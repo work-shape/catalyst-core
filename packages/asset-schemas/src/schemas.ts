@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { yamlValueIssue } from "./yaml-bounds";
 import {
   REASONING_EFFORTS,
   SKILL_RESOURCE_MEDIA_TYPES,
@@ -20,9 +21,50 @@ const localizedStringMapSchema = z
 
 export const localizedStringSchema = z.union([z.string().min(1), localizedStringMapSchema]);
 
-export const SKILL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
+// Every name of the public skill convention is one: lowercase letters, digits and hyphens.
+// What a skill of this platform could be named before stays a name too.
+export const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/u;
 export const SKILL_NAME_RULE =
-  "Skill name must start with a letter and contain only letters, numbers, dots, underscores, or hyphens";
+  "Skill name must start with a letter or a number and contain only letters, numbers, dots, underscores, or hyphens";
+
+/** How long a name of the public skill convention is at most, in characters. */
+export const SKILL_PORTABLE_NAME_MAX_CHARS = 64;
+/** How long a description of the public skill convention is at most, in characters. */
+export const SKILL_PORTABLE_DESCRIPTION_MAX_CHARS = 1_024;
+const SKILL_PORTABLE_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/u;
+
+/**
+ * What keeps a skill from being taken as it is into a tool that reads the public skill
+ * convention: a name that is not lowercase letters, digits and single hyphens or is longer
+ * than 64 characters, and a description longer than 1,024. Each is a warning with a code and
+ * refuses nothing: such a skill works here.
+ */
+export function skillPortabilityIssues(skill: {
+  name?: unknown;
+  description?: unknown;
+}): { code: string; message: string }[] {
+  const issues: { code: string; message: string }[] = [];
+  if (
+    typeof skill.name === "string" &&
+    (!SKILL_PORTABLE_NAME_PATTERN.test(skill.name) ||
+      skill.name.length > SKILL_PORTABLE_NAME_MAX_CHARS)
+  ) {
+    issues.push({
+      code: "skill_name_not_portable",
+      message: `The name '${skill.name}' is outside the public skill convention: lowercase letters, digits and single hyphens, at most ${SKILL_PORTABLE_NAME_MAX_CHARS} characters. The skill works here and may not be taken as it is elsewhere.`
+    });
+  }
+  if (
+    typeof skill.description === "string" &&
+    skill.description.length > SKILL_PORTABLE_DESCRIPTION_MAX_CHARS
+  ) {
+    issues.push({
+      code: "skill_description_not_portable",
+      message: `The description has ${skill.description.length} characters. The public skill convention takes at most ${SKILL_PORTABLE_DESCRIPTION_MAX_CHARS}.`
+    });
+  }
+  return issues;
+}
 
 export const skillNameSchema = z
   .string()
@@ -112,6 +154,33 @@ export const skillStarterSchema = z.strictObject({
   tools: z.array(z.string().min(1)).optional()
 });
 
+/**
+ * How much frontmatter a `SKILL.md` holds beside the keys the platform reads, as JSON, in
+ * characters. The keys of the public skill convention are a few lines.
+ */
+export const SKILL_FRONTMATTER_MAX_BYTES = 8_192;
+/** How deep the frontmatter of a `SKILL.md` nests at most. */
+export const SKILL_FRONTMATTER_MAX_DEPTH = 8;
+/**
+ * The keys of the frontmatter of a `SKILL.md` that are fields of the skill. Every other key is
+ * kept apart as its further `frontmatter`.
+ */
+export const SKILL_FRONTMATTER_FIELDS = [
+  "name",
+  "title",
+  "description",
+  "summary",
+  "starters"
+] as const;
+
+/** One file of a skill's folder as its index names it: no content. */
+export const skillFileEntrySchema = z.object({
+  path: z.string().min(1),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  bytes: z.number().int().min(0),
+  mediaType: z.string().min(1)
+});
+
 const skillConfigObjectSchema = z.object({
   name: skillNameSchema,
   title: z.string().min(1),
@@ -134,11 +203,36 @@ const skillConfigObjectSchema = z.object({
     .optional(),
   content: z.string().min(1),
   resources: z.array(skillResourceConfigSchema).optional(),
+  files: z.array(skillFileEntrySchema).optional(),
+  frontmatter: z
+    .record(z.string(), z.unknown())
+    .optional()
+    // A config is JSON, which has no alias. Its frontmatter is held to the size and the depth
+    // a file's is, so neither way of writing a skill stores more than the other.
+    .refine(
+      (frontmatter) =>
+        frontmatter === undefined ||
+        (yamlValueIssue(frontmatter, SKILL_FRONTMATTER_MAX_DEPTH) === undefined &&
+          JSON.stringify(frontmatter).length <= SKILL_FRONTMATTER_MAX_BYTES),
+      {
+        message: `Skill frontmatter holds at most ${SKILL_FRONTMATTER_MAX_BYTES} characters as JSON, nested at most ${SKILL_FRONTMATTER_MAX_DEPTH} levels`
+      }
+    ),
   origin: z.literal("release").optional(),
   icon: z.string().min(1).optional()
 });
 
 export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, context) => {
+  // A key the file reads as a field of the skill would be read back as that field.
+  for (const key of SKILL_FRONTMATTER_FIELDS) {
+    if (skill.frontmatter && Object.hasOwn(skill.frontmatter, key)) {
+      context.addIssue({
+        code: "custom",
+        path: ["frontmatter", key],
+        message: `Skill frontmatter cannot hold '${key}': it is a field of the skill itself`
+      });
+    }
+  }
   const seen = new Set<string>();
   for (const [index, resource] of (skill.resources ?? []).entries()) {
     const pathKey = resource.path.toLowerCase();
@@ -153,17 +247,20 @@ export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, con
   }
 });
 
-// A skill file is the instance's own: what only a shipped skill carries is no field of it.
-export const skillFileFrontmatterSchema = skillConfigObjectSchema
-  .omit({
-    content: true,
-    resources: true,
-    origin: true,
-    icon: true
-  })
-  .extend({
-    name: skillNameSchema.optional()
-  });
+/**
+ * The frontmatter of a `SKILL.md`. `description` is required. `name` may be left to the folder
+ * and `title` to the content; `summary` and `starters` are read as the config holds them.
+ * Every other key is kept as it is and never refused: the public skill convention has keys of
+ * its own, such as `license` and `metadata`, and a library may add more. A skill file is the
+ * instance's own: what only a shipped skill carries, `origin` and `icon`, is no field of it.
+ */
+export const skillFileFrontmatterSchema = z.looseObject({
+  name: skillNameSchema.optional(),
+  title: z.string().min(1).optional(),
+  description: z.string().min(1),
+  summary: skillConfigObjectSchema.shape.summary,
+  starters: skillConfigObjectSchema.shape.starters
+});
 
 const welcomeSubtitleSchema = z.union([
   z.string(),

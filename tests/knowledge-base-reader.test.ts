@@ -48,7 +48,7 @@ describe("the role a Knowledge Base on a Data Store reads as", () => {
 
   /** The store with one finding and one salary, and the Knowledge Base on it published. */
   async function world(tables = ["findings"]) {
-    const instance = await start(true, undefined, undefined, true);
+    const instance = await start(true, undefined, undefined, undefined, true);
     expect((await put(instance, storeFiles)).statusCode).toBe(200);
     expect((await publish(instance, 1)).statusCode).toBe(200);
     const record = await settle(instance, 1);

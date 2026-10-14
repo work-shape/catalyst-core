@@ -1,16 +1,25 @@
 import { cn } from "../cn";
-import { RegistryIcon } from "./registry-icon";
+import { fileTypeIcons } from "./file-type-icons";
+import { useRegistryIcon, type IconComponent } from "./registry-icon";
 
 /** `sm` is 16 px and sits in a chip or a line of text, `md` is 24 px, `lg` is 32 px. */
 export type SkillIconSize = "sm" | "md" | "lg";
 
-// A drawn icon, such as a file-type page, fills the box. A line icon is drawn smaller inside
-// it, so the generic book weighs as much as a page beside it.
-const skillIconSizes: Record<SkillIconSize, string> = {
-  sm: "size-4 [&_.lucide]:size-3! [&_.lucide]:stroke-2",
-  md: "size-6 [&_.lucide]:size-5!",
-  lg: "size-8 [&_.lucide]:size-5!"
+// A drawn page fills the box. A line icon stands bare at `sm` and on the neutral tile at `md`
+// and `lg`, drawn smaller inside it, so it weighs as much as a page beside it.
+const skillIconBoxes: Record<SkillIconSize, string> = {
+  sm: "size-4",
+  md: "size-6",
+  lg: "size-8"
 };
+
+const lineIconSizes: Record<SkillIconSize, string> = {
+  sm: "size-3.5 stroke-[1.75]",
+  md: "size-3.5",
+  lg: "size-4.5"
+};
+
+const drawnIcons: ReadonlySet<IconComponent> = new Set(Object.values(fileTypeIcons));
 
 export interface SkillIconProps {
   /**
@@ -23,22 +32,31 @@ export interface SkillIconProps {
 }
 
 /**
- * The icon of a skill, beside the skill's title. It is a page or the generic book and never
- * sits on a tile: a tile is the mark of a Connection. It repeats the title, so it is hidden
- * from assistive technology.
+ * The icon of a skill, beside the skill's title. A file-type page stands as drawn. A line icon
+ * sits on one neutral tile at `md` and `lg` and stands bare at `sm`: in ink for a skill that
+ * ships with the platform, muted for the generic book. The tile is never tinted, because
+ * colour means a file type and nothing else. The icon repeats the title, so it is hidden from
+ * assistive technology.
  */
 export function SkillIcon({ icon, size = "md", className }: SkillIconProps) {
+  const { Icon, registered } = useRegistryIcon(icon, undefined, "skill");
+  const drawn = drawnIcons.has(Icon);
+  const generic = !registered || icon === "skill";
+  const tile = !drawn && size !== "sm";
   return (
     <span
       aria-hidden="true"
-      data-skill-icon={icon ?? "generic"}
+      data-skill-icon={generic ? "generic" : icon}
+      data-skill-icon-tile={tile ? "" : undefined}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-full!",
-        skillIconSizes[size],
+        "inline-flex shrink-0 items-center justify-center",
+        generic ? "text-muted-foreground" : "text-foreground",
+        skillIconBoxes[size],
+        tile && "rounded-md bg-secondary",
         className
       )}
     >
-      <RegistryIcon name={icon} family="skill" />
+      <Icon aria-hidden className={drawn ? "size-full" : lineIconSizes[size]} />
     </span>
   );
 }

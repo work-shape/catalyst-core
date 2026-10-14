@@ -22,7 +22,7 @@ import {
   SourceFilePreview
 } from "../packages/chat-ui/src/conversation-file-presentation";
 import { StructuredDataView } from "../packages/chat-ui/src/structured-data-view";
-import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
+import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
 
 const resources: ConversationResourceListItem[] = [
   {

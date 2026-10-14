@@ -19,7 +19,7 @@ The open platform contains:
 - retention for conversations and audit events, minimized audit events, usage records with budgets and a customer rate card, and rate limits
 - modules, mail for invitations and password reset, and the background jobs page
 - execution workspaces with a sandboxed command runner, off unless an instance enables them
-- approval requests for skill changes that an agent proposes, with optional model-evaluated guardrails, listed read-only with their hits in Build > Guardrails
+- approval requests for skill changes that an agent proposes, with optional model-evaluated guardrails, listed read-only with their hits in Studio > Guardrails
 - Docker images, Compose files, an explicit migration step, and the `/health` and `/ready` probes
 
 Document processing, the artifact helper commands for execution workspaces and the private data view are paid capabilities. They are not in the open repository.

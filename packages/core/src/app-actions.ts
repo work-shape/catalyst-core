@@ -57,14 +57,11 @@ export function parseAppActionOperationName(
 export const APP_ACTION_INPUT_MAX_BYTES = 256 * 1024;
 
 /**
- * How many calls one page session may make in a minute, actions and Connection calls together.
+ * How many calls one page session may make in a minute, actions and reads of Workflow Runs together.
  * A page session is one mount of one frame for one viewer, so the limit bounds what one open
  * tile can ask of a Connection whatever its code does.
  */
 export const APP_ACTION_CALLS_PER_MINUTE_PER_SESSION = 600;
-
-/** The name a run of `connections.call` of the kit carries as its action. */
-export const APP_CONNECTION_CALL_ACTION_NAME = "connections.call";
 
 /**
  * Why a call of a frame was refused before or beside what the Connection says, as
@@ -72,7 +69,6 @@ export const APP_CONNECTION_CALL_ACTION_NAME = "connections.call";
  */
 export const APP_ACTION_REFUSALS = [
   "action_unknown",
-  "connection_not_declared",
   "draft_safe_mode",
   "forbidden",
   "input_invalid",

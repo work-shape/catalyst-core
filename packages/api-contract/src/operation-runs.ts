@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { timestampSchema } from "./shared";
 
+/** Where a call goes or went (ADR-0031): the called asset, its test target, or nowhere. */
+export const operationTargetSchema = z.enum(["live", "test", "dry_run"]);
+
 export const operationRunOriginSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("agent"),
@@ -24,17 +27,27 @@ export const operationRunOriginSchema = z.discriminatedUnion("kind", [
     pageSessionId: z.string(),
     conversationId: z.string().optional(),
     /**
-     * What the call reached, by name: a Connection and its operation, or the Data Store a
-     * statement read. No input and no result.
+     * What the call reached, by name: a Connection and its operation, the Data Store a
+     * statement read, or the Workflow it started. No input and no result.
      */
     target: z
       .union([
         z.object({ connection: z.string(), operation: z.string() }),
-        z.object({ dataStore: z.string() })
+        z.object({ dataStore: z.string() }),
+        z.object({ workflow: z.string() })
       ])
       .optional()
   }),
-  z.object({ kind: z.literal("workflow"), workflowRunId: z.string(), stepRunId: z.string() }),
+  z.object({
+    kind: z.literal("workflow"),
+    workflowRunId: z.string(),
+    stepRunId: z.string(),
+    /**
+     * In a test run of a Workflow draft, which acts as the person testing: the service
+     * principal whose rights bounded theirs.
+     */
+    boundBy: z.object({ id: z.string(), label: z.string() }).optional()
+  }),
   z.object({ kind: z.literal("schedule"), scheduleId: z.string() })
 ]);
 
@@ -63,6 +76,11 @@ export const operationRunSchema = z.object({
     label: z.string()
   }),
   origin: operationRunOriginSchema,
+  /**
+   * Where the call went: `live`, the asset it calls; `test`, that asset's test target; or
+   * `dry_run`, nowhere, a changing call of a draft that answered what it would have done.
+   */
+  target: operationTargetSchema,
   /**
    * The App a call with the origin `app` came from, as the instance holds it when the run is
    * read. Nothing of it is kept on the run. A run of a Page of a conversation has none.

@@ -198,6 +198,12 @@ export interface GalleryText
   cardBody: string;
   cardBodyLong: string;
   cardAction: string;
+  cardEdit: string;
+  cardStarted: string;
+  cardEditOpened: string;
+  cardActionNamed: string;
+  cardChanged: string;
+  cardChangedAt: string;
   tableName: string;
   tableState: string;
   tableUpdated: string;
@@ -210,6 +216,8 @@ export interface GalleryText
   today: string;
   yesterday: string;
   stateDraft: string;
+  /** What a switched-on `RunLiveOnce` says it covers. */
+  liveOnceOn: string;
   stateRunning: string;
   statePublished: string;
   stateNeedsReconnect: string;
@@ -429,6 +437,12 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     cardBodyLong:
       "Answers questions from the product handbook, looks up orders and drafts the reply to the customer.",
     cardAction: "Start chat",
+    cardEdit: "Edit",
+    cardStarted: "The chat started.",
+    cardEditOpened: "The editor opened.",
+    cardActionNamed: "Start chat with Support assistant",
+    cardChanged: "Changed yesterday",
+    cardChangedAt: "13 October 2026, 09:12",
     tableName: "Name",
     tableState: "State",
     tableUpdated: "Updated",
@@ -449,6 +463,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     today: "Today",
     yesterday: "Yesterday",
     stateDraft: "Draft",
+    liveOnceOn: "Your next call runs live.",
     stateRunning: "Running",
     statePublished: "Published",
     stateNeedsReconnect: "Needs reconnect",
@@ -667,6 +682,12 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     cardBodyLong:
       "Beantwortet Fragen aus dem Produkthandbuch, schlägt Bestellungen nach und entwirft die Antwort an den Kunden.",
     cardAction: "Chat starten",
+    cardEdit: "Bearbeiten",
+    cardStarted: "Der Chat hat begonnen.",
+    cardEditOpened: "Der Editor ist offen.",
+    cardActionNamed: "Chat starten mit Support-Assistent",
+    cardChanged: "Gestern geändert",
+    cardChangedAt: "13. Oktober 2026, 09:12",
     tableName: "Name",
     tableState: "Status",
     tableUpdated: "Geändert",
@@ -687,6 +708,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     today: "Heute",
     yesterday: "Gestern",
     stateDraft: "Entwurf",
+    liveOnceOn: "Dein nächster Aufruf läuft live.",
     stateRunning: "Läuft",
     statePublished: "Veröffentlicht",
     stateNeedsReconnect: "Neu verbinden",

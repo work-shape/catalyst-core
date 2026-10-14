@@ -7,6 +7,7 @@ import { KNOWLEDGE_OPERATION_PREFIX } from "./knowledge";
 import { DATA_TOOL_PREFIXES } from "./data-tool-names";
 import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
+import type { OperationBeforeEvent } from "./guardrail-events";
 import type { AuthenticatedIdentity, OperationScope } from "./identity";
 import type { CollaborationWorkspaceId, OperationRunId } from "./ids";
 import type { JsonObject } from "./json";
@@ -53,6 +54,13 @@ export interface OperationExecutionContext {
   access: ActorAccess;
   /** Writes audit rows that carry the run's id and correlation id. */
   audit: AuditRecorder;
+  /**
+   * The events of the operation's own `beforeEvents` as they were asked for this call, just
+   * before it executes: a call that waited for an approval is asked again first. An operation
+   * whose subject can change between the check and the write, such as the newest revision of
+   * a Page, writes what their guardrails read.
+   */
+  beforeEvents?: readonly OperationBeforeEvent[];
 }
 
 /** What an operation's own check of the caller's right answers. A refusal names the right. */
@@ -233,6 +241,21 @@ interface OperationDefinitionBase<Input, Output> {
   policyTargets?(input: Input): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
   /** The operation's own events, emitted beside the ones every call has. */
   events?: { before?: PlatformEventName; after?: PlatformEventName };
+  /**
+   * The before-events of a call beside `operation.before_call`, one per subject it writes or
+   * makes live: a write of assets names `asset.before_write` for each asset. The guardrails of
+   * each read the fields it hands them. Asked after the caller's right, with the policy.
+   */
+  beforeEvents?(
+    input: Input,
+    origin: OperationOrigin
+  ): readonly OperationBeforeEvent[] | Promise<readonly OperationBeforeEvent[]>;
+  /**
+   * The input fields the `heldInput` of its before-events may set for a call held for an
+   * approval, such as the revision of a Page it copies. They are merged into the input when the
+   * call is executed; no other field of the input can be changed that way.
+   */
+  heldInputKeys?: readonly string[];
   /** Where the operation is reached over HTTP. An agent tool has no such face. */
   http?: { method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; path: string };
   /** A run still `running` after this long counts as interrupted. */

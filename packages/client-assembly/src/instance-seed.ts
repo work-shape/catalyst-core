@@ -28,6 +28,13 @@ export async function seedInstance(
       // Names only. No instruction of a guardrail is logged.
       execution.logger.info({ guardrails }, "Release Guardrails reconciled");
     }
+    if (guardrails.conflicts.length > 0) {
+      // The floor runs from release config all the same; the asset keeps the name in Build.
+      execution.logger.warn(
+        { conflicts: guardrails.conflicts },
+        "Release Guardrails share a name with a guardrail written as an asset"
+      );
+    }
     await seedInstanceShippedSkills(execution);
   } catch (error) {
     await execution.close();

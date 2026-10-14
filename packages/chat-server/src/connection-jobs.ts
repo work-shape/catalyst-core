@@ -71,7 +71,7 @@ export const connectionDiscoverJob = defineJobKind({
  * for the running one, and it runs once that one ended. A Connection so has at most two live
  * jobs: one running and one queued behind it.
  */
-export function enqueueConnectionDiscovery(
+function enqueueConnectionDiscovery(
   jobs: Pick<JobsStore, "enqueue">,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -91,6 +91,20 @@ export function enqueueConnectionDiscovery(
       concurrencyKey: input.connectionName
     }
   );
+}
+
+/**
+ * Asks for a discovery that starts after this call: one is queued, and where one runs now,
+ * which may have read the Connection before the change that asks, one is queued behind it.
+ */
+export async function requestConnectionDiscovery(
+  jobs: Pick<JobsStore, "enqueue">,
+  input: { clientInstanceId: ClientInstanceId; connectionName: string }
+): Promise<void> {
+  const job = await enqueueConnectionDiscovery(jobs, input);
+  if (job.status === "running") {
+    await enqueueConnectionDiscovery(jobs, { ...input, behind: job });
+  }
 }
 
 /**

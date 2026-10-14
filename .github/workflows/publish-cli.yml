@@ -10,6 +10,7 @@ on:
 jobs:
   publish:
     if: ${{ vars.PUBLISH_PUBLIC_CLI == 'true' }}
+    # npm signs provenance only from GitHub-hosted runners, so this job stays off Blacksmith.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

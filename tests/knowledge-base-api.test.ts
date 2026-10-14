@@ -108,13 +108,13 @@ describe("a Knowledge Base on a Data Store", () => {
     });
     expect(queried.statusCode).toBe(404);
     expect(instance.execution.configAssets.kinds.get(KNOWLEDGE_BASE_ASSET_KIND)).toBeUndefined();
-    await expect(start(false, undefined, undefined, true)).rejects.toThrow(
+    await expect(start(false, undefined, undefined, undefined, true)).rejects.toThrow(
       "Module 'knowledge' requires module 'dataStores', which is off"
     );
   });
 
   it("checks the described tables on publish, answers rows with their source and keeps the check", async () => {
-    const instance = await start(true, undefined, undefined, true);
+    const instance = await start(true, undefined, undefined, undefined, true);
     await published(instance);
 
     const answered = await query(instance, {
@@ -150,7 +150,7 @@ describe("a Knowledge Base on a Data Store", () => {
   });
 
   it("refuses a write statement inside its read-only transaction, and the run says so", async () => {
-    const instance = await start(true, undefined, undefined, true);
+    const instance = await start(true, undefined, undefined, undefined, true);
     await published(instance);
 
     const written = await query(instance, { sql: "delete from findings" });
@@ -168,7 +168,7 @@ describe("a Knowledge Base on a Data Store", () => {
   });
 
   it("refuses to publish a definition that describes a table the store does not have", async () => {
-    const instance = await start(true, undefined, undefined, true);
+    const instance = await start(true, undefined, undefined, undefined, true);
     await publishStore(instance);
     await putKnowledgeBase(
       instance,
@@ -188,7 +188,7 @@ describe("a Knowledge Base on a Data Store", () => {
   });
 
   it("refuses a definition with a field of a later slice and one without a backend", async () => {
-    const instance = await start(true, undefined, undefined, true);
+    const instance = await start(true, undefined, undefined, undefined, true);
 
     const prompted = await putKnowledgeBase(instance, { ...definition(), answerPrompt: "Be nice" });
     const { backend: _backend, ...withoutBackend } = definition();
@@ -203,7 +203,7 @@ describe("a Knowledge Base on a Data Store", () => {
   });
 
   it("answers a member only with `knowledge_base.use`, and needs no right on the store behind it", async () => {
-    const instance = await start(true, undefined, developmentAuth, true);
+    const instance = await start(true, undefined, developmentAuth, undefined, true);
     await published(instance);
     const sql = "select client_id from findings";
 
@@ -251,7 +251,7 @@ describe("a Knowledge Base on a Data Store", () => {
   });
 
   it("gives an agent that lists it one tool, which reads only the Knowledge Bases it lists", async () => {
-    const instance = await start(true, undefined, undefined, true);
+    const instance = await start(true, undefined, undefined, undefined, true);
     await published(instance);
     const agent = {
       name: "analyst",
@@ -340,7 +340,7 @@ describe("a Knowledge Base on a Data Store", () => {
   });
 
   it("checks again on demand and says which table it can no longer read", async () => {
-    const instance = await start(true, undefined, undefined, true);
+    const instance = await start(true, undefined, undefined, undefined, true);
     await published(instance);
     const record = required(
       await instance.stores.dataStores.findDataStoreByName({ clientInstanceId, name: "findings" })

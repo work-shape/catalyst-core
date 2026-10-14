@@ -23,6 +23,7 @@ import type {
   BuildAsset,
   BuildAssetKind,
   BuildAssetStart,
+  BuildKind,
   BuildListedKind,
   BuildPageSlot
 } from "./build-asset-kind";
@@ -63,10 +64,19 @@ export function NewAssetPage({
       start={start}
       canWrite
       instanceWrite={source.rights.instanceWrite}
+      {...(source.scoped?.(entry.kind) && source.scope?.kind === "workspace"
+        ? { owner: source.scope.workspaceId }
+        : {})}
       onUnsavedChange={page.onUnsavedChange}
       save={async (config) => {
         const create = (expectedRevision: number | null) =>
-          source.writes.put({ kind: entry.kind, name: start.name, config, expectedRevision });
+          source.writes.put({
+            kind: entry.kind,
+            name: start.name,
+            config,
+            expectedRevision,
+            ...(start.availableIn ? { availableIn: start.availableIn } : {})
+          });
         try {
           try {
             await create(null);
@@ -168,16 +178,18 @@ export function ViewedAssetPage({
   back,
   kind,
   view,
-  name
+  name,
+  kinds
 }: Pick<AssetPageProps, "source" | "page" | "back"> & {
   kind: string;
   view: NonNullable<BuildListedKind["view"]>;
   name: string;
+  kinds: readonly BuildKind[];
 }) {
   const read = source.useAsset(kind, name);
   usePageShown(page, read.status);
   if (read.status === "ready") {
-    return <view.Page page={page} back={back} asset={read.asset} />;
+    return <view.Page page={page} back={back} asset={read.asset} kinds={kinds} />;
   }
   return (
     <UnreadAssetPage
@@ -282,21 +294,27 @@ function LoadedAssetPage({
   // An asset that ships with the platform is changed by a release alone, whoever reads it.
   const shippedTitle = entry.shippedTitle?.(stored);
   const shipped = shippedTitle !== undefined;
-  const canWrite = !shipped && source.rights.may("write", stored);
+  const owner = stored.scope.kind === "workspace" ? stored.scope.workspaceId : undefined;
+  const held = { kind: stored.kind, namespace: stored.namespace, workspaceId: owner };
+  const canWrite = !shipped && source.rights.may("write", held);
   const namespace = source.rights.namespaces.find(
     (candidate) => candidate.prefix === stored.namespace
   );
+  const workspaceName =
+    source.rights.workspaces.find((candidate) => candidate.id === owner)?.name ?? owner;
   const readOnlyReason = shipped
     ? t("build.readOnlyPlatform")
-    : stored.namespace === undefined
-      ? t("build.readOnlyInstance")
-      : t("build.readOnlyNamespace", { namespace: namespace?.displayName ?? stored.namespace });
-  const canDelete = !shipped && state.canDelete && source.rights.may("delete", stored);
+    : workspaceName !== undefined
+      ? t("build.readOnlyWorkspace", { workspace: workspaceName })
+      : stored.namespace === undefined
+        ? t("build.readOnlyInstance")
+        : t("build.readOnlyNamespace", { namespace: namespace?.displayName ?? stored.namespace });
+  const canDelete = !shipped && state.canDelete && source.rights.may("delete", held);
   // A kind with drafts answers its two pointers. The saved draft is ahead of what is
   // published, or nothing is published yet.
   const hasDraft = stored.draftRevision !== undefined;
   const draftAhead = hasDraft && stored.revision !== stored.publishedRevision;
-  const canPublish = draftAhead && conflict === undefined && source.rights.may("publish", stored);
+  const canPublish = draftAhead && conflict === undefined && source.rights.may("publish", held);
   const Editor = entry.Editor;
   const heardUnsaved = useCallback(
     (next: boolean) => {
@@ -393,6 +411,7 @@ function LoadedAssetPage({
         readOnlyReason={canWrite ? undefined : readOnlyReason}
         saveBlocked={conflict !== undefined}
         instanceWrite={source.rights.instanceWrite}
+        {...(owner === undefined ? {} : { owner })}
         onUnsavedChange={heardUnsaved}
         draftState={
           draftAhead ? (

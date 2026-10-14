@@ -11,7 +11,7 @@ import {
 const skillNameSchema = z
   .string()
   .min(1)
-  .regex(/^[A-Za-z][A-Za-z0-9_.-]*$/u);
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/u);
 
 const skillResourcePathSchema = z
   .string()
@@ -77,17 +77,19 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         return toolFailed("handler_failed", "read_skill requires an active agent run");
       }
 
-      // The skills the platform ships are offered to a conversation, and no agent's definition
-      // needs to list them. They are stored skills, read like any other.
+      // The skills the platform ships are offered to a conversation of an agent that holds the
+      // platform's tools, and no agent's definition needs to list them. They are stored skills,
+      // read like any other.
       const conversationId = context.toolRequest?.conversationId;
+      const assets = await options.assetSource.getSnapshot();
+      const agent = assets.agents.find((candidate) => candidate.name === agentName);
       const offer = conversationId
         ? await options.conversationOffer?.offerOf({
             clientInstanceId: context.clientInstanceId,
-            conversationId
+            conversationId,
+            agentToolNames: agent?.toolNames ?? []
           })
         : undefined;
-      const assets = await options.assetSource.getSnapshot();
-      const agent = assets.agents.find((candidate) => candidate.name === agentName);
       const allowedSkillNames = new Set([
         ...(agent?.skillNames ?? []),
         ...(offer?.skillNames ?? [])
@@ -99,7 +101,10 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         );
       }
 
-      const skill = assets.skills.find((candidate) => candidate.name === input.name);
+      // The snapshot carries no skill's resources: the skill read is read whole.
+      const skill = assets.skills.some((candidate) => candidate.name === input.name)
+        ? await options.assetSource.getSkill(input.name)
+        : undefined;
       if (!skill) {
         return toolFailed("validation_failed", `Skill '${input.name}' is not defined`);
       }

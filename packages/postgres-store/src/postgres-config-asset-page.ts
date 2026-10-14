@@ -1,4 +1,4 @@
-import { and, eq, ilike, inArray, like, or, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, like, or, sql, type SQLWrapper } from "drizzle-orm";
 import type { ConfigAssetRecord, ConfigAssetStore } from "@vivd-catalyst/core";
 import { containsPattern, prefixPattern } from "./like-pattern";
 import { publishedColumns, publishedRevisions } from "./postgres-config-asset-operations";
@@ -35,13 +35,17 @@ export async function listConfigAssetPage(
   const { text } = input;
   if (text !== undefined) {
     // What the title can be read from holds the text: the store cannot read a kind's title,
-    // so this keeps every asset whose title may match, and `titleOf` decides below.
+    // so this keeps every asset with a string value that may match, and `titleOf` decides
+    // below. A value is matched decoded: the JSON text of a config escapes `"` and `\`.
     const pattern = containsPattern(text.contains);
+    const holdsString = (config: SQLWrapper) => sql`exists (
+      select from jsonb_path_query(${config}, 'strict $.** ? (@.type() == "string")') as value
+      where value #>> '{}' ilike ${pattern})`;
     conditions.push(
       or(
         ilike(configAssets.name, pattern),
-        sql`${configAssetRevisions.config}::text ilike ${pattern}`,
-        sql`${publishedRevisions.config}::text ilike ${pattern}`
+        holdsString(configAssetRevisions.config),
+        holdsString(publishedRevisions.config)
       )
     );
   }

@@ -22,10 +22,10 @@ export const dataStores = defineTranslations({
     "dataStores.conditionsTitle": "Open on the server",
     "dataStores.conditionTempFilesUnbounded": "Temporary files have no limit",
     "dataStores.description":
-      "Data stores are created by an agent or through the API and cannot be changed here.",
+      "Data stores are created with their migrations through the CLI or the API and cannot be changed here.",
     "dataStores.descriptionLabel": "Description",
     "dataStores.empty":
-      "No data stores yet. A data store is a database the platform hosts, in which apps and workflows keep their rows. An agent or the API creates one.",
+      "No data stores yet. A data store is a database the platform hosts, in which apps and workflows keep their rows. A person with the right to create data stores adds one through the CLI or the API.",
     "dataStores.kind": "Data stores",
     "dataStores.kindSingular": "Data store",
     "dataStores.lastMigration": "Last migration",
@@ -135,10 +135,10 @@ export const dataStores = defineTranslations({
     "dataStores.conditionsTitle": "Am Server offen",
     "dataStores.conditionTempFilesUnbounded": "Temporäre Dateien haben keine Grenze",
     "dataStores.description":
-      "Datenspeicher werden von einem Agenten oder über die API angelegt und lassen sich hier nicht ändern.",
+      "Datenspeicher werden mit ihren Migrationen über die CLI oder die API angelegt und lassen sich hier nicht ändern.",
     "dataStores.descriptionLabel": "Beschreibung",
     "dataStores.empty":
-      "Noch keine Datenspeicher. Ein Datenspeicher ist eine Datenbank der Plattform, in der Apps und Workflows ihre Zeilen ablegen. Ein Agent oder die API legt ihn an.",
+      "Noch keine Datenspeicher. Ein Datenspeicher ist eine Datenbank der Plattform, in der Apps und Workflows ihre Zeilen ablegen. Wer das Recht hat, Datenspeicher anzulegen, legt ihn über die CLI oder die API an.",
     "dataStores.kind": "Datenspeicher",
     "dataStores.kindSingular": "Datenspeicher",
     "dataStores.lastMigration": "Letzte Migration",

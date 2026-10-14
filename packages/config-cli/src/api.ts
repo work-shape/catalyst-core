@@ -51,13 +51,18 @@ export interface ConfigApiOptions {
   fetchImpl?: typeof fetch;
   /** Waits between tries. Tests pass one that does not wait. */
   sleep?: (milliseconds: number) => Promise<void>;
+  /**
+   * The workspace whose own assets the working copy holds, for a root bound with
+   * `--workspace`. Left out, the instance's own. The reads of assets name it.
+   */
+  workspaceId?: string;
 }
 
 type FetchImpl = NonNullable<ConfigApiOptions["fetchImpl"]>;
 
 export async function createConfigApi(options: ConfigApiOptions) {
   const baseUrl = options.baseUrl.replace(/\/+$/u, "");
-  const fetchImpl = withoutRedirects(options.fetchImpl ?? fetch);
+  const fetchImpl = instanceFetch(options.fetchImpl);
   assertSafeApiKeyExchangeUrl(baseUrl);
   const accessToken = await exchangeApiKey(fetchImpl, baseUrl, options.apiKey);
   const client = createApiClient({
@@ -67,6 +72,7 @@ export async function createConfigApi(options: ConfigApiOptions) {
   });
 
   const sleep = options.sleep ?? defaultSleep;
+  const scope = options.workspaceId === undefined ? {} : { workspaceId: options.workspaceId };
 
   /**
    * Sends one changing call, all its tries under one key: a try whose answer never arrived is
@@ -120,7 +126,11 @@ export async function createConfigApi(options: ConfigApiOptions) {
         const page = await read(sleep, () =>
           client.assets.list({
             params: { kind },
-            query: { limit: MAX_LIST_LIMIT, ...(cursor === undefined ? {} : { cursor }) }
+            query: {
+              limit: MAX_LIST_LIMIT,
+              ...scope,
+              ...(cursor === undefined ? {} : { cursor })
+            }
           })
         );
         assets.push(...page.items);
@@ -131,7 +141,9 @@ export async function createConfigApi(options: ConfigApiOptions) {
     /** One asset with its content, or nothing where the instance holds none of that name. */
     getAsset: async (kind: string, name: string): Promise<Asset | undefined> => {
       try {
-        return await read(sleep, () => client.assets.get({ params: { kind, name } }));
+        return await read(sleep, () =>
+          client.assets.get({ params: { kind, name }, query: { ...scope } })
+        );
       } catch (error) {
         if (isMissingAsset(error)) return undefined;
         throw error;
@@ -140,7 +152,7 @@ export async function createConfigApi(options: ConfigApiOptions) {
     /** Who wrote the latest revision of one asset, a deleted one included. */
     getLatestRevision: async (kind: string, name: string) => {
       const page = await read(sleep, () =>
-        client.assets.revisions.list({ params: { kind, name }, query: { limit: 1 } })
+        client.assets.revisions.list({ params: { kind, name }, query: { limit: 1, ...scope } })
       );
       return page.items[0];
     },
@@ -214,7 +226,11 @@ function isMissingAsset(error: unknown): boolean {
   );
 }
 
-function assertSafeApiKeyExchangeUrl(url: string): void {
+/**
+ * Refuses an address a key would cross the network to in plain text. `what` names the act:
+ * sending the key, or receiving it at login.
+ */
+export function assertSafeApiKeyExchangeUrl(url: string, what = "send CATALYST_API_KEY"): void {
   const parsed = new URL(url);
   if (parsed.protocol === "https:") {
     return;
@@ -224,11 +240,11 @@ function assertSafeApiKeyExchangeUrl(url: string): void {
       return;
     }
     throw new Error(
-      `Refusing to send CATALYST_API_KEY over plain HTTP to '${parsed.hostname}'. Use HTTPS; HTTP is allowed only for localhost, 127.0.0.0/8, or ::1.`
+      `Refusing to ${what} over plain HTTP to '${parsed.hostname}'. Use HTTPS; HTTP is allowed only for localhost, 127.0.0.0/8, or ::1.`
     );
   }
   throw new Error(
-    `Refusing to send CATALYST_API_KEY using unsupported URL scheme '${parsed.protocol}'. Use HTTPS; HTTP is allowed only for localhost, 127.0.0.0/8, or ::1.`
+    `Refusing to ${what} using unsupported URL scheme '${parsed.protocol}'. Use HTTPS; HTTP is allowed only for localhost, 127.0.0.0/8, or ::1.`
   );
 }
 
@@ -239,6 +255,11 @@ function assertSafeApiKeyExchangeUrl(url: string): void {
  */
 function withoutRedirects(fetchImpl: FetchImpl): FetchImpl {
   return (input, init) => fetchImpl(input, { ...init, redirect: "manual" });
+}
+
+/** The fetch of every request to an instance: the one given, or the global one, never redirected. */
+export function instanceFetch(fetchImpl?: FetchImpl): FetchImpl {
+  return withoutRedirects(fetchImpl ?? fetch);
 }
 
 function isLoopbackHostname(hostname: string): boolean {
@@ -267,7 +288,7 @@ async function exchangeApiKey(
   }
 }
 
-function toConfigApiError(error: unknown): unknown {
+export function toConfigApiError(error: unknown): unknown {
   if (!(error instanceof ApiError)) {
     return error;
   }

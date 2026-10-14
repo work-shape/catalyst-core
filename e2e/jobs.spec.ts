@@ -7,7 +7,9 @@ import { requestWithOrigin } from "./request-with-origin";
 // payload nor the error message of the failure reaches the browser.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
-const databaseUrl = `postgres://agent_chat:agent_chat@${process.env.E2E_HOST ?? "127.0.0.1"}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
+const databaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${process.env.E2E_HOST ?? "127.0.0.1"}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 const PAYLOAD_MARKER = "payload-marker-4c1d9e";
 const MESSAGE_MARKER = "provider-message-marker-8a2f07";

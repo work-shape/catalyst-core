@@ -1,10 +1,11 @@
 import {
   createWorkflowRoutes,
+  workflowRunAsPrincipal,
   type OperationCalls,
   type RouteRegistration,
   type WorkflowListEntry
 } from "@vivd-catalyst/chat-server";
-import type { JobSchedule, RegisteredJobHandler } from "@vivd-catalyst/core";
+import { AppError, type JobSchedule, type RegisteredJobHandler } from "@vivd-catalyst/core";
 import {
   codeStepIssues,
   createWorkflowEngine,
@@ -176,6 +177,18 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       createWorkflowRoutes({
         ...engine,
         listWorkflows,
+        async test({ workflow, ...start }) {
+          // Definitions a test hands in are published revisions without a draft.
+          const draft = given ? undefined : await assets.draft(workflow);
+          if (!draft) throw new AppError("NOT_FOUND", `There is no Workflow '${workflow}'`);
+          // The principal bounds the test run and lends it nothing: it is asked to exist and
+          // be active, and no right over it is asked of the tester (ADR-0031).
+          await workflowRunAsPrincipal(
+            { clientInstanceId, apiAccess: stores.apiAccess },
+            { workflow, runAs: draft.manifest.runAs }
+          );
+          return engine.test({ draft, ...start });
+        },
         // Definitions a test hands in are no assets: a right on them is decided by name.
         assetIdOf: (workflow) => (given ? Promise.resolve(undefined) : assets.assetIdOf(workflow))
       })

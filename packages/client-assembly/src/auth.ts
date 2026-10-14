@@ -40,7 +40,9 @@ export interface CreateClientInstanceAuthInput {
   env: ClientInstanceEnv;
   secrets: SecretResolver;
   clientInstanceId: ClientInstanceId;
-  userStore: Pick<PlatformStores, "users" | "apiAccess">;
+  userStore: Pick<PlatformStores, "users" | "apiAccess" | "personalApiKeys">;
+  /** Whether the module `personalApiKeys` is on: off, a personal key authenticates nobody. */
+  personalApiKeys?: boolean;
   allowedOrigins?: string | string[];
 }
 
@@ -61,7 +63,15 @@ export async function createClientInstanceAuth(
     const serviceAccessOptions = {
       secret: serviceAccessTokenSecret,
       clientInstanceId: input.clientInstanceId,
-      apiAccessStore: input.userStore.apiAccess
+      apiAccessStore: input.userStore.apiAccess,
+      ...(input.personalApiKeys
+        ? {
+            personalApiKeys: {
+              store: input.userStore.personalApiKeys,
+              users: input.userStore.users
+            }
+          }
+        : {})
     };
     adapters.push(new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions));
     serviceAccessToken = {

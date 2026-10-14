@@ -8,12 +8,14 @@ import { expect, test } from "./test";
 
 // Studio > Connections on an instance with the module on: the rail entry, the empty list in
 // both languages, a row with its chips, and the grant of a Connection right on the Access page.
-// No operation writes a Connection yet, so the row is planted in the store, as the release
-// seed will write it.
+// The row is planted in the store as the release seed writes it; making one in Build is
+// `connection-editor.spec.ts`.
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
-const databaseUrl = `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
+const databaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
 const clientInstanceId = "demo-e2e";
 const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 /** The member the grant is written for. No other spec uses this member. */
@@ -23,9 +25,9 @@ const shotsDir = process.env.E2E_SHOTS_DIR;
 
 const EMPTY_EN = "No connections yet. A connection holds the access to an outside system.";
 const DESCRIPTION_EN =
-  "The operator of this instance sets up its connections. They cannot be changed here.";
+  "Connections give agents, apps and workflows access to outside systems. Those from the release config are read-only here.";
 const DESCRIPTION_DE =
-  "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern.";
+  "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Release-Konfiguration sind hier schreibgeschützt.";
 const EMPTY_DE =
   "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System.";
 
@@ -141,6 +143,7 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
   // A seeded user is listed once the user has signed in and asked who they are: the member
   // first, then the admin.
   let memberId = "";
+  let adminId = "";
   for (const user of [member, admin]) {
     const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
       data: { ...user, rememberMe: true }
@@ -148,12 +151,12 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
     expect(signedIn.ok()).toBe(true);
     const me = await page.request.get(`${apiBaseUrl}/api/v1/me`);
     expect(me.ok()).toBe(true);
-    if (user === member) {
-      const answer: unknown = await me.json();
-      memberId =
-        idOf(answer) ?? idOf(Object.getOwnPropertyDescriptor(Object(answer), "user")?.value) ?? "";
-      expect(memberId).not.toBe("");
-    }
+    const answer: unknown = await me.json();
+    const id =
+      idOf(answer) ?? idOf(Object.getOwnPropertyDescriptor(Object(answer), "user")?.value) ?? "";
+    expect(id).not.toBe("");
+    if (user === member) memberId = id;
+    else adminId = id;
   }
   const memberContext = await browser.newContext();
   const memberPage = await memberContext.newPage();
@@ -173,8 +176,8 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       ).toHaveAttribute("aria-current", "true");
       await expect(main.getByText(EMPTY_EN, { exact: true })).toBeVisible();
       await expect(main.getByText(DESCRIPTION_EN, { exact: true })).toBeVisible();
-      // Nothing starts a Connection here yet, and it has no CLI entry.
-      await expect(main.getByRole("button", { name: /^New /u })).toHaveCount(0);
+      // The administrator starts a Connection here. The CLI writes none yet: no CLI entry.
+      await expect(main.getByRole("button", { name: "New connection" }).first()).toBeVisible();
       await expect(main.getByRole("button", { name: "More actions", exact: true })).toHaveCount(0);
       await shoot(page, "connections-empty", async () => {
         await expect(page.getByRole("heading", { level: 1 })).toHaveText(
@@ -250,10 +253,12 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       await expect(dialog.getByLabel("Read", { exact: true })).toBeVisible();
       await expect(dialog.getByLabel("Write", { exact: true })).toHaveCount(0);
       await expect(dialog.getByLabel("Delete", { exact: true })).toHaveCount(0);
-      // The three places a Connection right is written at. The form opens on the Namespace.
-      await expect(dialog.getByRole("radio", { name: /^In a Namespace/u })).toBeChecked();
-      await expect(dialog.getByRole("radio", { name: /^In a shared workspace/u })).toBeVisible();
-      await dialog.getByRole("radio", { name: /^On one connection/u }).check();
+      // A new Connection right has one place, one Connection, so there is no place to choose:
+      // no workspace owns a Connection, and a Namespace is no longer offered.
+      await expect(dialog.getByRole("radiogroup", { name: "Where" })).toHaveCount(0);
+      await expect(dialog.getByRole("radio", { name: /shared workspace|Namespace/u })).toHaveCount(
+        0
+      );
       // Each action says what it allows.
       await expect(
         dialog.getByText("See the connection and its status in Studio. Never its credentials.", {
@@ -408,6 +413,71 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       if (shotsDir) {
         await memberPage.screenshot({
           path: join(shotsDir, "connections-read-grant-light-en-1280.png")
+        });
+      }
+    });
+
+    await test.step("a Connection right written on a workspace before NS-0 is named, refused anew and revoked", async () => {
+      const workspace = { id: `cw_${randomUUID()}`, name: "Records team" };
+      const grantId = `grant_${randomUUID()}`;
+      try {
+        await withSql(async (sql) => {
+          await sql`
+            insert into collaboration_workspaces
+              (id, client_instance_id, kind, name, visibility, created_at, updated_at)
+            values
+              (${workspace.id}, ${clientInstanceId}, 'shared', ${workspace.name}, 'private',
+               now(), now())`;
+          // As the grant operation wrote it before NS-0.
+          await sql`
+            insert into permission_grants
+              (id, client_instance_id, holder_kind, holder_id, action, scope_kind, scope_id,
+               effect, granted_by)
+            values
+              (${grantId}, ${clientInstanceId}, 'user', ${memberId}, 'connection.use',
+               'workspace', ${workspace.id}, 'allow', ${adminId})`;
+        });
+        // A new one is refused: no workspace owns a Connection.
+        const refused = await requestWithOrigin(
+          page,
+          "post",
+          `${apiBaseUrl}/api/v1/instance/access/grants`,
+          {
+            data: {
+              holderKind: "user",
+              holderId: memberId,
+              action: "connection.read",
+              scopeKind: "workspace",
+              scopeId: workspace.id
+            }
+          }
+        );
+        expect(refused.status()).toBe(422);
+        expect(JSON.stringify(await refused.json())).toContain("invalid_scope");
+
+        // The row is listed under the workspace's name, though no new right offers a workspace.
+        await page.goto("/settings/instance/access");
+        await page.getByRole("tab", { name: /^Rights/u }).click();
+        const row = page
+          .getByTestId("grant-row")
+          .filter({ hasText: "E2E Connections", hasNotText: connection.name });
+        await expect(row).toContainText(`Workspace ${workspace.name}`);
+        await expect(row).not.toContainText(workspace.id);
+        await row.getByRole("button", { name: /^Actions for the right of/u }).click();
+        await page.getByRole("menuitem", { name: /^Revoke: Use connections/u }).click();
+        const revokeDialog = page.getByRole("dialog", { name: "Revoke this right?" });
+        await expect(revokeDialog).toContainText(workspace.name);
+        await expect(revokeDialog).not.toContainText(workspace.id);
+        await revokeDialog.getByRole("button", { name: "Revoke" }).click();
+        await expect(revokeDialog).toHaveCount(0);
+        await expect(row).toHaveCount(0);
+        expect(
+          await withSql((sql) => sql`select 1 from permission_grants where id = ${grantId}`)
+        ).toHaveLength(0);
+      } finally {
+        await withSql(async (sql) => {
+          await sql`delete from permission_grants where id = ${grantId}`;
+          await sql`delete from collaboration_workspaces where id = ${workspace.id}`;
         });
       }
     });

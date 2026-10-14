@@ -1,3 +1,4 @@
+import { PLATFORM_TOOL_NAMES } from "@vivd-catalyst/client-assembly";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ClientInstanceCapability } from "@vivd-catalyst/client-assembly";
@@ -178,6 +179,8 @@ describe("a conversation about a Workflow with a code step", () => {
   /** The instance, with the Workflow published at revision 1 with its one script. */
   async function fixture() {
     const config = createTestConfig({
+      // The agent holds the platform's tools: its definition lists them.
+      toolNames: [...PLATFORM_TOOL_NAMES],
       developmentAuth: {
         enabled: true,
         defaultUserId: OWNER,

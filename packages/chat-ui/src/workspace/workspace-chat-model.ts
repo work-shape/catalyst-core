@@ -63,11 +63,12 @@ import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
-import { agentListStatus, type AgentListStatus } from "../agents/agents-model";
-import { NO_APP_RIGHTS, resolveAppRights, type AppRights } from "../apps/app-model";
+import { agentListStatus, agentsRowShown, type AgentListStatus } from "../agents/agents-model";
+import { NO_APP_RIGHTS, appsRowShown, resolveAppRights, type AppRights } from "../apps/app-model";
 import {
   resolveWorkflowRights,
   workflowsAccess,
+  workflowsRowShown,
   type WorkflowRights,
   type WorkflowsAccess
 } from "../workflows/workflow-model";
@@ -84,6 +85,7 @@ import {
   type ReasoningEffort
 } from "./agent-model-selection";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
+import { useUnreadableDockConversation, type WorkspaceDock } from "./use-workspace-dock";
 import {
   useWorkspaceChromeState,
   useWorkspaceConversationActivityState,
@@ -274,6 +276,8 @@ export interface WorkspaceRouteModel {
   route: WorkspaceRoute;
   view: WorkspaceView;
   selectedConversationId: string | undefined;
+  /** The chat dock beside every page but the chat route. */
+  dock: WorkspaceDock;
   canViewAdministration: boolean;
   /** Opens a route by its value, as the command palette's "Go to" group does. */
   showRoute(route: WorkspaceRoute): void;
@@ -307,11 +311,20 @@ export interface ConversationRailModel {
   canViewAdministration: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox: { toDecide: number } | undefined;
-  /** The session has workspaces: the Agents row shows. */
+  /**
+   * The session has workspaces and the instance names the Agents row for the open one: two
+   * agents or more are available there, or the person may write one.
+   */
   agents: boolean;
-  /** The Apps module is on: the Apps row shows. */
+  /**
+   * The Apps module is on and the instance names the Apps row for the open workspace: its Apps
+   * page lists the person an App, or the person may write one there.
+   */
   apps: boolean;
-  /** The Workflows area is open to the person: the Workflows row shows. */
+  /**
+   * The Workflows area is open to the person and the instance names them a Workflow or they
+   * may write one: the Workflows row shows.
+   */
   workflows: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
@@ -340,6 +353,10 @@ export interface SelectedChatModel {
   selectedConversationRetainedUntil: string | undefined;
   /** The asset the open conversation is about, once its thread has loaded. */
   selectedConversationSubject: { kind: string; name: string } | undefined;
+  /** The open conversation's title, once its thread has loaded. */
+  selectedConversationTitle: string | undefined;
+  /** The conversation stands in the dock of a page, not on its chat route. */
+  docked: boolean;
   /** Goes to a route of the interface, such as the page of that asset. */
   openRoute(route: WorkspaceRoute): void;
   messages: Message[] | undefined;
@@ -413,7 +430,10 @@ export function useWorkspaceChatModel({
   const conversationActivity = useWorkspaceConversationActivityState();
   const draftController = useWorkspaceDraftController();
   const displayPanel = useToolDisplayPanel();
-  const { route, selectedConversationId, view } = routeState;
+  const { route, selectedConversationId, view, dock } = routeState;
+  // Off the chat route the conversation is the dock's: a conversation shown or dropped there
+  // stays in the dock of the page.
+  const docked = view !== "chat";
   const activeDraft = useWorkspaceDraft({
     authScope: WORKSPACE_AUTH_SCOPE,
     conversationId: selectedConversationId
@@ -449,6 +469,22 @@ export function useWorkspaceChatModel({
     client,
     conversationId: selectedConversationId,
     enabled: isAuthenticated && Boolean(selectedConversationId)
+  });
+  const { moveDraft } = draftController;
+  const keepUnreadableDraft = useCallback(
+    (conversationId: string) =>
+      moveDraft({
+        authScope: WORKSPACE_AUTH_SCOPE,
+        fromConversationId: conversationId,
+        toConversationId: undefined
+      }),
+    [moveDraft]
+  );
+  useUnreadableDockConversation({
+    dock,
+    docked,
+    error: threadQuery.error,
+    keepDraft: keepUnreadableDraft
   });
   // Only a settled thread for the conversation actually on screen may decide
   // the canonical URL. A snapshot left over from another conversation, or one
@@ -631,6 +667,10 @@ export function useWorkspaceChatModel({
     conversationId: string,
     options?: { replace?: boolean }
   ) {
+    if (docked) {
+      dock.show(conversationId, { replace: true });
+      return;
+    }
     if (!activeCollaborationWorkspaceId) {
       return;
     }
@@ -647,6 +687,11 @@ export function useWorkspaceChatModel({
     conversation: { id: string; collaborationWorkspaceId: string },
     options?: { replace?: boolean }
   ) {
+    if (docked) {
+      // The empty dock's first message made it: the dock now holds it in place of nothing.
+      dock.show(conversation.id, { replace: true });
+      return;
+    }
     routeState.showConversation(conversation.collaborationWorkspaceId, conversation.id, options);
   }
 
@@ -698,7 +743,8 @@ export function useWorkspaceChatModel({
         subject
       }
     });
-    showCreatedConversation(conversation);
+    // It opens on the chat route with the asset beside it, from whichever page it was started.
+    routeState.showConversation(conversation.collaborationWorkspaceId, conversation.id);
     setNotice(undefined);
     workspaceCache.invalidateConversations();
     chrome.requestComposerFocus();
@@ -724,6 +770,10 @@ export function useWorkspaceChatModel({
       fromConversationId: conversationId,
       toConversationId: undefined
     });
+    if (docked) {
+      dock.show(undefined, { replace: true });
+      return;
+    }
     goToActiveCollaborationWorkspaceChat({ replace: true });
   }
 
@@ -771,6 +821,7 @@ export function useWorkspaceChatModel({
     settingsCollaborationWorkspace: collaborationWorkspace.settingsCollaborationWorkspace,
     selectSettingsCollaborationWorkspace:
       collaborationWorkspace.selectSettingsCollaborationWorkspace,
+    activeCollaborationWorkspace: collaborationWorkspace.activeCollaborationWorkspace,
     isAuthenticated,
     route,
     view,
@@ -866,10 +917,11 @@ export function useWorkspaceChatModel({
     selectedModel?.compactThresholdTokens ?? activeAgent?.compactThresholdTokens;
 
   // A layout effect: it runs before the effects of the thread, so the surface of the next
-  // conversation's subject opens after this close and not before it.
+  // conversation's subject opens after this close and not before it. A conversation that goes
+  // into the dock leaves what stood beside it too: the page takes that room.
   useLayoutEffect(() => {
     displayPanel.close();
-  }, [displayPanel.close, selectedConversationId]);
+  }, [displayPanel.close, selectedConversationId, docked]);
 
   const documentTitle = config?.ui.title
     ? createEnvironmentDocumentTitle(config.ui.title, config.clientInstance.environment)
@@ -905,6 +957,11 @@ export function useWorkspaceChatModel({
     selectedConversationId,
     clearConversationUploads: draftAttachmentController.clearConversationUploads,
     onDeletedActiveConversation: (nextSelectedConversationId) => {
+      if (docked) {
+        // The dock does not take another conversation in the place of one that is gone.
+        dock.forget();
+        return;
+      }
       if (nextSelectedConversationId) {
         showConversationInActiveCollaborationWorkspace(nextSelectedConversationId, {
           replace: true
@@ -999,8 +1056,12 @@ export function useWorkspaceChatModel({
     workspaceCache.invalidateStreamError(conversationId);
   }
 
+  // A conversation picked in the sidebar or the palette opens on its chat route, also from a
+  // page with a dock: the dock's own conversation goes out of the dock into it.
   function selectConversation(conversationId: string) {
-    showConversationInActiveCollaborationWorkspace(conversationId);
+    if (activeCollaborationWorkspaceId) {
+      routeState.showConversation(activeCollaborationWorkspaceId, conversationId);
+    }
     setNotice(undefined);
   }
 
@@ -1081,6 +1142,7 @@ export function useWorkspaceChatModel({
       route,
       view,
       selectedConversationId,
+      dock,
       canViewAdministration,
       showRoute: routeState.showRoute
     },
@@ -1112,12 +1174,14 @@ export function useWorkspaceChatModel({
       reloadConversations: () => {
         conversationsQuery.refetch().catch(() => undefined);
       },
-      selectedConversationId,
+      // The rail marks the conversation of the chat route; beside a page, the page's row is the
+      // current one, and the dock's conversation is only in the dock.
+      selectedConversationId: docked ? undefined : selectedConversationId,
       canViewAdministration,
       inbox,
-      agents: collaborationWorkspacesAvailable,
-      apps: appsEnabled,
-      workflows: workflowsOpen === "open",
+      agents: agentsRowShown(collaborationWorkspacesAvailable, workspaceAgentsQuery.data),
+      apps: appsRowShown(appsEnabled, workspaceAgentsQuery.data),
+      workflows: workflowsRowShown(workflowsOpen, platformContextQuery.data),
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
@@ -1193,7 +1257,13 @@ export function useWorkspaceChatModel({
       selectedConversationId,
       selectedConversationRetainedUntil: selectedThread?.conversation.retainedUntil,
       selectedConversationSubject: selectedThread?.conversation.subject,
-      openRoute: routeState.showRoute,
+      selectedConversationTitle: selectedThread?.conversation.title,
+      docked,
+      // A page the conversation links to opens with the conversation in the dock beside it.
+      openRoute: (target) =>
+        selectedConversationId === undefined
+          ? routeState.showRoute(target)
+          : dock.openPage(target, selectedConversationId),
       messages,
       completedRunProjections: controller.completedRunProjections,
       messagesLoaded,

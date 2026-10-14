@@ -16,12 +16,21 @@ import {
 import { IconTile } from "../status/icon-tile";
 import { ConnectionIcon, type ConnectionIconSize } from "../status/connection-icon";
 import { KnowsHowTo, SkillIcon, type SkillIconSize } from "../status/skill-icon";
+import { TargetBadge, type CallTarget } from "../status/target-badge";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
 const skillIconSizes: readonly SkillIconSize[] = ["sm", "md", "lg"];
 const connectionIconSizes: readonly ConnectionIconSize[] = ["sm", "md", "lg"];
-const shippedSkillIcons = ["spreadsheet", "document", "presentation", "pdf"] as const;
+// The four pages, then the line icons of platform skills that make no file, on the tile.
+const shippedSkillIcons = [
+  "spreadsheet",
+  "document",
+  "presentation",
+  "pdf",
+  "guide",
+  "workflow"
+] as const;
 
 const iconFamilies: readonly IconFamily[] = ["file", "service", "skill", "tool"];
 const fileTypeKeys = Object.keys(fileTypeIcons);
@@ -37,6 +46,7 @@ const badgeTones: readonly BadgeTone[] = [
   "accent"
 ];
 const badgeAppearances: readonly BadgeAppearance[] = ["soft", "outline"];
+const callTargets: readonly CallTarget[] = ["live", "test", "dry_run"];
 
 function toneLabel(tone: BadgeTone, text: GalleryText): string {
   const labels: Record<BadgeTone, string> = {
@@ -157,6 +167,17 @@ export const statusGallery: GalleryGroup = {
             </Badge>
           </Samples>
         </>
+      )
+    },
+    {
+      name: "TargetBadge",
+      components: ["TargetBadge"],
+      render: () => (
+        <Samples>
+          {callTargets.map((target) => (
+            <TargetBadge key={target} target={target} />
+          ))}
+        </Samples>
       )
     },
     {

@@ -8,6 +8,7 @@ import {
   ASSET_OPERATIONS_TOOL_NAME,
   ASSET_PUT_TOOL_NAME,
   ASSET_VALIDATE_TOOL_NAME,
+  PAGE_SAVE_AS_APP_TOOL_NAME,
   toolAnswer
 } from "./subject-run";
 
@@ -109,6 +110,13 @@ export function assetToolSentence(
     }
     case ASSET_OPERATIONS_TOOL_NAME:
       return t(call.isError ? "assetToolOperationsFailed" : "assetToolOperations");
+    case PAGE_SAVE_AS_APP_TOOL_NAME: {
+      if (call.isError || running) {
+        return t(call.isError ? "assetToolPageAppFailed" : "assetToolPageAppSaving");
+      }
+      const title = typeof answer?.title === "string" ? answer.title : answer?.name;
+      return typeof title === "string" ? t("assetToolPageAppSaved", { title }) : undefined;
+    }
     default:
       return undefined;
   }

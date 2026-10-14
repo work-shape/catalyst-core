@@ -1,6 +1,5 @@
 import {
   AppError,
-  INSTANCE_ASSET_SCOPE,
   auditActorFromIdentity,
   findNamespaceOfAssetName,
   isAppError,
@@ -9,6 +8,7 @@ import {
   type ConfigAssetMutation,
   type PolicyTarget
 } from "@vivd-catalyst/core";
+import { clearLiveOnceSwitches } from "./asset-after-write";
 import { z } from "zod";
 import { readDefinitionName } from "./asset-kinds/shared";
 import {
@@ -32,8 +32,9 @@ import {
   loadStoredAssets,
   impliesDefaultChange,
   accessOfSyncCredential,
-  releaseInitialAvailability,
+  syncInitialAvailability,
   requireInteractiveEditingOn,
+  requireOwnerWorkspace,
   toJsonObject
 } from "./asset-write-rules";
 import { currentRevisionOf } from "./asset-revision";
@@ -61,6 +62,7 @@ import {
   replacedSchema
 } from "./asset-sync-items";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
+import { assertDefaultOwnedByInstance } from "./asset-owner-references";
 
 export type { AssetSyncInput } from "./asset-sync-refusals";
 import type { AssetWorkflowOptions } from "./types";
@@ -99,7 +101,7 @@ export async function syncAssets(
   call: AssetCall,
   input: AssetSyncInput
 ) {
-  const bound = withSyncCredential(call);
+  const bound = withSyncCredential(call, input);
   const checked = await checkBatch(options, bound, input, "apply");
   return applyBatch(options, bound, checked);
 }
@@ -114,20 +116,22 @@ export async function checkAssetSync(
   call: AssetCall,
   input: AssetSyncInput
 ): Promise<{ valid: true }> {
-  await checkBatch(options, withSyncCredential(call), input, "check");
+  await checkBatch(options, withSyncCredential(call, input), input, "check");
   return { valid: true };
 }
 
-/** The call as it is decided: whether it is a release depends on the key it came with. */
-function withSyncCredential(call: AssetCall): AssetCall {
-  return { ...call, access: accessOfSyncCredential(call.actor, call.access) };
+/**
+ * The call as it is decided: whether it is a release depends on the key it came with and on
+ * the owner the batch names.
+ */
+function withSyncCredential(call: AssetCall, input: AssetSyncInput): AssetCall {
+  return { ...call, access: accessOfSyncCredential(call.actor, call.access, input) };
 }
 
 /** A batch every check accepted, with what the store is asked to write for it. */
 interface CheckedBatch {
   planned: PlannedItem[];
   ready: ReadyItem[];
-  releaseSync: boolean;
   storedDefault: string | null;
   defaultChange: { agentName: string | undefined } | undefined;
   mutations: ConfigAssetMutation[];
@@ -159,6 +163,7 @@ async function checkBatch(
   ) {
     throw new AppError("VALIDATION_FAILED", `Namespace '${input.namespace}' is not registered`);
   }
+  await requireOwnerWorkspace(options, input.workspaceId);
   const releaseSync = isReleaseSync(call.access, "sync");
   if (purpose === "apply") {
     await authorizeInteractiveWrite(options, call.actor, call, call.audit, releaseSync);
@@ -320,13 +325,13 @@ async function checkBatch(
   // same, which checks under its lock that the asset is still not there.
   const mutations: ConfigAssetMutation[] = ready().map((entry) =>
     entry.item.type === "delete"
-      ? { type: "delete", kind: entry.kind.kind, name: entry.name, scope: INSTANCE_ASSET_SCOPE }
+      ? { type: "delete", kind: entry.kind.kind, name: entry.name, scope: entry.scope }
       : {
           type: "upsert",
           kind: entry.kind.kind,
           name: entry.name,
           config: toJsonObject(acceptedByName(entry.kind.kind).get(entry.name)),
-          scope: INSTANCE_ASSET_SCOPE,
+          scope: entry.scope,
           // A kind with a published revision moves its draft with a write and nothing else.
           ...(entry.kind.lifecycle === "draft_published" ? { draft: true as const } : {})
         }
@@ -334,10 +339,11 @@ async function checkBatch(
   if (defaultChange) {
     mutations.push({ type: "setDefaultAgent", agentName: defaultChange.agentName });
   }
+  // Asked here as well as by the writer, so that a check of the batch refuses it too.
+  assertDefaultOwnedByInstance(kinds.kinds, mutations, stored.assets);
   return {
     planned,
     ready: ready(),
-    releaseSync,
     storedDefault,
     defaultChange,
     mutations
@@ -345,7 +351,7 @@ async function checkBatch(
 }
 
 async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checked: CheckedBatch) {
-  const { planned, ready, releaseSync, storedDefault, defaultChange, mutations } = checked;
+  const { planned, ready, storedDefault, defaultChange, mutations } = checked;
   const byKey = new Map(ready.map((entry) => [assetKey(entry.kind.kind, entry.name), entry]));
   const result = await applyValidatedConfigAssetMutations(options, {
     clientInstanceId: options.clientInstanceId,
@@ -363,7 +369,10 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
       )
     ),
     ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
-    ...releaseInitialAvailability(call.access, "sync"),
+    ...syncInitialAvailability(
+      call.access,
+      storedDefault === null && defaultChange?.agentName !== undefined
+    ),
     mutations
   }).catch(async (error: unknown) => {
     // Another write got between the check above and the store's lock. Nothing was written.
@@ -447,20 +456,24 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
   // The batch is committed: every asset is written. A row of the trail that cannot be written
   // is logged, the others are still written, and the caller is told what was written.
   await recordCommitted(options, call, records);
+  for (const entry of ready) {
+    const id = result.assetIds[assetKey(entry.kind.kind, entry.name)];
+    if (!entry.absent && entry.item.type === "put") {
+      await clearLiveOnceSwitches(options, call, entry.kind, entry.name, id);
+    }
+  }
   return {
     version: result.version,
     items,
-    ...(releaseSync
-      ? await hiddenAgentNamesOf(
-          options,
-          ready.filter((entry) => !entry.absent)
-        )
-      : {}),
+    ...(await hiddenAgentNamesOf(
+      options,
+      ready.filter((entry) => !entry.absent)
+    )),
     warnings: []
   };
 }
 
-/** The agents a release wrote that no workspace shows afterwards, as its answer names them. */
+/** The agents a batch wrote that no workspace shows afterwards, as its answer names them. */
 async function hiddenAgentNamesOf(
   options: AssetWorkflowOptions,
   written: readonly ReadyItem[]
@@ -487,12 +500,13 @@ export async function authorizeAssetSync(
   access: ActorAccess,
   input: AssetSyncInput
 ): Promise<void> {
-  await authorizeItems(options, accessOfSyncCredential(actor, access), input);
+  await authorizeItems(options, accessOfSyncCredential(actor, access, input), input);
 }
 
 /**
  * What the policy is asked about: each kind the batch names with the Namespace of the names it
- * carries, so a setting narrowed to a kind or to a Namespace applies to the batch.
+ * carries and the workspace the batch names, so a setting narrowed to a kind, a Namespace or
+ * a workspace applies to the batch.
  */
 export async function assetSyncPolicyTargets(
   options: AssetWorkflowOptions,
@@ -504,10 +518,14 @@ export async function assetSyncPolicyTargets(
   const targets = new Map<string, PolicyTarget>();
   for (const item of input.items) {
     const name = item.type === "put" ? readDefinitionName(item.config) : item.name;
+    // A Namespace is a prefix among the instance's own assets only.
     const namespace =
-      name === undefined ? undefined : findNamespaceOfAssetName(namespaces, name)?.prefix;
+      name === undefined || input.workspaceId !== undefined
+        ? undefined
+        : findNamespaceOfAssetName(namespaces, name)?.prefix;
     targets.set(JSON.stringify([item.kind, namespace]), {
       assetKind: item.kind,
+      ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
       ...(namespace === undefined ? {} : { namespace })
     });
   }

@@ -1,6 +1,7 @@
 import { useQueries } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { listAll, type ServicePrincipalDetail } from "@vivd-catalyst/api-client";
+import { Banner, Section } from "@vivd-catalyst/ui";
 import { loadFailure } from "../../access/access-model";
 import { usePrincipalGrantMutations, usePrincipalGrantsQuery } from "../../access/access-queries";
 import {
@@ -9,6 +10,10 @@ import {
   principalOfSearch
 } from "../../access/principal-grants-model";
 import { PrincipalRights } from "../../access/principal-rights";
+import {
+  useInstancePersonalApiKeysQuery,
+  useRevokePersonalApiKeyMutation
+} from "../../api/personal-api-keys";
 import { useApiAccessMutations } from "../../api/workspace-mutations";
 import {
   useAdministeredCollaborationWorkspacesQuery,
@@ -19,14 +24,18 @@ import {
 import { workspaceQueryKeys } from "../../api/workspace-query-keys";
 import { ApiAccessPanel } from "../../control-plane/api-access-panel";
 import { createApiAccessAuthorityKey } from "../../control-plane/api-access-reveal-controller";
-import { canManageUsers } from "../../control-plane/governance";
+import { canManageApiAccess, canManageUsers } from "../../control-plane/governance";
+import { PersonalApiKeysTable } from "../../control-plane/personal-api-keys-list";
 import { useTranslation } from "../../i18n";
 import { apiErrorMessage } from "../../workspace-utils";
 import { useSettingsPage } from "../settings-page-context";
 
-/** Instance > API access: the service principals and their keys, with its own data. */
+/**
+ * Instance > API access: the service principals and their keys, with its own data, and every
+ * person's own keys where the instance runs them.
+ */
 export function ApiAccessPage() {
-  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, config, user } = useSettingsPage();
   const { t } = useTranslation();
   const canManageSuperadminAccess = user.roles.includes("superadmin");
   const servicePrincipalsQuery = useServicePrincipalsQuery({
@@ -56,7 +65,7 @@ export function ApiAccessPage() {
     }
   }, [clearRevealedCredential, canManageSuperadminAccess]);
 
-  return (
+  const panel = (
     <ApiAccessPanel
       canMutate={canManageSuperadminAccess}
       principals={servicePrincipalsQuery.data ?? []}
@@ -88,6 +97,50 @@ export function ApiAccessPage() {
       }
       onClearRevealedCredential={clearRevealedCredential}
     />
+  );
+  return config.modules.personalApiKeys?.enabled ? (
+    <>
+      {panel}
+      <PersonalKeysOnInstance />
+    </>
+  ) : (
+    panel
+  );
+}
+
+/** Every person's own API keys, revoked here by a holder of the page. */
+function PersonalKeysOnInstance() {
+  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const { t } = useTranslation();
+  const api = { apiBaseUrl, authScope, client };
+  const keysQuery = useInstancePersonalApiKeysQuery({ ...api, enabled: true });
+  const revoke = useRevokePersonalApiKeyMutation({
+    ...api,
+    heldMessage: t("apiAccessWaitsForApproval")
+  });
+  const canRevoke = canManageApiAccess(user);
+
+  return (
+    <Section
+      layout="stacked"
+      title={t("personalApiKeys.instanceTitle")}
+      description={t("personalApiKeys.instanceDescription")}
+      count={keysQuery.data?.length}
+    >
+      {keysQuery.error ? (
+        <Banner tone="danger">
+          {apiErrorMessage(keysQuery.error, t("settings.requestFailed"))}
+        </Banner>
+      ) : (
+        <PersonalApiKeysTable
+          keys={keysQuery.data ?? []}
+          loading={keysQuery.isPending}
+          showOwner
+          revoking={revoke.isPending}
+          onRevoke={canRevoke ? (key) => revoke.mutateAsync(key.id) : undefined}
+        />
+      )}
+    </Section>
   );
 }
 

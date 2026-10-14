@@ -12,9 +12,14 @@ export function createConfigAssetSource(input: {
 }): ConfigAssetSource {
   return {
     async getSnapshot(): Promise<RuntimeAssetSnapshot> {
+      // Read for every turn and tool call: the skills come without their resources, which the
+      // store leaves out before they are read, and `getSkill` reads when a call needs them.
       const [state, assets] = await Promise.all([
         input.store.getConfigAssetState({ clientInstanceId: input.clientInstanceId }),
-        input.store.listActiveConfigAssets({ clientInstanceId: input.clientInstanceId })
+        input.store.listActiveConfigAssets({
+          clientInstanceId: input.clientInstanceId,
+          withoutSkillResources: true
+        })
       ]);
       return {
         version: state.version,
@@ -26,6 +31,14 @@ export function createConfigAssetSource(input: {
           .filter((asset) => asset.kind === "skill")
           .map((asset) => skillConfigSchema.parse(asset.config))
       };
+    },
+    async getSkill(name) {
+      const asset = await input.store.getConfigAsset({
+        clientInstanceId: input.clientInstanceId,
+        kind: "skill",
+        name
+      });
+      return asset?.status === "active" ? skillConfigSchema.parse(asset.config) : undefined;
     }
   };
 }

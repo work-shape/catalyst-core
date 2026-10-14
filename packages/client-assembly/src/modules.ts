@@ -39,8 +39,10 @@ const assetManagementModule = defineModule({
     "assets.revert",
     "assets.publish",
     "assets.discard_draft",
+    "assets.run_live_once",
     "assets.set_default",
-    "assets.set_availability"
+    "assets.set_availability",
+    "guardrails.unpublish"
   ],
   selfCheckedOperations: ["assets.sync"],
   // The agent's save of a draft is a change of an asset like `assets.put`, which it projects.
@@ -77,10 +79,10 @@ const appsModule = defineModule({
     "apps.preview",
     "apps.sessions.context",
     "apps.sessions.call_action",
-    "apps.sessions.call_connection"
+    "apps.sessions.get_workflow_run"
   ],
   kinds: ["app"],
-  tools: ["page.save"],
+  tools: ["page.save", "page.save_as_app"],
   jobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"],
   commandWorkerJobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"]
 });
@@ -93,10 +95,38 @@ const appsModule = defineModule({
  */
 const connectionsModule = defineModule({
   name: "connections",
-  operations: ["connections.get", "connections.test", "connections.list_tools"],
+  operations: [
+    "connections.get",
+    "connections.test",
+    "connections.set_secret",
+    "connections.discover",
+    "connections.list_tools"
+  ],
   kinds: ["connection"],
   jobKinds: ["connection.discover"],
   ui: ["build.connections"]
+});
+
+/**
+ * Personal API keys: a person issues keys that act as themself, narrowed to their scopes, in
+ * Settings or by confirming the CLI's connect code; whoever holds `api_access.manage` sees and
+ * revokes every person's keys. Off, no personal key authenticates (`createClientInstanceAuth`)
+ * and the keys stay stored, revocable when the module is on again.
+ */
+const personalApiKeysModule = defineModule({
+  name: "personalApiKeys",
+  operations: [
+    "me.api_keys.list",
+    "me.api_keys.create",
+    "me.api_keys.revoke",
+    "me.connect_codes.get",
+    "me.connect_codes.confirm",
+    "connect_codes.start",
+    "connect_codes.redeem",
+    "personal_api_keys.list",
+    "personal_api_keys.revoke"
+  ],
+  ui: ["settings.you.api-keys", "settings.api-access.personal-keys"]
 });
 
 /** The modules whose code ships with the platform. A capability declares its own. */
@@ -108,7 +138,8 @@ export const platformModules = [
   connectionsModule,
   workflowsModule,
   dataStoresModule,
-  knowledgeModule
+  knowledgeModule,
+  personalApiKeysModule
 ];
 
 /**
@@ -181,6 +212,11 @@ export function resolveInstanceModules(
 /** What a resolve-only run prints before it ends. The release gate looks for this line. */
 const RESOLVE_ONLY_MARKER = "resolve-only: this process starts with this config";
 
+/** Whether the release gate started this process with `--resolve-only`. */
+export function isResolveOnlyRun(): boolean {
+  return process.argv.includes("--resolve-only");
+}
+
 /**
  * Ends a resolve-only run. The release gate starts every built process entry point of a
  * deployment with the argument `--resolve-only`, once per release config. The process loads
@@ -190,7 +226,7 @@ const RESOLVE_ONLY_MARKER = "resolve-only: this process starts with this config"
  * the last of those checks.
  */
 export function endResolveOnlyRun(): void {
-  if (process.argv.includes("--resolve-only")) {
+  if (isResolveOnlyRun()) {
     process.stdout.write(`${RESOLVE_ONLY_MARKER}\n`);
     process.exit(0);
   }

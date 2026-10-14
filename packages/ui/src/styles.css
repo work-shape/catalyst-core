@@ -215,6 +215,27 @@
     }
   }
 
+  /* The chat dock: the conversation narrows into the dock beside a page, or widens out of it
+     into its own route, in this time on `--ease-move`. While it narrows, the page comes in at
+     the dock's moving edge (`dock-page-in`); while it widens, the conversation uncovers its
+     width from the dock's, `--dock-from` (`dock-widen`). Use them behind `motion-safe:`. */
+  --duration-dock: 250ms;
+  --animate-dock-page-in: dock-page-in var(--duration-dock) var(--ease-move) both;
+  --animate-dock-widen: dock-widen var(--duration-dock) var(--ease-move) both;
+
+  @keyframes dock-page-in {
+    from {
+      clip-path: inset(0 0 0 100%);
+      opacity: 0;
+    }
+  }
+
+  @keyframes dock-widen {
+    from {
+      clip-path: inset(0 calc(100% - var(--dock-from, 0px)) 0 0);
+    }
+  }
+
   /* A loading layout stays unseen this long, then fades in. An answer that comes sooner shows
      no loading state at all: a stand-in that is replaced at once reads as a flicker. */
   --duration-loading-delay: 180ms;
@@ -320,6 +341,20 @@
       background: color-mix(in srgb, var(--muted-foreground) 80%, transparent);
       background-clip: content-box;
     }
+  }
+}
+
+/* A card that opens as a whole (`CardTarget`): its target's clickable area lies over the card, and
+   every other control in it, and what `CardReachable` marks, stands above that area, so each
+   keeps its own action, its tooltip and its selectable text. In the components layer, a
+   control's own position utility still wins. */
+@layer components {
+  [data-card]:has([data-card-target])
+    :is(a, button, input, select, textarea, [tabindex], [data-card-reachable]):not(
+      [data-card-target]
+    ) {
+    position: relative;
+    z-index: 1;
   }
 }
 

@@ -33,20 +33,30 @@ export interface AgentAvailability {
 }
 
 /**
- * Availability given to agents a mutation batch creates or revives.
- * `selected_when_replacing_selected` is the config push rule: a batch that also deletes a
- * `selected` agent is treated as a rename, so its new agents start hidden instead of `all`.
+ * Availability given to agents a mutation batch creates or revives: every workspace, none,
+ * or the one shared workspace the agent was made in. `selected_when_replacing_selected` is
+ * the release rule: a batch that also deletes a `selected` agent is treated as a rename, so
+ * its new agents start hidden instead of `all`.
  */
-export type InitialAgentAvailability = "all" | "selected" | "selected_when_replacing_selected";
+export type InitialAgentAvailability =
+  | "all"
+  | "hidden"
+  | { collaborationWorkspaceId: CollaborationWorkspaceId }
+  | "selected_when_replacing_selected";
 
-export function resolveInitialAgentAvailabilityMode(
+export function resolveInitialAgentAvailability(
   initial: InitialAgentAvailability | undefined,
   deletesSelectedAgent: boolean
-): AgentAvailabilityMode {
-  if (initial === "selected_when_replacing_selected") {
-    return deletesSelectedAgent ? "selected" : "all";
+): Pick<AgentAvailability, "mode" | "collaborationWorkspaceIds"> {
+  const hidden = { mode: "selected" as const, collaborationWorkspaceIds: [] };
+  if (initial === undefined || initial === "all") {
+    return { mode: "all", collaborationWorkspaceIds: [] };
   }
-  return initial ?? "all";
+  if (initial === "hidden") return hidden;
+  if (initial === "selected_when_replacing_selected") {
+    return deletesSelectedAgent ? hidden : { mode: "all", collaborationWorkspaceIds: [] };
+  }
+  return { mode: "selected", collaborationWorkspaceIds: [initial.collaborationWorkspaceId] };
 }
 
 export function isAgentAvailableInWorkspace(
@@ -64,15 +74,25 @@ export function isAgentAvailableInWorkspace(
     : workspace.id !== undefined && availability.collaborationWorkspaceIds.includes(workspace.id);
 }
 
+/**
+ * A skill as every turn reads it: what the agent is told of it, without its resources. A
+ * skill's resources can be large, such as the product docs of `platform-docs`, and are read
+ * one skill at a time, when a call asks for them.
+ */
+export type RuntimeSkill = Omit<SkillConfig, "resources">;
+
 export interface RuntimeAssetSnapshot {
   version: number;
   defaultAgentName?: string;
   agents: AgentConfig[];
-  skills: SkillConfig[];
+  skills: RuntimeSkill[];
 }
 
 export interface ConfigAssetSource {
+  /** The agents and skills, read for each turn and each tool call. */
   getSnapshot(): Promise<RuntimeAssetSnapshot>;
+  /** One skill whole, with its resources, or nothing where none of the name is active. */
+  getSkill(name: string): Promise<SkillConfig | undefined>;
 }
 
 export interface ConfigAssetRecord {
@@ -376,6 +396,11 @@ export interface ConfigAssetStore {
     kind?: ConfigAssetKind;
     /** Only assets whose name starts with this text, such as a Namespace prefix. */
     namePrefix?: string;
+    /**
+     * Skills without their `resources`, left out by the store before they are read: what the
+     * runtime snapshot reads. `getConfigAsset` reads one skill whole.
+     */
+    withoutSkillResources?: boolean;
   }): Promise<ConfigAssetRecord[]>;
   /**
    * One page of the active assets of a kind in one scope, in the byte order of their names.
@@ -559,6 +584,18 @@ export interface ConfigAssetStore {
     replacedRevision?: number;
     fileSetId?: FileSetId;
   }>;
+  /**
+   * Takes the published pointer away: nothing of the asset is served until a revision is
+   * published again, and the draft stays as it is. Refuses with `nothing_published` where
+   * nothing is published. Answers the revision that was published.
+   */
+  unpublishConfigAsset(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name: string;
+    /** The asset whose right was checked, as in `publishConfigAssetRevision`. */
+    assetId: string;
+  }): Promise<{ revision: number }>;
   /**
    * Moves the draft pointer back to the published revision. Refuses with `CONFLICT` when the
    * draft is not at `expectedRevision`, and with `nothing_published` before the first publish.

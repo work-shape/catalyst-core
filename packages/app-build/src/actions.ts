@@ -18,7 +18,8 @@ import {
   type SqlActionParameter
 } from "./action-input";
 import type { PageBuildError } from "./errors";
-import { PAGE_MANIFEST_FILE, type PageManifest } from "./manifest";
+import { KIT_WORKFLOW_ACTIONS_SINCE, kitStartsWorkflows } from "./kit";
+import { PAGE_MANIFEST_FILE, reservedActionKeyMessage, type PageManifest } from "./manifest";
 import {
   APP_SQL_ACTION_FILE_MAX_BYTES,
   APP_SQL_ACTION_FILE_SUFFIX,
@@ -28,7 +29,8 @@ import type { PageFile } from "./types";
 
 // The named actions of a Page: one file of `actions/` each, and the ending of its name says
 // which kind. `<name>.action.yaml` says which operation of which Connection the action stands
-// for, what the browser may pass, and where each parameter goes in the operation's input.
+// for, or which Workflow it starts, what the browser may pass, and where each parameter goes
+// in the input of the operation or of the run.
 // `<name>.sql` is a statement on the Data Store of the manifest, with its parameters declared
 // in its header: one that reads, or one that adds a row. The build reads a file as data and writes the action into the
 // manifest. At a call the platform reads the manifest and nothing else: no file of `actions/`
@@ -37,6 +39,7 @@ import type { PageFile } from "./types";
 // The build runs without the instance, so it checks what the files say among themselves. What
 // only the instance knows, whether a Connection or a Data Store exists and what effect an
 // operation was accepted with, is checked when the App is written and published and again at
+// every call. Whether a Workflow exists, and whether the caller may start it, is asked at
 // every call.
 
 /** The folder the action files are in. */
@@ -48,10 +51,7 @@ export const APP_ACTION_FILE_MAX_BYTES = 64 * 1024;
 /** How many named actions one Page has. */
 export const APP_MAX_ACTIONS = 100;
 
-const actionFileSchema = z.strictObject({
-  connection: z.string().min(1).max(64),
-  operation: z.string().min(1).max(128),
-  effect: z.enum(["reading", "changing"]),
+const actionFileFields = {
   description: z.string().max(APP_ACTION_DESCRIPTION_MAX_CHARS).optional(),
   policy: z.enum(APP_ACTION_POLICY_VALUES).optional(),
   input: z
@@ -60,6 +60,23 @@ const actionFileSchema = z.strictObject({
       mapping: z.record(z.string(), z.unknown()).optional()
     })
     .optional()
+};
+
+/** An action file that calls an operation of a Connection. */
+const connectionActionFileSchema = z.strictObject({
+  connection: z.string().min(1).max(64),
+  operation: z.string().min(1).max(128),
+  effect: z.enum(["reading", "changing"]),
+  ...actionFileFields
+});
+
+/**
+ * An action file that starts a Workflow. It names no effect: a start always changes
+ * something. The mapping makes the input of the run.
+ */
+const workflowActionFileSchema = z.strictObject({
+  workflow: z.string().min(1).max(64),
+  ...actionFileFields
 });
 
 export type CompiledActions =
@@ -95,6 +112,29 @@ function actionFileOf(file: PageFile): ActionFile | undefined {
 }
 
 /**
+ * A YAML file of `actions/` whose name has not the ending of an action file. The build would
+ * pass it over and the action would be missing at the first call, so it is refused with the
+ * name it needs.
+ */
+function misnamedActionFiles(files: readonly PageFile[]): PageBuildError[] {
+  return files.flatMap(({ path }) => {
+    if (!path.startsWith(APP_ACTIONS_DIRECTORY) || !/\.ya?ml$/u.test(path)) return [];
+    if (path.endsWith(APP_ACTION_FILE_SUFFIX)) return [];
+    const name = path
+      .slice(APP_ACTIONS_DIRECTORY.length)
+      .replace(/(\.action)?\.ya?ml$/u, "")
+      .replaceAll("/", "-");
+    return [
+      {
+        file: path,
+        code: "action_invalid" as const,
+        message: `'${path}' is no action file: an action that calls a Connection or starts a Workflow is the file '${APP_ACTIONS_DIRECTORY}${name}${APP_ACTION_FILE_SUFFIX}', and a statement on the Data Store is '${APP_ACTIONS_DIRECTORY}${name}${APP_SQL_ACTION_FILE_SUFFIX}'. Rename the file.`
+      }
+    ];
+  });
+}
+
+/**
  * Compiles the action files of a Page against its manifest. It answers every action, or every
  * fault an author has to fix, each with its file.
  */
@@ -125,6 +165,7 @@ export function compileActions(
     };
   }
 
+  errors.push(...misnamedActionFiles(files));
   const defined = new Set<string>();
   for (const { file, name, kind } of actionFiles) {
     if (defined.has(name)) {
@@ -139,7 +180,7 @@ export function compileActions(
     const compiled =
       kind === "sql"
         ? compileSqlActionFile(file, name, entries.get(name), manifest)
-        : compileActionFile(file, name, declared);
+        : compileActionFile(file, name, declared, manifest.kit);
     if ("errors" in compiled) {
       errors.push(...compiled.errors);
     } else {
@@ -154,9 +195,9 @@ export function compileActions(
 
 /**
  * What the manifest says about actions, held against the files. A file defines its action. A
- * line under `actions` of the manifest names one of them: for a `connection` action it may,
- * and must then say the same as the file; for an `sql` action it must, because the statement
- * says nothing of its effect.
+ * line under `actions` of the manifest names one of them: for a `connection` or a `workflow`
+ * action it may, and must then say the same as the file; for an `sql` action it must, because
+ * the statement says nothing of its effect.
  */
 function declarationErrors(
   manifest: PageManifest,
@@ -178,7 +219,7 @@ function declarationErrors(
     const suffix = ACTION_FILE_KINDS.find((known) => file.endsWith(known.suffix))?.suffix;
     if (suffix === undefined) {
       fail(
-        `The action '${entry.name}' names '${file}'. An action is a file '${APP_ACTIONS_DIRECTORY}<name>${APP_ACTION_FILE_SUFFIX}' that calls an operation of a Connection, or a file '${APP_ACTIONS_DIRECTORY}<name>${APP_SQL_ACTION_FILE_SUFFIX}' that reads a Data Store; no other kind of action exists yet.`
+        `The action '${entry.name}' names '${file}'. An action is a file '${APP_ACTIONS_DIRECTORY}<name>${APP_ACTION_FILE_SUFFIX}' that calls an operation of a Connection or starts a Workflow, or a file '${APP_ACTIONS_DIRECTORY}<name>${APP_SQL_ACTION_FILE_SUFFIX}' that reads a Data Store; no other kind of action exists yet.`
       );
       continue;
     }
@@ -196,16 +237,24 @@ function declarationErrors(
       continue;
     }
     // An `sql` action was compiled from this line, so there is nothing to hold it against.
-    if (action.kind !== "connection" || action.file !== file) continue;
+    if (action.kind === "sql" || action.file !== file) continue;
     if (entry.effect !== action.effect) {
       fail(
-        `The manifest calls the action '${entry.name}' ${entry.effect} and '${file}' calls it ${action.effect}. Say it once, in the file.`
+        action.kind === "workflow"
+          ? `The manifest calls the action '${entry.name}' ${entry.effect}. It starts a Workflow, which always changes something: say 'effect: changing' or leave the line out.`
+          : `The manifest calls the action '${entry.name}' ${entry.effect} and '${file}' calls it ${action.effect}. Say it once, in the file.`
       );
     }
-    if (entry.connection !== undefined && entry.connection !== action.connection) {
-      fail(
-        `The manifest names the Connection '${entry.connection}' for the action '${entry.name}' and '${file}' names '${action.connection}'.`
-      );
+    if (entry.connection !== undefined) {
+      if (action.kind === "workflow") {
+        fail(
+          `The manifest names the Connection '${entry.connection}' for the action '${entry.name}', which starts the Workflow '${action.workflow}' and calls no Connection. Remove 'connection'.`
+        );
+      } else if (entry.connection !== action.connection) {
+        fail(
+          `The manifest names the Connection '${entry.connection}' for the action '${entry.name}' and '${file}' names '${action.connection}'.`
+        );
+      }
     }
     if (entry.policy !== undefined && entry.policy !== action.policy) {
       fail(
@@ -264,7 +313,7 @@ function compileSqlActionFile(
     return {
       errors: [
         inFile(
-          `The statement has no line under 'actions' in ${PAGE_MANIFEST_FILE}. Add '{ name: ${name}, file: ${file.path}, effect: reading }': the manifest says what a statement does.`
+          `The statement has no line under 'actions' in ${PAGE_MANIFEST_FILE}. Add '{ name: ${name}, file: ${file.path}, effect: reading }', or 'effect: changing' for an INSERT: the manifest says what a statement does.`
         )
       ]
     };
@@ -356,7 +405,8 @@ function compileSqlActionFile(
 function compileActionFile(
   file: PageFile,
   name: string,
-  declaredConnections: ReadonlySet<string>
+  declaredConnections: ReadonlySet<string>,
+  kitVersion: string
 ): { action: CompiledAppAction } | { errors: PageBuildError[] } {
   const fail = (
     message: string,
@@ -381,40 +431,70 @@ function compileActionFile(
   } catch {
     return fail("The action file is not UTF-8 text.");
   }
-  const read = readYamlData(text, file.path);
+  const read = readYamlData(text, file.path, { refuseAliases: true });
   if (!read.ok) {
     return fail(read.issue.message, "action_invalid", read.issue.line);
   }
   const value = read.value;
-  const parsed = actionFileSchema.safeParse(value);
-  if (!parsed.success) {
-    return {
-      errors: parsed.error.issues.map((issue) => ({
-        file: file.path,
-        code: "action_invalid" as const,
-        message: describeIssue(issue)
-      }))
-    };
+  const reserved = reservedActionKeyMessage(value);
+  if (reserved !== undefined) {
+    return fail(reserved, "key_reserved");
   }
-  const { connection, operation, effect, description, policy, input } = parsed.data;
+  const issues = (error: z.ZodError, keys: string) => ({
+    errors: error.issues.map((issue) => ({
+      file: file.path,
+      code: "action_invalid" as const,
+      message: describeIssue(issue, keys, value)
+    }))
+  });
+  // The key `workflow` makes the file one that starts a Workflow.
+  if (typeof value === "object" && value !== null && "workflow" in value) {
+    const parsed = workflowActionFileSchema.safeParse(value);
+    if (!parsed.success) {
+      return issues(
+        parsed.error,
+        "An action file that starts a Workflow holds workflow, description, policy and input with schema and mapping."
+      );
+    }
+    const { workflow, description, policy } = parsed.data;
+    if (!kitStartsWorkflows(kitVersion)) {
+      return fail(
+        `The action starts the Workflow '${workflow}', and the manifest names kit ${kitVersion}. An App that starts a Workflow names kit ${KIT_WORKFLOW_ACTIONS_SINCE} or later in ${PAGE_MANIFEST_FILE}.`
+      );
+    }
+    const input = readInput(parsed.data.input);
+    return "message" in input
+      ? fail(input.message)
+      : {
+          action: {
+            name,
+            kind: "workflow",
+            file: file.path,
+            effect: "changing",
+            ...(description === undefined ? {} : { description }),
+            ...(policy === undefined ? {} : { policy }),
+            workflow,
+            input
+          }
+        };
+  }
+  const parsed = connectionActionFileSchema.safeParse(value);
+  if (!parsed.success) {
+    return issues(
+      parsed.error,
+      "An action file holds connection, operation, effect, description, policy and input with schema and mapping, or workflow in place of connection, operation and effect."
+    );
+  }
+  const { connection, operation, effect, description, policy } = parsed.data;
   if (!declaredConnections.has(connection)) {
     return fail(
       `The action calls the Connection '${connection}', which the manifest does not list. Add it under 'connections' in ${PAGE_MANIFEST_FILE}: a Page reaches what its manifest names and nothing else.`,
       "connection_not_declared"
     );
   }
-  const schema = input?.schema ?? { type: "object" as const, properties: {} };
-  const unknownRequired = (schema.required ?? []).filter(
-    (parameter) => !Object.hasOwn(schema.properties, parameter)
-  );
-  if (unknownRequired.length > 0) {
-    return fail(
-      `'input.schema.required' names ${unknownRequired.map((parameter) => `'${parameter}'`).join(", ")}, which 'input.schema.properties' does not hold.`
-    );
-  }
-  const mapping = readMapping(input?.mapping ?? {}, new Set(Object.keys(schema.properties)));
-  if ("message" in mapping) {
-    return fail(mapping.message);
+  const input = readInput(parsed.data.input);
+  if ("message" in input) {
+    return fail(input.message);
   }
   return {
     action: {
@@ -426,9 +506,26 @@ function compileActionFile(
       ...(policy === undefined ? {} : { policy }),
       connection,
       operation,
-      input: { schema, mapping: mapping.value }
+      input
     }
   };
+}
+
+/** The schema and the mapping of an action file, read against each other. */
+function readInput(
+  input: { schema?: AppActionInputSchema; mapping?: Record<string, unknown> } | undefined
+): { schema: AppActionInputSchema; mapping: JsonObject } | { message: string } {
+  const schema = input?.schema ?? { type: "object" as const, properties: {} };
+  const unknownRequired = (schema.required ?? []).filter(
+    (parameter) => !Object.hasOwn(schema.properties, parameter)
+  );
+  if (unknownRequired.length > 0) {
+    return {
+      message: `'input.schema.required' names ${unknownRequired.map((parameter) => `'${parameter}'`).join(", ")}, which 'input.schema.properties' does not hold.`
+    };
+  }
+  const mapping = readMapping(input?.mapping ?? {}, new Set(Object.keys(schema.properties)));
+  return "message" in mapping ? mapping : { schema, mapping: mapping.value };
 }
 
 /**
@@ -492,10 +589,28 @@ function readMapping(
   return fault === undefined ? { value } : { message: fault };
 }
 
-function describeIssue(issue: z.core.$ZodIssue): string {
+/** What each key of an action file holds, for a file that leaves one out. */
+const ACTION_FILE_KEY_HINTS: Readonly<Record<string, string>> = {
+  connection: "the name of a Connection the manifest lists under 'connections'",
+  operation:
+    "the name of an operation the Connection offers, exactly as the Connection lists it; only an accepted operation can be called",
+  effect:
+    "'reading' or 'changing', as the operation was accepted on the Connection; an action file that starts a Workflow has 'workflow: <Workflow id>' in place of connection, operation and effect"
+};
+
+function describeIssue(issue: z.core.$ZodIssue, keys: string, value: unknown): string {
   if (issue.code === "unrecognized_keys") {
     const where = issue.path.length > 0 ? ` under '${issue.path.join(".")}'` : "";
-    return `Unknown key${issue.keys.length > 1 ? "s" : ""} ${issue.keys.map((key) => `'${key}'`).join(", ")}${where}. An action file holds connection, operation, effect, description, policy and input with schema and mapping.`;
+    return `Unknown key${issue.keys.length > 1 ? "s" : ""} ${issue.keys.map((key) => `'${key}'`).join(", ")}${where}. ${keys}`;
+  }
+  const [top] = issue.path;
+  if (
+    issue.path.length === 1 &&
+    typeof top === "string" &&
+    (typeof value !== "object" || value === null || !Object.hasOwn(value, top))
+  ) {
+    const hint = ACTION_FILE_KEY_HINTS[top];
+    return `'${top}' is missing${hint ? `: ${hint}` : ""}. ${keys}`;
   }
   const key = issue.path.length > 0 ? `'${issue.path.join(".")}'` : "The action file";
   return `${key}: ${issue.message}`;

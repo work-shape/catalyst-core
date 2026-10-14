@@ -78,3 +78,12 @@ export const namespaces = pgTable(
     primaryKey({ name: "namespaces_pk", columns: [table.clientInstanceId, table.prefix] })
   ]
 );
+
+/**
+ * A row says the legacy permission lists were written back into their columns for a release
+ * before AP-4 (`scripts/verify-permissions.ts --restore-legacy-columns`). The next migration
+ * step moves the lists into grant rows again and empties the table.
+ */
+export const legacyPermissionRestores = pgTable("legacy_permission_restores", {
+  restoredAt: timestamp("restored_at", { withTimezone: true }).primaryKey()
+});

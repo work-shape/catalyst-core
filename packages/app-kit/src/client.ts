@@ -5,6 +5,7 @@ import {
   type AppCallResult,
   type AppContext,
   type AppThemeChange,
+  type AppWorkflowRun,
   type HostMessage,
   type PageMessage
 } from "./protocol";
@@ -54,6 +55,9 @@ export class AppCallError extends Error {
     if (failure.runId !== undefined) this.runId = failure.runId;
   }
 }
+
+/** What an answer of the wrong kind to a request is taken as. The interface sends none. */
+const MISMATCHED_ANSWER = { code: "failed", message: "The interface answered another call." };
 
 /** What one call may carry beside its input. */
 export interface AppCallOptions {
@@ -180,22 +184,22 @@ export interface AppClient {
       options?: AppCallOptions
     ): Promise<AppCallResult>;
   };
-  connections: {
-    /** Calls one operation of a Connection the manifest lists, with the viewer's rights. */
-    call(
-      connection: string,
-      operation: string,
-      input?: unknown,
-      options?: AppCallOptions
-    ): Promise<AppCallResult>;
+  workflowRuns: {
+    /**
+     * Reads a Workflow Run that an action of this Page started, by the `id` of the run the
+     * call answered: its state and, once it is done, its result. A run of a Workflow that no
+     * action of the manifest starts rejects with an `AppCallError` as one that does not exist.
+     */
+    get(runId: string): Promise<AppWorkflowRun>;
   };
 }
 
-type CallMessage = Extract<PageMessage, { type: "action" | "connection_call" }>;
-/** A call before the session and the id of its answer are known. */
-type NewCall =
-  | Omit<Extract<CallMessage, { type: "action" }>, "session" | "requestId">
-  | Omit<Extract<CallMessage, { type: "connection_call" }>, "session" | "requestId">;
+type RequestMessage = Extract<PageMessage, { type: "action" | "workflow_run" }>;
+/** A call or a read before the session and the id of its answer are known. */
+type NewRequest =
+  | Omit<Extract<RequestMessage, { type: "action" }>, "session" | "requestId">
+  | Omit<Extract<RequestMessage, { type: "workflow_run" }>, "session" | "requestId">;
+type Answer = Extract<HostMessage, { type: "action_result" | "workflow_run_result" }>;
 
 /** A client on a transport. A Page uses the one below; a test brings its own transport. */
 export function createAppClient(
@@ -207,12 +211,11 @@ export function createAppClient(
   const themeListeners = new Set<(change: AppThemeChange) => void>();
   // What the Page said before the interface answered: the newest message of each kind.
   const pending = new Map<PageMessage["type"], PageMessage>();
-  // The calls that wait for their answer, by the id each was sent with.
+  // The calls and reads that wait for their answer, by the id each was sent with.
   const calls = new Map<
     string,
     {
-      resolve(result: AppCallResult): void;
-      reject(error: AppCallError): void;
+      resolve(answer: Answer): void;
       timeout: ReturnType<typeof setTimeout>;
     }
   >();
@@ -237,18 +240,14 @@ export function createAppClient(
           }
           return;
         }
-        if (incoming.type === "action_result") {
+        if (incoming.type === "action_result" || incoming.type === "workflow_run_result") {
           const waiting = incoming.session === session ? calls.get(incoming.requestId) : undefined;
           if (!waiting) {
             return;
           }
           calls.delete(incoming.requestId);
           clearTimeout(waiting.timeout);
-          if (incoming.ok) {
-            waiting.resolve(incoming.result);
-          } else {
-            waiting.reject(new AppCallError(incoming.error));
-          }
+          waiting.resolve(incoming);
           return;
         }
         for (const listener of themeListeners) {
@@ -270,8 +269,8 @@ export function createAppClient(
     transport.send(message.type === "ready" ? message : { ...message, session });
   }
 
-  /** Sends one call once the interface answered, and waits for the answer that names it. */
-  async function call(message: NewCall): Promise<AppCallResult> {
+  /** Sends one call or read once the interface answered, and waits for the answer that names it. */
+  async function request(message: NewRequest): Promise<Answer> {
     await connect().catch(() => undefined);
     const callSession = session;
     if (callSession === undefined) {
@@ -279,16 +278,24 @@ export function createAppClient(
     }
     callCount += 1;
     const requestId = `${callCount}-${Math.random().toString(36).slice(2, 10)}`;
-    return new Promise<AppCallResult>((resolve, reject) => {
+    return new Promise<Answer>((resolve, reject) => {
       const timeout = setTimeout(() => {
         calls.delete(requestId);
         reject(
           new AppCallError({ code: "timeout", message: "The interface did not answer the call." })
         );
       }, options.callTimeoutMs ?? CALL_TIMEOUT_MS);
-      calls.set(requestId, { resolve, reject, timeout });
+      calls.set(requestId, { resolve, timeout });
       transport.send({ ...message, session: callSession, requestId });
     });
+  }
+
+  async function call(
+    message: Exclude<NewRequest, { type: "workflow_run" }>
+  ): Promise<AppCallResult> {
+    const answer = await request(message);
+    if (answer.type === "action_result" && answer.ok) return answer.result;
+    throw new AppCallError(answer.ok ? MISMATCHED_ANSWER : answer.error);
   }
 
   return {
@@ -304,17 +311,12 @@ export function createAppClient(
             : { idempotencyKey: callOptions.idempotencyKey })
         })
     },
-    connections: {
-      call: (connection, operation, input, callOptions = {}) =>
-        call({
-          type: "connection_call",
-          connection,
-          operation,
-          input: input ?? {},
-          ...(callOptions.idempotencyKey === undefined
-            ? {}
-            : { idempotencyKey: callOptions.idempotencyKey })
-        })
+    workflowRuns: {
+      async get(runId) {
+        const answer = await request({ type: "workflow_run", runId });
+        if (answer.type === "workflow_run_result" && answer.ok) return answer.run;
+        throw new AppCallError(answer.ok ? MISMATCHED_ANSWER : answer.error);
+      }
     },
     onThemeChange(callback) {
       themeListeners.add(callback);
@@ -349,8 +351,7 @@ export const resize: AppClient["resize"] = (height) => client().resize(height);
 export const actions: AppClient["actions"] = {
   call: (name, params, options) => client().actions.call(name, params, options)
 };
-/** The Connections the manifest lists. `connections.call("crm", "list_customers", {})`. */
-export const connections: AppClient["connections"] = {
-  call: (connection, operation, input, options) =>
-    client().connections.call(connection, operation, input, options)
+/** The Workflow Runs the actions of the manifest started. `workflowRuns.get(run.id)`. */
+export const workflowRuns: AppClient["workflowRuns"] = {
+  get: (runId) => client().workflowRuns.get(runId)
 };

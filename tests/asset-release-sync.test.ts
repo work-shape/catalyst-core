@@ -525,7 +525,7 @@ describe("assets.sync without a Namespace", () => {
       t.call(userId, "assets.sync", { payload: { items } });
     const needsNamespace = {
       code: "VALIDATION_FAILED",
-      message: "A batch names the Namespace it belongs to"
+      message: "A batch names the Namespace or the workspace it belongs to"
     };
 
     // A Namespace holder, an administrator and a superadmin: none of them holds the release right.
@@ -599,7 +599,10 @@ describe("assets.sync without a Namespace", () => {
         message: errorSchema.parse(response.json()).error.message
       };
     };
-    const needsNamespace = { status: 422, message: "A batch names the Namespace it belongs to" };
+    const needsNamespace = {
+      status: 422,
+      message: "A batch names the Namespace or the workspace it belongs to"
+    };
     const missingScope = { status: 403, message: "Missing auth scope 'config_assets:write'" };
 
     for (const operation of ["assets.sync_check", "assets.sync"] as const) {

@@ -18,6 +18,7 @@ import { jobOperations } from "./jobs";
 import { knowledgeOperations } from "./knowledge";
 import { operationRunOperations } from "./operations";
 import { pageOperations } from "./pages";
+import { personalApiKeyOperations } from "./personal-api-keys";
 import { platformOperations } from "./platform";
 import { referenceOperations } from "./reference";
 import { systemOperations } from "./system";
@@ -46,6 +47,7 @@ export const apiOperations = {
   ...knowledgeOperations,
   ...userOperations,
   ...apiAccessOperations,
+  ...personalApiKeyOperations,
   ...accessOperations,
   ...credentialOperations,
   ...platformOperations,

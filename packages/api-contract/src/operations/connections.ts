@@ -12,6 +12,9 @@ import { defineRegisteredOperation, json } from "./define-operation";
 // of a Connection. The asset, with name, settings and accepted operations, is read through
 // `assets.get`. Nothing here answers a secret, a handle of one, or data of the outside system.
 
+/** The longest secret a write takes. The Secret Store counts its bytes again. */
+const SECRET_VALUE_MAX_CHARS = 16 * 1024;
+
 /** How long the description of an operation is at most as these answers carry it. */
 export const CONNECTION_OPERATION_DESCRIPTION_MAX_CHARS = 4_000;
 
@@ -55,6 +58,19 @@ export const connectionOperationDetailSchema = z.object({
   schemaRefusal: z.string().optional()
 });
 
+/**
+ * A tool the last discovery read that the Connection does not accept. It is callable by
+ * nobody until a write of the Connection accepts it, with the fingerprint shown here.
+ */
+const connectionDiscoveredToolSchema = z.object({
+  name: z.string(),
+  /** As the outside system describes it. Untrusted text, shown as text. */
+  description: z.string().max(CONNECTION_OPERATION_DESCRIPTION_MAX_CHARS).optional(),
+  /** What the outside system's hint proposes. The accepted list decides. */
+  proposedEffect: connectionOperationEffectSchema,
+  fingerprint: z.string()
+});
+
 export const connectionDetailSchema = z.object({
   name: z.string(),
   health: z.enum(CONNECTION_HEALTH_STATES),
@@ -64,6 +80,8 @@ export const connectionDetailSchema = z.object({
   /** One credential for everyone who may use the Connection. The page says so. */
   sharedCredential: z.boolean(),
   operations: z.array(connectionOperationDetailSchema),
+  /** The tools the last discovery read and the Connection does not accept, by name. */
+  discovered: z.array(connectionDiscoveredToolSchema),
   /** The agents that carry a tool of this Connection, each one the caller may read. */
   usedBy: z.array(
     z.object({ agentName: z.string(), title: z.string(), toolNames: z.array(z.string()) })
@@ -98,7 +116,21 @@ export const connectionToolsSchema = z.object({
   )
 });
 
+/**
+ * A secret entered once. It is never answered, logged or kept with the run of its call.
+ * `expectedVersion` is the version the writer saw, `null` where none was set: a write over a
+ * version somebody else set meanwhile is refused.
+ */
+const connectionSecretWriteSchema = z.object({
+  value: z.string().min(1).max(SECRET_VALUE_MAX_CHARS),
+  expectedVersion: z.number().int().positive().nullable()
+});
+
+const connectionDiscoveryRequestSchema = z.object({ status: z.literal("queued") });
+
 export type ConnectionDetail = z.infer<typeof connectionDetailSchema>;
+export type ConnectionSecretState = z.infer<typeof connectionSecretStateSchema>;
+export type ConnectionDiscoveredTool = z.infer<typeof connectionDiscoveredToolSchema>;
 export type ConnectionOperationDetail = z.infer<typeof connectionOperationDetailSchema>;
 export type ConnectionTestResult = z.infer<typeof connectionTestResultSchema>;
 export type ConnectionTools = z.infer<typeof connectionToolsSchema>;
@@ -135,6 +167,38 @@ export const connectionOperations = {
     requires: [],
     effect: "changing",
     response: json(connectionTestResultSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  "connections.set_secret": defineRegisteredOperation({
+    id: "connections.set_secret",
+    method: "PUT",
+    path: "/api/v1/connections/:name/secret",
+    summary:
+      "Enter the secret of one Connection made on the instance, or replace it. The value is never answered",
+    tag: "Connections",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    // The call carries a secret. The run keeps no answer and the call never waits.
+    secret: true,
+    body: connectionSecretWriteSchema,
+    response: json(connectionSecretStateSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  "connections.discover": defineRegisteredOperation({
+    id: "connections.discover",
+    method: "POST",
+    path: "/api/v1/connections/:name/discover",
+    summary: "Read again which tools the system behind one Connection offers",
+    tag: "Connections",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    response: json(connectionDiscoveryRequestSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),

@@ -2,6 +2,7 @@ import { text, jsonObject } from "./support/assertions";
 
 import { describe, expect, it } from "vitest";
 import { asManagedArtifactId } from "@vivd-catalyst/core";
+import { listConversationResources } from "@vivd-catalyst/chat-server";
 import { createExecutionWorkspaceManagedObjectReader } from "@vivd-catalyst/client-assembly";
 import { createArtifactPreviewSettingsHash } from "@vivd-catalyst/tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
@@ -718,6 +719,94 @@ describe("workspace.preview_images", () => {
       })
     ).resolves.toMatchObject({ mimeType: "image/png", bytes: previewBytes });
     expect(modelOutput.text).toContain("[Visual context loaded]");
+  });
+
+  it("keeps images rendered to check the work out of created files and lists promoted files", async () => {
+    const harness = await createWorkspaceHarness();
+    await harness.putWorkspaceFile({
+      path: "previews/contoso_daten.png",
+      objectKey: "execution-workspaces/private/previews/contoso_daten.png",
+      bytes: encode("render-of-the-data-sheet"),
+      mimeType: "image/png"
+    });
+    await harness.putWorkspaceFile({
+      path: "artifacts/contoso.xlsx",
+      objectKey: "execution-workspaces/private/artifacts/contoso.xlsx",
+      bytes: encode("xlsx-bytes"),
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+    await harness.putWorkspaceFile({
+      path: "artifacts/umsatz_chart.png",
+      objectKey: "execution-workspaces/private/artifacts/umsatz_chart.png",
+      bytes: encode("chart-the-person-asked-for"),
+      mimeType: "image/png"
+    });
+
+    // The agent looks at a render of the workbook and at the chart it made for the person.
+    const looked = await harness.runTool("workspace.preview_images", {
+      paths: ["previews/contoso_daten.png", "artifacts/umsatz_chart.png"],
+      maxImages: 2
+    });
+    expect(looked.status).toBe("success");
+    const createdFiles = async () =>
+      (
+        await listConversationResources({
+          store: harness.store,
+          clientInstanceId: harness.clientInstanceId,
+          conversationId: harness.conversation.id
+        })
+      ).items
+        .filter((item) => item.resourceType === "generated_file")
+        .map((item) => item.title)
+        .sort();
+    expect(await createdFiles()).toEqual([]);
+
+    for (const [workspacePath, kind, mimeType] of [
+      [
+        "artifacts/contoso.xlsx",
+        "spreadsheet.workbook",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ],
+      ["artifacts/umsatz_chart.png", "image.png", "image/png"]
+    ] as const) {
+      const promoted = await harness.runTool("workspace.promote_artifact", {
+        path: workspacePath,
+        kind,
+        mimeType
+      });
+      expect(promoted.status).toBe("success");
+    }
+    // Looking at a promoted image again does not hide it.
+    await harness.runTool("workspace.preview_images", { path: "artifacts/umsatz_chart.png" });
+
+    expect(await createdFiles()).toEqual(["contoso.xlsx", "umsatz_chart.png"]);
+  });
+
+  it("keeps preview rows stored before the inspection purpose out of created files", async () => {
+    const harness = await createWorkspaceHarness();
+    await harness.store.files.ensureManagedArtifact({
+      id: asManagedArtifactId("art_workspace_preview_stored_before_the_purpose"),
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "image.png",
+      objectKey: "execution-workspaces/private/previews/contoso_start.png",
+      filename: "contoso_start.png",
+      mimeType: "image/png",
+      byteSize: 3,
+      checksum: "sha256:previews/contoso_start.png",
+      metadata: {
+        source: "execution_workspace",
+        workspaceId: "workspace-1",
+        workspacePath: "previews/contoso_start.png"
+      }
+    });
+
+    const resources = await listConversationResources({
+      store: harness.store,
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id
+    });
+    expect(resources.items).toEqual([]);
   });
 
   it("queues selector-specific previews when an existing manifest does not cover the request", async () => {

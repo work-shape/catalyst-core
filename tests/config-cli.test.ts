@@ -1,5 +1,6 @@
 import {
   callTestPath,
+  createTestAssetKinds,
   createTestFetch,
   createTestInstance,
   type TestInstance
@@ -9,7 +10,7 @@ import { retiredReleasePaths } from "./support/retired-api-paths";
 
 import { createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -18,6 +19,7 @@ import {
   UNKNOWN_OPERATION_REASON
 } from "@vivd-catalyst/api-contract";
 import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   ApiKeyAccessTokenExchange,
@@ -32,13 +34,23 @@ import {
   AppError,
   StoreBackedAuditRecorder,
   asClientInstanceId,
+  asUserId,
+  createAssetKindRegistry,
   type AgentRuntime,
   type JsonObject,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
+import {
+  createScriptedInstanceModelGateway,
+  type FakeModelProvider as ModelProvider
+} from "./support/model-gateway";
+import {
+  GuardrailRunner,
+  createAuditingEventEmitter,
+  createGuardrailAssetKind
+} from "@vivd-catalyst/chat-server";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import {
   STATE_FILENAME,
@@ -63,7 +75,20 @@ import {
   updateManifestDefaultAgent
 } from "../packages/config-cli/src/index";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
-import { agent as namespaceAgent, recordAuthAdapter } from "./support/access-instance";
+import {
+  agentConfig as namespaceAgentConfig,
+  grantKaiNamespace,
+  inDays,
+  setupPersonalKeyInstance
+} from "./support/personal-api-keys";
+import {
+  agent as namespaceAgent,
+  clientInstanceId as accessInstanceId,
+  recordAuthAdapter,
+  setupAccessInstance,
+  skill as accessSkill
+} from "./support/access-instance";
+import { IBAN as GUARDRAIL_IBAN, guardedEvents, ibanPattern } from "./support/guardrails";
 import { setupNamespaceHolder } from "./support/asset-operations";
 import { appFiles, setupAppInstance } from "./support/app-instance";
 
@@ -259,12 +284,14 @@ describe("config CLI diff", () => {
     const remote = canonicalBundleFiles({
       defaultAgentName: "assistant",
       agents: [agentConfig("Remote instructions")],
-      skills: []
+      skills: [],
+      guardrails: []
     });
     const local = canonicalBundleFiles({
       defaultAgentName: "assistant",
       agents: [agentConfig("Local instructions")],
-      skills: []
+      skills: [],
+      guardrails: []
     });
     const path = "agents/assistant.agent.yaml";
     const output = createUnifiedDiff(
@@ -661,10 +688,10 @@ skills:
         {
           type: "upsert",
           kind: "skill",
-          name: "platform-guide",
+          name: "platform-docs",
           config: {
-            name: "platform-guide",
-            title: "How this platform works",
+            name: "platform-docs",
+            title: "Platform documentation",
             description: "Shipped.",
             content: "Shipped.",
             origin: "release",
@@ -737,10 +764,10 @@ skills:
       ]
     });
     expect(pruneStdout.join("")).not.toContain("crm");
-    expect(mergeStdout.join("") + pruneStdout.join("")).not.toContain("platform-guide");
+    expect(mergeStdout.join("") + pruneStdout.join("")).not.toContain("platform-docs");
     for (const [kind, name] of [
       ["connection", "crm"],
-      ["skill", "platform-guide"]
+      ["skill", "platform-docs"]
     ] as const) {
       expect(
         await fixture.store.configAssets.getConfigAsset({
@@ -879,6 +906,62 @@ skills:
     const placed = await push();
     expect(placed).toContain("Pushed 1 agent, 0 skills, version 5.");
     expect(placed).not.toContain("Hidden in every workspace");
+  });
+
+  // Fails without the change: no guardrail ran at `asset.before_write`, and the skill with the
+  // IBAN was pushed.
+  it("prints the guardrail, the skill and the reason when a guardrail blocks a push", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await mkdir(resolve(directory, "skills", "kunden-faq"), { recursive: true });
+    await writeFile(
+      resolve(directory, "skills", "kunden-faq", "SKILL.md"),
+      serializeSkillMarkdown({
+        name: "kunden-faq",
+        title: "Kunden-FAQ",
+        description: "Fragen von Kunden",
+        content: "Überweisungen gehen an DE89 3704 0044 0532 0130 00."
+      }),
+      "utf8"
+    );
+    const { fetchImpl, fixture } = await instanceHolding(
+      { agents: [], skills: [] },
+      [],
+      heldAssetId,
+      {
+        no_iban: {
+          displayName: "No IBAN in skills",
+          on: "asset.before_write",
+          filter: { kind: "skill" },
+          check: {
+            kind: "pattern",
+            pattern: "\\bDE\\d{2}(?:\\s?\\d{4}){4}\\s?\\d{2}\\b",
+            reason: "Skills hold no bank account."
+          },
+          outcome: "block"
+        }
+      }
+    );
+    await recordEmptyPull(directory);
+    const stderr: string[] = [];
+    const exitCode = await runCli(["config", "push"], {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_guarded" },
+      stderr: (text) => stderr.push(text),
+      fetchImpl
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr.join("")).toContain(
+      "Guardrail 'No IBAN in skills' blocked skill 'kunden-faq': Skills hold no bank account."
+    );
+    expect(stderr.join("")).not.toContain("3704 0044");
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "kunden-faq"
+      })
+    ).toBeUndefined();
   });
 
   it("rewrites only selected pull files without changing the recorded version", async () => {
@@ -1441,7 +1524,7 @@ skills:
         stderr: (text) => missingStderr.push(text)
       })
     ).toBe(1);
-    expect(missingStderr.join("")).toContain("Missing CLI credentials");
+    expect(missingStderr.join("")).toContain("Not logged in to https://catalyst.test");
     expect(missingStderr.join("")).toContain("CATALYST_API_KEY");
 
     // The server credential no longer signs the CLI in, and no request leaves the process.
@@ -1461,7 +1544,7 @@ skills:
         stderr: (text) => serverCredentialStderr.push(text)
       })
     ).toBe(1);
-    expect(serverCredentialStderr.join("")).toContain("Missing CLI credentials");
+    expect(serverCredentialStderr.join("")).toContain("Not logged in");
     expect(serverCredentialStderr.join("")).not.toContain("SERVER_CREDENTIAL");
     expect(serverCredentialRequests).toEqual([]);
 
@@ -2167,6 +2250,221 @@ describe("config CLI against an instance", () => {
   );
 });
 
+describe("config CLI guardrails in the working copy", () => {
+  const judge = {
+    name: "privacy",
+    displayName: "Privacy",
+    on: "asset.before_write",
+    filter: { kind: "skill" },
+    check: {
+      kind: "model_judge",
+      modelBindingId: "local",
+      instruction: "Block a skill that names a person.\n\nNames of companies are fine."
+    },
+    outcome: "block",
+    origin: "asset"
+  };
+  const pattern = {
+    name: "no_iban",
+    displayName: "No IBAN in skills",
+    on: "asset.before_write",
+    filter: { kind: "skill" },
+    check: {
+      kind: "pattern",
+      pattern: "\\bDE\\d{2}(?:\\s?\\d{4}){4}\\s?\\d{2}\\b",
+      reason: "Skills hold no bank account."
+    },
+    outcome: "block",
+    origin: "asset"
+  };
+
+  async function guardrailWorkingCopy(): Promise<string> {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await writeFile(
+      resolve(directory, "catalyst.yaml"),
+      `${await readFile(resolve(directory, "catalyst.yaml"), "utf8")}guardrails:\n  - guardrails/*/guardrail.yaml\n`,
+      "utf8"
+    );
+    return directory;
+  }
+
+  const commandOptions = (directory: string, fetchImpl: typeof fetch, output: string[]) => ({
+    cwd: directory,
+    env: { CATALYST_API_KEY: "cat_guardrails" },
+    fetchImpl,
+    stdout: (text: string) => output.push(text),
+    stderr: (text: string) => output.push(text)
+  });
+
+  it("pulls a judge into guardrail.yaml and check.md, a pattern into guardrail.yaml alone", async () => {
+    const directory = await guardrailWorkingCopy();
+    // A check.md of an earlier pull does not survive a check that holds none.
+    await mkdir(resolve(directory, "guardrails", "no_iban"), { recursive: true });
+    await writeFile(resolve(directory, "guardrails", "no_iban", "check.md"), "Stale.\n", "utf8");
+    const { fetchImpl } = await instanceHolding({
+      agents: [],
+      skills: [],
+      guardrails: [judge, pattern]
+    });
+    const output: string[] = [];
+    const options = commandOptions(directory, fetchImpl, output);
+
+    expect(await runConfigCommand("pull", options), output.join("")).toBe(0);
+    expect(output.join("")).toContain("Pulled 0 agents, 0 skills, 2 guardrails");
+    const privacy = resolve(directory, "guardrails", "privacy");
+    expect((await readdir(privacy)).sort()).toEqual(["check.md", "guardrail.yaml"]);
+    expect(await readFile(resolve(privacy, "check.md"), "utf8")).toBe(
+      `${judge.check.instruction}\n`
+    );
+    const judgeYaml = await readFile(resolve(privacy, "guardrail.yaml"), "utf8");
+    expect(judgeYaml).toContain("kind: model_judge");
+    expect(judgeYaml).not.toContain("instruction");
+    expect(judgeYaml).not.toContain("origin");
+    expect(await readdir(resolve(directory, "guardrails", "no_iban"))).toEqual(["guardrail.yaml"]);
+
+    // What was pulled is what the instance holds: no difference and nothing to push.
+    output.length = 0;
+    expect(await runConfigCommand("diff", options), output.join("")).toBe(0);
+    expect(output.join("")).toContain("No differences.");
+    expect(await runConfigCommand("push", options)).toBe(0);
+    expect(output.join("")).toContain("No local changes to push.");
+  });
+
+  it("puts an edited check.md as the guardrail's next draft after the sync, and --only selects it", async () => {
+    const directory = await guardrailWorkingCopy();
+    const syncs: unknown[] = [];
+    const { fetchImpl: instanceFetch, fixture } = await instanceHolding(
+      { agents: [], skills: [], guardrails: [judge, pattern] },
+      syncs
+    );
+    // Every call that writes, in the order the CLI sends them.
+    const writes: Array<{ path: string; body: unknown }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (request.method !== "GET" && path !== testOperations["access_tokens.exchange"].path) {
+        writes.push({
+          path: `${request.method} ${path}`,
+          body: JSON.parse(await request.clone().text())
+        });
+      }
+      return instanceFetch(request);
+    };
+    const output: string[] = [];
+    const options = commandOptions(directory, fetchImpl, output);
+    expect(await runConfigCommand("pull", options), output.join("")).toBe(0);
+
+    const checkPath = resolve(directory, "guardrails", "privacy", "check.md");
+    const patternYaml = resolve(directory, "guardrails", "no_iban", "guardrail.yaml");
+    await writeFile(checkPath, "Edited and dropped.\n", "utf8");
+    await writeFile(
+      patternYaml,
+      (await readFile(patternYaml, "utf8")).replace("outcome: block", "outcome: warn"),
+      "utf8"
+    );
+    // A pull of the judge alone brings back its instruction and leaves the pattern as edited.
+    expect(await runConfigCommand("pull", { ...options, only: ["guardrail:privacy"] })).toBe(0);
+    expect(await readFile(checkPath, "utf8")).toBe(`${judge.check.instruction}\n`);
+    expect(await readFile(patternYaml, "utf8")).toContain("outcome: warn");
+
+    const instruction = "Block a skill that names a person or a phone number.";
+    await writeFile(checkPath, `${instruction}\n`, "utf8");
+    await mkdir(resolve(directory, "skills", "review"), { recursive: true });
+    await writeFile(
+      resolve(directory, "skills", "review", "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Review")),
+      "utf8"
+    );
+    output.length = 0;
+    expect(
+      await runConfigCommand("push", {
+        ...options,
+        only: ["skill:review", "guardrail:privacy"]
+      }),
+      output.join("")
+    ).toBe(0);
+    expect(output.join("")).toContain(
+      "Guardrails to write one by one, each as its draft:\n- guardrail:privacy"
+    );
+    expect(output.join("")).toContain("Pushed 0 agents, 1 skill, version");
+    expect(output.join("")).toContain("Wrote guardrail:privacy as draft revision 2");
+    // The batch holds the skill alone; the guardrail is put after it, against its pulled revision.
+    const { origin: _origin, ...definition } = judge;
+    expect(writes.map((write) => write.path)).toEqual([
+      "POST /api/v1/assets/sync/check",
+      "POST /api/v1/assets/sync",
+      "PUT /api/v1/assets/guardrail/privacy"
+    ]);
+    expect(syncs).toEqual([
+      {
+        items: [
+          {
+            type: "put",
+            kind: "skill",
+            config: skillConfig("review", "Review"),
+            expectedRevision: null
+          }
+        ]
+      }
+    ]);
+    expect(writes[2]?.body).toEqual({
+      config: { ...definition, check: { ...judge.check, instruction } },
+      expectedRevision: 1
+    });
+    const stored = await fixture.store.configAssets.getConfigAsset({
+      clientInstanceId: fixture.clientInstanceId,
+      kind: "guardrail",
+      name: "privacy"
+    });
+    expect(stored).toMatchObject({ revision: 2, config: { check: { instruction } } });
+    expect(
+      (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.assets?.[
+        "guardrail:privacy"
+      ]
+    ).toMatchObject({ id: "cfga_held_guardrail_privacy", revision: 2 });
+
+    // Only the pattern is left changed locally.
+    output.length = 0;
+    expect(await runConfigCommand("diff", options)).toBe(1);
+    expect(output.join("")).toContain("guardrail:no_iban: changed locally");
+    expect(output.join("")).not.toContain("guardrail:privacy");
+
+    // Changed on the instance since: the put is refused and names the pull that repairs it.
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "guardrail",
+          name: "privacy",
+          assetId: "cfga_held_guardrail_privacy",
+          config: { ...judge, displayName: "Privacy, edited there" }
+        }
+      ]
+    });
+    await writeFile(checkPath, "Edited here as well.\n", "utf8");
+    output.length = 0;
+    expect(await runConfigCommand("push", { ...options, only: ["guardrail:privacy"] })).toBe(1);
+    expect(output.join("")).toContain("Push conflict; nothing was applied.");
+    expect(output.join("")).toContain("- guardrail:privacy: revision 3");
+    expect(output.join("")).toContain("catalyst config pull --only guardrail:privacy");
+
+    expect(await runConfigCommand("pull", { ...options, only: ["guardrails:privacy"] })).toBe(1);
+    expect(output.join("")).toContain("guardrail:<name>");
+  });
+
+  it("neither pulls nor prunes guardrails where catalyst.yaml names none", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    const { fetchImpl } = await instanceHolding({ agents: [], skills: [], guardrails: [judge] });
+    const output: string[] = [];
+    expect(await runConfigCommand("pull", commandOptions(directory, fetchImpl, output))).toBe(0);
+    expect(output.join("")).toContain("Pulled 0 agents, 0 skills, version 1.");
+    expect(await readdir(directory)).not.toContain("guardrails");
+  });
+});
+
 describe("config CLI API transport", () => {
   it("reports invalid JSON during API-key exchange without exposing the response body", async () => {
     const responseBody = "upstream response body must stay private";
@@ -2265,9 +2563,9 @@ describe("config CLI help", () => {
     expect(help).toContain("CATALYST_API_KEY");
     expect(help).not.toContain("SERVER_CREDENTIAL");
     expect(help).toContain("list");
-    expect(help).toContain("show <agent|skill> <name>");
+    expect(help).toContain("show <agent|skill|guardrail> <name>");
     expect(help).toContain("--prune");
-    expect(help).toContain("--only <agent:name|skill:name>");
+    expect(help).toContain("--only <agent:name|skill:name|guardrail:name>");
     expect(help).not.toContain("local-key");
   });
 
@@ -2282,11 +2580,150 @@ describe("config CLI help", () => {
 
     expect(await runCli(["config", "pull", "--write-env", ".env"], { cwd, stderr })).toBe(2);
     expect(await runCli(["config", "pull"], { cwd, env: {}, stderr })).toBe(1);
-    expect(output.join("")).toContain("Administration, API Access");
+    expect(output.join("")).toContain("Run 'catalyst login --instance http://127.0.0.1:4210'");
     expect(await runCli(["config", "local-key"], { cwd, env: {}, stderr })).toBe(2);
     expect(output.join("")).toContain("catalyst-local-key");
   });
 });
+
+/** A working copy of the Namespace `kai-` with one agent of each side of its border. */
+async function kaiWorkingCopy(): Promise<string> {
+  const directory = await createTemporaryDirectory();
+  await writeFile(
+    join(directory, "catalyst.yaml"),
+    "instances:\n  production:\n    url: https://catalyst.test\n    namespace: kai-\ndefaultInstance: production\nagents:\n  - agents/*.agent.yaml\nskills:\n  - skills/*/SKILL.md\n"
+  );
+  await mkdir(join(directory, "agents"));
+  await writeFile(
+    join(directory, "agents", "kai-tax.agent.yaml"),
+    serializeAgentYaml(namespaceAgentConfig("kai-tax"))
+  );
+  return directory;
+}
+
+describe("catalyst login", () => {
+  it("saves the key of a confirmed code, and the CLI then works inside the person's Namespace only", async () => {
+    const t = await setupPersonalKeyInstance();
+    await grantKaiNamespace(t);
+    const cwd = await kaiWorkingCopy();
+    const configHome = await createTemporaryDirectory();
+    const env = { CATALYST_CONFIG_HOME: configHome };
+    const fetchImpl = createTestFetch(t.instance);
+    const output: string[] = [];
+    const stdout = (text: string) => output.push(text);
+    let confirmed = false;
+
+    // The person confirms in Settings while the CLI waits for it.
+    const sleep = async () => {
+      if (confirmed) return;
+      const code = /code ([A-Z]{4}-[A-Z]{4})/u.exec(output.join(""))?.[1];
+      expect(code).toBeDefined();
+      await t.expectOk(t.kai.id, "me.connect_codes.confirm", {
+        params: { userCode: code ?? "" },
+        payload: {
+          name: "Mini",
+          scopes: ["agent.read:kai-", "agent.write:kai-"],
+          expiresAt: inDays(30)
+        }
+      });
+      confirmed = true;
+    };
+    expect(await runCli(["login"], { cwd, env, fetchImpl, stdout, sleep })).toBe(0);
+    const printed = output.join("");
+    expect(printed).toContain("https://catalyst.test/settings/you/api-keys?code=");
+    expect(printed).toContain("Logged in to https://catalyst.test with the key 'Mini'");
+
+    // The key is in a file only its user reads, and on no line the CLI printed.
+    const path = join(configHome, "credentials.json");
+    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    const saved: unknown = JSON.parse(await readFile(path, "utf8"));
+    const apiKey = JSON.stringify(saved).match(/cat\.apic_[^"]+/u)?.[0];
+    expect(apiKey).toBeDefined();
+    expect(printed).not.toContain(apiKey ?? "");
+
+    output.length = 0;
+    expect(await runCli(["config", "push"], { cwd, env, fetchImpl, stdout })).toBe(0);
+    expect(output.join("")).toContain("Pushed 1 agent");
+    output.length = 0;
+    expect(await runCli(["config", "list"], { cwd, env, fetchImpl, stdout })).toBe(0);
+    expect(output.join("")).toContain("agent\tkai-tax\t-\t-");
+
+    // A pull reads what the key may read and nothing of the whole instance.
+    const paths: string[] = [];
+    const recording: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      paths.push(new URL(request.url).pathname);
+      return fetchImpl(request);
+    };
+    output.length = 0;
+    expect(await runCli(["config", "pull"], { cwd, env, fetchImpl: recording, stdout })).toBe(0);
+    expect(output.join("")).toContain("Pulled 1 agent, 0 skills.");
+    expect(paths).not.toContain(testOperations["config_assets.get_overview"].path);
+    expect(await readFile(join(cwd, "agents", "kai-tax.agent.yaml"), "utf8")).toContain(
+      "# Pulled from production.\n"
+    );
+
+    // An agent outside the Namespace is refused, with the right that is missing.
+    await writeFile(
+      join(cwd, "agents", "other.agent.yaml"),
+      serializeAgentYaml(namespaceAgentConfig("other"))
+    );
+    const errors: string[] = [];
+    expect(
+      await runCli(["config", "push"], {
+        cwd,
+        env,
+        fetchImpl,
+        stdout,
+        stderr: (text) => errors.push(text)
+      })
+    ).toBe(1);
+    expect(errors.join("")).toMatch(/other/u);
+
+    // Revoked in Settings, the saved key is refused on the next call.
+    const keys = await t.expectOk(t.kai.id, "me.api_keys.list");
+    const keyId = /"id":"(apic_[^"]+)"/u.exec(keys.body)?.[1] ?? "";
+    await t.expectOk(t.kai.id, "me.api_keys.revoke", { params: { keyId } });
+    const refused: string[] = [];
+    expect(
+      await runCli(["config", "list"], {
+        cwd,
+        env,
+        fetchImpl,
+        stdout,
+        stderr: (text) => refused.push(text)
+      })
+    ).toBe(1);
+    expect(refused.join("")).toContain("revoked");
+
+    expect(await runCli(["logout"], { cwd, env, stdout })).toBe(0);
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 1, instances: {} });
+  });
+
+  it("refuses a saved key file that others may read", async () => {
+    const cwd = await kaiWorkingCopy();
+    const configHome = await createTemporaryDirectory();
+    await writeFile(
+      join(configHome, "credentials.json"),
+      JSON.stringify({ version: 1, instances: {} }),
+      { mode: 0o644 }
+    );
+    const errors: string[] = [];
+    expect(
+      await runCli(["config", "list"], {
+        cwd,
+        env: { CATALYST_CONFIG_HOME: configHome },
+        stderr: (text) => errors.push(text)
+      })
+    ).toBe(1);
+    expect(errors.join("")).toContain("can be read by other users");
+  });
+});
+
+/** What `show --json` prints of an asset: the definition under `config`, beside its facts. */
+const shownAnswerSchema = z
+  .object({ kind: z.string(), revision: z.number(), config: z.record(z.string(), z.unknown()) })
+  .loose();
 
 describe("catalyst asset commands against an instance", () => {
   /**
@@ -2323,12 +2760,146 @@ describe("catalyst asset commands against an instance", () => {
     return { run, requests };
   }
 
+  // Check 57, from the verification of PR 67. Fails without the fix: a guardrail on
+  // `operation.before_call`, whose past calls cannot be checked again, reported "would have
+  // blocked 0" and was published at once, though it blocked every one of those calls after.
+  it("does not publish a first blocking guardrail unconfirmed when its dry run could check nothing", async () => {
+    const t = await setupAccessInstance({
+      furtherKinds: [createGuardrailAssetKind()],
+      server: (stores) => ({
+        authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" },
+        operations: { events: guardedEvents(stores, {}).events }
+      })
+    });
+    const cwd = await createTemporaryDirectory();
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "skill", name: "faq" },
+      payload: { config: accessSkill("faq", "Antworten.") }
+    });
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "guardrail", name: "no-puts" },
+      payload: {
+        config: {
+          name: "no-puts",
+          displayName: "No puts",
+          on: "operation.before_call",
+          filter: { operation: "assets.put" },
+          check: { kind: "pattern", pattern: "." },
+          outcome: "block"
+        }
+      }
+    });
+    const { run } = cliAs(t.instance, t.admin.id, cwd);
+    const unconfirmed = await run("guardrail", "publish", "no-puts", "--revision", "1");
+    expect(unconfirmed.err).toContain("would have blocked 0 actions by 0 people");
+    expect(unconfirmed.code).toBe(1);
+    const unchecked = /and (\d+) actions? it could not check/u.exec(unconfirmed.err)?.[1];
+    expect(Number(unchecked)).toBeGreaterThan(0);
+    // Nothing was published.
+    const stored = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId: accessInstanceId,
+      kind: "guardrail",
+      name: "no-puts"
+    });
+    expect(stored?.publishedRevision).toBeUndefined();
+    const confirmed = await run(
+      "guardrail",
+      "publish",
+      "no-puts",
+      "--revision",
+      "1",
+      "--confirm",
+      /--confirm (\d+)/u.exec(unconfirmed.err)?.[1] ?? ""
+    );
+    expect(confirmed.code, confirmed.err).toBe(0);
+    const blocked = await t.call(t.admin.id, "assets.put", {
+      params: { kind: "skill", name: "faq" },
+      payload: { config: accessSkill("faq", "Wieder neu.") }
+    });
+    expect(blocked.statusCode).toBe(403);
+  });
+
+  // `catalyst guardrail test`, `dry-run`, `publish` and `unpublish` (EW-6a). Fails without the
+  // change: the CLI had none of these, and a guardrail could not be published.
+  it("tests a guardrail's draft, shows the dry run, publishes only on a confirmed number, and unpublishes", async () => {
+    const t = await setupAccessInstance({
+      furtherKinds: [createGuardrailAssetKind()],
+      server: () => ({ authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" } })
+    });
+    const cwd = await createTemporaryDirectory();
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "skill", name: "faq" },
+      payload: { config: accessSkill("faq", `Konto ${GUARDRAIL_IBAN}`) }
+    });
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "guardrail", name: "no-iban" },
+      payload: {
+        config: {
+          name: "no-iban",
+          displayName: "No IBAN",
+          on: "asset.before_write",
+          filter: { kind: "skill" },
+          check: { kind: "pattern", pattern: ibanPattern, reason: "No bank account." },
+          outcome: "block"
+        }
+      }
+    });
+    const { run } = cliAs(t.instance, t.admin.id, cwd);
+
+    const sample = await run("guardrail", "test", "no-iban", "--text", `Konto ${GUARDRAIL_IBAN}`);
+    expect(sample.code, sample.err).toBe(0);
+    expect(sample.out).toContain(
+      "Revision 1 of guardrail 'no-iban' on 'asset.before_write': block (No bank account.)."
+    );
+    const onAsset = await run("guardrail", "test", "no-iban", "--asset", "skill:faq");
+    expect(onAsset.out).toContain(": block (No bank account.).");
+
+    const dryRun = await run("guardrail", "dry-run", "no-iban");
+    expect(dryRun.code, dryRun.err).toBe(0);
+    expect(dryRun.out).toContain("would have blocked 1 action by 1 person");
+    expect(dryRun.out).not.toContain(t.admin.id);
+
+    const unconfirmed = await run("guardrail", "publish", "no-iban", "--revision", "1");
+    expect(unconfirmed.code).toBe(1);
+    expect(unconfirmed.err).toContain("would have blocked 1 action by 1 person");
+    expect(unconfirmed.err).toContain("Publish it with --confirm 1");
+    const wrong = await run("guardrail", "publish", "no-iban", "--revision", "1", "--confirm", "2");
+    expect(wrong.code).toBe(1);
+    const published = () =>
+      t.stores.configAssets
+        .getConfigAsset({ clientInstanceId: accessInstanceId, kind: "guardrail", name: "no-iban" })
+        .then((asset) => asset?.publishedRevision);
+    expect(await published()).toBeUndefined();
+
+    const confirmed = await run(
+      "guardrail",
+      "publish",
+      "no-iban",
+      "--revision",
+      "1",
+      "--confirm",
+      "1"
+    );
+    expect(confirmed.code, confirmed.err).toBe(0);
+    expect(confirmed.out).toContain("Published revision 1 of guardrail 'no-iban'");
+    expect(await published()).toBe(1);
+
+    const unpublished = await run("guardrail", "unpublish", "no-iban");
+    expect(unpublished.code, unpublished.err).toBe(0);
+    expect(unpublished.out).toContain("Guardrail 'no-iban' no longer enforces");
+    expect(await published()).toBeUndefined();
+
+    // The commands are a guardrail's; another kind is told so before anything is sent.
+    expect((await run("skill", "test", "faq", "--text", "x")).code).toBe(2);
+    expect((await run("guardrail", "test", "no-iban")).code).toBe(2);
+  });
+
   it("builds an agent with its own skill in the holder's Namespace and is refused outside it", async () => {
     const t = await setupNamespaceHolder({
       furtherToolNames: ["read_skill"],
       // The CLI sends its token: the sign-in takes it beside the test header.
-      server: (stores) => ({
-        authAdapter: { ...recordAuthAdapter(stores), credentialMode: "explicit" }
+      server: () => ({
+        authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" }
       })
     });
     const cwd = await createTemporaryDirectory();
@@ -2458,6 +3029,62 @@ describe("catalyst asset commands against an instance", () => {
     expect((await t.stored("agent", "kai-tax"))?.revision).toBe(3);
   });
 
+  it("puts back what show --json printed, and asks for the model right only where the model changes", async () => {
+    const t = await setupNamespaceHolder({
+      server: () => ({
+        authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" }
+      })
+    });
+    // An agent on a model binding, written by the superadmin, who manages models. An admin
+    // writes agents and does not hold `agent_models.manage`.
+    const created = await t.putAgent(
+      t.root.id,
+      "bound",
+      { modelProviderId: undefined, modelBindingId: "plain" },
+      "all"
+    );
+    expect(created.statusCode, created.body).toBe(200);
+    const cwd = await createTemporaryDirectory();
+    const { run } = cliAs(t.instance, t.admin.id, cwd);
+
+    const shown = await run("agent", "show", "bound", "--json");
+    expect(shown.code, shown.err).toBe(0);
+    const answer = shownAnswerSchema.parse(JSON.parse(shown.out));
+    const { config } = answer;
+    await writeFile(
+      join(cwd, "bound.json"),
+      JSON.stringify({ ...answer, config: { ...config, displayName: "Renamed" } })
+    );
+    const renamed = await run(
+      "agent",
+      "put",
+      "bound",
+      "--from",
+      "bound.json",
+      "--if-revision",
+      "1"
+    );
+    expect(renamed.code, renamed.err).toBe(0);
+    const stored = (await t.stored("agent", "bound"))?.config;
+    expect(stored).toMatchObject({ displayName: "Renamed", modelBindingId: "plain" });
+    expect(stored).not.toHaveProperty("revision");
+
+    // Leaving the binding out changes the model the agent runs on: that needs the right.
+    const { modelBindingId: _binding, ...unbound } = config;
+    await writeFile(join(cwd, "unbound.json"), JSON.stringify(unbound));
+    const refused = await run(
+      "agent",
+      "put",
+      "bound",
+      "--from",
+      "unbound.json",
+      "--if-revision",
+      "2"
+    );
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain("Missing the right 'agent_models.manage'");
+  });
+
   it("writes an App from its folder as a draft and publishes the revision it names", async () => {
     const t = await setupAppInstance({ explicitCredentials: true });
     try {
@@ -2539,7 +3166,16 @@ async function createTemporaryDirectory(): Promise<string> {
   return directory;
 }
 
-async function createFixture() {
+/**
+ * An instance behind the CLI. `guardrails` are its release config's, run at every call. With
+ * `guardrailKind` it also holds guardrails as assets.
+ */
+async function createFixture(
+  guardrails: Record<string, unknown> = {},
+  guardrailKind = false,
+  /** The module a writer who is no release needs, such as a CLI root bound to a workspace. */
+  assetManagement = false
+) {
   const clientInstanceId = asClientInstanceId("config-cli-test");
   const store = (await createTestInstance()).stores;
   const config = parseClientInstanceConfig({
@@ -2551,8 +3187,24 @@ async function createFixture() {
     },
     auth: {},
     infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
-    tools: [{ name: "known.tool", enabled: true }]
+    tools: [{ name: "known.tool", enabled: true }],
+    guardrails,
+    // A push writes guardrails one by one with `assets.put`, which the module switches, and so
+    // does every write of a root bound to a workspace.
+    ...(guardrailKind || assetManagement ? { modules: { assetManagement: { enabled: true } } } : {})
   });
+  if (assetManagement) {
+    config.administration.agentConfiguration.allowAgentCreation = true;
+    config.administration.agentConfiguration.allowSkillEditing = true;
+    config.administration.agentConfiguration.editableAgentFields = [
+      "displayName",
+      "description",
+      "instructions",
+      "toolNames",
+      "skillNames",
+      "initialPrompts"
+    ];
+  }
   const authOptions = {
     secret: "a-development-session-token-secret",
     clientInstanceId,
@@ -2568,19 +3220,57 @@ async function createFixture() {
   const servicePrincipal = await store.apiAccess.createServicePrincipal({
     clientInstanceId,
     displayLabel: "Catalyst CLI",
-    permissions: ["config_assets.read", "config_assets.release"]
+    permissions: [
+      "config_assets.read",
+      "config_assets.release",
+      ...(guardrailKind ? ["config_assets.write"] : [])
+    ]
   });
   const createdCredential = await store.apiAccess.createApiCredential({
     clientInstanceId,
     servicePrincipalId: servicePrincipal.id,
     name: "config CLI test",
-    scopes: ["config_assets:read", "config_assets:release"]
+    // A guardrail is written with `assets.put`, which a credential reaches with the write scope.
+    scopes: [
+      "config_assets:read",
+      "config_assets:release",
+      ...(guardrailKind ? ["config_assets:write"] : [])
+    ]
   });
+  // No legacy key carries a right on guardrails: the CLI's key is granted them as rows.
+  for (const action of guardrailKind ? ["guardrail.read", "guardrail.write"] : []) {
+    await store.access.createGrant({
+      clientInstanceId,
+      holderKind: "service_principal",
+      holderId: servicePrincipal.id,
+      action,
+      effect: "allow",
+      scopeKind: "instance",
+      grantedBy: asUserId("usr_config_cli_test")
+    });
+  }
   const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit });
+  const usageGovernance = new ModelUsageGovernance({
+    store: store.usage,
+    budget: config.usage.budget,
+    safeguards: config.usage.safeguards,
+    costs: config.usage.costs
+  });
+  const guardrailRunner = new GuardrailRunner({
+    clientInstanceId,
+    config,
+    hits: store.guardrails,
+    modelGateway: createScriptedInstanceModelGateway({
+      config,
+      modelProvider: createUnusedModelProvider(),
+      usageGovernance
+    })
+  });
   const server = await createTestInstance({
     server: {
       config,
       clientInstanceId,
+      operations: { events: createAuditingEventEmitter(auditRecorder, guardrailRunner) },
       authAdapter: new IdentityResolvingAuthAdapter(
         new CompositeAuthAdapter([
           new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
@@ -2589,23 +3279,19 @@ async function createFixture() {
         store.users
       ),
       stores: store,
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: config.usage.budget,
-        safeguards: config.usage.safeguards,
-        costs: config.usage.costs
-      }),
+      usageGovernance,
       auditRecorder,
       configAssets: {
         store: store.configAssets,
-        validationRefs: {
-          modelProviderIds: ["local"],
-          modelBindingIds: [],
-          modelBindings: [],
-          fastModeModelBindingIds: [],
-          reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-          enabledToolNames: ["known.tool", "read_skill"]
-        }
+        validationRefs: fixtureValidationRefs,
+        ...(guardrailKind
+          ? {
+              kinds: createAssetKindRegistry([
+                ...createTestAssetKinds({ config, validationRefs: fixtureValidationRefs }).kinds,
+                createGuardrailAssetKind()
+              ])
+            }
+          : {})
       },
       agentRuntime: createUnusedAgentRuntime(),
       modelProvider: createUnusedModelProvider(),
@@ -2618,6 +3304,16 @@ async function createFixture() {
   servers.push(server);
   return { clientInstanceId, server, store, apiKey: createdCredential.secret };
 }
+
+/** The validation refs of the fixture's instance, also for a registry made beside it. */
+const fixtureValidationRefs = {
+  modelProviderIds: ["local"],
+  modelBindingIds: [],
+  modelBindings: [],
+  fastModeModelBindingIds: [],
+  reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+  enabledToolNames: ["known.tool", "read_skill"]
+};
 
 async function writeMinimalManifest(
   directory: string,
@@ -2689,6 +3385,8 @@ interface HeldAssets {
   defaultAgentName?: string;
   agents: ReadonlyArray<JsonObject & { name: string }>;
   skills: ReadonlyArray<JsonObject & { name: string }>;
+  /** Given, the instance holds guardrails as assets, these among them. */
+  guardrails?: ReadonlyArray<JsonObject & { name: string }>;
 }
 
 /**
@@ -2700,9 +3398,11 @@ async function instanceHolding(
   remote: HeldAssets,
   syncs: unknown[] = [],
   /** The id each asset gets. Another one makes the instance another database's. */
-  idOf: (key: string) => string = heldAssetId
+  idOf: (key: string) => string = heldAssetId,
+  guardrails: Record<string, unknown> = {},
+  assetManagement = false
 ) {
-  const fixture = await createFixture();
+  const fixture = await createFixture(guardrails, remote.guardrails !== undefined, assetManagement);
   const mutations = [
     ...remote.agents.map((config) => ({
       type: "upsert" as const,
@@ -2716,6 +3416,13 @@ async function instanceHolding(
       kind: "skill",
       name: config.name,
       assetId: idOf(`skill:${config.name}`),
+      config
+    })),
+    ...(remote.guardrails ?? []).map((config) => ({
+      type: "upsert" as const,
+      kind: "guardrail",
+      name: config.name,
+      assetId: idOf(`guardrail:${config.name}`),
       config
     })),
     ...(remote.defaultAgentName === undefined
@@ -2828,3 +3535,252 @@ function createUnusedModelProvider(): ModelProvider {
     }
   };
 }
+
+describe("a working copy bound to a workspace", () => {
+  /**
+   * An instance with a workspace Team that owns the skill `team-notes`, a key that writes the
+   * instance's assets, and an empty working copy. `guardrails` lists guardrails in it.
+   */
+  async function boundFixture(guardrails = false) {
+    const syncs: unknown[] = [];
+    /** Every call that writes, in the order the CLI sends them. */
+    const writes: Array<{ path: string; body: unknown }> = [];
+    const { fixture } = await instanceHolding(
+      {
+        defaultAgentName: "assistant",
+        agents: [agentConfig("The instance's own.")],
+        skills: [],
+        ...(guardrails ? { guardrails: [] } : {})
+      },
+      syncs,
+      heldAssetId,
+      {},
+      true
+    );
+    const { clientInstanceId, store } = fixture;
+    const owner = await store.users.createUser({
+      clientInstanceId,
+      displayLabel: "Owner",
+      roles: ["user"],
+      permissions: []
+    });
+    const team = await store.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Team",
+      creatorUserId: owner.id
+    });
+    const scope = { kind: "workspace" as const, workspaceId: team.id };
+    await applyAtCurrentRevisions(store.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "team-notes",
+          config: skillConfig("team-notes", "Notes."),
+          scope
+        }
+      ]
+    });
+    // A key that writes the instance's assets: the root it is used in names the owner.
+    const principal = await store.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      displayLabel: "Team CLI",
+      permissions: ["config_assets.read", "config_assets.write"]
+    });
+    const credential = await store.apiAccess.createApiCredential({
+      clientInstanceId,
+      servicePrincipalId: principal.id,
+      name: "team CLI",
+      scopes: ["config_assets:read", "config_assets:write"]
+    });
+    // No legacy key carries a right on guardrails: the key is granted them as rows.
+    for (const action of guardrails
+      ? ["guardrail.read", "guardrail.write", "guardrail.delete"]
+      : []) {
+      await store.access.createGrant({
+        clientInstanceId,
+        holderKind: "service_principal",
+        holderId: principal.id,
+        action,
+        effect: "allow",
+        scopeKind: "instance",
+        grantedBy: asUserId("usr_config_cli_test")
+      });
+    }
+    const serverFetch = createTestFetch(fixture.server);
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path === testOperations["access_tokens.exchange"].path) {
+        return serverFetch(request.url, {
+          method: request.method,
+          headers: { authorization: `Bearer ${credential.secret}` }
+        });
+      }
+      if (path === testOperations["assets.sync"].path) {
+        syncs.push(JSON.parse(await request.clone().text()));
+      }
+      if (request.method !== "GET") {
+        writes.push({
+          path: `${request.method} ${path}`,
+          body: JSON.parse(await request.clone().text())
+        });
+      }
+      return serverFetch(request);
+    };
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    if (guardrails) {
+      await writeFile(
+        resolve(directory, "catalyst.yaml"),
+        `${await readFile(resolve(directory, "catalyst.yaml"), "utf8")}guardrails:\n  - guardrails/*/guardrail.yaml\n`,
+        "utf8"
+      );
+    }
+    const output: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_team" },
+      fetchImpl,
+      stdout: (text: string) => output.push(text),
+      stderr: (text: string) => output.push(text)
+    };
+    return { fixture, team, scope, syncs, writes, directory, output, options };
+  }
+
+  it("binds with pull --workspace, pulls and pushes what the workspace owns, and is bound once", async () => {
+    const { fixture, team, scope, syncs, directory, output, options } = await boundFixture();
+    const { clientInstanceId, store } = fixture;
+
+    expect(
+      await runConfigCommand("pull", { ...options, workspace: team.id }),
+      output.join("")
+    ).toBe(0);
+    expect(output.join("")).toContain(`Bound this working copy to workspace '${team.id}'.`);
+    expect(await readFile(join(directory, "catalyst.yaml"), "utf8")).toContain(
+      `    workspace: ${team.id}\n`
+    );
+    // The workspace's skill, and nothing of the instance's own.
+    const pulled = await readWorkingCopy(directory, await readManifest(directory));
+    expect(pulled.skills.map((skill) => skill.name)).toEqual(["team-notes"]);
+    expect(pulled.agents).toEqual([]);
+
+    // A push of the bound root writes into the workspace.
+    await mkdir(join(directory, "agents"), { recursive: true });
+    await writeFile(
+      join(directory, "agents", "team-helper.agent.yaml"),
+      serializeAgentYaml(
+        canonicalizeAgentConfig({
+          ...agentConfig("Read the notes.", { name: "team-helper" }),
+          toolNames: ["read_skill"],
+          skillNames: ["team-notes"]
+        })
+      )
+    );
+    expect(await runConfigCommand("push", options), output.join("")).toBe(0);
+    expect(syncs.at(-1)).toMatchObject({ workspaceId: team.id });
+    expect(syncs.at(-1)).not.toHaveProperty("defaultAgentName");
+    expect(
+      (
+        await store.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "agent",
+          name: "team-helper"
+        })
+      )?.scope
+    ).toEqual(scope);
+
+    // Bound once: another workspace is pulled into a directory of its own.
+    output.length = 0;
+    expect(await runConfigCommand("pull", { ...options, workspace: "cws_other" })).not.toBe(0);
+    expect(output.join("")).toContain(`This working copy is bound to workspace '${team.id}'.`);
+    // A root that pulled the instance's own assets is not bound afterwards.
+    const instanceRoot = await createTemporaryDirectory();
+    await writeMinimalManifest(instanceRoot, "https://catalyst.test");
+    await recordEmptyPull(instanceRoot);
+    output.length = 0;
+    expect(
+      await runConfigCommand("pull", { ...options, cwd: instanceRoot, workspace: team.id })
+    ).not.toBe(0);
+    expect(output.join("")).toContain("This working copy holds the instance's own assets");
+  });
+
+  it("pushes a guardrail of the bound root as the workspace's, and prunes it there", async () => {
+    const { fixture, team, scope, writes, directory, output, options } = await boundFixture(true);
+    const { clientInstanceId, store } = fixture;
+    expect(
+      await runConfigCommand("pull", { ...options, workspace: team.id }),
+      output.join("")
+    ).toBe(0);
+
+    const guardrail = {
+      name: "team_no_codes",
+      displayName: "No codes in Team's skills",
+      on: "asset.before_write",
+      filter: { kind: "skill" },
+      check: { kind: "pattern", pattern: "CODE-[0-9]+", reason: "Skills hold no codes." },
+      outcome: "block"
+    };
+    await mkdir(resolve(directory, "guardrails", guardrail.name), { recursive: true });
+    await writeFile(
+      resolve(directory, "guardrails", guardrail.name, "guardrail.yaml"),
+      [
+        `name: ${guardrail.name}`,
+        `displayName: ${guardrail.displayName}`,
+        `on: ${guardrail.on}`,
+        "filter:",
+        "  kind: skill",
+        "check:",
+        "  kind: pattern",
+        `  pattern: ${guardrail.check.pattern}`,
+        `  reason: ${guardrail.check.reason}`,
+        `outcome: ${guardrail.outcome}`,
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    output.length = 0;
+    writes.length = 0;
+    expect(await runConfigCommand("push", options), output.join("")).toBe(0);
+    expect(output.join("")).toContain(`Wrote guardrail:${guardrail.name} as draft revision 1`);
+    expect(writes).toEqual([
+      {
+        path: `PUT /api/v1/assets/guardrail/${guardrail.name}`,
+        body: { config: guardrail, expectedRevision: null, workspaceId: team.id }
+      }
+    ]);
+    const stored = await store.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "guardrail",
+      name: guardrail.name
+    });
+    expect(stored?.scope).toEqual(scope);
+
+    // What the push wrote is what the bound root holds: nothing to push, no difference.
+    output.length = 0;
+    expect(await runConfigCommand("diff", options), output.join("")).toBe(0);
+
+    // A prune deletes it in the workspace that owns it.
+    await rm(resolve(directory, "guardrails", guardrail.name), { recursive: true });
+    writes.length = 0;
+    output.length = 0;
+    expect(await runConfigCommand("push", { ...options, prune: true }), output.join("")).toBe(0);
+    expect(writes).toEqual([
+      {
+        path: `POST /api/v1/assets/guardrail/${guardrail.name}/delete`,
+        body: { expectedRevision: 1, workspaceId: team.id }
+      }
+    ]);
+    expect(
+      (
+        await store.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "guardrail",
+          name: guardrail.name
+        })
+      )?.status
+    ).toBe("deleted");
+  });
+});

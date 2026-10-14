@@ -12,6 +12,10 @@ import {
   publishAssetRequestSchema,
   putAssetRequestSchema,
   revertAssetRequestSchema,
+  runLiveOnceRequestSchema,
+  runLiveOnceResponseSchema,
+  listLiveOnceQuerySchema,
+  liveOnceListSchema,
   setAssetAvailabilityRequestSchema,
   setAssetDefaultRequestSchema,
   setAssetDefaultResponseSchema,
@@ -48,7 +52,7 @@ export const assetOperations = {
     id: "assets.sync",
     method: "POST",
     path: "/api/v1/assets/sync",
-    summary: "Apply puts and deletes in one Namespace, all of them or none",
+    summary: "Apply puts and deletes in one Namespace or workspace, all of them or none",
     tag: "Assets",
     auth: "principal",
     scope: "config_assets:write",
@@ -172,6 +176,41 @@ export const assetOperations = {
     response: json(assetPointersResponseSchema),
     errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED"],
     rateClass: "write"
+  }),
+  // ADR-0031. A changing call of a draft App or Workflow is simulated; this makes the caller's
+  // own next call of one action, or that step in their next test run, live. Another member's
+  // call stays simulated. Only the kinds `app` and `workflow` have one.
+  "assets.run_live_once": defineRegisteredOperation({
+    id: "assets.run_live_once",
+    method: "POST",
+    path: "/api/v1/assets/:kind/:name/run-live-once",
+    summary:
+      "Make your own next call of one action or step of the draft live instead of simulated, once",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    body: runLiveOnceRequestSchema,
+    response: json(runLiveOnceResponseSchema),
+    errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED", "VALIDATION_FAILED"],
+    rateClass: "write"
+  }),
+  "assets.list_live_once": defineRegisteredOperation({
+    id: "assets.list_live_once",
+    method: "GET",
+    path: "/api/v1/assets/:kind/:name/run-live-once",
+    summary:
+      "List the caller's own Run live once switches on the draft, and the test run that used each",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    query: listLiveOnceQuerySchema,
+    response: json(liveOnceListSchema),
+    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
+    rateClass: "read"
   }),
   "assets.delete": defineRegisteredOperation({
     id: "assets.delete",

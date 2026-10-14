@@ -7,6 +7,7 @@ import {
   Card,
   CardFooter,
   CardHeader,
+  CardTarget,
   CardTitle,
   EmptyState,
   InlineError,
@@ -17,7 +18,7 @@ import {
 import { AreaFrame, useAreaTitleFocus } from "../area-frame";
 import { agentKind } from "../build-area/agent-kind";
 import type { BuildAssetStart } from "../build-area/build-asset-kind";
-import { BuildCreateDialog } from "../build-area/build-create-dialog";
+import { BuildCreateDialog, type BuildCreateStart } from "../build-area/build-create-dialog";
 import { useTranslation } from "../i18n";
 import { RouteLink } from "../route-link";
 import type { WorkspaceRoute } from "../workspace/workspace-route";
@@ -44,7 +45,11 @@ export interface AgentsPageProps {
    * Present for a person who may create an agent. Its dialog opens on this page, and only
    * Continue leads to Studio, where the new agent is written.
    */
-  newAgent?: AgentCreation & { onStart(start: BuildAssetStart): void };
+  newAgent?: AgentCreation & {
+    /** Where the new agent starts available: the open workspace, as one made in Studio does. */
+    startsIn: BuildCreateStart;
+    onStart(start: BuildAssetStart): void;
+  };
 }
 
 /**
@@ -126,6 +131,7 @@ export function AgentsPage({
           entry={agentKind}
           namespaces={newAgent.namespaces}
           mayNameFreely={newAgent.mayNameFreely}
+          startsIn={newAgent.startsIn}
           onClose={() => setCreating(false)}
           onStart={(start) => {
             setCreating(false);
@@ -139,7 +145,8 @@ export function AgentsPage({
 
 /**
  * One agent: its mark, its name, what it does in two lines at most, and the ways into a chat
- * with it. Its starter prompts wait in the empty chat with it, not on the card.
+ * with it. Its starter prompts wait in the empty chat with it, not on the card. The whole card
+ * starts the chat.
  */
 function AgentCard({
   agent,
@@ -173,9 +180,11 @@ function AgentCard({
         ) : null}
       </CardHeader>
       <CardFooter className="justify-between">
-        <Button size="sm" aria-describedby={titleId} onClick={() => onStartChat(agent.name)}>
-          {t("agents.startChat")}
-        </Button>
+        <CardTarget label={t("agents.startChatWith", { name: agent.displayName })}>
+          <Button size="sm" onClick={() => onStartChat(agent.name)}>
+            {t("agents.startChat")}
+          </Button>
+        </CardTarget>
         {onOpenStudio ? (
           <RouteLink
             route={agentStudioRoute(agent.name)}

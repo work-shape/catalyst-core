@@ -125,6 +125,13 @@ export function toolOperation(
             origin.kind === "agent" ? tool.policyFloor?.(origin) : undefined
         }
       : {}),
+    ...(tool.beforeEvents
+      ? {
+          beforeEvents: (input, origin) =>
+            origin.kind === "agent" ? (tool.beforeEvents?.(input, origin) ?? []) : []
+        }
+      : {}),
+    ...(tool.heldInputKeys ? { heldInputKeys: tool.heldInputKeys } : {}),
     action: null,
     authorize(_input, context) {
       for (const permissionRef of requiredPermissionRefs) {
@@ -209,7 +216,8 @@ function toolCallOf(
       operationRun: {
         id: context.runId,
         ...(context.workspaceId ? { workspaceId: context.workspaceId } : {})
-      }
+      },
+      ...(context.beforeEvents ? { beforeEvents: context.beforeEvents } : {})
     }
   };
 }
@@ -311,16 +319,18 @@ export function toolResultFromOperationResult(
           failed("handler_failed", result.error.message);
     case "expired":
     case "pending_confirmation":
+    // An agent's call carries no draft context yet, so it is never simulated.
+    case "dry_run":
       return internalFailure(names.correlationId);
   }
 }
 
 function denialText(denial: OperationDenial, names: ToolCallNames): string {
   if (denial.kind === "forbidden") {
-    if (denial.action.startsWith(AGENT_TOOL_ACTION_PREFIX)) {
+    if (denial.action?.startsWith(AGENT_TOOL_ACTION_PREFIX)) {
       return `Agent '${names.agentName}' is not allowed to use '${names.toolName}'`;
     }
-    if (denial.action.startsWith(PERMISSION_REF_ACTION_PREFIX)) {
+    if (denial.action?.startsWith(PERMISSION_REF_ACTION_PREFIX)) {
       return `User is missing permission '${denial.action.slice(PERMISSION_REF_ACTION_PREFIX.length)}'`;
     }
   }
@@ -331,13 +341,15 @@ function denialText(denial: OperationDenial, names: ToolCallNames): string {
 }
 
 const forbiddenDetailsSchema = z.object({
-  action: z.string(),
+  action: z.string().optional(),
   reason: z.enum([
     "no_grant",
     "denied",
     "unknown_action",
     "holder_inactive",
-    "holder_not_administrable"
+    "holder_not_administrable",
+    "user_only",
+    "outside_key_scope"
   ])
 });
 const issuesSchema = z.object({

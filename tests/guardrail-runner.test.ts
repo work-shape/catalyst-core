@@ -120,11 +120,9 @@ function proposal(
   return {
     event: "approval_request.before_create" as const,
     subjectKind: request.kind,
-    content: () => {
+    fields: () => {
       const newContent = requestHandler.checkContent?.(request.payload);
-      return newContent === undefined
-        ? undefined
-        : JSON.stringify({ summary: request.summary, newContent });
+      return newContent === undefined ? undefined : { summary: request.summary, newContent };
     },
     ...(request.origin ? { origin: request.origin } : {})
   };
@@ -420,13 +418,16 @@ describe("guardrail runner", () => {
     );
     expect(columns.map((column) => column.column_name).sort()).toEqual([
       "client_instance_id",
+      "converted_from",
       "created_at",
       "event",
       "guardrail_name",
       "id",
       "message",
       "outcome",
-      "subject_kind"
+      "subject_id",
+      "subject_kind",
+      "subject_name"
     ]);
   });
 
@@ -585,7 +586,13 @@ async function skillFixture() {
     title: "Existing title",
     description: "Existing description",
     content: "Private old text",
-    resources: []
+    resources: [
+      {
+        path: "references/payment.md",
+        mediaType: "text/markdown" as const,
+        content: "Pay by invoice."
+      }
+    ]
   };
   const agent = {
     name: "assistant",
@@ -679,6 +686,61 @@ describe("guardrails on a skill change", () => {
     for (const expected of ["New title", "New description", "New body"]) {
       expect(f.skillHandler.checkContent?.(newPayload)).toContain(expected);
     }
+  });
+
+  // Fails without the change: a guardrail on `asset.before_write` never saw a skill an agent
+  // proposed, and the approval wrote it.
+  it("hands asset.before_write the skill as the change would write it", async () => {
+    const f = await skillFixture();
+    const events =
+      (await f.tool.beforeEvents?.(
+        {
+          skillName: f.skill.name,
+          summary: "Bank details",
+          operations: [
+            {
+              type: "replace_text",
+              target: "root",
+              oldText: "Private old text",
+              newText: "Überweise an DE89 3704 0044 0532 0130 00."
+            }
+          ]
+        },
+        { conversationId: asConversationId("conversation") }
+      )) ?? [];
+    expect(events.map((event) => [event.name, event.subject])).toEqual([
+      ["asset.before_write", { kind: "skill", name: f.skill.name }]
+    ]);
+    const fields = await events[0]?.checkable();
+    expect(fields?.name).toBe(f.skill.name);
+    expect(fields?.content).toContain("DE89 3704 0044 0532 0130 00");
+    expect(fields?.content).toContain("Existing title");
+    expect(fields?.content).not.toContain("Private old text");
+  });
+
+  // Fails without the change: the runtime snapshot leaves a skill's resources out, so a change
+  // to a resource did not apply to it and the guardrails were handed the skill's name alone.
+  it("hands asset.before_write a change to a resource with the resource changed", async () => {
+    const f = await skillFixture();
+    const events =
+      (await f.tool.beforeEvents?.(
+        {
+          skillName: f.skill.name,
+          summary: "Bank details",
+          operations: [
+            {
+              type: "replace_text",
+              target: "references/payment.md",
+              oldText: "Pay by invoice.",
+              newText: "Überweise an DE89 3704 0044 0532 0130 00."
+            }
+          ]
+        },
+        { conversationId: asConversationId("conversation") }
+      )) ?? [];
+    const fields = await events[0]?.checkable();
+    expect(fields?.content).toContain("DE89 3704 0044 0532 0130 00");
+    expect(fields?.content).not.toContain("Pay by invoice.");
   });
 
   it("returns a model-readable blocked proposal failure and stores no request or asset change", async () => {

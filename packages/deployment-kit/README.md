@@ -29,7 +29,7 @@ Derived from `INSTANCE`:
 | Deployment checkout     | `deployment.<instance>`, next to `platform/` and `capabilities/` |
 | App directory on the VM | `/opt/vivd-catalyst/<instance>`                                  |
 | Env file on the VM      | `/etc/vivd-catalyst/<instance>/app.env`                          |
-| Database dumps          | `<instance>-<database>-<timestamp>[-<label>].sql.gz`             |
+| Database backups        | `<instance>-<database>-<timestamp>[-<label>].tar`                |
 | Backup units            | `vivd-catalyst-<instance>-backup.service` and `.timer`           |
 
 `INSTANCE` is lowercase letters, digits and dashes, and may start with a digit (`exampletax`): a
@@ -55,9 +55,9 @@ start `workspace-command-worker`.
 | `deploy --host HOST --manifest FILE`             | Deploys the images of a manifest by digest.                                                                                             |
 
 A deploy sends the Compose file, the Caddyfile and the files under `host/` to the VM, then runs
-`lib/deploy-remote.sh` there: pull, dump the database under `pre-deploy/` (a failed dump aborts
-before migrations), migrate, start the services, roll `agent-run-worker` with a drain, and fail
-unless every service runs the digest of the release.
+`lib/deploy-remote.sh` there: pull, back up the database server under `pre-deploy/` (a failed
+backup aborts before migrations), migrate, start the services, roll `agent-run-worker` with a
+drain, and fail unless every service runs the digest of the release.
 
 The deploy ends with the upload check, `host/check-upload.mjs`, which runs inside the `api`
 container: it creates a conversation, uploads one small text file, waits up to 60 s until the
@@ -106,9 +106,55 @@ it was assembled from, makes the checks that need only the two, prints
 `resolve-only: this process starts with this config` and ends with code 0 before it opens a
 store. A config the schema refuses fails there, and so does a process that would stop on the
 host: a module is on that its build ships no code for, or the workspace command worker is built
-for a config that turns Execution Workspaces off. An entry point must start its process through
+for a config that turns Execution Workspaces off. Whether the host has the memory for the
+sandboxes of a config depends on the host, not on the machine the gate runs on: the gate does
+not check it. Where the sandbox is `docker`, the workspace command worker prints
+`host memory not checked: checked at startup on the host` to stderr, and the check is made when
+the worker starts on the host. An entry point must start its process through
 `defineClientInstance` for this. One that ends without the line fails, and one that is still
 running after two minutes is killed and fails.
+
+## Backups
+
+`host/backup-postgres.sh` runs nightly from the backup timer (key prefix `postgres/`) and before
+the migrations of every deploy (`pre-deploy/`). It backs up the instance's whole Postgres server
+into one tar archive in the backup bucket:
+
+- `globals.sql`: the roles with their passwords, settings and memberships, from
+  `pg_dumpall --globals-only`.
+- `<database>.dump`: a `pg_dump` in custom format for each database, the platform database and
+  every Data Store database (`catalyst_ds_...`).
+
+The databases come from the server's own catalog, not from the platform's records of its stores,
+so a store whose record is missing or not yet written is backed up too. Left out are the
+templates, `postgres` (the maintenance database, so a grant changed there is not in the backup),
+the `<database>_restore_<timestamp>` and `<database>_replaced_<timestamp>` databases that
+`restore-postgres.sh` makes, and a database an interrupted `DROP DATABASE` left invalid, which
+the backup names on stderr. A database whose name cannot be a file name fails the backup instead
+of being skipped. `CATALYST_SECRET_STORE_KEY` is not in the backup: the platform reads the store
+roles' passwords with it, so a restored instance needs the key from the password manager.
+
+`host/restore-postgres.sh` runs on the VM, in the app directory:
+
+- `list` prints the backups of both prefixes: the archives, and the `.sql.gz` dumps of the
+  platform database written before them.
+- `verify [KEY]` restores each database of a backup into a scratch database
+  `<database>_restore_<timestamp>`, without owners and grants, prints its row counts next to
+  the live database's and drops it again. No live database and no role is changed.
+- `recover KEY --replace-database <platform database>` refuses while app containers run or a
+  session is open on a database of the backup, and asks for the database name before it changes
+  anything. It creates the roles the server lacks, without login. Then it renames each database
+  of the backup to `<database>_replaced_<timestamp>` and creates it again from its dump, with
+  owner, grants and settings. Last, in one transaction, it sets every role as in the backup
+  (attributes, passwords, settings, memberships), except `POSTGRES_USER`, whose password stays
+  the one in the env file. If a step fails or the script is stopped, every database is put back
+  and the roles keep their passwords; only the roles it created stay, without login. A database
+  that the backup does not hold, such as a store made after it, stays as it is. On an empty
+  server the same command restores the whole instance. Recover onto a server with the backup's
+  `POSTGRES_USER`: under another one, the backup's comes back as a second superuser with its old
+  password, and a role membership it granted fails the recovery.
+- A `.sql.gz` key restores the platform database as before: into a scratch database, which a
+  recovery then swaps in.
 
 ## Still owned by the deployment repo
 

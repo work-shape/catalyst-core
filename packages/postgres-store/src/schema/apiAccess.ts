@@ -9,7 +9,7 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { ApiCredentialRecord, ServicePrincipalRecord } from "@vivd-catalyst/core";
+import type { ServicePrincipalRecord } from "@vivd-catalyst/core";
 import { productUsers } from "./users";
 
 export const servicePrincipals = pgTable(
@@ -56,11 +56,15 @@ export const apiCredentials = pgTable(
   {
     id: text("id").primaryKey(),
     clientInstanceId: text("client_instance_id").notNull(),
-    servicePrincipalId: text("service_principal_id").notNull(),
+    // Exactly one owner: a service principal, or the user of a personal key.
+    servicePrincipalId: text("service_principal_id"),
+    ownerUserId: text("owner_user_id"),
     name: text("name").notNull(),
     keyPrefix: text("key_prefix").notNull(),
     secretHash: text("secret_hash").notNull(),
-    scopes: jsonb("scopes").$type<ApiCredentialRecord["scopes"]>(),
+    // `["*"]` for every scope of the principal. Null only in a row a release before AP-4 wrote;
+    // the column becomes required once no supported release writes null.
+    scopes: jsonb("scopes").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
@@ -72,10 +76,69 @@ export const apiCredentials = pgTable(
       table.clientInstanceId,
       table.servicePrincipalId
     ),
+    // A person's keys, newest first, for their own list and the instance's.
+    index("api_credentials_client_owner_created_idx")
+      .on(table.clientInstanceId, table.ownerUserId, table.createdAt, table.id)
+      .where(sql`${table.ownerUserId} is not null`),
+    index("api_credentials_client_personal_created_idx")
+      .on(table.clientInstanceId, table.createdAt, table.id)
+      .where(sql`${table.ownerUserId} is not null`),
     foreignKey({
       name: "api_credentials_client_principal_fk",
       columns: [table.clientInstanceId, table.servicePrincipalId],
       foreignColumns: [servicePrincipals.clientInstanceId, servicePrincipals.id]
-    }).onDelete("cascade")
+    }).onDelete("cascade"),
+    // A deleted user's keys go with them.
+    foreignKey({
+      name: "api_credentials_client_owner_fk",
+      columns: [table.clientInstanceId, table.ownerUserId],
+      foreignColumns: [productUsers.clientInstanceId, productUsers.id]
+    }).onDelete("cascade"),
+    check(
+      "api_credentials_one_owner_check",
+      sql`(${table.servicePrincipalId} is null) <> (${table.ownerUserId} is null)`
+    )
+  ]
+);
+
+/**
+ * A connect code between its start by the CLI and the collection of its key. The code a
+ * person types and the CLI's own code are stored as hashes. Approval fixes the owner, the
+ * name, the scopes and the expiry of the key; collection issues the key and marks the row.
+ */
+export const apiConnectCodes = pgTable(
+  "api_connect_codes",
+  {
+    id: text("id").primaryKey(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    userCodeHash: text("user_code_hash").notNull(),
+    deviceCodeHash: text("device_code_hash").notNull(),
+    clientLabel: text("client_label"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    ownerUserId: text("owner_user_id"),
+    keyName: text("key_name"),
+    keyScopes: jsonb("key_scopes").$type<string[]>(),
+    keyExpiresAt: timestamp("key_expires_at", { withTimezone: true }),
+    redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
+    credentialId: text("credential_id")
+  },
+  (table) => [
+    uniqueIndex("api_connect_codes_device_code_idx").on(table.deviceCodeHash),
+    uniqueIndex("api_connect_codes_client_user_code_idx").on(
+      table.clientInstanceId,
+      table.userCodeHash
+    ),
+    index("api_connect_codes_expires_idx").on(table.clientInstanceId, table.expiresAt),
+    foreignKey({
+      name: "api_connect_codes_client_owner_fk",
+      columns: [table.clientInstanceId, table.ownerUserId],
+      foreignColumns: [productUsers.clientInstanceId, productUsers.id]
+    }).onDelete("cascade"),
+    check(
+      "api_connect_codes_approval_check",
+      sql`(${table.approvedAt} is null) = (${table.ownerUserId} is null) and (${table.approvedAt} is null) = (${table.keyScopes} is null) and (${table.approvedAt} is null) = (${table.keyExpiresAt} is null) and (${table.approvedAt} is null) = (${table.keyName} is null)`
+    )
   ]
 );

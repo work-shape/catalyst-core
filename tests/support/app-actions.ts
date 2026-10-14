@@ -101,11 +101,20 @@ function frameOf(preview: unknown): Frame {
 }
 
 /** What a test adds to the instance: a limiter of its own, and what a further module brings. */
-export interface AppActionsOptions extends Pick<AppInstanceOptions, "furtherKinds" | "modules"> {
+export interface AppActionsOptions extends Pick<
+  AppInstanceOptions,
+  "furtherKinds" | "modules" | "register"
+> {
   /** What the real build answered, changed: a build is a sandboxed process that is not trusted. */
   tamper?(built: PageBuildOutcome): PageBuildOutcome;
   rateLimiter?: RateLimiter;
-  server?: AppInstanceOptions["server"];
+  /** Further server options, made with the ones the fixture built, such as its call path. */
+  server?: (
+    ...input: [
+      ...Parameters<NonNullable<AppInstanceOptions["server"]>>,
+      built: ReturnType<NonNullable<AppInstanceOptions["server"]>>
+    ]
+  ) => ReturnType<NonNullable<AppInstanceOptions["server"]>>;
 }
 
 const instance = (further: AppActionsOptions) =>
@@ -113,11 +122,14 @@ const instance = (further: AppActionsOptions) =>
     setupAppInstance({
       modules: { ...options.modules, ...further.modules },
       furtherKinds: [...(options.furtherKinds ?? []), ...(further.furtherKinds ?? [])],
-      server: (stores, config) => ({
-        ...options.server?.(stores, config),
-        ...(further.rateLimiter ? { rateLimiter: further.rateLimiter } : {}),
-        ...further.server?.(stores, config)
-      }),
+      server: (stores, config) => {
+        const built = {
+          ...options.server?.(stores, config),
+          ...(further.rateLimiter ? { rateLimiter: further.rateLimiter } : {})
+        };
+        return { ...built, ...further.server?.(stores, config, built) };
+      },
+      ...(further.register ? { register: further.register } : {}),
       // The real build, in this process: it compiles the action files into the manifest.
       build: async ({ files, signal }) => {
         const built = await buildPage({ files, signal });
@@ -142,13 +154,6 @@ interface AppActionHelpers {
     userId: string,
     frame: Frame,
     name: string,
-    input: unknown,
-    headers?: Record<string, string>
-  ): Promise<Called>;
-  callConnection(
-    userId: string,
-    frame: Frame,
-    target: { connection: string; operation: string },
     input: unknown,
     headers?: Record<string, string>
   ): Promise<Called>;
@@ -248,18 +253,6 @@ export async function setupAppActions(
       payload: { ...frame.proof, input },
       headers
     });
-  const callConnection = (
-    userId: string,
-    frame: Frame,
-    target: { connection: string; operation: string },
-    input: unknown,
-    headers: Record<string, string> = {}
-  ) =>
-    t.call(userId, "apps.sessions.call_connection", {
-      params: { pageSessionId: frame.pageSessionId, ...target },
-      payload: { ...frame.proof, input },
-      headers
-    });
   const can = async (userId: string, frame: Frame) => {
     const response = await t.call(userId, "apps.sessions.context", {
       params: { pageSessionId: frame.pageSessionId },
@@ -303,7 +296,6 @@ export async function setupAppActions(
     openApp,
     openPage,
     callAction,
-    callConnection,
     can,
     refusal,
     runs,

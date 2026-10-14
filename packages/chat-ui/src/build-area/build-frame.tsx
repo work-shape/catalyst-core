@@ -22,6 +22,7 @@ import {
   PageHeaderBack,
   Picker,
   PickerButton,
+  RegistryIcon,
   SkeletonList,
   SkeletonPage,
   SubRail
@@ -55,6 +56,7 @@ import {
   type VisibleBuildKind
 } from "./build-model";
 import { useBuildNavigation } from "./build-route";
+import { buildScopeValue, buildScopes, type BuildScope } from "./build-rights";
 import { scrollPageToTop } from "./build-scroll";
 
 /** The commands the CLI entry names, in the order a person runs them. */
@@ -74,7 +76,14 @@ const ALL_NAMESPACES = "";
  * back, History, the delete, the answer to a conflict and every state; what a kind is comes
  * from its registry entry, and what the instance holds from `source`.
  */
-export function BuildFrame({ source }: { source: BuildSource }) {
+export function BuildFrame({
+  source,
+  workspace
+}: {
+  source: BuildSource;
+  /** The shared workspace the reader works in: a new agent starts available there. */
+  workspace?: { id: string; name: string };
+}) {
   const { t } = useTranslation();
   const { location, open, href } = useBuildNavigation();
   const kinds = visibleBuildKinds(useBuildAssetKinds(), source.kinds);
@@ -235,6 +244,26 @@ export function BuildFrame({ source }: { source: BuildSource }) {
   };
 
   const assetName = creating ? undefined : place.name;
+  // A new asset and a copy start where the dialog says: of a kind that starts in the workspace,
+  // in the one the reader works in, or in the workspace of the scope, where the reader is a
+  // member; made in one the reader is no member of, it starts hidden.
+  const scope = source.scoped?.(entry.kind) ? source.scope : undefined;
+  const scopeWorkspace =
+    scope?.kind === "workspace"
+      ? source.rights.workspaces.find((candidate) => candidate.id === scope.workspaceId)
+      : undefined;
+  const startsIn =
+    isEditableKind(entry) && entry.startsInWorkspace
+      ? {
+          workspace:
+            scope?.kind === "workspace"
+              ? scopeWorkspace?.member
+                ? { id: scopeWorkspace.id, name: scopeWorkspace.name }
+                : undefined
+              : workspace,
+          mayChooseAll: source.rights.instanceWrite
+        }
+      : undefined;
   const back = (
     <PageHeaderBack label={t("build.backToList", { kind: t(entry.label) })} onClick={openList}>
       {t(entry.label)}
@@ -248,6 +277,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
         kind={entry.kind}
         view={entry.view}
         name={assetName}
+        kinds={kinds.map((kind) => kind.entry)}
         page={{ ref: pageRef, above: loadError, shown: pageShown }}
         back={back}
       />
@@ -291,6 +321,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
             initialTitle={t("build.copyTitle", { title: copying.title })}
             namespaces={source.rights.creatableNamespaces(entry.kind)}
             mayNameFreely={source.rights.instanceWrite}
+            startsIn={startsIn}
             onClose={() => setCopying(undefined)}
             onStart={(chosen) => {
               setCopying(undefined);
@@ -323,14 +354,11 @@ export function BuildFrame({ source }: { source: BuildSource }) {
             groups={[
               {
                 id: "kinds",
-                items: kinds.map((kind) => {
-                  const Icon = kind.entry.icon;
-                  return {
-                    id: kind.entry.path,
-                    label: t(kind.entry.label),
-                    icon: <Icon aria-hidden="true" />
-                  };
-                })
+                items: kinds.map((kind) => ({
+                  id: kind.entry.path,
+                  label: t(kind.entry.label),
+                  icon: <RegistryIcon name={kind.entry.icon} />
+                }))
               }
             ]}
             value={entry.path}
@@ -355,6 +383,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
           entry={entry}
           namespaces={source.rights.creatableNamespaces(entry.kind)}
           mayNameFreely={source.rights.instanceWrite}
+          startsIn={startsIn}
           onClose={() => setAsking(false)}
           onStart={(chosen) => {
             setAsking(false);
@@ -417,7 +446,14 @@ function BuildList({
   const [now] = useState(() => new Date());
   const settledText = useSettledText(view.text);
   const list = source.useList(entry.kind, { text: settledText, namespace: view.namespace });
-  const { namespaces } = source.rights;
+  const scope = source.scoped?.(entry.kind) ? source.scope : undefined;
+  const scopes = scope && source.chooseScope ? buildScopes(source.rights) : [];
+  const workspaceName = (id: string) =>
+    source.rights.workspaces.find((candidate) => candidate.id === id)?.name ?? id;
+  const scopeName = (of: BuildScope) =>
+    of.kind === "instance" ? t("build.scopeInstance") : workspaceName(of.workspaceId);
+  // A Namespace is a prefix among the instance's own assets alone.
+  const namespaces = scope?.kind === "workspace" ? [] : source.rights.namespaces;
   const namespaceName = (prefix: string | undefined) =>
     namespaces.find((namespace) => namespace.prefix === prefix)?.displayName;
   const filtered = settledText.trim() !== "" || view.namespace !== undefined;
@@ -440,7 +476,7 @@ function BuildList({
         description={entry.description ? t(entry.description) : undefined}
         primaryAction={newButton}
         overflow={
-          editable ? (
+          editable && !editable.withoutCli ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <IconButton label={t("build.listActions")} variant="outline">
@@ -465,8 +501,8 @@ function BuildList({
         listError ? null : (
           <SkeletonList rows={6} />
         )
-      ) : list.rows.length === 0 && !filtered ? (
-        <EmptyState icon={<entry.icon aria-hidden="true" />} action={newButton}>
+      ) : list.rows.length === 0 && !filtered && scopes.length < 2 ? (
+        <EmptyState icon={<RegistryIcon name={entry.icon} />} action={newButton}>
           {t(editable && !state.canCreate ? editable.emptyReadOnlyText : entry.emptyText)}
         </EmptyState>
       ) : (
@@ -483,40 +519,64 @@ function BuildList({
               />
             }
             filters={
-              namespaces.length > 1 ? (
-                <Picker
-                  search
-                  label={t("build.namespaceFilter")}
-                  options={[
-                    { value: ALL_NAMESPACES, label: t("build.namespaceAll") },
-                    ...namespaces.map((namespace) => ({
-                      value: namespace.prefix,
-                      label: namespace.displayName,
-                      description: namespace.prefix
-                    }))
-                  ]}
-                  value={view.namespace ?? ALL_NAMESPACES}
-                  onValueChange={(prefix) =>
-                    onViewChange({
-                      ...view,
-                      namespace: prefix === ALL_NAMESPACES ? undefined : prefix
-                    })
-                  }
-                >
-                  <PickerButton
+              <>
+                {scope && scopes.length > 1 ? (
+                  <Picker
+                    label={t("build.scopeFilter")}
+                    options={scopes.map((option) => ({
+                      value: buildScopeValue(option),
+                      label: scopeName(option)
+                    }))}
+                    value={buildScopeValue(scope)}
+                    onValueChange={(value) => {
+                      const chosen = scopes.find((option) => buildScopeValue(option) === value);
+                      if (chosen) source.chooseScope?.(chosen);
+                    }}
+                  >
+                    <PickerButton
+                      label={t("build.scopeFilter")}
+                      value={scopeName(scope)}
+                      placeholder={t("build.scopeInstance")}
+                    />
+                  </Picker>
+                ) : null}
+                {namespaces.length > 1 ? (
+                  <Picker
+                    search
                     label={t("build.namespaceFilter")}
-                    value={namespaceName(view.namespace) ?? t("build.namespaceAll")}
-                    placeholder={t("build.namespaceAll")}
-                  />
-                </Picker>
-              ) : undefined
+                    options={[
+                      { value: ALL_NAMESPACES, label: t("build.namespaceAll") },
+                      ...namespaces.map((namespace) => ({
+                        value: namespace.prefix,
+                        label: namespace.displayName,
+                        description: namespace.prefix
+                      }))
+                    ]}
+                    value={view.namespace ?? ALL_NAMESPACES}
+                    onValueChange={(prefix) =>
+                      onViewChange({
+                        ...view,
+                        namespace: prefix === ALL_NAMESPACES ? undefined : prefix
+                      })
+                    }
+                  >
+                    <PickerButton
+                      label={t("build.namespaceFilter")}
+                      value={namespaceName(view.namespace) ?? t("build.namespaceAll")}
+                      placeholder={t("build.namespaceAll")}
+                    />
+                  </Picker>
+                ) : null}
+              </>
             }
           />
           {list.rows.length === 0 ? (
             <EmptyState layout="inline" icon={<SearchX aria-hidden="true" />}>
-              {settledText.trim() === ""
-                ? t("build.noMatchInNamespace")
-                : t("build.noMatch", { query: settledText.trim() })}
+              {settledText.trim() !== ""
+                ? t("build.noMatch", { query: settledText.trim() })
+                : view.namespace === undefined && scope
+                  ? t("build.noneInScope", { scope: scopeName(scope) })
+                  : t("build.noMatchInNamespace")}
             </EmptyState>
           ) : (
             <List aria-label={t(entry.label)}>
@@ -525,14 +585,19 @@ function BuildList({
                 const namespace = namespaceName(asset.namespace) ?? asset.namespace;
                 const own = entry.row?.(asset);
                 const rowText = entry.rowText?.(asset)?.trim();
+                const RowLine = entry.RowLine;
                 return (
                   <ListRow
                     key={asset.name}
                     leading={own?.leading ?? <RowMark entry={entry} title={title} />}
                     title={title}
+                    // A kind's own line is a sentence, read whole.
+                    descriptionWraps={!own && RowLine !== undefined ? "always" : false}
                     description={
                       own ? (
                         own.description
+                      ) : RowLine ? (
+                        <RowLine asset={asset} />
                       ) : (
                         <>
                           <code className="font-mono">{asset.name}</code>
@@ -542,6 +607,9 @@ function BuildList({
                     }
                     chips={
                       <>
+                        {asset.scope.kind === "workspace" ? (
+                          <Chip size="sm">{workspaceName(asset.scope.workspaceId)}</Chip>
+                        ) : null}
                         {namespace ? <Chip size="sm">{namespace}</Chip> : null}
                         {entry.badges?.(asset, t)}
                       </>
@@ -614,13 +682,12 @@ function RowMark({ entry, title }: { entry: BuildKind; title: string }) {
   if (entry.avatar) {
     return <Avatar kind={entry.avatar} name={title} />;
   }
-  const Icon = entry.icon;
   return (
     <span
       aria-hidden="true"
       className="grid size-8 place-items-center rounded-md bg-muted text-muted-foreground"
     >
-      <Icon className="size-4" />
+      <RegistryIcon name={entry.icon} className="size-4" />
     </span>
   );
 }

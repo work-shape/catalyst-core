@@ -102,8 +102,13 @@ export async function setup() {
       t.operationCalls.deps
     );
   };
+  /** The rows on resources; the instance-wide rows its legacy list became stay out (AP-4). */
   const principalRows = () =>
-    t.stores.access.listGrants({ clientInstanceId, holderKind: "service_principal" });
+    t.stores.access.listGrants({
+      clientInstanceId,
+      holderKind: "service_principal",
+      excludeInstanceScope: true
+    });
   return { t, principal, ops, payload, grantTo, step, principalRows };
 }
 

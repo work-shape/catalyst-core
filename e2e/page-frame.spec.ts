@@ -188,6 +188,21 @@ test("the head of every asset page is one row as high as the header, and the id 
       // At 768 px the conversation of a draft covers the draft and its head.
       { path: `/w/${workspaceId}/app-drafts/${app}`, wideOnly: true }
     ];
+    // Fails with a draft whose head was drawn a second time once its record arrived: on a slow
+    // runner a measure of the first head met an element that was gone.
+    const record = new RegExp(`/api/v1/assets/app/${app}\\?`, "u");
+    await page.route(record, async (route) => {
+      await new Promise((done) => setTimeout(done, 500));
+      await route.continue();
+    });
+    await page.goto(`/w/${workspaceId}/app-drafts/${app}`);
+    const draftHead = page.locator('header[data-variant="detail"]');
+    await expect(draftHead.getByRole("heading", { level: 1 })).toBeVisible();
+    const firstHead = await draftHead.elementHandle();
+    await expect(draftHead.getByRole("button", { name: "Publish" })).toBeVisible();
+    expect(await firstHead?.evaluate((element) => element.isConnected)).toBe(true);
+    await page.unroute(record);
+
     for (const size of [WIDE, { width: 768, height: 900 }]) {
       await page.setViewportSize(size);
       for (const { path, id, wideOnly } of editors) {
@@ -234,7 +249,9 @@ test("the head of every asset page is one row as high as the header, and the id 
 });
 
 // Fails with a head that cut the name first: at 390 px a run was named "Ru…" beside its chip
-// and the text of its way back.
+// and the text of its way back. A Connection's head carries History and its menu, so under 768
+// px they go to a second row once they do not fit beside the arrow and the whole name; the row
+// then has its width back and gives way again in the same order.
 test("a narrowing head gives the chips, then the text of the way back, and cuts the name last", async ({
   page
 }) => {
@@ -255,7 +272,7 @@ test("a narrowing head gives the chips, then the text of the way back, and cuts 
     const name = head.getByRole("heading", { level: 1 });
     await expect(name).toBeVisible();
     const read = () =>
-      head.evaluate(async (element) => {
+      head.evaluate(async (element, height) => {
         // The head measures its row after a resize and draws again.
         await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
         const title = element.querySelector("h1");
@@ -273,11 +290,12 @@ test("a narrowing head gives the chips, then the text of the way back, and cuts 
             (chip) => chip.getBoundingClientRect().top < firstLine - 1
           ).length,
           // No gap is left where the text was: the name follows the way back at one distance.
-          gap: Math.round(title.getBoundingClientRect().left - back.getBoundingClientRect().right)
+          gap: Math.round(title.getBoundingClientRect().left - back.getBoundingClientRect().right),
+          wrapped: element.getBoundingClientRect().height > height + 1
         };
-      });
+      }, HEADER);
     const wide = await read();
-    expect(wide).toEqual({ cut: false, text: true, chips: 2, gap: wide.gap });
+    expect(wide).toEqual({ cut: false, text: true, chips: 2, gap: wide.gap, wrapped: false });
     const seen = [wide];
     for (let width = 760; width >= 240; width -= 20) {
       await page.setViewportSize({ width, height: 800 });
@@ -287,15 +305,23 @@ test("a narrowing head gives the chips, then the text of the way back, and cuts 
       const before = seen[Math.max(0, index - 1)] ?? now;
       const where = `step ${index}: ${JSON.stringify(now)}`;
       expect(now.gap, where).toBe(wide.gap);
-      expect(now.chips, where).toBeLessThanOrEqual(before.chips);
+      // The actions wrap once and stay wrapped, and only after the chips and the text went.
+      // The row they leave has its width back: what went may return there.
+      expect(before.wrapped && !now.wrapped, where).toBe(false);
+      const wrapsNow = now.wrapped && !before.wrapped;
+      if (wrapsNow) {
+        expect(before, where).toMatchObject({ cut: false, text: false, chips: 0 });
+      }
+      expect(wrapsNow || now.chips <= before.chips, where).toBe(true);
       // The text stays while a chip could still go, and the name is whole while the text shows.
-      expect(now.text && before.text === false, where).toBe(false);
+      expect(!wrapsNow && now.text && before.text === false, where).toBe(false);
       expect(now.text && now.cut, where).toBe(false);
       expect(!now.text && now.chips > 0, where).toBe(false);
     }
     // Each part went, and the arrow stood alone beside the whole name before the name was cut.
     expect(seen.some((now) => now.text && now.chips === 0)).toBe(true);
     expect(seen.some((now) => !now.text && !now.cut)).toBe(true);
+    expect(seen.some((now) => now.wrapped)).toBe(true);
     expect(seen.at(-1)).toMatchObject({ cut: true, text: false, chips: 0 });
   } finally {
     await removeConnection(connection.id);

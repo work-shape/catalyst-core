@@ -1,4 +1,5 @@
 import {
+  APP_BRIDGE_CONNECTION_CALL_REMOVED,
   APP_BRIDGE_MARK,
   APP_BRIDGE_VERSION,
   appBridgeHostMessageSchema,
@@ -7,7 +8,7 @@ import {
   type AppBridgeHostMessage,
   type AppBridgePageMessage
 } from "@vivd-catalyst/api-client";
-import type { FrameCallAnswer, FrameCalls } from "./frame-calls";
+import type { FrameCallAnswer, FrameCalls, FrameWorkflowRunAnswer } from "./frame-calls";
 
 // The interface's side of the bridge to a Page. A Page is code an agent wrote, running in a
 // frame without an origin. So the interface decides by three things whether it listens: the
@@ -91,6 +92,25 @@ export function callResultMessage(
   });
 }
 
+/** The answer to one read of a Workflow Run, named by the id the Page gave the read. */
+export function workflowRunResultMessage(
+  session: string,
+  requestId: string,
+  answer: FrameWorkflowRunAnswer
+): AppBridgeHostMessage {
+  return appBridgeHostMessageSchema.parse({
+    [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+    type: "workflow_run_result",
+    session,
+    requestId,
+    ...answer
+  });
+}
+
+/** What a Page is told where no call can be made, and where a call got no answer. */
+const NOT_AVAILABLE = { code: "not_available", message: "This frame cannot make calls." };
+const NOT_MADE = { code: "failed", message: "The call could not be made." };
+
 interface PageWindow {
   postMessage(message: unknown, targetOrigin: string): void;
 }
@@ -166,21 +186,37 @@ export function createPageBridge(input: {
         input.onNavigate(message.path);
       } else if (message.type === "resize") {
         input.onResize(message.height);
+      } else if (message.type === "workflow_run") {
+        const { requestId } = message;
+        const calls = input.calls?.();
+        const answer: Promise<FrameWorkflowRunAnswer> = calls
+          ? calls.workflowRun(message.runId)
+          : Promise.resolve({ ok: false, error: NOT_AVAILABLE });
+        answer
+          // The Page always gets an answer to a read, so that it never waits for nothing.
+          .catch((): FrameWorkflowRunAnswer => ({ ok: false, error: NOT_MADE }))
+          .then((result) => {
+            post(source, workflowRunResultMessage(input.session, requestId, result));
+          })
+          .catch(() => undefined);
+      } else if (message.type === "connection_call") {
+        // Retired: a Page of an older kit is told at once that a named action is the way.
+        post(
+          source,
+          callResultMessage(input.session, message.requestId, {
+            ok: false,
+            error: { ...APP_BRIDGE_CONNECTION_CALL_REMOVED }
+          })
+        );
       } else {
         const { requestId } = message;
         const calls = input.calls?.();
         const answer: Promise<FrameCallAnswer> = calls
           ? calls.run(message)
-          : Promise.resolve({
-              ok: false,
-              error: { code: "not_available", message: "This frame cannot make calls." }
-            });
+          : Promise.resolve({ ok: false, error: NOT_AVAILABLE });
         answer
           // The Page always gets an answer to a call, so that it never waits for nothing.
-          .catch((): FrameCallAnswer => ({
-            ok: false,
-            error: { code: "failed", message: "The call could not be made." }
-          }))
+          .catch((): FrameCallAnswer => ({ ok: false, error: NOT_MADE }))
           .then((result) => {
             post(source, callResultMessage(input.session, requestId, result));
           })

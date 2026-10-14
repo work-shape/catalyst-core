@@ -19,6 +19,12 @@ export function resolveSendBlock(input: {
   workspaceBlock: SendBlock | undefined;
   snapshotStatus: ConversationSnapshotStatus;
   noAgentsMessage: string | undefined;
+  /**
+   * A message typed while the thread loads waits and is sent once it is there. The dock does not
+   * wait: the conversation its address names may be one the person cannot read, and it opens
+   * empty instead.
+   */
+  queueWhileLoading?: boolean;
   t: TranslationContextValue["t"];
 }): SendBlock | undefined {
   if (input.sending) {
@@ -32,7 +38,7 @@ export function resolveSendBlock(input: {
     return input.workspaceBlock;
   }
   if (input.snapshotStatus === "loading") {
-    return { reason: input.t("loadingConversation"), loading: true };
+    return { reason: input.t("loadingConversation"), loading: input.queueWhileLoading ?? true };
   }
   if (input.snapshotStatus !== "ready") {
     // A failed load does not lift by itself; a later refetch must not send what waited.

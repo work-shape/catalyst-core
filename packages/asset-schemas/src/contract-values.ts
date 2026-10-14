@@ -85,6 +85,7 @@ export const ACTIONS = [
   "knowledge_base.use",
   "guardrail.read",
   "guardrail.write",
+  "guardrail.publish",
   "guardrail.delete",
   "operations.approve",
   "users.manage",

@@ -1,12 +1,14 @@
 import { z } from "zod";
 import {
   AppError,
+  INSTANCE_ASSET_SCOPE,
   auditActorFromUser,
   isJsonObject,
   unknownToJsonValue,
   type ApprovalRequest,
   type ApprovalRequestContext,
   type ApprovalRequestHandler,
+  type AssetScope,
   type AuthenticatedUser,
   type ConfigAssetMutation,
   type ConfigAssetRevisionRecord,
@@ -16,7 +18,10 @@ import {
   applySkillChange,
   assertSkillChangeScope,
   createSkillChangePreview,
+  guardrailFieldOf,
+  guardrailStringsOf,
   skillChangeOperationsSchema,
+  skillConfigSchema,
   skillNameSchema
 } from "@vivd-catalyst/config-schema";
 import {
@@ -106,8 +111,7 @@ export function createSkillChangeApprovalHandler(
       if (context.status !== "pending") {
         return toJsonObject(data.preview);
       }
-      const snapshot = await options.configAssets.source.getSnapshot();
-      const skill = snapshot.skills.find((candidate) => candidate.name === data.skillName);
+      const skill = await options.configAssets.source.getSkill(data.skillName);
       try {
         return toJsonObject(createSkillChangePreview(skill, data.operations));
       } catch {
@@ -128,7 +132,7 @@ export function createSkillChangeApprovalHandler(
       if (!agent || (!creation && !agent.skillNames.includes(data.skillName))) {
         return true;
       }
-      const skill = snapshot.skills.find((candidate) => candidate.name === data.skillName);
+      const skill = await options.configAssets.source.getSkill(data.skillName);
       try {
         applySkillChange(skill, data.operations);
         return false;
@@ -138,6 +142,52 @@ export function createSkillChangeApprovalHandler(
         }
         throw error;
       }
+    },
+    // The skill as the approval writes it, read by the guardrails on asset writes once more: a
+    // guardrail added since the agent proposed it reads it too.
+    async applyEvents(payload, context) {
+      const data = validatePayload(payload);
+      // A change already written, whose approval failed to be recorded, is recovered as it is.
+      if (await findProducedRevision(data.skillName, context.requestId)) return [];
+      // The skill whole: the snapshot leaves its resources out, and the guardrails read them.
+      const current = await options.configAssets.source.getSkill(data.skillName);
+      // A change that no longer applies was found stale before this is asked.
+      const skill = applySkillChange(current, data.operations);
+      return [
+        {
+          name: "asset.before_write",
+          subject: { kind: "skill", name: skill.name },
+          checkable: () => ({
+            name: skill.name,
+            content: guardrailFieldOf(guardrailStringsOf(skill))
+          })
+        }
+      ];
+    },
+    // The skill as the revert writes it back: the revision before the change, read like a new
+    // write. Reverting a created skill deletes it and writes no content.
+    async revertEvents(request) {
+      const data = validatePayload(request.payload);
+      if (data.operations[0]?.type === "create_skill") return [];
+      const history = await listSkillRevisions(data.skillName);
+      // An undo already written, whose status was not recorded, is recovered as it is.
+      if (revertedBy(history, request.id)) return [];
+      const applied = findRequestRevision(history, request.id);
+      const before =
+        applied && history.find((revision) => revision.revision === applied.revision - 1);
+      const config = before?.config;
+      // Nothing to write back: the revert itself refuses it.
+      if (!before || !config) return [];
+      return [
+        {
+          name: "asset.before_write",
+          subject: { kind: "skill", id: before.assetId, name: data.skillName },
+          checkable: () => ({
+            name: data.skillName,
+            content: guardrailFieldOf(guardrailStringsOf(config))
+          })
+        }
+      ];
     },
     async isApplied(payload, context) {
       return (
@@ -161,10 +211,15 @@ export function createSkillChangeApprovalHandler(
         skillName: data.skillName,
         operations: data.operations
       });
-      const current = snapshot.skills.find((candidate) => candidate.name === data.skillName);
-      const skill = applySkillChange(current, data.operations);
+      const skill = applySkillChange(snapshot.skill, data.operations);
       const mutations: ConfigAssetMutation[] = [
-        { type: "upsert", kind: "skill", name: skill.name, config: toJsonObject(skill) }
+        {
+          type: "upsert",
+          kind: "skill",
+          name: skill.name,
+          scope: snapshot.scopeOf("skill"),
+          config: toJsonObject(skill)
+        }
       ];
       // An approved request is the review a deleted name needs: it names the tombstone.
       const baseRevisions = { [`skill:${skill.name}`]: snapshot.revisionOf("skill", skill.name) };
@@ -174,6 +229,7 @@ export function createSkillChangeApprovalHandler(
           type: "upsert",
           kind: "agent",
           name: agent.name,
+          scope: snapshot.scopeOf("agent"),
           config: toJsonObject({
             ...agent,
             skillNames: [...new Set([...agent.skillNames, skill.name])]
@@ -207,11 +263,7 @@ export function createSkillChangeApprovalHandler(
       }
       const latest = history.at(-1);
       // A previous revert may have committed before its request transition failed.
-      if (
-        latest !== undefined &&
-        appliedBy(latest, request.id) &&
-        (latest.operation === "revert" || latest.operation === "delete")
-      ) {
+      if (latest !== undefined && revertedBy(history, request.id)) {
         return revisionResult(data.skillName, latest);
       }
       if (latest?.id !== applied.id) {
@@ -233,6 +285,7 @@ export function createSkillChangeApprovalHandler(
             type: "upsert",
             kind: "agent",
             name: agent.name,
+            scope: snapshot.scopeOf("agent"),
             operation: "revert",
             config: toJsonObject({
               ...agent,
@@ -240,7 +293,12 @@ export function createSkillChangeApprovalHandler(
             })
           });
         }
-        mutations.push({ type: "delete", kind: "skill", name: data.skillName });
+        mutations.push({
+          type: "delete",
+          kind: "skill",
+          name: data.skillName,
+          scope: snapshot.scopeOf("skill")
+        });
       } else {
         const before = history.find((revision) => revision.revision === applied.revision - 1);
         if (!before?.config) {
@@ -250,6 +308,7 @@ export function createSkillChangeApprovalHandler(
           type: "upsert",
           kind: "skill",
           name: data.skillName,
+          scope: snapshot.scopeOf("skill"),
           operation: "revert",
           config: before.config
         });
@@ -299,9 +358,21 @@ export function createSkillChangeApprovalHandler(
     ]);
     return {
       ...(await options.configAssets.source.getSnapshot()),
+      /**
+       * The skill whole, with its resources, which the snapshot leaves out: the content of the
+       * revision read above, so a change is made from what its base names.
+       */
+      skill: skill?.status === "active" ? skillConfigSchema.parse(skill.config) : undefined,
       /** The last revision of the asset, a deleted one's included, or `null` for none. */
       revisionOf: (kind: "skill" | "agent", name: string) =>
-        revisions.get(`${kind}:${name}`) ?? null
+        revisions.get(`${kind}:${name}`) ?? null,
+      /**
+       * Who owns what the change writes. A skill keeps its owner, a deleted one's included; a
+       * skill the change creates is owned by the owner of the agent that proposed it, so the
+       * agent names a skill of its own owner.
+       */
+      scopeOf: (kind: "skill" | "agent"): AssetScope =>
+        (kind === "skill" ? skill?.scope : undefined) ?? agent?.scope ?? INSTANCE_ASSET_SCOPE
     };
   }
 }
@@ -320,6 +391,16 @@ function validatePayload(payload: JsonObject) {
 /** Whether the revision was written for this request. */
 function appliedBy(revision: ConfigAssetRevisionRecord, requestId: string): boolean {
   return revision.origin?.kind === "approval_request" && revision.origin.requestId === requestId;
+}
+
+/** Whether the newest revision is the undo of this request, written by an earlier revert. */
+function revertedBy(history: readonly ConfigAssetRevisionRecord[], requestId: string): boolean {
+  const latest = history.at(-1);
+  return (
+    latest !== undefined &&
+    appliedBy(latest, requestId) &&
+    (latest.operation === "revert" || latest.operation === "delete")
+  );
 }
 
 function findRequestRevision(revisions: ConfigAssetRevisionRecord[], requestId: string) {

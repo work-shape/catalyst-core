@@ -706,7 +706,8 @@ describe("config asset admin routes", () => {
       ).json().config as Record<string, unknown>;
 
     const overview = await request(fixture.server, token, "config_assets.get_overview", {});
-    // The eligible bindings are the ones an agent may use; `userSelectable` is not consulted.
+    // The eligible bindings are the ones an agent may use; `userSelectable` is not consulted,
+    // and an embedding binding is never one.
     expect(overview.json().references.modelBindingIds).toEqual(["plain", "other", "fast"]);
 
     const agent = boundAgentConfig("plain");
@@ -719,8 +720,8 @@ describe("config asset admin routes", () => {
       (await put({ ...agent, userSelectableModelBindingIds: ["other", "fast"] })).statusCode
     ).toBe(200);
 
-    // A binding agents may not use and an unknown binding are both rejected on save.
-    for (const bindingId of ["internal", "missing"]) {
+    // A binding agents may not use, an embedding binding and an unknown binding are rejected.
+    for (const bindingId of ["internal", "embedding", "missing"]) {
       for (const send of [put, push]) {
         const rejected = await send({ ...agent, userSelectableModelBindingIds: [bindingId] });
         expect(rejected.statusCode).toBe(422);
@@ -728,6 +729,9 @@ describe("config asset admin routes", () => {
           `Agent 'assistant' lists missing model binding '${bindingId}' in userSelectableModelBindingIds`
         );
       }
+    }
+    for (const send of [put, push]) {
+      expect((await send(boundAgentConfig("embedding"))).statusCode).toBe(422);
     }
     expect((await push({ ...agent, userSelectableModelBindingIds: ["other"] })).statusCode).toBe(
       200
@@ -1262,7 +1266,8 @@ async function createFixture(
             { id: "plain", providerId: "local" },
             { id: "other", providerId: "local" },
             { id: "internal", providerId: "local", agentSelectable: false },
-            { id: "fast", providerId: "local", supportsFastMode: true }
+            { id: "fast", providerId: "local", supportsFastMode: true },
+            { id: "embedding", providerId: "local", kind: "embedding", dimensions: 8 }
           ],
           usage: {
             costs: {
@@ -1381,15 +1386,17 @@ async function createFixture(
     server: {
       config,
       clientInstanceId,
-      authAdapter: serviceAccessOptions
-        ? new IdentityResolvingAuthAdapter(
-            new CompositeAuthAdapter([
+      // As an assembled instance does: a signed-in person is a stored user, whose legacy list
+      // the first sign-in writes as rows (AP-4).
+      authAdapter: new IdentityResolvingAuthAdapter(
+        serviceAccessOptions
+          ? new CompositeAuthAdapter([
               new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
               new HmacSessionTokenAuthAdapter(authOptions)
-            ]),
-            store.users
-          )
-        : new HmacSessionTokenAuthAdapter(authOptions),
+            ])
+          : new HmacSessionTokenAuthAdapter(authOptions),
+        store.users
+      ),
       stores: store,
       usageGovernance: new ModelUsageGovernance({
         store: store.usage,
@@ -1465,15 +1472,19 @@ async function mintToken(
       | undefined;
   } = {}
 ): Promise<string> {
+  const roles = overrides.roles ?? ["user"];
+  const permissions = overrides.permissions ?? [
+    "config_assets.read",
+    "config_assets.write",
+    "config_assets.release"
+  ];
   const payload = {
-    externalUserId: "config-cli",
+    // The first sign-in of a person writes the rights the token names; a later token does not
+    // change them. A token with other rights is therefore another person.
+    externalUserId: `config-cli:${[...roles, ...permissions].join(",")}`,
     displayLabel: "Config CLI",
-    roles: overrides.roles ?? ["user"],
-    permissions: overrides.permissions ?? [
-      "config_assets.read",
-      "config_assets.write",
-      "config_assets.release"
-    ],
+    roles,
+    permissions,
     scopes: overrides.scopes ?? [
       "config_assets:read",
       "config_assets:write",

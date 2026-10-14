@@ -49,6 +49,8 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       // What the schema accepts today: any name that is not empty.
       nameRule: { pattern: /^[\s\S]+$/u, description: "Agent name must not be empty" },
       actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" },
+      // The instance owns it, or the workspace it was made in (WS-OWN-1a).
+      owners: ["instance", "workspace"],
       validate: (context, agents) => [
         ...findAgentReferenceIssues({
           agents,
@@ -80,6 +82,12 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
     inRelease: true,
     holdsInstanceDefault: true,
     hasWorkspaceAvailability: true,
+    references: (agent) => {
+      const skillNames = readDefinitionField(agent, "skillNames");
+      return Array.isArray(skillNames)
+        ? skillNames.flatMap((name) => (typeof name === "string" ? [{ kind: "skill", name }] : []))
+        : [];
+    },
 
     // Switching to a binding without fast-mode support clears the flag instead of failing the save.
     prepareInteractiveUpsert({ current, next }) {

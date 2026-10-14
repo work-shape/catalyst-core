@@ -4,6 +4,8 @@ import type {
   AuthenticatedIdentity,
   ClientInstanceId,
   ConfigAssetKind,
+  ConfigAssetRecord,
+  FileSet,
   JsonObject,
   Namespace,
   PlatformStores,
@@ -20,6 +22,19 @@ export interface ConfigAssetValidationRefs {
   enabledToolNames: string[];
 }
 
+/** What the platform tells its agents before their own instructions. */
+export interface PlatformInstructions {
+  /** The rules at the head of every agent's system prompt. */
+  rules: string;
+  /** How the platform works, for an agent that holds one of `toolNames`. */
+  orientation: string;
+  /** The platform's tools: an agent whose definition lists one of them holds them. */
+  toolNames: readonly string[];
+}
+
+/** The operation a write of an asset arrives through. */
+export type AssetWriteSurface = "put" | "delete" | "revert" | "sync";
+
 /**
  * A registered kind with what the config asset workflow asks of it. Everything the workflow
  * does differently for one kind is answered here, by that kind's registration.
@@ -34,10 +49,30 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   readonly holdsInstanceDefault: boolean;
   /** An asset of this kind is usable only in the workspaces its availability names. */
   readonly hasWorkspaceAvailability: boolean;
+  /**
+   * The assets a definition of the kind names by name, for the rule that an asset names what
+   * a workspace owns only when its own owner is that workspace. Left out: it names none.
+   */
+  references?(definition: unknown): readonly { kind: string; name: string }[];
   /** Adjusts what an interactive save sends before it is validated. */
   prepareInteractiveUpsert(input: {
     current: unknown;
     next: Record<string, unknown>;
+    /**
+     * The principal who writes, where the save has one: a put and a validate. A kind that
+     * records who is accountable for a new asset reads it.
+     */
+    principalId?: string;
+  }): Record<string, unknown>;
+  /**
+   * What a revert stores of an earlier revision, for a kind whose server decides fields that
+   * an earlier revision may hold differently: those stay as they are now. Without it the
+   * revision is stored as it was.
+   */
+  prepareRevert?(input: {
+    current: unknown;
+    restored: Record<string, unknown>;
+    principalId: string;
   }): Record<string, unknown>;
   /**
    * The right an interactive save needs beside the kind's write right and its caller lacks,
@@ -55,6 +90,7 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   /** Throws `FORBIDDEN` when the instance's editing policy refuses this interactive save. */
   assertInteractiveUpsertAllowed(input: {
     access: ActorAccess;
+    surface: AssetWriteSurface;
     name: string;
     /** The stored definition, or undefined for a new asset. */
     current: unknown;
@@ -87,8 +123,42 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     /** The config of that revision. */
     config: unknown;
   }): void | Promise<void>;
+  /**
+   * Throws where a write of the validated definition reaches beyond the scope that owns the
+   * asset, which only the stores can tell: a workspace guardrail whose filter names another
+   * workspace. Asked of every write through an asset operation, before it is stored.
+   */
+  assertScopedWrite?(input: {
+    clientInstanceId: ClientInstanceId;
+    scope: AssetScope;
+    name: string;
+    definition: unknown;
+    stores: PlatformStores;
+  }): Promise<void>;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
-  assertInteractiveDeleteAllowed(): void;
+  assertInteractiveDeleteAllowed(input: { surface: AssetWriteSurface }): void;
+  /**
+   * Throws where another asset still needs this one and nothing checks that reference when
+   * the other is written: asked of a delete with the assets as they are stored, each with its
+   * draft and, where it has one, its published config.
+   */
+  assertRemovable?(input: {
+    name: string;
+    assets(kind: string): Promise<readonly ConfigAssetRecord[]>;
+  }): Promise<void>;
+  /**
+   * What a write of a config revision does beside storing it, called once the write is
+   * committed, with the stores of the instance. A failure is logged and the write stands, so
+   * what it does is something a later write or start repairs.
+   */
+  afterWrite?(input: {
+    clientInstanceId: ClientInstanceId;
+    name: string;
+    /** The config before the write, where the asset was active. */
+    previous: unknown;
+    config: JsonObject;
+    stores: PlatformStores;
+  }): Promise<void>;
   /**
    * The config a revision holds, made from the manifest its build validated. A kind whose
    * revisions hold files brings it: only the kind knows what its config is beside the manifest.
@@ -105,6 +175,47 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * alone. Throws `VALIDATION_FAILED` for files it refuses.
    */
   manifestOfFiles?(files: readonly { path: string; bytes: Uint8Array }[]): JsonObject;
+  /**
+   * Set by a kind whose revision is a config and may hold files beside it: the config stays
+   * the one place its text is read from, and the files the config cannot hold are kept in a
+   * file set the revision names. Such a kind is written as its config or as its whole folder
+   * of files, and is read as either. A write of the config alone leaves the other files of
+   * the asset where they are.
+   */
+  readonly revisionFiles?: {
+    /** The file of the folder that every write of files carries. */
+    manifestFile: string;
+    /**
+     * Reads the folder of one write: the config it makes, and the paths of the files the
+     * config does not hold. Throws `VALIDATION_FAILED` for a set or a file it refuses.
+     */
+    read(
+      name: string,
+      files: readonly { path: string; bytes: Uint8Array }[]
+    ): { config: Record<string, unknown>; extras: string[] };
+    /** What the file set of a revision names as its manifest. */
+    manifestOf(extras: readonly string[]): JsonObject;
+    /**
+     * The config with the index of the files of its file set that it does not hold itself,
+     * and without one where there is none. What a caller sent as the index is not read.
+     */
+    indexed(config: JsonObject, fileSet: FileSet | undefined): JsonObject;
+    /**
+     * What a write of the config alone keeps of the revision before it: the index of the
+     * files where that revision has a file set, and whatever else of its config such a write
+     * cannot know to send.
+     */
+    carried(config: JsonObject, before: unknown, beforeHasFiles: boolean): JsonObject;
+    /** The files a config holds itself, as a read of the folder answers them. */
+    filesOfConfig(config: unknown): { path: string; bytes: Uint8Array }[];
+    /** Whether stored bytes say what the config says at their path. */
+    matchesConfig(config: unknown, file: { path: string; bytes: Uint8Array }): boolean;
+  };
+  /**
+   * What the answer of a write says of a definition that was written and that its caller
+   * should know: each a warning with a code, none a refusal.
+   */
+  writeWarnings?(definition: unknown): { code: string; message: string }[];
   /**
    * What a publish does beside moving the published pointer, with `stores` bound to the
    * transaction that moves it. A throw refuses the publish and leaves the pointer where it was.
@@ -130,6 +241,7 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * repairs.
    */
   onRemove?(input: {
+    clientInstanceId: ClientInstanceId;
     assetId: string;
     /** The config that was published until the delete, where one was. */
     published?: JsonObject;

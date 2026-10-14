@@ -241,6 +241,15 @@ export function workspaceRoutePath(route: WorkspaceRoute): string {
   return pathWith(to, params);
 }
 
+/**
+ * Opens the page of a route in a new tab. The address is the page's own: the dock's
+ * conversation stays out, so a page opened or passed on never carries a conversation.
+ */
+export function openWorkspacePageInNewTab(route: WorkspaceRoute): void {
+  const href = new URL(workspaceRoutePath(route), window.location.origin).toString();
+  window.open(href, "_blank", "noopener");
+}
+
 /** A path pattern with its `$name` segments filled from `params`. */
 function pathWith(pattern: string, params: Record<string, string>): string {
   return pattern

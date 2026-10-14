@@ -63,6 +63,8 @@ skills/support_review/
 
 The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. Binary assets do not belong in config assets.
 
+A working copy holds the instance's [guardrails](#guardrails-as-assets) where `catalyst.yaml` lists their files under `guardrails`, such as `guardrails/*/guardrail.yaml`; each is a folder with its `guardrail.yaml` and, for a `model_judge` check, its instruction in `check.md`. Without that list, pull, diff and `push --prune` leave the instance's guardrails alone. `pull` brings the draft and `--only guardrail:<name>` selects one. Guardrails are no part of a release: after the `assets.sync` batch of agents and skills, `push` writes each changed guardrail as its next draft with `assets.put` against the revision of its last pull, and `push --prune` deletes one with `assets.delete`, so the key needs `config_assets:write` and the instance the module `assetManagement`. `validate` leaves guardrails to the instance's check at that write. Publishing stays a step of its own, and the guardrails of release config are never part of a working copy.
+
 The front matter of `SKILL.md` holds `title`, `description` and, optionally, `name`, `summary` and `starters`. The two texts have different readers:
 
 - `description` is for the agent. It says when to use the skill.
@@ -117,6 +119,42 @@ The CLI sends the API key only to `POST /api/v1/auth/access-token`, then uses th
 Do not pass the key on the command line or put it in `catalyst.yaml` or `.catalyst-state.json`. Keychain-backed profiles are a future enhancement; the current CLI intentionally reads only environment variables.
 
 The exchange needs `SERVICE_ACCESS_TOKEN_SECRET` set on the server; without it the instance has no API access and the exchange answers 404. The API key is the CLI's only sign-in. A CLI without `CATALYST_API_KEY` stops before it sends a request and names Administration, API Access as the place a key comes from; `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` are not read.
+
+## Skills that ship with the release
+
+Some skills come with the release rather than with a working copy: the platform's documentation (`platform-docs`), `workflow-authoring` where Workflows are on, and the skills a capability of the deployment ships, such as `spreadsheets`, `documents`, `presentations` and `pdf` with the artifact helpers. The API process stores each at start as a read-only skill marked as the platform's, with its own icon, and only where the instance has the tools the skill names. No pull brings one, no diff shows one and no push writes or deletes one; an agent lists one in `skillNames` like any other skill.
+
+The name of a shipped skill is taken. A write of a skill of the instance's own under that name is refused, and a start that finds one, because the release ships a skill the instance already holds as its own, stops with the name of the skill. Remove the instance copy with `catalyst config push` while the previous release still runs: pull, delete the skill's folder, take its name out of the agents' `skillNames`, `push --prune`. Then start the release, and add the name to the agents again with a pull and a push. The start never deletes a skill of the instance's own.
+
+## A skill as a folder of files
+
+A skill follows the public Agent Skills convention, so a folder taken unchanged from a public skill library saves, reads and round-trips byte for byte: `SKILL.md` with YAML frontmatter and Markdown, and whatever lies beside it, commonly below `scripts/`, `references/` and `assets/`, and also files at the root such as `LICENSE.txt` or `reference.md`. The asset API writes and reads the whole folder: `assets.put` with `files` (each `{ path, text }` or `{ path, base64 }`, `SKILL.md` among them) and `assets.get` with `files=true`, which answers every file with its hash and its content as it was written.
+
+**Frontmatter.** `name` and `description` are required; a file without a `name` takes the name of the asset. `title` is optional: where it is absent the skill is shown under the first Markdown heading of its content, or else under its name with spaces for hyphens and a capital first letter. `summary` and `starters` are read as fields of the skill, as before. Every other key (`license`, `metadata`, `allowed-tools`, `compatibility`, anything else) is kept as it is, returned as `frontmatter` of the config, and read by nothing; a `frontmatter` of a config that holds one of the skill's own fields is refused. The file is stored as its bytes, so nothing reorders or reformats it.
+
+**Names.** Every name of the convention is accepted (lowercase letters, digits and hyphens), and so is what a skill here could always be named: letters, digits, dots, underscores and hyphens, starting with a letter or a digit. A write of a skill whose name is outside the convention or longer than 64 characters, or whose description is longer than 1,024, is answered with a warning (`skill_name_not_portable`, `skill_description_not_portable`) and is not refused.
+
+**Files.** Any normalized relative path is a file of the skill. A file whose extension says script or text (`.py`, `.js`, `.mjs`, `.ts`, `.sh`, `.rb`, `.md`, `.txt`, `.json`, `.yaml`, `.yml`, `.xml`, `.html`, `.css`, `.csv`) is UTF-8; every other file is bytes.
+
+The config of a skill stays where its text is read from: `content` from `SKILL.md`, and `resources` for every text file with a resource extension (`.md`, `.txt`, `.json`, `.yaml`, `.yml`) outside `scripts/`, at whatever path it lies. Every other file is kept in the file set of the revision, and the config names it in `files`, an index of `path`, `sha256`, `bytes` and `mediaType` without content. So a skill that is text alone has the config it always had, `read_skill` and a proposal of an agent work on it unchanged, and a write of the config alone (a release sync, the interface, an approved proposal) changes the text and leaves the other files and the further frontmatter of the skill where they are. Reverting to a revision brings its files back with it. What a caller sends as `files` in a config is not read; `frontmatter` is, and an empty one clears it.
+
+A folder is refused with the path and a reason of its own:
+
+| Reason | What is refused |
+| --- | --- |
+| `skill_manifest_missing`, `skill_manifest_invalid` | no `SKILL.md`, or one whose frontmatter does not read or lacks a description |
+| `skill_frontmatter_alias`, `skill_frontmatter_too_deep`, `skill_frontmatter_too_large` | a frontmatter that uses a YAML anchor with an alias or a merge key, nests deeper than 8 levels, or holds more than 8,192 characters beside the fields of the skill |
+| `skill_path_invalid`, `skill_path_duplicate` | a path that escapes the folder or is not normalized, is longer than 240 characters or has a segment longer than 100, a `SKILL.md` below the root; two paths that differ in case alone, a path that is the folder of another one |
+| `skill_file_not_text` | a file whose extension says script or text and whose bytes are no UTF-8 |
+| `skill_file_executable` | a compiled program by its first bytes (ELF, Mach-O, and PE by both of its headers), whatever its name |
+| `skill_file_lfs_pointer` | a Git LFS pointer in place of the file |
+| `skill_file_too_large` | a file over 2 MiB |
+| `files_too_large`, a schema issue on `files` | more than 8 MiB in all, more than 500 files: the limits of every write of files of the API, which are the skill's too |
+| `files_unavailable` | a file the config cannot hold, on an instance without a `files` object store |
+
+The two limits of a whole folder are answered by the API's general limits of a write of files, before any file is decoded and for every kind alike, so a call over one costs nothing; the skill's own `skill_too_large` and `skill_too_many_files` name the same numbers and answer a caller that reaches the rule another way. A YAML anchor with an alias is refused outright in a frontmatter, as in `store.yaml`, `workflow.yaml`, `app.yaml` and an App's action files: a reader answers an alias as the object its anchor made, so a few lines of nested aliases are a value of any size, and no file the platform reads needs one.
+
+An instance without a `files` object store holds skills as their text, as before. An agent's proposal stays with instruction text: it creates and changes no file below `scripts/` and no file that is not a text resource. The audit event of a write of a folder names each file by path, hash and size and holds no content. `read_skill` does not list the other files yet, and an agent's workspace does not hold them yet.
 
 ## Interactive editing and field ownership
 
@@ -233,7 +271,9 @@ operation text, 60,000 per root or resource, and 30 resources per skill.
 
 The same permission allows reverting an approved request. Revert writes a new
 revision restoring the previous content and records the reverting user. It is
-blocked if the skill has newer revisions. Reverting a newly created skill
+blocked if the skill has newer revisions, and where a guardrail on
+`asset.before_write` blocks the restored content; the request then stays
+approved. Reverting a newly created skill
 removes it and its agent reference together; other agents' references must be
 removed first. Reverting retains the original approval and proposal history.
 
@@ -273,7 +313,7 @@ A deleted asset keeps its name, its history and the revision of its delete. `nul
 
 `assets.sync` applies up to 200 puts and deletes for one registered Namespace, named by its prefix in `namespace`. Each item is checked like the single call: the right on that asset, its revision, its content. An item may also carry `expectedAssetId`, the id of the asset its revision was read from; where the instance holds another asset under the name the batch is refused with `409 CONFLICT` and `details.reason` `asset_replaced`. Each applied item answers the `id` and the `revision` it wrote. One put item holds at most 2 MiB as JSON (`ASSET_SYNC_ITEM_MAX_BYTES`). Every item carries `expectedRevision` as the single call does, and the answers are the same two: `428` with `details.assets` when an item names none, `412` with `details.conflicts` when an item is stale. The rights are decided first, those beside the right on the item included, so a caller without a right learns nothing of a revision. The whole set is validated against what the transaction's lock protects: a write that another write made invalid between its check and its commit is refused. An asset the batch does not name is not read for its revision and never refuses the batch. The batch is applied completely or not at all, in one transaction: an agent may name a skill the same batch creates. A kind with a draft and a published revision has its draft moved by a put; the published revision and the version of the asset set stay. An App is refused as an item, since its files are built per write. When any item is refused the answer carries `details.items` with one entry per item, `refused` with its error or `not_applied`, and nothing is written. An item whose name does not start with the prefix is refused for every caller, an administrator included. The right on every item is decided before the instance's policy is asked, and a policy setting narrowed to a kind or to a Namespace applies to a batch that names an asset of that kind or in that Namespace.
 
-A holder of `config_assets.release` whose key carries the scope `config_assets:release` may leave `namespace` out. That batch is a release, which is what `catalyst config push` sends: it may name any agent or skill of the instance, holds up to 2,000 items, may carry `defaultAgentName` and `expectedDefaultAgentName`, is not bound by `editableAgentFields` or the right for model settings, and is checked against the whole stored set instead of what its key may read. A delete of an asset that is not there is answered `absent` and refuses nothing, unless the asset was created meanwhile. A release answers `hiddenAgentNames` for agents it wrote that no workspace offers.
+A holder of `config_assets.release` whose key carries the scope `config_assets:release` may leave `namespace` out. That batch is a release, which is what `catalyst config push` sends: it may name any agent or skill of the instance, holds up to 2,000 items, may carry `defaultAgentName` and `expectedDefaultAgentName`, is not bound by `editableAgentFields` or the right for model settings, and is checked against the whole stored set instead of what its key may read. A delete of an asset that is not there is answered `absent` and refuses nothing, unless the asset was created meanwhile. Every batch answers `hiddenAgentNames` for agents it wrote that no workspace offers.
 
 `assets.sync_check` takes the body of a sync, runs every check of it and writes nothing. It answers `{ "valid": true }` or the refusal the sync would answer.
 
@@ -284,6 +324,8 @@ A definition is checked against what its caller may read. A reference to an asse
 The writing operations and `assets.sync` belong to the module `assetManagement` and follow the same rules as edits in the admin panel: `editableAgentFields`, the lists of a Namespace, and the rights for the default agent and for model settings. Only a release, as described above, is exempt, so `catalyst config push` also works where interactive editing is narrowed or off.
 
 `platform.context.get` tells a caller where it is: the instance, its release, the asset kinds with their rights, and the Namespaces in which the caller may do something. It answers a person and a service principal. An action is named only when the credential's scopes allow it: `config_assets:read` for reading, `config_assets:write` for writing and deleting.
+
+A new agent starts in the workspace it is made in. `assets.put` takes `availableIn`: `{ "workspaceId": "…" }`, a Shared Workspace the caller is a member of, or `"all"`, which needs the right to write agents on the whole instance. A call of an agent in a conversation is made in that conversation's workspace without naming it. A new agent made in no Shared Workspace is hidden everywhere, and the answer carries the warning `agent_hidden`. `assets.sync` without the release right is made in no workspace, so the agents it creates start hidden and its answer names them in `hiddenAgentNames`. A write of an agent that exists refuses `availableIn`: its availability is set with `assets.set_availability`.
 
 `assets.list` and `assets.get` mark the instance's default agent with `isDefault: true` and leave the field out on every other asset. `assets.get` of an agent also carries its `availability`, the workspaces it is offered in, when one is stored.
 
@@ -307,6 +349,8 @@ A write moves the draft and nothing else. The revision the members of the App's 
 
 `apps.get_from_page` (`GET /api/v1/conversations/{conversationId}/pages/{pageId}/app`) answers the App of a Page, or `null`: among the Apps updated from the Page that the caller may write, the one the caller wrote from it last, and otherwise the one created first. `draftFromPage` is `false` where the draft was last written another way than from this Page. With `?app=<id>` the answer also carries `candidate`: that App where the caller may write it, with `page` saying whether it is updated from `none`, `this` Page, an `other_page` of the conversation or one of an `other_conversation`; `null` otherwise. In the interface the header of a Page with an App offers Update app in place of Save as app, and Save as app under the id of an App the reader may write offers to update that App from the Page.
 
+With the module `apps` on, every conversation offers its agent `page.save`, `page.save_as_app` and the file tools a Page's folder is written with (`workspace.write_file`, and `workspace.edit_file` and `workspace.read_file` where the release enables them), whatever the agent's `toolNames` list; without `workspace.write_file` in the release none of them is offered. The surface beside the chat opens when the first save starts, as the Page building. `page.save_as_app` is the agent's Save as app: it saves the newest revision of a Page of the conversation as an App of the conversation's workspace, with `app.created` as above, and makes the App what the conversation is about. It is refused in a conversation shared with its workspace, as an open is. From then on each built `page.save` of that Page in the conversation also writes the next draft revision of the App, as `apps.update_from_page` does; its answer carries `app` with `saved: true`, the revision and the `warnings` of guardrails that warn about the draft, or `saved: false` with the reason where the draft was written another way since, another Page was put into the App, the person may not write it, a guardrail blocked it or asked for an approval, which this save cannot wait for (the person's Update app on the Page can), or the write failed. The Page is saved either way. What an administrator sets on `assets.put` for an App holds for both tools, as it does for `platform.assets.put`; a setting on `apps.create_from_page` holds for `page.save_as_app`, and one on `apps.update_from_page` for `page.save` in a conversation about an App.
+
 `apps.preview` (`POST /api/v1/apps/{app}/preview`) answers the address a frame loads, for the mode `published` or `draft`, and `interfacePath`, the path of the App in the interface. `assets.delete` removes an App with its revisions and its files; its Operation Runs and audit events stay.
 
 The address `apps.preview` answers is the credential of the frame it is loaded in: the sandboxed frame has no origin and cannot send the session, so whoever holds the address is served its files. The address names the person it was made for and one file set, is valid for one hour, and that person's right is asked again at most every 30 seconds. A browser keeps a file no longer than the address is valid. Treat the address as a secret of that person and do not pass it on; share the App by its path in the interface (`interfacePath`).
@@ -316,6 +360,30 @@ The address `apps.preview` answers is the credential of the frame it is loaded i
 | `app.read`, `app.write`, `app.delete` | admin, superadmin | Read, write and delete Apps. A writer is shown the draft. |
 | `app.publish` | admin, superadmin | Move the published revision. A credential needs the scope `config_assets:publish`, which `config_assets:write` does not include. |
 | `app.use` | every member of the App's workspace | Open the published revision, and see it in `assets.list` and `assets.get`. A member is never shown a draft. |
+
+## Guardrails as assets
+
+A guardrail is a check bound to a before-event, with the outcome of a hit, as in [release config](/configure/release-config/#guardrails). Beside the floor of release config, guardrails are written as assets of the kind `guardrail`. A working copy keeps one as `guardrails/<name>/guardrail.yaml`, with the instruction of a `model_judge` check in `check.md` beside it:
+
+```yaml
+# guardrails/no-iban/guardrail.yaml
+name: no-iban
+displayName: No IBAN in skills
+on: asset.before_write
+filter:
+  kind: skill
+check:
+  kind: pattern
+  pattern: "(?i)\\bDE\\d{2}(?:\\s?\\d{4}){4}\\s?\\d{2}\\b"
+  reason: Skills hold no bank account.
+outcome: block
+```
+
+A guardrail belongs to the instance or to one Collaboration Workspace (`--workspace <id>` on `catalyst guardrail put`). A write makes a draft, which checks nothing. `catalyst guardrail test <name> --text <content>` (or `--from <file>`, `--asset skill:<name>`) answers what the draft would say, and `catalyst guardrail dry-run <name>` counts what it would have blocked, asked an approval for or warned on in the last 14 days, by actions and by people, never naming anyone. A dry run checks again the writes and publishes of assets of that period, a `model_judge` at most the newest 200; calls of operations and requests for an approval are counted and not checked, since their content is not kept. Neither keeps a hit. Testing needs `guardrail.write`, and a judge's model usage counts for the guardrail's scope: a workspace guardrail's for its workspace.
+
+`catalyst guardrail publish <name> --revision <n>` shows the dry run first. A first publish that would have blocked anything goes ahead only with `--confirm <n>` naming that number; publish a draft with the outcome `warn` first to watch it. Publishing takes `guardrail.publish` at the guardrail's scope. Administrators hold it at instance scope; an administrator grants it for one Shared Workspace (`permissions.grant`, scope `workspace`) to let someone set that workspace's rules. No workspace right carries it. `catalyst guardrail unpublish <name>` stops a guardrail; its draft stays. Publish and unpublish are audited as `guardrail.published` and `guardrail.unpublished` with the guardrail, the revision, its scope and who.
+
+A workspace guardrail answers the events of its workspace only. Its filter may narrow them, by `kind`, `operation`, `origin`, `agent` and `workspace`, and a filter that names another workspace, an agent the workspace does not offer or an operation of an asset another workspace owns is refused at save. Every guardrail that applies runs, from the floor, the instance and the event's workspace, and the strictest answer wins. Guardrail assets never run on writes, publishes or deletes of guardrails, nor on their tests; only the floor does, so no published guardrail can stop the change of guardrails.
 
 ## Permissions
 

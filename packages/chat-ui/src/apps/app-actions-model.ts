@@ -23,25 +23,26 @@ const policyOutcomes: Record<AppAction["policy"], AppActionOutcome> = {
 
 /**
  * What a place says a call of an action would come to. The Actions side of a draft says what
- * the draft does with it: a changing action is not carried out there whatever the policy
- * says, and a reading one that would run can be tested. Everywhere else it is the policy's
- * word.
+ * the draft does with it: an action whose policy lets the call run can be tested there, a
+ * changing one as a simulation that says what it would have done (ADR-0031). Everywhere else
+ * it is the policy's word.
  */
 export function appActionOutcome(
-  action: Pick<AppAction, "effect" | "policy">,
+  action: Pick<AppAction, "policy">,
   /** The place shows the draft as its frame runs it: in safe mode. */
   safeMode: boolean
 ): AppActionOutcome {
-  if (!safeMode) {
-    return policyOutcomes[action.policy];
-  }
-  if (action.effect === "changing") {
-    return { labelKey: "apps.actionNotCarriedOutInDraft", tone: "neutral" };
-  }
-  return action.policy === "allow"
+  return safeMode && action.policy === "allow"
     ? { labelKey: "apps.actionTestableInDraft", tone: "success" }
     : policyOutcomes[action.policy];
 }
+
+/** What the target of an action of each kind is, said under it. */
+export const appActionTargetKeys: Record<AppAction["kind"], TranslationKey> = {
+  connection: "apps.actionKindConnection",
+  sql: "apps.actionKindSql",
+  workflow: "apps.actionKindWorkflow"
+};
 
 export const appActionUnavailableKeys: Record<
   NonNullable<AppAction["unavailable"]>,
@@ -52,19 +53,36 @@ export const appActionUnavailableKeys: Record<
   operation_missing: "apps.actionOperationMissing",
   operation_disabled: "apps.actionOperationDisabled",
   not_exposed: "apps.actionNotExposed",
-  data_store_missing: "apps.actionDataStoreMissing"
+  data_store_missing: "apps.actionDataStoreMissing",
+  workflows_off: "apps.actionWorkflowsOff"
 };
 
 /**
- * Whether the row offers the test: a reading action of a draft, to whoever writes the App.
- * The test is a real call, so the instance asks every right again when it is made.
+ * Whether the row offers the test: every action of a draft, to whoever writes the App. The
+ * test is a real call, so the instance asks every right again when it is made. A changing
+ * action is simulated there, unless the tester switched "Run live once" on for it.
  */
-export function appActionTestable(
-  action: Pick<AppAction, "effect">,
+export function appActionTestable(view: AppMode, rights: Pick<AppRights, "write">): boolean {
+  return rights.write && view === "draft";
+}
+
+/**
+ * Whether the row offers "Run live once": a changing action of a draft, to whoever writes the
+ * App, where the policy lets the call run. A call that needs an approval cannot wait from a
+ * draft, and a refused one stays refused, so the switch would carry out nothing.
+ */
+export function appActionLiveOnceOffered(
+  action: Pick<AppAction, "effect" | "policy" | "unavailable">,
   view: AppMode,
   rights: Pick<AppRights, "write">
 ): boolean {
-  return rights.write && view === "draft" && action.effect === "reading";
+  return (
+    rights.write &&
+    view === "draft" &&
+    action.effect === "changing" &&
+    action.unavailable === undefined &&
+    (action.policy === "allow" || action.policy === "confirm")
+  );
 }
 
 /** What an input cannot be sent for. Each names the parameter where one is at fault. */
@@ -236,6 +254,8 @@ export function formatAppActionResult(result: unknown): {
 export type AppActionTestOutcome =
   | { status: "done"; runId: string; result: unknown }
   | { status: "pending_approval"; runId: string }
+  /** The draft carried nothing out: `message` says what it would have done, with `input`. */
+  | { status: "dry_run"; message: string; input: unknown; runId?: never }
   | {
       /** `denied` is a refusal for a right or by the policy; everything else failed. */
       status: "denied" | "failed";
@@ -255,6 +275,7 @@ export type AppActionTestOutcome =
 export const appActionTestTones: Record<AppActionTestOutcome["status"], BadgeTone> = {
   done: "success",
   pending_approval: "warning",
+  dry_run: "info",
   denied: "danger",
   failed: "danger"
 };
@@ -265,13 +286,24 @@ const REFUSAL_CODES: readonly string[] = ["forbidden", "policy_denied", "guardra
 /** The outcome of a call the frame call client answered. */
 export function appActionTestOutcome(
   answer:
-    | { ok: true; result: { runId: string; status: "done" | "pending_approval"; result?: unknown } }
+    | {
+        ok: true;
+        result:
+          | { runId: string; status: "done" | "pending_approval"; result?: unknown }
+          | { status: "dry_run"; message: string; result: unknown };
+      }
     | { ok: false; error: { code: string; message: string; runId?: string } }
 ): AppActionTestOutcome {
   if (answer.ok) {
-    return answer.result.status === "done"
-      ? { status: "done", runId: answer.result.runId, result: answer.result.result }
-      : { status: "pending_approval", runId: answer.result.runId };
+    const { result } = answer;
+    switch (result.status) {
+      case "dry_run":
+        return { status: "dry_run", message: result.message, input: result.result };
+      case "done":
+        return { status: "done", runId: result.runId, result: result.result };
+      case "pending_approval":
+        return { status: "pending_approval", runId: result.runId };
+    }
   }
   const { code, message, runId } = answer.error;
   return {

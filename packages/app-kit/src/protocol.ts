@@ -47,12 +47,45 @@ export interface AppContext {
   can: Record<string, AppActionPermission>;
 }
 
-/** How a call went. `pending_approval` carries no result: the call waits for another person. */
-export interface AppCallResult {
-  runId: string;
-  status: "done" | "pending_approval";
-  /** What the operation answered. Check its shape before using it. */
-  result?: unknown;
+/**
+ * How a call went. `pending_approval` carries no result: the call waits for another person.
+ * `dry_run` is the answer of a draft or a Page to an action that would change something, such
+ * as one that starts a Workflow: nothing was carried out and no run was made; `message` is the
+ * platform's sentence of what the call would have done, and `result` the input it would have
+ * done it with. Show the message as it is.
+ */
+export type AppCallResult =
+  | {
+      runId: string;
+      status: "done" | "pending_approval";
+      /**
+       * What the operation answered. Check its shape before using it. Of an action that starts
+       * a Workflow it is the Workflow Run, with its `id`: follow it with `useWorkflowRun`.
+       */
+      result?: unknown;
+    }
+  | { status: "dry_run"; message: string; result: unknown };
+
+/** The states of a Workflow Run. The first three wait for more; the others are its end. */
+export type AppWorkflowRunStatus =
+  "queued" | "running" | "waiting" | "done" | "failed" | "cancelled" | "limit_reached";
+
+/** A Workflow Run that an action of this Page started, as it stands now. */
+export interface AppWorkflowRun {
+  id: string;
+  workflow: string;
+  status: AppWorkflowRunStatus;
+  /**
+   * What the run answered, once it is `done`. A result of more than 2,000 characters as JSON
+   * is not handed to a Page: `outputTruncated` says so, and the Page reads what it needs from
+   * where the Workflow wrote it, such as a Data Store.
+   */
+  output?: unknown;
+  outputTruncated?: boolean;
+  /** Why the run did not end `done`: a fixed word and the platform's sentence. */
+  error?: { code: string; message: string };
+  startedAt?: string;
+  finishedAt?: string;
 }
 
 /** Why a call was refused or failed, as the interface told it. */
@@ -85,15 +118,7 @@ export type PageMessage =
       input: Record<string, unknown>;
       idempotencyKey?: string;
     }
-  | {
-      type: "connection_call";
-      session: string;
-      requestId: string;
-      connection: string;
-      operation: string;
-      input: unknown;
-      idempotencyKey?: string;
-    };
+  | { type: "workflow_run"; session: string; requestId: string; runId: string };
 
 /** What the interface sends. */
 export type HostMessage =
@@ -101,6 +126,9 @@ export type HostMessage =
   | ({ type: "theme" } & AppThemeChange)
   | ({ type: "action_result"; session: string; requestId: string } & (
       { ok: true; result: AppCallResult } | { ok: false; error: AppCallFailure }
+    ))
+  | ({ type: "workflow_run_result"; session: string; requestId: string } & (
+      { ok: true; run: AppWorkflowRun } | { ok: false; error: AppCallFailure }
     ));
 
 const THEME_KEYS = [
@@ -173,6 +201,9 @@ function readCan(value: unknown): Record<string, AppActionPermission> {
 }
 
 function readCallResult(value: unknown): AppCallResult | undefined {
+  if (isRecord(value) && value.status === "dry_run" && typeof value.message === "string") {
+    return { status: "dry_run", message: value.message, result: value.result };
+  }
   if (
     !isRecord(value) ||
     typeof value.runId !== "string" ||
@@ -184,6 +215,44 @@ function readCallResult(value: unknown): AppCallResult | undefined {
     runId: value.runId,
     status: value.status,
     ...("result" in value ? { result: value.result } : {})
+  };
+}
+
+const RUN_STATUSES: readonly string[] = [
+  "queued",
+  "running",
+  "waiting",
+  "done",
+  "failed",
+  "cancelled",
+  "limit_reached"
+];
+
+function isRunStatus(value: unknown): value is AppWorkflowRunStatus {
+  return typeof value === "string" && RUN_STATUSES.includes(value);
+}
+
+function readWorkflowRun(value: unknown): AppWorkflowRun | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.workflow !== "string" ||
+    !isRunStatus(value.status)
+  ) {
+    return undefined;
+  }
+  const { error } = value;
+  return {
+    id: value.id,
+    workflow: value.workflow,
+    status: value.status,
+    ...("output" in value ? { output: value.output } : {}),
+    ...(value.outputTruncated === true ? { outputTruncated: true } : {}),
+    ...(isRecord(error) && typeof error.code === "string" && typeof error.message === "string"
+      ? { error: { code: error.code, message: error.message } }
+      : {}),
+    ...(typeof value.startedAt === "string" ? { startedAt: value.startedAt } : {}),
+    ...(typeof value.finishedAt === "string" ? { finishedAt: value.finishedAt } : {})
   };
 }
 
@@ -262,6 +331,21 @@ export function readHostMessage(data: unknown): HostMessage | undefined {
     }
     const error = readCallFailure(data.error);
     return error ? { type: "action_result", session, requestId, ok: false, error } : undefined;
+  }
+  if (
+    data.type === "workflow_run_result" &&
+    typeof data.session === "string" &&
+    typeof data.requestId === "string"
+  ) {
+    const { session, requestId } = data;
+    if (data.ok === true) {
+      const run = readWorkflowRun(data.run);
+      return run ? { type: "workflow_run_result", session, requestId, ok: true, run } : undefined;
+    }
+    const error = readCallFailure(data.error);
+    return error
+      ? { type: "workflow_run_result", session, requestId, ok: false, error }
+      : undefined;
   }
   return undefined;
 }

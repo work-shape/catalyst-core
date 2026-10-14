@@ -41,6 +41,8 @@ export const secrets = pgTable(
     nonce: bytes("nonce").notNull(),
     ciphertext: bytes("ciphertext").notNull(),
     source: text("source").$type<SecretSource>().notNull(),
+    /** The origin the secret was set for. Null for a secret of no origin. */
+    origin: text("origin"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },

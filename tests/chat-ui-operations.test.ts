@@ -27,6 +27,7 @@ function run(overrides: Partial<OperationRunResource> = {}): OperationRunResourc
     id: "opr_1",
     operation: "workspace.apply_patch",
     effect: "changing",
+    target: "live",
     status: "done",
     actor: { kind: "user", id: "user-anna", label: "Anna Beispiel" },
     origin: {

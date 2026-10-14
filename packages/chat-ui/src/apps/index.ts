@@ -1,9 +1,10 @@
 // What the tests of the Apps area read. The interface itself reaches these through the area
 // route table, the surface renderers and the header of a Page.
 export { ActionTestDialogView } from "./action-test-dialog";
-export { AppActionsView } from "./actions-view";
+export { AppActionsView, type AppActionsLiveOnce } from "./actions-view";
 export {
   appActionInputStart,
+  appActionLiveOnceOffered,
   appActionOutcome,
   appActionTestable,
   appActionTestOutcome,
@@ -22,6 +23,7 @@ export {
   appPreviewProblemText,
   appDraftShown,
   appRefusalText,
+  appsRowShown,
   appRowActions,
   appState,
   NO_APP_RIGHTS,

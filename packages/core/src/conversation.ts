@@ -8,6 +8,7 @@ import type {
   MessageId
 } from "./ids";
 import type { AgentRunWriteFence } from "./identity";
+import type { SkillResourceConfig } from "./config";
 import type { JsonObject, JsonValue } from "./json";
 import type { ISODateString } from "./time";
 
@@ -27,9 +28,10 @@ export type ConversationListScope = { kind: "viewer"; userId: string } | { kind:
 /**
  * The asset a conversation is about, by its kind and its name, such as a Workflow whose draft
  * the agent edits. It is set when the conversation is created from the asset's page, and by
- * the server when the agent opens another asset in it with `platform.assets.open`: one subject
- * at a time, the last one opened wins. The tools that check and save a draft reach this asset
- * and no other, whatever a model names.
+ * the server when the agent opens another asset of the conversation's workspace in it with
+ * `platform.assets.open`: one subject at a time, the last one opened wins. An asset of the
+ * instance becomes the subject only by the person's step, never by the agent's open. The tools
+ * that check and save a draft reach this asset and no other, whatever a model names.
  */
 export interface ConversationSubject {
   kind: string;
@@ -38,8 +40,9 @@ export interface ConversationSubject {
 
 /**
  * What the conversations of an instance are offered beyond what their agent's definition
- * lists: in every conversation the tools that find, open, read and save an asset and the skill
- * that says how the platform works, and the skills the platform ships for the assets of a kind.
+ * lists. An agent whose definition lists the platform's tools gets those it lists, the
+ * orientation on the platform and the skills the platform ships for it; every other agent gets
+ * none of them. Where Pages exist, every agent gets what builds one.
  */
 export interface ConversationOffer {
   /**
@@ -54,6 +57,11 @@ export interface ConversationOffer {
    * offered nowhere.
    */
   skillNames: readonly string[];
+  /**
+   * How the platform works, as a section of the system prompt. Only an agent that holds the
+   * platform's tools is told it.
+   */
+  orientation?: string;
 }
 
 /**
@@ -65,8 +73,18 @@ export interface ShippedSkill {
   title: string;
   description: string;
   content: string;
+  /** The files under the skill's folder, such as `references/<page>.md`, read through `read_skill`. */
+  resources?: readonly SkillResourceConfig[];
   /** The key of the interface's icon registry that marks the skill in lists. */
   icon: string;
+  /** The sentence for people that completes "Knows how to". */
+  summary?: string;
+  /**
+   * The tools the skill has the agent call. It ships only where the instance has every one of
+   * them, so the switch of the module or the setting that owns them decides it; without a list
+   * it ships everywhere.
+   */
+  tools?: readonly string[];
 }
 
 export interface ConversationOfferSource {
@@ -74,12 +92,14 @@ export interface ConversationOfferSource {
   offerOf(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
+    /** The tools the agent's own definition lists: they decide whether it holds the platform's. */
+    agentToolNames: readonly string[];
   }): Promise<ConversationOffer | undefined>;
 }
 
 /**
- * The prefix of the tools on the platform's assets. The server offers them to the agent of
- * every conversation, whatever its definition lists. Only `platform.assets.open` moves what the
+ * The prefix of the tools on the platform's assets. The server offers them to an agent whose
+ * definition lists them. Only `platform.assets.open` moves what the
  * conversation is about; the check and the save reach that asset and no other.
  */
 export const SUBJECT_TOOL_PREFIX = "platform.assets.";

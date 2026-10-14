@@ -1,5 +1,5 @@
 {
-  "id": "3b1e1eca-fdfd-42ae-88c2-c831b90db646",
+  "id": "3fa1af2f-869f-486b-9568-986734ad21ac",
   "prevId": "92da596a-1dd9-4241-9f41-4af0da73112a",
   "version": "7",
   "dialect": "postgresql",
@@ -7868,6 +7868,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subject_name": {
+          "name": "subject_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -7916,74 +7928,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.knowledge_base_states": {
-      "name": "knowledge_base_states",
-      "schema": "",
-      "columns": {
-        "client_instance_id": {
-          "name": "client_instance_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "asset_id": {
-          "name": "asset_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revision": {
-          "name": "revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tables": {
-          "name": "tables",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "problem": {
-          "name": "problem",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "checked_at": {
-          "name": "checked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "knowledge_base_states_client_instance_id_asset_id_pk": {
-          "name": "knowledge_base_states_client_instance_id_asset_id_pk",
-          "columns": [
-            "client_instance_id",
-            "asset_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "knowledge_base_states_status_check": {
-          "name": "knowledge_base_states_status_check",
-          "value": "\"knowledge_base_states\".\"status\" in ('ok', 'needs_attention')"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.account": {

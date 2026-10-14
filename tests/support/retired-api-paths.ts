@@ -122,3 +122,10 @@ export const retiredReleasePaths = [
   ["POST", "/api/v1/instance/config/import"],
   ["POST", "/api/v1/instance/config/validate"]
 ] as const satisfies readonly (readonly ["GET" | "POST", string])[];
+
+/**
+ * The free call of a Connection operation by a frame, removed with the kit's `connections.call`:
+ * a frame reaches a Connection through a named action alone. Nothing answers there.
+ */
+export const removedFrameConnectionCallPath = (pageSessionId: string) =>
+  `/api/v1/app-content-sessions/${pageSessionId}/connections/crm/operations/echo`;

@@ -8,6 +8,7 @@ import {
   operationDenialError,
   recordsAllowedCalls,
   type ActorAccess,
+  type JsonObject,
   type NewOperationRun,
   type OperationAuthorization,
   type OperationCall,
@@ -19,14 +20,20 @@ import {
   type OperationRunActor
 } from "@vivd-catalyst/core";
 import {
-  authorizeActor,
+  accessOf,
+  authorizeRights,
+  decideTarget,
+  draftCallOf,
+  rightsOf,
+  simulateRun
+} from "./draft-calls";
+import {
   authorizeOrigin,
   createRunContext,
   denyRun,
   endRun,
   executeAdmitted,
   failRun,
-  hashInput,
   requireModuleOn,
   resolveGuardedPolicy,
   type DirectDecision,
@@ -36,6 +43,7 @@ import {
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
+import { hashInput } from "./input-hash";
 
 /**
  * How long a call waits for another person's approval before it expires unexecuted. The
@@ -53,10 +61,11 @@ const IDEMPOTENCY_CLAIM_ATTEMPTS = 3;
  * before a run exists; every call that gets further has one.
  */
 export async function runOperation(
-  call: OperationCall,
+  made: OperationCall,
   deps: RunOperationDeps,
   runtime: OperationCallRuntime = {}
 ): Promise<OperationOutcome> {
+  const call = draftCallOf(made);
   requireModuleOn(call, deps.modules);
   const registered = await deps.registry.resolve(call.operation);
   if (!registered) {
@@ -89,6 +98,35 @@ export async function runOperation(
     definition = { ...definition, secret: true };
   }
   const secretInput = withoutSecrets !== undefined;
+  if (call.draft && definition.effect !== "reading" && idempotencyKey !== undefined) {
+    // A changing call of a draft sent again under the key of a call that went live or to a
+    // test target is answered by that call's run. It never carries that run out again: a
+    // changing call of a draft goes live only through "Run live once" (ADR-0031).
+    const held = await deps.runs.findByIdempotencyKey({
+      clientInstanceId: deps.clientInstanceId,
+      actor,
+      idempotencyKey
+    });
+    if (held && !runsAgain(held, definition)) {
+      return {
+        result: replay(held, definition, actor, inputHash, secretInput),
+        run: held,
+        replayed: true
+      };
+    }
+  }
+  const target = await decideTarget({
+    call,
+    definition,
+    deps,
+    admitted: async () =>
+      surface.allowed &&
+      (await authorizeRights({ definition, call: frozen, resource }, await rightsOf(frozen, deps)))
+        .allowed
+  });
+  // A dry run holds no key: it would only ever answer a simulation again, and the same key
+  // stays free for the live call (ADR-0031).
+  const heldKey = target === "dry_run" ? undefined : idempotencyKey;
 
   for (let attempt = 0; attempt < IDEMPOTENCY_CLAIM_ATTEMPTS; attempt++) {
     const start: NewOperationRun = {
@@ -99,13 +137,14 @@ export async function runOperation(
       actor,
       workspaceId: frozen.workspaceId,
       origin: call.origin,
+      target,
       conversationId: "conversationId" in call.origin ? call.origin.conversationId : undefined,
-      idempotencyKey,
+      idempotencyKey: heldKey,
       inputHash,
       correlationId: call.correlationId,
       startedAt: now().toISOString(),
       // What carries the call out is handed its key and carries out one call per key.
-      ...(definition.repeatsUnderKey && idempotencyKey !== undefined
+      ...(definition.repeatsUnderKey && heldKey !== undefined
         ? { takesInterrupted: true as const }
         : {})
     };
@@ -125,13 +164,18 @@ export async function runOperation(
         runtime
       });
       const ending = await admitAndExecute(context, surface);
-      return { ...ending, replayed: false, ...(context.unrecorded ? { unrecorded: true } : {}) };
+      return {
+        ...ending,
+        replayed: false,
+        ...(context.unrecorded ? { unrecorded: true } : {}),
+        ...(context.publishedWouldAsk ? { publishedWouldAsk: context.publishedWouldAsk } : {})
+      };
     }
-    if (idempotencyKey === undefined) break;
+    if (heldKey === undefined) break;
     const held = await deps.runs.findByIdempotencyKey({
       clientInstanceId: deps.clientInstanceId,
       actor,
-      idempotencyKey
+      idempotencyKey: heldKey
     });
     // A run that may be run again is taken by the next `create`; a run that is gone frees the
     // key. Every other run answers again what it answered, to the actor that holds its key and
@@ -395,10 +439,10 @@ type Admission = { ending: OperationEnding } | { access: ActorAccess; decision?:
 
 async function admit(context: RunContext, surface: OperationAuthorization): Promise<Admission> {
   const { run, definition, call, deps, now } = context;
-  const access = await deps.authorizer.forActor(call.actor);
+  const rights = await rightsOf(call, deps);
   // The surface and the right are asked here for every operation, so nobody without them
   // learns what the policy says or receives an approval.
-  const right = surface.allowed ? await authorizeActor(context, access) : surface;
+  const right = surface.allowed ? await authorizeRights(context, rights) : surface;
   await context.emit("operation.authorization_checked", "after", {
     ...(definition.action === null ? {} : { action: definition.action }),
     status: right.allowed ? "success" : "denied",
@@ -410,7 +454,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
         kind: "forbidden",
         action: right.action,
         reason: right.reason,
-        ...(right.message === undefined ? {} : { message: right.message })
+        ...(right.message === undefined ? {} : { message: right.message }),
+        ...(right.boundBy ? { boundBy: right.boundBy } : {})
       })
     };
   }
@@ -420,6 +465,14 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return { ending: await denyRun(context, guarded.denial) };
   }
   const { policy } = guarded;
+  // A call of a test run resolves `confirm` as its tester's own call when their start was the
+  // confirmation. A run of the published revision has nobody to ask, and asks for an approval.
+  if (call.draft?.boundBy !== undefined && policy.value === "confirm") {
+    context.publishedWouldAsk = "approval";
+  }
+  if (run.target === "dry_run") {
+    return { ending: await simulateRun(context, policy) };
+  }
   if (policy.next === "await_confirmation") {
     throw new AppError("INTERNAL", "This surface cannot hold a call for a confirmation");
   }
@@ -430,19 +483,30 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     if (definition.secret) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }
-    // The approval is asked and nothing can hold the call for it: the refusal says so.
     const unavailable: OperationDenial = {
       kind: "policy",
       operation: definition.name,
       reason: "approval_unavailable"
     };
+    // A call of a draft that "Run live once" sent live does not wait: an approved call is
+    // executed from the registry, which holds what is published and no draft, and a test run
+    // has nothing that could ask its principal again. The approval gates it by refusing it.
+    if (call.draft) {
+      return { ending: await denyRun(context, unavailable) };
+    }
+    // The approval is asked and nothing can hold the call for it: the refusal says so.
     if (!deps.approvals) {
       return { ending: await denyRun(context, unavailable) };
     }
     const expiresAt = new Date(now().getTime() + PENDING_APPROVAL_EXPIRES_AFTER_MS).toISOString();
+    // The call the approval answers reads what the approval is asked about: what could change
+    // meanwhile, such as the newest revision of a Page, is held beside its input, in the keys
+    // the operation declares.
+    const heldInput = await heldInputOf(context);
     const filed = await deps.approvals.request({
       run,
       call,
+      ...(Object.keys(heldInput).length > 0 ? { heldInput } : {}),
       resource: context.resource,
       runtime: context.runtime,
       expiresAt,
@@ -467,10 +531,25 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     };
   }
   return {
-    access,
+    access: accessOf(rights),
     decision:
       "decisionMode" in policy
         ? { mode: policy.decisionMode, reason: policy.decisionReason }
         : undefined
   };
+}
+
+/** What the before-events of a call hold beside its input, in the keys its operation declares. */
+async function heldInputOf(context: RunContext): Promise<JsonObject> {
+  const keys = context.definition.heldInputKeys ?? [];
+  const held: JsonObject = {};
+  if (keys.length === 0) return held;
+  for (const event of context.beforeEvents ?? []) {
+    const fields = await event.heldInput?.();
+    for (const key of keys) {
+      const value = fields?.[key];
+      if (value !== undefined) held[key] = value;
+    }
+  }
+  return held;
 }

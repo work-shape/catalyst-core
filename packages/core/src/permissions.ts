@@ -7,6 +7,7 @@ import {
 } from "@vivd-catalyst/asset-schemas";
 import { AppError } from "./errors";
 import { operationDenialError } from "./operation-denial";
+import { personalApiKeyCovers, personalApiKeyNamesAction } from "./personal-api-keys";
 import {
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
@@ -53,6 +54,24 @@ export function legacyPermissionFor(action: PlatformAction): Permission {
     }
   }
   throw new AppError("VALIDATION_FAILED", `No legacy permission for action '${action}'`);
+}
+
+/** What the legacy list helpers read of a holder's grant rows. */
+export type LegacyRowView = Pick<PermissionGrant, "action" | "effect" | "scopeKind">;
+
+/**
+ * The keys a holder's instance-wide rows stand for: every action of the key has a row and one
+ * of them allows. These are the keys of the holder's legacy list, a key whose single action a
+ * row of other origin denies included, which the list held all the same. A service principal's
+ * credential can carry these keys, as far as its scopes reach.
+ */
+export function legacyKeysHeld(rows: readonly LegacyRowView[]): Permission[] {
+  return PERMISSIONS.filter((key) => {
+    const effects = LEGACY_PERMISSION_ACTIONS[key].map(
+      (action) => rows.find((row) => row.scopeKind === "instance" && row.action === action)?.effect
+    );
+    return effects.every((effect) => effect !== undefined) && effects.includes("allow");
+  });
 }
 
 export const ROLE_DEFAULT_ACTIONS: Record<
@@ -121,11 +140,15 @@ export interface AccessResource {
  */
 export const WORKSPACE_MEMBER_ACTIONS = ["app.use"] as const satisfies readonly PlatformAction[];
 
-export type AccessSource = "role" | "legacy" | "legacy_ref" | "grant" | "membership";
+export type AccessSource = "role" | "legacy_ref" | "grant" | "membership";
 
 export type AccessDecision =
   | { allowed: true; source: AccessSource }
-  | { allowed: false; reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" };
+  | {
+      allowed: false;
+      /** `outside_key_scope`: the holder has the right, and the personal key of the call does not cover it. */
+      reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" | "outside_key_scope";
+    };
 
 export interface PersistedAccess {
   holderActive: boolean;
@@ -167,22 +190,22 @@ export const PERMISSION_REF_ACTION_PREFIX = "ref:";
 export { NAMESPACE_PREFIX_MAX_LENGTH, NAMESPACE_PREFIX_MIN_LENGTH, NAMESPACE_PREFIX_PATTERN };
 
 /**
- * The actions a grant row can be written for, each with the scope kinds it can be written at,
- * until the slice that brings each further check. No row is written at instance scope: the
- * whole instance is a role's.
+ * The actions a grant row can be written for, with the scope kinds it can be written at. No
+ * grant is written at instance scope: an instance-wide row is a key of a user's or a service
+ * principal's legacy list (AP-4). `guardrail.publish` is one workspace's; no bundle carries it.
  */
 export const GRANTABLE_ACTION_SCOPES = {
-  "agent.read": ["namespace", "asset"],
-  "agent.write": ["namespace", "asset"],
-  "agent.delete": ["namespace", "asset"],
-  "skill.read": ["namespace", "asset"],
-  "skill.write": ["namespace", "asset"],
-  "skill.delete": ["namespace", "asset"],
-  // Reading and using a Connection are granted in a Namespace, on one Connection or on what
-  // a workspace owns. Writing, deleting and approving stay with the role until a slice opens
-  // them.
-  "connection.read": ["namespace", "asset", "workspace"],
-  "connection.use": ["namespace", "asset", "workspace"],
+  "agent.read": ["workspace", "namespace", "asset"],
+  "agent.write": ["workspace", "namespace", "asset"],
+  "agent.delete": ["workspace", "namespace", "asset"],
+  "skill.read": ["workspace", "namespace", "asset"],
+  "skill.write": ["workspace", "namespace", "asset"],
+  "skill.delete": ["workspace", "namespace", "asset"],
+  // Reading and using a Connection are granted in a Namespace or on one Connection. No
+  // workspace owns a Connection, so a right at workspace scope would cover nothing. Writing,
+  // deleting and approving stay with the role until a slice opens them.
+  "connection.read": ["namespace", "asset"],
+  "connection.use": ["namespace", "asset"],
   // A Workflow is the instance's own: its rights are granted in a Namespace or on one Workflow,
   // and no workspace owns one yet. Reading shows it and its runs, using starts it, writing
   // edits the draft and publishing moves the published pointer; making a revision live that
@@ -198,7 +221,8 @@ export const GRANTABLE_ACTION_SCOPES = {
   "workflow.read": ["namespace", "asset"],
   "workflow.use": ["namespace", "asset"],
   "workflow.write": ["namespace", "asset"],
-  "workflow.publish": ["namespace", "asset"]
+  "workflow.publish": ["namespace", "asset"],
+  "guardrail.publish": ["workspace"]
 } as const satisfies Partial<
   Record<PlatformAction, readonly Exclude<PermissionGrant["scopeKind"], "instance">[]>
 >;
@@ -250,15 +274,23 @@ export function isSuperadmin(subject: { roles: readonly string[] }): boolean {
   return subject.roles.includes("superadmin");
 }
 
-/** Whoever holds rights, with the three sources the holder's own record carries. */
+/**
+ * Whoever holds rights, with the two sources the holder's own record carries. A right held
+ * one by one, also one of the nine legacy keys, is a grant row: the legacy permission lists
+ * were moved into rows (AP-4) and are no source any more.
+ */
 export interface AccessHolder {
   kind: "user" | "service_principal";
   id: string;
   clientInstanceId: ClientInstanceId;
   roles: readonly string[];
-  /** The legacy column: keys, and `!key` revocations. */
-  permissions: readonly string[];
   permissionRefs: readonly string[];
+  /**
+   * The legacy keys the token of a service principal's credential carries. On its request they
+   * are the principal's legacy rights in place of the rows its list became, as before AP-4
+   * (`tokenRights`). Absent for every other holder.
+   */
+  tokenKeys?: readonly string[];
 }
 
 /** One thing a holder is allowed or denied, with the source that says so. */
@@ -279,8 +311,10 @@ export function accessHolderFromIdentity(actor: AuthenticatedIdentity): AccessHo
       id: actor.id,
       clientInstanceId: actor.clientInstanceId,
       roles: [],
-      permissions: actor.permissions,
-      permissionRefs: actor.permissionRefs
+      permissionRefs: actor.permissionRefs,
+      // A credential's token carries the keys its scopes reach; a Workflow Run holds its
+      // principal's own rights.
+      ...("credentialId" in actor ? { tokenKeys: actor.permissions } : {})
     };
   }
   if ("kind" in actor) {
@@ -291,14 +325,13 @@ export function accessHolderFromIdentity(actor: AuthenticatedIdentity): AccessHo
     id: actor.id,
     clientInstanceId: actor.clientInstanceId,
     roles: actor.roles,
-    permissions: actor.permissions ?? [],
     permissionRefs: actor.permissionRefs
   };
 }
 
 /**
- * Everything the four sources say about one holder, in the order role defaults, legacy column,
- * references, grant rows. The evaluator and the effective-rights list both read this.
+ * Everything the four sources say about one holder, in the order role defaults, references,
+ * memberships, grant rows. The evaluator and the effective-rights list both read this.
  */
 export function listAccessEntries(holder: AccessHolder, persisted: PersistedAccess): AccessEntry[] {
   const entries: AccessEntry[] = [];
@@ -307,21 +340,6 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
       for (const action of ROLE_DEFAULT_ACTIONS[role]) {
         entries.push({ action, effect: "allow", scopeKind: "instance", source: "role" });
       }
-    }
-  }
-  for (const entry of holder.permissions) {
-    const revoked = entry.startsWith("!");
-    const permission = revoked ? entry.slice(1) : entry;
-    if (!isPermission(permission)) {
-      continue;
-    }
-    for (const action of LEGACY_PERMISSION_ACTIONS[permission]) {
-      entries.push({
-        action,
-        effect: revoked ? "deny" : "allow",
-        scopeKind: "instance",
-        source: "legacy"
-      });
     }
   }
   for (const permissionRef of holder.permissionRefs) {
@@ -343,6 +361,16 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
       });
     }
   }
+  const ownRows = persisted.grants.filter(
+    (grant) =>
+      grant.clientInstanceId === holder.clientInstanceId &&
+      grant.holderKind === holder.kind &&
+      grant.holderId === holder.id
+  );
+  const token = holder.tokenKeys === undefined ? undefined : tokenRights(holder.tokenKeys, ownRows);
+  for (const action of token?.allowed ?? []) {
+    entries.push({ action, effect: "allow", scopeKind: "instance", source: "grant" });
+  }
   for (const grant of persisted.grants) {
     // A row of another client instance or of another holder never applies. Rows held through a
     // role or a group are the store's answer for this holder.
@@ -358,6 +386,13 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
     if (!isPlatformAction(grant.action)) {
       continue;
     }
+    if (
+      grant.scopeKind === "instance" &&
+      grant.holderKind === holder.kind &&
+      token?.replaces(grant)
+    ) {
+      continue;
+    }
     entries.push({
       action: grant.action,
       effect: grant.effect,
@@ -368,6 +403,40 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
     });
   }
   return entries;
+}
+
+/**
+ * A token's carried keys stand in for the rows the principal's list became, as before AP-4; a
+ * scope carries its first key (`governance:read`: `usage.view`). Rows of a key given in full
+ * are the list's; of a mixed key only the allows are; a partly given key is no key of it.
+ */
+function tokenRights(
+  carried: readonly string[],
+  ownRows: readonly LegacyRowView[]
+): { allowed: PlatformAction[]; replaces(row: LegacyRowView): boolean } {
+  const held = legacyKeysHeld(ownRows);
+  const heldScopes = new Set(held.map((key) => authScopeForPermission(key)));
+  const allowed = PERMISSIONS.filter(
+    (key) =>
+      carried.includes(key) &&
+      (held.includes(key) ||
+        (authScopeForPermission(key) !== undefined && heldScopes.has(authScopeForPermission(key))))
+  ).flatMap((key) => LEGACY_PERMISSION_ACTIONS[key]);
+  return {
+    allowed,
+    replaces(row) {
+      const key = PERMISSIONS.find((candidate) =>
+        LEGACY_PERMISSION_ACTIONS[candidate].some((action) => action === row.action)
+      );
+      if (key === undefined) return false;
+      const effects = LEGACY_PERMISSION_ACTIONS[key].map(
+        (action) =>
+          ownRows.find((own) => own.scopeKind === "instance" && own.action === action)?.effect
+      );
+      if (effects.some((effect) => effect === undefined)) return false;
+      return effects.every((effect) => effect === effects[0]) || row.effect === "allow";
+    }
+  };
 }
 
 function entryCovers(entry: AccessEntry, resource: AccessResource | undefined): boolean {
@@ -474,10 +543,27 @@ export function evaluateAccess(input: {
   return { allowed: false, reason: "unknown_action" };
 }
 
-/** The synchronous answers for one holder over one load of the persisted state. */
-export function createActorAccess(holder: AccessHolder, persisted: PersistedAccess): ActorAccess {
-  const authorize = (action: string, resource?: AccessResource) =>
-    evaluateAccess({ holder, persisted, action, resource });
+/**
+ * The synchronous answers for one holder over one load of the persisted state. With the scopes
+ * of a personal key, a right is allowed where the holder has it and a scope covers it: removing
+ * the holder's right narrows the key on its next call.
+ */
+export function createActorAccess(
+  holder: AccessHolder,
+  persisted: PersistedAccess,
+  keyScopes?: readonly string[]
+): ActorAccess {
+  const authorize = (action: string, resource?: AccessResource): AccessDecision => {
+    const decision = evaluateAccess({ holder, persisted, action, resource });
+    if (!decision.allowed || keyScopes === undefined || decision.source === "legacy_ref") {
+      // A reference names a tool the holder may use, which a key neither widens nor narrows.
+      return decision;
+    }
+    const legacyActions = isPermission(action) ? LEGACY_PERMISSION_ACTIONS[action] : undefined;
+    return personalApiKeyCovers(keyScopes, action, resource, legacyActions)
+      ? decision
+      : { allowed: false, reason: "outside_key_scope" };
+  };
   return {
     authorize,
     require(action, resource) {
@@ -488,12 +574,41 @@ export function createActorAccess(holder: AccessHolder, persisted: PersistedAcce
     },
     holdsGrantAt: (action, scopeKinds) =>
       persisted.holderActive &&
+      (keyScopes === undefined || personalApiKeyNamesAction(keyScopes, action)) &&
       persisted.grants.some(
         (grant) =>
           grant.action === action &&
           grant.effect === "allow" &&
           scopeKinds.includes(grant.scopeKind)
       )
+  };
+}
+
+/**
+ * The rights of a call in a test run of a Workflow draft (ADR-0031): the person testing,
+ * bounded by the service principal the Workflow runs as. An action is allowed only where both
+ * hold it, so a test lends nobody the principal's grants and does not pass where the live run
+ * would fail. A refusal on the principal's side names the principal.
+ */
+export function boundedActorAccess(
+  tester: ActorAccess,
+  principal: ActorAccess,
+  boundBy: { id: string; label: string }
+): ActorAccess {
+  return {
+    authorize(action, resource) {
+      const own = tester.authorize(action, resource);
+      return own.allowed ? principal.authorize(action, resource) : own;
+    },
+    require(action, resource) {
+      tester.require(action, resource);
+      const bound = principal.authorize(action, resource);
+      if (!bound.allowed) {
+        throw operationDenialError({ kind: "forbidden", action, reason: bound.reason, boundBy });
+      }
+    },
+    holdsGrantAt: (action, scopeKinds) =>
+      tester.holdsGrantAt(action, scopeKinds) && principal.holdsGrantAt(action, scopeKinds)
   };
 }
 
@@ -512,7 +627,11 @@ export function createAuthorizer(accessStore?: AccessStore): Authorizer {
             holder: { kind: holder.kind, id: holder.id }
           })
         : { holderActive: true, grants: [] };
-      return createActorAccess(holder, persisted);
+      return createActorAccess(
+        holder,
+        persisted,
+        isAuthenticatedServicePrincipal(actor) ? undefined : actor.keyScopes
+      );
     }
   };
 }
@@ -567,6 +686,8 @@ export interface AccessAdministrationStore extends AccessStore {
     excludeSuperadminHolders?: boolean;
     /** Leaves out the rows whose holder is a service principal. */
     excludeServicePrincipalHolders?: boolean;
+    /** Leaves out the instance-wide rows, which the legacy permission lists show. */
+    excludeInstanceScope?: boolean;
     page?: StorePage;
   }): Promise<PermissionGrant[]>;
   /** Throws CONFLICT `namespace_overlap` naming the registered prefix it meets. */

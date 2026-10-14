@@ -1,5 +1,6 @@
 import type {
   ConnectionDetail,
+  ConnectionSecretState,
   ConnectionTestResult,
   ConnectionTools
 } from "@vivd-catalyst/api-contract";
@@ -59,6 +60,14 @@ export interface ConnectionManagementPort {
   test(name: string, signal?: AbortSignal): Promise<ConnectionTestResult>;
   /** The tools an agent can carry, of the Connections `readable` admits. */
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionTools>;
+  /**
+   * Stores the shared secret of a Connection made on the instance as its next version, after
+   * the version the writer saw. The value is never answered, logged or read back.
+   */
+  setSecret(
+    name: string,
+    input: { value: string; expectedVersion: number | null }
+  ): Promise<ConnectionSecretState>;
   /**
    * Reads what the outside system offers into the Connection's catalog, bounded in time and
    * size. It makes nothing callable that the accepted list does not name. A failure is an

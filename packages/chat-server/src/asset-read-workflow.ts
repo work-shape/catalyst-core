@@ -11,6 +11,7 @@ import {
   type ActorAccess,
   type AgentAvailability,
   type AssetScope,
+  type ConfigAssetKey,
   type ConfigAssetRecord,
   type FileSet,
   type JsonObject,
@@ -21,7 +22,7 @@ import {
 } from "@vivd-catalyst/core";
 import { resolveConfigLocale } from "@vivd-catalyst/config-schema";
 import { accessResource, decide, type AssetCall } from "./asset-access";
-import { readSourceFiles, type AssetFileOutput } from "./asset-files";
+import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import { notFound, requireActive, type AssetAddress, type AssetTarget } from "./asset-target";
 import type { AssetWorkflowOptions } from "./types";
@@ -94,13 +95,7 @@ export class AssetReadWorkflow {
             }),
         afterName: typeof after === "string" ? after : undefined,
         limit: page?.limit ?? DEFAULT_ASSET_LIST_LIMIT,
-        readable: (asset) => {
-          const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
-          return (
-            reads(resource) ||
-            showsPublishedView(kind, call.access, resource, asset.published === true)
-          );
-        }
+        readable: (asset) => listedTo(kind, call.access, asset)
       })
     ]);
     return records.map((record) => {
@@ -268,7 +263,7 @@ export class AssetReadWorkflow {
   }> {
     const { kind, name } = target;
     const selector = input.revision ?? "draft";
-    if (input.files && kind.representation !== "files") {
+    if (input.files && kind.representation !== "files" && !kind.revisionFiles) {
       throw new AppError("VALIDATION_FAILED", `A ${kind.kind} holds no files`, {
         reason: "no_files"
       });
@@ -281,7 +276,16 @@ export class AssetReadWorkflow {
           { reason: "no_draft" }
         );
       }
-      return { config: asset.config };
+      return {
+        config: asset.config,
+        ...(input.files
+          ? await readRevisionFiles(this.options, kind, {
+              assetId: asset.id,
+              config: asset.config,
+              ...(asset.fileSetId ? { fileSetId: asset.fileSetId } : {})
+            })
+          : {})
+      };
     }
     const content = await this.revisionOf(target, asset, selector);
     if (!input.files) {
@@ -451,6 +455,22 @@ function isPublished(kind: WorkflowAssetKind, asset: ConfigAssetRecord | undefin
     asset !== undefined &&
     liveRevisionId(asset, kind) !== undefined &&
     asset.publishedRevision !== undefined
+  );
+}
+
+/**
+ * Whether a list of the kind shows the caller this asset: whoever reads it is shown all of it,
+ * a holder of the use right its published view.
+ */
+export function listedTo(
+  kind: WorkflowAssetKind,
+  access: ActorAccess,
+  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published">
+): boolean {
+  const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
+  return (
+    access.authorize(kind.actions.read, resource).allowed ||
+    showsPublishedView(kind, access, resource, asset.published === true)
   );
 }
 

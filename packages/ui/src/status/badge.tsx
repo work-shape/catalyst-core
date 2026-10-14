@@ -41,6 +41,12 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
    * the `Spinner` of something that runs. It is decoration; the text names the state.
    */
   leading?: ReactNode;
+  /**
+   * The badge may narrow to the room its row leaves and cuts its text with an ellipsis, for a
+   * long text beside others on a narrow screen. The whole text stays in the badge, so it is
+   * its accessible name, and a text given as a string is its title as well.
+   */
+  truncate?: boolean;
 }
 
 export function Badge({
@@ -50,13 +56,16 @@ export function Badge({
   size = "md",
   dot = false,
   leading,
+  truncate = false,
   children,
   ...props
 }: BadgeProps) {
   return (
     <span
+      title={truncate && typeof children === "string" ? children : undefined}
       className={cn(
-        "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border px-2 text-caption font-medium whitespace-nowrap [&>svg]:size-3 [&>svg]:stroke-2",
+        "inline-flex w-fit items-center gap-1.5 rounded-full border px-2 text-caption font-medium whitespace-nowrap [&>svg]:size-3 [&>svg]:stroke-2",
+        truncate ? "max-w-full min-w-0 shrink" : "shrink-0",
         badgeSizes[size],
         appearance === "outline" ? outlineTones[tone] : softTones[tone],
         className
@@ -76,7 +85,7 @@ export function Badge({
           {leading}
         </span>
       )}
-      {children}
+      {truncate ? <span className="truncate">{children}</span> : children}
     </span>
   );
 }

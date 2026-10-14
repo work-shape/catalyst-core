@@ -58,11 +58,15 @@ describe("platform.context.get statements", () => {
     expect(withGrants.context.assetActions).toEqual(["connection.read"]);
     expect(withGrants.grantReads).toBe(1);
     expect(withGrants.count).toBe(without.count);
-    // Authentication, authorization's one load of the holder and the grant rows, and the
-    // Namespace records.
+    // Authentication, authorization's one load of the holder and the grant rows, the
+    // Namespace records, and the Shared Workspaces and the caller's own, whose rights the
+    // context names (WS-OWN-1a).
     expect(withGrants.count).toBe(CONTEXT_STATEMENTS);
   });
 });
 
-/** What `platform.context.get` sent before it named `assetActions`. */
-const CONTEXT_STATEMENTS = 5;
+/**
+ * What `platform.context.get` sent before it named `assetActions`: the test sign-in reads the
+ * person's record in one statement, as the evaluator reads the rights from the rows (AP-4).
+ */
+const CONTEXT_STATEMENTS = 6;

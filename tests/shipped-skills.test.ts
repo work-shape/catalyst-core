@@ -1,18 +1,49 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { seedShippedSkills } from "@vivd-catalyst/chat-server";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import {
+  createConfigAssetSource,
+  platformDocsSkill,
+  type ClientInstanceCapability
+} from "@vivd-catalyst/client-assembly";
+import { asClientInstanceId, type ShippedSkill } from "@vivd-catalyst/core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 
 // The skills that ship with the platform are stored skills of origin `release`, written by the
 // seed of the API process and by nothing else. Each test fails without the change: before it
-// no start stored a skill, and the platform's guide was no asset a list could show.
+// no start stored a skill, and the platform's docs were no asset a list could show.
 
 const ADMIN = "admin";
-const GUIDE = "platform-guide";
+const GUIDE = "platform-docs";
+/** The guide earlier releases shipped, which the orientation in the system prompt replaced. */
+const RETIRED_GUIDE = "platform-guide";
 const AUTHORING = "workflow-authoring";
 const clientInstanceId = asClientInstanceId("demo-local");
+
+/** A general skill a capability ships, as the artifact helpers ship theirs. */
+const generalSkill = (name: string, icon: string, tools: readonly string[]): ShippedSkill => ({
+  name,
+  title: name.toUpperCase(),
+  description: `Use for ${name}.`,
+  summary: `Knows how to make a ${name} file.`,
+  content: `# ${name}`,
+  icon,
+  tools
+});
+
+/**
+ * A capability that ships two skills: one whose tool every instance has, and one whose tool
+ * only an instance with Execution Workspaces has, which this suite's instance has not.
+ */
+const artifactSkills: ClientInstanceCapability = {
+  name: "artifact-skills",
+  skills: [
+    generalSkill("pdf", "pdf", ["read_skill"]),
+    generalSkill("spreadsheets", "spreadsheet", ["read_skill", "workspace.exec"])
+  ],
+  create: () => ({})
+};
 
 const listSchema = z.object({
   items: z.array(
@@ -37,7 +68,7 @@ describe("the skills that ship with the platform", () => {
     for (const instance of open.splice(0).reverse()) await instance.close();
   });
 
-  async function start(workflows: boolean) {
+  async function start(workflows: boolean, capabilities: ClientInstanceCapability[] = []) {
     const config = createTestConfig({
       developmentAuth: {
         enabled: true,
@@ -54,7 +85,7 @@ describe("the skills that ship with the platform", () => {
     });
     config.modules = { assetManagement: { enabled: true }, workflows: { enabled: workflows } };
     config.administration.agentConfiguration.allowSkillEditing = true;
-    const app = await createTestInstance({ config, env: {}, tools: [] });
+    const app = await createTestInstance({ config, env: {}, tools: [], capabilities });
     open.push(app);
     return app;
   }
@@ -83,7 +114,7 @@ describe("the skills that ship with the platform", () => {
       origin: "release",
       icon: "workflow"
     });
-    expect((await read(app, GUIDE)).config.content).toContain("# How this platform works");
+    expect((await read(app, GUIDE)).config.content).toContain("# Workshape Catalyst documentation");
   });
 
   it("refuses every change and delete of one, and a new skill under its name", async () => {
@@ -130,6 +161,22 @@ describe("the skills that ship with the platform", () => {
     });
     expect(posing.statusCode, posing.body).toBe(422);
     expect(posing.body).toContain("Only a skill that ships with the platform names an origin");
+  });
+
+  it("keeps the name of a skill a module ships for the platform while that module is off", async () => {
+    // Before, Workflows off let an instance take `workflow-authoring`, and the start that
+    // turned Workflows on stopped on it.
+    const app = await start(false);
+    expect(await shippedNames(app)).toEqual([GUIDE]);
+    const taken = await app.call("assets.put", {
+      params: { kind: "skill", name: AUTHORING },
+      payload: {
+        config: { name: AUTHORING, title: "Ours", description: "Ours.", content: "Ours." },
+        expectedRevision: null
+      }
+    });
+    expect(taken.statusCode, taken.body).toBe(422);
+    expect(taken.body).toContain(`The platform ships a skill named '${AUTHORING}'`);
   });
 
   it("copies one into an ordinary skill of the instance that can be changed", async () => {
@@ -182,24 +229,75 @@ describe("the skills that ship with the platform", () => {
       skills: [
         {
           name: GUIDE,
-          title: "How this platform works",
+          title: "Platform documentation",
           description: "The next release's guide.",
           content: "# The next release's guide",
           icon: "guide"
         }
       ]
     });
-    expect(result).toEqual({ created: [], updated: [GUIDE], removed: [] });
+    expect(result).toEqual({ created: [], updated: [GUIDE], removed: [], unlisted: [] });
     const replaced = await read(without, GUIDE);
     expect(replaced.revision).toBeGreaterThan(guide.revision);
     expect(replaced.config.content).toBe("# The next release's guide");
+  });
+
+  it("retires the guide an earlier release shipped and keeps the references of the docs", async () => {
+    const earlier = await start(true);
+    // What an earlier release stored: its guide beside the skill for Workflows.
+    await seedShippedSkills({
+      clientInstanceId,
+      stores: earlier.stores,
+      skills: [
+        {
+          name: RETIRED_GUIDE,
+          title: "How this platform works",
+          description: "The earlier release's guide.",
+          content: "# How this platform works",
+          icon: "guide"
+        },
+        {
+          name: AUTHORING,
+          title: "Workflow authoring",
+          description: "Writing Workflows.",
+          content: "# Workflows",
+          icon: "workflow"
+        }
+      ]
+    });
+    expect(await shippedNames(earlier)).toEqual([RETIRED_GUIDE, AUTHORING].sort());
+
+    // This release's start deletes the guide and stores the docs with their references.
+    const now = await start(true);
+    expect(await shippedNames(now)).toEqual([GUIDE, AUTHORING].sort());
+    const gone = await now.call("assets.get", { params: { kind: "skill", name: RETIRED_GUIDE } });
+    expect(gone.statusCode, gone.body).toBe(404);
+    const docs = z
+      .object({ config: z.object({ resources: z.array(z.object({ path: z.string() })) }) })
+      .parse((await now.call("assets.get", { params: { kind: "skill", name: GUIDE } })).json());
+    expect(docs.config.resources.map(({ path }) => path)).toContain("references/configure/cli.md");
+  });
+
+  it("leaves its references out of the snapshot every turn reads, and reads them with the skill", async () => {
+    const app = await start(false);
+    const source = createConfigAssetSource({ store: app.stores.configAssets, clientInstanceId });
+    // Read for every turn and tool call: the docs' 400 KB of references stay in the database.
+    const snapshot = await source.getSnapshot();
+    const docs = snapshot.skills.find((skill) => skill.name === GUIDE);
+    expect(docs?.content).toBe(platformDocsSkill.content);
+    expect(docs).not.toHaveProperty("resources");
+    expect(JSON.stringify(snapshot).length).toBeLessThan(50_000);
+    // What read_skill reads: the one skill, whole.
+    const whole = await source.getSkill(GUIDE);
+    expect(whole?.resources).toEqual(platformDocsSkill.resources);
+    expect(await source.getSkill("no-such-skill")).toBeUndefined();
   });
 
   it("is stored once by starts that run at the same time", async () => {
     const app = await start(true);
     const next = {
       name: GUIDE,
-      title: "How this platform works",
+      title: "Platform documentation",
       description: "The next release's guide.",
       content: "# The next release's guide",
       icon: "guide"
@@ -243,5 +341,54 @@ describe("the skills that ship with the platform", () => {
         ]
       })
     ).rejects.toThrow("The platform ships the skill 'spreadsheets'");
+  });
+  it("stores the skills a capability ships, with their icon and summary, where the instance has their tools", async () => {
+    const app = await start(false, [artifactSkills]);
+    // `spreadsheets` names `workspace.exec`, which an instance without Execution Workspaces
+    // has not: it is not shipped there.
+    expect(await shippedNames(app)).toEqual([GUIDE, "pdf"].sort());
+    expect((await listed(app)).find((skill) => skill.name === "pdf")?.attributes).toEqual({
+      origin: "release",
+      icon: "pdf",
+      summary: "Knows how to make a pdf file."
+    });
+    const pdf = await read(app, "pdf");
+    expect(pdf.config).not.toHaveProperty("tools");
+
+    // Its name is the platform's, also that of the skill whose tools are off.
+    for (const name of ["pdf", "spreadsheets"]) {
+      const taken = await app.call("assets.put", {
+        params: { kind: "skill", name },
+        payload: {
+          config: { name, title: "Ours", description: "Ours.", content: "Ours." },
+          expectedRevision: null
+        }
+      });
+      expect(taken.statusCode, taken.body).toBe(name === "pdf" ? 403 : 422);
+    }
+
+    // A release without the capability deletes its skills.
+    const without = await start(false);
+    expect(await shippedNames(without)).toEqual([GUIDE]);
+  });
+
+  it("stops the start of a release that ships a skill the instance holds as its own, and says how to remove it", async () => {
+    const earlier = await start(false);
+    const created = await earlier.call("assets.put", {
+      params: { kind: "skill", name: "pdf" },
+      payload: {
+        config: { name: "pdf", title: "PDF", description: "Ours.", content: "Ours." },
+        expectedRevision: null
+      }
+    });
+    expect(created.statusCode, created.body).toBe(200);
+
+    await expect(start(false, [artifactSkills])).rejects.toThrow(
+      "The platform ships the skill 'pdf', and the instance holds a skill of its own named 'pdf'. Remove the instance copy with 'catalyst config push' after pulling"
+    );
+    // The instance's skill is left as it was: the start deletes nothing.
+    const kept = await read(earlier, "pdf");
+    expect(kept.config.content).toBe("Ours.");
+    expect(kept.config).not.toHaveProperty("origin");
   });
 });
