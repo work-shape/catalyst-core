@@ -22,9 +22,10 @@ export function UserFields({
   onChange(nextForm: UserFormState): void;
 }) {
   const { t } = useTranslation();
+  // The fields measure the room of their card, which sits beside other cards in a wide window.
   return (
-    <>
-      <div className="grid gap-3 md:grid-cols-2">
+    <div className="@container grid gap-3">
+      <div className="grid gap-3 @md:grid-cols-2">
         <Field label={t("settings.displayLabel")}>
           <Input
             value={form.displayLabel}
@@ -41,7 +42,7 @@ export function UserFields({
           />
         </Field>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 @xl:grid-cols-3">
         <Field label={t("settings.status")}>
           <Select
             value={form.status}
@@ -68,7 +69,7 @@ export function UserFields({
           />
         </Field>
       </div>
-    </>
+    </div>
   );
 }
 
