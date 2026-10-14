@@ -2,10 +2,12 @@ import { connectionConfigSchema, type ReleaseConnectionConfig } from "@vivd-cata
 import {
   AppError,
   CONNECTION_ASSET_KIND,
+  CONNECTION_DECLARATION_FIELDS,
   SHARED_CREDENTIAL_SUBJECT,
   createConnectionSecretHandle,
   findConnectorTypeIssues,
   resolveOptionalSecret,
+  unknownToJsonValue,
   type AssetValidationIssue,
   type AuditActor,
   type ClientInstanceId,
@@ -13,6 +15,7 @@ import {
   type ConfigAssetRecord,
   type ConnectionConfig,
   type ConnectionHealth,
+  type ConnectionOperationConfig,
   type ConnectorTypeRegistry,
   sameJson,
   type JsonObject,
@@ -84,6 +87,16 @@ function storedOrigin(asset: ConfigAssetRecord): unknown {
   return asset.config?.origin;
 }
 
+/** What an operation declares, as JSON. Nothing for an operation of a type that does not declare. */
+function declarationJson(operation: ConnectionOperationConfig): JsonObject {
+  const json: JsonObject = {};
+  for (const field of CONNECTION_DECLARATION_FIELDS) {
+    const value = operation[field];
+    if (value !== undefined) json[field] = unknownToJsonValue(value);
+  }
+  return json;
+}
+
 function toJsonObject(config: ConnectionConfig): JsonObject {
   const json: JsonObject = {
     name: config.name,
@@ -104,7 +117,8 @@ function toJsonObject(config: ConnectionConfig): JsonObject {
         : { schemaFingerprint: operation.schemaFingerprint }),
       ...(operation.idempotencyKeyHeader === undefined
         ? {}
-        : { idempotencyKeyHeader: operation.idempotencyKeyHeader })
+        : { idempotencyKeyHeader: operation.idempotencyKeyHeader }),
+      ...declarationJson(operation)
     })),
     enabled: config.enabled,
     origin: config.origin

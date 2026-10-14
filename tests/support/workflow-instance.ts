@@ -238,15 +238,21 @@ export async function workflowFixture(
   const workers: JobWorker[] = [];
   const fromAssets = options.definitions === "assets";
   const given = options.definitions === "assets" ? undefined : options.definitions;
-  // The kind asks the principals of the instance, whose stores exist once it is set up.
-  let principals: PlatformStores["apiAccess"] | undefined;
+  // The kind asks the principals of the instance and their rights, whose stores exist once it
+  // is set up.
+  let instanceStores: PlatformStores | undefined;
+  const storesOf = () => {
+    if (!instanceStores) throw new Error("The instance is not set up");
+    return instanceStores;
+  };
   const kind = createWorkflowAssetKind({
     clientInstanceId,
     apiAccess: {
-      findServicePrincipalByName(input) {
-        if (!principals) throw new Error("The instance is not set up");
-        return principals.findServicePrincipalByName(input);
-      }
+      findServicePrincipalByName: (input) => storesOf().apiAccess.findServicePrincipalByName(input)
+    },
+    access: {
+      loadPersistedAccess: (input) => storesOf().access.loadPersistedAccess(input),
+      listGrantScopeAssets: (input) => storesOf().access.listGrantScopeAssets(input)
     },
     ...(options.now ? { now: options.now } : {}),
     ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone })
@@ -264,7 +270,7 @@ export async function workflowFixture(
           const server = connectionOptions.server?.(stores, config) ?? {};
           if (!server.operationCalls) throw new Error("The instance built no call path");
           modules = resolveInstanceModules(config, []).snapshot;
-          principals = stores.apiAccess;
+          instanceStores = stores;
           workflows = createInstanceWorkflows({
             modules,
             clientInstanceId,

@@ -63,12 +63,12 @@ describe("API access model", () => {
       const authorityA = createApiAccessAuthorityKey({
         apiBaseUrl: "https://a.example.com",
         principalId: "user-a",
-        canManageSuperadminAccess: true
+        canIssueKeys: true
       });
       const authorityB = createApiAccessAuthorityKey({
         apiBaseUrl: "https://b.example.com",
         principalId: "user-b",
-        canManageSuperadminAccess: true
+        canIssueKeys: true
       });
       const controller = createApiAccessRevealController(authorityA);
       const originAuthority = controller.captureAuthority();
@@ -96,7 +96,7 @@ describe("API access model", () => {
     const authority = createApiAccessAuthorityKey({
       apiBaseUrl: "https://a.example.com",
       principalId: "user-a",
-      canManageSuperadminAccess: true
+      canIssueKeys: true
     });
     const controller = createApiAccessRevealController(authority);
     const originAuthority = controller.captureAuthority();

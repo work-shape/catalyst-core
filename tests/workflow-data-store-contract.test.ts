@@ -27,7 +27,6 @@ import {
   WORKFLOW_LOOP_MAX_CONCURRENCY,
   WORKFLOW_MANIFEST_FILE,
   WORKFLOW_OPERATION_PREFIX,
-  WORKFLOW_RUN_AS_ACTION,
   WORKFLOW_RUN_JOB_KINDS,
   WORKFLOW_RUN_MODES,
   WORKFLOW_RUN_STATUSES,
@@ -359,8 +358,6 @@ describe("the names of a Workflow", () => {
     expect(auditActorFromServicePrincipal(principal)).not.toHaveProperty("credentialId");
     expectTypeOf<WorkflowRunPrincipal>().toExtend<ActingServicePrincipal>();
     expectTypeOf<WorkflowRunPrincipal>().not.toHaveProperty("credentialId");
-    // Publishing or testing a Workflow that names a principal needs the right over principals.
-    expect(WORKFLOW_RUN_AS_ACTION).toBe("api_access.manage");
     expect(workflowOrigin).toEqual({ kind: "workflow", workflowRunId: runId, stepRunId });
     // Nobody is present in a run or at a due time: neither call confirms itself.
     expect(callerCanConfirm(workflowOrigin)).toBe(false);
