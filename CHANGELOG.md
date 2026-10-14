@@ -2215,6 +2215,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Parallel browser suites on one Postgres:** `scripts/run-chat-e2e.mjs`, `playwright.config.ts`
+  and the specs hard-coded the database `agent_chat`, so several runs on one machine erased each
+  other's data. `E2E_DATABASE_URL` now replaces that URL for the migration, the API, the worker
+  and the specs; without it nothing changes. The runner still creates and drops no database or
+  role. Use it with `E2E_EXTERNAL_POSTGRES=1` and an empty database per run.
 - **Backups of the whole database server:** `backup-postgres.sh` of the deployment kit dumped
   only `POSTGRES_DB`, so no Data Store database and no role was in a nightly or pre-deploy
   backup. A backup is now one tar archive, `<instance>-<database>-<timestamp>[-<label>].tar`,
