@@ -5,6 +5,7 @@ import { WORKFLOW_ASSET_KIND, type UserRecord } from "@vivd-catalyst/core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { operationOf } from "./support/connection-operations";
 import { fileTestDatabaseUrl } from "./support/test-database";
+import { withTestSql } from "./support/test-sql";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { NOTE, notifyClients, readyWorkflows, stepRunsOf } from "./support/workflow-runs";
 
@@ -196,12 +197,9 @@ describe("a test run of a Workflow draft", () => {
       ["live_once.switched_on", "send", t.kai.id],
       ["live_once.used", "send", t.kai.id]
     ]);
-    // The tester's start satisfied `confirm`; a published run would ask for an approval here.
-    expect(sends.map((step) => step.publishedWouldAsk)).toEqual([
-      "approval",
-      "approval",
-      "approval"
-    ]);
+    // The tester's start satisfied `confirm`, and so does the publish of a published run: it
+    // asks nobody here either.
+    expect(sends.map((step) => step.publishedWouldAsk)).toEqual([undefined, undefined, undefined]);
     expect(live.steps.find((step) => step.stepId === "clients")?.publishedWouldAsk).toBeUndefined();
 
     // The next test run simulates the step again.
@@ -284,6 +282,26 @@ describe("a test run of a Workflow draft", () => {
     } finally {
       await sql.end();
     }
+  });
+
+  // A step of a test run carries its draft, so the publish of the Workflow confirms none of its
+  // calls: only the tester's own start does.
+  it("runs no switched 'confirm' step live where the tester's start was not their own confirmation", async () => {
+    const t = await ready();
+    // The instance default `confirm`, which a published run's publish would satisfy.
+    t.state.centralSettings = [];
+    await switchOn(t, 1);
+    const started = testRunSchema.parse((await startTest(t)).json());
+    // An agent's start for the tester: no call of `workflows.test` that was theirs.
+    await withTestSql(
+      (sql) => sql`update workflow_runs set operation_run_id = null where id = ${started.id}`
+    );
+
+    const ended = await t.finish(started.id);
+    expect(ended.status).toBe("failed");
+    const send = (await stepRunsOf(t, started.id)).find((step) => step.stepId === "send");
+    expect(send).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
+    expect(t.executed.filter((call) => call.operation === "write")).toEqual([]);
   });
 
   it("gates a switched step on an approval the policy asks for", async () => {

@@ -227,6 +227,8 @@ export async function callStepOperation(input: {
   actor: AuthenticatedIdentity;
   /** Set on a step of a test run: the draft, the step and the principal that bounds it. */
   draft?: OperationDraftContext;
+  /** Set on a step of a published run whose Workflow was deleted since the run started. */
+  workflowDeleted?: true;
   signal: AbortSignal;
   wait: OperationOutcomeWait;
   /** Keeps the id of the Operation Run of the step's call on its step run. */
@@ -279,7 +281,8 @@ export async function callStepOperation(input: {
     origin: { kind: "workflow", workflowRunId: run.id, stepRunId: stepRun.id },
     correlationId: run.correlationId,
     ...(changing ? { idempotencyKey } : {}),
-    ...(input.draft ? { draft: input.draft } : {})
+    ...(input.draft ? { draft: input.draft } : {}),
+    ...(input.workflowDeleted ? { workflowDeleted: input.workflowDeleted } : {})
   };
   const refused = refusedRight(run.principal.name, operation, source, input.draft !== undefined);
   if (changing) {

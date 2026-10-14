@@ -23,10 +23,10 @@ import {
   failRun,
   OperationNotBegunError,
   requireModuleOn,
-  resolveGuardedPolicy,
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
+import { resolveGuardedPolicy } from "./operation-policy-call";
 import { hashInput } from "./input-hash";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */

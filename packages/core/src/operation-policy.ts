@@ -65,6 +65,15 @@ export interface PolicyInput {
   callerCanConfirm: boolean;
   /** Whether the surface can hold the call until the person it acts for confirmed it. */
   canPause: boolean;
+  /**
+   * Whether the call is a step of a run of a published Workflow revision: a run from a
+   * schedule, or a manual or a parent's start of what is published, never a test run of a
+   * draft. Its publisher approved its changing operations when publishing, so a `confirm`
+   * runs. A floor, a `deny`, an `approval` and a guardrail still hold it.
+   */
+  publishedRun?: boolean;
+  /** Whether the Workflow of that published run was deleted since: its publish approves nothing. */
+  workflowDeleted?: boolean;
 }
 
 export type PolicySource =
@@ -74,17 +83,23 @@ export type PolicySource =
   | "policy_floor"
   | "central_setting"
   | "guardrail"
-  | "surface_cannot_pause";
+  | "surface_cannot_pause"
+  /** A `confirm` the publish of a Workflow approved, whose Workflow was deleted since. */
+  | "workflow_deleted";
 
 /** The value that applies to a call, where it comes from, and how the call goes on. */
 export type PolicyResolution = { source: PolicySource } & (
   | { value: "allow"; next: "run" }
-  /** The caller's own call is the confirmation, recorded as the run's decision. */
+  /** The call runs without a prompt, and this is recorded as the run's decision. */
   | {
       value: "confirm";
       next: "run";
       decisionMode: "direct";
-      /** The instance default asked for an approval, which a secret answer cannot wait for. */
+      /**
+       * Why nobody was asked, where the caller's own call is not why: the instance default
+       * asked for an approval, which a secret answer cannot wait for; or the call is a step of
+       * a published Workflow, whose publish was its confirmation.
+       */
       decisionReason?: OperationRunDecisionReason;
     }
   | { value: "confirm"; next: "await_confirmation" }
@@ -100,8 +115,10 @@ export type PolicyResolution = { source: PolicySource } & (
  * takes the strictest of what each target resolves to. An operation's `policyFloor` then
  * tightens what came of it and never loosens it. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
  * they do not apply, wherever they come from, so a reading operation resolves to `allow` or
- * `deny`. A step of a Workflow Run has nobody to ask and acts for nobody who could be asked
- * later, so its `confirm` is an `approval`. A surface that can neither confirm nor pause is
+ * `deny`. A step of a run of a published Workflow revision runs a `confirm`: the publish was
+ * its confirmation, until the Workflow is deleted: its run's `confirm` is then refused. Any other step of a Workflow Run has nobody to ask and acts for nobody who
+ * could be asked later, so its `confirm` is an `approval`; so is a published run's `confirm`
+ * that an operation's floor asks for, which no setting and no publish lowers. A surface that can neither confirm nor pause is
  * refused a call that would have to wait for its own caller's confirmation. A call that needs
  * another person's approval waits from every surface.
  */
@@ -182,6 +199,21 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
             : {})
         };
       }
+      if (
+        input.publishedRun &&
+        input.origin.kind === "workflow" &&
+        !holdsForPublishedRun(definition.policyFloor)
+      ) {
+        if (input.workflowDeleted)
+          return { value: "deny", next: "refuse", source: "workflow_deleted" };
+        return {
+          value,
+          next: "run",
+          decisionMode: "direct",
+          source,
+          decisionReason: "workflow_publish"
+        };
+      }
       if (hasNobodyToAsk(input.origin)) {
         return { value: "approval", next: "await_approval", source };
       }
@@ -202,6 +234,15 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
  */
 function hasNobodyToAsk(origin: OperationOrigin): boolean {
   return origin.kind === "workflow";
+}
+
+/**
+ * Whether an operation's floor keeps a published run's call waiting: a floor of `confirm` or
+ * stricter is what the operation, or what it stands for, asks of every call, and no publish
+ * gives that.
+ */
+export function holdsForPublishedRun(floor: PolicyValue | undefined): boolean {
+  return floor !== undefined && floor !== "allow";
 }
 
 function stricter(left: PolicyValue, right: PolicyValue): PolicyValue {
