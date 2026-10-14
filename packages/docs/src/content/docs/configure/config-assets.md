@@ -120,6 +120,12 @@ Do not pass the key on the command line or put it in `catalyst.yaml` or `.cataly
 
 The exchange needs `SERVICE_ACCESS_TOKEN_SECRET` set on the server; without it the instance has no API access and the exchange answers 404. The API key is the CLI's only sign-in. A CLI without `CATALYST_API_KEY` stops before it sends a request and names Administration, API Access as the place a key comes from; `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` are not read.
 
+## Skills that ship with the release
+
+Some skills come with the release rather than with a working copy: the platform's documentation (`platform-docs`), `workflow-authoring` where Workflows are on, and the skills a capability of the deployment ships, such as `spreadsheets`, `documents`, `presentations` and `pdf` with the artifact helpers. The API process stores each at start as a read-only skill marked as the platform's, with its own icon, and only where the instance has the tools the skill names. No pull brings one, no diff shows one and no push writes or deletes one; an agent lists one in `skillNames` like any other skill.
+
+The name of a shipped skill is taken. A write of a skill of the instance's own under that name is refused, and a start that finds one, because the release ships a skill the instance already holds as its own, stops with the name of the skill. Remove the instance copy with `catalyst config push` while the previous release still runs: pull, delete the skill's folder, take its name out of the agents' `skillNames`, `push --prune`. Then start the release, and add the name to the agents again with a pull and a push. The start never deletes a skill of the instance's own.
+
 ## A skill as a folder of files
 
 A skill follows the public Agent Skills convention, so a folder taken unchanged from a public skill library saves, reads and round-trips byte for byte: `SKILL.md` with YAML frontmatter and Markdown, and whatever lies beside it, commonly below `scripts/`, `references/` and `assets/`, and also files at the root such as `LICENSE.txt` or `reference.md`. The asset API writes and reads the whole folder: `assets.put` with `files` (each `{ path, text }` or `{ path, base64 }`, `SKILL.md` among them) and `assets.get` with `files=true`, which answers every file with its hash and its content as it was written.

@@ -30,6 +30,7 @@ import {
   type RegisteredProviderDefinition,
   type RetriedJob,
   type SecretResolver,
+  type ShippedSkill,
   isAppError,
   readObjectBytes,
   type ObjectStorage
@@ -310,6 +311,11 @@ export interface ClientInstanceCapability {
   modules?: readonly ModuleDefinition[];
   /** Providers the capability brings. They register beside the platform's own at startup. */
   providers?: readonly RegisteredProviderDefinition[];
+  /**
+   * Skills the capability ships. The release seed stores each as a read-only skill of origin
+   * `release` where the instance has the tools it names, and its name is the platform's.
+   */
+  skills?: readonly ShippedSkill[];
   create(
     context: ClientInstanceCapabilityContext
   ): ClientInstanceCapabilityContribution | Promise<ClientInstanceCapabilityContribution>;
