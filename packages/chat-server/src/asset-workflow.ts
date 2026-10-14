@@ -62,6 +62,7 @@ import {
   requireAssetKindModuleOn,
   requireMatchingConfigName,
   setsInitialDefault,
+  storedWritableIssues,
   toJsonObject
 } from "./asset-write-rules";
 import {
@@ -787,19 +788,4 @@ function allocatedRevision(
     throw new AppError("INTERNAL", `The write of config ${kind} '${name}' has no revision`);
   }
   return revision;
-}
-
-/** What the kind refuses a write of the stored asset for, whatever the write says. */
-function storedWritableIssues(
-  kind: WorkflowAssetKind,
-  current: unknown
-): AssetSetIssue[] | undefined {
-  if (current === undefined) return undefined;
-  try {
-    kind.assertStoredWritable?.({ current });
-    return undefined;
-  } catch (error) {
-    if (isAppError(error)) return errorIssues(error);
-    throw error;
-  }
 }
