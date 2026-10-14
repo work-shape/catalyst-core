@@ -13,6 +13,7 @@ The German interface shows the labels in quotes.
 - You need the address of its MCP endpoint, such as `https://crm.example.com/mcp`, and its key or token if it asks for one.
 - You need to be an administrator. Creating a Connection, entering its key and testing it are rights of the administrator role.
 - The operator must allow the instance to reach the server's host. If it does not, the test says **Network denied** ("Netzwerk gesperrt"); ask the operator.
+- The operator must have set up a key store for credentials (a Secret Store key). Without it the key you enter is not kept, and **Credential** shows **Not set** ("Nicht gesetzt"). If that happens, ask the operator.
 
 ## Create the Connection
 
@@ -34,9 +35,11 @@ Never type a key into a chat. An agent cannot take it from there, and an agent t
 
 The instance asks the server which tools it offers. On the Connection's page, **Discovered tools** ("Gefundene Tools") lists them. Each says whether it only reads or also changes something.
 
-1. For each tool you want, tick **Agents can use it** ("Agenten dürfen es nutzen") if agents should call it.
-2. Click **Accept** ("Akzeptieren"). The tool moves to **Operations** ("Operationen").
-3. Accept only what you need. You can **Remove** ("Entfernen") an operation later.
+1. For each tool you want, check **What it does** ("Was es tut"): **Reading** ("Lesend") or **Changing** ("Ändernd").
+2. **Agents can use it** ("Agenten dürfen es nutzen") is already ticked. Untick it if agents should not call this tool.
+3. Click **Accept** ("Akzeptieren"). The tool moves to **Operations** ("Operationen").
+
+Accept only what you need. You can **Remove** ("Entfernen") an operation later.
 
 If the server adds tools later, click **Read tools again** ("Tools neu lesen").
 
@@ -74,4 +77,4 @@ An agent acts with the rights of the person it works for. So the person who chat
 
 - One key serves everyone who may use the Connection. The outside system sees every call as that one account, and the instance records who asked for it.
 - A Connection set up by the operator in the release config opens read-only. Changes to it go through the operator.
-- A Connection cannot be deleted while an agent still has one of its tools. Take the tools off the agents first.
+- A Connection cannot be deleted while an agent still has one of its tools or an App uses it. Take the tools off the agents and the Connection out of the Apps first.

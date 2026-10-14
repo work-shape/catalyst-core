@@ -29,8 +29,10 @@ Studio says this in one sentence for each guardrail, under **When it runs** ("Wa
 | On a hit ("Bei einem Treffer") | What the person sees |
 | --- | --- |
 | **Warns** ("Warnt") | The action goes ahead. The reason is shown and kept beside it. |
-| **Needs approval** ("Braucht Freigabe") | A change waits in the **Inbox** ("Eingang") until someone who may decide approves it. A read cannot wait and is refused. Where a change cannot wait either, such as the App draft an agent saves, it is blocked. |
+| **Needs approval** ("Braucht Freigabe") | A change waits in the **Inbox** ("Eingang") until someone who may decide approves it. A read can't wait, so it is refused; so is a change that can't wait, such as an agent saving into an App draft. |
 | **Blocks** ("Blockiert") | Nothing happens. The person or the agent is told the guardrail's reason. |
+
+When a guardrail blocks something an agent tried in a chat, the agent's step shows as failed, such as "Could not change …", "Could not read …" or "The save failed", followed by the guardrail's reason, or "A guardrail blocked the call" when it gives none.
 
 Every guardrail that applies runs, and the strictest answer wins. A guardrail can only make things stricter: it never allows what a right or the policy refuses.
 
@@ -45,18 +47,18 @@ Open **Studio** and choose **Guardrails** ("Leitplanken"). Each row has the sent
 
 Hits never name a person. They say which rule, when, and what kind of thing was checked, not who did it. A list of who tripped which rule would make the instance a tool for watching employees.
 
-The page in Studio only reads. You write a guardrail with an agent or with the CLI, as below.
+The page in Studio only reads. You write a guardrail with the CLI, as below.
 
 ## Where guardrails come from
 
 - **The operator's floor.** The operator sets guardrails in the release config. They always run, nobody can change or stop them in the product, and Studio marks them "set by the operator".
-- **Guardrails written as assets.** An administrator, or an agent working for one, writes further guardrails for the whole instance or for one shared workspace. They add checks to the floor and never remove one. A workspace's guardrail checks only what happens in that workspace.
+- **Guardrails written as assets.** An administrator writes further guardrails for the whole instance or for one shared workspace. They add checks to the floor and never remove one. A workspace's guardrail checks only what happens in that workspace.
 
-Guardrails never check changes to guardrails, except the floor. So no guardrail can lock people out of fixing guardrails.
+Only the operator's guardrails check changes to guardrails, so a guardrail can never stop you from fixing one.
 
 ## Write, try and publish a guardrail
 
-Ask an agent with the platform's building tools to write the guardrail, or write it with [the CLI](/configure/cli/). A new guardrail is a **draft**: it checks nothing until it is published.
+You write a guardrail as a file and save it with [the CLI](/configure/cli/): `catalyst guardrail put <name> --from <folder> --if-revision new`, or `catalyst config push` from a working copy. [Guardrails as assets](/configure/config-assets/#guardrails-as-assets) shows the file. A new guardrail is a **draft**: it checks nothing until it is published.
 
 1. **Try it on an example.** `catalyst guardrail test <name> --text "<sample>"` says what the draft would answer. `--asset skill:<name>` tries it on an existing skill. A test keeps no hit.
 2. **See what it would have done.** `catalyst guardrail dry-run <name>` counts what the draft would have warned on, held or blocked in the last 14 days, without names.

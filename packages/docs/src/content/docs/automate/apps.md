@@ -15,7 +15,7 @@ The agent builds a **Page** and shows it beside the chat. **Preview** ("Vorschau
 
 A Page belongs to its conversation. It cannot yet change anything in other systems. To keep it and share it, save it as an App.
 
-On the **Apps** page you can also click **Build an app in chat** ("App im Chat bauen"), which starts a chat for this.
+When you have no App yet, the **Apps** page offers **Build an app in chat** ("App im Chat bauen"), which starts a chat for this.
 
 ## Keep it as an App
 
@@ -23,11 +23,11 @@ On the **Apps** page you can also click **Build an app in chat** ("App im Chat b
 2. Give it a **Name** and an **ID**. The ID is part of the App's address and cannot change later.
 3. Click **Save** ("Speichern").
 
-The Page becomes the **draft** of a new App in your workspace. Nothing is published yet, so nobody else sees it.
+The Page becomes the **draft** of a new App in your workspace. Nothing is published yet: only administrators see it until you publish.
 
 You can also simply tell the agent "keep this as an app".
 
-After that, changes you ask for in the same chat go into the App's draft by themselves. When that did not happen, for example because someone changed the draft elsewhere, the Page offers **Update app** ("App aktualisieren"): **Update draft** ("Entwurf aktualisieren") puts the Page as it is now into the draft.
+After that, changes you ask for in the same chat go into the App's draft by themselves. When that did not happen, for example because someone changed the draft elsewhere, the Page offers **Update app** ("App aktualisieren"): **Replace draft** ("Entwurf ersetzen") puts the Page as it is now into the draft.
 
 ## Try it safely
 
@@ -36,7 +36,7 @@ Open **Apps** in the main rail and the App, then **Edit** ("Bearbeiten"). The dr
 In a draft, nothing changes for real:
 
 - An action that only reads gets real data.
-- An action that would change something is **simulated**. It answers with what it would have done and changes nothing. The result says **Not carried out in the draft** ("Im Entwurf nicht ausgeführt").
+- An action that would change something is **simulated**. It answers with what it would have done and changes nothing. In the **Test** dialog the result says **Not carried out in the draft** ("Im Entwurf nicht ausgeführt").
 
 On the **Actions** tab, **Test** ("Testen") calls one action with input you give.
 
@@ -53,10 +53,10 @@ The switch is yours alone: it does not affect anyone else trying the draft. Savi
 ## Publish it
 
 1. On the draft, click **Publish** ("Veröffentlichen").
-2. The dialog says who gets it: "Everyone in your workspace gets revision 3 when they open the app." It also lists the Connections it uses and the outside hosts it calls.
-3. Confirm.
+2. The dialog names the workspace that gets it, such as "Everyone in Sales gets revision 3 when they open the app.", and lists the Connections it uses and the outside hosts it calls.
+3. Click **Publish** ("Veröffentlichen") in the dialog.
 
-Now everyone in the workspace finds it under **Apps**, and it appears in the main rail under **Published apps** ("Veröffentlichte Apps"). In a published App, every action runs for real, with the rights of the person using it. An action that starts a Workflow is the exception: the Workflow runs with its own account.
+Now everyone in the workspace finds it on the **Apps** page, and up to five published Apps appear under **Apps** in the main rail. In a published App, every action runs for real, with the rights of the person using it. An action that starts a Workflow is the exception: the Workflow runs with its own account.
 
 An agent never publishes. A person decides.
 
