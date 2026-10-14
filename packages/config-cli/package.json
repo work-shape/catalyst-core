@@ -12,7 +12,8 @@
     "node": ">=22"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

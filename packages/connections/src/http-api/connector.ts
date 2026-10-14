@@ -17,7 +17,7 @@ import { z } from "zod";
 import { holdsCredential } from "../connector-context";
 import { egressTargetOfUrl } from "../egress";
 import { hostHeaderOf, oneRequestAgent, sendPinnedRequest } from "../pinned-request";
-import { httpApiDeclaredOperations, pathPlaceholders } from "./declaration";
+import { httpApiDeclaredOperations, isDotSegment, pathPlaceholders } from "./declaration";
 
 // The Connector type `http_api`, first cut (CS-5a): a REST interface reached by GET. Each
 // Connection declares its operations itself (`./declaration`). A call sends the declared path
@@ -123,8 +123,8 @@ const testPathSchema = z
     message: "must be a path that starts with '/' and holds no query, fragment or space"
   })
   .refine(
-    (path) => !path.split("/").some((segment) => segment === "." || segment === ".."),
-    "must hold no '.' or '..' segment"
+    (path) => !path.split("/").some(isDotSegment),
+    "must hold no '.' or '..' segment, also not written as %2e"
   );
 
 const headerNameSchema = z.string().regex(HEADER_NAME_PATTERN, {
@@ -200,8 +200,15 @@ function settingsOf(settings: JsonObject): HttpApiSettings {
   return read.data;
 }
 
-/** The address of a path relative to the base address: the base's path, then this one. */
+/**
+ * The address of a path relative to the base address: the base's path, then this one. A dot
+ * segment is refused here as well as at save, so a path stored before the save refused it,
+ * or a filled placeholder, never leaves the base path.
+ */
 function addressOf(baseUrl: string, path: string, query?: URLSearchParams): URL {
+  if (path.split("/").some(isDotSegment)) {
+    throw connectionCallError("input_invalid", "the path holds a '.' or '..' segment");
+  }
   const url = new URL(baseUrl);
   const base = url.pathname.replace(/\/+$/u, "");
   url.pathname = `${base}${path}` || "/";
@@ -305,10 +312,13 @@ function resultOf(body: Buffer): JsonObject {
   throw connectionCallError("output_invalid", "the answer is neither a JSON object nor a list");
 }
 
-/** A path parameter's value as one encoded path segment. A `/` or `..` is refused. */
+/**
+ * A path parameter's value as one encoded path segment. An empty value and a `/` are refused
+ * here, a value `.` or `..` by `addressOf`: each would change which path the request reaches.
+ */
 function pathSegmentOf(value: JsonValue | undefined): string {
   const text = typeof value === "number" && Number.isFinite(value) ? String(value) : value;
-  if (typeof text !== "string" || text === "" || text.includes("/") || text.includes("..")) {
+  if (typeof text !== "string" || text === "" || text.includes("/")) {
     throw connectionCallError("input_invalid");
   }
   return encodeURIComponent(text);

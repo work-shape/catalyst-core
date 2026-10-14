@@ -3,6 +3,8 @@ title: Build an App
 description: How an agent writes a Page, saves it as an App and gives it named actions on a Connection, a Data Store or a Workflow, and how the App's code calls them.
 ---
 
+This page is the technical guide an agent follows. [Apps for people](/automate/apps/) says what a person clicks.
+
 An App is a Page that is kept. An agent writes the Page's files in its execution workspace, saves the folder with `page.save` and shows it beside the conversation. When the person asks to keep it, `page.save_as_app` makes it an App with a draft. A person publishes the draft; an agent never publishes.
 
 A quick Page may show data the agent wrote into it. Live data comes through named actions: one file per action in the folder `actions/`, which the build compiles into the manifest. The browser calls an action by its name and nothing else: it never calls a Connection, a Data Store or a Workflow directly, and it never holds a key.

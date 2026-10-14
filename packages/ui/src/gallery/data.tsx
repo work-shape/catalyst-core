@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { CodeBlock, type CodeToken } from "../data/code-block";
+import { CommandLine } from "../data/command-line";
 import { CodeFile } from "../data/code-file";
 import { FilterBar } from "../data/filter-bar";
 import { KeyValue, KeyValueList, type KeyValueLayout } from "../data/key-value";
@@ -514,7 +515,7 @@ export const dataGallery: GalleryGroup = {
     },
     {
       name: "CodeBlock",
-      components: ["CodeBlock", "CodeFile"],
+      components: ["CodeBlock", "CodeFile", "CommandLine"],
       render: (text) => (
         <div className="grid items-start gap-6 sm:grid-cols-2">
           <Samples label={text.codeWhole}>
@@ -540,6 +541,13 @@ export const dataGallery: GalleryGroup = {
           </Samples>
           <Samples label={text.codeAsFile}>
             <CodeFileSample name={text.codeConfigName} code={text.codeSample} />
+          </Samples>
+          <Samples label={text.codeCommand}>
+            <CommandLine
+              className="w-full"
+              label={text.codeCommandLabel}
+              command="npm install --global @work-shape/catalyst-cli@0.6.3 && catalyst setup codex --instance https://chat.catalyst.example"
+            />
           </Samples>
         </div>
       )

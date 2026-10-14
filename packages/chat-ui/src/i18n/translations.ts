@@ -17,6 +17,7 @@ import { dock } from "./dock";
 import { files } from "./files";
 import { guardrails } from "./guardrails";
 import { inbox } from "./inbox";
+import { localAgent } from "./local-agent";
 import { navigation } from "./navigation";
 import { operations } from "./operations";
 import { pages } from "./pages";
@@ -51,6 +52,7 @@ export const translations = combineTranslations(common)
   .and(files)
   .and(guardrails)
   .and(inbox)
+  .and(localAgent)
   .and(navigation)
   .and(operations)
   .and(pages)
