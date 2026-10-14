@@ -19,6 +19,7 @@ export type {
 export {
   createWorkflowLiveCheck,
   requireWorkflowRunAs,
+  workflowRunAsPrincipal,
   type WorkflowRunAsOptions
 } from "./workflow-run-as";
 import { createHttpRuntime } from "./http/runtime";

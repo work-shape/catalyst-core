@@ -57,6 +57,9 @@ export async function decideTarget(input: {
   const { call, definition, deps, admitted } = input;
   const { draft } = call;
   if (!draft || definition.effect === "reading") return "live";
+  // A step of a test run whose switch an earlier call of the run took, such as the item before
+  // in a loop: the switch covers the step for the run, and it was audited when it was taken.
+  if (draft.liveForRun === true) return (await admitted()) ? "live" : "dry_run";
   if (!deps.liveOnce || !(await admitted())) return "dry_run";
   const { taken, cleared } = await deps.liveOnce.take({
     clientInstanceId: deps.clientInstanceId,

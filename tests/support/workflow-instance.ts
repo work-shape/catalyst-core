@@ -92,6 +92,7 @@ export const stepRunsSchema = z.object({
       bodyCounts: z.record(z.string(), countsSchema).optional(),
       effect: z.string().optional(),
       source: z.string().optional(),
+      target: z.string().optional(),
       operationRunId: z.string().optional(),
       error: z
         .object({ code: z.string(), message: z.string(), action: z.string().optional() })

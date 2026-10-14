@@ -18,6 +18,7 @@ import type {
   OperationEffect,
   OperationRunActor,
   OperationRunId,
+  OperationTarget,
   ServicePrincipalId,
   UserId,
   WorkflowManifest,
@@ -73,7 +74,9 @@ export const workflowRuns = pgTable(
     // The due time of the schedule that started the run. Null on every other run.
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
     // When the run's values and those of its step runs were removed. Null while it has them.
-    dataPrunedAt: timestamp("data_pruned_at", { withTimezone: true })
+    dataPrunedAt: timestamp("data_pruned_at", { withTimezone: true }),
+    // Of a test run: the steps a "Run live once" switch made live for the whole run (ADR-0031).
+    liveSteps: jsonb("live_steps").$type<string[]>()
   },
   (table) => [
     check("workflow_runs_mode_check", sql`${table.mode} in ('live', 'test')`),
@@ -133,6 +136,9 @@ export const workflowStepRuns = pgTable(
     // Of an operation step: what its operation does and the name of what it belongs to.
     effect: text("effect").$type<OperationEffect>(),
     source: text("source"),
+    // Where its call went (ADR-0031): `live`, `test`, or `dry_run` for a simulated step of a
+    // test run. Missing on a step run a release before EW-5t wrote.
+    target: text("target").$type<OperationTarget>(),
     // Of a code step: what its container is given while it waits for the sandbox, how its
     // script ended before the engine has read that, and what the script wrote beside its result.
     staged: jsonb("staged").$type<WorkflowStagedCode>(),

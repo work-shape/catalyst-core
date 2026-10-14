@@ -96,6 +96,17 @@ export interface OperationDraftContext {
    * made as the person testing and allowed only where the principal holds the right too.
    */
   boundBy?: ActingServicePrincipal;
+  /**
+   * A test run whose start was the tester's own confirmation: they called `workflows.test`
+   * themselves, or confirmed an agent's call of it. A step's `confirm` is then satisfied by
+   * that start, as a person's direct call satisfies it; `approval` still gates the step.
+   */
+  startConfirmed?: boolean;
+  /**
+   * The step took a "Run live once" switch earlier in this test run: the switch covers the step
+   * for the whole run, so this call goes live where it may be made, without another switch.
+   */
+  liveForRun?: boolean;
 }
 
 export interface OperationCall<TInput = unknown> {

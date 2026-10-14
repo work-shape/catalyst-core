@@ -25,6 +25,7 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
     endStepRun: (ref) => operations.endWorkflowStepRun(db, ref),
     markLoopWaiting: (ref) => operations.markWorkflowLoopWaiting(db, ref),
     noteStepRunOperation: (ref) => operations.noteWorkflowStepRunOperation(db, ref),
+    noteLiveStep: (ref) => operations.noteWorkflowLiveStep(db, ref),
     listOpenStepRuns: (ref) => operations.listOpenWorkflowStepRuns(db, ref),
     listRunsWithDataEndedBefore: (input) =>
       operations.listWorkflowRunsWithDataEndedBefore(db, input),

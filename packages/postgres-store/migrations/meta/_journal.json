@@ -526,6 +526,13 @@
       "when": 1791945073684,
       "tag": "0074_draft_call_targets_validate",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1791951193913,
+      "tag": "0075_test_run_targets",
+      "breakpoints": true
     }
   ]
 }

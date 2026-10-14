@@ -472,8 +472,9 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     if (definition.secret) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }
-    // A call of a test run is held by nothing yet that could ask the principal again when it
-    // is executed. EW-5t decides how a test run waits.
+    // A call of a test run does not wait (EW-5t): nothing takes a run up again when somebody
+    // decides, and nothing could ask the principal again when the call is executed. The step
+    // is refused with the reason, so the approval gates it.
     const unavailable: OperationDenial = {
       kind: "policy",
       operation: definition.name,

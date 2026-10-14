@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
 import type { UserId, WorkflowRunId, WorkflowStepRunId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
+import type { OperationTarget } from "./operation-runs";
 import type { OperationEffect } from "./operations";
 import type { PlatformAction } from "./permissions";
 
@@ -481,9 +482,10 @@ export interface WorkflowManifest {
    * The `name` of the service principal a run of this Workflow acts as (`WorkflowRunPrincipal`,
    * `ServicePrincipalRecord.name`): a slug, unique on the instance and never changed, so the
    * definition moves between instances unchanged. Making a revision live that names a
-   * principal, and a test run of a draft that names one, need what administering service
-   * principals needs (`WORKFLOW_RUN_AS_ACTION` and the rule beside it in the server). A
-   * definition without it is refused on save. Spec: Who a run acts as.
+   * principal needs what administering service principals needs (`WORKFLOW_RUN_AS_ACTION` and
+   * the rule beside it in the server). A test run of a draft does not: it acts as the person
+   * testing, bounded by the principal (ADR-0031). A definition without it is refused on save.
+   * Spec: Who a run acts as.
    */
   runAs: string;
   /** The schema of the run's input, as JSON Schema: the output schema of the trigger step. */
@@ -509,7 +511,7 @@ export interface WorkflowManifest {
   steps: readonly WorkflowStep[];
 }
 
-/** `test` runs the draft with changing operations blocked. Spec: Draft, test run and go-live. */
+/** `test` runs a draft as its tester, bounded by the principal (ADR-0031). */
 export const WORKFLOW_RUN_MODES = ["live", "test"] as const;
 
 export type WorkflowRunMode = (typeof WORKFLOW_RUN_MODES)[number];
@@ -634,6 +636,12 @@ export interface WorkflowStepRunCall {
   effect?: OperationEffect;
   /** The name of the Connection, Data Store, Knowledge Base or App of the operation. */
   source?: string;
+  /**
+   * Where the call went, as its Operation Run records it (ADR-0031): `live`, `test` or, for a
+   * changing step of a test run that was not made, `dry_run`. Every step of a run of the
+   * published revision is `live`.
+   */
+  target?: OperationTarget;
 }
 
 /** What a run page needs of a run beside its status. Types; the engine slices fill them. */

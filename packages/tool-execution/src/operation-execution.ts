@@ -338,7 +338,11 @@ async function policyInputOf(
     targets: definition.policyTargets
       ? await definition.policyTargets(call.input)
       : [{ workspaceId: call.workspaceId, assetKind: resource?.kind }],
-    callerCanConfirm: callerCanConfirm(call.origin),
+    // A step of a test run that a person started is that person's call: their start was the
+    // confirmation (ADR-0031). A step of any other run has nobody to ask.
+    callerCanConfirm:
+      callerCanConfirm(call.origin) ||
+      (call.draft?.boundBy !== undefined && call.draft.startConfirmed === true),
     // No surface can hold a call for its actor's confirmation before OP-3.
     canPause: false
   };

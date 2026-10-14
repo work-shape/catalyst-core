@@ -613,6 +613,7 @@ describe("the modules workflows and dataStores", () => {
       operations: [
         "workflows.list",
         "workflows.start",
+        "workflows.test",
         "workflows.get_run",
         "workflows.list_runs",
         "workflows.list_step_runs",
