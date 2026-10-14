@@ -19,7 +19,7 @@ import {
 } from "./action-input";
 import type { PageBuildError } from "./errors";
 import { KIT_WORKFLOW_ACTIONS_SINCE, kitStartsWorkflows } from "./kit";
-import { PAGE_MANIFEST_FILE, type PageManifest } from "./manifest";
+import { PAGE_MANIFEST_FILE, reservedActionKeyMessage, type PageManifest } from "./manifest";
 import {
   APP_SQL_ACTION_FILE_MAX_BYTES,
   APP_SQL_ACTION_FILE_SUFFIX,
@@ -436,6 +436,10 @@ function compileActionFile(
     return fail(read.issue.message, "action_invalid", read.issue.line);
   }
   const value = read.value;
+  const reserved = reservedActionKeyMessage(value);
+  if (reserved !== undefined) {
+    return fail(reserved, "key_reserved");
+  }
   const issues = (error: z.ZodError, keys: string) => ({
     errors: error.issues.map((issue) => ({
       file: file.path,

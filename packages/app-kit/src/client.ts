@@ -184,15 +184,6 @@ export interface AppClient {
       options?: AppCallOptions
     ): Promise<AppCallResult>;
   };
-  connections: {
-    /** Calls one operation of a Connection the manifest lists, with the viewer's rights. */
-    call(
-      connection: string,
-      operation: string,
-      input?: unknown,
-      options?: AppCallOptions
-    ): Promise<AppCallResult>;
-  };
   workflowRuns: {
     /**
      * Reads a Workflow Run that an action of this Page started, by the `id` of the run the
@@ -203,11 +194,10 @@ export interface AppClient {
   };
 }
 
-type RequestMessage = Extract<PageMessage, { type: "action" | "connection_call" | "workflow_run" }>;
+type RequestMessage = Extract<PageMessage, { type: "action" | "workflow_run" }>;
 /** A call or a read before the session and the id of its answer are known. */
 type NewRequest =
   | Omit<Extract<RequestMessage, { type: "action" }>, "session" | "requestId">
-  | Omit<Extract<RequestMessage, { type: "connection_call" }>, "session" | "requestId">
   | Omit<Extract<RequestMessage, { type: "workflow_run" }>, "session" | "requestId">;
 type Answer = Extract<HostMessage, { type: "action_result" | "workflow_run_result" }>;
 
@@ -321,18 +311,6 @@ export function createAppClient(
             : { idempotencyKey: callOptions.idempotencyKey })
         })
     },
-    connections: {
-      call: (connection, operation, input, callOptions = {}) =>
-        call({
-          type: "connection_call",
-          connection,
-          operation,
-          input: input ?? {},
-          ...(callOptions.idempotencyKey === undefined
-            ? {}
-            : { idempotencyKey: callOptions.idempotencyKey })
-        })
-    },
     workflowRuns: {
       async get(runId) {
         const answer = await request({ type: "workflow_run", runId });
@@ -372,11 +350,6 @@ export const resize: AppClient["resize"] = (height) => client().resize(height);
 /** The named actions of the manifest. `actions.call("loadRows", { limit: 20 })`. */
 export const actions: AppClient["actions"] = {
   call: (name, params, options) => client().actions.call(name, params, options)
-};
-/** The Connections the manifest lists. `connections.call("crm", "list_customers", {})`. */
-export const connections: AppClient["connections"] = {
-  call: (connection, operation, input, options) =>
-    client().connections.call(connection, operation, input, options)
 };
 /** The Workflow Runs the actions of the manifest started. `workflowRuns.get(run.id)`. */
 export const workflowRuns: AppClient["workflowRuns"] = {

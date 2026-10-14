@@ -39,17 +39,14 @@ export function frameSessionProof(address: FrameAddress): FrameSessionProof | un
     : { pageSessionId: address.pageSessionId, fileSetId: address.fileSetId, token };
 }
 
-type CallMessage = Extract<AppBridgePageMessage, { type: "action" | "connection_call" }>;
 /**
  * One call as the instance is asked for it: what a frame's message says of it, without what
  * only the bridge reads. The test of an action in the draft view makes the same call.
  */
-type FrameCall =
-  | Pick<Extract<CallMessage, { type: "action" }>, "type" | "name" | "input" | "idempotencyKey">
-  | Pick<
-      Extract<CallMessage, { type: "connection_call" }>,
-      "type" | "connection" | "operation" | "input" | "idempotencyKey"
-    >;
+type FrameCall = Pick<
+  Extract<AppBridgePageMessage, { type: "action" }>,
+  "type" | "name" | "input" | "idempotencyKey"
+>;
 type CallAnswer = Extract<AppBridgeHostMessage, { type: "action_result" }>;
 
 /** How one call of a frame came out, as the frame is told. */
@@ -90,7 +87,6 @@ export interface FrameCallTexts {
 const FINAL_REFUSALS: readonly string[] = [
   "forbidden",
   "action_unknown",
-  "connection_not_declared",
   "draft_safe_mode",
   // A Page of a conversation reaches no Data Store; only an App does.
   "data_store_needs_app",
@@ -163,22 +159,11 @@ export function createFrameCalls(
       // A frame that names no key gets one per message: one message is one call.
       const key = call.idempotencyKey === undefined ? {} : { idempotencyKey: call.idempotencyKey };
       try {
-        const result =
-          call.type === "action"
-            ? await client.apps.sessions.call_action({
-                params: { pageSessionId, name: call.name },
-                body: { fileSetId, token, input: call.input },
-                ...key
-              })
-            : await client.apps.sessions.call_connection({
-                params: {
-                  pageSessionId,
-                  connection: call.connection,
-                  operation: call.operation
-                },
-                body: { fileSetId, token, input: call.input },
-                ...key
-              });
+        const result = await client.apps.sessions.call_action({
+          params: { pageSessionId, name: call.name },
+          body: { fileSetId, token, input: call.input },
+          ...key
+        });
         return {
           ok: true,
           result:

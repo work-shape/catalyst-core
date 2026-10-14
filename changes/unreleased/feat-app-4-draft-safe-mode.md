@@ -16,8 +16,8 @@ section: Added
   call would have done in the interface's language, and focus moves to the status line of
   "Run live once" once it is set. The UI library adds `TargetBadge` (Live, Test, Simulated),
   which now also marks the steps of a Workflow run, and `RunLiveOnce`. No migration of its
-  own. A Page and a direct Connection call from a draft still refuse a
-  changing call with `draft_safe_mode`. **Upgrade:** an App's draft that called a changing
+  own. Only a Page of a conversation still refuses a changing call with `draft_safe_mode`; a
+  draft has no direct Connection call since `connections.call` was removed. **Upgrade:** an App's draft that called a changing
   action got `409 draft_safe_mode` and now gets a `dry_run` answer; the call needs an
   `Idempotency-Key` as in a published App. **Rollback:** the previous release refuses such a
   call again; switches stay in `live_once_switches` and are cleared by the next save or call.

@@ -3,7 +3,6 @@ import {
   appActionCallResultSchema,
   appActionsListQuerySchema,
   appActionsSchema,
-  appConnectionCallRequestSchema,
   appFromPageQuerySchema,
   appFromPageSchema,
   appPreviewRequestSchema,
@@ -20,8 +19,7 @@ import { defineOperation, defineRegisteredOperation, json } from "./define-opera
 /**
  * What a call of a frame declares. It runs through the call path as the operation its action
  * is (`app.<id>.<action>` in an App, `page_action.<page id>.<action>` in a Page of a
- * conversation, or the Connection's own), so every call is an Operation Run with
- * the origin `app`. The name of that operation is read from the manifest the frame shows and
+ * conversation), so every call is an Operation Run with the origin `app`. The name of that operation is read from the manifest the frame shows and
  * is not this descriptor's id, which is why these are not defined with
  * `defineRegisteredOperation`. A call that waits for an approval answers `200` with the
  * status `pending_approval`: the frame reads one shape.
@@ -160,14 +158,6 @@ export const appOperations = {
     path: "/api/v1/app-content-sessions/:pageSessionId/actions/:name",
     summary: "Call a named action of the Page or App a frame shows, with the caller's rights",
     body: appActionCallRequestSchema
-  }),
-  "apps.sessions.call_connection": defineOperation({
-    ...FRAME_CALL,
-    id: "apps.sessions.call_connection",
-    path: "/api/v1/app-content-sessions/:pageSessionId/connections/:connection/operations/:operation",
-    summary:
-      "Call an operation of a Connection the manifest of the shown Page or App lists, with the caller's rights",
-    body: appConnectionCallRequestSchema
   }),
   // POST because it carries the token of the frame's address, which never stands in a path.
   // The run is read through `workflows.get_run` with the caller's rights, which lets whoever
