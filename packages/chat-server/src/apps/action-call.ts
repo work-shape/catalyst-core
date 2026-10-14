@@ -11,19 +11,15 @@ import {
 import {
   appActionInputAsZod,
   compiledActionsOf,
-  declaredConnectionsOf,
   declaredDataStoresOf,
   type CompiledAppAction
 } from "@vivd-catalyst/app-build";
 import {
   APP_ACTION_CALLS_PER_MINUTE_PER_SESSION,
   APP_ACTION_INPUT_MAX_BYTES,
-  APP_CONNECTION_CALL_ACTION_NAME,
   AppError,
   CONNECTION_ACTIONS,
   CONNECTION_ASSET_KIND,
-  connectionCallError,
-  connectionOperationName,
   getSubjectUserId,
   isAppError,
   isAppErrorCode,
@@ -88,7 +84,7 @@ export interface ShownRevision {
   /**
    * The workspace the frame belongs to: the App's, or the one of the Page's conversation.
    * Every call of the frame carries it, so a setting that is narrowed to a workspace counts
-   * for a named action and for a direct call of a Connection alike.
+   * for every named action of the frame.
    */
   workspaceId: CollaborationWorkspaceId | undefined;
   conversationId?: ServedFileSet["conversationId"];
@@ -98,7 +94,6 @@ export interface ShownRevision {
 /** The frame a call comes from, once its address and its viewer were checked. */
 export interface FrameSession extends ShownRevision {
   viewer: AuthenticatedUser;
-  connections: string[];
 }
 
 export interface FrameSessionProof {
@@ -141,8 +136,8 @@ export class AppActionCalls {
     this.options = options;
     this.conversations = new ConversationWorkflow(options);
     // A named action asks its App itself, so the operation it stands for is read from the
-    // registry as it is. The call path's own registry asks the App of a call's origin before
-    // a Connection operation (`guardAppOrigin`), which a direct call below goes through.
+    // registry as it is. A frame calls no Connection operation directly: it reaches a
+    // Connection only through a named `connection` action of its manifest.
     this.environment = {
       registry: options.operationCalls.registry,
       modules: options.modules,
@@ -189,8 +184,7 @@ export class AppActionCalls {
       access: caller.access,
       pageSessionId: proof.pageSessionId,
       actions: compiledActionsOf(fileSet.manifest),
-      dataStores: declaredDataStoresOf(fileSet.manifest),
-      connections: declaredConnectionsOf(fileSet.manifest)
+      dataStores: declaredDataStoresOf(fileSet.manifest)
     };
     if (!fileSet.asset) {
       const conversation = await this.conversations
@@ -374,52 +368,6 @@ export class AppActionCalls {
     return appWorkflowRunOf(run.data);
   }
 
-  /**
-   * Calls one operation of a Connection the shown manifest lists. The run is the Connection
-   * operation's own, with the origin `app`, so the exposure `bridge`, the right on the
-   * Connection and the operation's policy are asked where every call of it asks them. The
-   * right on the App is asked before them, by the frame's own rule here and by the App the
-   * origin names where the registry resolves the operation (`guardAppOrigin`). The second is
-   * what still asks when a call that waited is executed.
-   */
-  async callConnection(
-    session: FrameSession,
-    target: { connection: string; operation: string },
-    input: unknown,
-    call: FrameCall
-  ): Promise<AppActionCallResult> {
-    await this.admit(session, input);
-    if (!session.connections.includes(target.connection)) {
-      throw refusal(
-        "FORBIDDEN",
-        "connection_not_declared",
-        `The manifest does not list the Connection '${target.connection}' under 'connections'.`
-      );
-    }
-    const operation = await this.options.operationCalls.deps.registry.resolve(
-      connectionOperationName(target.connection, target.operation)
-    );
-    if (!operation || operation.action !== null) {
-      throw connectionCallError("operation_unknown");
-    }
-    this.requireOutsideSafeMode(session, operation.effect);
-    const { host } = session;
-    const definition: OperationDefinition = {
-      ...operation,
-      async authorize(operationInput, context) {
-        const own = await host.authorize(context);
-        return own.allowed ? operation.authorize(operationInput, context) : own;
-      }
-    };
-    return this.run(
-      session,
-      definition,
-      input,
-      appOrigin(session, APP_CONNECTION_CALL_ACTION_NAME, target),
-      call
-    );
-  }
-
   /** The limit of one page session and the size of one input, before anything is read. */
   private async admit(session: FrameSession, input: unknown): Promise<void> {
     const { config, rateLimiter } = this.options;
@@ -465,8 +413,7 @@ export class AppActionCalls {
    * Runs the call through the call path. The definition is the one built from the manifest
    * the frame shows, so a draft and a Page run what a published revision would. A call that
    * waited for an approval is executed later from the registry: a named action from the
-   * published App while its revision is still the one the call was made in, and a Connection
-   * operation after its App was asked again.
+   * published App while its revision is still the one the call was made in.
    */
   private async run(
     session: FrameSession,

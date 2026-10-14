@@ -1,4 +1,5 @@
 import {
+  APP_BRIDGE_CONNECTION_CALL_REMOVED,
   APP_BRIDGE_MARK,
   APP_BRIDGE_VERSION,
   appBridgeHostMessageSchema,
@@ -198,6 +199,15 @@ export function createPageBridge(input: {
             post(source, workflowRunResultMessage(input.session, requestId, result));
           })
           .catch(() => undefined);
+      } else if (message.type === "connection_call") {
+        // Retired: a Page of an older kit is told at once that a named action is the way.
+        post(
+          source,
+          callResultMessage(input.session, message.requestId, {
+            ok: false,
+            error: { ...APP_BRIDGE_CONNECTION_CALL_REMOVED }
+          })
+        );
       } else {
         const { requestId } = message;
         const calls = input.calls?.();

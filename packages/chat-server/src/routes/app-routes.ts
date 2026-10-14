@@ -102,27 +102,6 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   );
 
   route(
-    apiOperations["apps.sessions.call_connection"],
-    async ({ user, access, context, params, body, request, reply }) => {
-      void reply.header("cache-control", "no-store");
-      const session = await actions.session(
-        { user, access },
-        { pageSessionId: params.pageSessionId, fileSetId: body.fileSetId, token: body.token }
-      );
-      return actions.callConnection(
-        session,
-        { connection: params.connection, operation: params.operation },
-        body.input,
-        {
-          correlationId: context.correlationId,
-          idempotencyKey: idempotencyKeyOf(request.headers["idempotency-key"]),
-          header: (name, value) => void reply.header(name, value)
-        }
-      );
-    }
-  );
-
-  route(
     apiOperations["apps.sessions.get_workflow_run"],
     async ({ user, access, context, params, body, reply }) => {
       void reply.header("cache-control", "no-store");

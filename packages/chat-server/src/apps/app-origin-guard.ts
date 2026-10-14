@@ -14,10 +14,11 @@ import { decide } from "../asset-access";
 import { appResourceOf, authorizePublishedApp, requirePublishedRevision } from "./action-source";
 import { APP_ACTIONS } from "./app-kind";
 
-// A frame of an App may call an operation of a Connection its manifest lists. The run is the
-// Connection operation's own, so nothing of the App is in its definition. The App is asked
-// here instead, for every call whose origin names one: when the call is made, and again when
-// a call that waited for an approval is executed, where nothing of the frame is left. So an
+// A Connection operation whose run names an App as its origin: one a frame of an App called
+// directly before the kit's `connections.call` was removed, which may still wait for an
+// approval. The run is the Connection operation's own, so nothing of the App is in its
+// definition. The App is asked here instead, for every call whose origin names one, when a
+// call that waited for an approval is executed, where nothing of the frame is left. So an
 // App that was removed, a right on it that was taken away and a revision that was replaced
 // all end such a call before the Connection is reached.
 

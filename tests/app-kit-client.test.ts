@@ -6,6 +6,7 @@ import {
   type AppBridgeContext
 } from "@vivd-catalyst/api-contract";
 import { describe, expect, it } from "vitest";
+import * as kitClient from "@vivd-catalyst/app-kit/client";
 import {
   AppCallError,
   createAppClient,
@@ -98,7 +99,7 @@ describe("the two halves of the bridge", () => {
     client.navigate("/zahlen/2026?monat=3");
     client.resize(812.5);
     void client.actions.call("load", { limit: 20 }, { idempotencyKey: "key-1" }).catch(() => 0);
-    void client.connections.call("crm", "list_customers", { limit: 20 }).catch(() => 0);
+    void client.workflowRuns.get("wfr-1").catch(() => 0);
     await sentCalls();
 
     expect(sent.map((message) => message.type)).toEqual([
@@ -106,11 +107,25 @@ describe("the two halves of the bridge", () => {
       "navigate",
       "resize",
       "action",
-      "connection_call"
+      "workflow_run"
     ]);
     for (const message of sent) {
       expect(appBridgePageMessageSchema.safeParse(envelope(message)).success).toBe(true);
     }
+  });
+
+  // Fails before the removal: the kit offered `connections.call`, a free call of a Connection.
+  it("offer no free call of a Connection: a Page reaches one through a named action", () => {
+    const client = createAppClient(recordingTransport().transport);
+    expect(Object.keys(client).sort()).toEqual([
+      "actions",
+      "getContext",
+      "navigate",
+      "onThemeChange",
+      "resize",
+      "workflowRuns"
+    ]);
+    expect("connections" in kitClient).toBe(false);
   });
 
   it("agree on what the interface sends: the client reads what the schema allows", () => {
@@ -400,7 +415,7 @@ describe("the kit client", () => {
     deliver(hostMessage({ type: "context", session: "session-1", context }));
     await asked;
 
-    await expect(client.connections.call("crm", "list", {})).rejects.toMatchObject({
+    await expect(client.actions.call("load", {})).rejects.toMatchObject({
       name: "AppCallError",
       code: "timeout"
     });
