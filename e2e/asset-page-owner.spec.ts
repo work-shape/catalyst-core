@@ -5,9 +5,8 @@ import { sendToolCall } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// Verifier (NAV-2, PR 91 round 2): the "Working on" line over the composer leads to the asset's
-// page. For an asset a workspace owns, that page must read it where it is, whatever owner Studio
-// was last set to; today it says the Data Store does not exist.
+// The page of an asset a workspace owns reads it where it is, whatever owner Studio was set to
+// last: reached by the "Working on" line over the composer, or by its address (NAV-2).
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -20,7 +19,7 @@ async function signIn(page: Page): Promise<void> {
   expect(response.ok()).toBe(true);
 }
 
-test("the Working on line leads to a workspace's Data Store after Studio was set to another owner", async ({
+test("a workspace's Data Store opens from the Working on line and by its address after Studio was set to another owner", async ({
   page
 }) => {
   test.setTimeout(180_000);
@@ -38,6 +37,8 @@ test("the Working on line leads to a workspace's Data Store after Studio was set
 
   // New data store in the workspace's Studio; the agent's first save opens its draft.
   await page.goto(`/w/${workspaceId}`);
+  // New goes to the agent where the workspace is the open one.
+  await expect(page.getByRole("button", { name: "Switch workspace" })).toContainText(label);
   await page.getByRole("button", { name: "Studio", exact: true }).click();
   await page
     .getByRole("navigation", { name: "Kinds in Studio" })
@@ -68,5 +69,17 @@ test("the Working on line leads to a workspace's Data Store after Studio was set
   // The line over the composer leads to the store's draft, not to "no Data Store".
   await page.getByTestId("conversation-subject").getByRole("link").click();
   await expect(page).toHaveURL((url) => url.pathname === `/build/data-stores/${name}`);
+  await expect(page.locator("[data-data-store-publish]")).toBeVisible();
+
+  // The page set Studio to the store's owner, whose list says the store is a draft.
+  await page.goto("/build/data-stores");
+  await expect(page.getByRole("button", { name: `Scope: ${label}` })).toBeVisible();
+  await expect(page.locator("[data-data-store-row-draft]")).toBeVisible();
+
+  // By its address, with Studio set to the instance again.
+  await page.getByRole("button", { name: /^Scope: / }).click();
+  await page.getByRole("option", { name: "Instance" }).click();
+  await expect(page.getByRole("button", { name: "Scope: Instance" })).toBeVisible();
+  await page.goto(`/build/data-stores/${name}`);
   await expect(page.locator("[data-data-store-publish]")).toBeVisible();
 });

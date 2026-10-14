@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
 import { invalidateOfferedAgents } from "../api/agent-placement-mutations";
 import { createAssetWrites, type AvailableIn } from "../api/asset-writes";
@@ -12,6 +12,7 @@ import type { BuildAsset, BuildAssetRow } from "./build-asset-kind";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
 import {
   AGENT_ASSET_KIND,
+  buildScopes,
   buildScopeValue,
   readLastBuildScope,
   resolveBuildRights,
@@ -195,6 +196,10 @@ export function useBuildSource(): BuildSource {
     const workspaceId = workspaceOf(kind);
     return workspaceId === undefined ? {} : { workspaceId };
   };
+  /** The other owners Studio offers, where an asset missing in the scope is looked for. */
+  const otherScopes = buildScopes(rights).filter(
+    (other) => buildScopeValue(other) !== buildScopeValue(scope)
+  );
 
   const kinds = useMemo<BuildKindState[]>(() => {
     // The instance's own switches for the two kinds it has always had. A kind that brings no
@@ -300,6 +305,44 @@ export function useBuildSource(): BuildSource {
         refetchOnReconnect: false,
         retry: false
       });
+      // A page reached by a link, by its address or after a reload names the asset alone,
+      // not its owner. Where Studio is set to an owner that does not have it, the page looks
+      // in the other owners Studio offers and sets Studio to the first that has it, so every
+      // way to the page reads the asset where it is.
+      const missingHere =
+        query.error !== null && !query.isFetching && apiErrorCode(query.error) === "NOT_FOUND";
+      const searched = missingHere && scopedKinds.has(kind) && otherScopes.length > 0;
+      const elsewhere = useQuery({
+        queryKey: ["asset-owner", apiBaseUrl, authScope, kind, buildScopeValue(scope), name],
+        enabled: searched,
+        queryFn: async ({ signal }) => {
+          const found = await Promise.all(
+            otherScopes.map((other) =>
+              client.assets
+                .get({
+                  params: { kind, name },
+                  query: other.kind === "workspace" ? { workspaceId: other.workspaceId } : {},
+                  signal
+                })
+                .then(
+                  () => true,
+                  () => false
+                )
+            )
+          );
+          const owner = otherScopes.find((_, index) => found[index]);
+          return owner === undefined ? null : buildScopeValue(owner);
+        },
+        gcTime: 0,
+        staleTime: Infinity,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        retry: false
+      });
+      const foundIn = elsewhere.data;
+      useEffect(() => {
+        if (typeof foundIn === "string") storeLastBuildScope(foundIn);
+      }, [foundIn]);
       // What was read stays the page's asset while it is read again and after a read that
       // failed: only a newer answer replaces it. The page would otherwise lose what was typed.
       if (query.data) {
@@ -319,7 +362,10 @@ export function useBuildSource(): BuildSource {
       if (query.error && !query.isFetching) {
         const code = apiErrorCode(query.error);
         if (code === "NOT_FOUND") {
-          return { status: "missing" };
+          // Looked for in the other owners: loading until that answers and Studio is set.
+          return searched && !elsewhere.isError && elsewhere.data !== null
+            ? { status: "loading" }
+            : { status: "missing" };
         }
         if (code === "FORBIDDEN") {
           return { status: "refused" };

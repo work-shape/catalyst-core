@@ -45,8 +45,10 @@ function migrationFileName(migration: DraftMigration): string {
   return `${migrationNumber(migration.number)}_${migration.name}.sql`;
 }
 
-/** Whether the page shows the store as a draft: it has a draft and nothing was published. */
-export function dataStoreNeverPublished(asset: BuildAssetViewProps["asset"]): boolean {
+/** Whether the store is shown as a draft: it has a draft and nothing was published. */
+export function dataStoreNeverPublished(
+  asset: Pick<BuildAssetViewProps["asset"], "draftRevision" | "publishedRevision">
+): boolean {
   return asset.draftRevision !== undefined && asset.publishedRevision === undefined;
 }
 

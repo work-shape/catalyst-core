@@ -149,7 +149,6 @@ test("New agent in a workspace's Studio opens the dock, and the first save creat
         ).json()
       )
       .items.map((agent) => agent.name);
-  const before = await offered();
 
   // The workspace is the open one and Studio's scope: what is made here, it owns.
   const workspaceName = `Studio ${name.slice(-8)}`;
@@ -181,8 +180,9 @@ test("New agent in a workspace's Studio opens the dock, and the first save creat
   });
   await expect(page).toHaveURL((url) => url.pathname === `/build/agents/${name}`);
   await expect(page.getByTestId("asset-opened-line").last()).toHaveText("Opened Built helper");
-  // Nobody's agent list changed.
-  expect(await offered()).toEqual(before);
+  // The agent is offered to nobody: it is not among the workspace's agents. Other tests change
+  // that list meanwhile, so only this agent is asked about.
+  expect(await offered()).not.toContain(name);
   await shootLocales(page, "nav-2-agent-created", async () => {
     await expect(page.getByTestId("asset-opened-line").last()).toBeVisible();
   });

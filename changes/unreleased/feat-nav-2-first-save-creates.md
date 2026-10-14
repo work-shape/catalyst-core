@@ -46,3 +46,8 @@ section: Added
   a first save is asked of the kind and the name it creates, so a setting on a Namespace
   applies, and a setting on another kind does not. Tools' `policyFloor` is told the call's
   input. A confirmation of an open sent again changes nothing and writes no second audit row.
+- **An asset's page in Studio finds its owner:** a page reached by the "Working on" line, by
+  its address or after a reload names the asset alone. Where Studio is set to an owner that
+  does not have it, the page looks in the other owners Studio offers and sets Studio to the
+  one that has it. A Data Store never published says "Draft · not published" in the list
+  instead of asking for a state it does not have yet.
