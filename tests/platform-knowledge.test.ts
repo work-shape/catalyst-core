@@ -129,3 +129,41 @@ describe("the shipped skill platform-docs", () => {
     ).resolves.toBeDefined();
   });
 });
+
+// Platform Access acceptance check 55 (CONNECT-1a): an agent that holds the platform tools can
+// walk a person through connecting a local agent from its docs, and no agent can issue a key or
+// a connect code. Fails without the change: the docs had no such page.
+describe("connecting a local agent, as an agent knows it", () => {
+  const keyOperations =
+    platformModules.find((module) => module.name === "personalApiKeys")?.operations ?? [];
+
+  it("is a page of platform-docs that leads to /settings/you/connect and says no agent issues a key", () => {
+    const page = (platformDocsSkill.resources ?? []).find(
+      (resource) => resource.path === "references/getting-started/local-agent.md"
+    );
+    expect(page?.content).toContain("Connect a local agent");
+    expect(page?.content).toContain("/settings/you/connect");
+    expect(page?.content).toContain("Lokalen Agenten verbinden");
+    expect(page?.content).toContain("no agent can make one");
+    expect(platformDocsSkill.content).toMatch(
+      /`references\/getting-started\/local-agent\.md`: [^\n]*\/settings\/you\/connect/u
+    );
+  });
+
+  it("is no tool: no module offers one for personal API keys or connect codes, and no agent is offered one", async () => {
+    expect(keyOperations).toEqual(
+      expect.arrayContaining(["me.api_keys.create", "connect_codes.start"])
+    );
+    const keyTool = /api_keys|api-keys|connect_codes|connect-codes/u;
+    for (const module of platformModules) {
+      expect(
+        (module.tools ?? []).filter((name) => keyTool.test(name)),
+        module.name
+      ).toEqual([]);
+    }
+    const offer = await offerFor(PLATFORM_TOOLS);
+    expect(
+      offer.toolNames.filter((name) => keyTool.test(name) || keyOperations.includes(name))
+    ).toEqual([]);
+  });
+});

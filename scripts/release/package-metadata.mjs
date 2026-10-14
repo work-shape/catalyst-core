@@ -59,8 +59,9 @@ const OVERRIDES = {
   // Ships src/ for the same Tailwind scanning and for its `./styles.css` export. Its
   // JavaScript imports no CSS and has no side effects.
   ui: { files: ["dist", "src"] },
-  // The entry runs the CLI when executed as `catalyst`.
-  "config-cli": { sideEffects: undefined },
+  // The entry runs the CLI when executed as `catalyst`. `catalyst setup` writes the skill it
+  // ships, read at runtime from ../skills relative to dist/.
+  "config-cli": { files: ["dist", "skills"], sideEffects: undefined },
   // Ships the pinned view runtime it serves, read at runtime from ../vendor relative to dist/.
   "chat-server": { files: ["dist", "vendor"] },
   // Migrations are read at runtime from ../migrations relative to dist/. The

@@ -209,7 +209,7 @@ export const access = defineTranslations({
     "access.checkPerson": "Person",
     "access.checkKind": "Kind",
     "access.checkName": "Asset name",
-    "access.checkNamePlaceholder": "kai-helper",
+    "access.checkNamePlaceholder": "tax-helper",
     "access.checkPickAsset": "Pick an existing asset",
     "access.checkEmpty":
       "Choose a person and enter an asset name to see what the person may do with it.",
@@ -498,7 +498,7 @@ export const access = defineTranslations({
     "access.checkPerson": "Person",
     "access.checkKind": "Art",
     "access.checkName": "Asset-Name",
-    "access.checkNamePlaceholder": "kai-helper",
+    "access.checkNamePlaceholder": "tax-helper",
     "access.checkPickAsset": "Vorhandenes Asset wählen",
     "access.checkEmpty":
       "Wähle eine Person und gib einen Asset-Namen ein, um zu sehen, was die Person damit darf.",

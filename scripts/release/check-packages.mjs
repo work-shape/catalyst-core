@@ -32,8 +32,8 @@ const MAX_TARBALL_BYTES = 300_000;
 // schema snapshot each, about 9 kB packed per migration; 69 migrations are 620 kB, 82 are 814 kB
 // (2026-10-14, the Knowledge Base migration). chat-ui grew
 // past 1 MB with the Workflow, Data Store, Agents and rights pages, and past 1.2 MB with the
-// Studio scope filter and workspace owners of WS-OWN-1a (2026-10-14); src/ and dist/ both
-// count each line.
+// Studio scope filter and workspace owners of WS-OWN-1a and Connect a local agent of CONNECT-1a
+// (2026-10-14); src/ and dist/ both count each line.
 const MAX_TARBALL_BYTES_BY_DIR = {
   "chat-ui": 1_250_000,
   ui: 500_000,
