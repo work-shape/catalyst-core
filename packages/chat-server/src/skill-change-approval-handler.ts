@@ -147,8 +147,8 @@ export function createSkillChangeApprovalHandler(
       const data = validatePayload(payload);
       // A change already written, whose approval failed to be recorded, is recovered as it is.
       if (await findProducedRevision(data.skillName, context.requestId)) return [];
-      const snapshot = await options.configAssets.source.getSnapshot();
-      const current = snapshot.skills.find((candidate) => candidate.name === data.skillName);
+      // The skill whole: the snapshot leaves its resources out, and the guardrails read them.
+      const current = await options.configAssets.source.getSkill(data.skillName);
       // A change that no longer applies was found stale before this is asked.
       const skill = applySkillChange(current, data.operations);
       return [
