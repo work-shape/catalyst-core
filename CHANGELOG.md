@@ -75,19 +75,23 @@ contain breaking changes; a patch version does not.
 - **Guardrails read every way content reaches an asset or goes live:** `asset.before_write` now
   also answers `apps.create_from_page` and `apps.update_from_page` (the App's definition and
   the Page revision the write copies: the write copies the revision the guardrails read; a call
-  held for an approval keeps that revision beside its input (`heldInput` of the request), so
-  the call the approval answers is checked again and writes exactly that revision; the new optional `fileSetId` names a revision to copy, and a
-  revision that is gone is refused with `CONFLICT`), `assets.revert` (the earlier revision it writes again, also one written before the
+  held for an approval, by a guardrail or by a policy, keeps the revision there was beside its
+  input (`heldInput` of the request, only in the fields the operation declares), so the call
+  the approval answers is checked again and writes exactly that revision; the new optional `fileSetId` names a revision to copy, and a
+  revision that is gone is refused with `CONFLICT`), the agent's `page.save_as_app` (held for an approval, it too keeps the revision its guardrails
+  read) and the App draft a `page.save` writes (the revision the save stored; a block or a hold
+  leaves the draft unwritten and says why, as the Page is saved already), `assets.revert` (the
+  earlier revision it writes again, also one written before the
   guardrail existed), an approved skill change before it is applied (the skill as the approval
   writes it) and the undo of an approved skill change (`approval_requests.revert`, the revision
   it writes back). A block at the approval leaves the skill unchanged and ends the request as
   not applied (`superseded`, `applyResult.execution` `refused`, `GUARDRAIL_BLOCKED` with the
   reason), which the Inbox item shows; a block at the undo refuses it and the request stays
   approved. A new before-event `data_store.before_publish` answers the publish of a Data
-  Store, with the revision's definition and migration files. A UTF-16 text file with its byte
-  order mark is read as text. Any other file that is no UTF-8 text is no longer skipped: a
-  `pattern` reads its printable runs of at least 4 characters, so a photo passes whatever its
-  size and text hidden beside a NUL byte is found; a `model_judge` reads the printable runs of
+  Store, with the revision's definition and migration files. A UTF-16 text file, with its byte
+  order mark or with a NUL in every other byte of its start, is read as text. Any other file that is no UTF-8 text is no longer skipped: a
+  `pattern` reads its printable runs (line ends included) of at least 4 characters, so a photo
+  passes whatever its size, and only text counts toward the limit of what a check reads and text hidden beside a NUL byte is found; a `model_judge` reads the printable runs of
   at least 16 characters of an image or a font and answers any other such file as unread. A refusal for content that is
   too large or cannot be judged no longer says to try again. A block found when a held call
   or an approved change is asked again is kept as a hit. A revert and a publish read no
