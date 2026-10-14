@@ -151,6 +151,17 @@ describe("publishing needs an instance admin's approval", () => {
     expect(
       await t.stores.approvals.countApprovalRequests({ clientInstanceId, kinds: ["app_publish"] })
     ).toBe(before);
+    const audit = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 500 });
+    expect(audit).toContainEqual(
+      expect.objectContaining({
+        type: "operation.completed",
+        actor: expect.objectContaining({ userId: t.admin.id }),
+        metadata: expect.objectContaining({
+          operationRunId: runId,
+          decisionReason: "approved_by_caller"
+        })
+      })
+    );
   });
 
   it("refuses to approve a request whose draft moved, and lets a newer request replace the open one", async () => {

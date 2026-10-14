@@ -1,8 +1,4 @@
-import type {
-  ConfigAssetStore,
-  JsonObject,
-  PlatformAction
-} from "@vivd-catalyst/core";
+import type { ConfigAssetStore, JsonObject, PlatformAction } from "@vivd-catalyst/core";
 
 /**
  * A kind of held call whose request the holders of its own right decide, and which knows what

@@ -170,7 +170,8 @@ async function publishReview(
     ? await Promise.all(
         reach.calls.map(async (call) => ({
           ...call,
-          effect: call.effect ?? (call.operation ? await options.effectOf(call.operation) : undefined)
+          effect:
+            call.effect ?? (call.operation ? await options.effectOf(call.operation) : undefined)
         }))
       )
     : [];
@@ -244,7 +245,9 @@ async function changedFiles(
     const now = after.get(path);
     const then = before.get(path);
     if (now === then) return [];
-    return [{ path, change: then === undefined ? "added" : now === undefined ? "removed" : "changed" }];
+    return [
+      { path, change: then === undefined ? "added" : now === undefined ? "removed" : "changed" }
+    ];
   });
 }
 

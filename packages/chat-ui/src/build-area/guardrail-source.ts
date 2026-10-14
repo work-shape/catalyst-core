@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GuardrailHits, ShippedGuardrailView } from "@vivd-catalyst/api-client";
-import {
-  useSettingsPage,
-  type SettingsPageContextValue
-} from "../settings/settings-page-context";
+import { useSettingsPage, type SettingsPageContextValue } from "../settings/settings-page-context";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
 
 /** The newest hits of one Guardrail, as its page asked for them. */

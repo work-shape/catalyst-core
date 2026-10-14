@@ -176,7 +176,9 @@ export function useWorkflowDraft(
       }
       setError(
         instanceSentence(failure) ??
-          t(change === "publish" ? "workflows.draft.publishFailed" : "workflows.draft.discardFailed")
+          t(
+            change === "publish" ? "workflows.draft.publishFailed" : "workflows.draft.discardFailed"
+          )
       );
     } finally {
       setBusy(false);

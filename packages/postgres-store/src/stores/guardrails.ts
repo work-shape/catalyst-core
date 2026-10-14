@@ -54,7 +54,10 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
         .insert(shippedGuardrailSwitches)
         .values({ clientInstanceId, guardrailName: name, ...values })
         .onConflictDoUpdate({
-          target: [shippedGuardrailSwitches.clientInstanceId, shippedGuardrailSwitches.guardrailName],
+          target: [
+            shippedGuardrailSwitches.clientInstanceId,
+            shippedGuardrailSwitches.guardrailName
+          ],
           set: values
         })
         .returning();

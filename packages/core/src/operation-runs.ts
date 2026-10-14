@@ -52,9 +52,7 @@ export interface OperationRunActor {
  * own call was the approval (`approval` of the operation's definition).
  */
 export type OperationRunDecisionReason =
-  | "inherited_approval_not_applied"
-  | "workflow_publish"
-  | "approved_by_caller";
+  "inherited_approval_not_applied" | "workflow_publish" | "approved_by_caller";
 
 export interface OperationRunDecision {
   /**

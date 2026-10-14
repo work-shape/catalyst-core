@@ -51,7 +51,6 @@ export const HELD_CALL_APPROVAL_KINDS: readonly string[] = [
   ...PUBLISH_APPROVAL_KINDS
 ];
 
-
 /**
  * The largest input a call may have to be held for an approval, as JSON. The input is kept in
  * the request until the call is decided. A larger call is refused and says so.
@@ -161,7 +160,9 @@ export function createOperationCallApprovalHandler(
   const runsOf = (context: ApprovalRequestContext): OperationRunStore =>
     context.transaction?.operationRuns ?? options.deps().runs;
   /** The assets as the decision's transaction sees them. */
-  const storesOf = (context: ApprovalRequestContext): Pick<ApprovalTransactionStores, "configAssets"> =>
+  const storesOf = (
+    context: ApprovalRequestContext
+  ): Pick<ApprovalTransactionStores, "configAssets"> =>
     context.transaction ?? { configAssets: options.configAssets };
   const runIdOf = (payload: JsonObject) => payloadSchema.pick({ runId: true }).safeParse(payload);
 
@@ -292,8 +293,7 @@ export function minimizedOperationCallPayload(payload: JsonObject): JsonObject {
   if (!parsed.success) {
     return { inputRemoved: true };
   }
-  const { runId, operation, effect, actor, origin, workspaceId, expiresAt, subject } =
-    parsed.data;
+  const { runId, operation, effect, actor, origin, workspaceId, expiresAt, subject } = parsed.data;
   return toJsonObject({
     runId,
     operation,
@@ -427,8 +427,10 @@ export async function endHeldOperationCalls(
   }
 }
 
-export interface ApprovedOperationCallExecutorOptions
-  extends Pick<OperationCallApprovalOptions, "clientInstanceId" | "deps" | "users"> {
+export interface ApprovedOperationCallExecutorOptions extends Pick<
+  OperationCallApprovalOptions,
+  "clientInstanceId" | "deps" | "users"
+> {
   approvals: Pick<ApprovalRequestStore, "getApprovalRequest" | "transitionApprovedApprovalRequest">;
 }
 
