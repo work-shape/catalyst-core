@@ -262,48 +262,51 @@ describe("who writes a service principal's grant row", () => {
     expect(await s.principalRows()).toHaveLength(1);
   });
 
-  it("asks what administering service principals asks: api_access.manage, held by a superadmin", async () => {
+  // Check 38: an administrator, no superadmin and without `api_access.manage`, gives a
+  // principal a right where the administrator holds it, and only there.
+  it("asks service_principals.manage and the right it gives, on the asset it names", async () => {
     const s = await setup();
     const { t } = s;
     const crm = await t.seed("crm", forWorkflows);
+    const erp = await t.seed("erp", forWorkflows);
 
-    // An administrator writes rows for users and holds no `api_access.manage`.
-    await t.expectRefused(
-      t.admin.id,
-      "permissions.grant",
-      { payload: s.payload(crm) },
-      t.forbidden("api_access.manage", "no_grant")
-    );
-    // Holding the right without the role is refused by name: no right stands for the role.
-    const withoutRole = await t.expectRefused(
-      s.ops.id,
-      "permissions.grant",
-      { payload: s.payload(crm) },
-      t.forbidden("permissions.grant", "holder_not_administrable")
-    );
-    expect(withoutRole.message).toBe(
-      "A grant row of a service principal is written by a superadmin who holds 'api_access.manage'"
-    );
-    // A person who manages no users writes no grant row at all.
-    await t.expectRefused(
-      t.kai.id,
-      "permissions.grant",
-      { payload: s.payload(crm) },
-      t.forbidden("users.manage", "no_grant")
-    );
+    // Managing users is no right over principals, and holding nothing is not either.
+    for (const userId of [s.manager.id, t.kai.id]) {
+      await t.expectRefused(
+        userId,
+        "permissions.grant",
+        { payload: s.payload(crm) },
+        t.forbidden("service_principals.manage", "no_grant")
+      );
+    }
     expect(await s.principalRows()).toEqual([]);
 
-    const grantId = await s.grantTo(crm);
+    // The administrator holds `connection.use` on the CRM and gives it.
+    const written = await t.expectOk(t.admin.id, "permissions.grant", { payload: s.payload(crm) });
+    const grantId = grantSchema.parse(written.json()).id;
+    // A deny on the ERP takes it from the administrator, who then cannot give it there.
+    await t.grant(t.admin.id, "connection.use", { assetId: erp }, "deny");
+    const denied = await t.expectRefused(
+      t.admin.id,
+      "permissions.grant",
+      { payload: s.payload(erp) },
+      t.forbidden("connection.use", "denied")
+    );
+    expect(denied.message).toBe(
+      "'connection.use' on the connection 'erp' is denied to this call, and 'Monthly check' would act with it. Only a holder of a right gives or lends it"
+    );
+    expect((await s.principalRows()).map((row) => row.id)).toEqual([grantId]);
+
     // Who may not see service principals is told of a principal's row what is told of a row
     // that does not exist, so no grant id of a principal can be told from an absent one.
     const hidden = await t.expectRefused(
-      t.admin.id,
+      s.manager.id,
       "permissions.revoke",
       { params: { grantId } },
       { status: 404, code: "NOT_FOUND" }
     );
     const absent = await t.expectRefused(
-      t.admin.id,
+      s.manager.id,
       "permissions.revoke",
       { params: { grantId: "grant_absent" } },
       { status: 404, code: "NOT_FOUND" }
@@ -312,14 +315,17 @@ describe("who writes a service principal's grant row", () => {
       message: absent.message,
       details: absent.details
     });
+    // A caller who holds neither right that removes a row causes no read.
     await t.expectRefused(
-      s.ops.id,
+      t.kai.id,
       "permissions.revoke",
       { params: { grantId } },
-      t.forbidden("permissions.revoke", "holder_not_administrable")
+      t.forbidden("users.manage", "no_grant")
     );
     expect(await s.principalRows()).toHaveLength(1);
-    await t.expectOk(t.root.id, "permissions.revoke", { params: { grantId } });
+    // Taking a right away asks nothing of the rule: the deny does not stop the revoke.
+    await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId } });
+    expect(await s.principalRows()).toEqual([]);
   });
 
   it("asks the credential what administering service principals asks of it", async () => {
@@ -389,9 +395,10 @@ describe("who writes a service principal's grant row", () => {
 
     expect(await listed(t.root.id)).toEqual([grantId]);
     expect(await listed(s.ops.id, { holderKind: "service_principal" })).toEqual([grantId]);
-    expect(await listed(t.admin.id)).toEqual([]);
+    expect(await listed(t.admin.id, { holderKind: "service_principal" })).toEqual([grantId]);
+    expect(await listed(s.manager.id)).toEqual([]);
     expect(
-      await listed(t.admin.id, { holderKind: "service_principal", holderId: principal.id })
+      await listed(s.manager.id, { holderKind: "service_principal", holderId: principal.id })
     ).toEqual([]);
   });
 
@@ -420,12 +427,12 @@ describe("who writes a service principal's grant row", () => {
     expect(await listed(t.root.id, { scopeKind: "asset", scopeId: erp })).toEqual([onErp]);
 
     // Who is not shown service principals is shown the person and nothing of the principal.
-    expect(await listed(t.admin.id, holdersOfCrm)).toEqual([kaiOnCrm]);
+    expect(await listed(s.manager.id, holdersOfCrm)).toEqual([kaiOnCrm]);
     // The same answer for a Connection only a principal holds, for one nobody holds and for
     // one that does not exist: the list does not say which of the three it is.
     const nobody = await t.seed("empty", forWorkflows);
     for (const scopeId of [erp, nobody, "asset_unknown"]) {
-      const answer = await t.expectOk(t.admin.id, "permissions.list", {
+      const answer = await t.expectOk(s.manager.id, "permissions.list", {
         query: { scopeKind: "asset", scopeId }
       });
       expect(answer.statusCode, scopeId).toBe(200);
@@ -433,7 +440,7 @@ describe("who writes a service principal's grant row", () => {
     }
     // And for a principal that exists and one that does not.
     for (const holderId of [principal.id, "sp_unknown"]) {
-      const answer = await t.expectOk(t.admin.id, "permissions.list", {
+      const answer = await t.expectOk(s.manager.id, "permissions.list", {
         query: { holderKind: "service_principal", holderId }
       });
       expect(answer.json(), holderId).toEqual({ items: [] });
@@ -639,9 +646,10 @@ describe("a disabled or deleted service principal", () => {
 
     expect(deleted?.id).toBe(principal.id);
     const left = await withTestSql(async (sql) => ({
-      // The rows of the administrator who manages API access are hers and stay.
+      // The rows of the people who manage API access and users are theirs and stay.
       grants: await sql<{ id: string }[]>`
-        select id from permission_grants where holder_id <> ${s.ops.id} order by id`,
+        select id from permission_grants
+        where holder_id <> ${s.ops.id} and holder_id <> ${s.manager.id} order by id`,
       keys: await sql<{ count: number }[]>`select count(*)::int as count from api_credentials`,
       principals: await sql<
         { count: number }[]

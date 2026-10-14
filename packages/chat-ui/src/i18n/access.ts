@@ -108,7 +108,7 @@ export const access = defineTranslations({
       "Change the draft of the Workflow. A draft does not run until it is published.",
     "access.actionPublishWorkflowDescription": "Make a draft the version that runs.",
     "access.actionPublishWorkflowNote":
-      "Not enough on its own today: publishing a Workflow also needs the superadmin role and the right to manage API access. For anyone else this right changes nothing yet.",
+      "Publishing also needs every right of the service principal the Workflow runs as. Whoever lacks one of them is refused, with the right named.",
     "access.scopeWorkflow": "Workflow {name}",
     "access.actionOnGuardrail": "{action} guardrails",
     "access.actionPublishGuardrailDescription":
@@ -379,7 +379,7 @@ export const access = defineTranslations({
       "Den Entwurf des Workflows ändern. Ein Entwurf läuft erst, wenn er veröffentlicht ist.",
     "access.actionPublishWorkflowDescription": "Einen Entwurf zu der Version machen, die läuft.",
     "access.actionPublishWorkflowNote":
-      "Reicht heute allein nicht: Einen Workflow zu veröffentlichen braucht zusätzlich die Superadmin-Rolle und das Recht, den API-Zugriff zu verwalten. Für alle anderen ändert dieses Recht noch nichts.",
+      "Zum Veröffentlichen braucht die Person außerdem jedes Recht des Service Principals, als der der Workflow läuft. Fehlt ihr eines, wird sie abgelehnt, mit dem fehlenden Recht beim Namen.",
     "access.scopeWorkflow": "Workflow {name}",
     "access.actionOnGuardrail": "Leitplanken: {action}",
     "access.actionPublishGuardrailDescription":

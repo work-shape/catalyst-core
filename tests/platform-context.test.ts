@@ -54,6 +54,7 @@ describe("platform.context.get", () => {
       "actions",
       "assetActions",
       "instance",
+      "instanceActions",
       "kinds",
       "namespaces",
       "release",
@@ -76,6 +77,7 @@ describe("platform.context.get", () => {
     expect(lena.namespaces).toEqual([]);
     expect(lena.actions).toEqual([]);
     expect(lena.assetActions).toEqual([]);
+    expect(lena.instanceActions).toEqual([]);
 
     const admin = platformContextSchema.parse(
       (await t.expectOk(t.admin.id, "platform.context.get")).json()
@@ -87,6 +89,8 @@ describe("platform.context.get", () => {
         actions: ["agent.read", "agent.write", "skill.read", "skill.write", "skill.delete"]
       }
     ]);
+    // The role administers service principals (RIGHTS-1a).
+    expect(admin.instanceActions).toEqual(["service_principals.manage"]);
     // On the instance's assets as a whole the role holds every action: the deny names one
     // Namespace.
     expect(admin.actions).toEqual([

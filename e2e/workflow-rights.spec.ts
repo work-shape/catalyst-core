@@ -24,7 +24,7 @@ const NARROW = { width: 390, height: 844 };
 const USE_SENTENCE =
   "Start the Workflow. It then runs with the Workflow's own rights, not with this person's, so it can read and change what the person cannot.";
 const PUBLISH_NOTE =
-  "Not enough on its own today: publishing a Workflow also needs the superadmin role and the right to manage API access.";
+  "Publishing also needs every right of the service principal the Workflow runs as.";
 
 async function signIn(page: Page, user: { email: string; password: string }): Promise<void> {
   const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {

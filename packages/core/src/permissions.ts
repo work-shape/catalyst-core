@@ -74,6 +74,15 @@ export function legacyKeysHeld(rows: readonly LegacyRowView[]): Permission[] {
   });
 }
 
+/**
+ * The rights over the instance itself that no asset kind carries and no legacy key names. A
+ * role holds them by default; the interface reads which of them a person holds from the
+ * platform context.
+ */
+export const INSTANCE_ACTIONS = [
+  "service_principals.manage"
+] as const satisfies readonly PlatformAction[];
+
 export const ROLE_DEFAULT_ACTIONS: Record<
   "user" | "admin" | "superadmin",
   readonly PlatformAction[]
@@ -209,8 +218,8 @@ export const GRANTABLE_ACTION_SCOPES = {
   // A Workflow is the instance's own: its rights are granted in a Namespace or on one Workflow,
   // and no workspace owns one yet. Reading shows it and its runs, using starts it, writing
   // edits the draft and publishing moves the published pointer; making a revision live that
-  // names a service principal asks the right over that principal beside it. Deleting and the
-  // rows of a run's datasets stay with the role.
+  // names a service principal also asks every right of that principal (`requireHeldRights`).
+  // Deleting and the rows of a run's datasets stay with the role.
   "workflow.read": ["namespace", "asset"],
   "workflow.use": ["namespace", "asset"],
   "workflow.write": ["namespace", "asset"],
@@ -649,6 +658,8 @@ export interface GrantScopeAsset {
   name: string;
   /** False once the asset was deleted. Its deny rows stay and apply when the name returns. */
   active: boolean;
+  /** The workspace that owns the asset; absent for one of the instance's own. */
+  workspaceId?: string;
 }
 
 /** The store behind grants and Namespaces: the evaluator's port plus the administration writes. */
@@ -706,7 +717,7 @@ export interface AccessAdministrationStore extends AccessStore {
   getGrantableAsset(input: {
     clientInstanceId: ClientInstanceId;
     assetId: string;
-  }): Promise<{ id: string; kind: string; name: string } | undefined>;
+  }): Promise<Omit<GrantScopeAsset, "active"> | undefined>;
   /**
    * The agents and skills behind asset scope ids, deleted ones included: a deny outlives the
    * asset it names, and whoever lists it has to say which name it still refuses.
@@ -760,17 +771,6 @@ export function hasPermission(
   permission: Permission
 ): boolean {
   return resolveEffectivePermissions(subject).has(permission);
-}
-
-export function requirePermission(
-  subject:
-    | Pick<AuthenticatedUser, "roles" | "permissions">
-    | Pick<AuthenticatedServicePrincipal, "permissions">,
-  permission: Permission
-): void {
-  if (!hasPermission(subject, permission)) {
-    throw new AppError("FORBIDDEN", `Missing permission '${permission}'`);
-  }
 }
 
 function isDefaultPermissionRole(role: string): role is keyof typeof ROLE_DEFAULT_PERMISSIONS {

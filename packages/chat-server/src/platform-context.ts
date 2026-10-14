@@ -5,6 +5,7 @@ import {
   FILE_SET_MAX_FILE_BYTES,
   FILE_SET_MAX_FILES,
   FILE_SET_MAX_TOTAL_BYTES,
+  INSTANCE_ACTIONS,
   INSTANCE_ASSET_SCOPE,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
@@ -210,6 +211,7 @@ export async function readPlatformContext(
     })),
     actions: usableActions(options, caller),
     assetActions: readActionsOnSingleAssets(options, caller),
+    instanceActions: INSTANCE_ACTIONS.filter((action) => caller.access.authorize(action).allowed),
     namespaces: namespaces.flatMap((namespace) => {
       const actions = usableActions(options, caller, namespace.prefix);
       return actions.length > 0

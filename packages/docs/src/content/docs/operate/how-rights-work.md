@@ -251,6 +251,8 @@ Some things are reserved for a Superadmin. Only a Superadmin gives somebody the 
 
 One right is on no switch. Pushing a release with `catalyst config push` needs `config_assets.release`, and only a Service Principal can hold it. See [API keys and Service Principals](#api-keys-and-service-principals).
 
+Managing Service Principals, `service_principals.manage`, is on no switch either. Admins and Superadmins carry it with their level. It creates a Service Principal, gives and takes its rights, and switches it on and off. Its keys stay with "Manage API access".
+
 Chatting is not on this list. Which conversations you see depends on the Collaboration Workspaces you are a member of and on whether a conversation is private, and not on one of these rights. The one exception is a Superadmin, who can enter every Shared Workspace.
 
 The Users page has one more field, **Permission refs**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field.
@@ -605,14 +607,16 @@ To take the right away, open the menu of the line in the list and choose **Revok
 
 ## API keys and Service Principals
 
-The Catalyst CLI does not sign in as a person. It works as a Service Principal, and so should a script. A Superadmin creates a **Service Principal** on **Settings > Instance > API access** and gives it one or both of two rights:
+The Catalyst CLI does not sign in as a person. It works as a Service Principal, and so should a script. Whoever manages Service Principals, an Admin for example, creates a **Service Principal** on **Settings > Instance > API access** and gives it one or both of two rights:
 
 - "Read configuration assets", to pull and compare agents and skills.
-- "Release configuration assets", to push them with `catalyst config push`.
+- "Release configuration assets", to push them with `catalyst config push`. Only a Superadmin gives this one.
 
-Then the Superadmin creates an **API key** for it and picks the key's scopes from the rights the Service Principal holds. The key is shown once.
+Then a person with "Manage API access" creates an **API key** for it and picks the key's scopes from the rights the Service Principal holds. The key is shown once.
 
-A Service Principal has no role. A Superadmin can allow one to use a single named resource, such as one Connection: a grant with the holder kind `service_principal`, a use right, and that one asset as scope. The use rights are `connection.use`, `workflow.use`, and `data_store.read`, `data_store.insert` and `data_store.execute` for the rows of a Data Store, each where its module is on. No other grant can be written for one: no right that writes, publishes, deletes or manages, no workspace, Namespace or instance scope, and no deny. A Service Principal never writes a grant, also not for itself. Disabling a Service Principal leaves its grants recorded and without effect. The interface does not offer these grants yet; they are written through `POST /api/v1/instance/access/grants`.
+Nobody gives a Service Principal more than they hold themselves. Giving it a right, switching it back on and issuing it a key each ask whether the person holds every right the Service Principal would act with. Where a personal API key makes the call, its scopes count too. A refusal names the first right that is missing, and the asset only where the person may read it. Taking a right away and switching a Service Principal off ask nothing of it.
+
+A Service Principal has no role. Whoever manages Service Principals can allow one to use a single named resource they may use themselves, such as one Connection: a grant with the holder kind `service_principal`, a use right, and that one asset as scope. The use rights are `connection.use`, `workflow.use`, and `data_store.read`, `data_store.insert` and `data_store.execute` for the rows of a Data Store, each where its module is on. No other grant can be written for one: no right that writes, publishes, deletes or manages, no workspace, Namespace or instance scope, and no deny. A Service Principal never writes a grant, also not for itself. Disabling a Service Principal leaves its grants recorded and without effect. The interface does not offer these grants yet; they are written through `POST /api/v1/instance/access/grants`.
 
 A release push reaches every agent and skill of the instance and is not held back by the editing limits of the interface. It is still bound by the tool and model lists of a Namespace and by a deny on an asset. See [config assets](/configure/config-assets/#permissions).
 
@@ -626,7 +630,8 @@ A release push reaches every agent and skill of the instance and is not held bac
 | Change the lists of a Namespace registered before | Settings > Instance > Access, Namespaces | Manage users |
 | Find out why somebody can or cannot do something | Settings > Instance > Access, Check | Manage users and View agent configuration |
 | Create a key of your own for the CLI | Settings > You > API keys, or `catalyst login` | The module `personalApiKeys` on |
-| Create a key for a script or CI | Settings > Instance > API access | Superadmin |
+| Create a Service Principal or give it a right | Settings > Instance > API access | Manage Service Principals, and the right you give |
+| Create a key for a script or CI | Settings > Instance > API access | Manage API access, and every right of the Service Principal |
 | Decide a call or a skill change that waits | Inbox | Approve skill changes |
 | See what was called, by whom, and what was refused | Settings > Instance > Operations | View audit log |
 | See who changed which right | Settings > Instance > Audit | View audit log |

@@ -9874,7 +9874,7 @@
     "/api/v1/instance/api-credentials/{credentialId}/revoke": {
       "post": {
         "operationId": "api_credentials.revoke",
-        "summary": "Revoke an API key; superadmins only",
+        "summary": "Revoke an API key",
         "tags": [
           "API Access"
         ],
@@ -11089,13 +11089,13 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-requires": [
-          "api_access.manage"
+          "service_principals.manage"
         ],
         "x-catalyst-rate-class": "read"
       },
       "post": {
         "operationId": "service_principals.create",
-        "summary": "Create a service principal; superadmins only",
+        "summary": "Create a service principal",
         "tags": [
           "API Access"
         ],
@@ -11203,7 +11203,7 @@
     "/api/v1/instance/service-principals/{servicePrincipalId}": {
       "patch": {
         "operationId": "service_principals.update",
-        "summary": "Change a service principal; superadmins only",
+        "summary": "Change a service principal",
         "tags": [
           "API Access"
         ],
@@ -11322,7 +11322,7 @@
     "/api/v1/instance/service-principals/{servicePrincipalId}/credentials": {
       "post": {
         "operationId": "api_credentials.create",
-        "summary": "Issue an API key for a service principal; superadmins only",
+        "summary": "Issue an API key for a service principal",
         "tags": [
           "API Access"
         ],
@@ -26059,6 +26059,12 @@
               "type": "string"
             }
           },
+          "instanceActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "namespaces": {
             "type": "array",
             "items": {
@@ -26087,6 +26093,7 @@
           "kinds",
           "actions",
           "assetActions",
+          "instanceActions",
           "namespaces",
           "workspaces",
           "visibleSections"
