@@ -1,8 +1,10 @@
+import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { WORKFLOW_ASSET_KIND, type UserRecord } from "@vivd-catalyst/core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { operationOf } from "./support/connection-operations";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { NOTE, notifyClients, readyWorkflows, stepRunsOf } from "./support/workflow-runs";
 
@@ -263,6 +265,25 @@ describe("a test run of a Workflow draft", () => {
         usedAt: expect.any(String)
       }
     ]);
+  });
+
+  it("removes a run's bindings of its switches with the run", async () => {
+    const t = await ready();
+    await switchOn(t, 1);
+    const { started } = await testRun(t);
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice: () => undefined });
+    try {
+      const bindings = async () =>
+        (
+          await sql<{ count: number }[]>`
+            select count(*)::int as count from live_once_runs where workflow_run_id = ${started.id}`
+        )[0]?.count;
+      expect(await bindings()).toBe(1);
+      await sql`delete from workflow_runs where id = ${started.id}`;
+      expect(await bindings()).toBe(0);
+    } finally {
+      await sql.end();
+    }
   });
 
   it("gates a switched step on an approval the policy asks for", async () => {
