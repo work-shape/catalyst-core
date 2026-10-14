@@ -20,6 +20,7 @@ import {
 } from "@vivd-catalyst/core";
 import {
   PLATFORM_ASSET_LIST_MAX,
+  PLATFORM_ASSET_OPEN_NEEDS_PERSON,
   PLATFORM_ASSET_TOOLS,
   platformAssetWriteRefusal,
   type PlatformAssetCalls,
@@ -176,6 +177,29 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     );
   }
 
+  /**
+   * Refuses to move the subject onto an asset of the instance. Such an asset becomes the
+   * subject only by a person's step: the person started the conversation from its page. The
+   * agent's own open is no such step, since a document or a tool's answer the agent read can
+   * ask for it, and the person may change every asset of the instance. Until the host asks the
+   * person to confirm such an open, the agent is refused it. An asset of the conversation's
+   * workspace, such as an App, opens as before.
+   */
+  async function requireWorkspaceAsset(named: ConversationSubject): Promise<void> {
+    const row = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: named.kind,
+      name: named.name
+    });
+    if (row?.scope.kind === "workspace") return;
+    throw new AppError(
+      "FORBIDDEN",
+      `This ${named.kind} belongs to the whole instance, and only the person makes such an asset what a conversation is about, by starting the conversation from its page. You can read it with ${PLATFORM_ASSET_TOOLS.get.name}. To change it, ask the person to open its page and choose Edit with the agent`,
+      { reason: PLATFORM_ASSET_OPEN_NEEDS_PERSON },
+      { exposeMessage: true }
+    );
+  }
+
   /** The call as the asset operations take one. */
   async function callOf(context: ToolExecutionContext): Promise<AssetCall> {
     const runId = context.operationRun?.id;
@@ -295,9 +319,11 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       const conversation = await conversationOf(context);
       const moves = !sameSubject(named, conversation.subject);
       if (moves) {
-        // Another asset is opened as one the conversation could have been made about.
+        // Another asset is opened as one the conversation could have been made about, and
+        // only where no person's step is needed for it.
         await requireReadableSubject(options, context.user, named);
         await requireOwnTranscript(conversation);
+        await requireWorkspaceAsset(named);
       }
       const read = await readAsset(context, conversation, named);
       // Set once the read stood: a refused open leaves the conversation about what it was.
@@ -353,6 +379,8 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     },
 
     async put(context, input) {
+      // The save reaches the subject and no asset the model names. An asset of the instance is
+      // the subject only where a person's step made it so: `open` moves no subject onto one.
       const { subject, address, call } = await bound(context);
       const kind = options.configAssets.kinds.kinds.find(
         (candidate) => candidate.kind === subject.kind

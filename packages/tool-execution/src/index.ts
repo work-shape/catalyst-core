@@ -7,6 +7,7 @@ export {
 } from "./page-save-tool";
 export * from "./read-skill-tool";
 export {
+  PLATFORM_ASSET_OPEN_NEEDS_PERSON,
   PLATFORM_ASSET_TOOLS,
   PLATFORM_ASSET_TOOL_NAMES,
   createPlatformAssetBinding,
