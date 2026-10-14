@@ -77,26 +77,33 @@ export function publishApproval(
   };
 }
 
-/** Why a held publish can no longer be approved: the asset, its draft or its live revision moved. */
+/**
+ * Why a held publish can no longer be approved: the asset is gone, or its draft or its live
+ * revision moved. The item words the code; the request keeps the sentence.
+ */
+type PublishMoved = "gone" | "draft_moved" | "live_moved";
+
+const MOVED_SENTENCES: Readonly<Record<PublishMoved, (name: string) => string>> = {
+  gone: (name) => `'${name}' is gone. Nothing was published.`,
+  draft_moved: (name) =>
+    `The draft of '${name}' changed since the request was filed. Nothing was published; publish again to ask for the new draft.`,
+  live_moved: (name) =>
+    `Another revision of '${name}' was published since the request was filed. Nothing was published.`
+};
+
 async function publishMoved(
   clientInstanceId: ClientInstanceId,
   subject: PublishSubject,
   store: Pick<ConfigAssetStore, "getConfigAsset">
-): Promise<string | undefined> {
+): Promise<PublishMoved | undefined> {
   const asset = await store.getConfigAsset({
     clientInstanceId,
     kind: subject.kind,
     name: subject.name
   });
-  if (!asset || asset.id !== subject.assetId || asset.status !== "active") {
-    return `The ${subject.kind} '${subject.name}' is gone. Nothing was published.`;
-  }
-  if (asset.revision !== subject.draftRevision) {
-    return `The draft of '${subject.name}' changed since the request was filed. Nothing was published; publish again to ask for the new draft.`;
-  }
-  if ((asset.publishedRevision ?? null) !== subject.liveRevision) {
-    return `Another revision of '${subject.name}' was published since the request was filed. Nothing was published.`;
-  }
+  if (!asset || asset.id !== subject.assetId || asset.status !== "active") return "gone";
+  if (asset.revision !== subject.draftRevision) return "draft_moved";
+  if ((asset.publishedRevision ?? null) !== subject.liveRevision) return "live_moved";
   return undefined;
 }
 
@@ -118,9 +125,9 @@ export function publishApprovalKinds(options: PublishApprovalKindsOptions): Held
     requiredPermission: approve,
     async moved(subject, store) {
       const parsed = publishSubjectSchema.safeParse(subject);
-      return parsed.success
-        ? publishMoved(clientInstanceId, parsed.data, store)
-        : "The request names no revision it publishes.";
+      if (!parsed.success) return "The request names no revision it publishes.";
+      const moved = await publishMoved(clientInstanceId, parsed.data, store);
+      return moved && MOVED_SENTENCES[moved](parsed.data.name);
     },
     async review(subject) {
       const parsed = publishSubjectSchema.safeParse(subject);

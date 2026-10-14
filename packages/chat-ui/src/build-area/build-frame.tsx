@@ -496,6 +496,7 @@ function BuildList({
         }
       />
       {loadError}
+      {entry.ListHead ? <entry.ListHead /> : null}
       {listError}
       {list.rows === undefined ? (
         listError ? null : (

@@ -161,7 +161,7 @@ describe("publishing needs an instance admin's approval", () => {
 
     expectStatus(await t.putApp(t.kai.id, "menu", appFiles("menu 2", { id: "menu" })), 200);
     expect((await request(t.admin.id, second.approvalRequestId)).preview.review).toMatchObject({
-      stale: expect.stringContaining("draft")
+      stale: "draft_moved"
     });
     expectStatus(await decide(t.admin.id, second.approvalRequestId, "approve"), 200);
     await getTestJobs(t.instance).runDue();

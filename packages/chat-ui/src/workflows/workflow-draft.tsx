@@ -148,6 +148,8 @@ export function useWorkflowDraft(
   const [asking, setAsking] = useState<DraftChange>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // The publish was sent and waits for an approver: the live revision stays until then.
+  const [waits, setWaits] = useState(false);
   const state = draftState(view);
   const draft = view?.draft;
   if (host === undefined || view === undefined || draft === undefined || state === undefined) {
@@ -155,26 +157,26 @@ export function useWorkflowDraft(
   }
   const ask = (change: DraftChange) => () => {
     setError(undefined);
+    setWaits(false);
     setAsking(change);
   };
   const run = async (change: DraftChange) => {
     setBusy(true);
     setError(undefined);
+    setWaits(false);
     try {
       await (change === "publish"
         ? writes?.publish(workflow, draft.revision)
         : writes?.discard(workflow, draft.revision));
       setAsking(undefined);
     } catch (failure) {
+      if (failure instanceof PendingApprovalError) {
+        setWaits(true);
+        return;
+      }
       setError(
-        failure instanceof PendingApprovalError
-          ? t("workflows.draft.pending")
-          : (instanceSentence(failure) ??
-              t(
-                change === "publish"
-                  ? "workflows.draft.publishFailed"
-                  : "workflows.draft.discardFailed"
-              ))
+        instanceSentence(failure) ??
+          t(change === "publish" ? "workflows.draft.publishFailed" : "workflows.draft.discardFailed")
       );
     } finally {
       setBusy(false);
@@ -197,6 +199,7 @@ export function useWorkflowDraft(
           publishedRevision={draft.publishedRevision}
           loading={busy}
           error={error}
+          waits={waits}
           onConfirm={() => {
             run(asking).catch(() => undefined);
           }}
@@ -214,6 +217,7 @@ export function DraftChangeDialog({
   publishedRevision,
   loading,
   error,
+  waits = false,
   onConfirm,
   onClose
 }: {
@@ -224,6 +228,8 @@ export function DraftChangeDialog({
   publishedRevision: number | undefined;
   loading: boolean;
   error: string | undefined;
+  /** The publish was sent and waits for an approver. */
+  waits?: boolean;
   onConfirm(): void;
   onClose(): void;
 }) {
@@ -243,6 +249,11 @@ export function DraftChangeDialog({
         ? t("workflows.draft.publishBody", { number: revision })
         : t("workflows.draft.discardBody", { number: publishedRevision ?? revision })}
       {error ? <InlineError className="mt-3">{error}</InlineError> : null}
+      {waits ? (
+        <Banner layout="line" role="status" className="mt-3" data-testid="workflow-publish-waits">
+          {t("workflows.draft.pending")}
+        </Banner>
+      ) : null}
     </ConfirmDialog>
   );
 }
