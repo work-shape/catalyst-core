@@ -4,6 +4,7 @@ import {
   EGRESS_DENIED,
   EGRESS_PROTOCOLS,
   EGRESS_UNRESOLVED,
+  egressSettingFor,
   type EgressChecker,
   type EgressGrant,
   type EgressProtocol,
@@ -43,6 +44,11 @@ import {
 //   public one, and so does this check.
 // - A redirect or a returned download address is a new target: `egressTargetOfUrl` reads it
 //   and `check` judges it. An address with a user name or a password is never a target.
+// - `egress.allowPublicHttps` is the operator opening every `https` target on port 443 that
+//   no entry names. Such a target is judged as a `public` entry, so every answer must be a
+//   public address. The Platform Store's host is refused on every port, by name and by
+//   address. Plain `http`, `postgres` and every other port still need an entry.
+// - A refusal says which setting would let the target through, or that none would.
 
 /** One entry of release config `egress.allow`, as the schema reads it. */
 export interface EgressAllowEntry {
@@ -80,6 +86,11 @@ const DEFAULT_PORTS: Record<EgressProtocol, number> = { https: 443, http: 80, po
 
 export interface EgressCheckerOptions {
   allow: readonly EgressAllowEntry[];
+  /**
+   * Release config `egress.allowPublicHttps`: an `https` target on port 443 that no entry
+   * names is judged as a `public` entry. Off unless set.
+   */
+  allowPublicHttps?: boolean;
   /** The Platform Store's own targets. They are refused always. */
   platformStore?: readonly { host: string; port: number }[];
   /**
@@ -93,15 +104,44 @@ export interface EgressCheckerOptions {
   now?: () => number;
 }
 
-export function egressDenied(target: { host: string; port: number }): AppError {
+/**
+ * Why a target was refused, for the setting the refusal names:
+ * - `unlisted`: no entry names it. An entry would, and for `https` on 443 the opt-in too.
+ * - `not_public`: it is judged as public and an answer is not a public address. Only a
+ *   `private` entry with ranges reaches it.
+ * - `outside_ranges`: a `private` entry names it and an answer lies outside its `cidrs`.
+ * - `store_unresolved`: the Platform Store's name gave no address, so the target cannot be
+ *   told apart from it.
+ * - `never`: no setting reaches it: link-local, the Platform Store, an answer that is no
+ *   routable address, a target that cannot be read.
+ */
+type EgressDenial = "unlisted" | "not_public" | "outside_ranges" | "store_unresolved" | "never";
+
+const DENIAL_HINTS: Record<Exclude<EgressDenial, "unlisted">, string> = {
+  not_public:
+    "It resolves to an address that is not public. Only an entry under 'egress.allow' with 'network: private' and the 'cidrs' it lies in reaches it",
+  outside_ranges: "It resolves to an address outside the 'cidrs' of its entry under 'egress.allow'",
+  store_unresolved:
+    "The instance's database host did not resolve, so the target cannot be told apart from it",
+  never: "No setting allows it"
+};
+
+export function egressDenied(
+  target: { protocol?: string; host: string; port: number },
+  denial: EgressDenial = "never"
+): AppError {
   // Host and port are what the operator's list is written in. Nothing else of the target,
   // no path and no query, is ever part of a refusal.
   const host = printableHost(target.host);
-  return new AppError("FORBIDDEN", `${EGRESS_DENIED}: ${host}:${target.port} is not allowed`, {
-    reason: EGRESS_DENIED,
-    host,
-    port: target.port
-  });
+  const hint =
+    denial === "unlisted" && target.protocol !== undefined && isEgressProtocol(target.protocol)
+      ? egressSettingFor({ protocol: target.protocol, host, port: target.port })
+      : DENIAL_HINTS[denial === "unlisted" ? "never" : denial];
+  return new AppError(
+    "FORBIDDEN",
+    `${EGRESS_DENIED}: ${host}:${target.port} is not allowed. ${hint}`,
+    { reason: EGRESS_DENIED, host, port: target.port }
+  );
 }
 
 /**
@@ -208,12 +248,19 @@ const LINK_LOCAL = new BlockList();
 LINK_LOCAL.addSubnet("169.254.0.0", 16, "ipv4");
 LINK_LOCAL.addSubnet("fe80::", 10, "ipv6");
 const LINK_LOCAL_STARTS = { ipv4: "169.254.0.0", ipv6: "fe80::" } as const;
+/** The ranges of a `public` entry: none. */
+const NO_RANGES = new BlockList();
 
 interface ListedEntry {
   entry: EgressAllowEntry;
   host: string;
   ranges: BlockList;
+  /** Named by no entry, let through by `egress.allowPublicHttps`. */
+  opened?: true;
 }
+
+/** How many judged targets are held at once. Only a list opened by the opt-in comes near. */
+const HELD_ANSWERS_MAX = 1_000;
 
 function listEntries(allow: readonly EgressAllowEntry[]): ListedEntry[] {
   return allow.map((entry) => {
@@ -270,10 +317,22 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     host: normalizeEgressHost(target.host),
     port: target.port
   }));
-  // Holds the answer for each target of the list that was asked, so at most one entry per
-  // line of `egress.allow`. A refusal by a rule is held as long as a grant, one that came
-  // from the resolver for `EGRESS_RESOLUTION_FAILURE_TTL_MS`.
+  // Holds the answer for each target that was asked. A refusal by a rule is held as long as a
+  // grant, one that came from the resolver for `EGRESS_RESOLUTION_FAILURE_TTL_MS`. Without
+  // `allowPublicHttps` there is at most one entry per line of `egress.allow`; with it any host
+  // may be asked, so the map is bounded: expired answers go first, then the oldest.
   const answers = new Map<string, { until: number; answer: Promise<EgressGrant> }>();
+  const makeRoom = () => {
+    if (answers.size < HELD_ANSWERS_MAX) return;
+    const at = now();
+    for (const [key, held] of answers) {
+      if (held.until <= at) answers.delete(key);
+    }
+    for (const key of answers.keys()) {
+      if (answers.size < HELD_ANSWERS_MAX) break;
+      answers.delete(key);
+    }
+  };
 
   const addressesOf = async (host: string): Promise<EgressResolvedAddress[]> => {
     const literal = canonicalAddress(host);
@@ -286,16 +345,18 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
   };
 
   /**
-   * The addresses the Platform Store answers on the port, for the comparison by address.
-   * They are resolved each time a target is judged, at the same moment as the target, and
+   * The addresses the Platform Store answers on the port, or on any port, for the comparison
+   * by address. They are resolved each time a target is judged, at the same moment as the target, and
    * are held nowhere else: a judged answer and the Store addresses it was compared with are
    * always of one age, at most `EGRESS_RESOLUTION_TTL_MS`. A Store host that does not
    * resolve throws, and the target is refused: without the Store's addresses nobody can say
    * that a target is not the Store.
    */
-  const storeAddressesOn = async (port: number): Promise<string[]> => {
+  const storeAddressesOn = async (port: number | "any"): Promise<string[]> => {
     const found: string[] = [];
-    for (const store of platformStore.filter((candidate) => candidate.port === port)) {
+    for (const store of platformStore.filter(
+      (candidate) => port === "any" || candidate.port === port
+    )) {
       const addresses = await addressesOf(store.host);
       if (addresses.length === 0) {
         throw new Error("The Platform Store host has no address");
@@ -326,10 +387,11 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     }
     let store: string[];
     try {
-      store = await storeAddressesOn(target.port);
+      // A target no entry names is kept off the Store on every port, not only on its own.
+      store = await storeAddressesOn(listed.opened ? "any" : target.port);
     } catch {
       // The Platform Store's name gave no address: the target cannot be told apart from it.
-      throw briefly(egressDenied(target));
+      throw briefly(egressDenied(target, "store_unresolved"));
     }
     for (const answer of addresses) {
       // An answer this check cannot read as an address is never connected to.
@@ -348,11 +410,12 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
       ) {
         throw egressDenied(target);
       }
-      const inside = listed.ranges.check(answer.address, family);
-      const allowed =
-        listed.entry.network === "private" ? inside : !isBlockedIpAddress(answer.address);
-      if (!allowed) {
-        throw egressDenied(target);
+      if (listed.entry.network === "private") {
+        if (!listed.ranges.check(answer.address, family)) {
+          throw egressDenied(target, "outside_ranges");
+        }
+      } else if (isBlockedIpAddress(answer.address)) {
+        throw egressDenied(target, "not_public");
       }
     }
     // Every answer passed. The first IPv4 one is pinned, else the first.
@@ -370,27 +433,45 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     });
   };
 
-  /** The entry of the list that names the target, decided without an address, or nothing. */
-  const listedEntryOf = (target: EgressTarget): ListedEntry | undefined => {
+  /**
+   * The entry of the list that names the target, or the one `allowPublicHttps` stands for,
+   * decided without an address. Otherwise why there is none.
+   */
+  const listedEntryOf = (target: EgressTarget): ListedEntry | EgressDenial => {
     if (
       !isEgressProtocol(target.protocol) ||
       !isPort(target.port) ||
       !(isHostName(target.host) || isIP(target.host) !== 0)
     ) {
-      return undefined;
+      return "never";
     }
     if (options.platformStoreUnknown === true && target.protocol === "postgres") {
-      return undefined;
+      return "never";
     }
     if (platformStore.some((store) => store.host === target.host && store.port === target.port)) {
-      return undefined;
+      return "never";
     }
-    return entries.find(
+    const listed = entries.find(
       (candidate) =>
         candidate.entry.protocol === target.protocol &&
         candidate.host === target.host &&
         candidate.entry.port === target.port
     );
+    if (listed) {
+      return listed;
+    }
+    if (options.allowPublicHttps !== true || target.protocol !== "https" || target.port !== 443) {
+      return "unlisted";
+    }
+    if (platformStore.some((store) => store.host === target.host)) {
+      return "never";
+    }
+    return {
+      entry: { protocol: "https", host: target.host, port: 443, network: "public", cidrs: [] },
+      host: target.host,
+      ranges: NO_RANGES,
+      opened: true
+    };
   };
   const normalized = (input: EgressTarget): EgressTarget => ({
     protocol: input.protocol,
@@ -399,12 +480,12 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
   });
 
   return {
-    admits: (input) => listedEntryOf(normalized(input)) !== undefined,
+    admits: (input) => typeof listedEntryOf(normalized(input)) !== "string",
     async check(input) {
       const target = normalized(input);
       const listed = listedEntryOf(target);
-      if (!listed) {
-        throw egressDenied(target);
+      if (typeof listed === "string") {
+        throw egressDenied(target, listed);
       }
       const key = `${target.protocol}|${target.host}|${target.port}`;
       let held = answers.get(key);
@@ -412,6 +493,8 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
         const asked = now();
         const entry = { until: asked + EGRESS_RESOLUTION_TTL_MS, answer: judge(target, listed) };
         held = entry;
+        answers.delete(key);
+        makeRoom();
         answers.set(key, entry);
         entry.answer.catch((error: unknown) => {
           if (error instanceof AppError && unresolved.has(error)) {

@@ -445,9 +445,14 @@ const egressAllowEntrySchema = z
 
 /**
  * Where Connections may connect. Deny by default: an empty list refuses every target. Each
- * entry is one protocol, host and port.
+ * entry is one protocol, host and port. `allowPublicHttps` is the operator opening every
+ * `https` target on port 443 whose addresses are all public, for an instance whose admins
+ * connect services themselves. Off unless set.
  */
 export const egressConfigSchema = z
-  .object({ allow: z.array(egressAllowEntrySchema).default([]) })
+  .object({
+    allow: z.array(egressAllowEntrySchema).default([]),
+    allowPublicHttps: z.boolean().optional()
+  })
   .strict()
   .prefault({});

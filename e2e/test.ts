@@ -161,14 +161,12 @@ const allowedPageErrors: readonly AllowedPageError[] = [
   {
     name: "grant-already-there",
     reason:
-      "Chromium's own log line: the test asks for three grants of which two exist, the " +
-      "instance answers 409 for each of the two, and the page says that it left them alone, " +
-      "which the test asserts.",
+      "Chromium's own log line: the test asks for two grants of which one exists, the " +
+      "instance answers 409 for that one, and the page says that it left it alone, which the " +
+      "test asserts.",
     matches: requestAnswered(409),
     path: /^\/api\/v1\/instance\/access\/grants$/u,
-    tests: [
-      "an administrator registers a Namespace, grants in it, checks, denies, revokes and deletes"
-    ]
+    tests: ["an administrator registers a Namespace, grants, checks, denies, revokes and deletes"]
   },
   {
     name: "planted-policy-refusal",

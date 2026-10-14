@@ -18,7 +18,7 @@ A person with a grant in a Namespace sees the assets of that Namespace and nothi
 
 A grant on one single asset, or on what one workspace owns, is checked by the instance on every read and write. The interface learns only that the person may read some asset of the kind: a read grant gives the Studio row and the list of the kind, which holds the assets the person may read. Such an asset opens read-only. A grant that allows another action and no reading gives no Studio row.
 
-On an instance with the module [`connections`](/configure/modules/#connections) on, Studio also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant in a Namespace, on one Connection or on the Connections of one workspace, who sees those Connections. A grant to use a Connection gives no entry in Studio. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). The list is **Studio > Connections**; the German interface names it **Studio › Verbindungen**.
+On an instance with the module [`connections`](/configure/modules/#connections) on, Studio also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant on one Connection, who sees that Connection. A read grant written earlier in a Namespace or on a workspace shows the Connections it covers until it is revoked. A grant to use a Connection gives no entry in Studio. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). The list is **Studio > Connections**; the German interface names it **Studio › Verbindungen**.
 
 ## Connecting an outside system
 
@@ -67,7 +67,7 @@ The page of a Connection shows it and changes nothing. It never shows a credenti
 | Ready | The outside system answered the test. | Nothing. |
 | Not tested | Nobody has tested the Connection yet. | Test it. |
 | Unauthorized | The outside system refused the credential. | The operator sets a new credential in the instance's environment and restarts the instance. |
-| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress). | The operator adds the host to `egress.allow` and restarts the instance. |
+| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress), or it resolves to an address the instance may not reach. | The operator adds the host to `egress.allow`, or for a public HTTPS host on port 443 sets `egress.allowPublicHttps`, and restarts the instance. |
 | Unavailable | The outside system did not answer. | Check the address under Settings. It is changed in the release config. |
 | Not configured | The credential is missing. | The operator supplies it in the instance's environment and restarts the instance. |
 | Credential unreadable | A credential is stored and the instance cannot read it. | The operator restores the Secret Store key it was stored with, or supplies the credential again, and restarts the instance. |
