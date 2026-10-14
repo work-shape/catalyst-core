@@ -370,7 +370,7 @@ export function createTestAssetKinds(
 ): ChatServerOptions["configAssets"]["kinds"] {
   return createAssetKindRegistry([
     createAgentAssetKind(input),
-    createSkillAssetKind({ config: input.config })
+    createSkillAssetKind({ config: input.config, shippedSkillNames: [] })
   ]);
 }
 

@@ -23,7 +23,9 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
           event: hit.event,
           outcome: hit.outcome,
           message: hit.message,
-          subjectKind: hit.subjectKind
+          subjectKind: hit.subjectKind,
+          subjectId: hit.subjectId ?? null,
+          subjectName: hit.subjectName ?? null
         }))
       );
     },
@@ -46,6 +48,8 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
         outcome: row.outcome,
         message: row.message,
         subjectKind: row.subjectKind,
+        ...(row.subjectId === null ? {} : { subjectId: row.subjectId }),
+        ...(row.subjectName === null ? {} : { subjectName: row.subjectName }),
         createdAt: row.createdAt.toISOString()
       }));
     },
