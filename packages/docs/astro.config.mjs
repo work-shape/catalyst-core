@@ -108,6 +108,7 @@ export default defineConfig({
           items: [
             "reference/current-status",
             "reference/glossary",
+            "reference/app-bridge",
             {
               // Written by scripts/generate-api-reference.mjs from the release's OpenAPI document.
               label: "API",
