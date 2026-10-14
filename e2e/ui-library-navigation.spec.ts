@@ -546,6 +546,8 @@ test("a card opens from anywhere on it, its other control keeps its action, and 
   const start = card.getByRole("button", { name: "Start chat" });
   const edit = card.getByRole("button", { name: "Edit" });
   await card.scrollIntoViewIfNeeded();
+  // The edge at rest, before the pointer has been on the card: a hover fades out.
+  const atRest = await style(card, "border-top-color");
 
   // A click on the name, on the text and on the empty room beside Edit opens the card. The
   // target's area lies over the name and the text, so the pointer is sent there by force.
@@ -575,8 +577,6 @@ test("a card opens from anywhere on it, its other control keeps its action, and 
 
   // Over the text the pointer is on the target: the card darkens its edge and the pointer
   // shows that it opens. Over Edit the card stays at rest.
-  await page.mouse.move(0, 0);
-  const atRest = await style(card, "border-top-color");
   await text.hover({ force: true });
   await expect.poll(() => style(card, "border-top-color")).not.toBe(atRest);
   expect(await style(start, "cursor")).toBe("pointer");
