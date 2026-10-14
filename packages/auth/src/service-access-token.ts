@@ -12,7 +12,6 @@ import {
   operationScopesOfPersonalApiKey,
   parseApiCredentialSecret,
   permissionForAuthScope,
-  resolveEffectivePermissions,
   type ApiAccessStore,
   type ApiCredentialId,
   type AuthenticatedServicePrincipal,
@@ -66,7 +65,7 @@ export interface ServiceAccessTokenOptions {
 /** Who an access token acts as: a service principal, or the owner of a personal key. */
 export type ApiKeyIdentity = AuthenticatedServicePrincipal | AuthenticatedUser;
 
-interface EffectiveServiceGrants {
+export interface EffectiveServiceGrants {
   scopes: AuthScope[];
   permissions: string[];
 }
@@ -228,12 +227,22 @@ export function extractApiKey(headers: AuthRequestHeaders): string | undefined {
   return extractBearerToken(headers);
 }
 
-function deriveEffectiveServiceGrants(resolved: ResolvedApiCredential): EffectiveServiceGrants {
-  const principalScopes = new Map<string, string>();
-  for (const permission of resolveEffectivePermissions(resolved.servicePrincipal)) {
+/**
+ * The scopes a credential's token carries, those of its list that its principal's keys name,
+ * and the keys behind them. The evaluator allows the principal's instance-wide rights of a key
+ * only when the token carries that key, so the scopes cap the principal's rights as they did
+ * before AP-4. A scope carries its first key (`permissionForAuthScope`), as a request's
+ * token did before AP-4: `governance:read` carries `usage.view` whichever of `usage.view` and
+ * `audit.view` the principal holds.
+ */
+export function deriveEffectiveServiceGrants(
+  resolved: ResolvedApiCredential
+): EffectiveServiceGrants {
+  const principalScopes = new Set<string>();
+  for (const permission of resolved.heldKeys.filter(isPermission)) {
     const scope = authScopeForPermission(permission);
     if (scope) {
-      principalScopes.set(scope, permission);
+      principalScopes.add(scope);
     }
   }
   const restrictions = resolved.credential.scopes?.map((entry) => {
@@ -242,14 +251,14 @@ function deriveEffectiveServiceGrants(resolved: ResolvedApiCredential): Effectiv
     }
     return entry;
   });
-  const selectedScopes = restrictions ?? [...principalScopes.keys()];
+  const selectedScopes = restrictions ?? [...principalScopes];
   const scopes = [...new Set(selectedScopes)].filter(
     (scope) => scope !== "*" && principalScopes.has(scope)
   ) as AuthScope[];
   return {
     scopes,
     permissions: scopes.flatMap((scope) => {
-      const permission = principalScopes.get(scope);
+      const permission = permissionForAuthScope(scope);
       return permission === undefined ? [] : [permission];
     })
   };

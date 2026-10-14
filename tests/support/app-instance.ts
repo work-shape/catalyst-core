@@ -206,7 +206,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
       },
       allowedOrigins: ["https://ui.example.test"],
       ...(options.explicitCredentials
-        ? { authAdapter: { ...recordAuthAdapter(stores), credentialMode: "explicit" as const } }
+        ? { authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" as const } }
         : {}),
       ...options.server?.(stores, config)
     }),

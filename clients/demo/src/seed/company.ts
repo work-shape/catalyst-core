@@ -456,15 +456,15 @@ export const checkQuestions: CheckQuestion[] = [
     person: "sven",
     kind: "agent",
     asset: "sales-offer-writer",
-    expect: { read: yes("individual_right"), write: yes("grant"), delete: no("no_grant") },
+    expect: { read: yes("grant"), write: yes("grant"), delete: no("no_grant") },
     because:
-      "He reads through the right set on the Users page and writes through a row on this one agent."
+      "He reads through the instance-wide right set on the Users page and writes through a row on this one agent."
   },
   {
     person: "sven",
     kind: "agent",
     asset: "sales-pitch-coach",
-    expect: { read: yes("individual_right"), write: no("no_grant"), delete: no("no_grant") },
+    expect: { read: yes("grant"), write: no("no_grant"), delete: no("no_grant") },
     because: "His write row names another agent, and nothing covers this one."
   },
   {

@@ -2527,8 +2527,8 @@ describe("catalyst asset commands against an instance", () => {
     const t = await setupNamespaceHolder({
       furtherToolNames: ["read_skill"],
       // The CLI sends its token: the sign-in takes it beside the test header.
-      server: (stores) => ({
-        authAdapter: { ...recordAuthAdapter(stores), credentialMode: "explicit" }
+      server: () => ({
+        authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" }
       })
     });
     const cwd = await createTemporaryDirectory();
