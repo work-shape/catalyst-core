@@ -1,5 +1,5 @@
 ---
-title: Rights and Namespaces
+title: Rights for one person or asset
 description: Give one person rights on one asset, and check what a person may do.
 ---
 
@@ -26,7 +26,7 @@ A Namespace is deleted only when no grant names it. Until then its row says how 
 
 ## Grants
 
-A grant gives one person one action in one place. The **New right** form takes a person, a kind, the actions, the place and the effect, and writes one row per action. For agents and skills the actions are read, write and delete. The places are a shared workspace, one existing asset and the whole instance, in this order, and the form offers only the places where every action of the kind can be written. Today that is one existing asset for every kind, so the form asks for no place and goes straight to the asset.
+A grant gives one person one action in one place. A Service Principal's grants are written on **Settings > Instance > API access**, not here. The **New right** form takes a person, a kind, the actions, the place and the effect, and writes one row per action. For agents and skills the actions are read, write and delete. The places are a shared workspace, one existing asset and the whole instance, in this order, and the form offers only the places where every action of the kind can be written. Today, for agents and skills, that is **In a shared workspace** ("In einem geteilten Arbeitsbereich"), which covers everything of the kind the workspace owns, also what is made later, and gives no access to its conversations; and **On one asset** ("An einem Asset"). For Connections and Workflows it is one existing item, so the form asks for no place and goes straight to the item. No action is offered for the whole instance.
 
 The form offers no Namespace. Rows written in a Namespace before stay in the list, keep applying and are revoked like any other row until the Namespace is retired.
 
