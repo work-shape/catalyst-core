@@ -1,6 +1,9 @@
 import {
+  DATA_STORE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
+  assetScopesEqual,
   type ConfigAssetRevisionRecord,
+  type FileSet,
   type GuardrailFields,
   type JsonObject,
   type OperationBeforeEvent
@@ -11,14 +14,20 @@ import {
   guardrailFieldOf,
   guardrailStringsOf
 } from "@vivd-catalyst/config-schema";
-import { readSourceFiles, type AssetFileInput } from "./asset-files";
+import type { AssetFileInput } from "./asset-files";
+import { readFileSetFile } from "./page-file-sets";
 import { readDefinitionName } from "./asset-kinds/shared";
+import { scopeOf } from "./asset-read-workflow";
 import type { AssetWorkflowOptions } from "./types";
 
-// The before-events of the asset operations: `asset.before_write` for each asset a call saves,
-// `app.before_publish` and `workflow.before_publish` for a revision a call makes live. Their
-// guardrails read the asset's name and the text of its definition or its files. The text is
-// handed to them and kept nowhere.
+// The before-events of the asset operations: `asset.before_write` for each asset a call saves
+// or brings back, `app.before_publish`, `workflow.before_publish` and
+// `data_store.before_publish` for a revision a call makes live. Their guardrails read the
+// asset's name and the text of its definition or its files. The text is handed to them and kept
+// nowhere. A file that is no text is read by a pattern as its printable runs, so text hidden
+// beside a NUL byte is still found and a photo adds next to nothing; a judge reads the long
+// runs of an image or a font, and nothing it can judge where another file is no text
+// (`GuardrailFilesField`).
 
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 
@@ -34,15 +43,67 @@ export function assetWriteEvent(input: {
     subject: { kind: input.kind, name: input.name },
     checkable: () => ({
       name: input.name,
-      content: guardrailFieldOf([
-        ...(input.config === undefined ? [] : guardrailStringsOf(input.config)),
-        ...(input.files ?? []).flatMap((file) => {
-          const text = "text" in file ? file.text : decodedText(file.base64);
-          return text === undefined ? [] : [text];
-        })
-      ])
+      content: filesField(
+        input.config === undefined ? [] : guardrailStringsOf(input.config),
+        (input.files ?? []).map((file) =>
+          "text" in file ? { text: file.text } : readOf(Buffer.from(file.base64, "base64"))
+        )
+      )
     })
   };
+}
+
+/**
+ * `asset.before_write` of an asset a call writes from a file set it copies, as an App is
+ * written from a Page: its definition and the files of the set as the write stores them.
+ * `read` answers nothing where there is no set, which the write itself refuses.
+ */
+export function fileSetWriteEvent(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "pages">,
+  input: {
+    kind: string;
+    name: string;
+    read(): Promise<{ config: JsonObject; fileSet: FileSet } | undefined>;
+  }
+): OperationBeforeEvent {
+  return {
+    name: "asset.before_write",
+    subject: { kind: input.kind, name: input.name },
+    checkable: async (): Promise<GuardrailFields> => {
+      const written = await input.read();
+      return written
+        ? {
+            name: input.name,
+            content: await fileSetText(options, guardrailStringsOf(written.config), written.fileSet)
+          }
+        : { name: input.name };
+    }
+  };
+}
+
+/**
+ * `asset.before_write` of a revert, with the text of the earlier revision it writes again: a
+ * revision kept from before a guardrail existed is read like a new write.
+ */
+export async function revertWriteEvents(
+  options: RevisionOptions,
+  input: RevisionAddress
+): Promise<OperationBeforeEvent[]> {
+  const revision = await callersRevision(options, input);
+  if (!revision) {
+    // Nothing of the caller's to bring back: the revert itself refuses it.
+    return [];
+  }
+  return [
+    {
+      name: "asset.before_write",
+      subject: { kind: input.kind, id: revision.assetId, name: input.name },
+      checkable: async (): Promise<GuardrailFields> => ({
+        name: input.name,
+        content: await revisionText(options, revision)
+      })
+    }
+  ];
 }
 
 /** `asset.before_write` of each asset a sync saves. A delete writes no content. */
@@ -62,22 +123,72 @@ export function syncWriteEvents(input: {
   );
 }
 
+/** The publish event of each kind that has one. */
+const PUBLISH_EVENTS: Readonly<Record<string, OperationBeforeEvent["name"]>> = {
+  app: "app.before_publish",
+  [WORKFLOW_ASSET_KIND]: "workflow.before_publish",
+  [DATA_STORE_ASSET_KIND]: "data_store.before_publish"
+};
+
 /**
- * `app.before_publish` or `workflow.before_publish` of the revision a publish makes live, with
- * the text of that revision. Another kind has no publish event yet.
+ * `app.before_publish`, `workflow.before_publish` or `data_store.before_publish` of the
+ * revision a publish makes live, with the text of that revision: a Data Store's are its
+ * migrations. Another kind has no publish event yet.
  */
 export async function publishEvents(
-  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets" | "stores" | "pages">,
-  input: { kind: string; name: string; revision: number }
+  options: RevisionOptions,
+  input: RevisionAddress
 ): Promise<OperationBeforeEvent[]> {
-  const name =
-    input.kind === "app"
-      ? "app.before_publish"
-      : input.kind === WORKFLOW_ASSET_KIND
-        ? "workflow.before_publish"
-        : undefined;
+  const name = PUBLISH_EVENTS[input.kind];
   if (name === undefined) {
     return [];
+  }
+  const revision = await callersRevision(options, input);
+  if (!revision) {
+    // Nothing of the caller's to make live: the publish itself refuses it.
+    return [];
+  }
+  return [
+    {
+      name,
+      subject: { kind: input.kind, id: revision.assetId, name: input.name },
+      checkable: async (): Promise<GuardrailFields> => ({
+        name: input.name,
+        content: await revisionText(options, revision)
+      })
+    }
+  ];
+}
+
+type RevisionOptions = Pick<
+  AssetWorkflowOptions,
+  "clientInstanceId" | "configAssets" | "stores" | "pages"
+>;
+
+/** A revision a call names, in the scope the call names: a workspace's, or the instance's. */
+interface RevisionAddress {
+  kind: string;
+  name: string;
+  revision: number;
+  workspaceId?: string | undefined;
+}
+
+/**
+ * The revision of the asset the call addresses, with a definition. Nothing where the asset of
+ * that name belongs to another scope than the call's: the call refuses it as it does, and no
+ * guardrail reads, judges or names another workspace's asset for it.
+ */
+async function callersRevision(
+  options: RevisionOptions,
+  input: RevisionAddress
+): Promise<(ConfigAssetRevisionRecord & { config: JsonObject }) | undefined> {
+  const asset = await options.configAssets.store.getConfigAsset({
+    clientInstanceId: options.clientInstanceId,
+    kind: input.kind,
+    name: input.name
+  });
+  if (!asset || !assetScopesEqual(asset.scope, scopeOf(input.workspaceId))) {
+    return undefined;
   }
   const revision = await options.configAssets.store.getConfigAssetRevision({
     clientInstanceId: options.clientInstanceId,
@@ -85,31 +196,17 @@ export async function publishEvents(
     name: input.name,
     revision: input.revision
   });
-  if (!revision || revision.config === null) {
-    // Nothing to make live: the publish itself refuses it.
-    return [];
+  if (!revision || revision.assetId !== asset.id || revision.config === null) {
+    return undefined;
   }
-  const { config } = revision;
-  return [
-    {
-      name,
-      subject: { kind: input.kind, id: revision.assetId, name: input.name },
-      checkable: async (): Promise<GuardrailFields> => ({
-        name: input.name,
-        content: await revisionText(options, { ...revision, config })
-      })
-    }
-  ];
+  return { ...revision, config: revision.config };
 }
 
-/**
- * The text of one revision: its definition's strings and its source files, or `null` where its
- * files are more than a guardrail reads.
- */
+/** The text of one revision: its definition's strings and its source files. */
 async function revisionText(
-  options: Parameters<typeof publishEvents>[0],
+  options: RevisionOptions,
   revision: Pick<ConfigAssetRevisionRecord, "assetId" | "fileSetId"> & { config: JsonObject }
-): Promise<string | null> {
+): Promise<GuardrailFields[string]> {
   const texts = guardrailStringsOf(revision.config);
   if (revision.fileSetId) {
     const fileSet = await options.stores.pages.getAssetFileSet({
@@ -118,30 +215,162 @@ async function revisionText(
       fileSetId: revision.fileSetId
     });
     if (fileSet) {
-      // A character is at least one byte: a set this large cannot be read whole.
-      const bytes = fileSet.sourceFiles.reduce((sum, file) => sum + file.bytes, 0);
-      if (bytes > GUARDRAIL_CHECKED_FIELD_MAX_CHARS * 4) {
-        return null;
-      }
-      const { files, filesOmitted } = await readSourceFiles(options, fileSet);
-      if (filesOmitted) {
-        return null;
-      }
-      for (const file of files) {
-        if (file.text !== undefined) texts.push(file.text);
-      }
+      return fileSetText(options, texts, fileSet);
     }
   }
   return guardrailFieldOf(texts);
 }
 
-/** The text of a file sent as bytes, where it is UTF-8 without a NUL, as a read answers it. */
-function decodedText(base64: string): string | undefined {
-  const bytes = Buffer.from(base64, "base64");
-  if (bytes.includes(0)) return undefined;
-  try {
-    return utf8.decode(bytes);
-  } catch {
-    return undefined;
+/**
+ * The texts given and the source files of a set, or `null` where their text is more than a
+ * guardrail reads. Files are read one at a time, a file that is no text reduced to its
+ * printable runs as it is read, so only text counts toward the limit: a Page of photos is read
+ * whole.
+ */
+async function fileSetText(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "pages">,
+  texts: readonly string[],
+  fileSet: FileSet
+): Promise<GuardrailFields[string]> {
+  let chars = texts.reduce((sum, text) => sum + text.length, 0);
+  const files: FileRead[] = [];
+  for (const file of fileSet.sourceFiles) {
+    const read = readOf(await readFileSetFile(options, fileSet, "src", file));
+    chars += "text" in read ? read.text.length : 0;
+    // A field longer than a check reads is not read in part: the rest need not be read.
+    if (chars > GUARDRAIL_CHECKED_FIELD_MAX_CHARS) return null;
+    files.push(read);
   }
+  return filesField(texts, files);
+}
+
+/**
+ * One file as a guardrail reads it: its text, or, where it is no text, its printable runs for
+ * a pattern and, of an image or a font, the long ones for a judge.
+ */
+type FileRead = { text: string } | { runs: string[]; judgeRuns?: string[] };
+
+const utf16 = {
+  le: new TextDecoder("utf-16le", { fatal: true }),
+  be: new TextDecoder("utf-16be", { fatal: true })
+};
+
+/** The bytes UTF-16 without a byte order mark is told by, at the start of a file. */
+const UTF16_SNIFF_BYTES = 1024;
+
+/**
+ * A file's text where it is UTF-8 without a NUL, as a read answers it, or UTF-16, as exports
+ * of Windows tools and some APIs are: with its byte order mark, or without one where every
+ * other byte of its start is NUL; else its printable runs.
+ */
+function readOf(bytes: Uint8Array): FileRead {
+  const decoder =
+    bytes[0] === 0xff && bytes[1] === 0xfe
+      ? utf16.le
+      : bytes[0] === 0xfe && bytes[1] === 0xff
+        ? utf16.be
+        : utf16WithoutMark(bytes);
+  try {
+    if (decoder) return { text: decoder.decode(bytes) };
+    if (!bytes.includes(0)) return { text: utf8.decode(bytes) };
+  } catch {
+    // Not the text it starts like: read as bytes.
+  }
+  return {
+    runs: printableRuns(bytes, PATTERN_RUN_MIN_CHARS),
+    ...(isImageOrFont(bytes) ? { judgeRuns: printableRuns(bytes, JUDGE_RUN_MIN_CHARS) } : {})
+  };
+}
+
+/**
+ * The decoder of UTF-16 without a byte order mark: text of Latin letters has a NUL in every
+ * other byte, the second of each pair in little-endian order and the first in big-endian. Only
+ * where one parity of the start is all NUL and the other is not.
+ */
+function utf16WithoutMark(bytes: Uint8Array): TextDecoder | undefined {
+  const length = Math.min(bytes.length, UTF16_SNIFF_BYTES);
+  if (length < 4 || length % 2 !== 0) return undefined;
+  const nulAt = (parity: 0 | 1) => {
+    let all = true;
+    let none = true;
+    for (let index = parity; index < length; index += 2) {
+      if (bytes[index] === 0) none = false;
+      else all = false;
+    }
+    return { all, none };
+  };
+  const even = nulAt(0);
+  const odd = nulAt(1);
+  if (odd.all && even.none) return utf16.le;
+  if (even.all && odd.none) return utf16.be;
+  return undefined;
+}
+
+/** The shortest printable run of a file that is no text a pattern reads, as `strings` does. */
+const PATTERN_RUN_MIN_CHARS = 4;
+/**
+ * The shortest printable run of an image or a font a judge reads. A photo's bytes hold one
+ * this long once in some ten million bytes; text put into the file holds them throughout.
+ */
+const JUDGE_RUN_MIN_CHARS = 16;
+
+/**
+ * The field of a definition's texts and some files. Where a file is no text, a pattern reads
+ * its printable runs and a judge the long ones of an image or a font; a file that is no text
+ * and neither leaves a judge nothing it can be told the content of.
+ */
+function filesField(texts: readonly string[], files: readonly FileRead[]): GuardrailFields[string] {
+  const read = [...texts, ...files.flatMap((file) => ("text" in file ? [file.text] : []))];
+  const binaries = files.flatMap((file) => ("runs" in file ? [file] : []));
+  if (binaries.length === 0) {
+    return guardrailFieldOf(read);
+  }
+  const judgeable = binaries.every((file) => file.judgeRuns !== undefined);
+  return {
+    pattern: guardrailFieldOf([...read, ...binaries.flatMap((file) => file.runs)]),
+    judge: guardrailFieldOf([
+      ...read,
+      ...(judgeable ? binaries.flatMap((file) => file.judgeRuns ?? []) : [])
+    ]),
+    ...(judgeable ? {} : { notJudgeable: true as const })
+  };
+}
+
+/** The runs of printable ASCII, tab and line ends included, of at least `min` characters. */
+function printableRuns(bytes: Uint8Array, min: number): string[] {
+  const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const runs: string[] = [];
+  let start = 0;
+  for (let index = 0; index <= buffer.length; index += 1) {
+    const byte = buffer[index];
+    const printable =
+      byte !== undefined &&
+      ((byte >= 0x20 && byte <= 0x7e) || byte === 0x09 || byte === 0x0a || byte === 0x0d);
+    if (printable) continue;
+    if (index - start >= min) runs.push(buffer.toString("latin1", start, index));
+    start = index + 1;
+  }
+  return runs;
+}
+
+/** The leading bytes of the image and font formats a page uses, whose pixels a judge skips. */
+const IMAGE_AND_FONT_SIGNATURES: readonly (readonly number[])[] = [
+  [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], // PNG
+  [0xff, 0xd8, 0xff], // JPEG
+  [0x47, 0x49, 0x46, 0x38], // GIF
+  [0x00, 0x00, 0x01, 0x00], // ICO
+  [0x77, 0x4f, 0x46, 0x46], // WOFF
+  [0x77, 0x4f, 0x46, 0x32], // WOFF2
+  [0x00, 0x01, 0x00, 0x00], // TrueType
+  [0x4f, 0x54, 0x54, 0x4f] // OpenType
+];
+
+function isImageOrFont(bytes: Uint8Array): boolean {
+  const startsWith = (signature: readonly number[]) =>
+    signature.every((byte, index) => bytes[index] === byte);
+  // WebP: a RIFF container of the form WEBP.
+  const webp =
+    startsWith([0x52, 0x49, 0x46, 0x46]) &&
+    [0x57, 0x45, 0x42, 0x50].every((byte, index) => bytes[8 + index] === byte);
+  return webp || IMAGE_AND_FONT_SIGNATURES.some(startsWith);
 }

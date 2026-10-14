@@ -22027,6 +22027,10 @@
           "workspaceId": {
             "type": "string",
             "minLength": 1
+          },
+          "fileSetId": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -26854,6 +26858,10 @@
             "minLength": 1
           },
           "pageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fileSetId": {
             "type": "string",
             "minLength": 1
           },

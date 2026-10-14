@@ -1,4 +1,5 @@
 import { GUARDRAIL_NAME_MAX_LENGTH, GUARDRAIL_NAME_PATTERN } from "@vivd-catalyst/asset-schemas";
+import type { GuardrailEvent } from "./guardrail-events";
 import type { ClientInstanceId } from "./ids";
 import type { OperationOrigin } from "./operations";
 import type { ISODateString } from "./time";
@@ -19,26 +20,9 @@ export const GUARDRAIL_ACTIONS = {
 } as const;
 
 export { GUARDRAIL_NAME_MAX_LENGTH, GUARDRAIL_NAME_PATTERN };
+export * from "./guardrail-events";
 export const GUARDRAIL_NAME_RULE =
   "Guardrail name must be lowercase words of letters and digits joined by hyphens or underscores";
-
-/**
- * The before-events a guardrail can be bound to: those the platform runs guardrails at. A
- * guardrail on any other event would never run, so release config refuses it. Each is an
- * event of the registry, `events.ts`, which its test holds.
- */
-export const GUARDRAIL_EVENTS = [
-  "asset.before_write",
-  "operation.before_call",
-  "app.before_publish",
-  "workflow.before_publish",
-  "approval_request.before_create"
-] as const;
-export type GuardrailEvent = (typeof GUARDRAIL_EVENTS)[number];
-
-export function isGuardrailEvent(name: string): name is GuardrailEvent {
-  return GUARDRAIL_EVENTS.some((event) => event === name);
-}
 
 /**
  * The fields each event hands its guardrails to read, never stored: the asset's name and the
@@ -50,6 +34,7 @@ export const GUARDRAIL_CHECKABLE_FIELDS = {
   "operation.before_call": ["input"],
   "app.before_publish": ["name", "content"],
   "workflow.before_publish": ["name", "content"],
+  "data_store.before_publish": ["name", "content"],
   "approval_request.before_create": ["summary", "newContent"]
 } as const satisfies Record<GuardrailEvent, readonly string[]>;
 
@@ -63,6 +48,7 @@ export const GUARDRAIL_FILTER_KEYS = {
   "operation.before_call": ["operation", "origin", "agent"],
   "app.before_publish": ["origin", "agent"],
   "workflow.before_publish": ["origin", "agent"],
+  "data_store.before_publish": ["origin", "agent"],
   "approval_request.before_create": ["kind"]
 } as const satisfies Record<GuardrailEvent, readonly (keyof GuardrailFilter)[]>;
 
@@ -87,14 +73,15 @@ export type GuardrailOutcome = (typeof GUARDRAIL_OUTCOMES)[number];
 
 /**
  * The events where something can wait for an approval: a call of an operation, which an
- * asset write, an App's publish and a Workflow's publish are too. A request for an approval
+ * asset write and the publish of an App, a Workflow or a Data Store are too. A request for an approval
  * cannot wait for another.
  */
 export const GUARDRAIL_APPROVAL_EVENTS = [
   "asset.before_write",
   "operation.before_call",
   "app.before_publish",
-  "workflow.before_publish"
+  "workflow.before_publish",
+  "data_store.before_publish"
 ] as const satisfies readonly GuardrailEvent[];
 
 /**
@@ -134,35 +121,6 @@ export interface GuardrailFilter {
   origin?: string;
   agent?: string;
 }
-
-/** What a before-event is about, as a hit names it. Never content and never a person. */
-export interface GuardrailSubject {
-  /** The asset kind, `operation`, or the kind of an approval request. */
-  kind: string;
-  /** The asset's id, where there is one. Never a run's, which names the person who acted. */
-  id?: string;
-  /** The asset's name or the operation's. */
-  name?: string;
-}
-
-/**
- * One before-event of a call about one of its subjects, beside its own `operation.before_call`:
- * an asset it writes, an App or a Workflow it makes live, or the operation it calls in turn, as
- * an App's action calls a Data Store's insert. A filter's `kind` is the subject's, its
- * `operation` the name of the operation called in turn.
- */
-export interface OperationBeforeEvent {
-  name: Exclude<GuardrailEvent, "approval_request.before_create">;
-  subject: GuardrailSubject;
-  /** The event's checkable fields, read only where a guardrail applies and never kept. */
-  checkable(): GuardrailFields | Promise<GuardrailFields>;
-}
-
-/**
- * The fields of a before-event by the names it declares checkable. `null` is a field too large
- * to be read: a guardrail that stops or holds answers on it as on a match.
- */
-export type GuardrailFields = Partial<Record<string, string | null>>;
 
 /**
  * What one guardrail answered at a before-event. `allow` where its check found nothing or its
