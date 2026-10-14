@@ -88,6 +88,9 @@ jobs:
       # A BuildKit builder whose layer cache stays on Blacksmith between runs. It falls back to
       # the local builder when Blacksmith cannot set it up.
       - uses: useblacksmith/setup-docker-builder@19215110ab936351210feebdfa5b440b4493e184 # v2.2.0
+        with:
+          # Every image of the job is a target of this one Dockerfile.
+          cache-key: vivd-client.Dockerfile
       - run: bash scripts/check-image-build.sh
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
