@@ -129,8 +129,12 @@ describe("the vocabulary of Connection rights", () => {
     ]);
     expect(GRANTABLE_ACTION_SCOPES["connection.read"]).toEqual(["namespace", "asset", "workspace"]);
     expect(GRANTABLE_ACTION_SCOPES["connection.use"]).toEqual(["namespace", "asset", "workspace"]);
-    // The scopes of agents and skills are the ones they had.
-    for (const action of GRANTABLE_ACTIONS.filter((name) => !name.startsWith("connection."))) {
+    // The scopes of agents and skills are the ones they had. A guardrail's publish is granted
+    // for one workspace alone.
+    expect(GRANTABLE_ACTION_SCOPES["guardrail.publish"]).toEqual(["workspace"]);
+    for (const action of GRANTABLE_ACTIONS.filter(
+      (name) => !name.startsWith("connection.") && name !== "guardrail.publish"
+    )) {
       expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(["namespace", "asset"]);
     }
   });

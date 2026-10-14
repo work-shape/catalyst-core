@@ -41,7 +41,8 @@ const assetManagementModule = defineModule({
     "assets.discard_draft",
     "assets.run_live_once",
     "assets.set_default",
-    "assets.set_availability"
+    "assets.set_availability",
+    "guardrails.unpublish"
   ],
   selfCheckedOperations: ["assets.sync"],
   // The agent's save of a draft is a change of an asset like `assets.put`, which it projects.
