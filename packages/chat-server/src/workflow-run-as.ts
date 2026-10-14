@@ -1,33 +1,35 @@
 import {
   AppError,
+  isAuthenticatedServicePrincipal,
   operationDenialError,
+  requireHeldRights,
   type ActorAccess,
   type ApiAccessStore,
   type AuthenticatedIdentity,
-  type ClientInstanceId,
   type ServicePrincipalRecord
 } from "@vivd-catalyst/core";
-import { authorizePrincipalAdministration } from "./api-access-administration-workflow";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
+import { RELEASE_KEY, principalRights, type PrincipalRightsOptions } from "./principal-rights";
 
-/** What the check reads: the principals of one instance, by name. */
-export interface WorkflowRunAsOptions {
-  clientInstanceId: ClientInstanceId;
+/** What the check reads: the principals of one instance by name, and the rights they hold. */
+export interface WorkflowRunAsOptions extends PrincipalRightsOptions {
   apiAccess: Pick<ApiAccessStore, "findServicePrincipalByName">;
 }
 
 /**
  * Answers the service principal a Workflow names under `runAs`, for a caller who may let a
- * Workflow act as it. Making a revision live lends the principal's grants to everyone who
- * holds `workflow.use`, so it asks this, with the name of its operation. The caller needs
- * exactly what administering principals needs: no second rule exists. The right is asked
- * before the name is looked up, so a caller without it does not learn which names exist. A
- * test run of a draft lends nothing and does not ask it (`workflowRunAsPrincipal`, ADR-0031).
+ * Workflow act as it. Making a revision live lends the principal's rights to everyone who
+ * holds `workflow.use`, so the caller must hold every one of them (`requireHeldRights`): no
+ * role and no right over principals stands in for that. A refusal names the first right the
+ * caller lacks, and the asset only where the caller may read it. A principal holding the
+ * release key is lent by nobody, superadmins included. A service principal
+ * lends nothing. A test run of a draft lends nothing and does not ask this
+ * (`workflowRunAsPrincipal`, ADR-0031).
  */
 export async function requireWorkflowRunAs(
   options: WorkflowRunAsOptions,
   caller: { actor: AuthenticatedIdentity; access: ActorAccess },
-  input: { workflow: string; runAs: unknown; operation: string }
+  input: { workflow: string; runAs: unknown }
 ): Promise<ServicePrincipalRecord> {
   if (typeof input.runAs !== "string" || input.runAs === "") {
     throw new AppError(
@@ -36,16 +38,28 @@ export async function requireWorkflowRunAs(
       { reason: "run_as_missing" }
     );
   }
-  const authorization = authorizePrincipalAdministration(caller, input.operation);
-  if (!authorization.allowed) {
+  if (isAuthenticatedServicePrincipal(caller.actor)) {
     throw operationDenialError({
       kind: "forbidden",
-      action: authorization.action,
-      reason: authorization.reason,
-      message: `The Workflow '${input.workflow}' acts as the service principal '${input.runAs}'. Letting a Workflow act as a service principal needs what administering service principals needs`
+      reason: "user_only",
+      message: `The Workflow '${input.workflow}' acts as the service principal '${input.runAs}', and a service principal lends no rights: a person publishes it`
     });
   }
-  return workflowRunAsPrincipal(options, { workflow: input.workflow, runAs: input.runAs });
+  const principal = await workflowRunAsPrincipal(options, {
+    workflow: input.workflow,
+    runAs: input.runAs
+  });
+  const rights = await principalRights(options, principal.id);
+  if (rights.some((right) => right.action === RELEASE_KEY)) {
+    throw operationDenialError({
+      kind: "forbidden",
+      action: RELEASE_KEY,
+      reason: "no_grant",
+      message: `The Workflow '${input.workflow}' acts as '${principal.displayLabel}', which holds '${RELEASE_KEY}'. No Workflow runs as a principal that releases config, so nobody publishes it`
+    });
+  }
+  requireHeldRights(caller.access, rights, { lends: { label: principal.displayLabel } });
+  return principal;
 }
 
 /**
@@ -54,7 +68,7 @@ export async function requireWorkflowRunAs(
  * name the instance does not have and a principal that is disabled, as a publish does.
  */
 export async function workflowRunAsPrincipal(
-  options: WorkflowRunAsOptions,
+  options: Pick<WorkflowRunAsOptions, "clientInstanceId" | "apiAccess">,
   input: { workflow: string; runAs: string }
 ): Promise<ServicePrincipalRecord> {
   const principal = await options.apiAccess.findServicePrincipalByName({
@@ -91,7 +105,7 @@ export function createWorkflowLiveCheck(
     await requireWorkflowRunAs(
       options,
       { actor, access },
-      { workflow: name, runAs: runAsOf(config), operation: "assets.publish" }
+      { workflow: name, runAs: runAsOf(config) }
     );
   };
 }

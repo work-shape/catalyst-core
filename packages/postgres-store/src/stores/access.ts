@@ -407,7 +407,13 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
 
     async getGrantableAsset(input) {
       const [row] = await db
-        .select({ id: configAssets.id, kind: configAssets.kind, name: configAssets.name })
+        .select({
+          id: configAssets.id,
+          kind: configAssets.kind,
+          name: configAssets.name,
+          scopeKind: configAssets.scopeKind,
+          scopeId: configAssets.scopeId
+        })
         .from(configAssets)
         .where(
           and(
@@ -417,7 +423,7 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
           )
         )
         .limit(1);
-      return row;
+      return row && { id: row.id, kind: row.kind, name: row.name, ...assetOwner(row) };
     },
 
     async listGrantScopeAssets(input) {
@@ -429,7 +435,9 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
           id: configAssets.id,
           kind: configAssets.kind,
           name: configAssets.name,
-          status: configAssets.status
+          status: configAssets.status,
+          scopeKind: configAssets.scopeKind,
+          scopeId: configAssets.scopeId
         })
         .from(configAssets)
         .where(
@@ -442,10 +450,16 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
         id: row.id,
         kind: row.kind,
         name: row.name,
-        active: row.status === "active"
+        active: row.status === "active",
+        ...assetOwner(row)
       }));
     }
   };
+}
+
+/** The workspace that owns an asset, where one does. */
+function assetOwner(row: { scopeKind: string; scopeId: string | null }): { workspaceId?: string } {
+  return row.scopeKind === "workspace" && row.scopeId !== null ? { workspaceId: row.scopeId } : {};
 }
 
 /**
