@@ -322,7 +322,10 @@ function checked(fields: GuardrailFields, event: GuardrailEvent, { guardrail }: 
   return names.flatMap((name) => {
     const value = fields[name];
     if (value === undefined) return [];
-    // A pattern reads every file, those that are no text as their bytes; a judge only text.
+    // A pattern and a judge each read the files as the field hands them to their kind.
+    if (value !== null && typeof value !== "string" && guardrail.check.kind !== "pattern") {
+      if (value.notJudgeable) return [[name, null, NO_TEXT_CAUSE] as const];
+    }
     const text =
       value === null || typeof value === "string"
         ? value
@@ -330,7 +333,7 @@ function checked(fields: GuardrailFields, event: GuardrailEvent, { guardrail }: 
           ? value.pattern
           : value.judge;
     if (text === null) {
-      return [[name, null, value === null ? TOO_LARGE_CAUSE : NO_TEXT_CAUSE] as const];
+      return [[name, null, TOO_LARGE_CAUSE] as const];
     }
     // A field longer than a check reads is not read in part.
     return [
@@ -345,7 +348,7 @@ function checked(fields: GuardrailFields, event: GuardrailEvent, { guardrail }: 
 type Checked = readonly [string, string] | readonly [string, null, string];
 
 const TOO_LARGE_CAUSE = tooLargeMessage(GUARDRAIL_CHECKED_FIELD_MAX_CHARS);
-/** Why a judge reads nothing of files one of which is no text, nor an image or a font. */
+/** Why a judge reads nothing of files one of which is no text, and neither an image nor a font. */
 const NO_TEXT_CAUSE = "could not judge a file that is no text";
 
 /**

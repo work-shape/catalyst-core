@@ -23,9 +23,10 @@ import type { AssetWorkflowOptions } from "./types";
 // or brings back, `app.before_publish`, `workflow.before_publish` and
 // `data_store.before_publish` for a revision a call makes live. Their guardrails read the
 // asset's name and the text of its definition or its files. The text is handed to them and kept
-// nowhere. A file that is no text is read by a pattern as its bytes, so text hidden beside a
-// NUL byte is still found; a judge is handed nothing of an image or a font, and nothing it can
-// judge where another file is no text (`GuardrailFilesField`).
+// nowhere. A file that is no text is read by a pattern as its printable runs, so text hidden
+// beside a NUL byte is still found and a photo adds next to nothing; a judge reads the long
+// runs of an image or a font, and nothing it can judge where another file is no text
+// (`GuardrailFilesField`).
 
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 
@@ -242,7 +243,7 @@ async function fileSetText(
     files.map((file) =>
       file.text !== undefined
         ? { text: file.text }
-        : { bytes: Buffer.from(file.base64 ?? "", "base64") }
+        : contentOf(Buffer.from(file.base64 ?? "", "base64"))
     )
   );
 }
@@ -250,22 +251,43 @@ async function fileSetText(
 /** One file as a guardrail reads it: its text, or its bytes where it is no text. */
 type FileContent = { text: string } | { bytes: Uint8Array };
 
-/** A file's text where it is UTF-8 without a NUL, as a read answers it, or else its bytes. */
+const utf16 = {
+  le: new TextDecoder("utf-16le", { fatal: true }),
+  be: new TextDecoder("utf-16be", { fatal: true })
+};
+
+/**
+ * A file's text where it is UTF-8 without a NUL, as a read answers it, or UTF-16 with its byte
+ * order mark, as exports of Windows tools often are; else its bytes.
+ */
 function contentOf(bytes: Uint8Array): FileContent {
-  if (!bytes.includes(0)) {
-    try {
-      return { text: utf8.decode(bytes) };
-    } catch {
-      // Not UTF-8: read as bytes.
-    }
+  const decoder =
+    bytes[0] === 0xff && bytes[1] === 0xfe
+      ? utf16.le
+      : bytes[0] === 0xfe && bytes[1] === 0xff
+        ? utf16.be
+        : undefined;
+  try {
+    if (decoder) return { text: decoder.decode(bytes) };
+    if (!bytes.includes(0)) return { text: utf8.decode(bytes) };
+  } catch {
+    // Not the text it starts like: read as bytes.
   }
   return { bytes };
 }
 
+/** The shortest printable run of a file that is no text a pattern reads, as `strings` does. */
+const PATTERN_RUN_MIN_CHARS = 4;
+/**
+ * The shortest printable run of an image or a font a judge reads. A photo's bytes hold one
+ * this long once in some ten million bytes; text put into the file holds them throughout.
+ */
+const JUDGE_RUN_MIN_CHARS = 16;
+
 /**
  * The field of a definition's texts and some files. Where a file is no text, a pattern reads
- * its bytes as Latin-1 and a judge reads the text alone, or nothing where the file is neither
- * an image nor a font, which a judge cannot be told what it shows.
+ * its printable runs and a judge the long ones of an image or a font; a file that is no text
+ * and neither leaves a judge nothing it can be told the content of.
  */
 function filesField(
   texts: readonly string[],
@@ -276,12 +298,33 @@ function filesField(
   if (binaries.length === 0) {
     return guardrailFieldOf(read);
   }
-  const pattern = guardrailFieldOf([
-    ...read,
-    ...binaries.map((bytes) => Buffer.from(bytes).toString("latin1"))
-  ]);
-  if (pattern === null) return null;
-  return { pattern, judge: binaries.every(isImageOrFont) ? guardrailFieldOf(read) : null };
+  const judgeable = binaries.every(isImageOrFont);
+  return {
+    pattern: guardrailFieldOf([
+      ...read,
+      ...binaries.flatMap((bytes) => printableRuns(bytes, PATTERN_RUN_MIN_CHARS))
+    ]),
+    judge: guardrailFieldOf([
+      ...read,
+      ...(judgeable ? binaries.flatMap((bytes) => printableRuns(bytes, JUDGE_RUN_MIN_CHARS)) : [])
+    ]),
+    ...(judgeable ? {} : { notJudgeable: true as const })
+  };
+}
+
+/** The runs of printable ASCII, tab included, of at least `min` characters. */
+function printableRuns(bytes: Uint8Array, min: number): string[] {
+  const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const runs: string[] = [];
+  let start = 0;
+  for (let index = 0; index <= buffer.length; index += 1) {
+    const byte = buffer[index];
+    const printable = byte !== undefined && ((byte >= 0x20 && byte <= 0x7e) || byte === 0x09);
+    if (printable) continue;
+    if (index - start >= min) runs.push(buffer.toString("latin1", start, index));
+    start = index + 1;
+  }
+  return runs;
 }
 
 /** The leading bytes of the image and font formats a page uses, whose pixels a judge skips. */

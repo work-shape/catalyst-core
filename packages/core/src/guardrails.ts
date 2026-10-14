@@ -171,14 +171,17 @@ export interface OperationBeforeEvent {
 export type GuardrailFields = Partial<Record<string, string | null | GuardrailFilesField>>;
 
 /**
- * A field of files, one of which at least is no text, such as an image. A pattern reads every
- * file, the bytes of one that is no text as Latin-1, so text beside a NUL byte is still
- * found. A judge reads the text files and is handed nothing of an image or a font; any other
- * file that is no text leaves it nothing it can judge (`null`), which it answers as unread.
+ * A field of files, one of which at least is no text, such as an image. A pattern reads the
+ * text files and the printable runs of every other file, as `strings` finds them, so text
+ * beside a NUL byte is still found and a photo adds next to nothing. A judge reads the text
+ * files and the long printable runs of an image or a font, which a photo has next to none of;
+ * `null` where that is more than a check reads. `notJudgeable` where a file is no text and
+ * neither an image nor a font: a judge cannot be told what it holds.
  */
 export interface GuardrailFilesField {
-  pattern: string;
+  pattern: string | null;
   judge: string | null;
+  notJudgeable?: true;
 }
 
 /**
