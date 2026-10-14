@@ -1,0 +1,57 @@
+# A Workflow of the demo that reads the Connection `sample-accounting` of the release config: it
+# lists the first clients of the sample accounting and reads the fiscal years of each of them in
+# a loop. It runs as the service principal `workflow-demo`, which the seed gives the right to use
+# that Connection and nothing else. A step never calls an asset operation such as `assets.list`.
+id: accounting-clients
+name: Accounting clients
+description: Lists the first clients of the sample accounting and reads the fiscal years of each, one after the other.
+runAs: workflow-demo
+inputs:
+  type: object
+  additionalProperties: false
+outputs:
+  type: object
+  properties:
+    read:
+      type: integer
+    failed:
+      type: integer
+  required: [read, failed]
+steps:
+  - id: start
+    name: Start by hand
+    type: trigger
+    triggers:
+      - kind: manual
+  - id: clients
+    name: List the clients
+    type: operation
+    operation: connection.sample-accounting.list_accounting_clients
+    input:
+      page:
+        value: 1
+      page_size:
+        value: 5
+  - id: each_client
+    name: For each client
+    type: loop
+    items: { step: clients, path: rows }
+    itemName: client
+    itemLabel: name
+    onItemFailure: continue
+    steps:
+      - id: years
+        name: Read the fiscal years
+        type: operation
+        operation: connection.sample-accounting.list_fiscal_years
+        input:
+          client_id:
+            ref: { step: each_client, path: client_id }
+  - id: result
+    name: Result
+    type: output
+    input:
+      read:
+        ref: { step: each_client, path: done }
+      failed:
+        ref: { step: each_client, path: failed }
