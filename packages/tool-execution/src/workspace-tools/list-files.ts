@@ -12,6 +12,13 @@ import { findExistingWorkspace } from "./workspace";
 export function workspaceListFilesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.list_files",
+    title: { en: "List workspace files", de: "Dateien auflisten" },
+    summary: {
+      en: "Lists the files the conversation holds.",
+      de: "Listet die Dateien auf, die die Unterhaltung enthält."
+    },
+    group: "files",
+    icon: "files",
     effect: "reading",
     description:
       "List the files tracked in this conversation's execution workspace, each with path, size and checksum. These are the internal working files of the conversation, not Collaboration Workspace assets. The list is empty until a tool has put a file there. Read a text file with workspace.read_file; search or look into directories with a command in workspace.exec.",

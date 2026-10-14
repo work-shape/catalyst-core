@@ -1,6 +1,21 @@
-import { describe, expect, it } from "vitest";
-import { CHAT_SESSION_AUTH_SCOPES, asClientInstanceId } from "@vivd-catalyst/core";
-import { HmacSessionTokenAuthAdapter, HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
+import { createHmac } from "node:crypto";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import {
+  CHAT_SESSION_AUTH_SCOPES,
+  asClientInstanceId,
+  type DelegatedActor
+} from "@vivd-catalyst/core";
+import {
+  HmacSessionTokenAuthAdapter,
+  HmacSessionTokenIssuer,
+  type SessionTokenInput
+} from "@vivd-catalyst/auth";
+
+/** Signs claims as the issuer does: a token only a holder of the secret can make. */
+function signedToken(claims: object, secret: string): string {
+  const payload = Buffer.from(JSON.stringify(claims), "utf8").toString("base64url");
+  return `${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`;
+}
 
 describe("HMAC chat session tokens", () => {
   it("normalizes signed token claims into an authenticated user", async () => {
@@ -185,6 +200,71 @@ describe("HMAC chat session tokens", () => {
       ).toThrow(
         "Service session token scopes must be limited to explicit first-party API operations"
       );
+    }
+  });
+
+  it("issues a session token for a service principal only, never for an API key", () => {
+    expectTypeOf<Extract<DelegatedActor, { kind: "api_key" }>>().not.toMatchTypeOf<
+      SessionTokenInput["delegatedActor"]
+    >();
+    const issuer = new HmacSessionTokenIssuer({
+      secret: "a-development-secret-with-enough-length",
+      clientInstanceId: asClientInstanceId("demo-local"),
+      issuer: "demo",
+      ttlSeconds: 900
+    });
+    const delegatedActor = { kind: "service_principal" as const, id: "key_x", authSource: "x" };
+    // What a caller outside the type system can still pass, such as a host's JavaScript.
+    Reflect.set(delegatedActor, "kind", "api_key");
+
+    expect(() =>
+      issuer.issue({ externalUserId: "kai", displayLabel: "Kai", delegatedActor })
+    ).toThrow(
+      expect.objectContaining({
+        code: "VALIDATION_FAILED",
+        message: "A session token names only a service principal as its delegated actor"
+      })
+    );
+  });
+
+  // CONNECT-1b verification: a signed token naming an API key authenticated, skipped resolving
+  // its user, and `originOf` in chat-server's route.ts recorded its calls as the CLI.
+  it("does not authenticate a session token that names any other delegated actor", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const options = {
+      secret: "a-development-secret-with-enough-length",
+      clientInstanceId,
+      issuer: "demo",
+      ttlSeconds: 900
+    };
+    const adapter = new HmacSessionTokenAuthAdapter(options);
+    const now = Math.floor(Date.now() / 1000);
+    const claims = {
+      sub: "kai",
+      displayLabel: "Kai",
+      roles: ["user"],
+      permissionRefs: [],
+      clientInstanceId,
+      authSource: "session-token",
+      iss: "demo",
+      iat: now,
+      exp: now + 300
+    };
+
+    for (const delegatedActor of [
+      { kind: "api_key", id: "key_x", displayLabel: "x", authSource: "x" },
+      { id: "key_x", authSource: "x" },
+      null
+    ]) {
+      await expect(
+        adapter.authenticate({
+          headers: {
+            authorization: `Bearer ${signedToken({ ...claims, delegatedActor }, options.secret)}`
+          },
+          clientInstanceId,
+          correlationId: "corr_forged"
+        })
+      ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
     }
   });
 });

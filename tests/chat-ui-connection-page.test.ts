@@ -99,6 +99,7 @@ function renderPage(input: PageInput = {}): string {
     writes: {
       put: async () => ({ revision: 1 }),
       delete: async () => undefined,
+      publish: async () => ({ draftRevision: 1, publishedRevision: 1 }),
       revert: async () => ({ revision: 1 }),
       revisions: async () => ({ items: [] })
     }

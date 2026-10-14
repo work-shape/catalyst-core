@@ -33,6 +33,15 @@ export const build = defineTranslations({
     "build.fallbackEnglish": "Empty in this language. People read the English text.",
     "build.fallbackGerman": "Empty in this language. People read the German text.",
     "build.history": "History",
+    "build.draftAhead": "Draft",
+    "build.neverPublished": "Not published",
+    "build.publish": "Publish",
+    "build.savesDraft": "Saves a draft. It answers nobody until it is published.",
+    "build.publishTitle": "Publish {name}?",
+    "build.publishDescription":
+      "The saved draft becomes the version everyone who uses it gets, from now on. Unsaved changes are not part of it.",
+    "build.publishFailed": "The draft could not be published.",
+    "build.publishSaveFirst": "Save your changes first: only a saved draft can be published.",
     "build.historyDescription": "Every saved revision of {name}, the newest first.",
     "build.historyStale":
       "This page holds an older version. Load the newer version before you restore one.",
@@ -152,6 +161,17 @@ export const build = defineTranslations({
     "build.fallbackEnglish": "In dieser Sprache leer. Es wird der englische Text gezeigt.",
     "build.fallbackGerman": "In dieser Sprache leer. Es wird der deutsche Text gezeigt.",
     "build.history": "Verlauf",
+    "build.draftAhead": "Entwurf",
+    "build.neverPublished": "Nicht veröffentlicht",
+    "build.publish": "Veröffentlichen",
+    "build.savesDraft":
+      "Speichert einen Entwurf. Er antwortet niemandem, bis er veröffentlicht ist.",
+    "build.publishTitle": "{name} veröffentlichen?",
+    "build.publishDescription":
+      "Der gespeicherte Entwurf wird ab jetzt die Version, die alle bekommen, die ihn nutzen. Ungespeicherte Änderungen gehören nicht dazu.",
+    "build.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
+    "build.publishSaveFirst":
+      "Speichere zuerst deine Änderungen: Nur ein gespeicherter Entwurf lässt sich veröffentlichen.",
     "build.historyDescription": "Jede gespeicherte Version von {name}, die neueste zuerst.",
     "build.historyStale":
       "Diese Seite zeigt eine ältere Version. Lade die neuere Version, bevor du eine wiederherstellst.",

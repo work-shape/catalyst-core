@@ -4,7 +4,7 @@ import { apiErrorCode, apiErrorMessage } from "../workspace-utils";
 type Translate = TranslationContextValue["t"];
 
 /** The part of an asset page a refusal is about. A kind names its sections' fields with these. */
-export type BuildRefusalField = "tools" | "model" | "skills";
+export type BuildRefusalField = "tools" | "model" | "skills" | "knowledge" | "source";
 
 /** What a refused change says, and where on the page it says it. */
 interface BuildRefusal {
@@ -110,7 +110,10 @@ const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
   ["userSelectableModelBindingIds", "model"],
   ["modelReasoningEfforts", "model"],
   ["reasoningEffort", "model"],
-  ["fastMode", "model"]
+  ["fastMode", "model"],
+  ["knowledgeBases", "knowledge"],
+  ["backend", "source"],
+  ["tables", "source"]
 ]);
 
 /**

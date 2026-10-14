@@ -60,6 +60,27 @@ export const lookupTicketToolFactory = defineConfiguredTool({
 
 Plain `defineTool(...)` exports are still useful for tests or fixed tools that do not need release-config parameters.
 
+## What A Tool Tells People
+
+The `description` is for the model. The agent page in Studio shows people something else: the
+tool's `title` and a one-sentence `summary` of what it does for them, both in English and German.
+A tool without them is shown by its name.
+
+```ts
+defineTool({
+  name: "support.lookup_ticket",
+  title: { en: "Look up ticket", de: "Ticket nachschlagen" },
+  summary: {
+    en: "Finds a support ticket and its status by its number.",
+    de: "Findet ein Support-Ticket und seinen Stand über seine Nummer.",
+  },
+  // ...
+});
+```
+
+A deployment's tool stands in the group of this instance's own tools. Its wording lives with
+the tool in the deployment repository, not in a platform package.
+
 ## Client Assembly Registration
 
 Register tool factories explicitly in `src/client.ts`.

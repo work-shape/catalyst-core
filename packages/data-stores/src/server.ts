@@ -47,7 +47,17 @@ export interface DataStoreServer {
     record: Pick<DataStoreRecord, "id" | "location" | "roles">,
     role: DataStoreRole
   ): PostgresTarget;
+  /**
+   * The name of the role of one Knowledge Base, which reads the tables it describes. It follows
+   * from the instance and the Knowledge Base, not from the store, so it outlives a move.
+   */
+  readerOf(knowledgeBaseId: string): string;
+  /** The database of a store as the role of a Knowledge Base on it, under the app role's limits. */
+  asReader(record: Pick<DataStoreRecord, "location">, knowledgeBaseId: string): PostgresTarget;
 }
+
+/** How many connections the role of one Knowledge Base may hold to its store at once. */
+export const DATA_STORE_READER_CONNECTION_LIMIT = 5;
 
 /** Quotes a name for a statement. Every name this package quotes is one it made or read from a catalog. */
 export function quoteIdentifier(name: string): string {
@@ -78,7 +88,8 @@ export function createDataStoreServer(input: {
       async getSecret(handle) {
         if (handle === PLATFORM_ROLE_HANDLE) return platform.password;
         const [storeId, role] = handle.split(":");
-        return storeId !== undefined && (role === "app" || role === "migration")
+        return storeId !== undefined &&
+          (role === "app" || role === "migration" || role === "reader")
           ? input.credentials.read(input.secretRows, storeId, role)
           : undefined;
       }
@@ -87,8 +98,14 @@ export function createDataStoreServer(input: {
     // checked against no egress list: it is the platform's database, not an outside system.
     pinAddress: async (host) => ({ allowed: true, address: (await lookup(host)).address })
   });
+  const readerOf = (knowledgeBaseId: string) =>
+    `catalyst_kb_${createHash("sha256")
+      .update(`${input.clientInstanceId}|${knowledgeBaseId}`)
+      .digest("hex")
+      .slice(0, 24)}`;
   return {
     executor,
+    readerOf,
     location: { host: platform.host, port: platform.port },
     platformDatabase: platform.database,
     namesOf(storeId) {
@@ -119,6 +136,21 @@ export function createDataStoreServer(input: {
       limits: {
         ...(role === "app" ? input.statementLimits : {}),
         maxConnections: Math.min(poolMaxConnections, DATA_STORE_ROLE_LIMITS[role].connectionLimit)
+      }
+    }),
+    asReader: (record, knowledgeBaseId) => ({
+      location: {
+        host: record.location.host,
+        port: record.location.port,
+        database: record.location.database,
+        user: readerOf(knowledgeBaseId),
+        tls: platform.tls,
+        schemas: ["public"]
+      },
+      credentialHandle: `${knowledgeBaseId}:reader`,
+      limits: {
+        ...input.statementLimits,
+        maxConnections: Math.min(poolMaxConnections, DATA_STORE_READER_CONNECTION_LIMIT)
       }
     })
   };

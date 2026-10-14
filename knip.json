@@ -29,6 +29,11 @@
       "project": ["src/**/*.{ts,tsx,mts,cts,js}", "*.{ts,mts,cts,js,mjs}"],
       "vite": false
     },
+    "packages/docs": {
+      "entry": ["src/route-data.ts", "scripts/**/*.mjs", "*.config.{ts,js,mjs}"],
+      "project": ["src/**/*.ts", "scripts/**/*.mjs", "*.{ts,mjs}"],
+      "vite": false
+    },
     "packages/app-build": {
       "entry": ["src/index.ts", "src/build.ts", "src/cli.ts"],
       "project": ["src/**/*.ts"],

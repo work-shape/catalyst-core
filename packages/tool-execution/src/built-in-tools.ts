@@ -78,6 +78,13 @@ export function createShowViewTool(
   const inputSchema = createShowViewInputSchema();
   return defineTool({
     name: "show_view",
+    title: { en: "Show inline widget", de: "Widget in der Antwort zeigen" },
+    summary: {
+      en: "Shows a small table, chart or overview inside its answer.",
+      de: "Zeigt eine kleine Tabelle, ein Diagramm oder eine Übersicht direkt in der Antwort."
+    },
+    group: "results",
+    icon: "app",
     effect: "reading",
     description: [
       "Show a small HTML widget inline in your answer: a table, chart, or compact visual that belongs to this one reply. For a standalone visualization, dashboard, or tool, save a Page with page.save instead when you have that tool.",

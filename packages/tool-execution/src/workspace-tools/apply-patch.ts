@@ -32,6 +32,13 @@ import { resolveWorkspaceHandle } from "./workspace";
 export function workspaceApplyPatchTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.apply_patch",
+    title: { en: "Patch workspace files", de: "Änderungen an Dateien anwenden" },
+    summary: {
+      en: "Applies a set of changes to several files of the conversation at once.",
+      de: "Wendet eine Reihe von Änderungen auf mehrere Dateien der Unterhaltung zugleich an."
+    },
+    group: "files",
+    icon: "code",
     effect: "changing",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },

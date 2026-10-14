@@ -27,6 +27,11 @@ export const weatherForecastToolFactory = defineConfiguredTool({
     const inputSchema = createInputSchema(config);
     return defineTool({
       name: "demo.weather_forecast",
+      title: { en: "Weather forecast", de: "Wettervorhersage" },
+      summary: {
+        en: "Gives a sample weather forecast for planning trips and appointments.",
+        de: "Gibt eine Beispiel-Wettervorhersage, um Reisen und Termine zu planen."
+      },
       effect: "reading",
       description:
         "Return a deterministic sample weather forecast for demo scheduling and travel-planning conversations.",
