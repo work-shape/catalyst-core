@@ -256,7 +256,6 @@ export const statusGallery: GalleryGroup = {
             <Chip
               leading={<Shield aria-hidden="true" />}
               trailing="1/3"
-              onRemove={() => undefined}
               popover={{ content: <p className="text-body">{text.chipPanelText}</p> }}
             >
               {text.roleAdmin}

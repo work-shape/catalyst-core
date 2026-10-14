@@ -3351,7 +3351,7 @@ test("superadmin config follows the German locale", async ({ page }) => {
   }
   await expect(form.getByText("Denkaufwand", { exact: true })).toBeVisible();
   await expect(
-    form.getByRole("group", { name: "Werkzeuge der Instanz", exact: true })
+    form.getByRole("button", { name: "Werkzeuge: Pakete hinzufügen", exact: true })
   ).toBeVisible();
   await expect(
     form.getByRole("heading", { name: "Einstiegsvorschläge", level: 2, exact: true })
