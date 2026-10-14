@@ -116,6 +116,19 @@ test("a Page built in a plain chat becomes an App, which the next saves of the P
   );
   expect(await draftRevision()).toBe(1);
 
+  // "Open page" in the head of the App's panel opens the page of its draft in a new tab, with
+  // no conversation in its address; this tab stays on the conversation.
+  const conversationUrl = page.url();
+  const [opened] = await Promise.all([
+    page.context().waitForEvent("page"),
+    page.getByRole("button", { name: "Open the app's draft page", exact: true }).click()
+  ]);
+  const draftPath = `/w/${encodeURIComponent(workspaceId)}/app-drafts/${appId}`;
+  await opened.waitForURL((url) => url.pathname === draftPath);
+  expect(new URL(opened.url()).searchParams.has("chat")).toBe(false);
+  await opened.close();
+  expect(page.url()).toBe(conversationUrl);
+
   // The next save of the Page writes the App's draft: the draft reloads in place and no Page
   // opens beside the chat.
   await writeFile(page, "index.html", indexWith(SECOND_HEADING));
