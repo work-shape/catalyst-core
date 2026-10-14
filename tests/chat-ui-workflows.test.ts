@@ -531,6 +531,16 @@ describe("the runs of a Workflow", () => {
     expect(markup).toContain("Ada Lovelace");
   });
 
+  it("marks a test run of the draft among the runs", () => {
+    const rows = [
+      toWorkflowRun(runResource({ id: "wr_3", status: "done", mode: "test" })),
+      toWorkflowRun(runResource({ id: "wr_1", status: "done" }))
+    ];
+    const markup = render(page(runList({ rows })));
+    expect(markup.match(/data-test-run=""/gu)).toHaveLength(1);
+    expect(markup).toContain(t("workflows.run.testBadge"));
+  });
+
   it("offers more runs where the instance has more", () => {
     const rows = [toWorkflowRun(runResource({ status: "failed", trigger: "schedule" }))];
     const markup = render(page(runList({ rows, hasMore: true })));
