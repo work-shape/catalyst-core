@@ -1,4 +1,3 @@
-import { Cable } from "lucide-react";
 import { Badge, Chip, ConnectionIcon } from "@vivd-catalyst/ui";
 import { connectionCategory } from "../connection-facts";
 import type { BuildAsset, BuildAssetKind } from "./build-asset-kind";
@@ -34,7 +33,7 @@ export const connectionKind: BuildAssetKind = {
   deleteTitle: "connections.deleteTitle",
   deleteDescription: "connections.deleteDescription",
   missingText: "connections.missing",
-  icon: Cable,
+  icon: "connection",
   shippedTitle: releaseConnectionTitle,
   // A batch of the CLI holds no Connection yet.
   withoutCli: true,

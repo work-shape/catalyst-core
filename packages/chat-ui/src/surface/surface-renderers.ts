@@ -3,7 +3,7 @@ import { AppEditSurface, AppEditSurfaceActions } from "../apps/app-edit-surface"
 import { AppPreview } from "../apps/app-preview";
 import { AgentSurface, AgentSurfaceActions } from "../conversation/agent-surface";
 import { InboxItemPanel } from "../inbox/inbox-item-panel";
-import { pageSurfaceRendering } from "../pages/page-surface";
+import { pageBuildingSurfaceRendering, pageSurfaceRendering } from "../pages/page-surface";
 import {
   WorkflowCanvasSurface,
   WorkflowSurfaceActions
@@ -35,6 +35,7 @@ export const surfaceRenderers: SurfaceRenderers = {
   file_preview: renderPrepared,
   inbox_item: (surface) => ({ content: createElement(InboxItemPanel, { itemId: surface.itemId }) }),
   page: pageSurfaceRendering,
+  page_building: pageBuildingSurfaceRendering,
   // An App fills the frame like a Page. The address stays the area's that shows the slot, so
   // the App's own moves are not written into it.
   app_view: (surface) => ({

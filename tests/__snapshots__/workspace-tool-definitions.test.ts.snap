@@ -1014,7 +1014,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
   },
   {
     "name": "workspace.preview_images",
-    "description": "Load bounded rendered preview images into model-visible visual context without promoting preview files to the user. Give exactly one source: artifactId, path, or paths. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached. Loaded images stay in visual context for the current turn only; call the tool again in a later turn to see them again.",
+    "description": "Load bounded rendered preview images into model-visible visual context. This is how to check rendered output: images loaded here are never listed among the person's files, so render checks under /workspace/previews and promote with workspace.promote_artifact only the files the person should get. Give exactly one source: artifactId, path, or paths. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached. Loaded images stay in visual context for the current turn only; call the tool again in a later turn to see them again.",
     "permission": null,
     "inputJsonSchema": {
       "type": "object",

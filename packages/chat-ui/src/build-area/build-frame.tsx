@@ -22,6 +22,7 @@ import {
   PageHeaderBack,
   Picker,
   PickerButton,
+  RegistryIcon,
   SkeletonList,
   SkeletonPage,
   SubRail
@@ -323,14 +324,11 @@ export function BuildFrame({ source }: { source: BuildSource }) {
             groups={[
               {
                 id: "kinds",
-                items: kinds.map((kind) => {
-                  const Icon = kind.entry.icon;
-                  return {
-                    id: kind.entry.path,
-                    label: t(kind.entry.label),
-                    icon: <Icon aria-hidden="true" />
-                  };
-                })
+                items: kinds.map((kind) => ({
+                  id: kind.entry.path,
+                  label: t(kind.entry.label),
+                  icon: <RegistryIcon name={kind.entry.icon} />
+                }))
               }
             ]}
             value={entry.path}
@@ -466,7 +464,7 @@ function BuildList({
           <SkeletonList rows={6} />
         )
       ) : list.rows.length === 0 && !filtered ? (
-        <EmptyState icon={<entry.icon aria-hidden="true" />} action={newButton}>
+        <EmptyState icon={<RegistryIcon name={entry.icon} />} action={newButton}>
           {t(editable && !state.canCreate ? editable.emptyReadOnlyText : entry.emptyText)}
         </EmptyState>
       ) : (
@@ -614,13 +612,12 @@ function RowMark({ entry, title }: { entry: BuildKind; title: string }) {
   if (entry.avatar) {
     return <Avatar kind={entry.avatar} name={title} />;
   }
-  const Icon = entry.icon;
   return (
     <span
       aria-hidden="true"
       className="grid size-8 place-items-center rounded-md bg-muted text-muted-foreground"
     >
-      <Icon className="size-4" />
+      <RegistryIcon name={entry.icon} className="size-4" />
     </span>
   );
 }
