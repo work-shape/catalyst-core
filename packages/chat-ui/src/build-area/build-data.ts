@@ -105,6 +105,12 @@ interface BuildWrites {
     availableIn?: AvailableIn;
   }): Promise<{ revision: number }>;
   delete(input: { kind: string; name: string; expectedRevision: number }): Promise<unknown>;
+  /** Makes a saved revision of a kind with drafts the one its users get. */
+  publish(input: {
+    kind: string;
+    name: string;
+    revision: number;
+  }): Promise<{ draftRevision: number; publishedRevision: number }>;
   revert(input: {
     kind: string;
     name: string;
@@ -321,6 +327,8 @@ export function useBuildSource(): BuildSource {
         made(writes.put({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
       delete: (input) =>
         made(writes.delete({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
+      publish: (input) =>
+        made(writes.publish({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
       revert: (input) =>
         made(writes.revert({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
       revisions: ({ kind, name, cursor }) =>

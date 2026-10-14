@@ -7,24 +7,16 @@ import { AppError, isAppError, type AppErrorCode } from "./errors";
 import type { ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
 
-// The names and shapes of a Data Store and of a Knowledge Base that more than one package
-// reads: the asset kinds, what their operations and jobs are called, and the handle a caller
-// reaches the rows of one store through. The store is in `@vivd-catalyst/data-stores`.
+// The names and shapes of a Data Store that more than one package reads: the asset kind,
+// what its operations and jobs are called, and the handle a caller reaches the rows of one
+// store through. The store is in `@vivd-catalyst/data-stores`. A Knowledge Base, which a Data
+// Store can back, is in `knowledge.ts`.
 
 /** The asset kind of a Data Store. Spec: data-stores-and-knowledge-bases.md, build order DS-1. */
 export const DATA_STORE_ASSET_KIND = "data_store";
 
 /** The file of a Data Store's folder that holds its definition. Spec: One data store primitive. */
 export const DATA_STORE_MANIFEST_FILE = "store.yaml";
-
-/**
- * The asset kind of a Knowledge Base. A kind of its own, with rights of its own: a Data Store
- * is one of its backends, not what it is. Spec: build order WD-2.
- */
-export const KNOWLEDGE_BASE_ASSET_KIND = "knowledge_base";
-
-/** The file of a Knowledge Base's folder that holds its definition. Spec: Knowledge Base on top. */
-export const KNOWLEDGE_BASE_MANIFEST_FILE = "kb.yaml";
 
 /**
  * The rights of the kind. `write` changes the definition and its migrations. `insert` adds
@@ -42,15 +34,6 @@ export const DATA_STORE_ACTIONS = {
   insert: "data_store.insert",
   execute: "data_store.execute"
 } as const satisfies AssetKindActions & { insert: string; execute: string };
-
-/** The rights of the kind. `use` searches and queries the published revision. */
-export const KNOWLEDGE_BASE_ACTIONS = {
-  read: "knowledge_base.read",
-  write: "knowledge_base.write",
-  publish: "knowledge_base.publish",
-  delete: "knowledge_base.delete",
-  use: "knowledge_base.use"
-} as const satisfies AssetKindActions;
 
 /**
  * The prefix of every operation on the rows of one Data Store: `data_store.<id>.<verb>`. The
@@ -261,23 +244,6 @@ export interface DataStoreSchema {
 export function dataStoreOperationName(store: string, verb: DataStoreOperationVerb): string {
   return `${DATA_STORE_OPERATION_PREFIX}${store}.${verb}`;
 }
-
-/**
- * The prefix of every operation of one Knowledge Base: `knowledge.<id>.search` and
- * `knowledge.<id>.query`. Rights, policy and audit are per Knowledge Base. Spec: P40.
- */
-export const KNOWLEDGE_OPERATION_PREFIX = "knowledge.";
-
-/** The operation that answers read-only SQL on one structured Knowledge Base. Spec: P38. */
-export function knowledgeQueryOperationName(knowledgeBase: string): string {
-  return `${KNOWLEDGE_OPERATION_PREFIX}${knowledgeBase}.query`;
-}
-
-/**
- * The one tool an agent queries its structured Knowledge Bases with. It names no Knowledge
- * Base: it is a projection that calls the operation of the one its input names. Spec: P40, P116.
- */
-export const KNOWLEDGE_QUERY_TOOL_NAME = "knowledge.query";
 
 /**
  * The job kinds of the store. `provision` creates the database and the roles of a new store,

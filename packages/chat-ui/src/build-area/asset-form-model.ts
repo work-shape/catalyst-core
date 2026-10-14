@@ -29,6 +29,8 @@ export interface AgentFormState {
   maxSteps: string;
   toolNames: string[];
   skillNames: string[];
+  /** The Knowledge Bases the agent answers from, by id. */
+  knowledgeBases: string[];
   initialPrompts: AgentInitialPromptForm[];
 }
 
@@ -162,6 +164,7 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
     maxSteps: typeof config.maxSteps === "number" ? String(config.maxSteps) : "",
     toolNames: stringArray(config.toolNames),
     skillNames: stringArray(config.skillNames),
+    knowledgeBases: stringArray(config.knowledgeBases),
     initialPrompts: initialPrompts.map((prompt) => {
       const record = (prompt ?? {}) as { title?: unknown; prompt?: unknown };
       return {
@@ -233,6 +236,7 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
     ...(maxSteps === undefined ? {} : { maxSteps }),
     toolNames: form.toolNames,
     skillNames: form.skillNames,
+    ...(form.knowledgeBases.length ? { knowledgeBases: form.knowledgeBases } : {}),
     initialPrompts: form.initialPrompts
       .filter((prompt) => hasLocalizedContent(prompt.title) || hasLocalizedContent(prompt.prompt))
       .map((prompt) => ({
@@ -368,6 +372,7 @@ export function emptyAgentForm(): AgentFormState {
     maxSteps: "",
     toolNames: [],
     skillNames: [],
+    knowledgeBases: [],
     initialPrompts: []
   };
 }
