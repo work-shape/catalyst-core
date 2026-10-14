@@ -62,6 +62,8 @@ interface PlatformAssetRead {
   publishedRevision?: number;
   /** Which of the two `config` is: the draft, or the published revision where no draft differs. */
   shows: "draft" | "published";
+  /** The workspace that owns the asset, by its id. Missing for an asset of the instance. */
+  workspaceId?: string;
 }
 
 /** The asset an agent opened: what it read, and the name people read for the asset. */
@@ -97,6 +99,8 @@ interface PlatformAssetCreated {
   kind: string;
   name: string;
   title: string;
+  /** The workspace that owns it, by its id: the conversation's. Missing for the instance's. */
+  workspaceId?: string;
 }
 
 type PlatformAssetWrite =
@@ -205,8 +209,7 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       get: (context, named) => required().get(context, named),
       validate: (context, config) => required().validate(context, config),
       put: (context, input) => required().put(context, input),
-      putPolicyFloor: (conversationId, input) =>
-        required().putPolicyFloor(conversationId, input),
+      putPolicyFloor: (conversationId, input) => required().putPolicyFloor(conversationId, input),
       putBeforeEvents: (conversationId, config) =>
         required().putBeforeEvents(conversationId, config),
       listOperations: (context, audience) => required().listOperations(context, audience),
@@ -241,7 +244,8 @@ const readOutputSchema = z.object({
   config: jsonObjectSchema,
   revision: z.number().int(),
   publishedRevision: z.number().int().optional(),
-  shows: z.enum(["draft", "published"])
+  shows: z.enum(["draft", "published"]),
+  workspaceId: z.string().optional()
 });
 const openOutputSchema = readOutputSchema.extend({
   title: z.string(),
@@ -256,7 +260,8 @@ const putOutputSchema = z.union([
     created: z.literal(true).optional(),
     kind: z.string().optional(),
     name: z.string().optional(),
-    title: z.string().optional()
+    title: z.string().optional(),
+    workspaceId: z.string().optional()
   }),
   z.object({ saved: z.literal(false), issues: z.array(issueSchema) }),
   z.object({

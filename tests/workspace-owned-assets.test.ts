@@ -464,7 +464,9 @@ describe("the agent's first save of a conversation (NAV-2)", () => {
       created: true,
       kind: "agent",
       name: "built-helper",
-      title: "Built helper"
+      title: "Built helper",
+      // The answer names the owner, so the page it opens reads the agent there.
+      workspaceId: team
     });
     expect(await ownerOf(t, "agent", "built-helper")).toEqual({
       kind: "workspace",

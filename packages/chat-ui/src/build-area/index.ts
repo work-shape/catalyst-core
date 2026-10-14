@@ -59,7 +59,9 @@ export {
   buildWorkspaceName,
   mayCreateAgents,
   resolveBuildRights,
+  readLastBuildScope,
   resolveBuildScope,
+  showOwnerInStudio,
   type BuildScope
 } from "./build-rights";
 export {

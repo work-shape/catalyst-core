@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
 import { invalidateOfferedAgents } from "../api/agent-placement-mutations";
 import { createAssetWrites, type AvailableIn } from "../api/asset-writes";
@@ -17,6 +17,7 @@ import {
   resolveBuildRights,
   resolveBuildScope,
   storeLastBuildScope,
+  subscribeBuildScope,
   type BuildRights,
   type BuildScope
 } from "./build-rights";
@@ -170,7 +171,11 @@ export function useBuildSource(): BuildSource {
   const rights = useMemo(() => resolveBuildRights(user, context), [context, user]);
   const management = config.features.configAssets;
   const assetsKey = workspaceQueryKeys.assets(apiBaseUrl, authScope);
-  const [chosenScope, setChosenScope] = useState(readLastBuildScope);
+  const chosenScope = useSyncExternalStore(
+    subscribeBuildScope,
+    readLastBuildScope,
+    () => undefined
+  );
   const scope = resolveBuildScope(rights, chosenScope, activeWorkspace?.id);
   const scopedKinds = new Set(
     (context?.kinds ?? [])
@@ -234,10 +239,7 @@ export function useBuildSource(): BuildSource {
       : undefined,
     reload: () => contextQuery.refetch(),
     scope,
-    chooseScope: (next) => {
-      storeLastBuildScope(buildScopeValue(next));
-      setChosenScope(buildScopeValue(next));
-    },
+    chooseScope: (next) => storeLastBuildScope(buildScopeValue(next)),
     scoped: (kind) => scopedKinds.has(kind),
     ...(buildWithAgent !== undefined &&
     scope.kind === "workspace" &&

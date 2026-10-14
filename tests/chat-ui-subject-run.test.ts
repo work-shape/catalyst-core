@@ -171,6 +171,22 @@ describe("the subject a run opens", () => {
     expect(
       standingAssetOpen({ toolName: "platform.assets.put", result: { saved: true, revision: 2 } })
     ).toBeUndefined();
+    // A store the conversation's workspace owns says so: Studio reads it there.
+    expect(
+      standingAssetOpen({
+        toolName: "platform.assets.put",
+        toolCallId: "3",
+        result: {
+          saved: true,
+          revision: 1,
+          created: true,
+          kind: "data_store",
+          name: "orders",
+          title: "Orders",
+          workspaceId: "w1"
+        }
+      })
+    ).toMatchObject({ subject: { kind: "data_store", name: "orders" }, owner: "w1" });
   });
 
   it("takes an open that stood as the line the thread shows, and nothing else", () => {

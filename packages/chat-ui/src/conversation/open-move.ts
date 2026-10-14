@@ -66,7 +66,8 @@ export interface OpenMovePlan {
   /** The opens handled now, by their call ids: each one is weighed once. */
   handled: string[];
   /** The pages this tab goes to, in order. The first move of a run adds a step to the history. */
-  moves: { page: WorkspaceRoute; replace: boolean }[];
+  /** `owner`: the workspace that owns the asset, by its id; absent for the instance's. */
+  moves: { page: WorkspaceRoute; replace: boolean; owner?: string }[];
 }
 
 /**
@@ -125,7 +126,11 @@ export function planOpenMoves(input: {
     if (!moves || samePage(here, page)) {
       continue;
     }
-    plan.moves.push({ page, replace: movedInRun });
+    plan.moves.push({
+      page,
+      replace: movedInRun,
+      ...(open.owner === undefined ? {} : { owner: open.owner })
+    });
     movedInRun = true;
     movedTo.add(workspaceRoutePath(page));
     here = page;

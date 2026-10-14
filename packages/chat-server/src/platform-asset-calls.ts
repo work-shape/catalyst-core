@@ -253,7 +253,8 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       config: read.config ?? {},
       revision: read.revision,
       ...(published === undefined ? {} : { publishedRevision: published }),
-      shows: published !== undefined && published === read.revision ? "published" : "draft"
+      shows: published !== undefined && published === read.revision ? "published" : "draft",
+      ...(address.workspaceId === undefined ? {} : { workspaceId: address.workspaceId })
     };
   }
 
@@ -346,7 +347,8 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       created: true,
       kind: named.kind,
       name: named.name,
-      title: titleOf(named.kind, named.name, read.config)
+      title: titleOf(named.kind, named.name, read.config),
+      ...ownerOf(kind, conversation)
     };
   }
 

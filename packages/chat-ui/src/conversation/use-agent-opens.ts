@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { ApiClient, Message } from "@vivd-catalyst/api-client";
+import { showOwnerInStudio } from "../build-area/build-rights";
 import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
 import { lastRunParts, pendingOpen, planOpenMoves, type WatchedRun } from "./open-move";
@@ -144,6 +145,7 @@ export function useAgentOpens(input: {
       handledOpens.current.add(key);
     }
     for (const move of plan.moves) {
+      showOwnerOf(move.page, move.owner);
       openPage(move.page, conversationId, { replace: move.replace });
       movedRuns.current.add(runId);
       conversationMoves.add(workspaceRoutePath(move.page));
@@ -177,6 +179,7 @@ export function useAgentOpens(input: {
         }
         onSubjectChanged(conversationId);
       }
+      showOwnerOf(target, open.owner);
       openPage(target, conversationId);
     },
     [client, conversationId, onError, onSubjectChanged, openPage, storedSubject, workspaceId]
@@ -191,4 +194,12 @@ export function useAgentOpens(input: {
       : pendingOpen({ opens: opensInRun(lastParts), storedSubject, workspaceId, here: route });
 
   return { pending, goTo, pageOf, sent, startedFrom };
+}
+
+/**
+ * A page of Studio reads its asset in Studio's scope: going to one the agent opened sets the
+ * scope to the asset's owner first, so the page finds it where it is.
+ */
+function showOwnerOf(page: WorkspaceRoute, owner: string | undefined): void {
+  if (page.kind === "build-asset") showOwnerInStudio(owner);
 }

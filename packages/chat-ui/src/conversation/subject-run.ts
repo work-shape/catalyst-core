@@ -72,6 +72,8 @@ export interface AssetOpen {
    * waits for the person to go to it (`conversations.subject.open`).
    */
   awaitsPerson: boolean;
+  /** The workspace that owns the asset, by its id. Absent for an asset of the instance. */
+  owner?: string;
 }
 
 /** The open an answer of `platform.assets.open` or of `page.save_as_app` says. */
@@ -86,7 +88,8 @@ function assetOpenOfAnswer(
     subject: { kind: answer.kind, name: answer.name },
     title: typeof answer.title === "string" && answer.title !== "" ? answer.title : answer.name,
     callId,
-    awaitsPerson: answer.awaitsPerson === true
+    awaitsPerson: answer.awaitsPerson === true,
+    ...(typeof answer.workspaceId === "string" ? { owner: answer.workspaceId } : {})
   };
 }
 

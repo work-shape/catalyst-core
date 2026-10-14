@@ -225,8 +225,13 @@ export function buildScopeValue(scope: BuildScope): string {
 /** The owner Studio worked in last in this browser, as `instance` or a workspace's id. */
 const SCOPE_STORAGE_KEY = "vivd-catalyst:build-scope";
 
+/** The owner chosen in this tab, which a browser that refuses storage keeps as well. */
+let chosenInTab: string | undefined;
+const scopeListeners = new Set<() => void>();
+
 /** The owner the reader chose last in this browser: `instance`, a workspace's id, or nothing. */
 export function readLastBuildScope(): string | undefined {
+  if (chosenInTab !== undefined) return chosenInTab;
   try {
     return window.localStorage.getItem(SCOPE_STORAGE_KEY) ?? undefined;
   } catch {
@@ -234,10 +239,27 @@ export function readLastBuildScope(): string | undefined {
   }
 }
 
+/** Keeps the owner Studio works in, and tells a Studio that is open. */
 export function storeLastBuildScope(scope: string): void {
+  chosenInTab = scope;
   try {
     window.localStorage.setItem(SCOPE_STORAGE_KEY, scope);
   } catch {
-    // A browser that refuses storage opens Studio in the scope it starts in.
+    // A browser that refuses storage keeps the scope for this tab alone.
   }
+  for (const listener of scopeListeners) listener();
+}
+
+/** Hears each owner Studio is set to work in. */
+export function subscribeBuildScope(listener: () => void): () => void {
+  scopeListeners.add(listener);
+  return () => scopeListeners.delete(listener);
+}
+
+/**
+ * Sets Studio to the owner of an asset whose page the person is taken to, so the page reads it
+ * where it is: the workspace that owns it, by its id, or the instance.
+ */
+export function showOwnerInStudio(workspaceId: string | undefined): void {
+  storeLastBuildScope(workspaceId ?? INSTANCE_SCOPE_VALUE);
 }
