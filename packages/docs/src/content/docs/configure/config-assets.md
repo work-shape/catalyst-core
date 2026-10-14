@@ -1,6 +1,6 @@
 ---
 title: Config Assets
-description: Agents and skills live in the database and are edited through the admin UI or synchronized with the Catalyst CLI.
+description: Agents, skills, Apps and guardrails live in the database; edit them in Studio, write them through the asset API, or synchronize them with the Catalyst CLI.
 ---
 
 Agents, skills, and the default agent are **config assets**: they live in the client instance's database, not in config files. The server never reads agent or skill files — a release config that still contains `agents`, `agentFiles`, `skills`, `skillFiles`, or `defaultAgentName` fails validation with a pointer to this workflow.
@@ -35,7 +35,7 @@ A working copy that never pulled from an instance pushes every asset as a creati
 
 There is no `--force`. A push never overwrites a change it did not read: the flag is refused with the procedure below. A deleted asset keeps its name with its history. `pull` records the revision of a delete it sees, and the next push that creates the asset again names it; without that pull the creation is reported as a conflict with the delete.
 
-The CLI reads with `assets.list` and `assets.get` and writes with `assets.sync`, the operations under [The asset API](#the-asset-api). Each push is one Operation Run of the key's service principal. A push whose answer is lost on the way is sent again under the same idempotency key, so it is applied once. One push holds at most 2,000 assets and 20 MiB, and one asset in it at most 2 MiB; a larger release is pushed in parts with `--only`. `validate` asks `assets.sync_check` whether a push of the whole working copy would be accepted and writes nothing. On an instance whose policy holds a release for approval, `push` reports the waiting Operation Run and exits with 1; pull after the approval.
+The CLI reads with `assets.list` and `assets.get` and writes with `assets.sync`, the operations under [The asset API](#the-asset-api). Each push is one Operation Run in the name of whoever the key belongs to: the person or the service principal. A push whose answer is lost on the way is sent again under the same idempotency key, so it is applied once. One push holds at most 2,000 assets and 20 MiB, and one asset in it at most 2 MiB; a larger release is pushed in parts with `--only`. `validate` asks `assets.sync_check` whether a push of the whole working copy would be accepted and writes nothing. On an instance whose policy holds a release for approval, `push` reports the waiting Operation Run and exits with 1; pull after the approval.
 
 If a touched asset was updated, deleted, or created on the instance since its baseline, the server rejects the **whole push** without applying anything. The CLI lists every conflicting asset with its current revision, whether that revision is its delete, who wrote it and when, then prints a scoped pull command. A key that may not read an asset is told its name only:
 
@@ -61,7 +61,7 @@ skills/support_review/
     └── response-format.json
 ```
 
-The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. Binary assets do not belong in config assets.
+The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. The working copy carries a skill's text files only. A skill with other files, such as images or scripts, is written from its folder with `catalyst skill put --from <folder>` or the asset API; see [A skill as a folder of files](#a-skill-as-a-folder-of-files).
 
 A working copy holds the instance's [guardrails](#guardrails-as-assets) where `catalyst.yaml` lists their files under `guardrails`, such as `guardrails/*/guardrail.yaml`; each is a folder with its `guardrail.yaml` and, for a `model_judge` check, its instruction in `check.md`. Without that list, pull, diff and `push --prune` leave the instance's guardrails alone. `pull` brings the draft and `--only guardrail:<name>` selects one. Guardrails are no part of a release: after the `assets.sync` batch of agents and skills, `push` writes each changed guardrail as its next draft with `assets.put` against the revision of its last pull, and `push --prune` deletes one with `assets.delete`, so the key needs `config_assets:write` and the instance the module `assetManagement`. `validate` leaves guardrails to the instance's check at that write. Publishing stays a step of its own, and the guardrails of release config are never part of a working copy.
 
@@ -93,14 +93,17 @@ starters:
 - `tools` is optional. A starter shows only for an agent that holds every tool it names, so it never offers what the agent cannot do.
 - The chat shows at most four starters for an agent, the skills in the order the agent lists them. An agent whose skills carry none shows the empty chat as before.
 
-The server URL can come from a named `catalyst.yaml` instance or directly from `--instance https://catalyst.example.com`. Authentication is environment-only for now:
+The server URL can come from a named `catalyst.yaml` instance or directly from `--instance https://catalyst.example.com`. The CLI signs in one of two ways:
+
+- **A person** runs `catalyst login --instance <url>` once and confirms the code in the browser, under **Settings > You > API keys** (German: **Einstellungen › Du › API-Schlüssel**). The CLI saves a personal key that acts as that person. This needs the module `personalApiKeys`. See [Log in](/configure/cli/#log-in).
+- **Automation**, such as a CI job, sets `CATALYST_API_KEY`. The variable wins over a saved key.
 
 ```sh
 export CATALYST_API_KEY='the-one-time-value-from-api-access'
 catalyst config diff --instance production
 ```
 
-Create the credential once as a superadmin under **Administration → API Access**:
+Create the key for automation once, as a superadmin, under **Settings > Instance > API access**:
 
 1. Create a service principal such as `Catalyst CLI` with `config_assets.read` and `config_assets.release`.
 2. Create a key restricted to `config_assets:read` and `config_assets:release`. A push is a release only with both: the right on the principal and the release scope on the key. Under a key with `config_assets:write` instead, the same principal syncs as any writer does, inside one Namespace and within the editing limits.
@@ -116,9 +119,9 @@ The script calls `catalyst-local-key --instance <url>`, a command of the private
 
 The CLI sends the API key only to `POST /api/v1/auth/access-token`, then uses the returned short-lived access token for config operations. It refuses to send an API key over plain HTTP except to `localhost`, `127.0.0.0/8`, or `::1`; remote instances must use HTTPS. A key belongs to a service principal but is independently named, audited, expirable, and revocable. Create separate keys for developer machines and CI jobs so they can be rotated without disrupting one another.
 
-Do not pass the key on the command line or put it in `catalyst.yaml` or `.catalyst-state.json`. Keychain-backed profiles are a future enhancement; the current CLI intentionally reads only environment variables.
+Do not pass the key on the command line or put it in `catalyst.yaml` or `.catalyst-state.json`. A key that `catalyst login` saved is kept in `~/.config/catalyst/credentials.json`, readable by you alone; [The key](/configure/cli/#the-key) says more.
 
-The exchange needs `SERVICE_ACCESS_TOKEN_SECRET` set on the server; without it the instance has no API access and the exchange answers 404. The API key is the CLI's only sign-in. A CLI without `CATALYST_API_KEY` stops before it sends a request and names Administration, API Access as the place a key comes from; `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` are not read.
+The exchange needs `SERVICE_ACCESS_TOKEN_SECRET` set on the server; without it the instance has no API access and the exchange answers 404. A personal key is exchanged at the same address. A CLI with neither `CATALYST_API_KEY` nor a saved key stops before it sends a request and says to run `catalyst login` or set the variable; `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` are not read.
 
 ## Skills that ship with the release
 
@@ -279,7 +282,7 @@ removed first. Reverting retains the original approval and proposal history.
 
 ## The asset API
 
-Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, where `kind` is a registered kind such as `agent` or `skill`. The admin panel uses these operations, and so can a script or an outside editor. Each changing call is one Operation Run with its actor and outcome. A read is checked the same way and leaves a run only when it is refused or fails. The [API reference](/reference/api/) lists the fields.
+Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, where `kind` is a registered kind such as `agent` or `skill`. Studio uses these operations, and so can a script or an outside editor. Each changing call is one Operation Run with its actor and outcome. A read is checked the same way and leaves a run only when it is refused or fails. The [API reference](/reference/api/) lists the fields.
 
 | Operation                 | Address                                      | Right                |
 | ------------------------- | -------------------------------------------- | -------------------- |
@@ -321,7 +324,7 @@ A request body over one megabyte is answered `400` with `details.reason` `body_t
 
 A definition is checked against what its caller may read. A reference to an asset the caller may not read, such as a skill of another Namespace, is answered like a reference to an asset that does not exist, by `assets.validate` and by a write. An asset may always refer to the assets beside it in its own Namespace, and a reference an asset already carries is kept when somebody edits it who may not read its target. A name with a NUL byte is refused with `422`.
 
-The writing operations and `assets.sync` belong to the module `assetManagement` and follow the same rules as edits in the admin panel: `editableAgentFields`, the lists of a Namespace, and the rights for the default agent and for model settings. Only a release, as described above, is exempt, so `catalyst config push` also works where interactive editing is narrowed or off.
+The writing operations and `assets.sync` belong to the module `assetManagement` and follow the same rules as edits in Studio: `editableAgentFields`, the lists of a Namespace, and the rights for the default agent and for model settings. Only a release, as described above, is exempt, so `catalyst config push` also works where interactive editing is narrowed or off.
 
 `platform.context.get` tells a caller where it is: the instance, its release, the asset kinds with their rights, and the Namespaces in which the caller may do something. It answers a person and a service principal. An action is named only when the credential's scopes allow it: `config_assets:read` for reading, `config_assets:write` for writing and deleting.
 
@@ -394,6 +397,6 @@ A workspace guardrail answers the events of its workspace only. Its filter may n
 | `config_assets.release` | Release synchronization via `catalyst config push`                           | none (service tokens only) |
 | `agent_models.manage`   | Interactive changes to an agent's model settings and user-selectable models  | superadmin                 |
 
-Effective permissions resolve from role defaults plus per-user grants (`"config_assets.write"`) and revocations (`"!config_assets.write"`) stored on the product user.
+Effective permissions resolve from role defaults plus the rights given to one person or service principal on the Users and API access pages, such as `config_assets.write`, or taken away, such as `!config_assets.write`. They are stored as instance-wide grant rows, one per action the key stands for: `config_assets.write` is `agent.write`, `agent.delete`, `skill.write` and `skill.delete`.
 
 Beside these, an administrator can allow or deny one user read, write or delete on agents or skills in a Namespace (a registered name prefix) or on one asset, through the operations under `/api/v1/instance/access`. A deny on an asset belongs to its name: it stays until it is revoked, also when the asset is deleted and created again, and the grant list keeps showing it. Allow rows on an asset are removed when the asset is deleted.

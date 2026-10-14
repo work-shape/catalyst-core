@@ -80,8 +80,7 @@ export default defineConfig({
             "configure/modules",
             "configure/config-assets",
             "configure/cli",
-            "configure/build",
-            "configure/chat-experience"
+            "configure/build"
           ]
         },
         {
@@ -90,7 +89,7 @@ export default defineConfig({
         },
         {
           label: "Extend",
-          items: ["extend/custom-tools", "extend/openapi-tools"]
+          items: ["extend/custom-tools"]
         },
         {
           label: "Operate",
@@ -103,8 +102,7 @@ export default defineConfig({
             "operate/how-rights-work",
             "operate/rights-and-namespaces",
             "operate/execution-workspaces",
-            "operate/runner-security",
-            "operate/config-asset-migration"
+            "operate/runner-security"
           ]
         },
         {

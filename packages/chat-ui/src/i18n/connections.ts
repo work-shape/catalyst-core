@@ -114,9 +114,13 @@ export const connections = defineTranslations({
     "connections.effectChanging": "Changing",
     "connections.effectReading": "Reading",
     "connections.enabled": "Enabled",
+    "connections.exposeOutside": "Outside clients (CLI, MCP)",
+    "connections.exposeOutsideHint":
+      "What a call returns is copied to the computer that holds the key.",
     "connections.exposureAgent": "Agents",
     "connections.exposureBridge": "Apps",
     "connections.exposureNone": "Nobody can call it",
+    "connections.exposureOutside": "Outside clients",
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Network denied",
     "connections.healthNetworkDeniedText":
@@ -307,9 +311,13 @@ export const connections = defineTranslations({
     "connections.empty":
       "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System.",
     "connections.enabled": "Aktiv",
+    "connections.exposeOutside": "Externe Clients (CLI, MCP)",
+    "connections.exposeOutsideHint":
+      "Was ein Aufruf zurückgibt, wird auf den Rechner kopiert, der den Schlüssel hat.",
     "connections.exposureAgent": "Agenten",
     "connections.exposureBridge": "Apps",
     "connections.exposureNone": "Niemand kann sie aufrufen",
+    "connections.exposureOutside": "Externe Clients",
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Netzwerk gesperrt",
     "connections.healthNetworkDeniedText":
