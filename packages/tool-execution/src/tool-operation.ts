@@ -118,8 +118,8 @@ export function toolOperation(
     ...(tool.effect === "reading" ? { recordsEveryCall: true } : {}),
     ...(tool.policyFloor
       ? {
-          policyFloorOf: (origin) =>
-            origin.kind === "agent" ? tool.policyFloor?.(origin) : undefined
+          policyFloorOf: (origin, input) =>
+            origin.kind === "agent" ? tool.policyFloor?.(origin, input) : undefined
         }
       : {}),
     ...(tool.beforeEvents

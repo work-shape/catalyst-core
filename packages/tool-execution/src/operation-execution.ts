@@ -353,7 +353,7 @@ async function policyInputOf(
   context: Pick<RunContext, "definition" | "call" | "resource" | "deps">
 ): Promise<PolicyInput> {
   const { definition, call, resource, deps } = context;
-  const callFloor = await definition.policyFloorOf?.(call.origin);
+  const callFloor = await definition.policyFloorOf?.(call.origin, call.input);
   return {
     definition:
       callFloor === undefined

@@ -586,7 +586,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       }
     },
 
-    async putPolicyFloor(conversationId) {
+    async putPolicyFloor(conversationId, input) {
       const conversation = await options.stores.conversations.getConversation(
         options.clientInstanceId,
         conversationId
@@ -594,17 +594,16 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       if (!conversation) return undefined;
       const subject = conversation.subject;
       if (subject) return centralFloor([ASSET_WRITE_OPERATION], subject);
-      // The first save creates one of these kinds, and which one the floor is not told: it is
-      // the strictest a setting asks for any of them where the asset would be.
-      let floor: PolicyValue | undefined;
-      for (const kind of creatableKinds()) {
-        const value = await centralFloor([ASSET_WRITE_OPERATION], {
-          kind: kind.kind,
-          ...ownerOf(kind, conversation)
-        });
-        if (value !== undefined) floor = stricterOf(floor, value);
-      }
-      return floor;
+      // The first save asks what a setting asks of the asset it names, where it would be, as
+      // `assets.put` of the API asks it: its name places it in a Namespace. A save that names
+      // no kind it creates is refused by the call itself.
+      const kind = creatableKinds().find((candidate) => candidate.kind === input.kind);
+      if (kind === undefined || input.name === undefined) return undefined;
+      return centralFloor([ASSET_WRITE_OPERATION], {
+        kind: kind.kind,
+        name: input.name,
+        ...ownerOf(kind, conversation)
+      });
     },
 
     async pageAppPolicyFloor(conversationId, write) {

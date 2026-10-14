@@ -152,9 +152,13 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, PageAppCalls
   /**
    * What an administrator's setting on the operation a save projects asks for the subject of a
    * conversation, or nothing where no setting matches it. A save is never looser than it. In a
-   * conversation about no asset yet it is the strictest of the kinds a first save can create.
+   * conversation about no asset yet it is what a setting asks for the asset the first save
+   * names, where it would be: its kind, its name and so its Namespace, and its owner.
    */
-  putPolicyFloor(conversationId: ConversationId): Promise<PolicyValue | undefined>;
+  putPolicyFloor(
+    conversationId: ConversationId,
+    input: PlatformAssetPut
+  ): Promise<PolicyValue | undefined>;
   /**
    * The before-event of a save: `asset.before_write` of the conversation's subject, or of the
    * asset a first save creates.
@@ -201,7 +205,8 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       get: (context, named) => required().get(context, named),
       validate: (context, config) => required().validate(context, config),
       put: (context, input) => required().put(context, input),
-      putPolicyFloor: (conversationId) => required().putPolicyFloor(conversationId),
+      putPolicyFloor: (conversationId, input) =>
+        required().putPolicyFloor(conversationId, input),
       putBeforeEvents: (conversationId, config) =>
         required().putBeforeEvents(conversationId, config),
       listOperations: (context, audience) => required().listOperations(context, audience),
@@ -443,7 +448,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       // the instance default for changes would apply, and an agent cannot wait for a person.
       permission: { mode: "allow" },
       // A setting on the operation this projects holds for the save of the agent too.
-      policyFloor: ({ conversationId }) => calls.putPolicyFloor(conversationId),
+      policyFloor: ({ conversationId }, input) => calls.putPolicyFloor(conversationId, input),
       // The guardrails on asset writes answer the agent's save as they answer a person's.
       beforeEvents: (input, { conversationId }) => calls.putBeforeEvents(conversationId, input),
       async execute(input, context) {
