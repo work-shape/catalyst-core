@@ -2272,6 +2272,14 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **A service principal calls no operation that a person calls:** an operation registered with
+  `auth: "user"`, such as `workspaces.create`, is refused to a service principal on the call
+  path as its route refuses one, also where the call takes no route, as from a step of a
+  Workflow. The call is denied before the operation runs, with an Operation Run that is
+  `denied` and the reason `user_only`, and the step says that only a person may call it. Such
+  a refusal names no right where the operation names none: `action` of a forbidden denial is
+  optional, and is left out where no right opens the call.
+  Before, the step's call ran into the operation and failed there.
 - **Parallel browser suites on one Postgres:** `scripts/run-chat-e2e.mjs`, `playwright.config.ts`
   and the specs hard-coded the database `agent_chat`, so several runs on one machine erased each
   other's data. `E2E_DATABASE_URL` now replaces that URL for the migration, the API, the worker

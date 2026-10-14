@@ -417,6 +417,7 @@ export class AssetWorkflow {
     const { kind, name } = target;
     const right = deleteDecision(call.access, target);
     if (!right.allowed) {
+      if (right.action === undefined) throw operationDenialError({ kind: "forbidden", ...right });
       call.access.require(right.action, target.resource);
     }
     await this.requireFurtherRight(call.access, target, "delete");
