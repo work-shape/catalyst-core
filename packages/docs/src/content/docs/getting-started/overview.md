@@ -1,5 +1,5 @@
 ---
-title: Overview
+title: What the platform provides
 description: How Workshape Catalyst is meant to be used by teams configuring their own agent chat.
 ---
 
@@ -55,7 +55,7 @@ Before writing tools or deploying anything, decide:
 - what should be retained, audited, deleted, and backed up
 - which model provider and region are acceptable
 
-Start with [Operating Models](/getting-started/operating-models/) and then write the [Instance Brief](/operate/instance-brief/).
+Start with [Ways to run an instance](/getting-started/operating-models/) and then write the [instance brief](/operate/instance-brief/).
 
 ## How Work Flows
 

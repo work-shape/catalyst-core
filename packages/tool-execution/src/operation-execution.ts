@@ -2,15 +2,11 @@ import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
   PLATFORM_EVENT_ALLOW,
-  POLICY_VALUES,
-  callConfirmedByCaller,
   isAppError,
   isAuthenticatedServicePrincipal,
   isToolOperationAnswer,
   moduleOffError,
   operationDenialError,
-  resolvePolicy,
-  strictestOutcome,
   connectionCallReasonOf,
   dataStoreRefusalOf,
   toErrorEnvelope,
@@ -49,14 +45,10 @@ import {
   type PlatformEventName,
   type PolicyDefaults,
   type PolicySource,
-  type PolicyInput,
-  type PolicyResolution,
-  type PolicyValue,
   type ToolExecutionResult,
   type ConversationId
 } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { askBeforeEvents, guardrailDenial } from "./before-events";
 import { failureLogFields } from "./tool-failure-log";
 
 /**
@@ -348,64 +340,6 @@ function namedRight(decision: AccessDecision, action: string): OperationAuthoriz
   return decision.allowed ? { allowed: true } : { allowed: false, action, reason: decision.reason };
 }
 
-/** What the policy is resolved from for this call, before a guardrail answered. */
-async function policyInputOf(
-  context: Pick<RunContext, "definition" | "call" | "resource" | "deps">
-): Promise<PolicyInput> {
-  const { definition, call, resource, deps } = context;
-  const callFloor = await definition.policyFloorOf?.(call.origin, call.input);
-  return {
-    definition:
-      callFloor === undefined
-        ? definition
-        : { ...definition, policyFloor: stricterPolicy(callFloor, definition.policyFloor) },
-    origin: call.origin,
-    instanceDefaults: deps.policy.instanceDefaults,
-    centralSettings: await deps.policy.centralSettings(),
-    // An operation says itself what the policy is asked about where its resource does not
-    // say it all. It is asked again, the same way, before a call that waited is executed.
-    targets: definition.policyTargets
-      ? await definition.policyTargets(call.input)
-      : [{ workspaceId: call.workspaceId, assetKind: resource?.kind }],
-    callerCanConfirm: callConfirmedByCaller(call),
-    // No surface can hold a call for its actor's confirmation before OP-3.
-    canPause: false
-  };
-}
-
-function stricterPolicy(left: PolicyValue, right: PolicyValue | undefined): PolicyValue {
-  return right !== undefined && POLICY_VALUES.indexOf(right) > POLICY_VALUES.indexOf(left)
-    ? right
-    : left;
-}
-
-/**
- * What the policy asks of a call once the guardrails answered, or why it is refused. Asked
- * when a call is made, and again, as the caller is then, before a call that waited for an
- * approval is executed.
- */
-export async function resolveGuardedPolicy(
-  context: RunContext
-): Promise<{ policy: PolicyResolution } | { denial: OperationDenial }> {
-  const { definition } = context;
-  const policyInput = await policyInputOf(context);
-  if (resolvePolicy(policyInput).next === "refuse") {
-    return { denial: { kind: "policy", operation: definition.name } };
-  }
-  const answers = await askBeforeEvents(context);
-  const guardrailOutcome = strictestOutcome(answers.map((answer) => answer.outcome));
-  const policy = resolvePolicy({ ...policyInput, guardrailOutcome });
-  if (policy.next !== "refuse") {
-    return { policy };
-  }
-  return {
-    denial:
-      policy.source === "guardrail"
-        ? guardrailDenial(answers, definition.events?.before ?? "operation.before_call")
-        : { kind: "policy", operation: definition.name }
-  };
-}
-
 /** Ends a run that is still `running`. The run as it was when something else ended it first. */
 export async function endRun(context: RunContext, ended: OperationRunEnd): Promise<OperationRun> {
   const { run, definition, deps } = context;
@@ -615,6 +549,8 @@ export async function executeAdmitted(
     completed = { ...completed, run: done };
     await context.emit("operation.completed", "after", {
       status: "success",
+      // Why the call ran without anybody asked, where its caller's own call is not why.
+      ...(decision?.reason ? { decisionReason: decision.reason } : {}),
       ...(tool ? toolAuditFields(tool.result) : {})
     });
     if (definition.events?.after) await context.emit(definition.events.after, "after");
