@@ -88,7 +88,7 @@ describe("a Workflow stored as an asset", () => {
     });
     return writeSchema.parse(response.json()).revision;
   }
-  /** Publishes as the superadmin, who may let a Workflow act as a service principal. */
+  /** Publishes as the superadmin, or as whoever is named. */
   const publish = (t: WorkflowFixture, revision: number, userId = t.root.id) =>
     t.call(userId, "assets.publish", { params: address, payload: { revision } });
   const listed = async (t: WorkflowFixture, userId = t.root.id) =>
@@ -111,16 +111,9 @@ describe("a Workflow stored as an asset", () => {
     const early = await startAs(t, t.root.id);
     expect(early.statusCode, early.body).toBe(404);
 
-    // The holder of the publish right alone does not lend the principal's grants.
-    await t.expectRefused(
-      t.admin.id,
-      "assets.publish",
-      { params: address, payload: { revision } },
-      t.forbidden("api_access.manage", "no_grant")
-    );
-    expect(await listed(t)).toEqual([]);
-
-    expect((await publish(t, revision)).statusCode).toBe(200);
+    // An administrator who is no superadmin publishes: she holds every right of the principal
+    // the Workflow runs as (RIGHTS-1a).
+    expect((await publish(t, revision, t.admin.id)).statusCode).toBe(200);
     const revisionId = await published(t);
     expect(await listed(t)).toEqual([
       {

@@ -84,7 +84,70 @@ export function createConnectionSecretHandle(): ConnectionSecretHandle {
   return handle;
 }
 
-export interface ConnectionOperationConfig {
+/**
+ * One parameter of a declared operation: the JSON schema its value fits, and what it is for.
+ * A path parameter is always required; a query parameter where `required` says so.
+ */
+export interface DeclaredOperationParameter {
+  schema: JsonObject;
+  description?: string;
+  required?: boolean;
+}
+
+/**
+ * Where a declared operation meets one dimension of the data scope, such as the Mandant: the
+ * input parameter that picks the value, and the field of each returned item that holds it.
+ */
+export interface DeclaredOperationScopeDimension {
+  /** A declared path or query parameter, such as `clientNumber`. */
+  input?: string;
+  /** The field of each returned item, such as `items[].number`. */
+  output?: string;
+}
+
+/**
+ * The data scope of a declared operation by dimension, such as
+ * `{ mandant: { input: "clientNumber", output: "items[].number" } }` (SCOPE-2). The shape is
+ * read now so that SCOPE-2 needs no new one; until SCOPE-2 the key is reserved and refused at
+ * save (SCOPE-0). Nothing filters by it.
+ */
+export type DeclaredOperationScope = Record<string, DeclaredOperationScopeDimension>;
+
+/** Why `scope` on an operation declaration is refused before SCOPE-2 (SCOPE-0). */
+export const CONNECTION_SCOPE_RESERVED =
+  "'scope' is reserved: scoped Connection operations arrive with SCOPE-2. Until then an operation that serves one Mandant takes it as a named parameter and returns it on every item";
+
+/**
+ * What a Connection declares of an operation itself, for a Connector type with no catalog
+ * and no discovery, such as `http_api`. The declaration is the operation's catalog entry:
+ * its description is what an agent reads, and its request is what the type sends. A type
+ * that does not declare refuses every one of these fields (`CONNECTION_DECLARATION_FIELDS`).
+ */
+export interface ConnectionOperationDeclaration {
+  /** The name in words, as a person reads it in a list. */
+  title?: string;
+  description?: string;
+  /** The HTTP method. */
+  method?: string;
+  /** A path relative to the Connection's address, with `{param}` placeholders. */
+  path?: string;
+  pathParams?: Record<string, DeclaredOperationParameter>;
+  query?: Record<string, DeclaredOperationParameter>;
+  scope?: DeclaredOperationScope;
+}
+
+/** The members of `ConnectionOperationDeclaration`, which only a declaring type reads. */
+export const CONNECTION_DECLARATION_FIELDS = [
+  "title",
+  "description",
+  "method",
+  "path",
+  "pathParams",
+  "query",
+  "scope"
+] as const satisfies readonly (keyof ConnectionOperationDeclaration)[];
+
+export interface ConnectionOperationConfig extends ConnectionOperationDeclaration {
   name: string;
   effect: ConnectionOperationEffect;
   exposure: ConnectionExposure[];
@@ -430,6 +493,8 @@ export interface ConnectorContext {
     revision: number;
     settings: JsonObject;
     authScheme: string;
+    /** The accepted operations, with the declaration of each where its type declares them. */
+    operations: readonly ConnectionOperationConfig[];
   };
   /** The checked target. The connector connects to `target.address`. */
   target: EgressGrant;
@@ -487,14 +552,34 @@ interface ConnectorTypeBase {
   limits: ConnectorLimits;
 }
 
-/** A Connector type has a catalog the release ships or reads one from the outside system. */
+/**
+ * How a declaring type reads the operations a Connection declares. Both are pure: a save asks
+ * `issues`, and only an operation without one is described.
+ */
+export interface DeclaredOperations {
+  /** Why one accepted operation's declaration is refused. Paths are inside the operation. */
+  issues(operation: ConnectionOperationConfig): AssetValidationIssue[];
+  /** The operation as its catalog entry, for a declaration without an issue. */
+  describe(operation: ConnectionOperationConfig): ConnectorOperationDescriptor;
+}
+
+/**
+ * A Connector type has a catalog the release ships, reads one from the outside system, or
+ * has each Connection declare its operations itself.
+ */
 export type ConnectorTypeDefinition = ConnectorTypeBase &
   (
-    | { catalog: readonly ConnectorOperationDescriptor[]; discover?: undefined }
+    | {
+        catalog: readonly ConnectorOperationDescriptor[];
+        discover?: undefined;
+        declared?: undefined;
+      }
     | {
         catalog?: undefined;
         discover(context: ConnectorContext): Promise<readonly ConnectorOperationDescriptor[]>;
+        declared?: undefined;
       }
+    | { catalog?: undefined; discover?: undefined; declared: DeclaredOperations }
   );
 
 /** The Connector types of this build. The assembly fills it; nothing adds a type at run time. */
@@ -544,13 +629,43 @@ export const CONNECTION_REFUSALS = {
 } as const;
 
 /**
+ * What the type refuses of the accepted operations: a declaration it does not read, or for a
+ * declaring type, a declaration it does not accept.
+ */
+function declarationIssues(
+  type: ConnectorTypeDefinition,
+  operations: readonly ConnectionOperationConfig[]
+): AssetValidationIssue[] {
+  return operations.flatMap((operation, index): AssetValidationIssue[] => {
+    const at = (issue: AssetValidationIssue): AssetValidationIssue => ({
+      ...issue,
+      path: ["operations", index, ...(issue.path ?? [])]
+    });
+    if (type.declared) {
+      const reserved: AssetValidationIssue[] =
+        operation.scope === undefined
+          ? []
+          : [{ message: CONNECTION_SCOPE_RESERVED, path: ["scope"], code: "key_reserved" }];
+      return [...reserved, ...type.declared.issues(operation)].map(at);
+    }
+    return CONNECTION_DECLARATION_FIELDS.filter((field) => operation[field] !== undefined).map(
+      (field) =>
+        at({
+          message: `Connector type '${type.type}' reads its operations from the outside system, so an operation declares no '${field}'`,
+          path: [field]
+        })
+    );
+  });
+}
+
+/**
  * What the Connector type of a Connection refuses it for: a type this build does not ship,
- * settings the type does not read, an auth scheme it does not offer. No issue repeats a value
- * of the settings.
+ * settings the type does not read, an auth scheme it does not offer, a declared operation it
+ * does not accept. No issue repeats a value of the settings.
  */
 export function findConnectorTypeIssues(
   registry: ConnectorTypeRegistry,
-  connection: Pick<ConnectionConfig, "connectorType" | "settings" | "authScheme">
+  connection: Pick<ConnectionConfig, "connectorType" | "settings" | "authScheme" | "operations">
 ): AssetValidationIssue[] {
   const type = registry.get(connection.connectorType);
   if (!type) {
@@ -574,5 +689,5 @@ export function findConnectorTypeIssues(
       path: ["authScheme"]
     });
   }
-  return issues;
+  return [...issues, ...declarationIssues(type, connection.operations)];
 }

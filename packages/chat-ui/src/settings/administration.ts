@@ -1,5 +1,6 @@
 import {
   canManageApiAccess,
+  canManageServicePrincipals,
   canManageUsers,
   canViewAudit,
   canViewUsageGovernance
@@ -44,7 +45,8 @@ export const administration: ChatShellAdministration = {
       id: "api-access",
       group: "instance",
       labelKey: "settings.apiAccess",
-      visible: (viewer) => canManageApiAccess(viewer.user),
+      visible: (viewer) =>
+        canManageServicePrincipals(viewer.platform) || canManageApiAccess(viewer.user),
       component: ApiAccessPage
     },
     {

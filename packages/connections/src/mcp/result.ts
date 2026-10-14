@@ -2,7 +2,6 @@ import {
   connectionCallError,
   isJsonObject,
   unknownToJsonValue,
-  type ConnectionCredential,
   type JsonObject,
   type JsonValue
 } from "@vivd-catalyst/core";
@@ -122,41 +121,4 @@ export function mcpOutputSchema(toolOutputSchema: JsonObject | undefined): JsonO
     required: ["content", "structuredContent"],
     additionalProperties: false
   };
-}
-
-/** A value as text may hold it: as it is, escaped as JSON once or twice, and encoded. */
-function formsOf(value: string): string[] {
-  const escaped = JSON.stringify(value).slice(1, -1);
-  const bytes = Buffer.from(value, "utf8");
-  const base64 = bytes.toString("base64");
-  return [
-    value,
-    escaped,
-    JSON.stringify(escaped).slice(1, -1),
-    base64,
-    base64.replace(/=+$/u, ""),
-    bytes.toString("base64url"),
-    bytes.toString("hex"),
-    encodeURIComponent(value)
-  ].filter((form) => form !== "");
-}
-
-/**
- * Whether data of the server holds the credential this call carried: the secret, or a header
- * made of it, as it is, escaped as JSON, as base64 in both alphabets, as hex or as part of an
- * address. Data that does is discarded whole. `undefined` credential: nothing to find.
- */
-export function holdsCredential(
-  data: JsonValue,
-  credential: ConnectionCredential | undefined
-): boolean {
-  if (credential === undefined) return false;
-  const written = JSON.stringify(data);
-  const lowered = written.toLowerCase();
-  for (const value of new Set([credential.secret, ...Object.values(credential.headers)])) {
-    for (const form of formsOf(value)) {
-      if (written.includes(form) || lowered.includes(form.toLowerCase())) return true;
-    }
-  }
-  return false;
 }
