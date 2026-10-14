@@ -12,3 +12,6 @@ section: Fixed
 - **Data stores page:** the description and the empty list say that a data store is created
   through the CLI or the API by a person with the right to create one. They said an agent
   creates one, which no agent tool does.
+- **A Page that reads a Data Store offers no retry:** the refusal `data_store_needs_app` is
+  final in the frame (`retryable: false`), as a Page reaches a Data Store only once it is an
+  App.
