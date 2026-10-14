@@ -1,4 +1,5 @@
 import {
+  WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   isJsonObject,
   type AssetKindRegistry,
@@ -12,9 +13,10 @@ import {
   type PlatformAction
 } from "@vivd-catalyst/core";
 import { z } from "zod";
+import { APP_ACTIONS, APP_ASSET_KIND } from "./apps/app-kind";
 import type { AssetTarget } from "./asset-target";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
-import type { HeldCallApprovalKind } from "./operation-call-approval-handler";
+import type { HeldCallApprovalKind } from "./held-call-kind";
 
 // A publish that a guardrail holds waits as a request of its own kind, `app_publish` or
 // `workflow_publish`, which the holders of the kind's `approve` right decide and nobody else.
@@ -22,11 +24,16 @@ import type { HeldCallApprovalKind } from "./operation-call-approval-handler";
 // request cannot be approved once the draft or the live revision moved. Spec:
 // events-workflows-and-guardrails.md, Publishing needs a person's click.
 
-/** The approval kind of a held publish, by the asset kind it publishes. */
-export const PUBLISH_APPROVAL_KINDS: Readonly<Record<string, string>> = {
-  app: "app_publish",
-  [WORKFLOW_ASSET_KIND]: "workflow_publish"
+/** The approval kind of a held publish and the right that decides it, by the asset kind. */
+const PUBLISH_APPROVALS: Readonly<Record<string, { kind: string; approve: PlatformAction }>> = {
+  [APP_ASSET_KIND]: { kind: "app_publish", approve: APP_ACTIONS.approve },
+  [WORKFLOW_ASSET_KIND]: { kind: "workflow_publish", approve: WORKFLOW_ACTIONS.approve }
 };
+
+/** The approval kinds of a held publish. */
+export const PUBLISH_APPROVAL_KINDS: readonly string[] = Object.values(PUBLISH_APPROVALS).map(
+  ({ kind }) => kind
+);
 
 /** What a held publish is about, frozen when it is filed: the asset and its two pointers then. */
 const publishSubjectSchema = z.object({
@@ -51,10 +58,9 @@ export function publishApproval(
   target: AssetTarget,
   revision: number
 ): OperationApproval | undefined {
-  const kind = PUBLISH_APPROVAL_KINDS[target.kind.kind];
-  const { approve } = target.kind.actions;
+  const approval = PUBLISH_APPROVALS[target.kind.kind];
   const { asset } = target;
-  if (kind === undefined || approve === undefined || asset?.status !== "active") return undefined;
+  if (approval === undefined || asset?.status !== "active") return undefined;
   const subject: PublishSubject = {
     kind: target.kind.kind,
     name: target.name,
@@ -63,7 +69,12 @@ export function publishApproval(
     draftRevision: asset.revision,
     liveRevision: asset.publishedRevision ?? null
   };
-  return { kind, action: approve, resource: target.resource, subject };
+  return {
+    kind: approval.kind,
+    action: approval.approve,
+    resource: target.resource,
+    subject
+  };
 }
 
 /** Why a held publish can no longer be approved: the asset, its draft or its live revision moved. */
@@ -91,7 +102,8 @@ async function publishMoved(
 
 export interface PublishApprovalKindsOptions {
   clientInstanceId: ClientInstanceId;
-  kinds: AssetKindRegistry<WorkflowAssetKind>;
+  /** The registered kinds, which say what a revision reaches. Without them the review omits it. */
+  kinds?: AssetKindRegistry<WorkflowAssetKind>;
   store: Pick<ConfigAssetStore, "getConfigAsset" | "getConfigAssetRevision">;
   files: Pick<PagesStore, "getAssetFileSet">;
   /** The effect of an operation a Workflow step calls, where it is registered. */
@@ -101,36 +113,29 @@ export interface PublishApprovalKindsOptions {
 /** The held-call kinds of a publish: one for each kind of asset whose publish can be held. */
 export function publishApprovalKinds(options: PublishApprovalKindsOptions): HeldCallApprovalKind[] {
   const { clientInstanceId } = options;
-  return Object.entries(PUBLISH_APPROVAL_KINDS).flatMap(([assetKind, kind]) => {
-    const approve = options.kinds.get(assetKind)?.actions.approve;
-    return approve === undefined
-      ? []
-      : [
-          {
-            kind,
-            requiredPermission: approve as PlatformAction,
-            async moved(subject, store) {
-              const parsed = publishSubjectSchema.safeParse(subject);
-              return parsed.success
-                ? publishMoved(clientInstanceId, parsed.data, store)
-                : "The request names no revision it publishes.";
-            },
-            async review(subject) {
-              const parsed = publishSubjectSchema.safeParse(subject);
-              if (!parsed.success) return undefined;
-              const moved = await publishMoved(clientInstanceId, parsed.data, options.store);
-              return {
-                ...(await publishReview(options, parsed.data)),
-                ...(moved ? { stale: moved } : {})
-              };
-            },
-            subjectKey(subject) {
-              const parsed = publishSubjectSchema.safeParse(subject);
-              return parsed.success ? { assetId: parsed.data.assetId } : subject;
-            }
-          }
-        ];
-  });
+  return Object.values(PUBLISH_APPROVALS).map(({ kind, approve }) => ({
+    kind,
+    requiredPermission: approve,
+    async moved(subject, store) {
+      const parsed = publishSubjectSchema.safeParse(subject);
+      return parsed.success
+        ? publishMoved(clientInstanceId, parsed.data, store)
+        : "The request names no revision it publishes.";
+    },
+    async review(subject) {
+      const parsed = publishSubjectSchema.safeParse(subject);
+      if (!parsed.success) return undefined;
+      const moved = await publishMoved(clientInstanceId, parsed.data, options.store);
+      return {
+        ...(await publishReview(options, parsed.data)),
+        ...(moved ? { stale: moved } : {})
+      };
+    },
+    subjectKey(subject) {
+      const parsed = publishSubjectSchema.safeParse(subject);
+      return parsed.success ? { assetId: parsed.data.assetId } : subject;
+    }
+  }));
 }
 
 /**
@@ -143,7 +148,7 @@ async function publishReview(
   subject: PublishSubject
 ): Promise<JsonObject> {
   const { clientInstanceId, store } = options;
-  const kind = options.kinds.get(subject.kind);
+  const kind = options.kinds?.get(subject.kind);
   const read = (revision: number) =>
     store.getConfigAssetRevision({
       clientInstanceId,

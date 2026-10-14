@@ -174,7 +174,9 @@ export type DryRunGuardrailResponse = z.infer<typeof dryRunGuardrailResponseSche
 
 // The right is the Guardrail's own and is decided on the Guardrail the call names, so
 // `requires` names none: reading its hits takes `guardrail.read`, testing and the dry run of
-// its draft `guardrail.write`, taking it back `guardrail.publish` at its scope.
+// its draft `guardrail.write`, taking it back `guardrail.publish` at its scope. A guardrail the
+// release ships is the instance's: it is read with `guardrail.read` and switched with
+// `guardrail.publish`, both at instance scope.
 export const guardrailOperations = {
   "guardrails.list_hits": defineRegisteredOperation({
     id: "guardrails.list_hits",
@@ -231,7 +233,7 @@ export const guardrailOperations = {
     tag: "Guardrails",
     auth: "principal",
     scope: "config_assets:read",
-    requires: ["guardrail.read"],
+    requires: [],
     effect: "reading",
     response: json(shippedGuardrailsSchema),
     errors: [],
@@ -246,7 +248,7 @@ export const guardrailOperations = {
     tag: "Guardrails",
     auth: "user",
     scope: "config_assets:publish",
-    requires: ["guardrail.publish"],
+    requires: [],
     effect: "changing",
     body: switchShippedGuardrailRequestSchema,
     response: json(shippedGuardrailSchema),

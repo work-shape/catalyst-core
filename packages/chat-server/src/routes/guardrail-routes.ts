@@ -1,4 +1,8 @@
-import { apiOperations, GUARDRAIL_HITS_LIMIT } from "@vivd-catalyst/api-contract";
+import {
+  apiOperations,
+  GUARDRAIL_HITS_LIMIT,
+  type ShippedGuardrailView
+} from "@vivd-catalyst/api-contract";
 import {
   AppError,
   GUARDRAIL_ACTIONS,
@@ -12,7 +16,6 @@ import {
   type ShippedGuardrail,
   type ShippedGuardrailSwitch
 } from "@vivd-catalyst/core";
-import type { ShippedGuardrailView } from "@vivd-catalyst/api-contract";
 import { accessResource, decide } from "../asset-access";
 import { AssetWorkflow } from "../asset-workflow";
 import { GuardrailRunner } from "../guardrail-runner";
@@ -114,6 +117,7 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
 
   // A shipped guardrail belongs to the instance: its right is asked at instance scope.
   route.operation(apiOperations["guardrails.list_shipped"], {
+    authorize: (_input, { access }) => decide(access, GUARDRAIL_ACTIONS.read, INSTANCE_GUARDRAILS),
     async execute(_input, context) {
       const switches = await options.stores.guardrails.listShippedGuardrailSwitches({
         clientInstanceId
@@ -132,6 +136,8 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
   });
 
   route.operation(apiOperations["guardrails.switch_shipped"], {
+    authorize: (input, { access }) =>
+      decide(access, GUARDRAIL_ACTIONS.publish, shippedResource(input.name)),
     resource: (input) => shippedResource(input.name),
     changeClass: "reversible",
     async execute(input, context) {
@@ -192,6 +198,9 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
     }
   });
 }
+
+/** The guardrails of the instance, as a right on all of them is asked. */
+const INSTANCE_GUARDRAILS = { kind: GUARDRAIL_ASSET_KIND };
 
 /** A shipped guardrail as a right is asked on it: the instance's, with no workspace. */
 function shippedResource(name: string): OperationResource {

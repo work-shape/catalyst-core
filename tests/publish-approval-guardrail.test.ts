@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { PUBLISH_APPROVAL_GUARDRAIL } from "@vivd-catalyst/core";
+import { PUBLISH_APPROVAL_GUARDRAIL, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { guardedEvents } from "./support/guardrails";
 import { getTestJobs } from "./support/test-instance";
+import type { WorkflowFixture } from "./support/workflow-instance";
+import { notifyClients, readyWorkflows } from "./support/workflow-runs";
 
 // GR-PUB-1: the guardrail the release ships, "Publishing needs an instance admin's approval".
 // A member who may publish an App and may not approve it waits for an admin; an admin's own
@@ -214,5 +216,53 @@ describe("publishing needs an instance admin's approval", () => {
     expectStatus(await switchTo(t.admin.id, true), 200);
     await created("archive");
     expectStatus(await t.publish(t.kai.id, "archive", 1), 202);
+  });
+});
+
+describe("publishing a Workflow under the shipped guardrail", () => {
+  let open: WorkflowFixture | undefined;
+  afterAll(async () => {
+    await open?.instance.close();
+  });
+
+  it("makes an approver's own publish live, through the guardrail and the kind's approve right", async () => {
+    const t = await readyWorkflows(
+      (fixture) => {
+        open = fixture;
+      },
+      {
+        definitions: "assets",
+        events: (stores) => guardedEvents(stores, {}, { shipped: true }).events
+      }
+    );
+    const put = await t.expectOk(t.root.id, "assets.put", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: "notify-clients" },
+      payload: {
+        config: { name: "notify-clients", manifest: notifyClients() },
+        expectedRevision: null
+      }
+    });
+    const { revision } = z.object({ revision: z.number() }).parse(put.json());
+
+    const published = await t.expectOk(t.root.id, "assets.publish", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: "notify-clients" },
+      payload: { revision }
+    });
+
+    const run = await t.stores.operationRuns.get({
+      clientInstanceId,
+      id: String(published.headers["operation-run-id"])
+    });
+    expect(run).toMatchObject({
+      decision: { mode: "approved", reason: "approved_by_caller", by: t.root.id }
+    });
+    const hits = await t.stores.guardrails.listHits({
+      clientInstanceId,
+      guardrailName: PUBLISH_APPROVAL_GUARDRAIL.name,
+      limit: 10
+    });
+    expect(hits).toContainEqual(
+      expect.objectContaining({ event: "workflow.before_publish", subjectName: "notify-clients" })
+    );
   });
 });

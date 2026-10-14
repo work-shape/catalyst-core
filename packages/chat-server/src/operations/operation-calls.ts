@@ -67,15 +67,13 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       : {})
   };
   // A held publish is decided by the holders of the kind's `approve` right.
-  const held = options.configAssets
-    ? publishApprovalKinds({
-        clientInstanceId,
-        kinds: options.configAssets.kinds,
-        store: options.stores.configAssets,
-        files: options.stores.pages,
-        effectOf: async (operation) => (await deps.registry.resolve(operation))?.effect
-      })
-    : [];
+  const held = publishApprovalKinds({
+    clientInstanceId,
+    ...(options.configAssets ? { kinds: options.configAssets.kinds } : {}),
+    store: options.stores.configAssets,
+    files: options.stores.pages,
+    effectOf: async (operation) => (await deps.registry.resolve(operation))?.effect
+  });
   const handlers = [
     createOperationCallApprovalHandler(handlerOptions),
     ...held.map((kind) => createOperationCallApprovalHandler(handlerOptions, kind))
