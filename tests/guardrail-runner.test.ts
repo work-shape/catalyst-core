@@ -418,6 +418,7 @@ describe("guardrail runner", () => {
     );
     expect(columns.map((column) => column.column_name).sort()).toEqual([
       "client_instance_id",
+      "converted_from",
       "created_at",
       "event",
       "guardrail_name",

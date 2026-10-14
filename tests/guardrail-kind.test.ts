@@ -51,6 +51,7 @@ const hitsSchema = z.object({
         outcome: z.enum(["warn", "block"]),
         message: z.string(),
         subjectKind: z.string(),
+        convertedFrom: z.literal("require_approval").optional(),
         createdAt: z.string()
       })
       // A hit names no person: an answer that carried one fails here.
@@ -209,6 +210,30 @@ describe("the hits of a Guardrail", () => {
       hasMore: false,
       counts: { last7Days: 1, last30Days: 1 }
     });
+  });
+
+  // Fails without the change: a block that answered a request for an approval the action could
+  // not wait for read as any other block.
+  it("says which block answered a request for an approval that could not wait", async () => {
+    const t = await seeded({ converted: privacy });
+    await t.stores.guardrails.recordHits({
+      clientInstanceId,
+      hits: [
+        hit({ guardrailName: "converted", message: "plain" }),
+        hit({ guardrailName: "converted", message: "held", convertedFrom: "require_approval" })
+      ]
+    });
+    const answer = hitsSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "guardrails.list_hits", { params: { name: "converted" } })
+      ).json()
+    );
+    expect(answer.items.map((item) => [item.message, item.outcome, item.convertedFrom])).toEqual(
+      expect.arrayContaining([
+        ["plain", "block", undefined],
+        ["held", "block", "require_approval"]
+      ])
+    );
   });
 
   it("counts the hits of the last 7 and the last 30 days by the database's clock", async () => {

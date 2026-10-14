@@ -182,7 +182,10 @@ export class GuardrailRunner {
                   message: answer.reason,
                   subjectKind: input.subject.kind,
                   ...(input.subject.id ? { subjectId: input.subject.id } : {}),
-                  ...(input.subject.name ? { subjectName: input.subject.name } : {})
+                  ...(input.subject.name ? { subjectName: input.subject.name } : {}),
+                  ...(answer.approvalCannotWait
+                    ? { convertedFrom: "require_approval" as const }
+                    : {})
                 }
               ]
             : [];

@@ -326,7 +326,7 @@ describe("an App the agent writes from a Page of its conversation", () => {
         title: "Offers",
         saved: false,
         message:
-          "Guardrail 'No IBAN in Apps' blocked app 'offers': Apps hold no bank account.: it asks for another person's approval, which a save of a Page cannot wait for. The App's draft was not written; the Page is saved. Ask the person to use Update app on the Page, where the write can wait for the approval."
+          "Guardrail 'No IBAN in Apps' blocked app 'offers': Apps hold no bank account. It asks for another person's approval, which a save of a Page cannot wait for. The App's draft was not written; the Page is saved. Ask the person to use Update app on the Page, where the write can wait for the approval."
       });
       expect(await draftRevisionOf(t, "offers")).toBe(1);
       expect(await hitsOf(t)).toEqual([["asset.before_write", "block", "offers"]]);
@@ -336,6 +336,42 @@ describe("an App the agent writes from a Page of its conversation", () => {
         status: "pending"
       });
       expect(pending).toEqual([]);
+    } finally {
+      await t.close();
+    }
+  });
+
+  // Fails without the change: the hit kept `block` and the guardrail's reason and nothing
+  // else, so its page and its counts said a guardrail that asks for an approval had blocked.
+  it("keeps a hit that says the block answered a request for an approval", async () => {
+    const { t, calls } = await setup({
+      no_iban: noIban({
+        displayName: "IBAN needs a look",
+        filter: { kind: "app" },
+        check: { kind: "pattern", pattern: ibanPattern, reason: "Kontonummer prüfen" },
+        outcome: "require_approval"
+      })
+    });
+    try {
+      const saved = await savedAgain(t, calls);
+      // A reason without a full stop gets one, and one with it no second.
+      expect(saved).toMatchObject({
+        saved: false,
+        message: expect.stringMatching(
+          /^Guardrail 'IBAN needs a look' blocked app 'offers': Kontonummer prüfen\. It asks/u
+        )
+      });
+      const [hit, ...more] = await t.stores.guardrails.listHits({
+        clientInstanceId,
+        guardrailName: "no_iban",
+        limit: 5
+      });
+      expect(more).toEqual([]);
+      expect(hit).toMatchObject({
+        outcome: "block",
+        message: "Kontonummer prüfen",
+        convertedFrom: "require_approval"
+      });
     } finally {
       await t.close();
     }

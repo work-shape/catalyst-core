@@ -173,6 +173,11 @@ export interface GuardrailHit {
   subjectId?: string;
   /** The asset's or the operation's name, where the subject has one. */
   subjectName?: string;
+  /**
+   * The outcome the guardrail answered, where the action could not wait for an approval and
+   * the hit is the `block` it was answered as (`GuardrailAnswer.approvalCannotWait`).
+   */
+  convertedFrom?: "require_approval";
   createdAt: ISODateString;
 }
 
