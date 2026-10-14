@@ -33,6 +33,15 @@ export const build = defineTranslations({
     "build.fallbackEnglish": "Empty in this language. People read the English text.",
     "build.fallbackGerman": "Empty in this language. People read the German text.",
     "build.history": "History",
+    "build.draftAhead": "Draft",
+    "build.neverPublished": "Not published",
+    "build.publish": "Publish",
+    "build.savesDraft": "Saves a draft. It answers nobody until it is published.",
+    "build.publishTitle": "Publish {name}?",
+    "build.publishDescription":
+      "The saved draft becomes the version everyone who uses it gets, from now on. Unsaved changes are not part of it.",
+    "build.publishFailed": "The draft could not be published.",
+    "build.publishSaveFirst": "Save your changes first: only a saved draft can be published.",
     "build.historyDescription": "Every saved revision of {name}, the newest first.",
     "build.historyStale":
       "This page holds an older version. Load the newer version before you restore one.",
@@ -46,10 +55,13 @@ export const build = defineTranslations({
     "build.nameTaken": "The id {name} is taken. Go back and choose another one.",
     "build.openHistory": "Open history",
     "build.namespaceAll": "All Namespaces",
+    "build.scopeFilter": "Scope",
+    "build.scopeInstance": "Instance",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio is not available to you. It opens for people who hold a right on an agent or a skill.",
     "build.noMatchInNamespace": "Nothing in this Namespace.",
+    "build.noneInScope": "Nothing in {scope} yet.",
     "build.noSkillsChosen": "No skills chosen.",
     "build.platform": "Platform",
     "build.pendingApproval":
@@ -59,6 +71,8 @@ export const build = defineTranslations({
       "Belongs to no Namespace. Only a person who may edit on the whole instance can change it.",
     "build.readOnlyNamespace":
       "Belongs to the Namespace {namespace}. Only a person who may edit in this Namespace can change it.",
+    "build.readOnlyWorkspace":
+      "Belongs to the workspace {workspace}. Only a person who may edit in this workspace can change it.",
     "build.readOnlyPlatform":
       "Ships with the platform and is updated with each release. To change it, copy it and edit the copy.",
     "build.restored": "Revision {number} restored.",
@@ -147,6 +161,17 @@ export const build = defineTranslations({
     "build.fallbackEnglish": "In dieser Sprache leer. Es wird der englische Text gezeigt.",
     "build.fallbackGerman": "In dieser Sprache leer. Es wird der deutsche Text gezeigt.",
     "build.history": "Verlauf",
+    "build.draftAhead": "Entwurf",
+    "build.neverPublished": "Nicht veröffentlicht",
+    "build.publish": "Veröffentlichen",
+    "build.savesDraft":
+      "Speichert einen Entwurf. Er antwortet niemandem, bis er veröffentlicht ist.",
+    "build.publishTitle": "{name} veröffentlichen?",
+    "build.publishDescription":
+      "Der gespeicherte Entwurf wird ab jetzt die Version, die alle bekommen, die ihn nutzen. Ungespeicherte Änderungen gehören nicht dazu.",
+    "build.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
+    "build.publishSaveFirst":
+      "Speichere zuerst deine Änderungen: Nur ein gespeicherter Entwurf lässt sich veröffentlichen.",
     "build.historyDescription": "Jede gespeicherte Version von {name}, die neueste zuerst.",
     "build.historyStale":
       "Diese Seite zeigt eine ältere Version. Lade die neuere Version, bevor du eine wiederherstellst.",
@@ -160,10 +185,13 @@ export const build = defineTranslations({
     "build.nameTaken": "Die Kennung {name} ist vergeben. Geh zurück und wähle eine andere.",
     "build.openHistory": "Verlauf öffnen",
     "build.namespaceAll": "Alle Namespaces",
+    "build.scopeFilter": "Geltungsbereich",
+    "build.scopeInstance": "Instanz",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio steht dir nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
     "build.noMatchInNamespace": "Nichts in diesem Namespace.",
+    "build.noneInScope": "Noch nichts in {scope}.",
     "build.noSkillsChosen": "Keine Skills ausgewählt.",
     "build.platform": "Plattform",
     "build.pendingApproval":
@@ -173,6 +201,8 @@ export const build = defineTranslations({
       "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
     "build.readOnlyNamespace":
       "Gehört zum Namespace {namespace}. Ändern kann es nur, wer in diesem Namespace bearbeiten darf.",
+    "build.readOnlyWorkspace":
+      "Gehört zum Arbeitsbereich {workspace}. Ändern kann es nur, wer in diesem Arbeitsbereich bearbeiten darf.",
     "build.readOnlyPlatform":
       "Kommt mit der Plattform und wird mit jedem Release aktualisiert. Um es zu ändern, kopieren Sie es und bearbeiten die Kopie.",
     "build.restored": "Version {number} wiederhergestellt.",

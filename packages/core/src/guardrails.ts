@@ -1,4 +1,5 @@
 import { GUARDRAIL_NAME_MAX_LENGTH, GUARDRAIL_NAME_PATTERN } from "@vivd-catalyst/asset-schemas";
+import type { AssetScope } from "./asset-kinds";
 import type { GuardrailEvent } from "./guardrail-events";
 import type { ClientInstanceId } from "./ids";
 import type { OperationOrigin } from "./operations";
@@ -6,18 +7,31 @@ import type { ISODateString } from "./time";
 
 /**
  * A Guardrail is an asset of kind `guardrail`: one check bound to a before-event, with the
- * outcome of a hit. Release config defines them so far; the release seed writes them into the
- * asset store, where Build lists them, and they are read-only in the product. Spec:
- * events-workflows-and-guardrails.md, Guardrails.
+ * outcome of a hit. Release config defines the operator's floor, which the release seed writes
+ * into the asset store as published and read-only. Builders write further guardrails as
+ * drafts, owned by the instance or one workspace, and a holder of `guardrail.publish` at that
+ * scope makes them enforce. Spec: events-workflows-and-guardrails.md, Guardrails.
  */
 export const GUARDRAIL_ASSET_KIND = "guardrail";
 
-/** The rights of the kind. Reading also shows a guardrail's hits. */
+/**
+ * The rights of the kind. Reading also shows a guardrail's hits; writing edits and tests the
+ * draft; publishing makes it enforce at its scope, which no workspace bundle carries.
+ */
 export const GUARDRAIL_ACTIONS = {
   read: "guardrail.read",
   write: "guardrail.write",
+  publish: "guardrail.publish",
   delete: "guardrail.delete"
 } as const;
+
+/**
+ * Where a guardrail comes from. `release`: the operator's floor, from release config, written
+ * by the release seed and read-only in the product. `asset`: written as an asset and made live
+ * by a publish; it adds checks to the floor and never removes one.
+ */
+export const GUARDRAIL_ORIGINS = ["release", "asset"] as const;
+export type GuardrailOrigin = (typeof GUARDRAIL_ORIGINS)[number];
 
 export { GUARDRAIL_NAME_MAX_LENGTH, GUARDRAIL_NAME_PATTERN };
 export * from "./guardrail-events";
@@ -41,14 +55,15 @@ export const GUARDRAIL_CHECKABLE_FIELDS = {
 /**
  * What a filter can narrow each event by. `kind` is the asset kind of a write or the kind of a
  * request; `operation` an operation's name, or a prefix ending in `.*`; `origin` where the
- * call came from, such as `agent` or `cli`; `agent` the name of the agent that acts.
+ * call came from, such as `agent` or `cli`; `agent` the name of the agent that acts;
+ * `workspace` the id of the Collaboration Workspace the action happens in.
  */
 export const GUARDRAIL_FILTER_KEYS = {
-  "asset.before_write": ["kind", "origin", "agent"],
-  "operation.before_call": ["operation", "origin", "agent"],
-  "app.before_publish": ["origin", "agent"],
-  "workflow.before_publish": ["origin", "agent"],
-  "data_store.before_publish": ["origin", "agent"],
+  "asset.before_write": ["kind", "origin", "agent", "workspace"],
+  "operation.before_call": ["operation", "origin", "agent", "workspace"],
+  "app.before_publish": ["origin", "agent", "workspace"],
+  "workflow.before_publish": ["origin", "agent", "workspace"],
+  "data_store.before_publish": ["origin", "agent", "workspace"],
   "approval_request.before_create": ["kind"]
 } as const satisfies Record<GuardrailEvent, readonly (keyof GuardrailFilter)[]>;
 
@@ -120,6 +135,7 @@ export interface GuardrailFilter {
   operation?: string;
   origin?: string;
   agent?: string;
+  workspace?: string;
 }
 
 /**
@@ -132,8 +148,12 @@ export interface GuardrailAnswer {
   outcome: GuardrailOutcome;
   /** The reason in plain language. Empty where it allowed, or where a warning check could not run. */
   reason: string;
-  /** `release`: the operator's floor, set in release config. */
-  origin: "release";
+  /** `release`: the operator's floor, set in release config. `asset`: a published guardrail. */
+  origin: GuardrailOrigin;
+  /** Who the guardrail of an `asset` answer belongs to: the instance or one workspace. */
+  scope?: AssetScope;
+  /** The published revision of an `asset` answer. */
+  revision?: number;
   /**
    * Set on a `block` that answers a `require_approval` where the action cannot wait for an
    * approval (`PlatformEventContext.cannotWait`).
@@ -150,8 +170,11 @@ export interface GuardrailConfig {
   filter?: GuardrailFilter;
   check: GuardrailCheck;
   outcome: GuardrailOutcome;
-  /** `release`: written by the release seed from release config and read-only in the product. */
-  origin: "release";
+  /**
+   * `release`: written by the release seed from release config and read-only in the product.
+   * `asset`: written as an asset, enforced once published.
+   */
+  origin: GuardrailOrigin;
 }
 
 /**
@@ -192,6 +215,21 @@ export interface GuardrailHitCounts {
 
 export type NewGuardrailHit = Omit<GuardrailHit, "id" | "createdAt">;
 
+/**
+ * One recent action a dry run checks again: a write or a publish of one revision of an asset.
+ * The actor key counts people and is never answered to a caller.
+ */
+export interface GuardrailDryRunSubject {
+  kind: string;
+  name: string;
+  assetId: string;
+  revision: number;
+  /** Who acted, as a key to count distinct people by. Absent where the store kept nobody. */
+  actorKey?: string;
+  /** The workspace that owns the asset, where one does. */
+  workspaceId?: string;
+}
+
 /** The only code that reads or writes the hits of guardrails. */
 export interface GuardrailStore {
   /** Takes the lock of the release seed for this instance until the surrounding transaction ends. */
@@ -211,9 +249,42 @@ export interface GuardrailStore {
     clientInstanceId: ClientInstanceId;
     guardrailName: string;
   }): Promise<GuardrailHitCounts>;
+  /**
+   * The writes or the publishes of asset revisions since a time, newest first, at most
+   * `limit`, with how many there were. A write is a revision written, a delete is none; a
+   * publish is an audited publish of an App, a Workflow or a Data Store.
+   */
+  listRecentSubjects(input: {
+    clientInstanceId: ClientInstanceId;
+    action: "write" | "publish";
+    since: Date;
+    /** Only these kinds. */
+    kinds?: readonly string[];
+    /** Never these kinds. */
+    excludeKinds?: readonly string[];
+    /** Only the assets this workspace owns. */
+    workspaceId?: string;
+    limit: number;
+  }): Promise<{ subjects: GuardrailDryRunSubject[]; total: number }>;
+  /**
+   * How many recent calls of operations, or requests for an approval, there were since a
+   * time: the actions whose content is not kept, which a dry run counts and cannot check.
+   */
+  countRecentActions(input: {
+    clientInstanceId: ClientInstanceId;
+    action: "operation_call" | "approval_request";
+    since: Date;
+    /** An operation's name, or a prefix ending in `.*`. */
+    operation?: string;
+    /** The origin kind of a call. */
+    origin?: string;
+    /** The kind of a request. */
+    kind?: string;
+    workspaceId?: string;
+  }): Promise<number>;
   /** Deletes the hits older than the audit retention. Answers how many it deleted. */
   deleteHitsOlderThan(input: { clientInstanceId: ClientInstanceId; days: number }): Promise<number>;
 }
 
-/** The reason of the refusal of every write of a Guardrail through the asset operations. */
+/** The reason of the refusal of every write of a release Guardrail through the asset operations. */
 export const GUARDRAIL_READ_ONLY_REASON = "guardrail_release_config_only";

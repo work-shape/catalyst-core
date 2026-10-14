@@ -80,7 +80,13 @@ type PlatformAssetWrite =
   | { saved: false; issues: PlatformAssetIssue[] }
   | { saved: false; conflict: "REVISION_CONFLICT"; message: string };
 
-/** One operation a step may call, as far as the person the agent acts for may see it. */
+/**
+ * Who would call the listed operations: a step of a Workflow, or a `connection` action of an
+ * App. Each is offered the operations exposed to its own surface.
+ */
+export type PlatformOperationsAudience = "workflow" | "app";
+
+/** One operation a step or an action may call, as far as the person the agent acts for may see it. */
 export interface PlatformCallableOperation {
   name: string;
   effect: "reading" | "changing";
@@ -126,7 +132,8 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, PageAppCalls
     config: Record<string, unknown>
   ): Promise<readonly OperationBeforeEvent[]>;
   listOperations(
-    context: ToolExecutionContext
+    context: ToolExecutionContext,
+    audience: PlatformOperationsAudience
   ): Promise<{ operations: PlatformCallableOperation[]; truncated: boolean }>;
 }
 
@@ -165,7 +172,7 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       putPolicyFloor: (conversationId) => required().putPolicyFloor(conversationId),
       putBeforeEvents: (conversationId, config) =>
         required().putBeforeEvents(conversationId, config),
-      listOperations: (context) => required().listOperations(context),
+      listOperations: (context, audience) => required().listOperations(context, audience),
       readContext: (context) => required().readContext(context),
       listAssets: (context, input) => required().listAssets(context, input),
       listFiles: (context, input) => required().listFiles(context, input),
@@ -285,6 +292,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
   return [
     defineTool({
       name: open.name,
+      title: { en: "Open asset", de: "Asset öffnen" },
+      summary: {
+        en: "Opens a Workflow, an App or an agent beside the chat to work on it.",
+        de: "Öffnet einen Workflow, eine App oder einen Agenten neben dem Chat, um daran zu arbeiten."
+      },
+      group: "platform",
+      icon: "guide",
       effect: open.effect,
       description: [
         "Open an asset of the platform, such as a Workflow, an App or an agent, beside the chat: the person sees it there, and this conversation is then about it.",
@@ -329,6 +343,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
     }),
     defineTool({
       name: get.name,
+      title: { en: "Read asset", de: "Asset lesen" },
+      summary: {
+        en: "Reads the definition of a Workflow, an App or an agent.",
+        de: "Liest die Definition eines Workflows, einer App oder eines Agenten."
+      },
+      group: "platform",
+      icon: "guide",
       effect: get.effect,
       description: [
         "Read the definition of an asset of the platform, such as a Workflow, an App or an agent: its config and the revision it is at.",
@@ -352,6 +373,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
     }),
     defineTool({
       name: validate.name,
+      title: { en: "Check asset", de: "Asset prüfen" },
+      summary: {
+        en: "Checks a definition for problems without saving it.",
+        de: "Prüft eine Definition auf Fehler, ohne sie zu speichern."
+      },
+      group: "platform",
+      icon: "guide",
       effect: validate.effect,
       description: [
         "Check a definition without saving it. Answers what a save of it would be refused for: each issue with the path of the value, a sentence and, where the check names one, a code.",
@@ -370,6 +398,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
     }),
     defineTool({
       name: put.name,
+      title: { en: "Save asset draft", de: "Entwurf eines Assets speichern" },
+      summary: {
+        en: "Saves a draft of the opened asset; nothing changes until a person publishes it.",
+        de: "Speichert einen Entwurf des geöffneten Assets; nichts ändert sich, bis eine Person ihn veröffentlicht."
+      },
+      group: "platform",
+      icon: "guide",
       effect: put.effect,
       description: [
         "Save a definition as the draft of the asset this conversation is about, the one you opened. The person sees the change beside the chat as soon as it is saved.",
@@ -414,19 +449,38 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
     }),
     defineTool({
       name: operations.name,
+      title: { en: "List callable operations", de: "Aufrufbare Operationen auflisten" },
+      summary: {
+        en: "Lists the operations a Workflow step or an App action may call.",
+        de: "Listet die Operationen auf, die ein Workflow-Schritt oder eine App-Aktion aufrufen darf."
+      },
+      group: "platform",
+      icon: "guide",
       effect: operations.effect,
       description: [
         "List the operations a step of a Workflow may call, as far as the person you act for may see them: the name a step writes under 'operation', whether the operation reads or changes, and its input and output as JSON Schema where it has one.",
+        "With 'for: app' it lists instead the operations of Connections that an App's connection action may call, each named 'connection.<connection>.<operation>': the action file writes the two parts as 'connection' and 'operation', and the effect as it is listed.",
         "The list is of the instance, not of one asset. 'truncated' says that there are more operations than the list holds."
       ].join(" "),
-      inputSchema: z.object({}),
+      inputSchema: z.object({
+        for: z
+          .enum(["workflow", "app"])
+          .optional()
+          .describe(
+            "Who calls the operations: 'workflow' for a step of a Workflow (the default), 'app' for an App's connection action."
+          )
+      }),
       outputSchema: operationsOutputSchema,
-      async execute(_input, context) {
-        const listed = await calls.listOperations(context);
+      async execute(input, context) {
+        const listed = await calls.listOperations(context, input.for ?? "workflow");
         return toolSuccess(listed, {
           auditSummary: {
             action: operations.name,
-            metadata: { operationCount: listed.operations.length, truncated: listed.truncated }
+            metadata: {
+              for: input.for ?? "workflow",
+              operationCount: listed.operations.length,
+              truncated: listed.truncated
+            }
           }
         });
       }

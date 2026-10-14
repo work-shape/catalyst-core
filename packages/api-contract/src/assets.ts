@@ -306,6 +306,23 @@ export const runLiveOnceResponseSchema = z.object({
   part: z.string()
 });
 
+export const listLiveOnceQuerySchema = z.object({ workspaceId: workspaceIdSchema });
+
+/**
+ * The caller's own "Run live once" switches on the asset's current draft. A switch a Workflow
+ * test run used names that run and when; it covers no later run until it is set again.
+ */
+export const liveOnceListSchema = z.object({
+  items: z.array(
+    z.object({
+      part: z.string(),
+      switchedAt: timestampSchema,
+      usedByRunId: z.string().optional(),
+      usedAt: timestampSchema.optional()
+    })
+  )
+});
+
 export const deleteAssetRequestSchema = z.object({
   /** The revision the caller last read. A delete is never made blind. Required. */
   expectedRevision: expectedRevisionSchema,
@@ -401,6 +418,14 @@ export const syncAssetsRequestSchema = z.object({
    * instance.
    */
   namespace: nameText(z.string().min(1)).optional(),
+  /**
+   * The workspace that owns every asset the batch names, as a CLI root bound with
+   * `--workspace` sends it. Left out, the batch names the instance's own assets. A batch
+   * names a Namespace or a workspace, never both, and one that names a workspace is no
+   * release: its agents start hidden and its writer holds the rights on what the workspace
+   * owns.
+   */
+  workspaceId: workspaceIdSchema,
   /**
    * At most `ASSET_SYNC_MAX_ITEMS` items, or `ASSET_RELEASE_SYNC_MAX_ITEMS` for a holder of
    * the release right. A batch without items names the default agent.

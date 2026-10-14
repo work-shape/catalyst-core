@@ -8,6 +8,8 @@ export interface StoredCredential {
   apiKey: string;
   keyId: string;
   name: string;
+  /** What the key may do, as it was issued. Left out by a CLI before `catalyst setup`. */
+  scopes?: string[];
   expiresAt: string;
   savedAt: string;
 }
@@ -39,6 +41,11 @@ export async function readStoredCredential(
   url: string
 ): Promise<StoredCredential | undefined> {
   return (await readCredentialFile(credentialsPath(env))).instances[credentialOrigin(url)];
+}
+
+/** The origins a key is saved for, in the order they were first saved. */
+export async function savedInstanceOrigins(env: ConfigCliEnv): Promise<string[]> {
+  return Object.keys((await readCredentialFile(credentialsPath(env))).instances);
 }
 
 export async function saveCredential(

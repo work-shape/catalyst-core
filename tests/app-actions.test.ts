@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { apiOperations } from "@vivd-catalyst/api-contract";
 import { createAppActionToolSource } from "@vivd-catalyst/chat-server";
 import { createConnectionToolSource } from "@vivd-catalyst/connections";
 import { APP_ACTION_INPUT_MAX_BYTES } from "@vivd-catalyst/core";
@@ -12,6 +13,8 @@ import {
   type AppActionsInstance
 } from "./support/app-actions";
 import { agentOrigin, operationOf } from "./support/connection-operations";
+import { removedFrameConnectionCallPath } from "./support/retired-api-paths";
+import { callTestPath } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 
 // A named action of a Page or an App, called by its frame through the interface, on real rows:
@@ -34,8 +37,6 @@ describe("a call a frame makes through the interface", () => {
   const openApp: AppActionsInstance["openApp"] = (...args) => t.openApp(...args);
   const openPage: AppActionsInstance["openPage"] = (...args) => t.openPage(...args);
   const callAction: AppActionsInstance["callAction"] = (...args) => t.callAction(...args);
-  const callConnection: AppActionsInstance["callConnection"] = (...args) =>
-    t.callConnection(...args);
   const can: AppActionsInstance["can"] = (...args) => t.can(...args);
   const refusal: AppActionsInstance["refusal"] = (response) => t.refusal(response);
   const runs: AppActionsInstance["runs"] = () => t.runs();
@@ -151,33 +152,29 @@ describe("a call a frame makes through the interface", () => {
     }
   });
 
-  it("carries out no changing action in a draft or a Page: draft_safe_mode, no run and no call", async () => {
-    const frames = {
-      page: await openPage(t.admin.id),
-      draft: await openApp(t.admin.id, "draft")
-    };
-    for (const [where, frame] of Object.entries(frames)) {
-      const before = { handed: t.handed.length, runs: (await runs()).length };
+  // A draft of an App simulates a changing action instead (ADR-0031): app-draft-safe-mode.test.ts.
+  it("carries out no changing action in a Page: draft_safe_mode, no run and no call", async () => {
+    const frame = await openPage(t.admin.id);
+    const before = { handed: t.handed.length, runs: (await runs()).length };
 
-      const response = await callAction(
-        t.admin.id,
-        frame,
-        "save",
-        { note: "x" },
-        { "idempotency-key": `safe-${where}` }
-      );
+    const response = await callAction(
+      t.admin.id,
+      frame,
+      "save",
+      { note: "x" },
+      { "idempotency-key": "safe-page" }
+    );
 
-      expect(response.statusCode, where).toBe(409);
-      expect(refusal(response), where).toMatchObject({
-        code: "CONFLICT",
-        details: { reason: "draft_safe_mode" }
-      });
-      expect(response.headers["operation-run-id"], where).toBeUndefined();
-      expect({ handed: t.handed.length, runs: (await runs()).length }, where).toEqual(before);
-      // The frame is told so before it asks, and a read stays possible.
-      expect(await can(t.admin.id, frame), where).toMatchObject({ save: "deny", load: "allow" });
-      expectStatus(await callAction(t.admin.id, frame, "load", { text: "read" }), 200);
-    }
+    expect(response.statusCode).toBe(409);
+    expect(refusal(response)).toMatchObject({
+      code: "CONFLICT",
+      details: { reason: "draft_safe_mode" }
+    });
+    expect(response.headers["operation-run-id"]).toBeUndefined();
+    expect({ handed: t.handed.length, runs: (await runs()).length }).toEqual(before);
+    // The frame is told so before it asks, and a read stays possible.
+    expect(await can(t.admin.id, frame)).toMatchObject({ save: "deny", load: "allow" });
+    expectStatus(await callAction(t.admin.id, frame, "load", { text: "read" }), 200);
   });
 
   it("asks a changing action of a published App for an Idempotency-Key, and runs two calls with one key once", async () => {
@@ -212,63 +209,38 @@ describe("a call a frame makes through the interface", () => {
     expect(refusal(other).code).toBe("IDEMPOTENCY_KEY_REUSED");
   });
 
-  it("refuses an operation that is exposed to agents alone, as an action and as a Connection call", async () => {
+  it("refuses an operation that is exposed to agents alone", async () => {
     const frame = await openApp(t.admin.id, "published");
     const handed = t.handed.length;
     const asAction = await callAction(t.admin.id, frame, "agent-only", { text: "x" });
-    const direct = await callConnection(
-      t.admin.id,
-      frame,
-      { connection: "erp", operation: "echo" },
-      { text: "x" }
-    );
 
-    for (const response of [asAction, direct]) {
-      expect(response.statusCode).toBe(403);
-      expect(refusal(response)).toMatchObject({
-        code: "FORBIDDEN",
-        details: { action: "connection_exposure:bridge", reason: "no_grant" }
-      });
-      expect(await runOf(response.headers["operation-run-id"])).toMatchObject({
-        status: "denied"
-      });
-    }
+    expect(asAction.statusCode).toBe(403);
+    expect(refusal(asAction)).toMatchObject({
+      code: "FORBIDDEN",
+      details: { action: "connection_exposure:bridge", reason: "no_grant" }
+    });
+    expect(await runOf(asAction.headers["operation-run-id"])).toMatchObject({
+      status: "denied"
+    });
     expect(t.handed.length).toBe(handed);
     expect((await can(t.admin.id, frame))["agent-only"]).toBe("deny");
   });
 
-  it("calls an operation of a listed Connection as that operation's own run, and none of a Connection the manifest does not list", async () => {
+  // Fails before the removal: the route ran the Connection's operation for any frame.
+  it("has no direct call of a Connection: a frame reaches a Connection through a named action alone", async () => {
     const frame = await openApp(t.admin.id, "published");
-
-    const listed = await callConnection(
-      t.admin.id,
-      frame,
-      { connection: "crm", operation: "echo" },
-      { text: "direct" }
-    );
-    expectStatus(listed, 200);
-    const answer = resultSchema.parse(listed.json());
-    expect(answer.result).toEqual({ text: "direct" });
-    expect(await runOf(answer.runId)).toMatchObject({
-      operation: "connection.crm.echo",
-      status: "done",
-      origin: {
-        kind: "app",
-        actionName: "connections.call",
-        pageSessionId: frame.pageSessionId,
-        target: { connection: "crm", operation: "echo" }
-      }
-    });
-
     const before = { handed: t.handed.length, runs: (await runs()).length };
-    const unlisted = await callConnection(
-      t.admin.id,
-      frame,
-      { connection: "hidden", operation: "echo" },
-      { text: "direct" }
+
+    expect(Object.keys(apiOperations)).not.toContain("apps.sessions.call_connection");
+    const direct = await callTestPath(
+      t.instance,
+      "POST",
+      removedFrameConnectionCallPath(frame.pageSessionId),
+      { "x-dev-user-id": t.admin.id }
     );
-    expect(unlisted.statusCode).toBe(403);
-    expect(refusal(unlisted).details).toEqual({ reason: "connection_not_declared" });
+    // No route answers, so the refusal is not the page session's own.
+    expect(direct.statusCode).toBe(404);
+    expect(JSON.stringify(direct.json())).not.toContain("session_invalid");
     expect({ handed: t.handed.length, runs: (await runs()).length }).toEqual(before);
   });
 

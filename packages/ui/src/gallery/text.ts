@@ -67,6 +67,8 @@ export interface GalleryText
   roleMember: string;
   roleAdmin: string;
   enabled: string;
+  chipWithPanel: string;
+  chipPanelText: string;
   notifyByEmail: string;
   notifyByEmailHint: string;
   selectAll: string;
@@ -216,6 +218,8 @@ export interface GalleryText
   today: string;
   yesterday: string;
   stateDraft: string;
+  /** What a switched-on `RunLiveOnce` says it covers. */
+  liveOnceOn: string;
   stateRunning: string;
   statePublished: string;
   stateNeedsReconnect: string;
@@ -273,6 +277,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     roleMember: "Member",
     roleAdmin: "Administrator",
     enabled: "Enabled",
+    chipWithPanel: "With a count and a panel",
+    chipPanelText: "What the chip names, and what can be done with it.",
     notifyByEmail: "Notify me by email",
     notifyByEmailHint: "One message per finished run.",
     selectAll: "Select all",
@@ -461,6 +467,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     today: "Today",
     yesterday: "Yesterday",
     stateDraft: "Draft",
+    liveOnceOn: "Your next call runs live.",
     stateRunning: "Running",
     statePublished: "Published",
     stateNeedsReconnect: "Needs reconnect",
@@ -516,6 +523,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     roleMember: "Mitglied",
     roleAdmin: "Administrator",
     enabled: "Aktiviert",
+    chipWithPanel: "Mit Anzahl und Panel",
+    chipPanelText: "Was der Chip benennt und was man damit tun kann.",
     notifyByEmail: "Per E-Mail benachrichtigen",
     notifyByEmailHint: "Eine Nachricht pro abgeschlossenem Lauf.",
     selectAll: "Alle auswählen",
@@ -705,6 +714,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     today: "Heute",
     yesterday: "Gestern",
     stateDraft: "Entwurf",
+    liveOnceOn: "Dein nächster Aufruf läuft live.",
     stateRunning: "Läuft",
     statePublished: "Veröffentlicht",
     stateNeedsReconnect: "Neu verbinden",

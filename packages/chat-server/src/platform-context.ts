@@ -1,4 +1,8 @@
-import { RELEASE_VERSION, type PlatformContext } from "@vivd-catalyst/api-contract";
+import {
+  PUBLISHED_CLI_VERSION,
+  RELEASE_VERSION,
+  type PlatformContext
+} from "@vivd-catalyst/api-contract";
 import {
   ASSET_GET_FILES_MAX_BYTES,
   ASSET_PUT_FILES_MAX_BYTES,
@@ -8,7 +12,9 @@ import {
   INSTANCE_ASSET_SCOPE,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  asUserId,
   hasAuthScope,
+  isAuthenticatedServicePrincipal,
   isPrincipalGrantableAction,
   type ActorAccess,
   type AssetKindActions,
@@ -50,18 +56,51 @@ const VERBS = ["read", "write", "delete", "publish"] as const;
  * Namespace, without a name the instance's own assets as a whole.
  */
 export function usableActions(options: ContextOptions, caller: Caller, name?: string): string[] {
+  return actionsOn(options, caller, name === undefined ? {} : { name });
+}
+
+/** The actions of the kinds the place lets the caller use, where its credential lets it call. */
+function actionsOn(
+  options: ContextOptions,
+  caller: Caller,
+  place: { name?: string; workspaceId?: string }
+): string[] {
   const usable = VERBS.filter((verb) => hasAuthScope(caller.actor, SCOPE_OF_VERB[verb]));
-  return options.configAssets.kinds.kinds.flatMap((kind) =>
-    usable
-      .flatMap((verb) => kind.actions[verb] ?? [])
-      .filter(
-        (action) =>
-          caller.access.authorize(action, {
-            kind: kind.kind,
-            ...(name === undefined ? {} : { name })
-          }).allowed
-      )
-  );
+  return options.configAssets.kinds.kinds
+    .filter((kind) => place.workspaceId === undefined || kind.owners.includes("workspace"))
+    .flatMap((kind) =>
+      usable
+        .flatMap((verb) => kind.actions[verb] ?? [])
+        .filter((action) => caller.access.authorize(action, { kind: kind.kind, ...place }).allowed)
+    );
+}
+
+/**
+ * The workspaces whose own assets the caller can use an action on: every Shared Workspace and
+ * the caller's own workspaces are asked, and the ones with none are left out. A workspace is
+ * named to nobody who holds nothing there.
+ */
+async function usableWorkspaces(
+  options: ContextOptions,
+  caller: Caller
+): Promise<PlatformContext["workspaces"]> {
+  const { clientInstanceId } = options;
+  const [shared, own] = await Promise.all([
+    options.stores.workspaces.listSharedWorkspaces({ clientInstanceId }),
+    isAuthenticatedServicePrincipal(caller.actor)
+      ? []
+      : options.stores.workspaces.listWorkspacesForUser({
+          clientInstanceId,
+          userId: asUserId(caller.actor.id)
+        })
+  ]);
+  const workspaces = new Map([...shared, ...own].map((workspace) => [workspace.id, workspace]));
+  const memberOf = new Set(own.map((workspace) => workspace.id));
+  return [...workspaces.values()].flatMap((workspace) => {
+    const actions = actionsOn(options, caller, { workspaceId: workspace.id });
+    const { id, name, kind } = workspace;
+    return actions.length > 0 ? [{ id, name, kind, member: memberOf.has(id), actions }] : [];
+  });
 }
 
 /**
@@ -141,21 +180,26 @@ export async function readPlatformContext(
 ): Promise<PlatformContext> {
   const { kinds } = options.configAssets.kinds;
   // The Namespaces alone: no count is shown here, so none is computed.
-  const [namespaces, sections] = await Promise.all([
+  const [namespaces, sections, workspaces] = await Promise.all([
     options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId }),
-    visibleSections(options, caller)
+    visibleSections(options, caller),
+    usableWorkspaces(options, caller)
   ]);
   return {
     instance: {
       id: options.clientInstanceId,
       name: options.config.clientInstance.displayName
     },
-    release: { version: RELEASE_VERSION },
+    release: {
+      version: RELEASE_VERSION,
+      ...(PUBLISHED_CLI_VERSION === undefined ? {} : { cliVersion: PUBLISHED_CLI_VERSION })
+    },
     kinds: kinds.map((kind) => ({
       kind: kind.kind,
       plural: kind.plural,
       lifecycle: kind.lifecycle,
       representation: kind.representation,
+      owners: [...kind.owners],
       actions: { ...kind.actions },
       ...principalActionsOf(options, kind),
       ...(kind.representation === "files"
@@ -179,6 +223,7 @@ export async function readPlatformContext(
         ? [{ prefix: namespace.prefix, displayName: namespace.displayName, actions }]
         : [];
     }),
+    workspaces,
     visibleSections: sections
   };
 }

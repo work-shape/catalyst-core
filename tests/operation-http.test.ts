@@ -98,29 +98,32 @@ describe("operation over HTTP: a call that runs", () => {
     expect(origins).toEqual({ user: { kind: "user" }, service_principal: { kind: "cli" } });
   });
 
-  it("takes a person's token for the CLI and a person's browser session for the person", async () => {
+  it("takes only an API credential for the CLI: an embedding host's session token and a browser session are the person", async () => {
     const { server, runs } = await createServer({ explicitCredentials: true });
-    const withHeaders = (name: string, caller: TestCaller, headers: Record<string, string>) => {
-      const as = person(caller);
-      return server.call("testRunChange", { payload: { name }, headers }, as);
-    };
-    const byToken = await withHeaders("by-token", {}, { authorization: "Bearer person-token" });
-    const bySession = await withHeaders(
+    const bearer = { authorization: "Bearer a-token" };
+    const call = (name: string, caller: TestCaller, headers: Record<string, string>) =>
+      server.call("testRunChange", { payload: { name }, headers }, person(caller));
+    const byKey = await call("by-key", { delegatedActor: "api_key" }, bearer);
+    const byPrincipal = await call("by-principal", { kind: "service" }, bearer);
+    const byHostToken = await call("by-host", { delegatedActor: "service_principal" }, bearer);
+    const byToken = await call("by-token", {}, bearer);
+    const bySession = await call(
       "by-session",
       { cookie: true },
       { "sec-fetch-site": "same-origin" }
     );
-    expect([byToken.statusCode, bySession.statusCode]).toEqual([200, 200]);
-    const origin = async (response: typeof byToken) =>
-      (await runs()).find((run) => run.id === response.headers["operation-run-id"]);
-    expect(await origin(byToken)).toMatchObject({
-      actor: { kind: "user" },
-      origin: { kind: "cli" }
-    });
-    expect(await origin(bySession)).toMatchObject({
-      actor: { kind: "user" },
-      origin: { kind: "user" }
-    });
+    const responses = [byKey, byPrincipal, byHostToken, byToken, bySession];
+    expect(responses.map((response) => response.statusCode)).toEqual([200, 200, 200, 200, 200]);
+    const stored = await runs();
+    const originOf = (response: (typeof responses)[number]) =>
+      stored.find((run) => run.id === response.headers["operation-run-id"])?.origin;
+    expect(responses.map(originOf)).toEqual([
+      { kind: "cli" },
+      { kind: "cli" },
+      { kind: "user" },
+      { kind: "user" },
+      { kind: "user" }
+    ]);
   });
 
   it("answers the outcome with its run when the call happened and recording it failed", async () => {

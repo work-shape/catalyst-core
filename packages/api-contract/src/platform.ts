@@ -11,6 +11,11 @@ export const platformAssetKindSchema = z.object({
   lifecycle: z.enum(["active", "draft_published"]),
   /** `config`: a revision is its config. `files`: a revision holds a set of files beside it. */
   representation: z.enum(["config", "files"]),
+  /**
+   * Who may own an asset of the kind: the instance, a workspace, or either. An asset a
+   * workspace owns is read and written by naming that workspace.
+   */
+  owners: z.array(z.enum(["instance", "workspace"])),
   actions: z.object({
     read: z.string(),
     write: z.string(),
@@ -49,10 +54,27 @@ export const platformContextNamespaceSchema = z.object({
   actions: z.array(z.string())
 });
 
+/** A workspace and the actions the caller can use on what it owns. */
+export const platformContextWorkspaceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.enum(["personal", "shared"]),
+  /** The caller is a member: a new agent it makes there starts offered there. */
+  member: z.boolean(),
+  actions: z.array(z.string())
+});
+
 /** Where a caller is and what it can do there: the first read of an outside editor. */
 export const platformContextSchema = z.object({
   instance: z.object({ id: z.string(), name: z.string() }),
-  release: z.object({ version: z.string() }),
+  release: z.object({
+    version: z.string(),
+    /**
+     * The version of `@work-shape/catalyst-cli` on npm that connects a local agent to this
+     * instance. Absent while none is published for it.
+     */
+    cliVersion: z.string().optional()
+  }),
   kinds: z.array(platformAssetKindSchema),
   /**
    * The actions of the listed kinds the caller can use on the instance's own assets as a
@@ -66,6 +88,12 @@ export const platformContextSchema = z.object({
    */
   assetActions: z.array(z.string()),
   namespaces: z.array(platformContextNamespaceSchema),
+  /**
+   * The workspaces whose own assets the caller can use an action of a listed kind on, each
+   * with those actions: through a membership, a grant on the workspace or a right on the
+   * whole instance. A workspace where the caller can use none is left out.
+   */
+  workspaces: z.array(platformContextWorkspaceSchema),
   /**
    * The section rows of the interface's sidebar that are there for the caller, of those that
    * belong to no workspace. `workflows`: the module is on, and the caller is listed at least

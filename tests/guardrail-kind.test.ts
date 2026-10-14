@@ -97,29 +97,82 @@ describe("the release seed of Guardrails", () => {
     expect(await seed({ privacy, tone })).toEqual({
       created: ["privacy", "tone"],
       updated: [],
-      removed: []
+      removed: [],
+      conflicts: []
     });
     // Two processes that start together write once.
     const [first, second] = await Promise.all([seed({ privacy, tone }), seed({ privacy, tone })]);
     expect([first, second]).toEqual([
-      { created: [], updated: [], removed: [] },
-      { created: [], updated: [], removed: [] }
+      { created: [], updated: [], removed: [], conflicts: [] },
+      { created: [], updated: [], removed: [], conflicts: [] }
     ]);
     expect(await readRevisions("privacy")).toEqual([1]);
 
     expect(await seed({ privacy: { ...privacy, outcome: "warn" } })).toEqual({
       created: [],
       updated: ["privacy"],
-      removed: ["tone"]
+      removed: ["tone"],
+      conflicts: []
     });
     expect(await readRevisions("privacy")).toEqual([1, 2]);
     // A name that comes back continues its revisions.
     expect(await seed({ privacy: { ...privacy, outcome: "warn" }, tone })).toEqual({
       created: ["tone"],
       updated: [],
-      removed: []
+      removed: [],
+      conflicts: []
     });
     expect((await readRevisions("tone")).length).toBeGreaterThan(1);
+  });
+
+  // Fails without the change: the floor was stored as a draft nobody published, and a start
+  // deleted the guardrails written as assets.
+  it("publishes the floor it writes, and leaves the guardrails written as assets alone", async () => {
+    const { stores } = await createTestInstance();
+    const seed = (guardrails: Record<string, ReleaseGuardrailConfig>) =>
+      seedReleaseGuardrails({ clientInstanceId, guardrails, stores });
+    const own = { kind: "guardrail", name: "own" };
+    await stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      actor: { displayLabel: "Admin", roles: [] },
+      baseRevisions: { "guardrail:own": null },
+      mutations: [
+        {
+          type: "upsert",
+          ...own,
+          draft: true,
+          config: { name: "own", displayName: "Own", ...tone, origin: "asset" }
+        }
+      ]
+    });
+    expect(await seed({ privacy, own: tone })).toEqual({
+      created: ["privacy"],
+      updated: [],
+      removed: [],
+      conflicts: ["own"]
+    });
+    const stored = await stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "guardrail",
+      name: "privacy"
+    });
+    expect(stored?.publishedRevision).toBe(1);
+    expect(await seed({ privacy: { ...privacy, outcome: "warn" } })).toMatchObject({
+      updated: ["privacy"],
+      removed: []
+    });
+    const updated = await stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "guardrail",
+      name: "privacy"
+    });
+    expect(updated?.publishedRevision).toBe(2);
+    const kept = await stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "guardrail",
+      name: "own"
+    });
+    expect(kept?.status).toBe("active");
   });
 });
 

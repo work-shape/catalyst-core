@@ -13,6 +13,7 @@ export const PAGE_BUILD_ERROR_CODES = [
   "cache_not_available",
   "sql_target_not_available",
   "sql_statement_not_allowed",
+  "key_reserved",
   "output_too_large"
 ] as const;
 

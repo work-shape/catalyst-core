@@ -36,7 +36,7 @@ steps:
   - id: each_client
     name: For each client
     type: loop
-    items: { step: clients, path: rows }
+    items: { step: clients, path: structuredContent.rows }
     itemName: client
     itemLabel: name
     onItemFailure: continue

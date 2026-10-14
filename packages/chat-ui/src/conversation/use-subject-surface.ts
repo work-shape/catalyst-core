@@ -74,8 +74,13 @@ export function useSubjectSurface(input: {
   conversationId: string | undefined;
   storedSubject: SubjectAsset | undefined;
   workspaceId: string | undefined;
+  /**
+   * The conversation stands in the dock of a page. The asset is not shown beside it there: its
+   * page shows it, and the line over the composer links there.
+   */
+  docked: boolean;
 }): SubjectSurfaceState | undefined {
-  const { activeRun, conversationId, storedSubject, workspaceId } = input;
+  const { activeRun, conversationId, storedSubject, workspaceId, docked } = input;
   const panel = useToolDisplayPanel();
   const queryClient = useQueryClient();
   const { apiBaseUrl } = useWorkspaceApiClient();
@@ -120,7 +125,7 @@ export function useSubjectSurface(input: {
   }, [apiBaseUrl, parts, queryClient]);
 
   useEffect(() => {
-    if (conversationId === undefined || subject === undefined || !panel.available) {
+    if (conversationId === undefined || subject === undefined || !panel.available || docked) {
       return;
     }
     const surface = subjectSurface({ subject, workspaceId, title });
@@ -144,7 +149,7 @@ export function useSubjectSurface(input: {
     if (panel.open && panel.entry?.key === surface.key && panel.entry.title !== surface.title) {
       panel.show(surface);
     }
-  }, [conversationId, openCall, panel, subject, title, workspaceId]);
+  }, [conversationId, docked, openCall, panel, subject, title, workspaceId]);
 
   if (subject === undefined) {
     return undefined;
@@ -154,7 +159,7 @@ export function useSubjectSurface(input: {
   return {
     subject,
     title,
-    ...(surface === undefined || shown || !panel.available
+    ...(surface === undefined || shown || !panel.available || docked
       ? {}
       : { show: () => panel.show(surface) })
   };

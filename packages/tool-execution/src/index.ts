@@ -22,7 +22,8 @@ export {
   platformAssetWriteRefusal,
   type PlatformAssetBinding,
   type PlatformAssetCalls,
-  type PlatformCallableOperation
+  type PlatformCallableOperation,
+  type PlatformOperationsAudience
 } from "./platform-asset-tools";
 export {
   PLATFORM_DISCOVERY_TOOLS,
@@ -56,7 +57,7 @@ export * from "./structured-data-tools";
 export * from "./structured-data-tool-schemas";
 
 export * from "./propose-skill-change-tool";
-export { guardrailDenial } from "./before-events";
+export { askBeforeEvents, guardrailDenial } from "./before-events";
 export * from "./skill-source-version";
 export * from "./registration";
 export { OPERATION_INPUT_MAX_DEPTH, runOperation } from "./run-operation";

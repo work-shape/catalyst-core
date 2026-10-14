@@ -9,7 +9,13 @@ export const APP_KIT_PACKAGE = "@work-shape/catalyst-app-kit";
  * Every kit version this release can build against. A release that ships a kit version adds it
  * here; none is ever removed, because a stored Page names the version it was built with.
  */
-export const RELEASED_KIT_VERSIONS: readonly string[] = ["1.0.0", "1.1.0", "1.2.0", "1.3.0"];
+export const RELEASED_KIT_VERSIONS: readonly string[] = [
+  "1.0.0",
+  "1.1.0",
+  "1.2.0",
+  "1.3.0",
+  "1.4.0"
+];
 
 /** The stylesheet of the shared UI library, with the utility classes its components use. */
 export const KIT_STYLESHEET_FILE = "ui.css";

@@ -32,6 +32,7 @@ const sourceAlias = {
   "@vivd-catalyst/chat-ui/shell": "packages/chat-ui/src/shell.tsx",
   "@vivd-catalyst/chat-ui/reading-place": "packages/chat-ui/src/assistant/reading-place.ts",
   "@vivd-catalyst/chat-ui/surface-layout": "packages/chat-ui/src/surface/surface-layout.ts",
+  "@vivd-catalyst/chat-ui/dock-state": "packages/chat-ui/src/workspace/dock-state.ts",
   "@vivd-catalyst/chat-ui/subject-run": "packages/chat-ui/src/conversation/subject-run.ts",
   "@vivd-catalyst/chat-ui/asset-tool-lines":
     "packages/chat-ui/src/conversation/asset-tool-lines.ts",
@@ -65,6 +66,7 @@ const sourceAlias = {
   "@vivd-catalyst/ui/theme": "packages/ui/src/theme/index.ts",
   "@vivd-catalyst/ui": "packages/ui/src/index.ts",
   "@vivd-catalyst/usage-governance": "packages/usage-governance/src/index.ts",
+  "@vivd-catalyst/web-access": "packages/web-access/src/index.ts",
   "@vivd-catalyst/workflows": "packages/workflows/src/index.ts"
 };
 

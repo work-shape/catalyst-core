@@ -2,7 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@vivd-catalyst/ui";
 import { useAgentPlacementMutations } from "../api/agent-placement-mutations";
-import { useAdministeredCollaborationWorkspacesQuery } from "../api/workspace-queries";
+import {
+  useAdministeredCollaborationWorkspacesQuery,
+  usePlatformContextQuery
+} from "../api/workspace-queries";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { canManageAgentModels } from "../control-plane/governance";
 import { useTranslation } from "../i18n";
@@ -15,6 +18,7 @@ import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
 import { AGENT_ASSET_KIND } from "./build-rights";
 import { AGENTS_BUILD_PATH } from "./build-route";
 import { useConnectionToolChoice } from "./connection-tools";
+import { useKnowledgeBaseSource } from "./knowledge-base-source";
 import { skillFacts } from "./skill-facts";
 
 /** How many skills the chooser of an agent asks the instance for with one search. */
@@ -45,7 +49,7 @@ export const agentKind: BuildAssetKind = {
 function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const { apiBaseUrl, authScope, client, user, config } = useSettingsPage();
   const { locale, t } = useTranslation();
-  const { asset, start, instanceWrite } = frame;
+  const { asset, start, instanceWrite, owner } = frame;
   const management = config.features.configAssets;
   const api = { apiBaseUrl, authScope, client };
   const placement = useAgentPlacementMutations({
@@ -62,16 +66,40 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const connectionTools = useConnectionToolChoice();
   const appTools = useAppToolsRead();
   const [skillSearch, setSkillSearch] = useState("");
+  // An agent names skills of its own owner and of the instance: a workspace's agent is offered
+  // that workspace's skills first, then the instance's own.
   const skillsQuery = useQuery({
-    queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", "skill", skillSearch],
-    queryFn: ({ signal }) =>
-      client.assets.list({
-        params: { kind: "skill" },
-        query: { limit: SKILL_CHOICE_PAGE_SIZE, ...(skillSearch ? { text: skillSearch } : {}) },
-        signal
-      }),
+    queryKey: [
+      ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
+      "choice",
+      "skill",
+      owner ?? "",
+      skillSearch
+    ],
+    queryFn: async ({ signal }) => {
+      const query = {
+        limit: SKILL_CHOICE_PAGE_SIZE,
+        ...(skillSearch ? { text: skillSearch } : {})
+      };
+      const [own, instance] = await Promise.all([
+        owner === undefined
+          ? undefined
+          : client.assets.list({
+              params: { kind: "skill" },
+              query: { ...query, workspaceId: owner },
+              signal
+            }),
+        client.assets.list({ params: { kind: "skill" }, query, signal })
+      ]);
+      return { items: [...(own?.items ?? []), ...instance.items] };
+    },
     placeholderData: (previous) => previous
   });
+  // The Knowledge Bases are offered where the instance has the kind: its module is on.
+  const context = usePlatformContextQuery({ ...api, enabled: true }).data;
+  const knowledgeOn = context?.kinds.some((kind) => kind.kind === "knowledge_base") ?? false;
+  const [knowledgeSearch, setKnowledgeSearch] = useState("");
+  const knowledgeRead = useKnowledgeBaseSource().useKnowledgeBases(knowledgeSearch, knowledgeOn);
   const administeredWorkspacesQuery = useAdministeredCollaborationWorkspacesQuery({
     ...api,
     enabled: instanceWrite && asset !== undefined
@@ -91,6 +119,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
       }
       isDefault={isDefault}
       references={referencesQuery.data}
+      referencesLoading={referencesQuery.isPending}
       editableAgentFields={management.editableAgentFields}
       canManageAgentModels={canManageAgentModels(user)}
       skillChoice={{
@@ -101,6 +130,14 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
         })),
         onSearch: (text) => setSkillSearch(text.trim())
       }}
+      knowledgeChoice={
+        knowledgeOn
+          ? {
+              options: knowledgeRead.status === "ready" ? knowledgeRead.data : [],
+              onSearch: (text) => setKnowledgeSearch(text.trim())
+            }
+          : undefined
+      }
       connectionTools={connectionTools}
       appTools={appTools}
       onMakeDefault={

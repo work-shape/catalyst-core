@@ -8,8 +8,10 @@ import type {
   FileSet,
   JsonObject,
   Namespace,
+  OperationEffect,
   PlatformStores,
-  RegisteredAssetKind
+  RegisteredAssetKind,
+  ToolPresentation
 } from "@vivd-catalyst/core";
 
 /** What an agent or skill definition may refer to on this instance. */
@@ -20,6 +22,15 @@ export interface ConfigAssetValidationRefs {
   fastModeModelBindingIds: string[];
   reasoningEfforts: string[];
   enabledToolNames: string[];
+}
+
+/**
+ * One tool an agent of the instance can be given, with what it tells people. `effect` is missing
+ * only for a tool the instance enables and no code registers.
+ */
+export interface AgentToolReference extends ToolPresentation {
+  name: string;
+  effect?: OperationEffect;
 }
 
 /** What the platform tells its agents before their own instructions. */
@@ -49,6 +60,11 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   readonly holdsInstanceDefault: boolean;
   /** An asset of this kind is usable only in the workspaces its availability names. */
   readonly hasWorkspaceAvailability: boolean;
+  /**
+   * The assets a definition of the kind names by name, for the rule that an asset names what
+   * a workspace owns only when its own owner is that workspace. Left out: it names none.
+   */
+  references?(definition: unknown): readonly { kind: string; name: string }[];
   /** Adjusts what an interactive save sends before it is validated. */
   prepareInteractiveUpsert(input: {
     current: unknown;
@@ -118,6 +134,18 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     /** The config of that revision. */
     config: unknown;
   }): void | Promise<void>;
+  /**
+   * Throws where a write of the validated definition reaches beyond the scope that owns the
+   * asset, which only the stores can tell: a workspace guardrail whose filter names another
+   * workspace. Asked of every write through an asset operation, before it is stored.
+   */
+  assertScopedWrite?(input: {
+    clientInstanceId: ClientInstanceId;
+    scope: AssetScope;
+    name: string;
+    definition: unknown;
+    stores: PlatformStores;
+  }): Promise<void>;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
   assertInteractiveDeleteAllowed(input: { surface: AssetWriteSurface }): void;
   /**

@@ -70,7 +70,7 @@ describe("a call of a Connection's operation", () => {
       effect: "reading",
       status: "done",
       actor: { kind: "user", id: t.kai.id },
-      origin: { kind: "user" }
+      origin: { kind: "cli" }
     });
   });
 
@@ -149,9 +149,12 @@ describe("a call of a Connection's operation", () => {
       status: "denied",
       reason: { kind: "forbidden", action: "connection_exposure:agent" }
     });
-    // A person is admitted by any one exposure, and an operation with none by nobody.
-    const byPerson = await t.invoke(t.kai, "connection.crm.write", {}, { effect: "changing" });
-    expect(byPerson.result).toMatchObject({ status: "pending_approval" });
+    // Nor does a key over the CLI reach it: that needs `outside`.
+    const byKey = await t.invoke(t.kai, "connection.crm.write", {}, { effect: "changing" });
+    expect(byKey.result).toMatchObject({
+      status: "denied",
+      reason: { kind: "forbidden", action: "connection_exposure:outside" }
+    });
     expect(t.executed).toEqual([]);
   });
 
@@ -164,7 +167,69 @@ describe("a call of a Connection's operation", () => {
 
     expect(outcome.result).toMatchObject({
       status: "denied",
-      reason: { kind: "forbidden", action: "connection_exposure:any" }
+      reason: { kind: "forbidden", action: "connection_exposure:outside" }
+    });
+    expect(t.executed).toEqual([]);
+  });
+
+  it("lets the CLI and an MCP client reach an operation only where it is exposed to outside, before the right is asked", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm", {
+      operations: [operationOf("echo", { exposure: ["agent", "bridge", "workflow"] })]
+    });
+    await t.grant(t.kai.id, "connection.use", { assetId });
+
+    for (const origin of [{ kind: "cli" }, { kind: "mcp" }] as const) {
+      const refused = await t.invoke(t.kai, "connection.crm.echo", { text: "hello" }, { origin });
+      expect(refused.result).toMatchObject({
+        status: "denied",
+        reason: { kind: "forbidden", action: "connection_exposure:outside", reason: "no_grant" }
+      });
+      // Refused on the exposure, so connection.use was never asked.
+      expect(t.sequence).toEqual(["read connection", "create run", "record denied"]);
+    }
+    expect(t.executed).toEqual([]);
+
+    await t.seed("crm", {
+      operations: [operationOf("echo", { exposure: ["agent", "bridge", "workflow", "outside"] })]
+    });
+    for (const origin of [{ kind: "cli" }, { kind: "mcp" }] as const) {
+      const passed = await t.invoke(t.kai, "connection.crm.echo", { text: "hello" }, { origin });
+      expect(passed.result).toMatchObject({ status: "done", output: { text: "hello" } });
+      expect(t.sequence.slice(0, 3)).toEqual([
+        "read connection",
+        "create run",
+        "authorize connection.use"
+      ]);
+    }
+  });
+
+  it("refuses a person outside an App and a schedule whatever the operation is exposed to", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm", {
+      operations: [operationOf("echo", { exposure: ["agent", "bridge", "workflow", "outside"] })]
+    });
+    await t.grant(t.kai.id, "connection.use", { assetId });
+
+    const byPerson = await t.invoke(
+      t.kai,
+      "connection.crm.echo",
+      { text: "hello" },
+      { origin: { kind: "user" } }
+    );
+    expect(byPerson.result).toMatchObject({
+      status: "denied",
+      reason: { kind: "forbidden", action: "connection_exposure:user" }
+    });
+    const bySchedule = await t.invoke(
+      t.kai,
+      "connection.crm.echo",
+      { text: "hello" },
+      { origin: { kind: "schedule", scheduleId: "sched_test" } }
+    );
+    expect(bySchedule.result).toMatchObject({
+      status: "denied",
+      reason: { kind: "forbidden", action: "connection_exposure:schedule" }
     });
     expect(t.executed).toEqual([]);
   });

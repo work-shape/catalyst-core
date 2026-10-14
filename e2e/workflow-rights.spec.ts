@@ -120,7 +120,6 @@ async function openDialogFor(page: Page): Promise<Locator> {
   const dialog = page.getByRole("dialog", { name: "New right" });
   await pick(page, dialog.getByRole("button", { name: /^Person: / }), member.label);
   await dialog.getByRole("radio", { name: "Workflows" }).click();
-  await dialog.getByRole("radio", { name: /^On one Workflow/u }).click();
   // The picker names the Workflow by its name, with what it says of itself under it.
   await dialog.getByRole("button", { name: /^Workflow: / }).click();
   const option = page.getByRole("option", { name: /Rights walk/u });
@@ -162,8 +161,9 @@ test("an admin gives a member reading and using on one Workflow and removes both
     await dialog.getByRole("radio", { name: /^Deny/u }).click();
     await expect(dialog.getByText(PUBLISH_NOTE, { exact: false })).toHaveCount(0);
     await dialog.getByRole("radio", { name: /^Allow/u }).click();
-    // A Workflow belongs to no workspace, so no workspace is offered as its place.
-    await expect(dialog.getByRole("radio", { name: /shared workspace/u })).toHaveCount(0);
+    // A Workflow belongs to no workspace, so one Workflow is its one place and no place is
+    // asked for.
+    await expect(dialog.getByRole("radiogroup", { name: "Where" })).toHaveCount(0);
 
     // Reading: the member is shown the Workflow and may not start it.
     await dialog.getByRole("checkbox", { name: /^Read/u }).check();

@@ -10,6 +10,7 @@ export function WorkspaceProviders({
   token,
   getToken,
   route,
+  chat,
   onRouteChange,
   children
 }: {
@@ -17,12 +18,13 @@ export function WorkspaceProviders({
   token?: string;
   getToken?: () => string | undefined | Promise<string | undefined>;
   route: WorkspaceRoute;
+  chat: string | undefined;
   onRouteChange(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
   children: ReactNode;
 }) {
   return (
     <WorkspaceApiClientProvider apiBaseUrl={apiBaseUrl} token={token} getToken={getToken}>
-      <WorkspaceUiStateProvider route={route} onRouteChange={onRouteChange}>
+      <WorkspaceUiStateProvider route={route} chat={chat} onRouteChange={onRouteChange}>
         <WorkspaceDraftsProvider>
           <ToolDisplayPanelProvider>{children}</ToolDisplayPanelProvider>
         </WorkspaceDraftsProvider>

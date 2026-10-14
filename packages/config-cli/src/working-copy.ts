@@ -13,6 +13,9 @@ import {
   type SkillConfig,
   type SkillResourceConfig
 } from "@vivd-catalyst/asset-schemas";
+import { savedInstanceOrigins } from "./credentials";
+import { type ConfigCliEnv, readConfigCliEnv } from "./env";
+import { GUARDRAIL_FILE, readGuardrailFolder, type GuardrailDefinition } from "./guardrail-files";
 
 export const MANIFEST_FILENAME = "catalyst.yaml";
 export const STATE_FILENAME = ".catalyst-state.json";
@@ -20,10 +23,16 @@ export const STATE_FILENAME = ".catalyst-state.json";
 export interface ManifestInstance {
   url: string;
   /**
-   * The one Namespace this working copy writes in, such as `kai-`. A push names it, and leaves
+   * The one Namespace this working copy writes in, such as `tax-`. A push names it, and leaves
    * the instance's default agent alone, which only a release names.
    */
   namespace?: string;
+  /**
+   * The workspace this working copy is bound to, by its id: `catalyst config pull
+   * --workspace <id>` writes it. The root holds what that workspace owns, and everything it
+   * pushes is owned by that workspace. A root names a Namespace or a workspace, not both.
+   */
+  workspace?: string;
 }
 
 export interface CatalystManifest {
@@ -32,6 +41,8 @@ export interface CatalystManifest {
   defaultAgentName?: string;
   agents: string[];
   skills: string[];
+  /** The globs of `guardrail.yaml` files. Left out, the working copy holds no guardrails. */
+  guardrails?: string[];
 }
 
 export interface ResolvedInstance extends ManifestInstance {
@@ -74,6 +85,7 @@ export interface WorkingCopyBundle {
   defaultAgentName?: string;
   agents: AgentConfig[];
   skills: SkillConfig[];
+  guardrails: GuardrailDefinition[];
 }
 
 export interface WorkingCopyIssue {
@@ -109,12 +121,19 @@ export function parseManifest(contents: string, source = MANIFEST_FILENAME): Cat
     const namespace = readOptionalString(value, "namespace", `${source} instance '${name}'`);
     if (namespace !== undefined && !NAMESPACE_PREFIX_PATTERN.test(namespace)) {
       throw new Error(
-        `${source} instance '${name}' names no Namespace prefix: '${namespace}'. A prefix is lowercase words joined by '-' and ends in '-', such as 'kai-'.`
+        `${source} instance '${name}' names no Namespace prefix: '${namespace}'. A prefix is lowercase words joined by '-' and ends in '-', such as 'tax-'.`
+      );
+    }
+    const workspace = readOptionalString(value, "workspace", `${source} instance '${name}'`);
+    if (namespace !== undefined && workspace !== undefined) {
+      throw new Error(
+        `${source} instance '${name}' names a Namespace and a workspace. A working copy belongs to one of them.`
       );
     }
     instances[name] = {
       url: normalizeUrl(value.url, `${source} instance '${name}'`),
-      ...(namespace === undefined ? {} : { namespace })
+      ...(namespace === undefined ? {} : { namespace }),
+      ...(workspace === undefined ? {} : { workspace })
     };
   }
 
@@ -125,7 +144,10 @@ export function parseManifest(contents: string, source = MANIFEST_FILENAME): Cat
     ...(defaultInstance === undefined ? {} : { defaultInstance }),
     ...(defaultAgentName === undefined ? {} : { defaultAgentName }),
     agents: readStringArray(input, "agents", source),
-    skills: readStringArray(input, "skills", source)
+    skills: readStringArray(input, "skills", source),
+    ...(input.guardrails === undefined
+      ? {}
+      : { guardrails: readStringArray(input, "guardrails", source) })
   };
 }
 
@@ -146,22 +168,47 @@ export async function readManifestIfPresent(
   }
 }
 
-export function resolveInstance(
-  manifest: CatalystManifest,
-  requestedInstance?: string
-): ResolvedInstance {
-  const key = requestedInstance ?? manifest.defaultInstance;
-  if (!key) {
+/**
+ * The instance a command works on: `instance` as an instance of the manifest or as an address,
+ * else the manifest's default instance. A working copy that names neither is refused with the
+ * instances it names: it belongs to one of them, and a saved key never chooses among them.
+ * Outside a working copy (`manifest` undefined), the one instance a key is saved for is taken,
+ * unless `CATALYST_API_KEY` is set, whose instance a saved key does not tell.
+ */
+export async function resolveInstance(
+  manifest: CatalystManifest | undefined,
+  options: { instance?: string | undefined; env?: ConfigCliEnv | undefined } = {}
+): Promise<ResolvedInstance> {
+  const key = options.instance ?? manifest?.defaultInstance;
+  if (key !== undefined && key !== "") {
+    const configured = manifest?.instances[key];
+    if (configured) return { key, ...configured };
+    return { key, url: normalizeUrl(key, `Instance '${key}'`) };
+  }
+  const refusal = `No instance selected; pass --instance or set defaultInstance in ${MANIFEST_FILENAME}.`;
+  if (manifest !== undefined) {
+    const names = Object.keys(manifest.instances);
     throw new Error(
-      `No instance selected; pass --instance or set defaultInstance in ${MANIFEST_FILENAME}`
+      names.length === 0 ? refusal : `${refusal} ${MANIFEST_FILENAME} names ${names.join(", ")}.`
     );
   }
-  const configured = manifest.instances[key];
-  if (configured) {
-    return { key, ...configured };
+  // Read as connectApi reads it: only whether it is set matters here.
+  if (readConfigCliEnv(options.env).CATALYST_API_KEY) {
+    throw new Error(`${refusal} CATALYST_API_KEY is set: name the instance it belongs to.`);
   }
-  return { key, url: normalizeUrl(key, `Instance '${key}'`) };
+  const saved = await savedInstanceOrigins(readConfigCliEnv(options.env));
+  const [origin, ...more] = saved;
+  if (origin === undefined) {
+    throw new Error(
+      `${refusal} No key is saved; 'catalyst login --instance <https-url>' saves one.`
+    );
+  }
+  if (more.length > 0) throw new Error(`${refusal} Keys are saved for ${saved.join(", ")}.`);
+  return { key: origin, url: origin };
 }
+
+/** The key of an asset in the state file: its kind and its name. */
+const ASSET_KEY_PATTERN = /^(agent|skill|guardrail):.+$/u;
 
 export async function readStateFile(path: string): Promise<CatalystState> {
   let contents: string;
@@ -195,7 +242,7 @@ export async function readStateFile(path: string): Promise<CatalystState> {
       baseline.assets = {};
       for (const [key, asset] of Object.entries(value.assets)) {
         if (
-          !/^(agent|skill):.+$/u.test(key) ||
+          !ASSET_KEY_PATTERN.test(key) ||
           !isRecord(asset) ||
           typeof asset.revision !== "number" ||
           !Number.isInteger(asset.revision) ||
@@ -222,7 +269,7 @@ export async function readStateFile(path: string): Promise<CatalystState> {
         // A number alone is the entry of an earlier CLI, which kept no id.
         const deleted = typeof entry === "number" ? { revision: entry } : entry;
         if (
-          !/^(agent|skill):.+$/u.test(key) ||
+          !ASSET_KEY_PATTERN.test(key) ||
           !isRecord(deleted) ||
           typeof deleted.revision !== "number" ||
           !Number.isInteger(deleted.revision) ||
@@ -259,12 +306,14 @@ export async function readWorkingCopy(
   workingDir: string,
   manifest: CatalystManifest
 ): Promise<WorkingCopyBundle> {
-  const [agentFiles, skillFiles] = await Promise.all([
+  const [agentFiles, skillFiles, guardrailFiles] = await Promise.all([
     matchManifestFiles(workingDir, manifest.agents),
-    matchManifestFiles(workingDir, manifest.skills)
+    matchManifestFiles(workingDir, manifest.skills),
+    matchManifestFiles(workingDir, manifest.guardrails ?? [])
   ]);
   const agents: AgentConfig[] = [];
   const skills: SkillConfig[] = [];
+  const guardrails: GuardrailDefinition[] = [];
   const issues: WorkingCopyIssue[] = [];
 
   for (const path of agentFiles) {
@@ -304,6 +353,17 @@ export async function readWorkingCopy(
     }
   }
 
+  // A guardrail is read as its files say and checked by the instance, which knows its events.
+  for (const path of guardrailFiles) {
+    const file = toRelativePath(workingDir, path);
+    try {
+      guardrails.push(await readGuardrailFolder(dirname(path)));
+    } catch (error) {
+      const extracted = extractErrorIssues(file, error);
+      issues.push(...(extracted.length > 0 ? extracted : [{ file, message: errorMessage(error) }]));
+    }
+  }
+
   if (issues.length > 0) {
     throw new WorkingCopyValidationError(issues);
   }
@@ -312,7 +372,8 @@ export async function readWorkingCopy(
       ? {}
       : { defaultAgentName: manifest.defaultAgentName }),
     agents,
-    skills
+    skills,
+    guardrails
   };
 }
 
@@ -352,6 +413,11 @@ export function skillAssetPath(workingDir: string, name: string): string {
   return resolve(workingDir, "skills", name, "SKILL.md");
 }
 
+export function guardrailAssetPath(workingDir: string, name: string): string {
+  assertSafeAssetName(name);
+  return resolve(workingDir, "guardrails", name, GUARDRAIL_FILE);
+}
+
 export async function readSkillResources(skillFilePath: string): Promise<SkillResourceConfig[]> {
   const skillDirectory = dirname(skillFilePath);
   const files: string[] = [];
@@ -388,12 +454,16 @@ export async function removeStaleManifestAssets(
   manifest: CatalystManifest,
   desiredPaths: Set<string>
 ): Promise<void> {
-  const existing = await matchManifestFiles(workingDir, [...manifest.agents, ...manifest.skills]);
+  const existing = await matchManifestFiles(workingDir, [
+    ...manifest.agents,
+    ...manifest.skills,
+    ...(manifest.guardrails ?? [])
+  ]);
   for (const path of existing) {
     if (desiredPaths.has(path)) {
       continue;
     }
-    if (path.endsWith("/SKILL.md")) {
+    if (path.endsWith("/SKILL.md") || path.endsWith(`/${GUARDRAIL_FILE}`)) {
       await rm(dirname(path), { recursive: true, force: true });
       continue;
     }
@@ -432,6 +502,48 @@ export async function updateManifestDefaultAgent(
     }
   }
   await writeFile(path, updated, "utf8");
+}
+
+/**
+ * Binds the working copy's instance to a workspace: writes `workspace: <id>` below the
+ * instance's `url` in catalyst.yaml and leaves every other line as it is. An instance that is
+ * not written as a block with its own `url:` line is not changed, and the caller is told to
+ * add the line itself.
+ */
+export async function bindManifestWorkspace(
+  path: string,
+  instanceKey: string,
+  workspaceId: string
+): Promise<void> {
+  const contents = await readFile(path, "utf8");
+  const lines = contents.split("\n");
+  const keyLine = lines.findIndex((line) => {
+    const match = /^(\s+)(["']?)([^"':]+)\2:\s*(?:#.*)?$/u.exec(line.trimEnd());
+    return match?.[3] === instanceKey;
+  });
+  const keyIndent = keyLine < 0 ? -1 : indentOf(lines[keyLine] ?? "");
+  let urlLine = -1;
+  for (let index = keyLine + 1; keyLine >= 0 && index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (line.trim() === "" || line.trim().startsWith("#")) continue;
+    if (indentOf(line) <= keyIndent) break;
+    if (/^\s+url:/u.test(line)) {
+      urlLine = index;
+      break;
+    }
+  }
+  if (urlLine < 0) {
+    throw new Error(
+      `Cannot bind instance '${instanceKey}' in ${MANIFEST_FILENAME}: add 'workspace: ${workspaceId}' to that instance yourself, beside its url.`
+    );
+  }
+  const entry = yaml.dump({ workspace: workspaceId }, { lineWidth: -1 }).trimEnd();
+  lines.splice(urlLine + 1, 0, `${" ".repeat(indentOf(lines[urlLine] ?? ""))}${entry}`);
+  await writeFile(path, lines.join("\n"), "utf8");
+}
+
+function indentOf(line: string): number {
+  return line.length - line.trimStart().length;
 }
 
 /**

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -8,7 +9,7 @@ import {
 } from "@vivd-catalyst/api-contract";
 import type { OperationOutcome } from "@vivd-catalyst/api-client";
 import { ConfigApiError, type ConfigApi } from "./api";
-import { readAssetSource, readDefinition } from "./asset-sources";
+import { readAssetSource } from "./asset-sources";
 import {
   formatAsset,
   formatAssetList,
@@ -54,6 +55,9 @@ const OPTIONS = {
   personal: { type: "boolean", default: false },
   "available-in": { type: "string", multiple: true },
   none: { type: "boolean", default: false },
+  field: { type: "string" },
+  asset: { type: "string" },
+  confirm: { type: "string" },
   help: { type: "boolean", short: "h", default: false }
 } as const;
 
@@ -162,18 +166,22 @@ const VERBS: Record<string, Verb> = {
     }
   },
   validate: {
-    usage: "validate --from <file>",
-    summary: "Check a definition against the instance without writing it (assets.validate)",
+    usage: "validate --from <file-or-folder>",
+    summary:
+      "Check a definition against the instance without writing it (assets.validate); a folder of files is checked against the limits of one write",
     named: false,
     flags: ["from"],
     prepare: (values, _name, cwd) => {
-      const from = fromPath(values, cwd, "--from <file>");
+      const from = fromPath(values, cwd, "--from <file-or-folder>");
       return async (session) => {
-        const config = await readDefinition(from);
+        // What put reads, validate reads. The instance checks a definition without writing
+        // it; the files of a kind whose revision holds files it checks only as it writes them.
+        const source = await readAssetSource(from, session.kind.representation);
+        if ("files" in source) return filesRead(session, from, source.files.length);
         const result = await session.api.read((client) =>
           client.assets.validate({
             params: { kind: session.kind.kind },
-            body: { config, ...session.scope }
+            body: { config: source.config, ...session.scope }
           })
         );
         writeOut(
@@ -227,13 +235,20 @@ const VERBS: Record<string, Verb> = {
     }
   },
   publish: {
-    usage: "publish <name> --revision <n>",
-    summary: "Make one revision the one its users are served (assets.publish)",
+    usage: "publish <name> --revision <n> [--confirm <blocked>]",
+    summary:
+      "Make one revision the one its users are served (assets.publish). A guardrail shows its dry run first",
     named: true,
-    flags: ["revision"],
+    flags: ["revision", "confirm"],
     prepare: (values, name) => {
       const revision = revisionNumber(required(values.revision, "--revision <n>"));
       return async (session) => {
+        if (session.kind.kind === GUARDRAIL_KIND) {
+          const proceed = await guardrailDryRunBeforePublish(session, name, revision);
+          if (proceed !== undefined) return proceed;
+        } else if (values.confirm !== undefined) {
+          throw new UsageError("--confirm answers the dry run of a guardrail's publish.");
+        }
         const outcome = await session.api.change(
           (client, idempotencyKey) =>
             client.assets.publish({
@@ -247,6 +262,80 @@ const VERBS: Record<string, Verb> = {
           `Published revision ${output.publishedRevision} of ${session.kind.kind} '${name}'${output.replacedRevision === undefined ? "" : ` in place of revision ${output.replacedRevision}`}.`
         ]);
       };
+    }
+  },
+  test: {
+    usage:
+      "test <name> [--revision <n>] (--text <content> [--field <field>] | --from <file> [--field <field>] | --asset <kind>:<name>[@<n>])",
+    summary:
+      "Check a guardrail's draft, or one revision, on sample content or on an asset; keeps no hit (guardrails.test)",
+    named: true,
+    flags: ["revision", "text", "from", "field", "asset"],
+    prepare: (values, name, cwd) => {
+      const revision = values.revision === undefined ? undefined : revisionNumber(values.revision);
+      const given = [values.text, values.from, values.asset].filter((value) => value !== undefined);
+      if (given.length !== 1) {
+        throw new UsageError("Give the content to check: one of --text, --from or --asset.");
+      }
+      if (values.asset !== undefined && values.field !== undefined) {
+        throw new UsageError("--field names a field of sample content, not of an asset.");
+      }
+      const asset = values.asset === undefined ? undefined : assetReference(values.asset);
+      return async (session) => {
+        requireGuardrail(session, "test");
+        const text =
+          values.from === undefined
+            ? values.text
+            : await readFile(fromPath(values, cwd, "--from <file>"), "utf8");
+        const body = {
+          ...(revision === undefined ? {} : { revision }),
+          ...(asset ? { asset } : { sample: { [values.field ?? "content"]: text ?? "" } })
+        };
+        const answer = await session.api.read((client) =>
+          client.guardrails.test({ params: { name }, body })
+        );
+        return print(session, answer, () =>
+          [
+            `Revision ${answer.revision} of guardrail '${name}' on '${answer.event}': ${answer.outcome}${answer.reason === "" ? "" : ` (${answer.reason})`}.`,
+            ...(answer.appliesToAsset === false
+              ? ["Its filter does not take this asset: where it enforces, it would not check it."]
+              : []),
+            "Nothing was kept: a test records no hit."
+          ].join("\n")
+        );
+      };
+    }
+  },
+  "dry-run": {
+    usage: "dry-run <name> [--revision <n>]",
+    summary:
+      "Count what a guardrail's draft, or one revision, would have answered in the last 14 days, without names (guardrails.dry_run)",
+    named: true,
+    flags: ["revision"],
+    prepare: (values, name) => {
+      const revision = values.revision === undefined ? undefined : revisionNumber(values.revision);
+      return async (session) => {
+        requireGuardrail(session, "dry-run");
+        const answer = await guardrailDryRun(session, name, revision);
+        return print(session, answer, () => formatDryRun(name, answer));
+      };
+    }
+  },
+  unpublish: {
+    usage: "unpublish <name>",
+    summary: "Stop a published guardrail from enforcing; its draft stays (guardrails.unpublish)",
+    named: true,
+    flags: [],
+    prepare: (_values, name) => async (session) => {
+      requireGuardrail(session, "unpublish");
+      const outcome = await session.api.change(
+        (client, idempotencyKey) =>
+          client.guardrails.unpublish({ params: { name }, idempotencyKey }),
+        "It may have been applied: run 'show' before sending it again."
+      );
+      return settle(session, outcome, (output) => [
+        `Guardrail '${name}' no longer enforces: revision ${output.unpublishedRevision} was taken back. Its draft is at revision ${output.draftRevision}.`
+      ]);
     }
   },
   "discard-draft": {
@@ -383,6 +472,90 @@ const VERBS: Record<string, Verb> = {
   }
 };
 
+const GUARDRAIL_KIND = "guardrail";
+
+function requireGuardrail(session: Session, verb: string): void {
+  if (session.kind.kind !== GUARDRAIL_KIND) {
+    throw new UsageError(`'${verb}' is a command of guardrails only.`);
+  }
+}
+
+/** `--asset <kind>:<name>[@<n>]`: the asset a test reads, at its live revision unless named. */
+function assetReference(value: string): { kind: string; name: string; revision?: number } {
+  const match = /^([a-z][a-z0-9_-]*):([^@]+)(?:@(\d+))?$/u.exec(value);
+  if (!match || match[1] === undefined || match[2] === undefined) {
+    throw new UsageError(`'${value}' names no asset: write <kind>:<name>, or <kind>:<name>@<n>.`);
+  }
+  return {
+    kind: match[1].replaceAll("-", "_"),
+    name: match[2],
+    ...(match[3] === undefined ? {} : { revision: revisionNumber(match[3]) })
+  };
+}
+
+type DryRun = Awaited<ReturnType<typeof guardrailDryRun>>;
+
+function guardrailDryRun(session: Session, name: string, revision: number | undefined) {
+  return session.api.read((client) =>
+    client.guardrails.dry_run({
+      params: { name },
+      body: revision === undefined ? {} : { revision }
+    })
+  );
+}
+
+function formatDryRun(name: string, answer: DryRun): string {
+  const people = (count: { actions: number; people: number }) =>
+    `${count.actions} action${count.actions === 1 ? "" : "s"} by ${count.people} ${count.people === 1 ? "person" : "people"}`;
+  return [
+    `Dry run of revision ${answer.revision} of guardrail '${name}' on '${answer.event}', over the last ${answer.days} days:`,
+    `  would have blocked ${people(answer.wouldBlock)}`,
+    `  would have asked for an approval on ${people(answer.wouldRequireApproval)}`,
+    `  would have warned on ${people(answer.wouldWarn)}`,
+    `  ${answer.evaluated} of ${answer.matched} matching actions checked again${answer.limitedTo === undefined ? "" : ` (at most ${answer.limitedTo})`}${answer.notEvaluable > 0 ? `; ${answer.notEvaluable} could not be, as their content or origin is not kept` : ""}.`,
+    "No names are shown and nothing was kept."
+  ].join("\n");
+}
+
+/**
+ * The dry run a guardrail's publish shows first. A first publish of a guardrail that stops
+ * actions (it blocks or holds them for an approval) goes ahead only with `--confirm` naming
+ * the actions it would have stopped and those it could not check: a dry run that checked
+ * nothing does not say that the guardrail stops nothing. Answers an exit code where the
+ * publish stops here, and nothing where it goes ahead.
+ */
+async function guardrailDryRunBeforePublish(
+  session: Session,
+  name: string,
+  revision: number
+): Promise<number | undefined> {
+  const answer = await guardrailDryRun(session, name, revision);
+  if (!session.values.json) writeErr(session.options, formatDryRun(name, answer));
+  const stops = answer.outcome === "block" || answer.outcome === "require_approval";
+  const stopped = answer.wouldBlock.actions + answer.wouldRequireApproval.actions;
+  const unchecked = stops ? answer.notEvaluable : 0;
+  const named = stopped + unchecked;
+  const confirmed = session.values.confirm;
+  if (answer.published || named === 0) {
+    if (confirmed !== undefined) {
+      throw new UsageError(
+        "--confirm answers a first publish that would stop actions or could not check them, and this is none."
+      );
+    }
+    return undefined;
+  }
+  if (confirmed === String(named)) return undefined;
+  const actions = (count: number) => `${count} action${count === 1 ? "" : "s"}`;
+  const what = `${actions(stopped)} it would have stopped${unchecked > 0 ? ` and ${actions(unchecked)} it could not check` : ""}`;
+  writeErr(
+    session.options,
+    confirmed === undefined
+      ? `This first publish acts on ${what} in the last ${answer.days} days. Publish it with --confirm ${named}, or publish a draft with the outcome 'warn' first.`
+      : `--confirm ${confirmed} does not name the ${named}: ${what}. Nothing was published.`
+  );
+  return EXIT.refused;
+}
+
 /** The words before the kind that are commands of their own. */
 const INSTANCE_COMMANDS = ["context", "kinds", "references"] as const;
 
@@ -429,13 +602,14 @@ export async function runAssetCommand(
       throw new UsageError(`Unexpected argument '${extra[0] ?? name}'.`);
     }
     const call = verb.prepare(values, name, options.cwd);
-    const api = await openInstance(options);
+    const { api, workspace } = await openInstance(options);
     const context = await api.read((client) => client.platform.context.get());
+    const workspaceId = values.workspace ?? workspace;
     return await call({
       api,
       kind: findKind(context.kinds, noun),
       values,
-      scope: values.workspace === undefined ? {} : { workspaceId: values.workspace },
+      scope: workspaceId === undefined ? {} : { workspaceId },
       options
     });
   } catch (error) {
@@ -456,7 +630,7 @@ async function runInstanceCommand(
   values: Values,
   options: ConfigCommandOptions
 ): Promise<number> {
-  const api = await openInstance(options);
+  const { api } = await openInstance(options);
   const json = values.json;
   const out = (value: unknown, text: () => string) =>
     writeOut(options, json ? JSON.stringify(value, null, 2) : text());
@@ -472,17 +646,17 @@ async function runInstanceCommand(
 }
 
 /**
- * The client of the instance the command names: `--instance` as a URL, or as an instance of
- * the working copy's `catalyst.yaml`, or the working copy's default instance. The key is the
- * one every command signs in with (`connectApi`).
+ * The client of the instance the command names, as `resolveInstance` selects it, signed in with
+ * the key every command uses (`connectApi`), and the workspace the working copy is bound to. A
+ * bound root addresses what that workspace owns, as its `config` commands do, unless
+ * `--workspace` names another.
  */
-async function openInstance(options: ConfigCommandOptions): Promise<ConfigApi> {
+async function openInstance(
+  options: ConfigCommandOptions
+): Promise<{ api: ConfigApi; workspace: string | undefined }> {
   const manifest = await readManifestIfPresent(resolveWorkingDir(options));
-  const instance = resolveInstance(
-    manifest ?? { instances: {}, agents: [], skills: [] },
-    options.instance
-  );
-  return connectApi(instance.url, options);
+  const instance = await resolveInstance(manifest, options);
+  return { api: await connectApi(instance.url, options), workspace: instance.workspace };
 }
 
 /** The kind a noun names: its id, its plural, or either with dashes for underscores. */
@@ -495,6 +669,18 @@ function findKind(kinds: readonly AssetKind[], noun: string): AssetKind {
     );
   }
   return kind;
+}
+
+/** What `validate` says of a folder of files: read, within one write, not yet checked. */
+function filesRead(session: Session, from: string, files: number): number {
+  const noun = kindNoun(session.kind);
+  const draft = session.kind.lifecycle === "draft_published" ? " as a draft" : "";
+  return print(session, { files, checkedByInstance: false }, () =>
+    [
+      `Read ${files} files from '${from}', within what one write carries.`,
+      `The instance checks the files of a ${session.kind.kind} as it writes them: 'catalyst ${noun} put <name> --from ${from} --if-revision <n|new>' writes them${draft}.`
+    ].join("\n")
+  );
 }
 
 /** Prints what a changing call answered, or that it waits and has changed nothing yet. */
@@ -580,9 +766,12 @@ ${Object.values(VERBS)
   .join("\n")}
 
 Options:
-  --instance <name-or-url>  An instance of catalyst.yaml, or its URL
+  --instance <name-or-url>  An instance of catalyst.yaml, or its URL. Left out: the
+                            defaultInstance of catalyst.yaml; outside a working copy,
+                            the one instance a key is saved for
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
-  --workspace <id>          Address the assets one workspace owns
+  --workspace <id>          Address the assets one workspace owns. Left out in a working
+                            copy bound to a workspace: that workspace
   --json                    Print the instance's answer as JSON
   --help                    Show this help
 

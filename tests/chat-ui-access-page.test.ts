@@ -17,6 +17,7 @@ import {
   emptyGrantForm,
   grantRequests,
   grantScopeKinds,
+  grantsNameWorkspaces,
   GrantsTab,
   grantVerbs,
   groupGrants,
@@ -113,7 +114,6 @@ function grantsTab(props: Partial<ComponentProps<typeof GrantsTab>>) {
     onRetry: nothing,
     users: [user("user-1", "Kai Example")],
     usersFailed: false,
-    namespaces: [kai],
     assets: [],
     assetsFailure: undefined,
     onGrant: nothingAdded,
@@ -462,6 +462,7 @@ describe("what a check decides", () => {
         plural: "agents",
         lifecycle: "active" as const,
         representation: "config" as const,
+        owners: ["instance" as const],
         actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
       },
       {
@@ -469,6 +470,7 @@ describe("what a check decides", () => {
         plural: "connections",
         lifecycle: "active" as const,
         representation: "config" as const,
+        owners: ["instance" as const],
         actions: {
           read: "connection.read",
           use: "connection.use",
@@ -481,6 +483,7 @@ describe("what a check decides", () => {
         plural: "apps",
         lifecycle: "active" as const,
         representation: "config" as const,
+        owners: ["instance" as const],
         actions: { read: "app.read", write: "app.write", delete: "app.delete" }
       },
       {
@@ -488,6 +491,7 @@ describe("what a check decides", () => {
         plural: "reports",
         lifecycle: "active" as const,
         representation: "config" as const,
+        owners: ["instance" as const],
         actions: { read: "report.read", write: "report.write", delete: "report.delete" }
       }
     ];
@@ -589,9 +593,8 @@ describe("what the dialogs send", () => {
       holderId: "user-1",
       kind: "agent",
       verbs: ["delete", "read"],
-      scopeKind: "namespace",
-      namespace: "kai-",
-      assetId: undefined,
+      scopeKind: "asset",
+      assetId: "asset-1",
       workspaceId: undefined,
       effect: "allow"
     } as const;
@@ -602,46 +605,40 @@ describe("what the dialogs send", () => {
     expect(grantRequests({ ...form, verbs: [] })).toBeUndefined();
   });
 
-  it("offers a Connection reading and using, in a Namespace, on one Connection or a workspace", () => {
+  it("offers a new right in a workspace or on one asset, and never in a Namespace or a workspace that owns no such asset", () => {
     expect(grantVerbs("connection")).toEqual(["read", "use"]);
-    expect(grantScopeKinds("connection")).toEqual(["namespace", "asset", "workspace"]);
-    // Agents and skills keep the verbs and the places they had.
+    // A Connection is the instance's own, so a workspace would cover nothing.
+    expect(grantScopeKinds("connection")).toEqual(["asset"]);
+    // A workspace owns agents and skills (WS-OWN-1a), so "In workspace X" comes first.
     for (const kind of ["agent", "skill"] as const) {
       expect(grantVerbs(kind)).toEqual(["read", "write", "delete"]);
-      expect(grantScopeKinds(kind)).toEqual(["namespace", "asset"]);
+      expect(grantScopeKinds(kind)).toEqual(["workspace", "asset"]);
     }
+    // A new right on agents starts at the agents' first place.
+    expect(emptyGrantForm).toMatchObject({ kind: "agent", scopeKind: "workspace" });
 
-    // Another kind keeps no asset and no verb it has no grant for. The Namespace stays: a
-    // Connection right is written there as an agent's is.
-    const inNamespace = withGrantKind(
+    // Another kind keeps no asset and no verb it has no grant for, and takes its first place.
+    const onConnection = withGrantKind(
       {
         ...emptyGrantForm,
         holderId: "user-1",
         verbs: ["read", "write"],
-        namespace: "kai-",
+        scopeKind: "workspace",
+        workspaceId: "ws-1",
         assetId: "asset-agent"
       },
       "connection"
     );
-    expect(inNamespace).toMatchObject({
+    expect(onConnection).toMatchObject({
       kind: "connection",
       verbs: ["read"],
-      scopeKind: "namespace",
+      scopeKind: "asset",
       assetId: undefined
     });
-    expect(grantRequests(inNamespace)).toEqual([
-      {
-        holderKind: "user",
-        holderId: "user-1",
-        action: "connection.read",
-        effect: "allow",
-        scopeKind: "namespace",
-        namespace: "kai-"
-      }
-    ]);
-    const chosen = { ...inNamespace, scopeKind: "asset" as const };
-    expect(grantRequests(chosen)).toBeUndefined();
-    expect(grantRequests({ ...chosen, verbs: ["use", "read"], assetId: "asset-crm" })).toEqual([
+    expect(grantRequests(onConnection)).toBeUndefined();
+    expect(
+      grantRequests({ ...onConnection, verbs: ["use", "read"], assetId: "asset-crm" })
+    ).toEqual([
       {
         holderKind: "user",
         holderId: "user-1",
@@ -659,32 +656,28 @@ describe("what the dialogs send", () => {
         scopeId: "asset-crm"
       }
     ]);
+    // No row is asked for where the server writes none: a verb the kind lacks, a workspace
+    // for a Connection, the whole instance.
     expect(
-      grantRequests({ ...chosen, verbs: ["use"], scopeKind: "workspace", workspaceId: "ws-1" })
-    ).toEqual([
+      grantRequests({ ...onConnection, verbs: ["write"], assetId: "asset-crm" })
+    ).toBeUndefined();
+    const inPlace = (kind: "connection" | "agent", scopeKind: "workspace" | "instance") =>
+      grantRequests({ ...onConnection, kind, scopeKind, workspaceId: "ws-1" });
+    expect(inPlace("connection", "workspace")).toBeUndefined();
+    for (const kind of ["connection", "agent"] as const) {
+      expect(inPlace(kind, "instance"), kind).toBeUndefined();
+    }
+    // An agent right in a workspace is one row on that workspace.
+    expect(inPlace("agent", "workspace")).toEqual([
       {
         holderKind: "user",
         holderId: "user-1",
-        action: "connection.use",
+        action: "agent.read",
         effect: "allow",
         scopeKind: "workspace",
         scopeId: "ws-1"
       }
     ]);
-    // No row is asked for where the server writes none: a verb the kind lacks.
-    expect(
-      grantRequests({ ...chosen, verbs: ["write"], scopeKind: "namespace", namespace: "kai-" })
-    ).toBeUndefined();
-    expect(grantRequests({ ...chosen, verbs: ["write"], assetId: "asset-crm" })).toBeUndefined();
-    expect(
-      grantRequests({
-        ...emptyGrantForm,
-        holderId: "user-1",
-        verbs: ["read"],
-        scopeKind: "workspace",
-        workspaceId: "ws-1"
-      })
-    ).toBeUndefined();
   });
 
   it("names a Connection row and a workspace row in words", () => {
@@ -717,6 +710,19 @@ describe("what the dialogs send", () => {
     expect(named).toContain("Read connections");
     // Without the workspaces the row names the workspace by its id.
     expect(render(grantsTab({ grants: [inWorkspace] }))).toContain("Workspace ws-1");
+    // A new agent or skill right names a workspace, so the page loads the workspaces; so it does
+    // for a Connection right written on a workspace before NS-0, listed by the workspace's name.
+    expect(grantsNameWorkspaces(["connection"], [])).toBe(true);
+    expect(grantsNameWorkspaces([], [onConnection, inWorkspace])).toBe(true);
+    // An instance-wide row is named in words, never by its scope kind.
+    const onInstance: PermissionGrantRow = {
+      ...namespaceGrant,
+      id: "grant-c3",
+      scopeKind: "instance",
+      namespace: undefined
+    };
+    expect(render(grantsTab({ grants: [onInstance] }))).toContain("Whole instance");
+    expect(render(grantsTab({ grants: [onInstance] }), "de")).toContain("Ganze Instanz");
   });
 
   it("reads a conflict without a reason as a user who is being deleted", () => {

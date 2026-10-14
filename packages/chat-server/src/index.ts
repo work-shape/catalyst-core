@@ -19,6 +19,7 @@ export type {
 export {
   createWorkflowLiveCheck,
   requireWorkflowRunAs,
+  workflowRunAsPrincipal,
   type WorkflowRunAsOptions
 } from "./workflow-run-as";
 import { createHttpRuntime } from "./http/runtime";
@@ -308,6 +309,7 @@ export { requestConnectionDiscovery } from "./connection-jobs";
 export type { WorkflowListEntry, WorkflowRunsPort } from "./workflow-runs-port";
 export { createWorkflowRoutes } from "./routes/workflow-routes";
 export type {
+  AgentToolReference,
   ConfigAssetValidationRefs,
   PlatformInstructions,
   WorkflowAssetKind

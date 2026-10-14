@@ -23,7 +23,12 @@ const callerSchema = z.object({
   scopes: z.array(z.string()).default(["*"]),
   roles: z.array(z.string()).default([]),
   permissions: z.array(z.string()).default([]),
-  cookie: z.boolean().default(false)
+  cookie: z.boolean().default(false),
+  /**
+   * Who acts for the user: `api_key`, the user's own personal API key, or
+   * `service_principal`, an embedding host that named the user in a session token.
+   */
+  delegatedActor: z.enum(["api_key", "service_principal"]).optional()
 });
 export type TestCaller = z.input<typeof callerSchema>;
 
@@ -127,7 +132,25 @@ export function createCallerAuthAdapter(): AuthAdapter & { calls: number } {
               clientInstanceId,
               authSource: "test",
               scopes,
-              ...(caller.cookie ? { authenticationMethod: "session-cookie" as const } : {})
+              ...(caller.cookie ? { authenticationMethod: "session-cookie" as const } : {}),
+              ...(caller.delegatedActor === "api_key"
+                ? {
+                    delegatedActor: {
+                      kind: "api_key" as const,
+                      id: asApiCredentialId("key_test"),
+                      displayLabel: "Test key",
+                      authSource: "test"
+                    }
+                  }
+                : caller.delegatedActor === "service_principal"
+                  ? {
+                      delegatedActor: {
+                        kind: "service_principal" as const,
+                        id: "sp_embedding_host",
+                        authSource: "test"
+                      }
+                    }
+                  : {})
             }
       );
     }

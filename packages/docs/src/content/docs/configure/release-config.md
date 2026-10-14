@@ -136,7 +136,7 @@ Every model binding with `supportsFastMode: true` needs these rates; startup val
 
 ## Guardrails
 
-`guardrails` defines the checks the instance runs before an action happens. It defaults to none. Each entry is keyed by its name: lowercase words of letters and digits joined by hyphens or underscores, at most 64 characters. The name stays the guardrail's id in Build, in its hits and on an approval request it checked.
+`guardrails` defines the checks the instance runs before an action happens. It defaults to none. Each entry is keyed by its name: lowercase words of letters and digits joined by hyphens or underscores, at most 64 characters. The name stays the guardrail's id in Studio, in its hits and on an approval request it checked.
 
 ```yaml
 guardrails:
@@ -185,9 +185,9 @@ All guardrails bound to an event run concurrently. For skill changes, the summar
 
 `warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking guardrail never lets unchecked content through. When a usage limit of the instance refuses the check, the reason given to the agent says that the limit is reached. When a skill change is approved, the skill as the approval would write it is checked again at `asset.before_write`: a block then leaves the skill unchanged, and the request ends as not applied with the guardrail's reason. Undoing an approved change writes the earlier revision back, which is checked the same way: a block refuses the undo and the request stays approved. A call that waited for an approval is checked again before it runs. Request kinds without a proposed-content extractor are not checked.
 
-Every warning and block is kept as a hit: the guardrail, the outcome, its one-sentence reason and the kind of request, never the checked content and never the person. A block that answered a `require_approval` where the action could not wait for an approval, such as the App draft an agent's `page.save` writes, says so (`convertedFrom: require_approval` of `guardrails.list_hits`; "Blocked: approval could not wait" on the guardrail's page). The judge is told to word its reason without quoting the content. Build > Guardrails lists the guardrails read-only, and a guardrail's page counts its hits for the last 7 and 30 days and lists the newest 50, for holders of `guardrail.read` (administrators). Hits are counted by rule and period and never listed by person, because a list of who tripped which rule would let the instance monitor employees, which in Germany needs the works council's co-determination (§87(1) no. 6 BetrVG). Who made a request is in the audit log: `approval_request.created` for a request a guardrail warned on, and `operation.failed` of the agent's `propose_skill_change` call for one it blocked. Hits are deleted with the audit events, after `retention.auditDays`. Creation audit metadata contains only guardrail names and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
+Every warning and block is kept as a hit: the guardrail, the outcome, its one-sentence reason and the kind of request, never the checked content and never the person. A block that answered a `require_approval` where the action could not wait for an approval, such as the App draft an agent's `page.save` writes, says so (`convertedFrom: require_approval` of `guardrails.list_hits`; "Blocked: approval could not wait" on the guardrail's page). The judge is told to word its reason without quoting the content. Studio > Guardrails lists the guardrails read-only, and a guardrail's page counts its hits for the last 7 and 30 days and lists the newest 50, for holders of `guardrail.read` (administrators). Hits are counted by rule and period and never listed by person, because a list of who tripped which rule would let the instance monitor employees, which in Germany needs the works council's co-determination (§87(1) no. 6 BetrVG). Who made a request is in the audit log: `approval_request.created` for a request a guardrail warned on, and `operation.failed` of the agent's `propose_skill_change` call for one it blocked. Hits are deleted with the audit events, after `retention.auditDays`. Creation audit metadata contains only guardrail names and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
 
-The API seeds the guardrails into the asset store when it starts, so a change of `guardrails` shows in Build after a restart. They cannot be changed or deleted through the asset operations or the CLI.
+The API seeds the guardrails into the asset store when it starts, published, so a change of `guardrails` shows in Studio after a restart. They are the operator's floor: they cannot be changed, unpublished or deleted through the asset operations or the CLI, and they run from release config itself. Further guardrails are written as assets and published by a holder of `guardrail.publish` (see [config assets](/configure/config-assets/#guardrails-as-assets)); they add checks to the floor and never remove one. A name of release config that a guardrail asset holds already is left to the asset in Studio and logged at start; the floor's rule of that name runs all the same.
 
 ### From `approvalChecks`
 
@@ -446,9 +446,9 @@ rejects that unsupported combination.
 
 Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, `xhigh`, or `max`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
 
-An agent's `modelBindingId`, `reasoningEffort`, `fastMode`, `userSelectableModelBindingIds`, and `modelReasoningEfforts` are editable in the admin panel exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all five.
+An agent's `modelBindingId`, `reasoningEffort`, `fastMode`, `userSelectableModelBindingIds`, and `modelReasoningEfforts` are editable in Studio exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all five.
 
-Set `supportsFastMode: true` on a binding whose provider deployment offers a priority processing tier. It defaults to `false`. An agent may set `fastMode: true` only while its binding supports it; saving it for another binding is a validation error, and switching an agent to a binding without support in the admin panel clears it. For fast-mode runs the OpenAI-compatible adapter sends `service_tier: "priority"` on both API shapes. When a chat user picks another model, fast mode applies only if that binding supports it. Fast runs are billed with the rate card's `fast` rates, see above.
+Set `supportsFastMode: true` on a binding whose provider deployment offers a priority processing tier. It defaults to `false`. An agent may set `fastMode: true` only while its binding supports it; saving it for another binding is a validation error, and switching an agent to a binding without support in Studio clears it. For fast-mode runs the OpenAI-compatible adapter sends `service_tier: "priority"` on both API shapes. When a chat user picks another model, fast mode applies only if that binding supports it. Fast runs are billed with the rate card's `fast` rates, see above.
 
 Which models chat users may pick is decided per agent, not per binding: each
 agent lists them in `userSelectableModelBindingIds`, and any `agentSelectable`
@@ -1049,7 +1049,7 @@ egress:
       port: 443
 ```
 
-Each key under `connections` is the name of a Connection. A name that starts with the prefix of a [Namespace](/operate/rights-and-namespaces/) belongs to that Namespace: whoever holds `connection.read` or `connection.use` there holds it on this Connection too, so choose the name with that in mind. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`) and optionally `policy` and `schemaFingerprint`. What stands in the list is accepted; nothing else of the outside system can be called.
+Each key under `connections` is the name of a Connection. A name that starts with the prefix of a [Namespace](/operate/rights-and-namespaces/) belongs to that Namespace: whoever holds `connection.read` or `connection.use` there holds it on this Connection too, so choose the name with that in mind. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`, `outside`) and optionally `policy` and `schemaFingerprint`. What stands in the list is accepted; nothing else of the outside system can be called. Each exposure admits one kind of caller: `agent` an agent, `bridge` an App, `workflow` a Workflow, and `outside` the CLI and the platform MCP server, a caller with an API key or a Service Principal's credential, whose results leave the instance. A person in the browser outside an App and a schedule are admitted by none. `outside` is off unless the list names it.
 
 `secret` is the name of a secret, resolved like every other secret of the instance: from the environment variable of that name or from the file `<NAME>_FILE` points at. It is the only place of a Connection where a secret may stand, and it never holds the value. An `authScheme` other than `none` needs it, and `none` refuses it.
 
@@ -1079,7 +1079,7 @@ Nothing returns a stored secret: no operation, route, CLI command, export, log l
 
 ### Egress
 
-`egress.allow` is the list of outside targets a Connection may reach. It is empty unless set, and an empty list refuses every target.
+`egress.allow` is the list of outside targets a Connection may reach. It is empty unless set, and an empty list refuses every target. `egress.allowPublicHttps` opens every public HTTPS host beside the list; it is off unless set.
 
 | Key        | Meaning                                                                   |
 | ---------- | ------------------------------------------------------------------------- |
@@ -1111,7 +1111,30 @@ egress:
       cidrs: ["172.28.0.0/16"]
 ```
 
-A refusal answers `egress_denied` with the host and the port, and nothing else of the address. A target outside the list is refused before its name is looked up. A host that is on the list and whose name gives no address, as with a stopped service or a resolver that is down, is refused as well and nothing is contacted, but it is not `egress_denied`: a call answers `connection_unavailable` and says that the host did not resolve, and a test of the Connection answers `unavailable`. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. A refusal that came from the resolver (a timeout, a failed lookup, no answer) is held for 5 seconds. The list is read at start: a change needs a restart.
+#### Every public HTTPS host
+
+`egress.allowPublicHttps: true` lets a Connection reach a host that no entry names, over `https` on port 443, for an instance whose administrators connect outside services themselves. The operator accepts that any administrator of the instance may then send a Connection, and its credential, to any public HTTPS service.
+
+```yaml
+egress:
+  allowPublicHttps: true
+  allow:
+    - protocol: http
+      host: mcp-internal
+      port: 8080
+      network: private
+      cidrs: ["172.28.0.0/16"]
+```
+
+- Such a target is judged as a `public` entry: every address the host answers must be public. Loopback, link-local, cloud metadata addresses, private ranges and their IPv4-mapped IPv6 forms are refused as above.
+- The instance's database host is refused on every port, by name and by address.
+- Redirects and returned download addresses are checked as new targets, and the credential still goes only to the origin it was configured for.
+- Another port, plain `http` and `postgres` still need an entry under `egress.allow`. The entries keep working beside the setting, and a private host is reached only through a `private` entry.
+- A start with the setting on logs a warning once.
+
+#### Refusals
+
+A refusal answers `egress_denied` with the host and the port, and nothing else of the address. Its message ends with the setting that would let the target through: an entry under `egress.allow`, `egress.allowPublicHttps` for `https` on port 443, a `private` entry for a host that resolves to a private address, or that no setting does, as for a link-local address or the database host. A target outside the list is refused before its name is looked up. A host that is on the list and whose name gives no address, as with a stopped service or a resolver that is down, is refused as well and nothing is contacted, but it is not `egress_denied`: a call answers `connection_unavailable` and says that the host did not resolve, and a test of the Connection answers `unavailable`. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. A refusal that came from the resolver (a timeout, a failed lookup, no answer) is held for 5 seconds. The list and `allowPublicHttps` are read at start: a change needs a restart.
 
 ## Data Stores
 

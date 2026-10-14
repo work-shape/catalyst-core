@@ -109,6 +109,12 @@ export interface LayoutGalleryText {
   surfaceExitFullscreen: string;
   surfaceClose: string;
   surfaceNoRenderer: string;
+  surfaceHeaderAlone: string;
+  surfaceHeaderTitle: string;
+  splitHandleLabel: string;
+  splitHandleSample: string;
+  headerShellAction: string;
+  headerShellChat: string;
   saveStickyBody: string;
   rowAgentStatus: string;
   rowWorkflowStatus: string;
@@ -166,6 +172,8 @@ export interface LayoutGalleryText {
   codeCutNumbered: string;
   codeWrapped: string;
   codeAsFile: string;
+  codeCommand: string;
+  codeCommandLabel: string;
   codeConfigName: string;
   codeOutputName: string;
   countPrimary: string;
@@ -284,6 +292,12 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     surfaceExitFullscreen: "Exit fullscreen",
     surfaceClose: "Close",
     surfaceNoRenderer: "This content cannot be shown yet.",
+    surfaceHeaderAlone: "SurfaceHeader: a panel's head on its own",
+    surfaceHeaderTitle: "Lease renewal",
+    splitHandleLabel: "Resize panel",
+    splitHandleSample: "Drag the line or use the arrow keys",
+    headerShellAction: "PageHeaderShellAction: the shell's control first",
+    headerShellChat: "Chat",
     saveStickyBody: "Scroll this form: the bar stays at its bottom edge.",
     rowAgentStatus: "Published. Used in 48 conversations this week.",
     rowWorkflowStatus: "Running. Next start tomorrow at 08:00.",
@@ -342,6 +356,8 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeCutNumbered: "Cut to four lines",
     codeWrapped: "Long lines broken",
     codeAsFile: "As a file, with colours and its controls",
+    codeCommand: "One command to copy",
+    codeCommandLabel: "Command for the terminal",
     codeConfigName: "agents/support.yaml",
     codeOutputName: "Output of the step",
     countPrimary: "Needs you",
@@ -458,6 +474,12 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     surfaceExitFullscreen: "Vollbild schließen",
     surfaceClose: "Schließen",
     surfaceNoRenderer: "Dieser Inhalt kann noch nicht angezeigt werden.",
+    surfaceHeaderAlone: "SurfaceHeader: der Kopf eines Bereichs für sich",
+    surfaceHeaderTitle: "Mietvertrag verlängern",
+    splitHandleLabel: "Bereichsbreite ändern",
+    splitHandleSample: "Ziehe die Linie oder nutze die Pfeiltasten",
+    headerShellAction: "PageHeaderShellAction: die Aktion der Oberfläche zuerst",
+    headerShellChat: "Chat",
     saveStickyBody: "Scrolle dieses Formular: Die Leiste bleibt am unteren Rand.",
     rowAgentStatus: "Veröffentlicht. Diese Woche in 48 Unterhaltungen genutzt.",
     rowWorkflowStatus: "Läuft. Nächster Start morgen um 08:00.",
@@ -516,6 +538,8 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeCutNumbered: "Auf vier Zeilen gekürzt",
     codeWrapped: "Lange Zeilen umbrochen",
     codeAsFile: "Als Datei, mit Farben und Bedienelementen",
+    codeCommand: "Ein Befehl zum Kopieren",
+    codeCommandLabel: "Befehl für das Terminal",
     codeConfigName: "agents/support.yaml",
     codeOutputName: "Ausgabe des Schritts",
     countPrimary: "Braucht dich",

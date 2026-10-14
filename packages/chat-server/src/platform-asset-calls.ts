@@ -1,9 +1,6 @@
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
 import {
   AppError,
-  CONNECTION_OPERATION_PREFIX,
-  DATA_STORE_OPERATION_PREFIX,
-  KNOWLEDGE_OPERATION_PREFIX,
   createAuthorizer,
   isPageId,
   moduleOffError,
@@ -14,6 +11,7 @@ import {
   type ActorAccess,
   type AuditRecorder,
   type AuthenticatedIdentity,
+  type ConfigAssetRecord,
   type Conversation,
   type ConversationSubject,
   type JsonObject,
@@ -44,6 +42,7 @@ import type { AssetCall } from "./asset-access";
 import { assetWriteEvent } from "./asset-guardrail-events";
 import { readDefinitionName } from "./asset-kinds/shared";
 import { AssetWorkflow } from "./asset-workflow";
+import { callableByAudience, listingOrigin } from "./platform-operations-audience";
 import { readPlatformContext } from "./platform-context";
 import { findWorkspaceFiles } from "./workspace-files";
 import type { AssetWorkflowOptions } from "./types";
@@ -74,13 +73,6 @@ const stricterOf = (left: PolicyValue | undefined, right: PolicyValue): PolicyVa
 /** How many operations one list answers. The list has no pages, so this is its bound. */
 const CALLABLE_OPERATION_LIST_MAX = 200;
 
-/** The operations that exist as data and that a step of a Workflow may name. */
-const CALLABLE_PREFIXES = [
-  CONNECTION_OPERATION_PREFIX,
-  DATA_STORE_OPERATION_PREFIX,
-  KNOWLEDGE_OPERATION_PREFIX
-];
-
 type AssetOptions = Pick<
   AssetWorkflowOptions,
   "clientInstanceId" | "stores" | "authorizer" | "auditRecorder" | "configAssets" | "modules"
@@ -103,6 +95,8 @@ const subjectUnavailable = () =>
  * not have, an asset that does not exist and one the caller holds no read right on are told
  * the same way, so the refusal says nothing of what is stored. An asset of a kind without a
  * draft, such as an agent, may be a subject: the agent reads it, and its tools save drafts only.
+ * The right is asked where the asset is: an asset a workspace owns is read with a right in
+ * that workspace, as `assets.get` naming the workspace reads it.
  */
 export async function requireReadableSubject(
   options: AssetWorkflowOptions,
@@ -110,21 +104,23 @@ export async function requireReadableSubject(
   subject: ConversationSubject
 ): Promise<void> {
   let decision: OperationAuthorization;
+  let asset: ConfigAssetRecord | undefined;
   try {
-    decision = await new AssetWorkflow(options).authorizeRead(
-      await accessOf(options, actor),
-      subject
-    );
+    asset = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: subject.kind,
+      name: subject.name
+    });
+    decision = await new AssetWorkflow(options).authorizeRead(await accessOf(options, actor), {
+      kind: subject.kind,
+      name: subject.name,
+      ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+    });
   } catch {
     // The kind is unknown here, or of a module that is off.
     throw subjectUnavailable();
   }
   if (!decision.allowed) throw subjectUnavailable();
-  const asset = await options.configAssets.store.getConfigAsset({
-    clientInstanceId: options.clientInstanceId,
-    kind: subject.kind,
-    name: subject.name
-  });
   if (asset?.status !== "active") throw subjectUnavailable();
 }
 
@@ -733,13 +729,14 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       };
     },
 
-    async listOperations(context) {
-      const { call } = await bound(context);
+    async listOperations(context, audience) {
+      // The list is of the instance, so it needs no subject: an agent asks it while it builds
+      // a Page, before the conversation is about any asset.
+      const conversation = await conversationOf(context);
+      const call = await callOf(context);
       const listing = await options.operationCalls?.registry.list({});
       const candidates = (listing?.operations ?? [])
-        .filter((definition) =>
-          CALLABLE_PREFIXES.some((prefix) => definition.name.startsWith(prefix))
-        )
+        .filter((definition) => callableByAudience(definition.name, audience))
         .sort((left, right) => (left.name < right.name ? -1 : 1));
       const visible = async (definition: OperationDefinition): Promise<boolean> => {
         try {
@@ -751,9 +748,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
             {},
             {
               actor: call.actor,
-              // Asked as a step of a Workflow would call it: an operation that is not exposed
-              // to Workflows is none a step may name.
-              origin: { kind: "workflow", workflowRunId: "", stepRunId: "" },
+              origin: listingOrigin(audience, conversation.id),
               correlationId: call.correlationId,
               access: call.access,
               resource

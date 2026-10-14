@@ -5,7 +5,6 @@ import {
   type WorkerLocalAgentRuntimeOptions
 } from "@vivd-catalyst/agent-runtime";
 import {
-  REASONING_EFFORTS,
   StoreBackedAuditRecorder,
   type AgentConfig,
   type ApprovalRequestHandlerRegistry,
@@ -16,11 +15,7 @@ import {
   createChatServer,
   createChatServerJobs
 } from "@vivd-catalyst/chat-server";
-import type {
-  ChatAttachmentService,
-  ChatServerOptions,
-  ConfigAssetValidationRefs
-} from "@vivd-catalyst/chat-server";
+import type { ChatAttachmentService, ChatServerOptions } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import {
   AppError,
@@ -63,7 +58,7 @@ import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
-import { shippedSkillNames } from "./shipped-skills";
+import { shippedSkillNamesOf, shippedSkillsOf } from "./shipped-skills";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -82,6 +77,7 @@ import { PLATFORM_INSTRUCTIONS, agentListableToolNames } from "./platform-orient
 import { assembleModules, endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
+import { createConfigAssetReferences, fastModeModelBindingIds } from "./tool-references";
 import { createToolDefinitions } from "./tools";
 import {
   createExecutionWorkspaceManagedObjectReader,
@@ -339,24 +335,8 @@ export async function createClientInstanceExecutionAssembly(
     (contribution) => contribution.jobRetries ?? []
   );
   const assetSource = createConfigAssetSource({ store: store.configAssets, clientInstanceId });
-  const validationRefs: ConfigAssetValidationRefs = {
-    modelProviderIds: modelProviders.map((provider) => provider.id),
-    modelBindingIds: config.modelBindings
-      .filter((binding) => binding.agentSelectable !== false)
-      .map((binding) => binding.id),
-    modelBindings: config.modelBindings
-      .filter((binding) => binding.agentSelectable !== false)
-      .map((binding) => {
-        const model =
-          binding.model ??
-          modelProviders.find((provider) => provider.id === binding.providerId)?.model;
-        if (model === undefined) throw new Error(`Model binding ${binding.id} has no model`);
-        return { id: binding.id, model, ...(binding.label ? { label: binding.label } : {}) };
-      }),
-    fastModeModelBindingIds: fastModeModelBindingIds(config),
-    reasoningEfforts: [...REASONING_EFFORTS],
-    enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
-  };
+  const references = createConfigAssetReferences(config, modelProviders);
+  const { validationRefs } = references;
   // A write is refused for an agent it adds or changes that names a tool of a module that is
   // off. A stored agent that still names one starts and runs without it, and does not stand in
   // the way of a write to another agent or a skill.
@@ -371,12 +351,13 @@ export async function createClientInstanceExecutionAssembly(
     source: assetSource,
     kinds: createInstanceAssetKinds({
       agent: { config, validationRefs, validateAgents },
-      skill: { config, shippedSkillNames },
+      skill: { config, shippedSkillNames: shippedSkillNamesOf(capabilities) },
       connections,
       modules,
       moduleKinds: moduleAssembly.assetKinds
     }),
     validationRefs,
+    tools: references.tools,
     platformInstructions: PLATFORM_INSTRUCTIONS
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
@@ -460,7 +441,13 @@ export async function createClientInstanceExecutionAssembly(
     ]
   });
   assertClientAssemblyValid({ config, tools, approvalRequestHandlers: handlers, modules });
+  references.describe(tools);
   const toolRegistry = platformTools.registry(tools, getEnabledToolNames(config));
+  const shippedSkills = shippedSkillsOf({
+    modules,
+    capabilities,
+    hasTool: (toolName) => toolRegistry.has(toolName)
+  });
   const modulesStarted = await moduleAssembly.start({
     operationCalls,
     authorizer,
@@ -538,6 +525,7 @@ export async function createClientInstanceExecutionAssembly(
     modules,
     clientInstanceId,
     store,
+    shippedSkills,
     attachments,
     managedObjects,
     jobRetries: [...jobRetries, ...modulesStarted.jobRetries],
@@ -758,12 +746,6 @@ async function tryManagedObjectReaders<T>(
     }
   }
   throw new AppError("NOT_FOUND", `Managed object '${subject}' was not found`);
-}
-
-function fastModeModelBindingIds(config: ClientInstanceConfig): string[] {
-  return config.modelBindings
-    .filter((binding) => binding.supportsFastMode)
-    .map((binding) => binding.id);
 }
 
 function uniqueById<T extends { id: string }>(records: T[]): T[] {

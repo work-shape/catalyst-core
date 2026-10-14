@@ -19,6 +19,7 @@ import {
   type WorkflowEdit
 } from "./workflow-draft";
 import { WorkflowHead } from "./workflow-head";
+import { useTestRun } from "./test-run";
 import { startOffered } from "./workflow-model";
 import type { WorkflowStartIssue, WorkflowStepView } from "./workflow-views";
 import { LoadError, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
@@ -59,6 +60,7 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
   });
   const edit = useEditWithAgent(shownId, read.workflow);
   const draft = useWorkflowDraft(shownId, read.workflow);
+  const test = useTestRun(shownId, read.workflow);
 
   if (!host || workspaceId === undefined) {
     return null;
@@ -78,7 +80,11 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
         trail={before.map((id, depth) => ({ id, name: names[depth], route: routeAt(depth) }))}
         runsAvailable={runsAvailable}
         edit={edit}
-        draft={draft.bar}
+        draft={
+          draft.bar === undefined || test === undefined
+            ? draft.bar
+            : { ...draft.bar, onTest: test.open }
+        }
         onOpenChild={(step) => {
           if (step.workflow !== undefined) {
             // An address of its own: the browser's way back leads one level up.
@@ -95,6 +101,7 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
       />
       {start.dialog}
       {draft.dialog}
+      {test?.dialog}
     </>
   );
 }

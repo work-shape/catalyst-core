@@ -7,6 +7,7 @@ const normalUser = { email: "e2e-user@example.test", password: "e2e-user-passwor
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 const accessPath = "/settings/instance/access";
 const assetPath = `${apiBaseUrl}/api/v1/assets/agent/kai-helper`;
+const grantsPath = `${apiBaseUrl}/api/v1/instance/access/grants`;
 /** Where a closed Instance page sends the visitor: the workspace, or its first settings page. */
 const awayFromInstancePagesPattern = /\/w\/[^/]+$|\/settings\/workspace\/general$/u;
 const NARROW = { width: 390, height: 844 };
@@ -53,7 +54,7 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
   ).toBe(true);
 }
 
-test("an administrator registers a Namespace, grants in it, checks, denies, revokes and deletes", async ({
+test("an administrator registers a Namespace, grants, checks, denies, revokes and deletes", async ({
   page,
   // The test stores an agent in its Namespace; the turn on the agents holds the one on the
   // Namespaces and grants.
@@ -62,7 +63,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
   test.setTimeout(90_000);
   // A seeded user is listed once the user has signed in.
   await signInViaApi(page, normalUser);
-  expect((await page.request.get(`${apiBaseUrl}/api/v1/me`)).ok()).toBe(true);
+  const holder: { id: string } = await (await page.request.get(`${apiBaseUrl}/api/v1/me`)).json();
   await signInViaApi(page, adminUser);
   await page.setViewportSize(WIDE);
   await page.goto("/settings/instance/users");
@@ -125,35 +126,60 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
       })
     ).toHaveAttribute("href", `${rightsDocs}#do-you-hold-the-right-here`);
 
-    // Grant E2E User reading and writing agents in kai-: one row, two actions.
+    // Grant E2E User reading kai-helper. An agent right is given in a shared workspace, which
+    // the dialog starts in (WS-OWN-1a), or on one agent; it offers no Namespace.
     await tab(page, "Rights").click();
     await expect(page.getByText("No right given yet.")).toBeVisible();
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    const inWorkspace = grantDialog.getByRole("radio", { name: /^In a shared workspace/u });
+    const onAsset = grantDialog.getByRole("radio", { name: /^On one asset/u });
+    await expect(inWorkspace).toBeChecked();
+    await expect(grantDialog.getByRole("radio", { name: /Namespace/u })).toHaveCount(0);
+    await onAsset.check();
     await grantDialog.getByLabel("Read").check();
-    await grantDialog.getByLabel("Write").check();
-    await pick(page, grantDialog.getByRole("button", { name: /^Namespace: / }), /kai-/u);
+    await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
+    const assetGrants = grantRows.filter({ hasText: "Agent kai-helper" });
     await expect(grantRows).toHaveCount(1);
-    await expect(grantRows.first()).toContainText("E2E User");
-    await expect(grantRows.first()).toContainText("Read agents");
-    await expect(grantRows.first()).toContainText("Write agents");
-    await expect(grantRows.first()).toContainText("Namespace kai-");
-    await expect(grantRows.first()).toContainText("E2E Admin");
+    await expect(assetGrants).toContainText("E2E User");
+    await expect(assetGrants).toContainText("Read agents");
+    await expect(assetGrants).toContainText("E2E Admin");
 
     // The same form with one more action adds the missing row and says what it left alone.
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-    for (const verb of ["Read", "Write", "Delete"]) {
+    for (const verb of ["Read", "Delete"]) {
       await grantDialog.getByLabel(verb).check();
     }
-    await pick(page, grantDialog.getByRole("button", { name: /^Namespace: / }), /kai-/u);
+    await onAsset.check();
+    await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
-    await expect(page.getByText("1 added. 2 already there and left as they are.")).toBeVisible();
+    await expect(page.getByText("1 added. 1 already there and left as they are.")).toBeVisible();
     await expect(grantRows).toHaveCount(1);
-    await expect(grantRows.first().locator('[data-effect="allow"]')).toHaveCount(3);
+    await expect(assetGrants.locator('[data-effect="allow"]')).toHaveCount(2);
+
+    // Rows in a Namespace are written through the API until the Namespace is retired. The
+    // page lists them as one row and revokes them.
+    for (const action of ["agent.read", "agent.write", "agent.delete"]) {
+      const granted = await requestWithOrigin(page, "post", grantsPath, {
+        data: {
+          holderKind: "user",
+          holderId: holder.id,
+          action,
+          scopeKind: "namespace",
+          namespace: "kai-"
+        }
+      });
+      expect(granted.ok()).toBe(true);
+    }
+    await page.reload();
+    await tab(page, "Rights").click();
+    await expect(grantRows).toHaveCount(2);
+    await expect(namespaceGrants).toContainText("E2E User");
+    await expect(namespaceGrants.locator('[data-effect="allow"]')).toHaveCount(3);
 
     // The rows allow kai-helper and nothing allows other-helper. The result says that it
     // answers for the right alone, and that a read through a grant opens no overview.
@@ -207,18 +233,15 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
     await grantDialog.getByLabel("Write").check();
-    await grantDialog.getByRole("radio", { name: /On one asset/u }).check();
+    await onAsset.check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("radio", { name: /^Deny/u }).check();
     await expect(
       grantDialog.getByText("Refuses the ticked actions here, even for an administrator.")
     ).toBeVisible();
-    // The dialog has two ways into the documentation: under the places, and after the deny.
+    // The dialog leads into the documentation at the place it asks for and after the deny.
     const rightsPage = "https://docs.workshape.ai/catalyst/operate/how-rights-work/";
     await expect(grantDialog.locator("a[data-docs-link]")).toHaveCount(2);
-    await expect(
-      grantDialog.getByRole("link", { name: "Namespace or workspace, opens in a new tab" })
-    ).toHaveAttribute("href", `${rightsPage}#namespace-or-workspace`);
     const denyLink = grantDialog.getByRole("link", {
       name: "Learn more about how a deny is decided, opens in a new tab"
     });

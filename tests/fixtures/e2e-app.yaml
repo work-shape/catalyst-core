@@ -115,6 +115,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member of the dock spec, whose conversations ride in the dock. No other spec uses
+      # this member.
+      - email: e2e-dock@example.test
+        displayLabel: E2E Zz Dock
+        passwordEnvName: E2E_DOCK_PASSWORD
+        developmentPassword: e2e-dock-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The three people of the Apps spec. No other spec uses them: the admin builds and
       # publishes, the member uses what is published, and the builder is the one the spec shows
       # the draft without the publish right. No grant gives a right on Apps yet, so the builder
@@ -253,6 +263,7 @@ administration:
       - maxSteps
       - toolNames
       - skillNames
+      - knowledgeBases
       - initialPrompts
     allowAgentCreation: true
     allowAgentDeletion: true
@@ -274,6 +285,9 @@ modules:
   # Workflows are on: the Access page grants their rights. The suite seeds none; a spec that
   # needs a Workflow stores and publishes its own.
   workflows:
+    enabled: true
+  # Personal API keys are on: You > API keys issues one with the scopes a person ticks.
+  personalApiKeys:
     enabled: true
 # The addresses a Connection of the suite may reach. Nothing listens on the first and the `test`
 # connector type contacts nothing: the entry is what lets a test of a Connection answer ready.

@@ -1,12 +1,19 @@
 import { createHmac, createHash, pbkdf2 } from "node:crypto";
 import { promisify } from "node:util";
-import { PostgresExecutorError } from "@vivd-catalyst/postgres-connector";
+import {
+  PostgresExecutorError,
+  type PostgresChangeStatements
+} from "@vivd-catalyst/postgres-connector";
 import { z } from "zod";
 import type { DataStoreRecord } from "@vivd-catalyst/core";
 import type { DataStoreRole } from "./credentials";
 import { DATA_STORE_ROLE_LIMITS, roleSettings } from "./role-limits";
 import type { DataStoreRuntime } from "./runtime";
-import { quoteIdentifier, type DataStoreServer } from "./server";
+import {
+  DATA_STORE_READER_CONNECTION_LIMIT,
+  quoteIdentifier,
+  type DataStoreServer
+} from "./server";
 
 // The two roles of a store as the platform gave them, and how it keeps them so. A role may
 // change its own password and its own settings, in a migration as in a trigger that fires on
@@ -171,44 +178,86 @@ export async function writeStoreRoles(
     },
     async (sql) => {
       for (const role of ROLES) {
-        const name = record.roles[role];
-        const quoted = quoteIdentifier(name);
-        if (options.create) {
-          const [existing] = await sql.run("select 1 from pg_catalog.pg_roles where rolname = $1", [
-            name
-          ]);
-          if (!existing) {
-            await sql.script(
-              `create role ${quoted} login nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls`
-            );
-          }
-        }
-        const elsewhere = await sql.run(
-          `select d.datname::pg_catalog.text as name from pg_catalog.pg_db_role_setting s
-             join pg_catalog.pg_roles r on r.oid = s.setrole
-             join pg_catalog.pg_database d on d.oid = s.setdatabase
-             where r.rolname = $1`,
-          [name]
-        );
-        // The verifier is base64 and digits between fixed marks: it holds no quote.
-        await sql.script(
-          [
-            `alter role ${quoted} connection limit ${DATA_STORE_ROLE_LIMITS[role].connectionLimit} password '${held[role]}'`,
-            `alter role ${quoted} reset all`,
-            ...z
-              .array(z.object({ name: z.string() }))
-              .parse(elsewhere)
-              .map(
-                (other) =>
-                  `alter role ${quoted} in database ${quoteIdentifier(other.name)} reset all`
-              ),
-            ...roleSettings(role, superuser).map(
-              (setting) => `alter role ${quoted} set ${setting.replace("=", " = ")}`
-            )
-          ].join(";\n")
-        );
+        await writeLoginRole(sql, record.roles[role], {
+          connectionLimit: DATA_STORE_ROLE_LIMITS[role].connectionLimit,
+          verifier: held[role],
+          settings: roleSettings(role, superuser),
+          ...options
+        });
       }
     }
+  );
+}
+
+/**
+ * Gives one login role its password, connection limit and settings, and nothing else, also for
+ * no single database. With `create` a role that is not there is made first: it logs in and may
+ * do nothing else, and it is a member of no role.
+ */
+async function writeLoginRole(
+  sql: PostgresChangeStatements,
+  name: string,
+  role: { connectionLimit: number; verifier: string; settings: readonly string[]; create?: true }
+): Promise<void> {
+  const quoted = quoteIdentifier(name);
+  if (role.create) {
+    const [existing] = await sql.run("select 1 from pg_catalog.pg_roles where rolname = $1", [
+      name
+    ]);
+    if (!existing) {
+      await sql.script(
+        `create role ${quoted} login nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls`
+      );
+    }
+  }
+  const elsewhere = await sql.run(
+    `select d.datname::pg_catalog.text as name from pg_catalog.pg_db_role_setting s
+       join pg_catalog.pg_roles r on r.oid = s.setrole
+       join pg_catalog.pg_database d on d.oid = s.setdatabase
+       where r.rolname = $1`,
+    [name]
+  );
+  // The verifier is base64 and digits between fixed marks: it holds no quote.
+  await sql.script(
+    [
+      `alter role ${quoted} connection limit ${role.connectionLimit} password '${role.verifier}'`,
+      `alter role ${quoted} reset all`,
+      ...z
+        .array(z.object({ name: z.string() }))
+        .parse(elsewhere)
+        .map(
+          (other) => `alter role ${quoted} in database ${quoteIdentifier(other.name)} reset all`
+        ),
+      ...role.settings.map((setting) => `alter role ${quoted} set ${setting.replace("=", " = ")}`)
+    ].join(";\n")
+  );
+}
+
+/**
+ * Gives the role of a Knowledge Base its password, its connection limit and the settings of the
+ * store's app role, made where it is not there. What it may read is granted on the store.
+ */
+export async function writeReaderRole(
+  server: DataStoreServer,
+  name: string,
+  password: string,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  const superuser = await platformIsSuperuser(server, signal);
+  const verifier = await scramVerifier(password);
+  await server.executor.change(
+    {
+      ...server.asPlatform(server.platformDatabase),
+      timeoutMs: DATA_STORE_ROLE_STEP_TIMEOUT_MS,
+      ...(signal ? { signal } : {})
+    },
+    (sql) =>
+      writeLoginRole(sql, name, {
+        connectionLimit: DATA_STORE_READER_CONNECTION_LIMIT,
+        verifier,
+        settings: roleSettings("app", superuser),
+        create: true
+      })
   );
 }
 

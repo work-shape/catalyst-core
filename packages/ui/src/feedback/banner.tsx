@@ -101,7 +101,9 @@ export function Banner({
       {action === undefined ? null : (
         <div
           className={cn(
-            "flex shrink-0 basis-full items-center gap-1 sm:-my-1.5 sm:basis-auto",
+            // Several actions wrap onto further lines where one line is too narrow for them,
+            // as on a phone, instead of running past the edge.
+            "flex min-w-0 shrink-0 basis-full flex-wrap items-center gap-1 sm:-my-1.5 sm:basis-auto",
             // On its own line the action starts where the text does, after the icon.
             shownIcon === null ? undefined : line ? "pl-5 sm:pl-0" : "pl-6.5 sm:pl-0"
           )}

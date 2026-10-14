@@ -3,7 +3,7 @@ import {
   AppError,
   PLATFORM_EVENT_ALLOW,
   POLICY_VALUES,
-  callerCanConfirm,
+  callConfirmedByCaller,
   isAppError,
   isAuthenticatedServicePrincipal,
   isToolOperationAnswer,
@@ -154,6 +154,8 @@ export interface OperationOutcome {
    * every call. `run` then says how the call went and is in no store.
    */
   unrecorded?: true;
+  /** A test run's call whose `confirm` the tester's start met: a published run asks approval. */
+  publishedWouldAsk?: "approval";
 }
 
 export type OperationEnding = Pick<OperationOutcome, "result" | "run" | "toolResult">;
@@ -176,6 +178,7 @@ export interface RunContext {
   unrecorded?: { start: NewOperationRun; heldAfterEvents: (() => Promise<unknown>)[] };
   /** Set once a later call took the run over: this call emits no further event of it. */
   overtaken?: boolean;
+  publishedWouldAsk?: "approval";
   /**
    * Set for a call that waited for an approval and is executed now: its before-events are
    * asked again, and the guardrails' hits were kept when it was made.
@@ -194,7 +197,7 @@ export interface RunContext {
     phase: "before" | "after",
     payload?: JsonObject,
     /** What a before-event's guardrails read, and the subject where it is not the call's. */
-    before?: Pick<PlatformEventContext, "checkable" | "filterBy"> & {
+    before?: Pick<PlatformEventContext, "checkable" | "filterBy" | "aboutGuardrails"> & {
       subject?: PlatformEventContext["subject"];
     }
   ): Promise<PlatformEventAnswer>;
@@ -246,7 +249,7 @@ export function createRunContext(
     asked: (events) => {
       context.beforeEvents = events;
     },
-    emit: (name, phase, payload = {}, before = {}) => {
+    emit: (name, phase, payload = {}, { subject: about, ...asked } = {}) => {
       const send = () =>
         deps.events.emit(
           name,
@@ -263,10 +266,10 @@ export function createRunContext(
             origin: call.origin,
             workspaceId: call.workspaceId,
             correlationId: call.correlationId,
-            subject: before.subject ?? subject,
+            subject: about ?? subject,
             phase,
-            ...(before.checkable ? { checkable: before.checkable } : {}),
-            ...(before.filterBy ? { filterBy: before.filterBy } : {}),
+            // What a before-event's guardrails read and narrow by, as its caller handed it.
+            ...asked,
             runtime: { deadline: input.runtime.deadline, signal: input.runtime.signal },
             ...(input.repeated ? { repeated: true } : {})
           }
@@ -364,7 +367,7 @@ async function policyInputOf(
     targets: definition.policyTargets
       ? await definition.policyTargets(call.input)
       : [{ workspaceId: call.workspaceId, assetKind: resource?.kind }],
-    callerCanConfirm: callerCanConfirm(call.origin),
+    callerCanConfirm: callConfirmedByCaller(call),
     // No surface can hold a call for its actor's confirmation before OP-3.
     canPause: false
   };

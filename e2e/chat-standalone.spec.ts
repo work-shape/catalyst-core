@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { assetRevision, readAsset, requestWithOrigin } from "./request-with-origin";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
+import { closeToolPackage, openToolPackage } from "./tool-packages";
 import { z } from "zod";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -3350,7 +3351,7 @@ test("superadmin config follows the German locale", async ({ page }) => {
   }
   await expect(form.getByText("Denkaufwand", { exact: true })).toBeVisible();
   await expect(
-    form.getByRole("group", { name: "Werkzeuge der Instanz", exact: true })
+    form.getByRole("button", { name: "Werkzeuge: Pakete hinzufügen", exact: true })
   ).toBeVisible();
   await expect(
     form.getByRole("heading", { name: "Einstiegsvorschläge", level: 2, exact: true })
@@ -3422,9 +3423,7 @@ test("superadmin manages config assets with validation and conflict protection",
     form().getByRole("textbox", { name: new RegExp(`^${label}`, "u") });
   /** Chooses the test's skill for the open agent, or takes it away again. */
   const toggleSkill = async () => {
-    await form()
-      .getByRole("button", { name: /^Skills/u })
-      .click();
+    await form().getByRole("button", { name: "Skills: Choose skills", exact: true }).click();
     await page.getByRole("option", { name: /Config E2E skill/u }).click();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("listbox")).toHaveCount(0);
@@ -3465,10 +3464,10 @@ test("superadmin manages config assets with validation and conflict protection",
     await clickAgent();
     // Nothing was changed yet, so there is nothing to save.
     await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
-    await expect(
-      fieldset("Instance tools").getByLabel("read_skill", { exact: true })
-    ).toBeVisible();
-    await expect(fieldset("Instance tools").getByLabel("show_view", { exact: true })).toBeVisible();
+    // The agent holds no tool yet; the packages are offered in the picker.
+    const toolSection = form().locator("#tools");
+    await expect(toolSection).toContainText("No tools chosen yet.");
+    await expect(toolSection.getByRole("button", { name: "Tools: Add packages" })).toBeVisible();
     const firstPromptText = fieldset("Prompt 1").getByRole("textbox", { name: /^Prompt/u });
     // The agent's models: the one that runs it, with its reasoning effort, and the ones people
     // may choose instead.
@@ -3513,16 +3512,13 @@ test("superadmin manages config assets with validation and conflict protection",
     await clickAgent();
     await toggleSkill();
     await expect(form().getByRole("list", { name: "Skills" })).toContainText("Config E2E skill");
-    await form().getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(
-      page.getByText(
-        "Agent 'research_assistant' references skills but does not allow 'read_skill'",
-        { exact: true }
-      )
-    ).toBeVisible();
-    await expectUnchanged(researchAgentUrl, agentRevision);
-
-    await fieldset("Instance tools").getByLabel("read_skill", { exact: true }).check();
+    // read_skill comes with the skill: the Skills package shows it as included, and the save
+    // carries it.
+    const skillsPanel = await openToolPackage(page, toolSection, "package:skills");
+    await expect(skillsPanel.locator('[data-included-tool="read_skill"]')).toContainText(
+      "Included"
+    );
+    await closeToolPackage(page);
     const updatedPrompt = `Keep this saved prompt ${Date.now()}.`;
     await firstPromptText.fill(updatedPrompt);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();

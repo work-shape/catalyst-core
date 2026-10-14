@@ -31,6 +31,7 @@ import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type {
+  AgentToolReference,
   ConfigAssetValidationRefs,
   PlatformInstructions,
   WorkflowAssetKind
@@ -98,6 +99,11 @@ export interface ChatServerOptions {
     /** The registered asset kinds, assembled once with the instance. */
     kinds: AssetKindRegistry<WorkflowAssetKind>;
     validationRefs: ConfigAssetValidationRefs;
+    /**
+     * The tools of `validationRefs.enabledToolNames` with what each tells people, for the agent
+     * page. Asked on each read, because the assembly registers its tools after this is built.
+     */
+    tools?: () => readonly AgentToolReference[];
     /**
      * What the platform tells its agents before their own instructions, shown read-only on an
      * agent's page: the rules every agent gets, and the orientation an agent gets whose

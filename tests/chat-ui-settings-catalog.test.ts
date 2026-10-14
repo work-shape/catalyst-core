@@ -93,10 +93,11 @@ const superadminWithoutMembership = viewer(
 
 describe("Settings catalog", () => {
   it("lists the pages of each group in the order of the navigation spec", () => {
-    // API keys is the module `personalApiKeys`'s, shown only where it is on.
+    // API keys and Connect a local agent are the module `personalApiKeys`'s, shown only where it is on.
     expect(catalog.map((page) => `${page.group}/${page.id}`)).toEqual([
       ...you,
       "you/api-keys",
+      "you/connect",
       ...workspace,
       ...instance
     ]);

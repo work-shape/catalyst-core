@@ -70,6 +70,7 @@ export default defineConfig({
           items: [
             "getting-started/overview",
             "getting-started/operating-models",
+            "getting-started/local-agent",
             "getting-started/local-demo",
             "getting-started/execution-workspaces-local"
           ]
@@ -82,13 +83,20 @@ export default defineConfig({
             "configure/modules",
             "configure/config-assets",
             "configure/cli",
-            "configure/build",
-            "configure/chat-experience"
+            "configure/build"
           ]
         },
         {
+          label: "Automate",
+          items: ["automate/apps", "apps/build", "automate/workflows"]
+        },
+        {
+          label: "Connect",
+          items: ["connect/connect-a-system"]
+        },
+        {
           label: "Extend",
-          items: ["extend/custom-tools", "extend/openapi-tools"]
+          items: ["extend/custom-tools"]
         },
         {
           label: "Operate",
@@ -99,10 +107,10 @@ export default defineConfig({
             "operate/auth-and-embedding",
             "operate/governance",
             "operate/how-rights-work",
+            "manage/guardrails",
             "operate/rights-and-namespaces",
             "operate/execution-workspaces",
-            "operate/runner-security",
-            "operate/config-asset-migration"
+            "operate/runner-security"
           ]
         },
         {
@@ -110,6 +118,7 @@ export default defineConfig({
           items: [
             "reference/current-status",
             "reference/glossary",
+            "reference/app-bridge",
             {
               // Written by scripts/generate-api-reference.mjs from the release's OpenAPI document.
               label: "API",

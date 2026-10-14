@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
+import { clearLiveOnceSwitches } from "./asset-after-write";
 import {
   AppError,
+  GUARDRAIL_ASSET_KIND,
   asUserId,
   createPlatformId,
   getSubjectUserId,
   isAppError,
   isAuthenticatedServicePrincipal,
   type AssetRepoWrite,
+  type AssetScope,
   type ConfigAssetRevisionOrigin,
   type ConfigAssetStore,
   type FileSet,
@@ -500,10 +503,16 @@ export class AssetDraftWorkflow {
         ? {}
         : { replacedRevision: published.replacedRevision })
     };
-    // An App's publication is named as its own: what reads the trail looks for it there.
+    // An App's and a Guardrail's publication are named as their own: what reads the trail
+    // looks for them there. A guardrail's names its scope, which is where it enforces.
     await (kind.kind === "app"
       ? recordAssetEvent(call, "app.published", metadata)
-      : recordAssetEvent(call, "config_asset.published", metadata));
+      : kind.kind === GUARDRAIL_ASSET_KIND
+        ? recordAssetEvent(call, "guardrail.published", {
+            ...metadata,
+            ...scopeMetadata(asset.scope)
+          })
+        : recordAssetEvent(call, "config_asset.published", metadata));
     return {
       draftRevision: asset.revision,
       publishedRevision: published.revision,
@@ -511,6 +520,47 @@ export class AssetDraftWorkflow {
         ? {}
         : { replacedRevision: published.replacedRevision })
     };
+  }
+
+  /**
+   * Takes the published revision of a guardrail away: the draft stays, and nothing of it acts until it is published
+   * again. Asks the publish right, as making it live does.
+   */
+  async unpublish(call: AssetCall, input: AssetAddress) {
+    const target = await this.host.target(input);
+    const { kind, name } = target;
+    // Only a guardrail acts on others by its published revision; another kind is taken back
+    // by a delete.
+    if (kind.kind !== GUARDRAIL_ASSET_KIND) {
+      throw new AppError("VALIDATION_FAILED", `A ${kind.kind} is taken back by a delete`, {
+        reason: "no_unpublish"
+      });
+    }
+    call.access.require(publishAction(kind), target.resource);
+    await this.host.authorizeEditing(call, "put");
+    const asset = requireActive(target);
+    if (asset.publishedConfig !== undefined) {
+      await kind.authorizeLive?.({
+        actor: call.actor,
+        access: call.access,
+        name,
+        revision: asset.publishedRevision ?? asset.revision,
+        config: asset.publishedConfig
+      });
+    }
+    const unpublished = await this.options.configAssets.store.unpublishConfigAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: kind.kind,
+      name,
+      assetId: asset.id
+    });
+    await recordAssetEvent(call, "guardrail.unpublished", {
+      kind: kind.kind,
+      name,
+      revision: unpublished.revision,
+      ...scopeMetadata(asset.scope)
+    });
+    return { draftRevision: asset.revision, unpublishedRevision: unpublished.revision };
   }
 
   /** Moves the draft back to the published revision. The revisions in between stay readable. */
@@ -529,20 +579,7 @@ export class AssetDraftWorkflow {
       // The discard makes the published revision the draft again. A "Run live once" switch
       // set for it before the draft changed would apply once more, so the switches the draft
       // left behind are cleared first (ADR-0031).
-      const cleared = await this.options.stores.liveOnceSwitches.clearStale({
-        clientInstanceId: this.options.clientInstanceId,
-        assetId: asset.id
-      });
-      for (const stale of cleared) {
-        await recordAssetEvent(call, "live_once.cleared", {
-          kind: kind.kind,
-          name,
-          revisionId: stale.revisionId,
-          part: stale.part,
-          switchedBy: stale.switchedBy.id,
-          reason: "draft_changed"
-        });
-      }
+      await clearLiveOnceSwitches(this.options, call, kind, name, asset.id);
     }
     let discarded: { revision: number };
     try {
@@ -564,6 +601,8 @@ export class AssetDraftWorkflow {
       revision: discarded.revision,
       discardedRevision: expectedRevision
     });
+    // The switches set for the discarded draft are cleared now, in the name of who discarded it.
+    await clearLiveOnceSwitches(this.options, call, kind, name, asset.id);
     return { draftRevision: discarded.revision, publishedRevision: discarded.revision };
   }
 
@@ -612,14 +651,46 @@ export class AssetDraftWorkflow {
         reason: "draft_changed"
       });
     }
+    // The switch is its owner's: only a call or a test run of theirs uses it.
     await recordAssetEvent(call, "live_once.switched_on", {
       kind: kind.kind,
       name,
       revision: asset.revision,
       revisionId: asset.activeRevisionId,
-      part: input.part
+      part: input.part,
+      switchedBy: call.actor.id
     });
     return { draftRevision: asset.revision, part: input.part };
+  }
+
+  /**
+   * The caller's own "Run live once" switches on the current draft, with the test run that
+   * used each, so a page shows them as they stand after a reload.
+   */
+  async listLiveOnce(call: AssetCall, input: AssetAddress) {
+    const target = await this.host.target(input);
+    const { kind } = target;
+    call.access.require(kind.actions.write, target.resource);
+    if (!kind.draftCalls) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `A draft of the kind '${kind.kind}' makes no calls that could run live`
+      );
+    }
+    const asset = requireActive(target);
+    const switches = await this.options.stores.liveOnceSwitches.list({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId: asset.id,
+      switchedBy: call.actor.id
+    });
+    return {
+      items: switches.map((set) => ({
+        part: set.part,
+        switchedAt: set.switchedAt,
+        ...(set.usedByRunId === undefined ? {} : { usedByRunId: set.usedByRunId }),
+        ...(set.usedAt === undefined ? {} : { usedAt: set.usedAt })
+      }))
+    };
   }
 
   /**
@@ -705,4 +776,11 @@ function publishAction(kind: WorkflowAssetKind): string {
     );
   }
   return publish;
+}
+
+/** Where an asset enforces, as its audit names it: the instance or one workspace. */
+function scopeMetadata(scope: AssetScope): JsonObject {
+  return scope.kind === "workspace"
+    ? { scope: "workspace", workspaceId: scope.workspaceId }
+    : { scope: "instance" };
 }

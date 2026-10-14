@@ -21,6 +21,7 @@ export * from "./schema/connections";
 export * from "./schema/workflowRuns";
 export * from "./schema/dataStores";
 export * from "./schema/guardrails";
+export * from "./schema/knowledgeBases";
 import { productUsers, userIdentities } from "./schema/users";
 import { servicePrincipals, apiCredentials, apiConnectCodes } from "./schema/apiAccess";
 import { conversations, messages, modelProviderContinuations } from "./schema/conversations";
@@ -45,7 +46,7 @@ import { assetCheckouts, assetRepoBundles } from "./schema/assetRepos";
 import { approvalRequests } from "./schema/approvals";
 import { platformJobs } from "./schema/jobs";
 import { operationRuns } from "./schema/operationRuns";
-import { liveOnceSwitches } from "./schema/liveOnceSwitches";
+import { liveOnceRuns, liveOnceSwitches } from "./schema/liveOnceSwitches";
 import { permissionGrants, namespaces } from "./schema/access";
 import { infrastructureCheckState } from "./schema/infrastructure";
 import { pages, fileSets, pageBuilds } from "./schema/pages";
@@ -53,6 +54,7 @@ import { secrets, connectionState } from "./schema/connections";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 import { dataStores } from "./schema/dataStores";
 import { guardrailHits } from "./schema/guardrails";
+import { knowledgeBaseStates } from "./schema/knowledgeBases";
 
 export const schema = {
   approvalRequests,
@@ -86,6 +88,7 @@ export const schema = {
   platformJobs,
   operationRuns,
   liveOnceSwitches,
+  liveOnceRuns,
   permissionGrants,
   namespaces,
   infrastructureCheckState,
@@ -97,5 +100,6 @@ export const schema = {
   workflowRuns,
   workflowStepRuns,
   dataStores,
+  knowledgeBaseStates,
   guardrailHits
 };

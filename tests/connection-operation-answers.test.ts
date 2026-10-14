@@ -199,7 +199,7 @@ describe("the Connection routes", () => {
           name: "echo",
           toolName: "connection.crm.echo",
           effect: "reading",
-          exposure: ["agent"],
+          exposure: ["agent", "outside"],
           enabled: true,
           status: "ready",
           description: echo.description
@@ -208,7 +208,7 @@ describe("the Connection routes", () => {
           name: "write",
           toolName: "connection.crm.write",
           effect: "changing",
-          exposure: ["agent"],
+          exposure: ["agent", "outside"],
           enabled: false,
           status: "disabled",
           description: write.description
