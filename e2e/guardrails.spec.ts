@@ -169,7 +169,7 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
       await page.goto(`/build/guardrails/${tone.name}`);
       await expect(page.getByRole("heading", { name: "Polite tone", level: 1 })).toBeVisible();
       await expect(main.getByText(/^No hits yet\./u)).toBeVisible();
-      await expect(main.getByText("Every kind of request")).toBeVisible();
+      await expect(main.getByText("Everything at this point")).toBeVisible();
       await shoot("guardrail-page-empty", async () => {
         await expect(main.getByText(/^(No hits yet|Noch keine Treffer)\./u)).toBeVisible();
       });

@@ -1,5 +1,5 @@
 {
-  "id": "2b44f8e7-4c71-4c7b-bdc5-942ed9b5e47a",
+  "id": "3fa1af2f-869f-486b-9568-986734ad21ac",
   "prevId": "92da596a-1dd9-4241-9f41-4af0da73112a",
   "version": "7",
   "dialect": "postgresql",
@@ -7023,12 +7023,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "origin": {
-          "name": "origin",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -7873,6 +7867,18 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subject_name": {
+          "name": "subject_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

@@ -237,7 +237,7 @@ describe("a guardrail's judge through the gateway", () => {
     return {
       event: "approval_request.before_create" as const,
       subjectKind: "fake",
-      content: () => JSON.stringify({ summary: "A proposal", newContent: "New text" }),
+      fields: () => ({ summary: "A proposal", newContent: "New text" }),
       ...(requestOrigin ? { origin: requestOrigin } : {})
     };
   }
