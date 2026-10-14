@@ -78,6 +78,16 @@ export function AppEdit({ app }: { app: string }) {
   const [error, setError] = useState<string>();
   // The outside hosts the shown draft lists that its frame may not call before a publish.
   const [heldBackHosts, setHeldBackHosts] = useState<readonly string[]>([]);
+  // Each save of the draft, also the agent's from the dock, is another revision: the frame asks
+  // for its address anew. The first read of the record is the revision the frame starts with.
+  const draftNow = record.app ? appDraftRevision(record.app) : undefined;
+  const [framedDraft, setFramedDraft] = useState(draftNow);
+  if (draftNow !== framedDraft) {
+    setFramedDraft(draftNow);
+    if (framedDraft !== undefined) {
+      setTurn((count) => count + 1);
+    }
+  }
 
   if (!host || !workspace || !rights) {
     return null;

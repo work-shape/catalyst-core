@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { pendingOpen, placeFollowsOpens, planOpenMoves } from "@vivd-catalyst/chat-ui/open-move";
+import {
+  lastRunParts,
+  pendingOpen,
+  placeFollowsOpens,
+  planOpenMoves
+} from "@vivd-catalyst/chat-ui/open-move";
 import type { WorkspaceRoute } from "@vivd-catalyst/chat-ui/shell";
 import type { AssetOpen } from "@vivd-catalyst/chat-ui/subject-run";
 
@@ -166,6 +171,67 @@ describe("the offer to go to an opened asset", () => {
         workspaceId: WS,
         here: onPage
       })
+    ).toBeUndefined();
+  });
+});
+
+describe("the last run the offer stands for", () => {
+  const finalOf = (runId: string) => ({
+    metadata: {
+      agentRuntime: { version: 1, kind: "assistant_final", runId, finishStatus: "completed" }
+    }
+  });
+  const partsOf = (name: string) => [
+    {
+      type: "tool_call",
+      toolName: "platform.assets.open",
+      toolCallId: `call-${name}`,
+      state: "output_available",
+      output: { kind: "app", name, title: name }
+    }
+  ];
+  const watched = (id: string, status: string, name: string) => ({
+    run: { id },
+    projection: { status, parts: partsOf(name) }
+  });
+
+  it("is the run the thread watches while it goes, or when it is the last", () => {
+    expect(
+      lastRunParts({
+        activeRun: watched("r2", "running", "live"),
+        messages: [finalOf("r1")],
+        completedRunProjections: { r1: { parts: partsOf("ended") } }
+      })
+    ).toEqual(partsOf("live"));
+    expect(
+      lastRunParts({
+        activeRun: watched("r1", "completed", "seen"),
+        messages: [finalOf("r1")],
+        completedRunProjections: {}
+      })
+    ).toEqual(partsOf("seen"));
+  });
+
+  it("is the ended run read from the thread in a second tab, after a reload or a later run", () => {
+    expect(
+      lastRunParts({
+        activeRun: undefined,
+        messages: [finalOf("r1"), finalOf("r2")],
+        completedRunProjections: {
+          r1: { parts: partsOf("first") },
+          r2: { parts: partsOf("second") }
+        }
+      })
+    ).toEqual(partsOf("second"));
+    expect(
+      lastRunParts({
+        activeRun: watched("r1", "completed", "first"),
+        messages: [finalOf("r1"), finalOf("r2")],
+        completedRunProjections: { r2: { parts: partsOf("second") } }
+      })
+    ).toEqual(partsOf("second"));
+    expect(
+      lastRunParts({ activeRun: undefined, messages: [], completedRunProjections: {} })
     ).toBeUndefined();
   });
 });

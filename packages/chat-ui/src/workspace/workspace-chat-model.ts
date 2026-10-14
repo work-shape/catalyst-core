@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   APP_ASSET_KIND,
+  type AgentRunProjection,
   type ApiClient,
   type ApiUser,
   type CollaborationWorkspaceAgents,
@@ -896,6 +897,8 @@ export function useWorkspaceChatModel({
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
   const agentOpens = useAgentOpens({
     activeRun: controller.activeRun,
+    messages,
+    completedRunProjections: controller.completedRunProjections ?? NO_RUN_PROJECTIONS,
     conversationId: selectedConversationId,
     storedSubject: selectedThread?.conversation.subject,
     workspaceId: activeCollaborationWorkspaceId,
@@ -1377,6 +1380,7 @@ export function useWorkspaceChatModel({
 }
 
 const NO_CONVERSATIONS: readonly ConversationListItem[] = [];
+const NO_RUN_PROJECTIONS: Readonly<Record<string, AgentRunProjection>> = {};
 
 // The code a run is failed with when no worker took it within its queue limit.
 const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";

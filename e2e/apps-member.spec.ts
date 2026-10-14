@@ -320,6 +320,9 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   const chip = page.getByTestId("asset-opened-chip");
   await expect(chip).toContainText(`Opened ${appName}`);
   expect(new URL(page.url()).pathname).toBe(appsList);
+  // The person turns to the second tab, which reads the conversation again as a shown tab does.
+  await second.bringToFront();
+  await second.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   const secondChip = second.getByTestId("asset-opened-chip");
   const secondReady = async () => {
     await expect(secondChip).toBeVisible();
@@ -328,6 +331,7 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   expect(new URL(second.url()).pathname).toBe(chatPath);
   await shootLocales(second, "nav-2-chip-second-tab", secondReady);
   await second.close();
+  await page.bringToFront();
   // The press of "Go to it" is the person's own step: the page opens with the dock.
   await chip.getByRole("button", { name: "Go to it", exact: true }).click();
   await expect(page).toHaveURL(

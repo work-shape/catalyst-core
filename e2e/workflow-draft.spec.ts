@@ -243,9 +243,9 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     const slot = page.locator("aside[data-surface-kind]");
     await expect(slot).toHaveAttribute("data-surface-kind", "tool_display");
     await expect(slot).toHaveAttribute("data-surface-mode", "covering");
+    // It slides in over the page: once it stands, it takes the page area exactly.
     const pageArea = await page.locator("[data-dock-page]").boundingBox();
-    const slotArea = await slot.boundingBox();
-    expect(slotArea).toEqual(pageArea);
+    await expect.poll(() => slot.boundingBox()).toEqual(pageArea);
     await expect(page.getByPlaceholder("Message")).toBeInViewport();
     await slot.getByRole("button", { name: "Show page", exact: true }).click();
     await expect(slot).toBeHidden();
@@ -375,6 +375,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     const editorReady = async () => {
       await expect(page.getByTestId("asset-opened-line").last()).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(subject).toContainText("Research Assistant");
     };
     await editorReady();
     await shootThemes(page, "agent-from-chat", editorReady);

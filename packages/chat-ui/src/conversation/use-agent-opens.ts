@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import type { ApiClient } from "@vivd-catalyst/api-client";
+import type { ApiClient, Message } from "@vivd-catalyst/api-client";
 import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
-import { pendingOpen, planOpenMoves } from "./open-move";
+import { lastRunParts, pendingOpen, planOpenMoves, type WatchedRun } from "./open-move";
 import {
   assetPageRoute,
   opensInRun,
@@ -11,12 +11,6 @@ import {
   type SubjectAsset,
   type SubjectRunPart
 } from "./subject-run";
-
-/** The run of the open conversation as the thread watches it. */
-interface WatchedRun {
-  run: { id: string };
-  projection: { status: string; parts: readonly SubjectRunPart[] };
-}
 
 const FINISHED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
 
@@ -49,6 +43,9 @@ export interface AgentOpens {
  */
 export function useAgentOpens(input: {
   activeRun: WatchedRun | undefined;
+  /** The messages of the thread and the projections of its ended runs, for the last run. */
+  messages: readonly Message[];
+  completedRunProjections: Readonly<Record<string, { parts: readonly SubjectRunPart[] }>>;
   conversationId: string | undefined;
   storedSubject: SubjectAsset | undefined;
   workspaceId: string | undefined;
@@ -61,6 +58,8 @@ export function useAgentOpens(input: {
 }): AgentOpens {
   const {
     activeRun,
+    messages,
+    completedRunProjections,
     conversationId,
     storedSubject,
     workspaceId,
@@ -171,10 +170,13 @@ export function useAgentOpens(input: {
     [client, conversationId, onError, onSubjectChanged, openPage, storedSubject, workspaceId]
   );
 
+  // The offer stands for the last run, also one this tab only reads: in a second tab, after a
+  // reload, or once the thread was read again after the run.
+  const lastParts = lastRunParts({ activeRun, messages, completedRunProjections });
   const pending =
-    parts === undefined
+    lastParts === undefined
       ? undefined
-      : pendingOpen({ opens: opensInRun(parts), storedSubject, workspaceId, here: route });
+      : pendingOpen({ opens: opensInRun(lastParts), storedSubject, workspaceId, here: route });
 
   return { pending, goTo, pageOf, sent };
 }

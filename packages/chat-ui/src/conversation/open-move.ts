@@ -1,6 +1,14 @@
+import type { Message } from "@vivd-catalyst/api-client";
+import { readCompatibleMessageRunId } from "../assistant/assistant-message-compat";
 import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import { routeConversationId } from "../workspace/workspace-route";
-import { assetPageRoute, sameAsset, type AssetOpen, type SubjectAsset } from "./subject-run";
+import {
+  assetPageRoute,
+  sameAsset,
+  type AssetOpen,
+  type SubjectAsset,
+  type SubjectRunPart
+} from "./subject-run";
 
 // When the agent opens an asset, the person is taken to its page only where they are working
 // with the agent, never from a page they went to on their own (navigation-and-layout.md, 4.7b).
@@ -147,4 +155,37 @@ export function pendingOpen(input: {
     ? !sameAsset(input.storedSubject, last.subject)
     : !samePage(input.here, page);
   return pending ? last : undefined;
+}
+
+/** The run of the open conversation as the thread watches it. */
+export interface WatchedRun {
+  run: { id: string };
+  projection: { status: string; parts: readonly SubjectRunPart[] };
+}
+
+const ENDED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+
+/**
+ * The parts of the last run of the conversation: the run the thread watches, unless a later
+ * run ended where this tab did not watch it, in another tab or before a reload. The thread keeps
+ * an ended run only as the projection of its message.
+ */
+export function lastRunParts(input: {
+  activeRun: WatchedRun | undefined;
+  messages: readonly Pick<Message, "metadata">[];
+  completedRunProjections: Readonly<Record<string, { parts: readonly SubjectRunPart[] }>>;
+}): readonly SubjectRunPart[] | undefined {
+  const { activeRun, messages, completedRunProjections } = input;
+  const lastRunId = messages
+    .map((message) => readCompatibleMessageRunId(message))
+    .findLast((runId) => runId !== undefined);
+  if (
+    activeRun !== undefined &&
+    (lastRunId === undefined ||
+      activeRun.run.id === lastRunId ||
+      !ENDED_RUN_STATES.has(activeRun.projection.status))
+  ) {
+    return activeRun.projection.parts;
+  }
+  return lastRunId === undefined ? undefined : completedRunProjections[lastRunId]?.parts;
 }
