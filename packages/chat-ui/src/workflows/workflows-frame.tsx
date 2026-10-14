@@ -1,12 +1,5 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
-import {
-  Badge,
-  Button,
-  InlineError,
-  PageHeaderBack,
-  Skeleton,
-  Spinner
-} from "@vivd-catalyst/ui";
+import { Badge, Button, InlineError, PageHeaderBack, Skeleton, Spinner } from "@vivd-catalyst/ui";
 import { opensHere } from "../apps/app-header";
 import { formatElapsed } from "../control-plane/locale-format";
 import { useTranslation, type TranslationContextValue } from "../i18n";
