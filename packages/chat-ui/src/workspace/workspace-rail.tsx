@@ -52,7 +52,10 @@ interface WorkspaceRailProps {
   canViewBuild?: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox?: RailSectionsGiven["inbox"];
-  /** The session has workspaces: the Agents row shows. */
+  /**
+   * The session has workspaces and the open one offers two agents or more, or the person may
+   * write one: the Agents row shows.
+   */
   agents?: boolean;
   /** The Apps module is on: the Apps row shows. */
   apps?: boolean;

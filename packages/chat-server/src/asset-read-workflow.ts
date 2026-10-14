@@ -11,6 +11,7 @@ import {
   type ActorAccess,
   type AgentAvailability,
   type AssetScope,
+  type ConfigAssetKey,
   type ConfigAssetRecord,
   type FileSet,
   type JsonObject,
@@ -94,13 +95,7 @@ export class AssetReadWorkflow {
             }),
         afterName: typeof after === "string" ? after : undefined,
         limit: page?.limit ?? DEFAULT_ASSET_LIST_LIMIT,
-        readable: (asset) => {
-          const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
-          return (
-            reads(resource) ||
-            showsPublishedView(kind, call.access, resource, asset.published === true)
-          );
-        }
+        readable: (asset) => listedTo(kind, call.access, asset)
       })
     ]);
     return records.map((record) => {
@@ -451,6 +446,22 @@ function isPublished(kind: WorkflowAssetKind, asset: ConfigAssetRecord | undefin
     asset !== undefined &&
     liveRevisionId(asset, kind) !== undefined &&
     asset.publishedRevision !== undefined
+  );
+}
+
+/**
+ * Whether a list of the kind shows the caller this asset: whoever reads it is shown all of it,
+ * a holder of the use right its published view.
+ */
+export function listedTo(
+  kind: WorkflowAssetKind,
+  access: ActorAccess,
+  asset: Pick<ConfigAssetKey, "kind" | "name" | "scope" | "id" | "published">
+): boolean {
+  const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
+  return (
+    access.authorize(kind.actions.read, resource).allowed ||
+    showsPublishedView(kind, access, resource, asset.published === true)
   );
 }
 

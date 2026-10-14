@@ -7,7 +7,10 @@ import type { WorkspaceRouteView } from "./workspace-route";
  * absent here does not show.
  */
 export interface RailSectionsGiven {
-  /** The session has workspaces, so the agents of the open one have a page. */
+  /**
+   * The session has workspaces and the open one offers a choice of agents, or the person may
+   * write one. With one agent New chat starts it and the row has nothing to add.
+   */
   agents?: boolean;
   /** The Apps module is on and the person is in a workspace that can hold Apps. */
   apps?: boolean;
