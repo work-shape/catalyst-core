@@ -3,6 +3,7 @@ import {
   isAppError,
   asCollaborationWorkspaceId,
   operationDenialError,
+  type GuardrailAnswer,
   type OperationBeforeEvent,
   type Page,
   type PlatformEventAnswer,
@@ -19,21 +20,32 @@ import type { PageApps } from "./page-apps";
 
 /**
  * The guardrails on asset writes asked about the App draft a save of a Page writes from the
- * revision it stored, as they answer a person's write of the App: the event to write with, or
- * why the draft is not written. Nothing can wait for an approval there, as the Page is saved
- * already: a hold leaves the draft unwritten, as a block does.
+ * revision it stored, as they answer a person's write of the App: the event to write with and
+ * the warnings the agent passes on, or why the draft is not written.
+ *
+ * A `require_approval` there is a block, kept as a block hit. Nothing can wait for an
+ * approval: the save's own before-events were asked before the revision existed and the Page
+ * is stored already, so no call is left to hold and no request is filed. A hit that asked for
+ * an approval nobody can give would count a hold that never was. The person's Update app on
+ * the Page (`apps.update_from_page`) writes the same draft and waits for the approval there.
  */
 export async function askAboutDraft(
   events: PlatformEventEmitter | undefined,
   context: ToolExecutionContext,
   pageApps: Pick<PageApps, "writeEvent">,
   input: { app: string; workspaceId: string; fileSetId?: string | undefined; page: Page }
-): Promise<{ event: OperationBeforeEvent } | { refusal: string }> {
+): Promise<{ event: OperationBeforeEvent; warnings: string[] } | { refusal: string }> {
   const event = pageApps.writeEvent({ ...input, page: () => Promise.resolve(input.page) });
   const answer = await askBeforeWrite(events, context, event, input.workspaceId);
-  return answer.outcome === "block" || answer.outcome === "require_approval"
-    ? { refusal: draftGuardrailRefusal(answer, event) }
-    : { event };
+  if (answer.outcome === "block" || answer.outcome === "require_approval") {
+    return { refusal: draftGuardrailRefusal(answer, event) };
+  }
+  return {
+    event,
+    warnings: answer.guardrails.flatMap((guardrail) =>
+      guardrail.outcome === "warn" ? [draftGuardrailWarning(guardrail, event)] : []
+    )
+  };
 }
 
 /**
@@ -72,22 +84,41 @@ async function askBeforeWrite(
       runtime: {
         ...(context.deadline ? { deadline: context.deadline } : {}),
         ...(context.signal ? { signal: context.signal } : {})
-      }
+      },
+      cannotWait: true
     }
   );
 }
 
 /**
- * Why a guardrail left the App's draft unwritten, in the words of its refusal. Nothing can wait
- * for an approval there, as the Page is saved already: a hold says where the write can wait.
+ * Why a guardrail left the App's draft unwritten, in the words of its refusal. Where it asked
+ * for an approval, which this write cannot wait for, it says where the write can wait.
  */
 function draftGuardrailRefusal(answer: PlatformEventAnswer, event: OperationBeforeEvent): string {
+  // A guardrail that blocks outright is named before one that asked for an approval.
+  const guardrails = [...answer.guardrails].sort(
+    (left, right) =>
+      Number(left.approvalCannotWait ?? false) - Number(right.approvalCannotWait ?? false)
+  );
   const why = operationDenialError(
-    guardrailDenial([{ ...answer, subject: event.subject }], event.name)
+    guardrailDenial([{ ...answer, guardrails, subject: event.subject }], event.name)
   ).message;
-  return answer.outcome === "block"
-    ? `${why}. The App's draft was not written; the Page is saved.`
-    : `${why}: it asks for another person's approval. The App's draft was not written; the Page is saved. Ask the person to save the App from the Page in its view, where the write can wait for the approval.`;
+  const asksForApproval = answer.guardrails.some(
+    (guardrail) => guardrail.outcome === "block" && guardrail.approvalCannotWait
+  );
+  const blocked = answer.guardrails.some(
+    (guardrail) => guardrail.outcome === "block" && !guardrail.approvalCannotWait
+  );
+  return asksForApproval && !blocked
+    ? `${why}: it asks for another person's approval, which a save of a Page cannot wait for. The App's draft was not written; the Page is saved. Ask the person to use Update app on the Page, where the write can wait for the approval.`
+    : `${why}. The App's draft was not written; the Page is saved.`;
+}
+
+/** A guardrail's warning about the App's draft, which the agent passes on to the person. */
+function draftGuardrailWarning(guardrail: GuardrailAnswer, event: OperationBeforeEvent): string {
+  const about = event.subject.name ? ` ${event.subject.kind} '${event.subject.name}'` : "";
+  const reason = guardrail.reason === "" ? " but could not check it" : `: ${guardrail.reason}`;
+  return `Guardrail '${guardrail.displayName}' warned about${about}${reason}`;
 }
 
 /** What a save of a Page answers about its App, where the App's draft was not written. */

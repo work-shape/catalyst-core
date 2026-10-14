@@ -78,6 +78,11 @@ export interface GuardrailCallContext {
    * which is new, is kept again.
    */
   repeated?: boolean;
+  /**
+   * Set where the action cannot wait for an approval and no request is filed for it: a
+   * `require_approval` answers as a `block`, and its hit is kept as one.
+   */
+  cannotWait?: boolean;
 }
 
 /** What `approval_request.before_create` hands its guardrails. */
@@ -151,7 +156,13 @@ export class GuardrailRunner {
       );
       for (const answer of judged) results.set(answer.guardrailName, answer);
     }
-    const answers = bound.flatMap((entry) => results.get(entry.name) ?? []);
+    const answers = bound.flatMap((entry) => {
+      const answer = results.get(entry.name);
+      if (!answer) return [];
+      return context.cannotWait && answer.outcome === "require_approval"
+        ? [{ ...answer, outcome: "block" as const, approvalCannotWait: true as const }]
+        : [answer];
+    });
     // Asked again, the hits of the first ask are kept already. A block is new: a block then
     // would have refused the action, so it never waited to be asked again.
     const recorded = context.repeated

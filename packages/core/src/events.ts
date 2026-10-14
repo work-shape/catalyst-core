@@ -520,6 +520,13 @@ export interface PlatformEventContext extends Pick<
    * an approval is executed. The guardrails answer again; their hits were kept the first time.
    */
   repeated?: true;
+  /**
+   * Set where the action cannot wait for an approval and no request is filed for it, as the
+   * App draft a save of a Page writes once the Page is stored: a guardrail's
+   * `require_approval` answers and is kept as a `block`, so no hit waits for an approval
+   * nobody can give.
+   */
+  cannotWait?: true;
 }
 
 export type PlatformEventOutcome = "allow" | "warn" | "block" | "require_approval";

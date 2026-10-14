@@ -16,6 +16,7 @@ import { createPageSaveAsAppTool } from "@vivd-catalyst/tool-execution";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { IBAN, guardedEvents, ibanPattern, noIban } from "./support/guardrails";
+import type { ReleaseGuardrailConfig } from "@vivd-catalyst/config-schema";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { getTestJobs, testServerOptions } from "./support/test-instance";
 
@@ -124,15 +125,15 @@ describe("an App written from a Page that waited for an approval", () => {
 });
 
 describe("an App the agent writes from a Page of its conversation", () => {
-  async function setup() {
+  async function setup(rules: Record<string, ReleaseGuardrailConfig> = noIbanInApps) {
     const t = await setupAppInstance({
-      server: (stores) => ({ operations: { events: guardedEvents(stores, noIbanInApps).events } })
+      server: (stores) => ({ operations: { events: guardedEvents(stores, rules).events } })
     });
     // The server, and with it its options, is built on the first request.
     await t.instance.call("health.get");
     const options = testServerOptions(t.instance);
     if (!options) throw new Error("The instance has no server options");
-    return { t, calls: createPlatformAssetCalls(options) };
+    return { t, options, calls: createPlatformAssetCalls(options) };
   }
 
   const identity = (user: UserRecord) => ({
@@ -263,4 +264,75 @@ describe("an App the agent writes from a Page of its conversation", () => {
       await t.close();
     }
   });
+
+  /** An App made from a Page of a new conversation, and a later save of that Page. */
+  async function savedAgain(t: AppInstance, calls: ReturnType<typeof createPlatformAssetCalls>) {
+    const conversationId = await privateConversation(t);
+    const page = await t.storePage("Angebot ohne Konto", {}, { conversationId });
+    await calls.saveAsApp(await contextOf(t, conversationId, "page.save_as_app"), {
+      page: "Offers",
+      name: "offers",
+      title: "Offers"
+    });
+    await t.storePage(`Konto ${IBAN}`, {}, { conversationId });
+    return calls.saveIntoSubjectApp(await contextOf(t, conversationId, "page.save"), {
+      pageId: page.pageId
+    });
+  }
+
+  const hitsOf = async (t: AppInstance) =>
+    (
+      await t.stores.guardrails.listHits({ clientInstanceId, guardrailName: "no_iban", limit: 5 })
+    ).map((hit) => [hit.event, hit.outcome, hit.subjectName]);
+
+  // Fails without the change: the draft was written and the warning was dropped, so the agent
+  // could not tell the person.
+  it("passes a guardrail's warning about the draft page.save writes on to the agent", async () => {
+    const { t, calls } = await setup({
+      no_iban: { ...noIbanInApps.no_iban, outcome: "warn" }
+    });
+    try {
+      expect(await savedAgain(t, calls)).toEqual({
+        name: "offers",
+        title: "Offers",
+        saved: true,
+        revision: 2,
+        warnings: [
+          "Guardrail 'No IBAN in Apps' warned about app 'offers': Apps hold no bank account."
+        ]
+      });
+      expect(await draftRevisionOf(t, "offers")).toBe(2);
+      expect(await hitsOf(t)).toEqual([["asset.before_write", "warn", "offers"]]);
+    } finally {
+      await t.close();
+    }
+  });
+
+  // Fails without the change: the hold was kept as a hit that asked for an approval, which no
+  // request was filed for and nobody could give.
+  it("blocks the draft page.save writes where a guardrail asks for an approval, and keeps a block", async () => {
+    const { t, calls } = await setup({
+      no_iban: { ...noIbanInApps.no_iban, outcome: "require_approval" }
+    });
+    try {
+      expect(await savedAgain(t, calls)).toEqual({
+        name: "offers",
+        title: "Offers",
+        saved: false,
+        message:
+          "Guardrail 'No IBAN in Apps' blocked app 'offers': Apps hold no bank account.: it asks for another person's approval, which a save of a Page cannot wait for. The App's draft was not written; the Page is saved. Ask the person to use Update app on the Page, where the write can wait for the approval."
+      });
+      expect(await draftRevisionOf(t, "offers")).toBe(1);
+      expect(await hitsOf(t)).toEqual([["asset.before_write", "block", "offers"]]);
+      const pending = await t.stores.approvals.listApprovalRequests({
+        clientInstanceId,
+        kinds: ["operation_call"],
+        status: "pending"
+      });
+      expect(pending).toEqual([]);
+    } finally {
+      await t.close();
+    }
+  });
 });
+
