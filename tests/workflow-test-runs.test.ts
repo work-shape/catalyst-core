@@ -252,9 +252,17 @@ describe("a test run of a Workflow draft", () => {
         usedAt: expect.any(String)
       }
     ]);
-    // Set again, it is unused again.
+    // Set again, it is a new switch for the next run, beside the run that used the last one.
     await switchOn(t, 1);
-    expect(await listed(t.kai)).toEqual([{ part: "send", switchedAt: expect.any(String) }]);
+    expect(await listed(t.kai)).toEqual([
+      { part: "send", switchedAt: expect.any(String) },
+      {
+        part: "send",
+        switchedAt: expect.any(String),
+        usedByRunId: kais.started.id,
+        usedAt: expect.any(String)
+      }
+    ]);
   });
 
   it("gates a switched step on an approval the policy asks for", async () => {

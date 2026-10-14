@@ -45,7 +45,7 @@ import { assetCheckouts, assetRepoBundles } from "./schema/assetRepos";
 import { approvalRequests } from "./schema/approvals";
 import { platformJobs } from "./schema/jobs";
 import { operationRuns } from "./schema/operationRuns";
-import { liveOnceSwitches } from "./schema/liveOnceSwitches";
+import { liveOnceRuns, liveOnceSwitches } from "./schema/liveOnceSwitches";
 import { permissionGrants, namespaces } from "./schema/access";
 import { infrastructureCheckState } from "./schema/infrastructure";
 import { pages, fileSets, pageBuilds } from "./schema/pages";
@@ -86,6 +86,7 @@ export const schema = {
   platformJobs,
   operationRuns,
   liveOnceSwitches,
+  liveOnceRuns,
   permissionGrants,
   namespaces,
   infrastructureCheckState,

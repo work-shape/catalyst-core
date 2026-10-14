@@ -161,16 +161,14 @@ export function useRunLiveOnce(
       return undefined;
     }
     const held = pending.get(step.id);
-    const stored = switches?.find((entry) => entry.step === step.id);
+    // A step may have a switch set for the next run beside the run that used the last one.
+    const set = switches?.find((entry) => entry.step === step.id && entry.used === undefined);
+    const used = switches?.find(
+      (entry) => entry.step === step.id && entry.used !== undefined
+    )?.used;
     return {
-      state: held?.busy
-        ? "busy"
-        : stored === undefined
-          ? "off"
-          : stored.used === undefined
-            ? "set"
-            : "used",
-      ...(stored?.used === undefined ? {} : { used: stored.used }),
+      state: held?.busy ? "busy" : set !== undefined ? "set" : used !== undefined ? "used" : "off",
+      ...(used === undefined ? {} : { used }),
       ...(held?.error === undefined ? {} : { error: held.error }),
       switchOn: () => {
         switchOn(step.id).catch(() => undefined);

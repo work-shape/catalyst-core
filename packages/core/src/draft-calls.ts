@@ -21,7 +21,7 @@ export interface LiveOnceSwitch {
   /** The owner: the person who set it. Only their calls use it. */
   switchedBy: { id: string; label: string };
   switchedAt: ISODateString;
-  /** The test run of a Workflow the switch was used by, and when. Absent while unused. */
+  /** The test run of a Workflow that took the switch, and when. Absent on a switch still set. */
   usedByRunId?: string;
   usedAt?: ISODateString;
 }
@@ -39,10 +39,10 @@ export interface LiveOnceSwitchStore {
   /**
    * Takes the switch the caller set on one part of one draft revision. Without `forRun` the
    * call uses it up: of two calls that ask at once, one takes it. With `forRun`, a test run of
-   * a Workflow, the first call binds the switch to that run in one statement and every later
-   * call of the same run is answered it again: `firstUse` tells the two apart. A switch bound
-   * to another run is not taken. Clears first every unused switch of the asset whose revision
-   * is no longer its draft, and answers them.
+   * a Workflow, the first call takes the switch and binds it to that run in one statement, and
+   * every later call of the same run is answered that binding: `firstUse` tells the two apart.
+   * A switch its owner sets again meanwhile is a new one, for their next run. Clears first every
+   * switch of the asset whose revision is no longer its draft, and answers them.
    */
   take(input: {
     clientInstanceId: ClientInstanceId;
@@ -55,7 +55,11 @@ export interface LiveOnceSwitchStore {
     /** When the call takes it: the moment a bound switch was used. */
     at: ISODateString;
   }): Promise<{ taken?: LiveOnceSwitch; firstUse: boolean; cleared: LiveOnceSwitch[] }>;
-  /** The switches one person set on the asset's current draft, used or not, by part. */
+  /**
+   * One person's switches on the asset's current draft: each one set and not used yet, and of
+   * each part the last test run that used one, with `usedByRunId` and `usedAt`. A part may
+   * have both: a run took a switch, and its owner set a new one for the next run.
+   */
   list(input: {
     clientInstanceId: ClientInstanceId;
     assetId: string;

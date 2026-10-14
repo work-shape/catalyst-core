@@ -298,11 +298,16 @@ describe("the page of a test run", () => {
     expect(used).toContain(`>${t("workflows.liveOnce.again")}</`);
     expect(used).toMatch(/Ran live in your test run of [^<]+\./u);
     expect(panel("send")).not.toContain(t("workflows.liveOnce.button"));
-    // German speaks of running for real, not of "live" at once.
+    // German says "live" as the target badge does, and never "auf einmal live".
     expect(panel("send", { state: "off" }, "de")).toContain(
       `>${de("workflows.liveOnce.button")}</`
     );
     expect(de("workflows.test.body")).not.toContain("auf einmal live");
+    expect(de("workflows.liveOnce.button")).toBe("Einmal live ausführen");
+    expect(de("workflows.target.live")).toBe("Live");
+    expect(de("workflows.run.publishedAsksShort")).toBe(
+      "Eine veröffentlichte Ausführung fragt hier nach Freigabe"
+    );
   });
 
   it("says in sentences what a simulated step would have done, without the engine's keys", () => {
