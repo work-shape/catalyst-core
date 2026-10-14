@@ -320,6 +320,14 @@ export async function callStepOperation(input: {
         trace
       );
     }
+    // A run of a published revision is no call of a draft. The test run of a draft (EW-5t)
+    // answers a simulated step.
+    case "dry_run":
+      throw new OperationStepFailure(
+        "operation_simulated",
+        `The operation '${operation}' was simulated, which only a test run of a draft does`,
+        trace
+      );
     case "expired":
     case "pending_approval":
     case "pending_confirmation":

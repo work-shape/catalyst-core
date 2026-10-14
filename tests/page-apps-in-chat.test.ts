@@ -101,6 +101,7 @@ describe("a Page made an App from its conversation", () => {
       effect: "changing",
       actor: { kind: "user", id: user.id, label: user.displayLabel },
       origin: { kind: "user" },
+      target: "live",
       inputHash: randomUUID().replace(/-/gu, "").padEnd(64, "a"),
       correlationId,
       startedAt: new Date().toISOString()
