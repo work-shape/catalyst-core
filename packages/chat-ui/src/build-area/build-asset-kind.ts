@@ -90,6 +90,12 @@ interface BuildKindBase {
   row?(asset: BuildAssetRow): { leading?: ReactNode; description?: string };
   /** What a row says after the asset's id, on the same line: such as the asset's description. */
   rowText?(asset: BuildAssetRow): string | undefined;
+  /**
+   * The line under a row's title in the kind's own words, in place of the asset's id and
+   * `rowText`, shown whole: a component, so it may read what the page knows, such as
+   * workspace names.
+   */
+  RowLine?: ComponentType<{ asset: BuildAssetRow }>;
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
 }

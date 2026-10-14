@@ -1,9 +1,6 @@
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
 import {
   AppError,
-  CONNECTION_OPERATION_PREFIX,
-  DATA_STORE_OPERATION_PREFIX,
-  KNOWLEDGE_OPERATION_PREFIX,
   createAuthorizer,
   isPageId,
   moduleOffError,
@@ -45,6 +42,7 @@ import type { AssetCall } from "./asset-access";
 import { assetWriteEvent } from "./asset-guardrail-events";
 import { readDefinitionName } from "./asset-kinds/shared";
 import { AssetWorkflow } from "./asset-workflow";
+import { callableByAudience, listingOrigin } from "./platform-operations-audience";
 import { readPlatformContext } from "./platform-context";
 import { findWorkspaceFiles } from "./workspace-files";
 import type { AssetWorkflowOptions } from "./types";
@@ -74,13 +72,6 @@ const stricterOf = (left: PolicyValue | undefined, right: PolicyValue): PolicyVa
 
 /** How many operations one list answers. The list has no pages, so this is its bound. */
 const CALLABLE_OPERATION_LIST_MAX = 200;
-
-/** The operations that exist as data and that a step of a Workflow may name. */
-const CALLABLE_PREFIXES = [
-  CONNECTION_OPERATION_PREFIX,
-  DATA_STORE_OPERATION_PREFIX,
-  KNOWLEDGE_OPERATION_PREFIX
-];
 
 type AssetOptions = Pick<
   AssetWorkflowOptions,
@@ -738,13 +729,14 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       };
     },
 
-    async listOperations(context) {
-      const { call } = await bound(context);
+    async listOperations(context, audience) {
+      // The list is of the instance, so it needs no subject: an agent asks it while it builds
+      // a Page, before the conversation is about any asset.
+      const conversation = await conversationOf(context);
+      const call = await callOf(context);
       const listing = await options.operationCalls?.registry.list({});
       const candidates = (listing?.operations ?? [])
-        .filter((definition) =>
-          CALLABLE_PREFIXES.some((prefix) => definition.name.startsWith(prefix))
-        )
+        .filter((definition) => callableByAudience(definition.name, audience))
         .sort((left, right) => (left.name < right.name ? -1 : 1));
       const visible = async (definition: OperationDefinition): Promise<boolean> => {
         try {
@@ -756,9 +748,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
             {},
             {
               actor: call.actor,
-              // Asked as a step of a Workflow would call it: an operation that is not exposed
-              // to Workflows is none a step may name.
-              origin: { kind: "workflow", workflowRunId: "", stepRunId: "" },
+              origin: listingOrigin(audience, conversation.id),
               correlationId: call.correlationId,
               access: call.access,
               resource

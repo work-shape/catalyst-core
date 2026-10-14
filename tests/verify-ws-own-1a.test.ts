@@ -194,8 +194,13 @@ describe("WS-OWN-1a verifier: workspace boundary and existence oracle", () => {
     expect(deleted.statusCode).not.toBe(200);
     expect(shape(deleted, "other-agent")).toEqual(shape(await del("nobody-agent"), "nobody-agent"));
     expect(
-      (await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "agent", name: "other-agent" }))
-        ?.status
+      (
+        await t.stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "agent",
+          name: "other-agent"
+        })
+      )?.status
     ).toBe("active");
   });
 
@@ -215,7 +220,13 @@ describe("WS-OWN-1a verifier: workspace boundary and existence oracle", () => {
 
     const written = await putIn(t, t.kai.id, "agent", reader("team-helper", ["other-notes"]), team);
     expect(written.statusCode).toBe(422);
-    const missing = await putIn(t, t.kai.id, "agent", reader("team-helper", ["nobody-notes"]), team);
+    const missing = await putIn(
+      t,
+      t.kai.id,
+      "agent",
+      reader("team-helper", ["nobody-notes"]),
+      team
+    );
     expect(shape(written, "other-notes")).toEqual(shape(missing, "nobody-notes"));
 
     const validate = (skillName: string) =>

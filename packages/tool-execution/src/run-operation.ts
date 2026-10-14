@@ -483,15 +483,15 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     if (definition.secret) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }
-    // A call of a test run does not wait (EW-5t): nothing takes a run up again when somebody
-    // decides, and nothing could ask the principal again when the call is executed. The step
-    // is refused with the reason, so the approval gates it.
     const unavailable: OperationDenial = {
       kind: "policy",
       operation: definition.name,
       reason: "approval_unavailable"
     };
-    if (call.draft?.boundBy) {
+    // A call of a draft that "Run live once" sent live does not wait: an approved call is
+    // executed from the registry, which holds what is published and no draft, and a test run
+    // has nothing that could ask its principal again. The approval gates it by refusing it.
+    if (call.draft) {
       return { ending: await denyRun(context, unavailable) };
     }
     // The approval is asked and nothing can hold the call for it: the refusal says so.

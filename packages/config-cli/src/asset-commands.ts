@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -54,6 +55,9 @@ const OPTIONS = {
   personal: { type: "boolean", default: false },
   "available-in": { type: "string", multiple: true },
   none: { type: "boolean", default: false },
+  field: { type: "string" },
+  asset: { type: "string" },
+  confirm: { type: "string" },
   help: { type: "boolean", short: "h", default: false }
 } as const;
 
@@ -227,13 +231,20 @@ const VERBS: Record<string, Verb> = {
     }
   },
   publish: {
-    usage: "publish <name> --revision <n>",
-    summary: "Make one revision the one its users are served (assets.publish)",
+    usage: "publish <name> --revision <n> [--confirm <blocked>]",
+    summary:
+      "Make one revision the one its users are served (assets.publish). A guardrail shows its dry run first",
     named: true,
-    flags: ["revision"],
+    flags: ["revision", "confirm"],
     prepare: (values, name) => {
       const revision = revisionNumber(required(values.revision, "--revision <n>"));
       return async (session) => {
+        if (session.kind.kind === GUARDRAIL_KIND) {
+          const proceed = await guardrailDryRunBeforePublish(session, name, revision);
+          if (proceed !== undefined) return proceed;
+        } else if (values.confirm !== undefined) {
+          throw new UsageError("--confirm answers the dry run of a guardrail's publish.");
+        }
         const outcome = await session.api.change(
           (client, idempotencyKey) =>
             client.assets.publish({
@@ -247,6 +258,80 @@ const VERBS: Record<string, Verb> = {
           `Published revision ${output.publishedRevision} of ${session.kind.kind} '${name}'${output.replacedRevision === undefined ? "" : ` in place of revision ${output.replacedRevision}`}.`
         ]);
       };
+    }
+  },
+  test: {
+    usage:
+      "test <name> [--revision <n>] (--text <content> [--field <field>] | --from <file> [--field <field>] | --asset <kind>:<name>[@<n>])",
+    summary:
+      "Check a guardrail's draft, or one revision, on sample content or on an asset; keeps no hit (guardrails.test)",
+    named: true,
+    flags: ["revision", "text", "from", "field", "asset"],
+    prepare: (values, name, cwd) => {
+      const revision = values.revision === undefined ? undefined : revisionNumber(values.revision);
+      const given = [values.text, values.from, values.asset].filter((value) => value !== undefined);
+      if (given.length !== 1) {
+        throw new UsageError("Give the content to check: one of --text, --from or --asset.");
+      }
+      if (values.asset !== undefined && values.field !== undefined) {
+        throw new UsageError("--field names a field of sample content, not of an asset.");
+      }
+      const asset = values.asset === undefined ? undefined : assetReference(values.asset);
+      return async (session) => {
+        requireGuardrail(session, "test");
+        const text =
+          values.from === undefined
+            ? values.text
+            : await readFile(fromPath(values, cwd, "--from <file>"), "utf8");
+        const body = {
+          ...(revision === undefined ? {} : { revision }),
+          ...(asset ? { asset } : { sample: { [values.field ?? "content"]: text ?? "" } })
+        };
+        const answer = await session.api.read((client) =>
+          client.guardrails.test({ params: { name }, body })
+        );
+        return print(session, answer, () =>
+          [
+            `Revision ${answer.revision} of guardrail '${name}' on '${answer.event}': ${answer.outcome}${answer.reason === "" ? "" : ` (${answer.reason})`}.`,
+            ...(answer.appliesToAsset === false
+              ? ["Its filter does not take this asset: where it enforces, it would not check it."]
+              : []),
+            "Nothing was kept: a test records no hit."
+          ].join("\n")
+        );
+      };
+    }
+  },
+  "dry-run": {
+    usage: "dry-run <name> [--revision <n>]",
+    summary:
+      "Count what a guardrail's draft, or one revision, would have answered in the last 14 days, without names (guardrails.dry_run)",
+    named: true,
+    flags: ["revision"],
+    prepare: (values, name) => {
+      const revision = values.revision === undefined ? undefined : revisionNumber(values.revision);
+      return async (session) => {
+        requireGuardrail(session, "dry-run");
+        const answer = await guardrailDryRun(session, name, revision);
+        return print(session, answer, () => formatDryRun(name, answer));
+      };
+    }
+  },
+  unpublish: {
+    usage: "unpublish <name>",
+    summary: "Stop a published guardrail from enforcing; its draft stays (guardrails.unpublish)",
+    named: true,
+    flags: [],
+    prepare: (_values, name) => async (session) => {
+      requireGuardrail(session, "unpublish");
+      const outcome = await session.api.change(
+        (client, idempotencyKey) =>
+          client.guardrails.unpublish({ params: { name }, idempotencyKey }),
+        "It may have been applied: run 'show' before sending it again."
+      );
+      return settle(session, outcome, (output) => [
+        `Guardrail '${name}' no longer enforces: revision ${output.unpublishedRevision} was taken back. Its draft is at revision ${output.draftRevision}.`
+      ]);
     }
   },
   "discard-draft": {
@@ -382,6 +467,90 @@ const VERBS: Record<string, Verb> = {
     }
   }
 };
+
+const GUARDRAIL_KIND = "guardrail";
+
+function requireGuardrail(session: Session, verb: string): void {
+  if (session.kind.kind !== GUARDRAIL_KIND) {
+    throw new UsageError(`'${verb}' is a command of guardrails only.`);
+  }
+}
+
+/** `--asset <kind>:<name>[@<n>]`: the asset a test reads, at its live revision unless named. */
+function assetReference(value: string): { kind: string; name: string; revision?: number } {
+  const match = /^([a-z][a-z0-9_-]*):([^@]+)(?:@(\d+))?$/u.exec(value);
+  if (!match || match[1] === undefined || match[2] === undefined) {
+    throw new UsageError(`'${value}' names no asset: write <kind>:<name>, or <kind>:<name>@<n>.`);
+  }
+  return {
+    kind: match[1].replaceAll("-", "_"),
+    name: match[2],
+    ...(match[3] === undefined ? {} : { revision: revisionNumber(match[3]) })
+  };
+}
+
+type DryRun = Awaited<ReturnType<typeof guardrailDryRun>>;
+
+function guardrailDryRun(session: Session, name: string, revision: number | undefined) {
+  return session.api.read((client) =>
+    client.guardrails.dry_run({
+      params: { name },
+      body: revision === undefined ? {} : { revision }
+    })
+  );
+}
+
+function formatDryRun(name: string, answer: DryRun): string {
+  const people = (count: { actions: number; people: number }) =>
+    `${count.actions} action${count.actions === 1 ? "" : "s"} by ${count.people} ${count.people === 1 ? "person" : "people"}`;
+  return [
+    `Dry run of revision ${answer.revision} of guardrail '${name}' on '${answer.event}', over the last ${answer.days} days:`,
+    `  would have blocked ${people(answer.wouldBlock)}`,
+    `  would have asked for an approval on ${people(answer.wouldRequireApproval)}`,
+    `  would have warned on ${people(answer.wouldWarn)}`,
+    `  ${answer.evaluated} of ${answer.matched} matching actions checked again${answer.limitedTo === undefined ? "" : ` (at most ${answer.limitedTo})`}${answer.notEvaluable > 0 ? `; ${answer.notEvaluable} could not be, as their content or origin is not kept` : ""}.`,
+    "No names are shown and nothing was kept."
+  ].join("\n");
+}
+
+/**
+ * The dry run a guardrail's publish shows first. A first publish of a guardrail that stops
+ * actions (it blocks or holds them for an approval) goes ahead only with `--confirm` naming
+ * the actions it would have stopped and those it could not check: a dry run that checked
+ * nothing does not say that the guardrail stops nothing. Answers an exit code where the
+ * publish stops here, and nothing where it goes ahead.
+ */
+async function guardrailDryRunBeforePublish(
+  session: Session,
+  name: string,
+  revision: number
+): Promise<number | undefined> {
+  const answer = await guardrailDryRun(session, name, revision);
+  if (!session.values.json) writeErr(session.options, formatDryRun(name, answer));
+  const stops = answer.outcome === "block" || answer.outcome === "require_approval";
+  const stopped = answer.wouldBlock.actions + answer.wouldRequireApproval.actions;
+  const unchecked = stops ? answer.notEvaluable : 0;
+  const named = stopped + unchecked;
+  const confirmed = session.values.confirm;
+  if (answer.published || named === 0) {
+    if (confirmed !== undefined) {
+      throw new UsageError(
+        "--confirm answers a first publish that would stop actions or could not check them, and this is none."
+      );
+    }
+    return undefined;
+  }
+  if (confirmed === String(named)) return undefined;
+  const actions = (count: number) => `${count} action${count === 1 ? "" : "s"}`;
+  const what = `${actions(stopped)} it would have stopped${unchecked > 0 ? ` and ${actions(unchecked)} it could not check` : ""}`;
+  writeErr(
+    session.options,
+    confirmed === undefined
+      ? `This first publish acts on ${what} in the last ${answer.days} days. Publish it with --confirm ${named}, or publish a draft with the outcome 'warn' first.`
+      : `--confirm ${confirmed} does not name the ${named}: ${what}. Nothing was published.`
+  );
+  return EXIT.refused;
+}
 
 /** The words before the kind that are commands of their own. */
 const INSTANCE_COMMANDS = ["context", "kinds", "references"] as const;

@@ -46,8 +46,8 @@ export function useConversationController({
   // The stored state changes one effect after the selection does. What a render shows and
   // connects to is the selected conversation's own state, from the first render on.
   const state = useMemo(
-    () => controllerStateForConversation(storedState, conversationId),
-    [conversationId, storedState]
+    () => controllerStateForConversation(storedState, conversationId, enabled && !snapshot),
+    [conversationId, enabled, snapshot, storedState]
   );
   const snapshotRunKey = snapshot?.activeRun
     ? `${snapshot.activeRun.run.id}:${snapshot.activeRun.projection.lastSequence}:${snapshot.activeRun.run.status}`
@@ -60,7 +60,7 @@ export function useConversationController({
     }
     if (snapshotLoading) {
       setState((current) => {
-        const own = controllerStateForConversation(current, conversationId);
+        const own = controllerStateForConversation(current, conversationId, true);
         return {
           ...own,
           snapshotStatus: own.snapshotStatus === "ready" ? "ready" : "loading"

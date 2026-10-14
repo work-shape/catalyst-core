@@ -79,10 +79,16 @@ describe("apps.actions.list", () => {
         required: ["text"]
       },
       policy: "allow",
-      agentTool: false
+      agentTool: false,
+      // Where the writer's next call goes (ADR-0031): a read of a draft reads live.
+      target: "live"
     });
-    // The policy's word, also for what a draft refuses: the view says that it is a draft.
-    expect(actions.save).toMatchObject({ effect: "changing", operation: "write" });
+    // The policy's word, and the call is simulated unless the writer switched it live once.
+    expect(actions.save).toMatchObject({
+      effect: "changing",
+      operation: "write",
+      target: "dry_run"
+    });
     expect(actions.save?.policy).not.toBe("deny");
     expect(actions.save?.unavailable).toBeUndefined();
     // `erp.echo` is exposed to agents alone, so no call from an App reaches it.

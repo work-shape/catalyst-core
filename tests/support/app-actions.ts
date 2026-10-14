@@ -157,13 +157,6 @@ interface AppActionHelpers {
     input: unknown,
     headers?: Record<string, string>
   ): Promise<Called>;
-  callConnection(
-    userId: string,
-    frame: Frame,
-    target: { connection: string; operation: string },
-    input: unknown,
-    headers?: Record<string, string>
-  ): Promise<Called>;
   can(userId: string, frame: Frame): Promise<Record<string, string>>;
   refusal(response: { json(): unknown }): z.infer<typeof errorSchema>["error"];
   /** Every run of an action of an App or a Page and of a Connection operation. */
@@ -260,18 +253,6 @@ export async function setupAppActions(
       payload: { ...frame.proof, input },
       headers
     });
-  const callConnection = (
-    userId: string,
-    frame: Frame,
-    target: { connection: string; operation: string },
-    input: unknown,
-    headers: Record<string, string> = {}
-  ) =>
-    t.call(userId, "apps.sessions.call_connection", {
-      params: { pageSessionId: frame.pageSessionId, ...target },
-      payload: { ...frame.proof, input },
-      headers
-    });
   const can = async (userId: string, frame: Frame) => {
     const response = await t.call(userId, "apps.sessions.context", {
       params: { pageSessionId: frame.pageSessionId },
@@ -315,7 +296,6 @@ export async function setupAppActions(
     openApp,
     openPage,
     callAction,
-    callConnection,
     can,
     refusal,
     runs,

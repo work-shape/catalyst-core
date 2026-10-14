@@ -624,6 +624,13 @@ export class AssetWorkflow {
       );
     }
     assertUpsertWithinLimits(call.access, surface, kind, { name, current, next, namespaces });
+    await kind.assertScopedWrite?.({
+      clientInstanceId: this.options.clientInstanceId,
+      scope: target.scope,
+      name,
+      definition: next,
+      stores: this.options.stores
+    });
     const mutations: ConfigAssetMutation[] = [
       {
         type: "upsert",

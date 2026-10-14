@@ -89,7 +89,9 @@ describe("an App on a Data Store, from its folder to a member's row", () => {
         }),
         policy: "confirm",
         // No agent carries an action of a draft.
-        agentTool: false
+        agentTool: false,
+        // A change from the draft is simulated (ADR-0031).
+        target: "dry_run"
       },
       {
         name: "list_findings",
@@ -99,7 +101,8 @@ describe("an App on a Data Store, from its folder to a member's row", () => {
         dataStore: { name: "ledger", title: "Ledger" },
         inputSchema: expect.objectContaining({ required: ["limit", "offset"] }),
         policy: "allow",
-        agentTool: false
+        agentTool: false,
+        target: "live"
       }
     ]);
     // A client that knows `connection` actions alone still reads those of the list.

@@ -115,6 +115,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member of the dock spec, whose conversations ride in the dock. No other spec uses
+      # this member.
+      - email: e2e-dock@example.test
+        displayLabel: E2E Zz Dock
+        passwordEnvName: E2E_DOCK_PASSWORD
+        developmentPassword: e2e-dock-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The three people of the Apps spec. No other spec uses them: the admin builds and
       # publishes, the member uses what is published, and the builder is the one the spec shows
       # the draft without the publish right. No grant gives a right on Apps yet, so the builder

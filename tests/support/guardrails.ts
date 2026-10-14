@@ -92,6 +92,8 @@ export function runnerOf(
     clientInstanceId,
     config,
     hits: stores.guardrails,
+    // The published guardrails written as assets run beside the floor, as on an instance.
+    assets: stores.configAssets,
     modelGateway: createScriptedInstanceModelGateway({
       config,
       modelProvider: { complete },

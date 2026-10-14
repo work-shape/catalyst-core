@@ -91,7 +91,8 @@ export function assertDefaultOwnedByInstance(
   if (!kind || set?.type !== "setDefaultAgent" || set.agentName === undefined) return;
   const name = set.agentName;
   const written = mutations.findLast(
-    (mutation) => mutation.type === "upsert" && mutation.kind === kind.kind && mutation.name === name
+    (mutation) =>
+      mutation.type === "upsert" && mutation.kind === kind.kind && mutation.name === name
   );
   const scope =
     written?.type === "upsert"

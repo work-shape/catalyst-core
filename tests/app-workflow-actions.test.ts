@@ -282,23 +282,40 @@ describe("an App that starts a Workflow", () => {
       "log-visit": expect.not.stringMatching(/deny/u)
     });
 
-    const response = await t.callAction(t.admin.id, frame, "log-visit", { page: "/draft" });
+    const response = await t.callAction(
+      t.admin.id,
+      frame,
+      "log-visit",
+      { page: "/draft" },
+      { "idempotency-key": "draft-visit" }
+    );
 
     expectStatus(response, 200);
     expect(response.json()).toEqual({
       status: "dry_run",
       message:
-        'Would have started the Workflow \'visit-log\' with {"page":"/draft","source":"app"}. The draft of an App runs in safe mode and carries out nothing that changes something. Publish the App to carry it out.',
+        'Would have started the Workflow \'visit-log\' with {"page":"/draft","source":"app"}. The draft of an App runs in safe mode and carries out nothing that changes something. Publish the App, or switch on "Run live once" for this action, to carry it out.',
       result: { workflow: WORKFLOW, input: { page: "/draft", source: "app" } }
     });
+    // The simulated call leaves its run, with the target that says so (ADR-0031).
+    expect(await t.runOf(response.headers["operation-run-id"])).toMatchObject({
+      target: "dry_run",
+      effect: "changing"
+    });
     // Its parameters are checked as a call checks them.
-    const invalid = await t.callAction(t.admin.id, frame, "log-visit", { path: "/draft" });
+    const invalid = await t.callAction(
+      t.admin.id,
+      frame,
+      "log-visit",
+      { path: "/draft" },
+      { "idempotency-key": "draft-visit-invalid" }
+    );
     expectStatus(invalid, 422);
     expect(t.refusal(invalid).details).toMatchObject({ reason: "input_invalid" });
     expect(await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: WORKFLOW })).toEqual(
       before
     );
-    expect(await t.runs()).toHaveLength(actionRuns);
+    expect(await t.runs()).toHaveLength(actionRuns + 1);
   });
 
   afterAll(async () => {
