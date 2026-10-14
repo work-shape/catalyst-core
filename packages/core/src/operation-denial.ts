@@ -43,8 +43,11 @@ export type OperationDenial =
        * policy refuses the call itself.
        */
       reason?: "approval_unavailable";
-      /** The guardrail whose `require_approval` asked for the approval, where one did. */
-      guardrail?: { id: string; label: string };
+      /**
+       * The guardrail whose `require_approval` asked for the approval, where one did, with
+       * its reason where it gave one.
+       */
+      guardrail?: { id: string; label: string; reason?: string };
     }
   | { kind: "guardrail"; guardrailId: string; message?: string }
   | { kind: "declined"; by: string; comment?: string };
@@ -62,7 +65,9 @@ export function operationDenialError(denial: OperationDenial): AppError {
       return denial.reason === "approval_unavailable"
         ? new AppError(
             "POLICY_DENIED",
-            `${denial.guardrail ? `The guardrail '${denial.guardrail.label}'` : "The instance's policy"} asks for another person's approval of '${denial.operation}', and this call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`,
+            denial.guardrail
+              ? `The guardrail '${denial.guardrail.label}' asks for another person's approval of '${denial.operation}'${denial.guardrail.reason ? `: ${asSentence(denial.guardrail.reason)}` : "."} The call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`
+              : `The instance's policy asks for another person's approval of '${denial.operation}', and this call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`,
             {
               operation: denial.operation,
               reason: denial.reason,
@@ -84,6 +89,11 @@ export function operationDenialError(denial: OperationDenial): AppError {
         ...(denial.comment === undefined ? {} : { comment: denial.comment })
       });
   }
+}
+
+/** A reason as the end of a sentence: with its own full stop, or one added. */
+function asSentence(reason: string): string {
+  return /[.!?]$/u.test(reason) ? reason : `${reason}.`;
 }
 
 function forbiddenMessage(denial: Extract<OperationDenial, { kind: "forbidden" }>): string {

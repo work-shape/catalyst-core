@@ -292,30 +292,35 @@ describe("a run of a published Workflow revision", () => {
     expect(await w.rows()).toEqual([0]);
   }, 120_000);
 
-  it("fails the step where a published guardrail asks for an approval, and names the guardrail", async () => {
-    const w = await world();
-    const params = { kind: "guardrail", name: "findings-need-approval" };
+  /** Writes and publishes an instance guardrail on the insert with the outcome given. */
+  async function guard(w: Awaited<ReturnType<typeof world>>, outcome: "require_approval" | "block") {
+    const params = { kind: "guardrail", name: "findings-guarded" };
     const written = await w.ok("assets.put", {
       params,
       payload: {
         config: {
-          name: "findings-need-approval",
+          name: "findings-guarded",
           displayName: "Findings are approved",
           on: "operation.before_call",
           filter: { operation: INSERT },
-          check: { kind: "pattern", pattern: "." },
-          outcome: "require_approval"
+          check: { kind: "pattern", pattern: ".", reason: "A person checks each finding." },
+          outcome
         },
         expectedRevision: null
       }
     });
     const { revision } = revisionSchema.parse(written.json());
     await w.ok("assets.publish", { params, payload: { revision } });
+  }
+
+  it("fails the step where a published guardrail asks for an approval, and names the guardrail", async () => {
+    const w = await world();
+    await guard(w, "require_approval");
 
     const run = await w.runByHand();
     expect(run).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
     expect(run.error?.message).toBe(
-      `The guardrail 'Findings are approved' asks for another person's approval of '${INSERT}', and this call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`
+      `The guardrail 'Findings are approved' asks for another person's approval of '${INSERT}': A person checks each finding. The call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`
     );
     expect(await w.rows()).toEqual([0]);
     const [refused] = await w.insertRuns();
@@ -325,8 +330,22 @@ describe("a run of a published Workflow revision", () => {
         kind: "policy",
         operation: INSERT,
         reason: "approval_unavailable",
-        guardrail: { id: "findings-need-approval", label: "Findings are approved" }
+        guardrail: {
+          id: "findings-guarded",
+          label: "Findings are approved",
+          reason: "A person checks each finding."
+        }
       }
     });
+  }, 120_000);
+
+  it("is refused at a step a published guardrail blocks", async () => {
+    const w = await world();
+    await guard(w, "block");
+
+    const run = await w.runByHand();
+    expect(run).toMatchObject({ status: "failed", error: { code: "GUARDRAIL_BLOCKED" } });
+    expect(run.error?.message).toContain("Guardrail 'Findings are approved' blocked");
+    expect(await w.rows()).toEqual([0]);
   }, 120_000);
 });

@@ -154,15 +154,12 @@ function guardrailRefusalMessage(
   return `Guardrail '${refusing.displayName}' blocked${about}${reason}`;
 }
 
-/**
- * The refusal of a call a guardrail stopped. The guardrail that refused names itself and its
- * reason; where only a hold refused a read, which cannot wait, the one that asked for the
- * approval is named. An emitter that names no guardrail leaves the event that asked.
- */
 /** A guardrail as a refusal names it. */
 export interface GuardrailNamed {
   id: string;
   label: string;
+  /** Its reason in plain language, where it gave one. */
+  reason?: string;
 }
 
 /** The guardrail whose `require_approval` asked for an approval, where one did. */
@@ -170,9 +167,19 @@ export function approvalAskedBy(answers: readonly SubjectAnswer[]): GuardrailNam
   const asking = answers
     .flatMap((answer) => answer.guardrails)
     .find((answer) => answer.outcome === "require_approval");
-  return asking ? { id: asking.guardrailName, label: asking.displayName } : undefined;
+  if (!asking) return undefined;
+  return {
+    id: asking.guardrailName,
+    label: asking.displayName,
+    ...(asking.reason === "" ? {} : { reason: asking.reason })
+  };
 }
 
+/**
+ * The refusal of a call a guardrail stopped. The guardrail that refused names itself and its
+ * reason; where only a hold refused a read, which cannot wait, the one that asked for the
+ * approval is named. An emitter that names no guardrail leaves the event that asked.
+ */
 export function guardrailDenial(answers: readonly SubjectAnswer[], event: string): OperationDenial {
   const named = answers.flatMap((answer) => answer.guardrails);
   const refusing =

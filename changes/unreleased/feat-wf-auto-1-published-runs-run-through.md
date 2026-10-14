@@ -12,9 +12,9 @@ section: Changed
   `decisionReason: "workflow_publish"`. A `deny`, an `approval`, a floor of the operation, a
   guardrail and the grants of the Workflow's service principal still stop the call. A test run
   of a draft acts as its tester, as before, and an agent's call still asks its person.
-- **Workflows:** a step refused because a guardrail asks for an approval names the guardrail:
-  "The guardrail '…' asks for another person's approval of '…'", with `details.guardrailId`
-  beside `details.reason: approval_unavailable`.
+- **Workflows:** a step refused because a guardrail asks for an approval names the guardrail
+  and its reason: "The guardrail '…' asks for another person's approval of '…': <reason>",
+  with `details.guardrailId` beside `details.reason: approval_unavailable`.
 - **Workflows:** a test run no longer marks a step "A published run asks for approval here" for
   a plain `confirm`, since a published run now runs it; the mark stays where the operation's
   floor asks for a confirmation.
