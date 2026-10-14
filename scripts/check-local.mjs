@@ -1,12 +1,21 @@
 #!/usr/bin/env node
-// Runs `pnpm check` in the current repository against a Postgres 17 container of its own.
+// Runs `pnpm check` in the current repository against a container of its own of the instance's
+// Postgres image, the one docker/postgres/pinned-image names.
 // The container gets a unique name and a free local port, and is removed when the check
 // ends, fails or is interrupted.
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { connectionsForWorkers, defaultTestWorkers } from "./test-postgres-capacity.mjs";
 
-const image = "postgres:17.6";
+const image = readFileSync(new URL("../docker/postgres/pinned-image", import.meta.url), "utf8")
+  .split("\n")
+  .find((line) => line.trim() !== "" && !line.startsWith("#"))
+  ?.trim();
+if (!image?.includes("@sha256:")) {
+  process.stderr.write("docker/postgres/pinned-image names no image by digest.\n");
+  process.exit(1);
+}
 const user = "catalyst";
 const password = "local-check";
 const database = "catalyst_test";
@@ -109,7 +118,7 @@ while (!isReady()) {
 }
 
 process.stdout.write(
-  `check:local: Postgres 17 in ${name} on 127.0.0.1:${port}, max_connections ${maxConnections}\n`
+  `check:local: Postgres of ${image} in ${name} on 127.0.0.1:${port}, max_connections ${maxConnections}\n`
 );
 check = spawn("pnpm", ["check"], {
   stdio: "inherit",

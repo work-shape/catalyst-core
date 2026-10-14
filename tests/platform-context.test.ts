@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { configAssetReferencesSchema, platformContextSchema } from "@vivd-catalyst/api-contract";
+import {
+  PUBLISHED_CLI_VERSION,
+  RELEASE_VERSION,
+  configAssetReferencesSchema,
+  platformContextSchema
+} from "@vivd-catalyst/api-contract";
 import {
   SCOPES_HEADER,
   SERVICE_HEADER,
@@ -43,6 +48,12 @@ describe("platform.context.get", () => {
 
     expect(context.instance).toEqual({ id: "demo-local", name: "Access test" });
     expect(context.release.version).toMatch(/^\d+\.\d+\.\d+/u);
+    // The CLI version Connect a local agent installs is the one on npm this commit names, and
+    // none while it names none (CONNECT-1a, check 52); never merely the release's own version.
+    expect(context.release).toEqual({
+      version: RELEASE_VERSION,
+      ...(PUBLISHED_CLI_VERSION === undefined ? {} : { cliVersion: PUBLISHED_CLI_VERSION })
+    });
     expect(context.kinds).toEqual(kinds);
     expect(context.namespaces).toEqual([
       { prefix: "kai-", displayName: "kai-", actions: ["agent.write"] }

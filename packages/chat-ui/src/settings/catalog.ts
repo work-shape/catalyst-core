@@ -12,6 +12,7 @@ import type {
   SettingsViewer
 } from "./page-definition";
 import { ApiKeysPage } from "./pages/api-keys";
+import { ConnectLocalAgentPage } from "./pages/connect-local-agent";
 import { LanguageAppearancePage } from "./pages/language-appearance";
 import { ProfilePage } from "./pages/profile";
 import { SecurityPage } from "./pages/security";
@@ -70,6 +71,14 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     labelKey: "settings.apiKeys",
     visible: (viewer) => viewer.modules?.personalApiKeys?.enabled === true,
     component: ApiKeysPage
+  },
+  {
+    id: "connect",
+    group: "you",
+    labelKey: "settings.connectLocalAgent",
+    width: "narrow",
+    visible: (viewer) => viewer.modules?.personalApiKeys?.enabled === true,
+    component: ConnectLocalAgentPage
   },
   {
     id: "general",

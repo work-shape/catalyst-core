@@ -64,6 +64,9 @@
       "name": "Jobs"
     },
     {
+      "name": "Knowledge Bases"
+    },
+    {
       "name": "Operations"
     },
     {
@@ -12506,6 +12509,580 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/knowledge-bases/{knowledgeBase}": {
+      "get": {
+        "operationId": "knowledge_bases.get",
+        "summary": "Read the state of one published Knowledge Base: whether its last check could read every table it describes",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "unchecked",
+                        "ok",
+                        "needs_attention"
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "checkedAt": {
+                      "type": "string"
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "readable": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "readable"
+                        ]
+                      }
+                    },
+                    "problem": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "tables"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/knowledge-bases/{knowledgeBase}/check": {
+      "post": {
+        "operationId": "knowledge_bases.check",
+        "summary": "Check one published Knowledge Base now: whether every table it describes can be read. It reads no row",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "unchecked",
+                        "ok",
+                        "needs_attention"
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "checkedAt": {
+                      "type": "string"
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "readable": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "readable"
+                        ]
+                      }
+                    },
+                    "problem": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "tables"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/knowledge-bases/{knowledgeBase}/query": {
+      "post": {
+        "operationId": "knowledge_bases.query",
+        "summary": "Read rows of one published Knowledge Base with one read-only statement and bound parameters",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sql": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "parameters": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "text",
+                                "text[]",
+                                "integer",
+                                "integer[]",
+                                "number",
+                                "number[]",
+                                "boolean",
+                                "boolean[]",
+                                "date",
+                                "date[]",
+                                "timestamp",
+                                "timestamp[]"
+                              ]
+                            },
+                            "value": {
+                              "anyOf": [
+                                {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "sql"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "nativeType": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "nativeType"
+                        ]
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "knowledgeBase": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "tables": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "knowledgeBase",
+                        "title",
+                        "tables"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "columns",
+                    "rows",
+                    "truncated",
+                    "source"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "me.get",
@@ -18235,6 +18812,7 @@
           "maxSteps",
           "toolNames",
           "skillNames",
+          "knowledgeBases",
           "initialPrompts"
         ]
       },
@@ -26034,6 +26612,9 @@
             "type": "object",
             "properties": {
               "version": {
+                "type": "string"
+              },
+              "cliVersion": {
                 "type": "string"
               }
             },

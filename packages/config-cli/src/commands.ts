@@ -227,7 +227,7 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
  */
 async function bindWorkspace(workingDir: string, options: ConfigCommandOptions) {
   const manifest = await readManifest(workingDir);
-  const instance = resolveInstance(manifest, options.instance);
+  const instance = await resolveInstance(manifest, options);
   const wanted = options.workspace;
   if (wanted === undefined || instance.workspace === wanted) return { manifest, instance };
   if (instance.workspace !== undefined) {
@@ -255,7 +255,7 @@ async function bindWorkspace(workingDir: string, options: ConfigCommandOptions) 
   }
   await bindManifestWorkspace(resolve(workingDir, MANIFEST_FILENAME), instance.key, wanted);
   const bound = await readManifest(workingDir);
-  const boundInstance = resolveInstance(bound, options.instance);
+  const boundInstance = await resolveInstance(bound, options);
   if (boundInstance.workspace !== wanted) {
     throw new Error(
       `Could not bind instance '${instance.key}' in ${MANIFEST_FILENAME}: add 'workspace: ${wanted}' to that instance yourself, beside its url.`
@@ -306,7 +306,7 @@ function assertPullTargetsMatchManifest(
 export async function diffConfig(options: ConfigCommandOptions): Promise<number> {
   const workingDir = resolveWorkingDir(options);
   const manifest = await readManifest(workingDir);
-  const instance = resolveInstance(manifest, options.instance);
+  const instance = await resolveInstance(manifest, options);
   const local = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options, instance);
   const overview = await readInstanceOverview(api, instance);
@@ -378,7 +378,7 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
 export async function validateConfig(options: ConfigCommandOptions): Promise<number> {
   const workingDir = resolveWorkingDir(options);
   const manifest = await readManifest(workingDir);
-  const instance = resolveInstance(manifest, options.instance);
+  const instance = await resolveInstance(manifest, options);
   const bundle = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options, instance);
   const listing = await listRemoteAssets(api, workingCopyKinds(manifest));
@@ -427,7 +427,7 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
 export async function listConfig(options: ConfigCommandOptions): Promise<number> {
   const workingDir = resolveWorkingDir(options);
   const manifest = await readManifest(workingDir);
-  const instance = resolveInstance(manifest, options.instance);
+  const instance = await resolveInstance(manifest, options);
   const local = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options, instance);
   const version = String((await readInstanceOverview(api, instance)).version ?? "-");
@@ -459,7 +459,7 @@ export async function showConfig(options: ConfigCommandOptions): Promise<number>
   }
   const workingDir = resolveWorkingDir(options);
   const manifest = await readManifest(workingDir);
-  const instance = resolveInstance(manifest, options.instance);
+  const instance = await resolveInstance(manifest, options);
   const api = await connectApi(instance.url, options, instance);
   const remote = await fetchRemoteAsset(api, options.assetKind, options.assetName);
   if (!remote) {
