@@ -61,7 +61,7 @@ A working copy can instead belong to one Shared Workspace: then the agents and s
 catalyst config pull --workspace <workspace-id>
 ```
 
-The pull writes `workspace: <workspace-id>` beside the instance's `url` in `catalyst.yaml`, and every later command of that working copy names the workspace. A working copy is bound once: one bound to another workspace, one of a Namespace and one that already pulled the instance's own assets are refused, so pull another workspace into a directory of its own. Its `push` is never a release and never changes the instance's default agent; an agent it creates starts hidden until an instance admin offers it. A workspace's agent may name the workspace's skills and the instance's skills you may read; no agent outside the workspace may name the workspace's skills.
+The pull writes `workspace: <workspace-id>` beside the instance's `url` in `catalyst.yaml`, and every later command of that working copy names the workspace. A working copy is bound once: one bound to another workspace, one of a Namespace and one that already pulled the instance's own assets are refused, so pull another workspace into a directory of its own. Its `push` is never a release and never changes the instance's default agent, which only an agent of the instance can be; an agent it creates starts hidden until an instance admin offers it, and a guardrail it creates belongs to the workspace as well. A workspace's agent may name the workspace's skills and the instance's skills you may read; no agent outside the workspace may name the workspace's skills.
 
 ## One command per asset operation
 
