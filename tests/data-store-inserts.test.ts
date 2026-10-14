@@ -129,28 +129,32 @@ describe("an insert into a Data Store", () => {
   });
 
   it("gives back what a refused insert wrote, so the next one that fits is taken", async () => {
-    const world = await nearlyFull("reclaimed");
+    const world = await published("reclaimed");
+    // Some megabyte a call.
     const batch = Array.from({ length: 1_000 }, (_, index) =>
       finding(index, { details: { note: "n".repeat(900) } })
     );
-    const fill = async () => {
-      for (let calls = 0; calls < 20; calls += 1) {
-        const refused = await call(world, "insert", { table: "findings", rows: batch }).then(
-          () => undefined,
-          (error: unknown) => error
-        );
-        if (refused) return refused;
-      }
-      throw new Error("The store never reached its limit");
-    };
+    expect(await call(world, "insert", { table: "findings", rows: batch })).toMatchObject({
+      inserted: 1_000
+    });
+    // The limit lies half a call above what the store holds now. The size of a database also
+    // moves by files that hold no row, such as the cache of the catalog that Postgres removes
+    // and writes again, some hundred kilobytes: a limit a few of them from the size would
+    // refuse or take a call by chance.
+    const limit = (await sizeOf(world.record.location.database)) + 512 * 1024;
+    await db.sql`update data_stores set size_limit_bytes = ${limit} where id = ${world.id}`;
 
-    await fill();
-    // What the last, refused call wrote is no row of the store. Left where it is, it would
-    // keep every later insert out although the rows that are kept fit.
+    expect(await refusal(call(world, "insert", { table: "findings", rows: batch }))).toMatchObject({
+      code: "CONFLICT",
+      details: { reason: "data_store_size_limit", limit }
+    });
+    // What the refused call wrote is no row of the store. Left where it is, half a call past
+    // the limit, it would keep every later insert out although the rows that are kept fit.
 
     expect(await call(world, "insert", { table: "findings", rows: [finding(1)] })).toMatchObject({
       inserted: 1
     });
+    expect(await count(world, "findings")).toMatchObject({ rows: [{ count: 1_001 }] });
   });
 
   it("skips only on a unique key of all rows that the call gives in full, and names why it does not", async () => {

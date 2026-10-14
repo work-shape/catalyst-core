@@ -40,12 +40,14 @@ export interface AuthPrincipal {
   externalUserId?: string;
 }
 
-export interface DelegatedActor {
-  kind: "service_principal";
-  id: string;
-  displayLabel?: string;
-  authSource: string;
-}
+/**
+ * Who acts for the subject user. `service_principal` is the backend of an embedding host that
+ * named the user in a session token. `api_key` is the user's own personal API key: its id is
+ * the key's, its label the key's name.
+ */
+export type DelegatedActor =
+  | { kind: "service_principal"; id: string; displayLabel?: string; authSource: string }
+  | { kind: "api_key"; id: ApiCredentialId; displayLabel: string; authSource: string };
 
 export interface AuthenticatedUser {
   /** Set by adapters when a browser session cookie authenticated this request. */
@@ -65,6 +67,12 @@ export interface AuthenticatedUser {
   subjectUserId?: string;
   delegatedActor?: DelegatedActor;
   scopes?: AuthScope[];
+  /**
+   * The scopes of the personal API key the call presents, `<action>` or `<action>:<prefix>`.
+   * The authorizer allows a right only where the user holds it and one of these covers it, so
+   * a key never does more than its owner may now. Absent for a signed-in person.
+   */
+  keyScopes?: readonly string[];
 }
 
 export interface AuthenticatedServicePrincipal {

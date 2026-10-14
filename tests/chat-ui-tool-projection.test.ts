@@ -13,7 +13,7 @@ import {
   readToolActionLabel,
   readToolDetailSections,
   readToolDisplayProjection
-} from "../packages/chat-ui/src/tool-call";
+} from "@vivd-catalyst/chat-ui/tool-call";
 import { readToolArtifactRefs } from "../packages/chat-ui/src/tool-artifacts";
 import { readToolSurfaceRefs } from "../packages/chat-ui/src/tool-surfaces";
 

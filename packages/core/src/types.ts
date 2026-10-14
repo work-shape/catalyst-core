@@ -2,6 +2,7 @@ export * from "./identity";
 export * from "./permissions";
 export * from "./user";
 export * from "./api-access";
+export * from "./personal-api-keys";
 export * from "./artifact-preview-pages";
 export * from "./files";
 export * from "./file-preview-capability";

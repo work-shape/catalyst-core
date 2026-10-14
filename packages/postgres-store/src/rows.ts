@@ -11,6 +11,7 @@ import {
   type CollaborationWorkspaceWithRole,
   type ClientInstanceId,
   type ApiCredentialRecord,
+  type PersonalApiKeyRecord,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
@@ -38,6 +39,7 @@ import {
   asManagedFileId,
   asMessageId,
   asToolCallId,
+  asClientInstanceId,
   asUserId,
   asApiCredentialId,
   asServicePrincipalId,
@@ -605,8 +607,8 @@ export function mapServicePrincipal(row: ServicePrincipalRow | undefined): Servi
 }
 
 export function mapApiCredential(row: ApiCredentialRow | undefined): ApiCredentialRecord {
-  if (!row) {
-    throw new AppError("INTERNAL", "Expected API credential row");
+  if (!row?.servicePrincipalId) {
+    throw new AppError("INTERNAL", "Expected the row of a service principal's API credential");
   }
   return {
     id: asApiCredentialId(row.id),
@@ -617,6 +619,24 @@ export function mapApiCredential(row: ApiCredentialRow | undefined): ApiCredenti
     scopes: row.scopes ?? undefined,
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt?.toISOString(),
+    revokedAt: row.revokedAt?.toISOString(),
+    lastUsedAt: row.lastUsedAt?.toISOString()
+  };
+}
+
+export function mapPersonalApiKey(row: ApiCredentialRow): PersonalApiKeyRecord {
+  if (!row.ownerUserId || !row.expiresAt || !row.scopes) {
+    throw new AppError("INTERNAL", "Expected the row of a personal API key");
+  }
+  return {
+    id: asApiCredentialId(row.id),
+    clientInstanceId: asClientInstanceId(row.clientInstanceId),
+    ownerUserId: asUserId(row.ownerUserId),
+    name: row.name,
+    keyPrefix: row.keyPrefix,
+    scopes: row.scopes,
+    createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
     revokedAt: row.revokedAt?.toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString()
   };

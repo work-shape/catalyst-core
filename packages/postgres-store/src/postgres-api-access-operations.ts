@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import {
   AppError,
   createApiCredentialId,
@@ -262,7 +262,9 @@ export async function revokeApiCredential(
     .where(
       and(
         eq(apiCredentials.clientInstanceId, input.clientInstanceId),
-        eq(apiCredentials.id, input.credentialId)
+        eq(apiCredentials.id, input.credentialId),
+        // A personal key is revoked through its own operation.
+        isNotNull(apiCredentials.servicePrincipalId)
       )
     )
     .returning();
@@ -317,11 +319,12 @@ export async function updateApiCredentialLastUsed(
       .where(
         and(
           eq(apiCredentials.clientInstanceId, input.clientInstanceId),
-          eq(apiCredentials.id, input.credentialId)
+          eq(apiCredentials.id, input.credentialId),
+          isNotNull(apiCredentials.servicePrincipalId)
         )
       )
       .returning();
-    if (!credential) {
+    if (!credential?.servicePrincipalId) {
       throw new AppError("NOT_FOUND", "API credential is not available");
     }
     const [principal] = await tx

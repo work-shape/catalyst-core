@@ -160,8 +160,13 @@ export function useControlPlaneModel({
   });
   const platformContext = platformQuery.data;
   const viewer = useMemo<SettingsViewer>(
-    () => ({ user, workspaces: collaborationWorkspaces, platform: platformContext }),
-    [collaborationWorkspaces, platformContext, user]
+    () => ({
+      user,
+      workspaces: collaborationWorkspaces,
+      platform: platformContext,
+      modules: config?.modules
+    }),
+    [collaborationWorkspaces, config?.modules, platformContext, user]
   );
   const build = useMemo<BuildAccess>(
     () => ({

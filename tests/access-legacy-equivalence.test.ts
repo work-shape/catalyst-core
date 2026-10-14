@@ -90,10 +90,10 @@ describe("legacy equivalence: service tokens", () => {
           credentialScopes: scopes
         });
         // The actor at the exchange and the actor a later request presents hold the same keys.
-        expect(issued.principal.permissions, credentialState).toEqual(expectedKeys);
+        expect(issued.identity.permissions, credentialState).toEqual(expectedKeys);
         expect(verified.permissions, credentialState).toEqual(expectedKeys);
 
-        for (const actor of [issued.principal, verified]) {
+        for (const actor of [issued.identity, verified]) {
           const access = await authorizer.forActor(actor);
           for (const key of LEGACY_KEYS) {
             const before = frozenHasPermission({ permissions: actor.permissions }, key);
