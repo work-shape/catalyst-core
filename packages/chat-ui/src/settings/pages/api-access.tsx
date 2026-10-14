@@ -24,7 +24,11 @@ import {
 import { workspaceQueryKeys } from "../../api/workspace-query-keys";
 import { ApiAccessPanel } from "../../control-plane/api-access-panel";
 import { createApiAccessAuthorityKey } from "../../control-plane/api-access-reveal-controller";
-import { canManageApiAccess, canManageUsers } from "../../control-plane/governance";
+import {
+  canManageApiAccess,
+  canManageServicePrincipals,
+  canManageUsers
+} from "../../control-plane/governance";
 import { PersonalApiKeysTable } from "../../control-plane/personal-api-keys-list";
 import { useTranslation } from "../../i18n";
 import { apiErrorMessage } from "../../workspace-utils";
@@ -32,17 +36,23 @@ import { useSettingsPage } from "../settings-page-context";
 
 /**
  * Instance > API access: the service principals and their keys, with its own data, and every
- * person's own keys where the instance runs them.
+ * person's own keys where the instance runs them. Principals are shown to and changed by a
+ * holder of `service_principals.manage`, their keys issued and revoked by a holder of
+ * `api_access.manage`.
  */
 export function ApiAccessPage() {
   const { apiBaseUrl, authScope, client, config, user } = useSettingsPage();
   const { t } = useTranslation();
-  const canManageSuperadminAccess = user.roles.includes("superadmin");
+  const contextQuery = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
+  const may = {
+    principals: canManageServicePrincipals(contextQuery.data),
+    keys: canManageApiAccess(user)
+  };
   const servicePrincipalsQuery = useServicePrincipalsQuery({
     apiBaseUrl,
     authScope,
     client,
-    enabled: true
+    enabled: may.principals
   });
   const apiAccessMutations = useApiAccessMutations({
     apiBaseUrl,
@@ -52,7 +62,7 @@ export function ApiAccessPage() {
     authorityKey: createApiAccessAuthorityKey({
       apiBaseUrl,
       principalId: user.id,
-      canManageSuperadminAccess
+      canIssueKeys: may.keys
     })
   });
   const { clearRevealedCredential } = apiAccessMutations;
@@ -60,25 +70,25 @@ export function ApiAccessPage() {
   const [initialPrincipalId] = useState(() => principalOfSearch(window.location.search));
 
   useEffect(() => {
-    if (!canManageSuperadminAccess) {
+    if (!may.keys) {
       clearRevealedCredential();
     }
-  }, [clearRevealedCredential, canManageSuperadminAccess]);
+  }, [clearRevealedCredential, may.keys]);
 
   const panel = (
     <ApiAccessPanel
-      canMutate={canManageSuperadminAccess}
+      may={may}
       principals={servicePrincipalsQuery.data ?? []}
       initialPrincipalId={initialPrincipalId}
       renderRights={(detail) => (
         <PrincipalRightsOnInstance
           key={detail.principal.id}
           detail={detail}
-          canMutate={canManageSuperadminAccess}
+          canMutate={may.principals}
         />
       )}
       revealedCredential={apiAccessMutations.revealedCredential}
-      loading={servicePrincipalsQuery.isLoading}
+      loading={contextQuery.isPending || servicePrincipalsQuery.isLoading}
       error={
         servicePrincipalsQuery.error
           ? apiErrorMessage(servicePrincipalsQuery.error, undefined)

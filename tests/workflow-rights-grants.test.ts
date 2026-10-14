@@ -294,13 +294,13 @@ describe("a right on a Workflow given through grant administration", () => {
       publish,
       t.forbidden("workflow.publish", "no_grant")
     );
-    // The publish right alone lends nobody the grants of the principal the Workflow runs as.
+    // The publish right alone lends nobody the rights of the principal the Workflow runs as.
     await t.grant(t.kai.id, WORKFLOW_ACTIONS.publish, { assetId: notify });
     await t.expectRefused(
       t.kai.id,
       "assets.publish",
       publish,
-      t.forbidden("api_access.manage", "no_grant")
+      t.forbidden("connection.use", "no_grant")
     );
     const asset = await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address });
     expect(asset?.publishedRevision).toBe(1);
@@ -350,16 +350,17 @@ describe("a right on a Workflow given through grant administration", () => {
       { status: 422, code: "VALIDATION_FAILED" }
     );
     expect(inNamespace.details).toMatchObject({ reason: "invalid_scope" });
-    // An administrator who is no superadmin gives a principal nothing.
+    // Who does not administer principals gives one nothing; an administrator who is no
+    // superadmin gives it a right she holds herself (RIGHTS-1a).
     await t.expectRefused(
-      t.admin.id,
+      t.kai.id,
       "permissions.grant",
       toPrincipal(WORKFLOW_ACTIONS.use, onNotify),
-      t.forbidden("api_access.manage", "no_grant")
+      t.forbidden("service_principals.manage", "no_grant")
     );
 
     const written = await t.expectOk(
-      t.root.id,
+      t.admin.id,
       "permissions.grant",
       toPrincipal(WORKFLOW_ACTIONS.use, onNotify)
     );
