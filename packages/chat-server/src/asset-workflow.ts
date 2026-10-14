@@ -16,6 +16,7 @@ import {
   type OperationAuthorization,
   type PolicyTarget
 } from "@vivd-catalyst/core";
+import { afterRemove, afterWrite } from "./asset-after-write";
 import { AssetDraftWorkflow } from "./asset-draft-workflow";
 import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
@@ -63,7 +64,8 @@ import {
   requireMatchingConfigName,
   setsInitialDefault,
   storedWritableIssues,
-  toJsonObject
+  toJsonObject,
+  withPublishedConfigs
 } from "./asset-write-rules";
 import {
   assertStoredWritable,
@@ -417,6 +419,7 @@ export class AssetWorkflow {
     const { kind, name } = target;
     const right = deleteDecision(call.access, target);
     if (!right.allowed) {
+      if (right.action === undefined) throw operationDenialError({ kind: "forbidden", ...right });
       call.access.require(right.action, target.resource);
     }
     await this.requireFurtherRight(call.access, target, "delete");
@@ -430,6 +433,10 @@ export class AssetWorkflow {
       return this.drafts.remove(call, target, expectedRevision);
     }
     const stored = await loadStoredAssets(this.options);
+    await kind.assertRemovable?.({
+      name,
+      assets: (other) => withPublishedConfigs(this.options, stored.assets, other)
+    });
     const clearsDefault = clearsLastDefault(stored.set, kind, name);
     requireInstanceDefaultChange(call.access, kind, clearsDefault);
     /** The set as the delete would leave it. */
@@ -457,7 +464,7 @@ export class AssetWorkflow {
           version: result.version
         })
     ]);
-    await this.afterRemove(call, target);
+    await afterRemove(this.options, call, target);
     return { version: result.version, revision, warnings: [] };
   }
 
@@ -479,7 +486,11 @@ export class AssetWorkflow {
     const stored = await loadStoredAssets(this.options);
     const view = loadReferableAssets(this.options, call.access, stored);
     const current = name === undefined ? undefined : findDefinition(view.set, kind.kind, name);
-    const prepared = kind.prepareInteractiveUpsert({ current, next: input.config });
+    const prepared = kind.prepareInteractiveUpsert({
+      current,
+      next: input.config,
+      principalId: call.actor.id
+    });
     const drafted = (set: AssetSet) => withDefinition(set, kind.kind, name ?? "", prepared);
     const found = findAssetSetIssues(kinds, drafted(view.set));
     const ofDefinition = view.complete
@@ -572,11 +583,12 @@ export class AssetWorkflow {
     kind.assertStoredWritable?.({ current });
     const setsDefault = setsInitialDefault(stored.set, kind);
     requireInstanceDefaultChange(call.access, kind, setsDefault);
-    // A revert restores what was stored: nothing is adjusted on the way.
+    // A revert restores what was stored: only what the kind's server decides is kept as it is.
+    const principalId = call.actor.id;
     const definition =
       write.operation === "revert"
-        ? config
-        : kind.prepareInteractiveUpsert({ current, next: config });
+        ? (kind.prepareRevert?.({ current, restored: config, principalId }) ?? config)
+        : kind.prepareInteractiveUpsert({ current, next: config, principalId });
     /** The set as the write would leave it. */
     const written = (set: AssetSet) => {
       const replaced = withDefinition(set, kind.kind, name, definition);
@@ -655,6 +667,7 @@ export class AssetWorkflow {
           ...(write.auditFiles ? { files: write.auditFiles.map((file) => ({ ...file })) } : {})
         })
     ]);
+    await afterWrite(this.options, call, target, { previous: current, config: toJsonObject(next) });
     return {
       version: result.version,
       revision,
@@ -713,27 +726,6 @@ export class AssetWorkflow {
       if (!isAppError(error) || error.code !== "REVISION_CONFLICT") throw error;
       const now = await this.target(target.address);
       throw await revisionConflictOf(this.options, call.access, now);
-    }
-  }
-
-  /**
-   * What the kind of a deleted asset does beside the delete, for a kind whose revisions are a
-   * config. The delete is committed: a failure is logged and the call is answered as done.
-   */
-  private async afterRemove(call: AssetCall, target: AssetTarget): Promise<void> {
-    const { kind, asset } = target;
-    if (!kind.onRemove || !asset) return;
-    try {
-      await kind.onRemove({
-        assetId: asset.id,
-        ...(asset.publishedConfig === undefined ? {} : { published: asset.publishedConfig }),
-        stores: this.options.stores
-      });
-    } catch (error) {
-      this.options.logger.error(
-        { correlationId: call.correlationId, error: error instanceof Error ? error.message : "" },
-        `A ${kind.kind} was deleted but what its kind does beside the delete failed`
-      );
     }
   }
 

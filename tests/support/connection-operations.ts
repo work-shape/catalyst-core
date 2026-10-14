@@ -23,6 +23,7 @@ import {
   asToolCallId,
   createAuthorizer,
   createConnectorTypeRegistry,
+  egressOriginOf,
   type AuthenticatedIdentity,
   type Authorizer,
   type CentralPolicySetting,
@@ -291,14 +292,15 @@ export async function fixtureOn<Instance extends AccessInstance>(
     check(target) {
       sequence.push("check egress");
       return (state.hostAllowed ? open : closed).check(target);
-    }
+    },
+    admits: (target) => (state.hostAllowed ? open : closed).admits(target)
   };
 
   let deps: ConnectionOperationSourceDeps | undefined;
   let calls: ReturnType<typeof createOperationCalls> | undefined;
   const t = await setup({
     modules: { connections: { enabled: true } },
-    furtherKinds: [createConnectionAssetKind({ connectorTypes })],
+    furtherKinds: [createConnectionAssetKind({ connectorTypes, egress })],
     server(stores, config) {
       const resolver = createConnectionCredentialResolver({
         clientInstanceId,
@@ -354,7 +356,7 @@ export async function fixtureOn<Instance extends AccessInstance>(
         operations,
         approvalRequests,
         operationCalls: calls,
-        connections: createConnectionManagement(deps)
+        connections: createConnectionManagement({ ...deps, keyring })
       };
     }
   });
@@ -417,7 +419,8 @@ export async function fixtureOn<Instance extends AccessInstance>(
       binding: { connectionAssetId: assetId, subject: SHARED_CREDENTIAL_SUBJECT },
       value: secret,
       source: "runtime",
-      handle
+      handle,
+      origin: egressOriginOf(egressTargetOfUrl(URL_OF_HOST))
     });
     return assetId;
   };

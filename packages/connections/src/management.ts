@@ -1,6 +1,7 @@
 import {
   AppError,
   CONNECTION_ASSET_KIND,
+  CONNECTION_REFUSALS,
   CREDENTIAL_REFUSALS,
   EGRESS_DENIED,
   SHARED_CREDENTIAL_SUBJECT,
@@ -26,7 +27,8 @@ import {
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "./connection-reads";
-import { openConnectorContext } from "./connector-context";
+import { AUTH_SCHEME_NONE, connectionOriginOf, openConnectorContext } from "./connector-context";
+import { createSecretStore, type SecretKeyring } from "./secret-store";
 
 // What the Connection's page and the agent editor read beyond the asset, and the test of a
 // Connection. Nothing here answers a secret, a handle of one or data of the outside system.
@@ -47,6 +49,14 @@ export interface ConnectionOperationView {
   schemaRefusal?: string;
 }
 
+/** A tool the last discovery read that the Connection does not accept. */
+export interface ConnectionDiscoveredToolView {
+  name: string;
+  description?: string;
+  proposedEffect: ConnectionOperationEffect;
+  fingerprint: string;
+}
+
 export interface ConnectionView {
   name: string;
   health: ConnectionHealth;
@@ -55,6 +65,7 @@ export interface ConnectionView {
   secret: { state: SecretState; version?: number };
   sharedCredential: boolean;
   operations: ConnectionOperationView[];
+  discovered: ConnectionDiscoveredToolView[];
   usedBy: { agentName: string; title: string; toolNames: string[] }[];
   discoveredAt?: string;
 }
@@ -96,6 +107,15 @@ export interface ConnectionManagement {
   test(name: string, signal?: AbortSignal): Promise<ConnectionTestView>;
   /** The tools an agent can carry, of the Connections `readable` admits. */
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionToolsView>;
+  /**
+   * Stores the shared secret of a Connection made on the instance, as the next version. The
+   * value is written once and never read back. `expectedVersion` is the version the writer
+   * saw, `null` for none: another writer's version in between refuses the write.
+   */
+  setSecret(
+    name: string,
+    input: { value: string; expectedVersion: number | null }
+  ): Promise<{ state: "set"; version: number }>;
 }
 
 function resourceOf(connection: StoredConnection): OperationResource {
@@ -109,6 +129,25 @@ function resourceOf(connection: StoredConnection): OperationResource {
 
 function notFound(name: string): AppError {
   return new AppError("NOT_FOUND", `Connection '${name}' does not exist`);
+}
+
+/** What the last discovery read that the accepted list does not name. */
+function discoveredOf(connection: StoredConnection): ConnectionDiscoveredToolView[] {
+  const accepted = new Set(connection.config.operations.map((operation) => operation.name));
+  return (connection.catalog?.entries ?? [])
+    .filter((entry) => !accepted.has(entry.name))
+    .map((entry) => ({
+      name: entry.name,
+      ...(entry.description === ""
+        ? {}
+        : { description: entry.description.slice(0, CONNECTION_DESCRIPTION_MAX_CHARS) }),
+      proposedEffect: entry.proposedEffect,
+      fingerprint: entry.fingerprint
+    }));
+}
+
+function secretWriteRefusal(reason: string, sentence: string): AppError {
+  return new AppError("CONFLICT", `${reason}: ${sentence}`, { reason });
 }
 
 function operationsOf(connection: StoredConnection): ConnectionOperationView[] {
@@ -159,7 +198,11 @@ function healthOfTest(
 }
 
 export function createConnectionManagement(
-  deps: ConnectionOperationSourceDeps & { now?: () => Date }
+  deps: ConnectionOperationSourceDeps & {
+    /** The keys of the Secret Store. Without them no secret is stored. */
+    keyring?: SecretKeyring;
+    now?: () => Date;
+  }
 ): ConnectionManagement {
   const now = deps.now ?? (() => new Date());
 
@@ -168,7 +211,11 @@ export function createConnectionManagement(
       clientInstanceId: deps.clientInstanceId,
       binding: { connectionAssetId: connection.assetId, subject: SHARED_CREDENTIAL_SUBJECT }
     });
-    if (!record) return { state: "not_set" };
+    // A secret set for another address than the Connection's is never sent, and so none.
+    const origin = connection.type
+      ? connectionOriginOf(connection.type, connection.config)
+      : undefined;
+    if (!record || origin === undefined || record.origin !== origin) return { state: "not_set" };
     // Whether the keys open it is what the seed, a test and a call found out and wrote down.
     const unreadable = connection.state?.health === "secret_unreadable";
     return { state: unreadable ? "unreadable" : "set", version: record.version };
@@ -200,6 +247,7 @@ export function createConnectionManagement(
         secret: await secretOf(connection),
         sharedCredential: connection.config.credentialMode === "shared",
         operations: operationsOf(connection),
+        discovered: discoveredOf(connection),
         usedBy,
         ...(catalog ? { discoveredAt: catalog.discoveredAt } : {})
       };
@@ -261,6 +309,67 @@ export function createConnectionManagement(
         lastErrorCode: status === "ready" ? null : (reason ?? status)
       });
       return { status, testedAt };
+    },
+
+    async setSecret(name, { value, expectedVersion }) {
+      const connection = await readConnection(deps, name);
+      if (!connection) throw notFound(name);
+      const { config } = connection;
+      if (config.origin === "release") {
+        throw new AppError(
+          "FORBIDDEN",
+          `${CONNECTION_REFUSALS.readOnlyOrigin}: this Connection is defined in release config, and its secret comes from the environment`,
+          { reason: CONNECTION_REFUSALS.readOnlyOrigin }
+        );
+      }
+      if (config.authScheme === AUTH_SCHEME_NONE || config.secretHandle === undefined) {
+        throw secretWriteRefusal(
+          CONNECTION_REFUSALS.takesNoSecret,
+          "the Connection sends no credential. Choose an auth scheme that does first"
+        );
+      }
+      if (!deps.keyring) {
+        throw secretWriteRefusal(
+          CONNECTION_REFUSALS.secretStoreUnavailable,
+          "this instance names no key of the Secret Store. An operator names one under 'secretStore.keys'"
+        );
+      }
+      const binding = { connectionAssetId: connection.assetId, subject: SHARED_CREDENTIAL_SUBJECT };
+      // The secret is for the address the Connection has on this read, and is sent nowhere
+      // else: an address another writer sets meanwhile does not get it.
+      const origin = connection.type
+        ? connectionOriginOf(connection.type, connection.config)
+        : undefined;
+      if (origin === undefined) {
+        throw secretWriteRefusal(
+          CREDENTIAL_REFUSALS.notConfigured,
+          "the Connection's settings name no address its connector type reads. Fix the settings first"
+        );
+      }
+      // The version is compared on the read the write follows: a check before it here would
+      // let a write that lands in between be replaced unseen.
+      const written = await createSecretStore({
+        clientInstanceId: deps.clientInstanceId,
+        keyring: deps.keyring,
+        store: deps.stores.connections
+      }).put({
+        binding,
+        value,
+        source: "runtime",
+        handle: config.secretHandle,
+        expectedVersion,
+        origin
+      });
+      if (written.changed) {
+        // What a test found was found with the secret before.
+        await deps.stores.connections.putConnectionState({
+          clientInstanceId: deps.clientInstanceId,
+          connectionAssetId: connection.assetId,
+          health: "unknown",
+          lastErrorCode: null
+        });
+      }
+      return { state: "set", version: written.version };
     },
 
     async listTools(readable) {

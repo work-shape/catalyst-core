@@ -31,6 +31,7 @@ import { agentModelSettingValue } from "./asset-kinds/agent";
 import {
   configValuesEqual,
   readDefinitionName,
+  type AssetWriteSurface,
   type WorkflowAssetKind
 } from "./asset-kinds/shared";
 import { accessResource, decide, deleteDecision, errorIssues } from "./asset-access";
@@ -61,6 +62,33 @@ export async function loadStoredAssets(options: AssetWorkflowOptions): Promise<S
     })
   ]);
   return { state, assets, set: assetSetOf(assets, state.defaultAgentName) };
+}
+
+/**
+ * The stored assets of one kind, each with its published config where it has one. The list of
+ * the stored assets carries only the drafts; the published configs are one more read.
+ */
+export async function withPublishedConfigs(
+  options: AssetWorkflowOptions,
+  assets: readonly ConfigAssetRecord[],
+  kind: ConfigAssetKind
+): Promise<ConfigAssetRecord[]> {
+  const ofKind = assets.filter((asset) => asset.kind === kind);
+  if (ofKind.length === 0) return ofKind;
+  const published = new Map(
+    (
+      await options.configAssets.store.listPublishedConfigAssets({
+        clientInstanceId: options.clientInstanceId,
+        kind,
+        names: ofKind.map((asset) => asset.name),
+        limit: ofKind.length
+      })
+    ).map((asset) => [asset.name, asset.publishedConfig])
+  );
+  return ofKind.map((asset) => {
+    const publishedConfig = published.get(asset.name);
+    return publishedConfig === undefined ? asset : { ...asset, publishedConfig };
+  });
 }
 
 /** What a refused change is told of an asset its caller may not read: that there is one. */
@@ -166,9 +194,6 @@ export function findIssuesOfChange(
     findAssetSetIssues(kinds, change(stored)).issues.some((issue) => !toldKeys.has(key(issue)));
   return untold ? [...told, { message: UNREAD_ASSET_ISSUE }] : told;
 }
-
-/** The operation a write of an asset arrives through. */
-export type AssetWriteSurface = "put" | "delete" | "revert" | "sync";
 
 /** The module whose switch turns changing assets in the interface on and off. */
 const ASSET_MANAGEMENT_MODULE = "assetManagement";
@@ -409,10 +434,13 @@ export function assertUpsertWithinLimits(
   access: ActorAccess,
   surface: AssetWriteSurface,
   kind: WorkflowAssetKind,
-  input: Omit<Parameters<WorkflowAssetKind["assertInteractiveUpsertAllowed"]>[0], "access">
+  input: Omit<
+    Parameters<WorkflowAssetKind["assertInteractiveUpsertAllowed"]>[0],
+    "access" | "surface"
+  >
 ): void {
   if (!isReleaseSync(access, surface)) {
-    kind.assertInteractiveUpsertAllowed({ access, ...input });
+    kind.assertInteractiveUpsertAllowed({ access, surface, ...input });
   }
 }
 
@@ -423,7 +451,7 @@ export function assertDeleteWithinLimits(
   kind: WorkflowAssetKind
 ): void {
   if (!isReleaseSync(access, surface)) {
-    kind.assertInteractiveDeleteAllowed();
+    kind.assertInteractiveDeleteAllowed({ surface });
   }
 }
 

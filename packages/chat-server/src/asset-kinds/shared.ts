@@ -4,6 +4,7 @@ import type {
   AuthenticatedIdentity,
   ClientInstanceId,
   ConfigAssetKind,
+  ConfigAssetRecord,
   FileSet,
   JsonObject,
   Namespace,
@@ -31,6 +32,9 @@ export interface PlatformInstructions {
   toolNames: readonly string[];
 }
 
+/** The operation a write of an asset arrives through. */
+export type AssetWriteSurface = "put" | "delete" | "revert" | "sync";
+
 /**
  * A registered kind with what the config asset workflow asks of it. Everything the workflow
  * does differently for one kind is answered here, by that kind's registration.
@@ -49,6 +53,21 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   prepareInteractiveUpsert(input: {
     current: unknown;
     next: Record<string, unknown>;
+    /**
+     * The principal who writes, where the save has one: a put and a validate. A kind that
+     * records who is accountable for a new asset reads it.
+     */
+    principalId?: string;
+  }): Record<string, unknown>;
+  /**
+   * What a revert stores of an earlier revision, for a kind whose server decides fields that
+   * an earlier revision may hold differently: those stay as they are now. Without it the
+   * revision is stored as it was.
+   */
+  prepareRevert?(input: {
+    current: unknown;
+    restored: Record<string, unknown>;
+    principalId: string;
   }): Record<string, unknown>;
   /**
    * The right an interactive save needs beside the kind's write right and its caller lacks,
@@ -66,6 +85,7 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   /** Throws `FORBIDDEN` when the instance's editing policy refuses this interactive save. */
   assertInteractiveUpsertAllowed(input: {
     access: ActorAccess;
+    surface: AssetWriteSurface;
     name: string;
     /** The stored definition, or undefined for a new asset. */
     current: unknown;
@@ -99,7 +119,29 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     config: unknown;
   }): void | Promise<void>;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
-  assertInteractiveDeleteAllowed(): void;
+  assertInteractiveDeleteAllowed(input: { surface: AssetWriteSurface }): void;
+  /**
+   * Throws where another asset still needs this one and nothing checks that reference when
+   * the other is written: asked of a delete with the assets as they are stored, each with its
+   * draft and, where it has one, its published config.
+   */
+  assertRemovable?(input: {
+    name: string;
+    assets(kind: string): Promise<readonly ConfigAssetRecord[]>;
+  }): Promise<void>;
+  /**
+   * What a write of a config revision does beside storing it, called once the write is
+   * committed, with the stores of the instance. A failure is logged and the write stands, so
+   * what it does is something a later write or start repairs.
+   */
+  afterWrite?(input: {
+    clientInstanceId: ClientInstanceId;
+    name: string;
+    /** The config before the write, where the asset was active. */
+    previous: unknown;
+    config: JsonObject;
+    stores: PlatformStores;
+  }): Promise<void>;
   /**
    * The config a revision holds, made from the manifest its build validated. A kind whose
    * revisions hold files brings it: only the kind knows what its config is beside the manifest.
@@ -182,6 +224,7 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * repairs.
    */
   onRemove?(input: {
+    clientInstanceId: ClientInstanceId;
     assetId: string;
     /** The config that was published until the delete, where one was. */
     published?: JsonObject;

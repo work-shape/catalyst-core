@@ -332,6 +332,42 @@ describe("the Secret Store", () => {
     expect(await resolverWith().resolve({ handle: a.handle, binding: first })).toBe(value);
   });
 
+  it("hands a secret to a call of the origin it was set for only, and binds the origin into the row", async () => {
+    const here = "https://mcp.example.com:443";
+    const there = "https://elsewhere.example.com:443";
+    const store = storeWith();
+    const value = generateTestSecret();
+    const { handle } = await store.put({ binding: first, value, source: "runtime", origin: here });
+    expect(await resolverWith().resolve({ handle, binding: first, origin: here })).toBe(value);
+
+    const moved = await refusal(resolverWith().resolve({ handle, binding: first, origin: there }));
+    expect(moved.details).toEqual({ reason: "connection_not_configured" });
+    expect(findLeak(`${moved.message}${moved.stack ?? ""}`, value)).toBeUndefined();
+
+    // A row given another origin in the database does not open: the origin is associated data.
+    await withTestSql((sql) => sql`update secrets set origin = ${there} where handle = ${handle}`);
+    const rebound = await refusal(
+      resolverWith().resolve({ handle, binding: first, origin: there })
+    );
+    expect(rebound.details).toEqual({ reason: "secret_unreadable" });
+    await withTestSql((sql) => sql`update secrets set origin = ${here} where handle = ${handle}`);
+
+    // For another origin the stored secret counts as none: a writer who saw none replaces it,
+    // under the same handle and the next version.
+    const replaced = await store.put({
+      binding: first,
+      value,
+      source: "runtime",
+      origin: there,
+      expectedVersion: null
+    });
+    expect(replaced).toEqual({ handle, version: 2, changed: true });
+    expect(await resolverWith().resolve({ handle, binding: first, origin: there })).toBe(value);
+    expect(
+      (await refusal(resolverWith().resolve({ handle, binding: first, origin: here }))).details
+    ).toEqual({ reason: "connection_not_configured" });
+  });
+
   it("refuses a changed row, a missing row and a key that is gone, each without a value", async () => {
     const value = generateTestSecret();
     const { handle } = await storeWith().put({ binding: first, value, source: "runtime" });
