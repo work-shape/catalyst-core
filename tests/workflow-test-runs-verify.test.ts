@@ -150,6 +150,64 @@ describe("Run live once in a test run (EW-5t verification)", () => {
     ]);
     expect(writes(t)).toHaveLength(3);
   });
+
+  // Turn 2. A switch set again while a test run that used it goes on is for the next test run,
+  // and the run that bound the first switch keeps every item of the step live.
+  it("leaves a switch set again during a test run for the next test run", async () => {
+    const t = await ready();
+    await switchOn(t);
+    const { inCall, letGo } = holdingFirst(t, "write", hanging);
+
+    const first = await startTest(t, t.kai);
+    await reach(t, inCall);
+    // The first item of the first run is live with the outside system; Kai sets the switch again.
+    await switchOn(t);
+    letGo();
+    await t.finish(first.id);
+    expect(await sendTargets(t, first.id)).toEqual(["live", "live", "live"]);
+
+    const second = await startTest(t, t.kai);
+    await t.finish(second.id, t.worker());
+    expect(await sendTargets(t, second.id)).toEqual(["live", "live", "live"]);
+  });
+
+  it("keeps every item of a running test run live when a switch set again is used by another run", async () => {
+    const t = await ready();
+    await switchOn(t);
+    const { inCall, letGo } = holdingFirst(t, "write", hanging);
+
+    const first = await startTest(t, t.kai);
+    await reach(t, inCall);
+    await switchOn(t);
+    const second = await startTest(t, t.kai);
+    await t.finish(second.id, t.worker());
+    letGo();
+    await t.finish(first.id);
+
+    expect(await sendTargets(t, second.id)).toEqual(["live", "live", "live"]);
+    expect(await sendTargets(t, first.id)).toEqual(["live", "live", "live"]);
+  });
+
+  // Turn 2: "a switch not yet used is cleared by the next save of the draft" (check 7), and
+  // clearing is an audit event (operations-and-policy, Calls made by a draft).
+  it("clears an unused switch with its audit event when the draft is saved", async () => {
+    const t = await ready();
+    await switchOn(t);
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: address,
+      payload: { config: { name: WORKFLOW, manifest: notifyClients() }, expectedRevision: 1 }
+    });
+
+    const audit = await t.stores.audit.listAuditEvents({
+      clientInstanceId: t.principal.clientInstanceId,
+      limit: 200
+    });
+    expect(
+      audit
+        .filter((event) => event.type === "live_once.cleared")
+        .map((event) => [event.metadata?.part, event.actor?.userId])
+    ).toEqual([["send", t.admin.id]]);
+  });
 });
 
 describe("rights of a test run (EW-5t verification)", () => {
