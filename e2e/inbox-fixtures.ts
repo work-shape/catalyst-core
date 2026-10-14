@@ -1,7 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import postgres from "postgres";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect } from "./test";
 
@@ -13,48 +12,6 @@ export const reviewer = {
   email: "e2e-superadmin@example.test",
   password: "e2e-superadmin-password"
 };
-const databaseUrl =
-  process.env.E2E_DATABASE_URL ??
-  `postgres://agent_chat:agent_chat@${process.env.E2E_HOST ?? "127.0.0.1"}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
-
-/**
- * Writes a person rows that allow these actions on the whole instance, as a role would. No
- * operation grants the rights of an App yet (RIGHTS-1c), and the Apps area offers what the
- * instance-wide rights allow. Answers how to take them back.
- */
-export async function allowOnInstance(
-  email: string,
-  actions: readonly string[]
-): Promise<() => Promise<void>> {
-  const sql = postgres(databaseUrl, { max: 1 });
-  try {
-    const [user] = await sql<
-      { id: string }[]
-    >`select id from product_users where client_instance_id = 'demo-e2e' and email = ${email}`;
-    if (!user) throw new Error(`No person ${email} on the instance`);
-    const ids = actions.map((action) => `grant_e2e_${action}_${user.id}`);
-    for (const [index, action] of actions.entries()) {
-      await sql`
-        insert into permission_grants
-          (id, client_instance_id, holder_kind, holder_id, action, scope_kind, scope_id, effect,
-           granted_by)
-        values
-          (${ids[index] ?? ""}, 'demo-e2e', 'user', ${user.id}, ${action}, 'instance', null,
-           'allow', 'e2e')`;
-    }
-    return async () => {
-      const end = postgres(databaseUrl, { max: 1 });
-      try {
-        await end`delete from permission_grants where id in ${end(ids)}`;
-      } finally {
-        await end.end();
-      }
-    };
-  } finally {
-    await sql.end();
-  }
-}
-
 /** Where the pictures of a run go. Without it a test takes none. */
 export const shotsDir = process.env.E2E_SHOTS_DIR;
 
@@ -163,4 +120,12 @@ export function tabName(label: string, count: number): RegExp {
 export async function decidedCount(tab: Locator): Promise<number> {
   await expect(tab).toHaveAccessibleName(/^Decided(?: ?, \d+ items?)?$/u);
   return Number(/, (\d+) item/u.exec((await tab.textContent()) ?? "")?.[1] ?? 0);
+}
+
+/** The id of what an answer of the instance created. */
+export function idOf(body: unknown): string {
+  if (typeof body !== "object" || body === null || !("id" in body) || typeof body.id !== "string") {
+    throw new Error("The answer names no id.");
+  }
+  return body.id;
 }
