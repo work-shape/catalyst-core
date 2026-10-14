@@ -1,8 +1,8 @@
 import {
   AppError,
-  INSTANCE_ASSET_SCOPE,
   isAppError,
   type ActorAccess,
+  type AssetScope,
   type ConfigAssetRecord
 } from "@vivd-catalyst/core";
 import { accessResource, errorIssues } from "./asset-access";
@@ -100,6 +100,11 @@ export interface AssetSyncInput {
    * any asset of the instance.
    */
   namespace?: string;
+  /**
+   * The workspace that owns every asset the batch names. Left out, the batch names the
+   * instance's own assets. A batch that names one is no release (`accessOfSyncCredential`).
+   */
+  workspaceId?: string;
   items: AssetSyncItem[];
   /** The default agent a release names, `null` for none. Left out, the batch names none. */
   defaultAgentName?: string | null;
@@ -110,11 +115,13 @@ export interface AssetSyncInput {
 export interface PlannedItem {
   index: number;
   item: AssetSyncItem;
+  /** The owner the batch writes the asset for: the workspace it names, or the instance. */
+  scope: AssetScope;
   name?: string;
   kind?: WorkflowAssetKind;
-  /** The instance's own row of the name, a deleted one included. */
+  /** The row of the name in the batch's scope, a deleted one included. */
   asset?: ConfigAssetRecord;
-  /** An asset a workspace owns carries the name. The batch never reads or writes it. */
+  /** An asset of another owner carries the name. The batch never reads or writes it. */
   other?: Pick<ConfigAssetRecord, "id" | "scope">;
   /** A delete of a release whose asset is not there: nothing is written for it. */
   absent?: boolean;
@@ -157,7 +164,7 @@ export function readsItem(access: ActorAccess, entry: ReadyItem): boolean {
 }
 
 function itemResource(entry: ReadyItem) {
-  return accessResource(entry.kind.kind, entry.name, INSTANCE_ASSET_SCOPE, entry.asset?.id);
+  return accessResource(entry.kind.kind, entry.name, entry.scope, entry.asset?.id);
 }
 
 /** The refusal of a batch the store found stale under its lock. */

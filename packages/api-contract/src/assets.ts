@@ -419,6 +419,14 @@ export const syncAssetsRequestSchema = z.object({
    */
   namespace: nameText(z.string().min(1)).optional(),
   /**
+   * The workspace that owns every asset the batch names, as a CLI root bound with
+   * `--workspace` sends it. Left out, the batch names the instance's own assets. A batch
+   * names a Namespace or a workspace, never both, and one that names a workspace is no
+   * release: its agents start hidden and its writer holds the rights on what the workspace
+   * owns.
+   */
+  workspaceId: workspaceIdSchema,
+  /**
    * At most `ASSET_SYNC_MAX_ITEMS` items, or `ASSET_RELEASE_SYNC_MAX_ITEMS` for a holder of
    * the release right. A batch without items names the default agent.
    */
