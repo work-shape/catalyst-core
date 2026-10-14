@@ -377,3 +377,50 @@
 .model-picker-range:focus-visible::-moz-range-thumb {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 40%, transparent);
 }
+
+/* The chat dock as a view transition of the type `dock-in` or `dock-out`, which the router plays
+   (`dock/dock-motion.ts`). The conversation is laid out at its new width from the first frame,
+   so its text wraps once and its stream goes on; the page comes in at the dock's moving edge,
+   or leaves to it. Where the browser has no view transition types, the shell plays the same
+   movement on the elements themselves; under reduced motion the router plays no transition. */
+html:active-view-transition-type(dock-in, dock-out) {
+  & [data-dock-chat] {
+    view-transition-name: dock-chat;
+  }
+
+  & [data-dock-page] {
+    view-transition-name: dock-page;
+  }
+
+  &::view-transition-old(root),
+  &::view-transition-old(dock-chat) {
+    display: none;
+  }
+
+  &::view-transition-new(root),
+  &::view-transition-group(dock-chat) {
+    animation: none;
+  }
+
+  &::view-transition-new(dock-chat) {
+    animation: none;
+    inline-size: auto;
+    block-size: auto;
+  }
+}
+
+html:active-view-transition-type(dock-in) {
+  /* The page's loading layout shows at once in the room the conversation gives up. */
+  & [data-dock-page] {
+    --duration-loading-delay: 0ms;
+  }
+
+  &::view-transition-new(dock-page) {
+    animation: var(--animate-dock-page-in);
+  }
+}
+
+html:active-view-transition-type(dock-out)::view-transition-old(dock-page) {
+  animation: var(--animate-dock-page-in);
+  animation-direction: reverse;
+}

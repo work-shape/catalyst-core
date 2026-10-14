@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -12,6 +14,27 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "../actions/button";
 import { cn } from "../cn";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
+
+const PageHeaderShellActionContext = createContext<ReactNode>(null);
+
+/**
+ * A control the application's shell puts into the head of every page, before the page's own
+ * actions: such as the button that brings back a panel the shell holds beside every page. Only
+ * a page's own heading, a head of level 1, shows it.
+ */
+export function PageHeaderShellAction({
+  action,
+  children
+}: {
+  action: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <PageHeaderShellActionContext.Provider value={action}>
+      {children}
+    </PageHeaderShellActionContext.Provider>
+  );
+}
 
 /**
  * `list` heads a list or settings page: the page name, a description, the primary action.
@@ -125,10 +148,16 @@ export function PageHeader({
   const Heading = headingLevel === 1 ? "h1" : "h2";
   const detail = variant === "detail";
   const [row, backTextGone] = useBackTextGone();
+  const shellAction = useContext(PageHeaderShellActionContext);
+  const ownShellAction = headingLevel === 1 ? shellAction : null;
   const hasActions =
-    secondaryActions !== undefined || primaryAction !== undefined || overflow !== undefined;
+    (ownShellAction !== null && ownShellAction !== undefined) ||
+    secondaryActions !== undefined ||
+    primaryAction !== undefined ||
+    overflow !== undefined;
   const actions = hasActions ? (
     <div className={cn("flex shrink-0 flex-wrap items-center gap-2", detail && "md:flex-nowrap")}>
+      {ownShellAction}
       {secondaryActions}
       {primaryAction}
       {overflow}

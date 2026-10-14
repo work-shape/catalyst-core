@@ -38,3 +38,4 @@ export {
   type SkillIconProps,
   type SkillIconSize
 } from "./skill-icon";
+export { TargetBadge, type CallTarget, type TargetBadgeProps } from "./target-badge";
