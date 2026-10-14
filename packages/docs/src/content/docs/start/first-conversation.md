@@ -7,8 +7,8 @@ In Catalyst you work with **agents**: assistants set up for a task, such as answ
 
 ## Start a chat
 
-1. Click **Agents** ("Agenten") in the main rail. It lists the agents of your current workspace.
-2. Pick one to start a chat with it. **New chat** ("Neuer Chat") in the main rail starts a new chat at any time.
+1. Click **New chat** ("Neuer Chat") in the main rail. If your workspace offers only one agent, this starts a chat with it.
+2. If your workspace offers more than one agent, the rail also shows **Agents** ("Agenten"). It lists them; pick one to start a chat with it.
 3. Type what you need and press Enter.
 
 To add files, click **Add attachment** ("Anhang hinzufügen") or drop them onto the chat.
@@ -26,10 +26,12 @@ If the agent offers more than one model, the chat shows a picker with **Model** 
 
 ## The rest of the main rail
 
+Which of these you see depends on your rights and your workspace.
+
 - **Apps**: the Apps of your workspace.
 - **Workflows**: work the platform does by itself. See [Workflows](/automate/workflows/).
 - **Inbox** ("Eingang"): requests waiting for an approval.
 - **Studio**: where agents, skills and connections to other systems are made. It shows only for people who build them. On an agent's card, **Edit in Studio** ("Im Studio bearbeiten") opens it there.
-- **Settings** ("Einstellungen"): your profile, language, and your API keys.
+- Your name at the bottom of the rail opens **Profile** ("Profil") and **Language and appearance** ("Sprache und Darstellung"). Your **API keys** ("API-Schlüssel") are on the same Settings page. Workspace owners and administrators also get a **Settings** ("Einstellungen") button.
 
 Next: [Workspaces](/start/workspaces/).
