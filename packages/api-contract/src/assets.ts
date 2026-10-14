@@ -306,6 +306,23 @@ export const runLiveOnceResponseSchema = z.object({
   part: z.string()
 });
 
+export const listLiveOnceQuerySchema = z.object({ workspaceId: workspaceIdSchema });
+
+/**
+ * The caller's own "Run live once" switches on the asset's current draft. A switch a Workflow
+ * test run used names that run and when; it covers no later run until it is set again.
+ */
+export const liveOnceListSchema = z.object({
+  items: z.array(
+    z.object({
+      part: z.string(),
+      switchedAt: timestampSchema,
+      usedByRunId: z.string().optional(),
+      usedAt: timestampSchema.optional()
+    })
+  )
+});
+
 export const deleteAssetRequestSchema = z.object({
   /** The revision the caller last read. A delete is never made blind. Required. */
   expectedRevision: expectedRevisionSchema,

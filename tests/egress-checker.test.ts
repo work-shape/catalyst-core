@@ -185,7 +185,9 @@ describe("the egress checker", () => {
     for (const dns of cases) {
       const { checker, asked } = checkerOf([{ host: "api.example.com" }], dns);
       const error = await denied(checker.check(https("other.example.com")));
-      expect(error.message).toBe("egress_denied: other.example.com:443 is not allowed");
+      expect(error.message).toBe(
+        "egress_denied: other.example.com:443 is not allowed. An operator adds it under 'egress.allow' in release config, or allows every public HTTPS host on port 443 with 'egress.allowPublicHttps: true'"
+      );
       // Another port and another protocol of a listed host are outside the list as well.
       await denied(checker.check(https("api.example.com", 8443)));
       await denied(checker.check({ protocol: "http", host: "api.example.com", port: 443 }));
@@ -200,7 +202,9 @@ describe("the egress checker", () => {
         "api.example.com": [address]
       });
       const error = await denied(checker.check(https("api.example.com")));
-      expect(error.message, address).toBe("egress_denied: api.example.com:443 is not allowed");
+      expect(error.message, address).toMatch(
+        /^egress_denied: api\.example\.com:443 is not allowed\. /u
+      );
     }
     // A Store whose name gives no address refuses the target on its port as `egress_denied`.
     const { checker } = checkerOf(
@@ -516,9 +520,11 @@ describe("the egress checker", () => {
   it("names host and port in a refusal, and nothing else of the target", async () => {
     const { checker } = checkerOf([]);
     const error = await denied(checker.check(https("api.example.com")));
-    expect(error.message).toBe("egress_denied: api.example.com:443 is not allowed");
+    expect(error.message).toMatch(/^egress_denied: api\.example\.com:443 is not allowed\. /u);
     const odd = await denied(checker.check(https("api.example.com/path?key=abc def")));
-    expect(odd.message).toBe("egress_denied: (unreadable host):443 is not allowed");
+    expect(odd.message).toBe(
+      "egress_denied: (unreadable host):443 is not allowed. No setting allows it"
+    );
   });
 });
 

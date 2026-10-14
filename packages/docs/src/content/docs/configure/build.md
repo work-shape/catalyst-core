@@ -18,7 +18,28 @@ A person with a grant in a Namespace sees the assets of that Namespace and nothi
 
 A grant on one single asset, or on what one workspace owns, is checked by the instance on every read and write. The interface learns only that the person may read some asset of the kind: a read grant gives the Studio row and the list of the kind, which holds the assets the person may read. Such an asset opens read-only. A grant that allows another action and no reading gives no Studio row.
 
-On an instance with the module [`connections`](/configure/modules/#connections) on, Studio also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant in a Namespace, on one Connection or on the Connections of one workspace, who sees those Connections. A grant to use a Connection gives no entry in Studio. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). Studio starts no Connection and changes none: Connections come from the release config.
+On an instance with the module [`connections`](/configure/modules/#connections) on, Studio also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant in a Namespace, on one Connection or on the Connections of one workspace, who sees those Connections. A grant to use a Connection gives no entry in Studio. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). The list is **Studio > Connections**; the German interface names it **Studio › Verbindungen**.
+
+## Connecting an outside system
+
+A Connection reaches a remote MCP server. That is the one connector type a Connection made on the instance has: there is no connector for a plain HTTP or REST API. To reach such an API, put an MCP server in front of it, or have the operator add a [custom tool](/extend/custom-tools/) in the client assembly.
+
+1. **New connection** in Studio > Connections takes a name, the server's https address with the path of its MCP endpoint, and the authentication: none, a bearer token, or a key in a header the server names.
+2. The key is entered in that form or later on the Connection's page under **Credential** (German: **Zugangsdaten**), with **Enter the key** or **Enter a new key**. It is stored encrypted and never shown again, to anyone. A key is never typed into a chat: an agent cannot take it, and an agent that asks for one is wrong. Give the key on the Connection's page only.
+3. The instance reads the tools the server offers. On the Connection's page, accept the operations agents may call. **Test connection** checks the address and the key.
+4. Give an agent the tools, as the next section says.
+
+The rights this needs:
+
+| Step | Right |
+| --- | --- |
+| See Studio > Connections and a Connection's page | `connection.read` |
+| Create a Connection, enter or replace its key, test it, accept its operations | `connection.write`, which the administrator role holds; the Access page does not grant it |
+| Delete a Connection | `connection.delete`, which the administrator role holds |
+| Give an agent a tool of the Connection | `agent.write` on the agent, and `connection.read` to see the Connection in the agent's Tools section |
+| Have an agent call the tool | `connection.use` for the person the agent works for: an agent acts with that person's rights |
+
+The administrator role holds every right on Connections. Beside the rights, the operator must have turned the module [`connections`](/configure/modules/#connections) on, listed the server's host in [`egress.allow`](/configure/release-config/#egress) and set a [Secret Store key](/configure/release-config/#secret-store-keys); without the host on the list the save is refused with `egress_denied`. A Connection that comes from the release config is read-only on the instance, and its credential comes from the instance's environment.
 
 ## Giving an agent the tools of a Connection
 
@@ -46,7 +67,7 @@ The page of a Connection shows it and changes nothing. It never shows a credenti
 | Ready | The outside system answered the test. | Nothing. |
 | Not tested | Nobody has tested the Connection yet. | Test it. |
 | Unauthorized | The outside system refused the credential. | The operator sets a new credential in the instance's environment and restarts the instance. |
-| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress). | The operator adds the host to `egress.allow` and restarts the instance. |
+| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress), or it resolves to an address the instance may not reach. | The operator adds the host to `egress.allow`, or for a public HTTPS host on port 443 sets `egress.allowPublicHttps`, and restarts the instance. |
 | Unavailable | The outside system did not answer. | Check the address under Settings. It is changed in the release config. |
 | Not configured | The credential is missing. | The operator supplies it in the instance's environment and restarts the instance. |
 | Credential unreadable | A credential is stored and the instance cannot read it. | The operator restores the Secret Store key it was stored with, or supplies the credential again, and restarts the instance. |

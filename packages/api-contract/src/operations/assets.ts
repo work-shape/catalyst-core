@@ -14,6 +14,8 @@ import {
   revertAssetRequestSchema,
   runLiveOnceRequestSchema,
   runLiveOnceResponseSchema,
+  listLiveOnceQuerySchema,
+  liveOnceListSchema,
   setAssetAvailabilityRequestSchema,
   setAssetDefaultRequestSchema,
   setAssetDefaultResponseSchema,
@@ -193,6 +195,22 @@ export const assetOperations = {
     response: json(runLiveOnceResponseSchema),
     errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED", "VALIDATION_FAILED"],
     rateClass: "write"
+  }),
+  "assets.list_live_once": defineRegisteredOperation({
+    id: "assets.list_live_once",
+    method: "GET",
+    path: "/api/v1/assets/:kind/:name/run-live-once",
+    summary:
+      "List the caller's own Run live once switches on the draft, and the test run that used each",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    query: listLiveOnceQuerySchema,
+    response: json(liveOnceListSchema),
+    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
+    rateClass: "read"
   }),
   "assets.delete": defineRegisteredOperation({
     id: "assets.delete",

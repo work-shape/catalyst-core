@@ -16,7 +16,7 @@ import {
   type OperationAuthorization,
   type PolicyTarget
 } from "@vivd-catalyst/core";
-import { afterRemove, afterWrite } from "./asset-after-write";
+import { afterRemove, afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
 import { AssetDraftWorkflow } from "./asset-draft-workflow";
 import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
@@ -675,6 +675,7 @@ export class AssetWorkflow {
         })
     ]);
     await afterWrite(this.options, call, target, { previous: current, config: toJsonObject(next) });
+    await clearLiveOnceSwitches(this.options, call, kind, name, target.asset?.id);
     return {
       version: result.version,
       revision,

@@ -9,6 +9,7 @@ import {
   workflowConfigSchema
 } from "@vivd-catalyst/config-schema";
 import {
+  AppError,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   defineAssetKind,
@@ -27,6 +28,7 @@ import {
   workflowStepFileIssues,
   workflowStepFilesRefusal,
   type WorkflowDefinitionResult,
+  type WorkflowDefinitionRevision,
   type WorkflowDefinitionSource,
   type WorkflowStepFile,
   type WorkflowStepFiles
@@ -278,6 +280,12 @@ export function createWorkflowAssetDefinitions(options: {
   published(): Promise<PublishedWorkflow[]>;
   /** The id of the asset of this name, a draft included: what a right on it is decided on. */
   assetIdOf(id: string): Promise<string | undefined>;
+  /**
+   * The draft of the Workflow of this id, which a test run runs: the asset's newest revision,
+   * published or not. Nothing where no asset has the id; a draft the engine cannot run is
+   * refused with what is wrong with it.
+   */
+  draft(id: string): Promise<WorkflowDefinitionRevision | undefined>;
 } {
   const { clientInstanceId, configAssets } = options;
   const published = async () =>
@@ -298,6 +306,21 @@ export function createWorkflowAssetDefinitions(options: {
     async assetIdOf(id) {
       const asset = await assetOf(id);
       return asset?.status === "active" ? asset.id : undefined;
+    },
+    async draft(id) {
+      const asset = await assetOf(id);
+      if (asset?.status !== "active") return undefined;
+      const parsed = parseStoredManifest(
+        manifestOfConfigSchema.safeParse(asset.config).data?.manifest
+      );
+      if (!parsed.ok) throw workflowDefinitionRefusal(id, parsed.issues);
+      // A save refuses a manifest of another id, so this is a row nothing of the product wrote.
+      if (parsed.manifest.id !== asset.name) {
+        throw new AppError("CONFLICT", `The draft of '${id}' names another id`, {
+          reason: "definition_invalid"
+        });
+      }
+      return { revisionId: asset.activeRevisionId, manifest: parsed.manifest };
     },
     async read(id) {
       const asset = await assetOf(id);
