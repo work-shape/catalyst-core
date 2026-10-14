@@ -18,7 +18,11 @@ const CONNECTION_TOOL_PREFIX = "connection.";
  * interface does not know has none and shows the generic Connection icon.
  */
 export function connectionCategory(connectorType: string | undefined): string | undefined {
-  return connectorType === "postgres" ? "database" : undefined;
+  return connectorType === "postgres"
+    ? "database"
+    : connectorType === "http_api"
+      ? "code"
+      : undefined;
 }
 
 /** The Connection a tool name belongs to, by its form `connection.<name>.<operation>`. */

@@ -65,6 +65,8 @@ function renderPage(input: PageInput = {}): string {
     useHolders: () => input.holders ?? { status: "hidden" },
     setSecret: async () => undefined,
     discover: async () => undefined,
+    readDetail: async (name) => connectionDetail(name, input.detail),
+    test: async () => testResult("ready"),
     principalHref: (principalId) => `/settings/instance/api-access?principal=${principalId}`
   };
   const context = platformContext();
@@ -628,6 +630,12 @@ describe("Connection page", () => {
           description: "Lists the invoices of one customer.\nTwo.\nThree.\nThe fourth line.",
           proposedEffect: "reading",
           fingerprint: "a".repeat(64)
+        },
+        {
+          name: "void_invoice",
+          description: "Voids one invoice.",
+          proposedEffect: "changing",
+          fingerprint: "b".repeat(64)
         }
       ]
     };
@@ -638,13 +646,24 @@ describe("Connection page", () => {
     // The next step is the editor's, not the operator's.
     expect(markup).toContain("Enter the key under Credential. Then test again.");
     expect(markup).not.toContain("The operator supplies the credential");
-    // A discovered tool waits to be accepted, with its effect proposed and agents allowed.
-    expect(markup).toContain('data-connection-discovered="list_invoices"');
-    expect(markup).toContain('data-connection-accept="list_invoices"');
-    expect(markup).toContain("The server says this tool only reads.");
-    // Whoever accepts it reads all of what the model will read, not three lines of it.
+    // The discovered tools wait in one list with one confirmation: the reading one is ticked,
+    // the changing one is not, and agents may use what is approved.
+    const row = (name: string) =>
+      new RegExp(`data-approval-tool="${name}"[\\s\\S]*?</li>`, "u").exec(markup)?.[0] ?? "";
+    expect(row("list_invoices")).toContain('aria-checked="true"');
+    expect(row("void_invoice")).toContain('aria-checked="false"');
+    expect(row("void_invoice")).toContain(">changes<");
+    const surface = (name: string) =>
+      new RegExp(`<button[^>]*data-approval-surface="${name}"[^>]*>`, "u").exec(markup)?.[0] ?? "";
+    expect(surface("agent")).toContain('aria-checked="true"');
+    expect(surface("workflow")).toContain('aria-checked="false"');
+    expect(markup).toContain("1 of 2 selected");
+    expect(markup).toMatch(/data-connection-approve=""[^>]*>Approve 1 tool</u);
+    expect(markup).toContain("Changing tools ask before every call.");
+    expect(markup).not.toContain("data-connection-accept");
+    // Whoever approves it reads all of what the model will read, not three lines of it.
     expect(markup).toMatch(
-      /<p class="(?![^"]*line-clamp)[^"]*">Lists the invoices[^<]*The fourth line\.</u
+      /<span class="(?![^"]*line-clamp)[^"]*">Lists the invoices[^<]*The fourth line\.</u
     );
     // An accepted operation can be taken off; the menu holds Delete.
     expect(markup).toContain('data-connection-remove="revenue_by_month"');
@@ -658,17 +677,36 @@ describe("Connection page", () => {
     for (const control of [
       ">Edit<",
       ">Enter the key<",
-      "data-connection-accept",
+      "data-connection-approve",
       "data-connection-remove"
     ]) {
       expect(reader, control).not.toContain(control);
     }
-    expect(renderPage({ asset: runtime, detail, locale: "de" })).toContain(
-      "Gib den Schlüssel unter Zugangsdaten ein. Teste danach erneut."
-    );
+    const german = renderPage({ asset: runtime, detail, locale: "de" });
+    expect(german).toContain("Gib den Schlüssel unter Zugangsdaten ein. Teste danach erneut.");
+    expect(german).toContain("Nutzen dürfen");
+    expect(german).toContain("1 Tool freigeben");
   });
 
-  it("offers a writer one check box per operation that opens it to outside clients, ticked where it is", () => {
+  it("adds the tools of a REST API by pasting them or drafting them in the chat, never by discovery", () => {
+    const rest = connectionAsset("exampledata", {
+      origin: "runtime",
+      connectorType: "http_api",
+      settings: { baseUrl: "https://gateway.example.test/datevconnect" }
+    });
+    const markup = renderPage({ asset: rest, detail: { operations: [] } });
+    expect(markup).toContain("Add tools");
+    expect(markup).toContain("data-connection-paste");
+    // Without a chat beside the page there is nothing to draft in.
+    expect(markup).not.toContain("data-connection-draft");
+    expect(markup).not.toContain("Discovered tools");
+    expect(renderPage({ asset: rest, detail: { operations: [] }, locale: "de" })).toContain(
+      "Du hast die Tools schon als YAML."
+    );
+    expect(renderPage({ asset: rest, canWrite: false })).not.toContain("data-connection-paste");
+  });
+
+  it("offers a writer four check boxes per operation, for agents, Apps, Workflows and outside clients", () => {
     const runtime = connectionAsset("ledger", { origin: "runtime" });
     const markup = renderPage({ asset: runtime });
     const box = (name: string) => {
@@ -685,11 +723,23 @@ describe("Connection page", () => {
     for (const name of ["revenue_by_month", "update_customer", "top_products", "delete_order"]) {
       expect(box(name), name).toContain('aria-checked="false"');
     }
-    expect(renderPage({ asset: runtime, locale: "de" })).toContain("Externe Clients (CLI, MCP)");
+    // Agents, Apps and Workflows are ticked as the operation names them.
+    const exposure = (surface: string, name: string) =>
+      new RegExp(`<button[^>]*data-connection-exposure="${surface}:${name}"[^>]*>`, "u").exec(
+        markup
+      )?.[0] ?? "";
+    expect(exposure("bridge", "list_customers")).toContain('aria-checked="true"');
+    expect(exposure("workflow", "delete_order")).toContain('aria-checked="true"');
+    expect(exposure("bridge", "revenue_by_month")).toContain('aria-checked="false"');
+    expect(exposure("agent", "revenue_by_month")).toContain('aria-checked="true"');
+    const german = renderPage({ asset: runtime, locale: "de" });
+    expect(german).toContain("Externe Clients (CLI, MCP)");
+    expect(german).toContain(">Apps<");
     // A reader who may not write, and a Connection of the release config, get no box.
     expect(renderPage({ asset: runtime, canWrite: false })).not.toContain(
       "data-connection-outside"
     );
     expect(renderPage()).not.toContain("data-connection-outside");
+    expect(renderPage()).not.toContain("data-connection-exposure");
   });
 });

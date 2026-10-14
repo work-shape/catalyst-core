@@ -2,18 +2,30 @@
 // state, these functions read and make definitions. No function here holds a credential: the
 // secret is entered beside the definition and sent on its own.
 
-/** The Connector type this form makes: a remote MCP server. */
-const MCP_CONNECTOR_TYPE = "mcp";
+/** The Connector types a person connects by address and key: a remote MCP server, a REST API. */
+export type ConnectionFormType = "mcp" | "http_api";
 
 /** How the instance proves itself to the server, as the form offers it. */
 export const CONNECTION_AUTH_CHOICES = ["none", "bearer", "header"] as const;
 export type ConnectionAuthChoice = (typeof CONNECTION_AUTH_CHOICES)[number];
 
+/** A fixed header of a REST API, as the form lists it: never a credential. */
+export interface ConnectionHeaderRow {
+  name: string;
+  value: string;
+}
+
 export interface ConnectionFormState {
+  connectorType: ConnectionFormType;
+  /** The address: the MCP server's `url`, or the REST API's `baseUrl`. */
   url: string;
   authScheme: ConnectionAuthChoice;
   /** With `header`: the header that carries the secret. */
   headerName: string;
+  /** For `http_api`: the fixed headers sent with every request. */
+  headers: ConnectionHeaderRow[];
+  /** For `http_api`: the path the test asks, or empty for the base address. */
+  testPath: string;
 }
 
 /** One operation a write accepts, as the definition holds it. */
@@ -42,16 +54,48 @@ function authChoiceOf(value: unknown): ConnectionAuthChoice {
 /** The form of a stored or copied definition. */
 export function connectionConfigToForm(config: Record<string, unknown>): ConnectionFormState {
   const settings = recordOf(config.settings);
+  const connectorType = config.connectorType === "http_api" ? "http_api" : "mcp";
   return {
-    url: textOf(settings.url),
+    connectorType,
+    url: textOf(connectorType === "http_api" ? settings.baseUrl : settings.url),
     authScheme: authChoiceOf(config.authScheme),
-    headerName: textOf(settings.headerName)
+    headerName: textOf(settings.headerName),
+    headers: Object.entries(recordOf(settings.headers)).map(([name, value]) => ({
+      name,
+      value: textOf(value)
+    })),
+    testPath: textOf(settings.testPath)
   };
 }
 
 /** The form of a new Connection: a server without a credential, until one is chosen. */
-export function emptyConnectionForm(): ConnectionFormState {
-  return { url: "", authScheme: "bearer", headerName: "" };
+export function emptyConnectionForm(
+  connectorType: ConnectionFormType = "mcp"
+): ConnectionFormState {
+  return {
+    connectorType,
+    url: "",
+    authScheme: "bearer",
+    headerName: "",
+    headers: [],
+    testPath: ""
+  };
+}
+
+/** The fixed headers of the form that name a header, by name. A row left empty is no header. */
+function headersOf(rows: readonly ConnectionHeaderRow[]): Record<string, string> {
+  return Object.fromEntries(
+    rows.map((row) => [row.name.trim(), row.value.trim()] as const).filter(([name]) => name !== "")
+  );
+}
+
+/** The origin of an address, to tell whether a change of it moves the key elsewhere. */
+export function addressOrigin(url: string): string | undefined {
+  try {
+    return new URL(url.trim()).origin;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Whether the auth scheme sends a secret, which the form then asks for. */
@@ -68,19 +112,31 @@ export function withConnectionForm(
   form: ConnectionFormState
 ): Record<string, unknown> {
   const headerName = form.headerName.trim();
+  const credentialHeader = form.authScheme === "header" && headerName !== "" ? { headerName } : {};
+  if (form.connectorType === "mcp") {
+    return {
+      ...config,
+      settings: { url: form.url.trim(), ...credentialHeader },
+      authScheme: form.authScheme
+    };
+  }
+  const headers = headersOf(form.headers);
+  const testPath = form.testPath.trim();
   return {
     ...config,
     settings: {
-      url: form.url.trim(),
-      ...(form.authScheme === "header" && headerName !== "" ? { headerName } : {})
+      baseUrl: form.url.trim(),
+      ...(Object.keys(headers).length === 0 ? {} : { headers }),
+      ...(testPath === "" ? {} : { testPath }),
+      ...credentialHeader
     },
     authScheme: form.authScheme
   };
 }
 
 /**
- * The definition of a new Connection: an MCP server that accepts no operation until its tools
- * are discovered and accepted. A copy keeps the operations of the Connection it copies. The
+ * The definition of a new Connection: a server that accepts no operation until its tools are
+ * discovered or declared, and approved. A copy keeps the operations of the Connection it copies. The
  * instance writes the origin, the owner and the secret handle itself.
  */
 export function newConnectionConfig(
@@ -94,7 +150,7 @@ export function newConnectionConfig(
       name: start.name,
       displayName: start.title,
       ...(description === "" ? {} : { description }),
-      connectorType: MCP_CONNECTOR_TYPE,
+      connectorType: form.connectorType,
       operations: acceptedOperationsOf(copied),
       enabled: true
     },
@@ -126,31 +182,41 @@ function acceptedOperationsOf(config: Record<string, unknown>): AcceptedOperatio
   });
 }
 
+/** One operation a person approved: as it was discovered or declared. */
+export interface ApprovedOperation {
+  name: string;
+  effect: "reading" | "changing";
+  /** For a discovered tool: the fingerprint of the description the person saw. */
+  schemaFingerprint?: string;
+  /** For a declared operation: its declaration, such as the method, the path and the parameters. */
+  declaration?: Record<string, unknown>;
+}
+
 /**
- * The definition with one more accepted operation: the tool as it was discovered, pinned to
- * the fingerprint the reader saw, so a later description of it waits for a review.
+ * The definition with the operations a person approved at once, each open to the surfaces of
+ * the one "may use" row and switched on. A discovered tool is pinned to the fingerprint the
+ * person saw, so a later description of it waits for a review. Every other operation stays.
  */
-export function withAcceptedOperation(
+export function withApprovedOperations(
   config: Record<string, unknown>,
-  operation: {
-    name: string;
-    effect: "reading" | "changing";
-    fingerprint: string;
-    forAgents: boolean;
-  }
+  approved: readonly ApprovedOperation[],
+  exposure: readonly string[]
 ): Record<string, unknown> {
-  const others = acceptedOperationsOf(config).filter((entry) => entry.name !== operation.name);
+  const names = new Set(approved.map((operation) => operation.name));
   return {
     ...config,
     operations: [
-      ...others,
-      {
+      ...acceptedOperationsOf(config).filter((entry) => !names.has(entry.name)),
+      ...approved.map((operation) => ({
+        ...operation.declaration,
         name: operation.name,
         effect: operation.effect,
-        exposure: operation.forAgents ? ["agent"] : [],
+        exposure: [...exposure],
         enabled: true,
-        schemaFingerprint: operation.fingerprint
-      }
+        ...(operation.schemaFingerprint === undefined
+          ? {}
+          : { schemaFingerprint: operation.schemaFingerprint })
+      }))
     ]
   };
 }
@@ -209,7 +275,11 @@ export function countConnectionFormChanges(
   return (
     Number(form.url.trim() !== baseline.url.trim()) +
     Number(form.authScheme !== baseline.authScheme) +
-    Number(headerCounts && form.headerName.trim() !== baseline.headerName.trim())
+    Number(headerCounts && form.headerName.trim() !== baseline.headerName.trim()) +
+    Number(
+      JSON.stringify(headersOf(form.headers)) !== JSON.stringify(headersOf(baseline.headers))
+    ) +
+    Number(form.testPath.trim() !== baseline.testPath.trim())
   );
 }
 
