@@ -79,7 +79,7 @@ export function useDataStoreInstance(): {
     changing?: PolicyValue,
     /** Who may sign in, where a test needs more than the administrator. */
     developmentAuth?: unknown,
-    /** The guardrails of release config on the call path, as `guardrails` holds them. */
+    /** The guardrails of release config of both processes, as `guardrails` holds them. */
     guardrails?: Record<string, unknown>
   ): Promise<DataStoreInstance>;
   /** Closes the processes of every instance the test started. */
@@ -146,7 +146,7 @@ export function useDataStoreInstance(): {
     };
     const env = { [KEY_VARIABLE]: randomBytes(32).toString("base64") };
     const api = await createTestInstance({
-      config: parseClientInstanceConfig(settings),
+      config: parseClientInstanceConfig({ ...settings, ...(guardrails ? { guardrails } : {}) }),
       env,
       tools: []
     });
