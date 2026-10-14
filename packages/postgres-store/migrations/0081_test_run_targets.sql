@@ -25,6 +25,7 @@ ALTER TABLE "live_once_switches" DROP CONSTRAINT "live_once_switches_pk";--> sta
 ALTER TABLE "live_once_switches" ADD CONSTRAINT "live_once_switches_owner_pk" PRIMARY KEY("asset_id","part","switched_by_id");--> statement-breakpoint
 ALTER TABLE "workflow_step_runs" ADD COLUMN "target" text;--> statement-breakpoint
 ALTER TABLE "workflow_step_runs" ADD COLUMN "published_would_ask" text;--> statement-breakpoint
+ALTER TABLE "live_once_runs" ADD CONSTRAINT "live_once_runs_workflow_run_id_workflow_runs_id_fk" FOREIGN KEY ("workflow_run_id") REFERENCES "public"."workflow_runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "live_once_runs" ADD CONSTRAINT "live_once_runs_asset_id_config_assets_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."config_assets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "live_once_runs_owner_idx" ON "live_once_runs" USING btree ("asset_id","switched_by_id","part","used_at");--> statement-breakpoint
 -- The checks are added without a scan and validated at once: both columns are new and empty.

@@ -1,5 +1,5 @@
 {
-  "id": "cb6bea48-610b-4b01-99c9-904f801aac62",
+  "id": "159668c7-e45f-4ee9-b942-7d3425ad4162",
   "prevId": "bb818bb5-938a-4f2d-a5d3-c8dd198bc7cb",
   "version": "7",
   "dialect": "postgresql",
@@ -6567,141 +6567,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.live_once_runs": {
-      "name": "live_once_runs",
-      "schema": "",
-      "columns": {
-        "client_instance_id": {
-          "name": "client_instance_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workflow_run_id": {
-          "name": "workflow_run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "part": {
-          "name": "part",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "asset_id": {
-          "name": "asset_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "asset_kind": {
-          "name": "asset_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "asset_name": {
-          "name": "asset_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revision_id": {
-          "name": "revision_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "switched_by_id": {
-          "name": "switched_by_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "switched_by_label": {
-          "name": "switched_by_label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "switched_at": {
-          "name": "switched_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "used_at": {
-          "name": "used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "live_once_runs_owner_idx": {
-          "name": "live_once_runs_owner_idx",
-          "columns": [
-            {
-              "expression": "asset_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "switched_by_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "part",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "used_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "live_once_runs_asset_id_config_assets_id_fk": {
-          "name": "live_once_runs_asset_id_config_assets_id_fk",
-          "tableFrom": "live_once_runs",
-          "tableTo": "config_assets",
-          "columnsFrom": [
-            "asset_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "live_once_runs_pk": {
-          "name": "live_once_runs_pk",
-          "columns": [
-            "workflow_run_id",
-            "part"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.live_once_switches": {
       "name": "live_once_switches",
       "schema": "",
@@ -6778,12 +6643,11 @@
         }
       },
       "compositePrimaryKeys": {
-        "live_once_switches_owner_pk": {
-          "name": "live_once_switches_owner_pk",
+        "live_once_switches_pk": {
+          "name": "live_once_switches_pk",
           "columns": [
             "asset_id",
-            "part",
-            "switched_by_id"
+            "part"
           ]
         }
       },
@@ -8012,18 +7876,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "target": {
-          "name": "target",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "published_would_ask": {
-          "name": "published_would_ask",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "staged": {
           "name": "staged",
           "type": "jsonb",
@@ -8169,14 +8021,6 @@
         "workflow_step_runs_status_check": {
           "name": "workflow_step_runs_status_check",
           "value": "\"workflow_step_runs\".\"status\" in ('queued', 'running', 'waiting', 'done', 'failed', 'cancelled')"
-        },
-        "workflow_step_runs_target_check": {
-          "name": "workflow_step_runs_target_check",
-          "value": "\"workflow_step_runs\".\"target\" is null or \"workflow_step_runs\".\"target\" in ('live', 'test', 'dry_run')"
-        },
-        "workflow_step_runs_published_would_ask_check": {
-          "name": "workflow_step_runs_published_would_ask_check",
-          "value": "\"workflow_step_runs\".\"published_would_ask\" is null or \"workflow_step_runs\".\"published_would_ask\" = 'approval'"
         },
         "workflow_step_runs_iteration_check": {
           "name": "workflow_step_runs_iteration_check",
@@ -8421,6 +8265,12 @@
         },
         "subject_name": {
           "name": "subject_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "converted_from": {
+          "name": "converted_from",
           "type": "text",
           "primaryKey": false,
           "notNull": false

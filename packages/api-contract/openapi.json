@@ -8525,6 +8525,10 @@
                           "subjectName": {
                             "type": "string"
                           },
+                          "convertedFrom": {
+                            "type": "string",
+                            "const": "require_approval"
+                          },
                           "createdAt": {
                             "$ref": "#/components/schemas/Timestamp"
                           }

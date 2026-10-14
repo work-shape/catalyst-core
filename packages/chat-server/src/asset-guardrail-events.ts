@@ -260,8 +260,8 @@ const UTF16_SNIFF_BYTES = 1024;
 
 /**
  * A file's text where it is UTF-8 without a NUL, as a read answers it, or UTF-16, as exports
- * of Windows tools and some APIs are: with its byte order mark, or without one where every
- * other byte of its start is NUL; else its printable runs.
+ * of Windows tools and some APIs are: with its byte order mark, or without one where the NUL
+ * bytes of its start sit at one parity; else its printable runs.
  */
 function readOf(bytes: Uint8Array): FileRead {
   const decoder =
@@ -283,26 +283,33 @@ function readOf(bytes: Uint8Array): FileRead {
 }
 
 /**
- * The decoder of UTF-16 without a byte order mark: text of Latin letters has a NUL in every
- * other byte, the second of each pair in little-endian order and the first in big-endian. Only
- * where one parity of the start is all NUL and the other is not.
+ * The share of the bytes at one parity of the start that are NUL, at least, and at the other,
+ * at most, for UTF-16 without a byte order mark. Text of Latin letters has a NUL in every other
+ * byte; a letter outside Latin-1, as the 'Ł' of a Polish name, has none there, and an image's
+ * NUL bytes sit at both parities alike.
+ */
+const UTF16_NUL_SHARE_MIN = 0.9;
+const UTF16_NUL_SHARE_MAX = 0.1;
+
+/**
+ * The decoder of UTF-16 without a byte order mark: the NUL bytes of its start sit in the second
+ * byte of each pair in little-endian order and in the first in big-endian.
  */
 function utf16WithoutMark(bytes: Uint8Array): TextDecoder | undefined {
   const length = Math.min(bytes.length, UTF16_SNIFF_BYTES);
   if (length < 4 || length % 2 !== 0) return undefined;
-  const nulAt = (parity: 0 | 1) => {
-    let all = true;
-    let none = true;
+  const pairs = length / 2;
+  const nulShareAt = (parity: 0 | 1) => {
+    let nuls = 0;
     for (let index = parity; index < length; index += 2) {
-      if (bytes[index] === 0) none = false;
-      else all = false;
+      if (bytes[index] === 0) nuls += 1;
     }
-    return { all, none };
+    return nuls / pairs;
   };
-  const even = nulAt(0);
-  const odd = nulAt(1);
-  if (odd.all && even.none) return utf16.le;
-  if (even.all && odd.none) return utf16.be;
+  const even = nulShareAt(0);
+  const odd = nulShareAt(1);
+  if (odd >= UTF16_NUL_SHARE_MIN && even <= UTF16_NUL_SHARE_MAX) return utf16.le;
+  if (even >= UTF16_NUL_SHARE_MIN && odd <= UTF16_NUL_SHARE_MAX) return utf16.be;
   return undefined;
 }
 

@@ -1,6 +1,7 @@
 import { index, primaryKey, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import type { ClientInstanceId } from "@vivd-catalyst/core";
 import { configAssets } from "./configAssets";
+import { workflowRuns } from "./workflowRuns";
 
 /**
  * "Run live once" on one action or step of one draft revision of an App or a Workflow, for the
@@ -37,13 +38,16 @@ export const liveOnceSwitches = pgTable(
  * The step of a Workflow test run that a switch made live, from the first call of that step in
  * the run to the end of the run (ADR-0031). The switch row is taken when this row is written, so
  * its owner can set a new switch for the next run while this one goes on. Kept as the record of
- * which run used which switch, and removed with the asset.
+ * which run used which switch, and removed with the run or the asset.
  */
 export const liveOnceRuns = pgTable(
   "live_once_runs",
   {
     clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
-    workflowRunId: text("workflow_run_id").notNull(),
+    // A run's bindings go with the run.
+    workflowRunId: text("workflow_run_id")
+      .notNull()
+      .references(() => workflowRuns.id, { onDelete: "cascade" }),
     part: text("part").notNull(),
     assetId: text("asset_id")
       .notNull()

@@ -97,7 +97,8 @@ function guardrailCallContext(
       : {}),
     ...(runtime?.deadline ? { deadline: runtime.deadline } : {}),
     ...(runtime?.signal ? { signal: runtime.signal } : {}),
-    ...(context.repeated ? { repeated: true } : {})
+    ...(context.repeated ? { repeated: true } : {}),
+    ...(context.cannotWait ? { cannotWait: true } : {})
   };
 }
 
