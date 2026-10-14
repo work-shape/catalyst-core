@@ -80,7 +80,13 @@ type PlatformAssetWrite =
   | { saved: false; issues: PlatformAssetIssue[] }
   | { saved: false; conflict: "REVISION_CONFLICT"; message: string };
 
-/** One operation a step may call, as far as the person the agent acts for may see it. */
+/**
+ * Who would call the listed operations: a step of a Workflow, or a `connection` action of an
+ * App. Each is offered the operations exposed to its own surface.
+ */
+export type PlatformOperationsAudience = "workflow" | "app";
+
+/** One operation a step or an action may call, as far as the person the agent acts for may see it. */
 export interface PlatformCallableOperation {
   name: string;
   effect: "reading" | "changing";
@@ -126,7 +132,8 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, PageAppCalls
     config: Record<string, unknown>
   ): Promise<readonly OperationBeforeEvent[]>;
   listOperations(
-    context: ToolExecutionContext
+    context: ToolExecutionContext,
+    audience: PlatformOperationsAudience
   ): Promise<{ operations: PlatformCallableOperation[]; truncated: boolean }>;
 }
 
@@ -165,7 +172,7 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       putPolicyFloor: (conversationId) => required().putPolicyFloor(conversationId),
       putBeforeEvents: (conversationId, config) =>
         required().putBeforeEvents(conversationId, config),
-      listOperations: (context) => required().listOperations(context),
+      listOperations: (context, audience) => required().listOperations(context, audience),
       readContext: (context) => required().readContext(context),
       listAssets: (context, input) => required().listAssets(context, input),
       listFiles: (context, input) => required().listFiles(context, input),
@@ -417,16 +424,28 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       effect: operations.effect,
       description: [
         "List the operations a step of a Workflow may call, as far as the person you act for may see them: the name a step writes under 'operation', whether the operation reads or changes, and its input and output as JSON Schema where it has one.",
+        "With 'for: app' it lists instead the operations of Connections that an App's connection action may call, each named 'connection.<connection>.<operation>': the action file writes the two parts as 'connection' and 'operation', and the effect as it is listed.",
         "The list is of the instance, not of one asset. 'truncated' says that there are more operations than the list holds."
       ].join(" "),
-      inputSchema: z.object({}),
+      inputSchema: z.object({
+        for: z
+          .enum(["workflow", "app"])
+          .optional()
+          .describe(
+            "Who calls the operations: 'workflow' for a step of a Workflow (the default), 'app' for an App's connection action."
+          )
+      }),
       outputSchema: operationsOutputSchema,
-      async execute(_input, context) {
-        const listed = await calls.listOperations(context);
+      async execute(input, context) {
+        const listed = await calls.listOperations(context, input.for ?? "workflow");
         return toolSuccess(listed, {
           auditSummary: {
             action: operations.name,
-            metadata: { operationCount: listed.operations.length, truncated: listed.truncated }
+            metadata: {
+              for: input.for ?? "workflow",
+              operationCount: listed.operations.length,
+              truncated: listed.truncated
+            }
           }
         });
       }
