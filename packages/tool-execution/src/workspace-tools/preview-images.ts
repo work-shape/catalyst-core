@@ -3,6 +3,7 @@ import { posix as path } from "node:path";
 import type { z } from "zod";
 import {
   type ManagedArtifactId,
+  type ManagedArtifactRecord,
   type SupportedImageMimeType,
   type ToolExecutionContext,
   type ToolHandlerResult,
@@ -23,12 +24,34 @@ import { resolveWorkspaceHandle } from "./workspace";
 
 export const EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE = "execution_workspace";
 
+/**
+ * The `purpose` of an artifact row that exists only so the model can look at a workspace image.
+ * Such a row is the agent checking its own work, not a file for the person, so it is never
+ * listed among the conversation's created files.
+ */
+export const WORKSPACE_INSPECTION_ARTIFACT_PURPOSE = "inspection";
+const WORKSPACE_PREVIEW_ARTIFACT_ID_PREFIX = "art_workspace_preview_";
+
+/**
+ * Whether an artifact row was made by `workspace.preview_images` to show a workspace image to
+ * the model. Rows stored before the purpose was recorded are known by their id, which only
+ * that tool gives out.
+ */
+export function isWorkspaceInspectionArtifact(
+  artifact: Pick<ManagedArtifactRecord, "id" | "metadata">
+): boolean {
+  return (
+    artifact.metadata.purpose === WORKSPACE_INSPECTION_ARTIFACT_PURPOSE ||
+    artifact.id.startsWith(WORKSPACE_PREVIEW_ARTIFACT_ID_PREFIX)
+  );
+}
+
 export function workspacePreviewImagesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.preview_images",
     effect: "reading",
     description:
-      "Load bounded rendered preview images into model-visible visual context without promoting preview files to the user. Give exactly one source: artifactId, path, or paths. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached. Loaded images stay in visual context for the current turn only; call the tool again in a later turn to see them again.",
+      "Load bounded rendered preview images into model-visible visual context. This is how to check rendered output: images loaded here are never listed among the person's files, so render checks under /workspace/previews and promote with workspace.promote_artifact only the files the person should get. Give exactly one source: artifactId, path, or paths. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached. Loaded images stay in visual context for the current turn only; call the tool again in a later turn to see them again.",
     inputSchema: workspacePreviewImagesInputSchema,
     outputSchema: workspacePreviewImagesOutputSchema,
     inputJsonSchema: workspacePreviewImagesInputJsonSchema,
@@ -165,6 +188,7 @@ async function previewWorkspaceImagePaths(
       checksum: file.checksum,
       metadata: {
         source: EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
+        purpose: WORKSPACE_INSPECTION_ARTIFACT_PURPOSE,
         workspaceId: workspace.value.handle.id,
         workspacePath: file.path
       }
@@ -246,7 +270,7 @@ function workspacePreviewImageArtifactId(version: {
       ])
     )
     .digest("hex");
-  return asManagedArtifactId(`art_workspace_preview_${digest}`);
+  return asManagedArtifactId(`${WORKSPACE_PREVIEW_ARTIFACT_ID_PREFIX}${digest}`);
 }
 
 function readPreviewImageMimeType(
