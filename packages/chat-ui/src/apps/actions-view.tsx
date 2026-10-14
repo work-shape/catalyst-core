@@ -3,7 +3,9 @@ import type { AppAction } from "@vivd-catalyst/api-client";
 import {
   Button,
   EmptyState,
+  InlineError,
   Page,
+  RunLiveOnce,
   SkeletonList,
   Table,
   TableBody,
@@ -11,34 +13,92 @@ import {
   TableCellDetail,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
+  TargetBadge
 } from "@vivd-catalyst/ui";
+import { instanceSentence } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
+import { apiErrorCode } from "../workspace-utils";
 import { ActionTestDialog } from "./action-test-dialog";
 import { AppActionEffect, AppActionOutcomeBadge, AppActionTarget } from "./app-action-facts";
 import {
+  appActionLiveOnceOffered,
   appActionTargetKeys,
   appActionTestable,
   appActionUnavailableKeys
 } from "./app-actions-model";
-import { useAppActions, type AppActionsRead } from "./app-data";
+import {
+  useAppActions,
+  useAppActionsReload,
+  type AppActionsRead,
+  type AppWrites
+} from "./app-data";
 import type { AppRights } from "./app-model";
 
 /**
- * The Actions side of a draft (layout 3): the named actions of the draft, and the test of a
- * reading one. The test is a real call from the draft, made as the builder.
+ * The Actions side of a draft (layout 3): the named actions of the draft, the test of each,
+ * and "Run live once" for a changing one. The test is a real call from the draft, made as the
+ * builder; a changing action is simulated there unless the builder switched it live once.
  */
-export function AppDraftActions({ app, rights }: { app: string; rights: AppRights }) {
+export function AppDraftActions({
+  app,
+  rights,
+  writes
+}: {
+  app: string;
+  rights: AppRights;
+  writes: Pick<AppWrites, "runLiveOnce">;
+}) {
+  const { t } = useTranslation();
   const read = useAppActions(app, true);
+  const reload = useAppActionsReload(app);
   const [tested, setTested] = useState<AppAction>();
+  const [switching, setSwitching] = useState<string>();
+  const [failed, setFailed] = useState<{ action: string; message: string }>();
+  const switchOn = (action: AppAction) => {
+    if (read.status !== "ready") {
+      return;
+    }
+    setSwitching(action.name);
+    setFailed(undefined);
+    writes
+      .runLiveOnce(app, action.name, read.revision)
+      .catch((caught: unknown) =>
+        setFailed({
+          action: action.name,
+          message:
+            apiErrorCode(caught) === "REVISION_CONFLICT"
+              ? t("apps.liveOnceStale")
+              : (instanceSentence(caught) ?? t("apps.liveOnceFailed"))
+        })
+      )
+      .finally(() => setSwitching(undefined));
+  };
   return (
     <>
-      <AppActionsView read={read} rights={rights} onTest={setTested} />
+      <AppActionsView
+        read={read}
+        rights={rights}
+        onTest={setTested}
+        liveOnce={{ switching, failed, switchOn }}
+      />
       {tested ? (
-        <ActionTestDialog app={app} action={tested} onClose={() => setTested(undefined)} />
+        <ActionTestDialog
+          app={app}
+          action={tested}
+          onTested={reload}
+          onClose={() => setTested(undefined)}
+        />
       ) : null}
     </>
   );
+}
+
+/** "Run live once" on the rows of a draft: which one is being switched, and which failed. */
+export interface AppActionsLiveOnce {
+  switching: string | undefined;
+  failed: { action: string; message: string } | undefined;
+  switchOn(action: AppAction): void;
 }
 
 /**
@@ -49,11 +109,14 @@ export function AppDraftActions({ app, rights }: { app: string; rights: AppRight
 export function AppActionsView({
   read,
   rights,
-  onTest
+  onTest,
+  liveOnce
 }: {
   read: AppActionsRead;
   rights: Pick<AppRights, "write">;
   onTest(action: AppAction): void;
+  /** Left out where the rows offer no switch. */
+  liveOnce?: AppActionsLiveOnce;
 }) {
   const { t } = useTranslation();
   if (read.status === "loading") {
@@ -89,9 +152,8 @@ export function AppActionsView({
       </ActionsPage>
     );
   }
-  const testable = (action: AppAction) => appActionTestable(action, read.view, rights);
-  // The column of the test is there only where a row has one: no room is kept for nothing.
-  const tests = read.actions.some(testable);
+  // The column of the test is there only where the rows have one: no room is kept for nothing.
+  const tests = appActionTestable(read.view, rights);
   return (
     <ActionsPage intro>
       {/* Too narrow for the columns, each action is a block with its test in reach. */}
@@ -131,15 +193,32 @@ export function AppActionsView({
                     : t(appActionTargetKeys[action.kind])}
                 </TableCellDetail>
               </TableCell>
-              {/* A row without a test gives its room to what a call would come to. */}
-              <TableCell
-                colSpan={tests && !testable(action) ? 2 : undefined}
-                stacked={testable(action) ? undefined : "full"}
-                className="whitespace-nowrap"
-              >
-                <AppActionOutcomeBadge action={action} safeMode={read.view === "draft"} />
+              <TableCell stacked={tests ? undefined : "full"}>
+                <div className="flex flex-wrap items-center gap-1.5 whitespace-nowrap">
+                  {action.target ? <TargetBadge target={action.target} /> : null}
+                  <AppActionOutcomeBadge action={action} safeMode={read.view === "draft"} />
+                </div>
+                {liveOnce && appActionLiveOnceOffered(action, read.view, rights) ? (
+                  <div className="mt-2 grid grid-cols-1 gap-1">
+                    <RunLiveOnce
+                      state={
+                        action.target === "live"
+                          ? "on"
+                          : liveOnce.switching === action.name
+                            ? "busy"
+                            : "off"
+                      }
+                      label={t("apps.liveOnceOf", { name: action.name })}
+                      onText={t("apps.liveOnceOn")}
+                      onSwitchOn={() => liveOnce.switchOn(action)}
+                    />
+                    {liveOnce.failed?.action === action.name ? (
+                      <InlineError>{liveOnce.failed.message}</InlineError>
+                    ) : null}
+                  </div>
+                ) : null}
               </TableCell>
-              {testable(action) ? (
+              {tests ? (
                 <TableCell className="text-right">
                   <Button
                     variant="outline"

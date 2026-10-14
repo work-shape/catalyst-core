@@ -18,6 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TargetBadge,
   type FlowGraphGroup,
   type FlowGraphNode
 } from "@vivd-catalyst/ui";
@@ -34,7 +35,7 @@ import type {
   WorkflowStepSource,
   WorkflowStepView
 } from "./workflow-views";
-import { RunStateBadge, StepTargetBadge, durationText } from "./workflows-frame";
+import { RunStateBadge, durationText } from "./workflows-frame";
 
 /** How many lines of what a step returned are shown. */
 const OUTPUT_PREVIEW_LINES = 40;
@@ -370,7 +371,7 @@ function StepRunDetails({
         {took === undefined ? null : <KeyValue label={t("workflows.panel.took")}>{took}</KeyValue>}
         {stepRun.target === undefined ? null : (
           <KeyValue label={t("workflows.target.label")}>
-            <StepTargetBadge target={stepRun.target} />
+            <TargetBadge target={stepRun.target} />
           </KeyValue>
         )}
         {source === undefined ? null : (

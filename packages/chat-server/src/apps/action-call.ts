@@ -38,7 +38,9 @@ import {
   type CollaborationWorkspaceId,
   type JsonObject,
   type OperationDefinition,
+  type OperationDraftContext,
   type OperationOrigin,
+  type OperationResult,
   type ServedFileSet
 } from "@vivd-catalyst/core";
 import { runOperation, type OperationOutcome } from "@vivd-catalyst/tool-execution";
@@ -67,7 +69,9 @@ import { appActionBinding, type AppActionBinding } from "./action-kinds";
 
 /**
  * Which revision a frame shows. A Page of a conversation and the draft of an App run in safe
- * mode: an action that changes something is refused there before anything else happens.
+ * mode. A Page is no asset: a changing action of it is refused, or answered with what it
+ * would have done where its kind can say so, and nothing runs. The draft of an App calls with
+ * a draft context, so that the call path simulates its changes and records them (ADR-0031).
  */
 type FrameMode = "page" | "draft" | "published";
 
@@ -239,7 +243,11 @@ export class AppActionCalls {
       revisionId:
         view === "published" && asset.publishedRevisionId !== undefined
           ? asset.publishedRevisionId
-          : (asset.revisionIds.at(-1) ?? asset.activeRevisionId)
+          : // The draft, where the file set is still the draft's: a "Run live once" switch is
+            // set for that revision and covers no call of another.
+            asset.revisionIds.includes(asset.activeRevisionId)
+            ? asset.activeRevisionId
+            : (asset.revisionIds.at(-1) ?? asset.activeRevisionId)
     };
   }
 
@@ -271,23 +279,36 @@ export class AppActionCalls {
     const binding = appActionBinding(action);
     const { definition } = await appActionDefinition(this.environment, session.host, action);
     const origin = appOrigin(session, action.name, binding.target);
-    if (action.effect === "changing" && session.mode !== "published" && binding.dryRun) {
-      return this.dryRun(session, definition, binding.dryRun, input, {
-        origin,
-        correlationId: call.correlationId,
-        parameters: appActionInputAsZod(action.input.schema)
-      });
+    if (action.effect === "changing" && session.mode === "page") {
+      if (binding.dryRun) {
+        return this.pageDryRun(session, definition, binding.dryRun, input, {
+          origin,
+          correlationId: call.correlationId,
+          parameters: appActionInputAsZod(action.input.schema)
+        });
+      }
+      this.requireOutsideSafeMode(session, action.effect);
     }
-    this.requireOutsideSafeMode(session, action.effect);
-    return this.run(session, definition, input, origin, call);
+    const draft = draftContextOf(session, action.name);
+    return this.run(
+      session,
+      definition,
+      input,
+      origin,
+      call,
+      draft && {
+        draft,
+        answer: (simulated) => simulatedAnswer(action, binding, simulated)
+      }
+    );
   }
 
   /**
-   * The answer of safe mode to a changing action whose kind can say what it would have done:
-   * the caller's rights and the parameters are asked as a call would ask them, and then
-   * nothing is called and no run is written. A call that would be refused is refused.
+   * The answer of a Page to a changing action whose kind can say what it would have done: the
+   * caller's rights and the parameters are asked as a call would ask them, and then nothing is
+   * called and no run is written. A call that would be refused is refused.
    */
-  private async dryRun(
+  private async pageDryRun(
     session: FrameSession,
     definition: OperationDefinition,
     wouldHave: NonNullable<AppActionBinding["dryRun"]>,
@@ -321,11 +342,7 @@ export class AppActionCalls {
     const dry = wouldHave(parameters.data);
     return {
       status: "dry_run",
-      message: `${dry.wouldHave} ${
-        session.mode === "page"
-          ? "A Page of a conversation runs in safe mode and carries out nothing that changes something. Save the Page as an App and publish it."
-          : "The draft of an App runs in safe mode and carries out nothing that changes something. Publish the App to carry it out."
-      }`,
+      message: `${dry.wouldHave} A Page of a conversation runs in safe mode and carries out nothing that changes something. Save the Page as an App and publish it.`,
       result: dry.input
     };
   }
@@ -456,7 +473,7 @@ export class AppActionCalls {
         "draft_safe_mode",
         session.mode === "page"
           ? "A Page of a conversation runs in safe mode: an action that changes something is not carried out. Save the Page as an App and publish it."
-          : "The draft of an App runs in safe mode: an action that changes something is not carried out. Publish the App to use it."
+          : "The draft of an App runs in safe mode: a direct call of a Connection that changes something is not carried out. Try it through a named action of the App, or publish the App."
       );
     }
   }
@@ -466,14 +483,19 @@ export class AppActionCalls {
    * the frame shows, so a draft and a Page run what a published revision would. A call that
    * waited for an approval is executed later from the registry: a named action from the
    * published App while its revision is still the one the call was made in, and a Connection
-   * operation after its App was asked again.
+   * operation after its App was asked again. A call of a draft carries its draft context, and
+   * the call path decides where it goes; `answer` words a call it simulated.
    */
   private async run(
     session: FrameSession,
     definition: OperationDefinition,
     input: unknown,
     origin: OperationOrigin,
-    call: FrameCall
+    call: FrameCall,
+    simulation?: {
+      draft: OperationDraftContext;
+      answer(simulated: Extract<OperationResult, { status: "dry_run" }>): AppActionCallResult;
+    }
   ): Promise<AppActionCallResult> {
     const { deps } = this.options.operationCalls;
     let outcome: OperationOutcome;
@@ -487,7 +509,8 @@ export class AppActionCalls {
           origin,
           workspaceId: session.workspaceId,
           idempotencyKey: call.idempotencyKey,
-          correlationId: call.correlationId
+          correlationId: call.correlationId,
+          ...(simulation ? { draft: simulation.draft } : {})
         },
         {
           ...deps,
@@ -550,9 +573,9 @@ export class AppActionCalls {
         );
       case "pending_confirmation":
         throw new AppError("INTERNAL", "A call of a frame cannot wait for a confirmation");
-      // A frame's call carries no draft context until APP-4: a draft refuses a changing action.
       case "dry_run":
-        throw new AppError("INTERNAL", "A call of a frame is not simulated before APP-4");
+        if (!simulation) throw new AppError("INTERNAL", "Only a call of a draft is simulated");
+        return simulation.answer(result);
     }
   }
 
@@ -598,6 +621,59 @@ export class AppActionCalls {
       ...(readable && label.success ? { connectionLabel: label.data.displayName } : {})
     };
   }
+}
+
+/**
+ * The draft context of a call of one action from the frame of an App's draft (ADR-0031): the
+ * App, the draft revision the frame shows and the action. A published revision and a Page of
+ * a conversation have none.
+ */
+function draftContextOf(shown: ShownRevision, part: string): OperationDraftContext | undefined {
+  const app = shown.host.resource;
+  if (shown.mode !== "draft" || app?.assetId === undefined || shown.appName === undefined) {
+    return undefined;
+  }
+  return {
+    asset: { kind: APP_ASSET_KIND, id: app.assetId, name: shown.appName },
+    revisionId: shown.revisionId,
+    part
+  };
+}
+
+/**
+ * The answer of a draft to a changing action the call path simulated: what it would have done
+ * and the input it would have done it with, which the kit shows, and whether the live call
+ * would have waited for somebody. Its run, with the target `dry_run`, is named in the header.
+ */
+function simulatedAnswer(
+  action: CompiledAppAction,
+  binding: AppActionBinding,
+  simulated: Extract<OperationResult, { status: "dry_run" }>
+): AppActionCallResult {
+  // The call path checked the input against these parameters before it simulated the call.
+  // The run keeps no input that holds a secret, and the answer then names none either.
+  const parameters =
+    simulated.input === undefined
+      ? undefined
+      : appActionInputAsZod(action.input.schema).parse(simulated.input);
+  const dry =
+    parameters === undefined
+      ? { wouldHave: `Would have called the action '${action.name}'.`, input: {} }
+      : (binding.dryRun?.(parameters) ?? {
+          wouldHave: `Would have called the action '${action.name}' with ${JSON.stringify(parameters)}.`,
+          input: parameters
+        });
+  const waits =
+    simulated.wouldAsk === "approval"
+      ? " Live, the call would wait for another person's approval."
+      : simulated.wouldAsk === "confirmation"
+        ? " Live, the call would ask for a confirmation."
+        : "";
+  return {
+    status: "dry_run",
+    message: `${dry.wouldHave}${waits} The draft of an App runs in safe mode and carries out nothing that changes something. Publish the App, or switch on "Run live once" for this action, to carry it out.`,
+    result: dry.input
+  };
 }
 
 /** The origin of a call from the frame of a shown revision, as its run names it. */
@@ -646,9 +722,11 @@ function appWorkflowRunOf(run: z.infer<typeof workflowRunSchema>): AppWorkflowRu
 
 /**
  * What each action of a shown revision would come to for its viewer, by the rule a call from
- * its frame is decided by: a changing action outside a published revision is refused, and
- * every other one is asked of the App, of the Connection and of the policy. `environment` is
- * one that holds the operations the actions stand for (`preloadedEnvironment`).
+ * its frame is decided by: a changing action of a Page is refused, and every other one is
+ * asked of the App, of the Connection and of the policy. A draft's changing action is asked
+ * as the live call would be: the call path simulates it, and policy refuses what it would
+ * refuse live. `environment` is one that holds the operations the actions stand for
+ * (`preloadedEnvironment`).
  */
 export async function appActionPermissions(
   environment: AppActionEnvironment,
@@ -657,9 +735,9 @@ export async function appActionPermissions(
   const can: Record<string, AppActionPermission> = {};
   for (const action of shown.actions) {
     const binding = appActionBinding(action);
-    // Safe mode refuses a changing action, but for one whose kind answers what it would have done.
+    // A Page refuses a changing action, but for one whose kind answers what it would have done.
     const permission =
-      action.effect === "changing" && shown.mode !== "published" && !binding.dryRun
+      action.effect === "changing" && shown.mode === "page" && !binding.dryRun
         ? "deny"
         : await appActionPermission(
             environment,

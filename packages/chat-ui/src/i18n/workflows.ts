@@ -34,9 +34,6 @@ export const workflows = defineTranslations({
       "Test run of the draft. It reads live data as {person}; steps that change something are simulated unless they run live once.",
     "workflows.run.testTitle": "Test run of {date}",
     "workflows.target.label": "Target",
-    "workflows.target.live": "Live",
-    "workflows.target.test": "Test",
-    "workflows.target.dry_run": "Simulated",
     "workflows.liveOnce.button": "Run live once",
     "workflows.liveOnce.hint":
       "In your next test run this step runs for real, under the instance's rules.",
@@ -329,9 +326,6 @@ export const workflows = defineTranslations({
       "Testlauf des Entwurfs. Er liest echte Daten als {person}; Schritte, die etwas ändern, werden simuliert, außer sie sollen einmal live laufen.",
     "workflows.run.testTitle": "Testlauf vom {date}",
     "workflows.target.label": "Ziel",
-    "workflows.target.live": "Live",
-    "workflows.target.test": "Test",
-    "workflows.target.dry_run": "Simuliert",
     "workflows.liveOnce.button": "Einmal live ausführen",
     "workflows.liveOnce.hint":
       "In deinem nächsten Testlauf läuft dieser Schritt live, nach den Regeln der Instanz.",

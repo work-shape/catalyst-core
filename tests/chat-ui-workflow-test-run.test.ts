@@ -1,6 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { uiLabelsDe } from "@vivd-catalyst/ui";
 import {
   LoopEntriesView,
   StartDialog,
@@ -278,11 +279,11 @@ describe("the page of a test run", () => {
   };
 
   it("marks each step with its target", () => {
-    expect(panel("clients")).toContain('data-step-target="live"');
-    expect(panel("clients")).toContain(`>${t("workflows.target.live")}</`);
+    expect(panel("clients")).toContain('data-target="live"');
+    expect(panel("clients")).toContain(">Live</");
     const send = panel("send");
-    expect(send).toContain('data-step-target="dry_run"');
-    expect(send).toContain(`>${t("workflows.target.dry_run")}</`);
+    expect(send).toContain('data-target="dry_run"');
+    expect(send).toContain(">Simulated</");
   });
 
   it("offers Run live once beside a simulated step, and says when it is set and when used", () => {
@@ -304,7 +305,7 @@ describe("the page of a test run", () => {
     );
     expect(de("workflows.test.body")).not.toContain("auf einmal live");
     expect(de("workflows.liveOnce.button")).toBe("Einmal live ausführen");
-    expect(de("workflows.target.live")).toBe("Live");
+    expect(uiLabelsDe.targetLive).toBe("Live");
     expect(de("workflows.run.publishedAsksShort")).toBe(
       "Eine veröffentlichte Ausführung fragt hier nach Freigabe"
     );
@@ -365,7 +366,7 @@ describe("the page of a test run", () => {
         }
       })
     );
-    expect(markup).toContain('data-step-target="live"');
-    expect(markup).toContain('data-step-target="dry_run"');
+    expect(markup).toContain('data-target="live"');
+    expect(markup).toContain('data-target="dry_run"');
   });
 });
