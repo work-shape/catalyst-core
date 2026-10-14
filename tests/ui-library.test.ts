@@ -427,6 +427,22 @@ describe("Banner", () => {
     expect(line).not.toContain("<button");
   });
 
+  it("wraps its actions where one line is too narrow for them", () => {
+    const button = (label: string) => createElement("button", { type: "button" }, label);
+    const markup = inRoot(
+      createElement(
+        Banner,
+        {
+          title: "Entwurf, noch nicht veröffentlicht",
+          action: createElement("span", null, button("Testlauf"), button("Veröffentlichen"))
+        },
+        "Body"
+      )
+    );
+    const row = /<div class="([^"]*)"><span><button/u.exec(markup)?.[1];
+    expect(row?.split(" ")).toEqual(expect.arrayContaining(["flex", "flex-wrap", "min-w-0"]));
+  });
+
   it("keeps the box and the tone's fill for the other layouts", () => {
     const inline = inRoot(createElement(Banner, { tone: "warning" }, "Read-only."));
     expect(inline).toMatch(/class="[^"]*border-warning-border bg-warning-soft[^"]*rounded-md/u);
