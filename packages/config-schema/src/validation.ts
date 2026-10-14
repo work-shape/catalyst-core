@@ -140,11 +140,11 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
   }
 
   const modelBindingIds = new Set(config.modelBindings.map((binding) => binding.id));
-  for (const [name, guardrail] of Object.entries(config.guardrails)) {
-    if (!modelBindingIds.has(guardrail.check.modelBindingId)) {
+  for (const [name, { check }] of Object.entries(config.guardrails)) {
+    if (check.kind === "model_judge" && !modelBindingIds.has(check.modelBindingId)) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `Guardrail '${name}' references missing model binding '${guardrail.check.modelBindingId}'`
+        `Guardrail '${name}' references missing model binding '${check.modelBindingId}'`
       );
     }
   }
@@ -216,10 +216,11 @@ function assertEmbeddingBindings(config: ClientInstanceConfig): void {
   );
   const { conversationTitles } = config;
   const chatUses = [
-    ...Object.entries(config.guardrails).map(([name, guardrail]) => ({
-      user: `Guardrail '${name}'`,
-      bindingId: guardrail.check.modelBindingId
-    })),
+    ...Object.entries(config.guardrails).flatMap(([name, { check }]) =>
+      check.kind === "model_judge"
+        ? [{ user: `Guardrail '${name}'`, bindingId: check.modelBindingId }]
+        : []
+    ),
     ...(conversationTitles.enabled && conversationTitles.modelBindingId
       ? [{ user: "Conversation title generation", bindingId: conversationTitles.modelBindingId }]
       : [])
@@ -318,7 +319,10 @@ export function assertSpendBudgetPricingCoverage(
   }
 
   const pricedBindingIds = [
-    ...Object.values(config.guardrails).map((guardrail) => guardrail.check.modelBindingId),
+    // A guardrail that asks a model; the other checks call none.
+    ...Object.values(config.guardrails).flatMap(({ check }) =>
+      check.kind === "model_judge" ? [check.modelBindingId] : []
+    ),
     // Ingestion and search call them without an agent; the budget bounds them all the same.
     ...config.modelBindings
       .filter((binding) => binding.kind === "embedding")

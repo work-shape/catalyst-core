@@ -41,6 +41,7 @@
   "dependencies": {
     "@vivd-catalyst/asset-schemas": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",
+    "re2js": "^2.8.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {

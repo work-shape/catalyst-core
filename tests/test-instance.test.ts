@@ -80,8 +80,10 @@ describe("test instance", () => {
       payload: "{",
       headers: { "content-type": "application/json" }
     });
-    expect(malformed.statusCode).toBe(500);
-    expect(malformed.json()).toMatchObject({ error: { code: "INTERNAL" } });
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json()).toMatchObject({
+      error: { code: "BAD_REQUEST", details: { reason: "invalid_json_body" } }
+    });
     const response = await instance.call("me.get", {
       headers: { origin: "https://ui.example.test" }
     });

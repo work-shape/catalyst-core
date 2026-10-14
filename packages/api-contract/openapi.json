@@ -8014,6 +8014,7 @@
                             "type": "string",
                             "enum": [
                               "warn",
+                              "require_approval",
                               "block"
                             ]
                           },
@@ -8021,6 +8022,12 @@
                             "type": "string"
                           },
                           "subjectKind": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "subjectName": {
                             "type": "string"
                           },
                           "createdAt": {

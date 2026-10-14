@@ -66,7 +66,13 @@ function hit(overrides: Partial<GuardrailHitView> = {}): GuardrailHitView {
 }
 
 function renderPage(
-  input: { asset?: BuildAsset; hits?: GuardrailHitsRead; locale?: LocaleCode } = {}
+  input: {
+    asset?: BuildAsset;
+    hits?: GuardrailHitsRead;
+    locale?: LocaleCode;
+    /** The further kinds the reader sees in Build. */
+    sees?: string[];
+  } = {}
 ): string {
   const asset = input.asset ?? guardrailAsset();
   const hits: GuardrailHitsRead = input.hits ?? {
@@ -74,7 +80,11 @@ function renderPage(
     hits: { items: [], hasMore: false, counts: { last7Days: 0, last30Days: 0 } }
   };
   const source: BuildSource = {
-    kinds: [{ kind: "guardrail", canCreate: false, canDelete: false }],
+    kinds: ["guardrail", ...(input.sees ?? [])].map((kind) => ({
+      kind,
+      canCreate: false,
+      canDelete: false
+    })),
     rights: resolveBuildRights({ permissions: ["config_assets.write"] }, platformContext()),
     loading: false,
     error: undefined,
@@ -134,7 +144,7 @@ describe("Guardrail page", () => {
     expect(markup).toContain(">No personal data in skills</h1>");
     expect(markup).toContain("Before a request for approval is filed");
     expect(markup).toContain("Check whether the text names a person.");
-    expect(markup).toContain("The request is not filed. Whoever asked is told the reason.");
+    expect(markup).toContain("The action does not happen. Whoever acted is told the reason.");
     expect(markup).toContain("Guardrails come from the release config and cannot be changed here.");
     expect(markup).not.toContain("Save");
     // The judge's model binding is configuration, not something a reader acts on.
@@ -144,8 +154,8 @@ describe("Guardrail page", () => {
   it("names every kind of request where no filter narrows it, and a warning outcome", () => {
     const { filter: _filter, ...unfiltered } = guardrailAsset({ outcome: "warn" }).config;
     const markup = renderPage({ asset: { ...guardrailAsset(), config: unfiltered } });
-    expect(markup).toContain("Every kind of request");
-    expect(markup).toContain("whoever decides it sees the warning");
+    expect(markup).toContain("Everything at this point");
+    expect(markup).toContain("whoever acts or decides on it sees the warning");
   });
 
   it("counts the hits by period and lists the newest by kind, reason and outcome, naming nobody", () => {
@@ -167,6 +177,58 @@ describe("Guardrail page", () => {
     expect(markup).toMatch(/Last 30 days<\/dt>.*?>61</su);
     expect(markup).toContain("The check could not be run.");
     expect(markup).toContain("Only the newest 2 hits are shown.");
+  });
+
+  // Fails without the change: a hit named only the kind of what it checked, so nobody could
+  // tell which skill was blocked or open it.
+  it("names the subject of a hit and links an asset of the Build area to its page", () => {
+    const read = (sees?: string[]) =>
+      renderPage({
+        ...(sees ? { sees } : {}),
+        asset: guardrailAsset({
+          on: "asset.before_write",
+          filter: { kind: "skill" },
+          check: { kind: "pattern", pattern: "DE\\d{2}", reason: "Skills hold no IBAN." }
+        }),
+        hits: {
+          status: "ready",
+          hits: {
+            items: [
+              hit({
+                event: "asset.before_write",
+                subjectKind: "skill",
+                subjectName: "kunden-faq",
+                message: "Skills hold no IBAN."
+              }),
+              hit({
+                id: "ghit_2",
+                event: "operation.before_call",
+                outcome: "require_approval",
+                subjectKind: "operation",
+                subjectName: "data_store.kunden.insert",
+                message: "Inserts wait for an approval."
+              })
+            ],
+            hasMore: false,
+            counts: { last7Days: 2, last30Days: 2 }
+          }
+        }
+      });
+    const markup = read(["skill"]);
+    expect(markup).toContain("Before an asset is saved");
+    expect(markup).toContain("Pattern");
+    expect(markup).toContain("Skills hold no IBAN.");
+    expect(markup).toContain('data-guardrail-hit-subject="kunden-faq"');
+    expect(markup).toContain('href="/build/skills/kunden-faq"');
+    expect(markup).toContain("Call of data_store.kunden.insert");
+    expect(markup).toContain("Held for approval");
+    // A call is no page of the Build area: its hit names it and links nothing.
+    expect(markup).not.toContain("data_store.kunden.insert</a>");
+    expect(markup).not.toMatch(/href="[^"]*data_store\.kunden\.insert/u);
+    // A reader who does not see skills in Build is named the skill and offered no link.
+    const unseen = read();
+    expect(unseen).toContain('data-guardrail-hit-subject="kunden-faq"');
+    expect(unseen).not.toContain('href="/build/skills/kunden-faq"');
   });
 
   it("shows an empty, a waiting and a failed read of the hits", () => {
