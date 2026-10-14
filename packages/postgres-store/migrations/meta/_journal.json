@@ -547,6 +547,13 @@
       "when": 1791949513500,
       "tag": "0077_personal_api_keys_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1791952052556,
+      "tag": "0078_secret_origin",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,7 @@ import { workspaceRoutePath } from "../routes";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { apiErrorCode } from "../workspace-utils";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
+import { waitsForDiscovery, type DiscoveryWait } from "./connection-form-model";
 
 /** The action that lets a person test a Connection. */
 const CONNECTION_WRITE_ACTION = "connection.write";
@@ -50,6 +51,9 @@ export type ConnectionTestRun =
   | { status: "held" }
   | { status: "failed"; message: string | undefined };
 
+/** How often the page asks again for the tools of a discovery it waits for. */
+const DISCOVERY_POLL_MS = 2_000;
+
 /**
  * Everything the Connection page reads and does beyond the asset the frame hands it. The page
  * is handed this and reads nothing else, so a test hands it answers of its own. Nothing here
@@ -58,8 +62,18 @@ export type ConnectionTestRun =
 export interface ConnectionSource {
   /** The reader may test the Connection: the page offers the button. The instance decides the call. */
   mayTest(connection: { namespace?: string }): boolean;
-  /** A hook: the Connection's state, read when the page opens and again after a test. */
-  useDetail(name: string): ConnectionDetailRead;
+  /**
+   * A hook: the Connection's state, read when the page opens and again after a test. While the
+   * page waits for a discovery it is read again every few seconds, until the discovery is in.
+   */
+  useDetail(name: string, wait?: DiscoveryWait): ConnectionDetailRead;
+  /**
+   * Enters the Connection's secret, as the next version after `expectedVersion`. The value goes
+   * to the instance and is kept nowhere here. The page reads the Connection again afterwards.
+   */
+  setSecret(name: string, value: string, expectedVersion: number | null): Promise<void>;
+  /** Asks the instance to read the Connection's tools again. Throws `PendingApprovalError` when held. */
+  discover(name: string): Promise<void>;
   /** A hook: the test of this page. */
   useTest(name: string): { run: ConnectionTestRun; start(): void };
   /**
@@ -94,11 +108,15 @@ export function useConnectionSource(): ConnectionSource {
           (held) => held.prefix === namespace && held.actions.includes(CONNECTION_WRITE_ACTION)
         ) ??
           false)),
-    useDetail(name) {
+    useDetail(name, wait) {
       const query = useQuery({
         queryKey: detailKey(name),
         queryFn: ({ signal }) => calls.get({ params: { name }, signal }),
-        retry: false
+        retry: false,
+        refetchInterval: ({ state }) =>
+          wait && state.data && waitsForDiscovery(wait, state.data, Date.now())
+            ? DISCOVERY_POLL_MS
+            : false
       });
       // What was read stays while it is read again: the page does not blink after a test.
       if (query.data) {
@@ -139,6 +157,20 @@ export function useConnectionSource(): ConnectionSource {
       return failure === "failed" && !grants.isFetching
         ? { status: "failed", retry: () => void grants.refetch().catch(() => undefined) }
         : { status: "loading" };
+    },
+    async setSecret(name, value, expectedVersion) {
+      try {
+        await calls.set_secret({ params: { name }, body: { value, expectedVersion } });
+      } finally {
+        await queryClient.invalidateQueries({ queryKey: detailKey(name) });
+      }
+    },
+    async discover(name) {
+      const outcome = await calls.discover({ params: { name } });
+      if (outcome.status !== "done") {
+        throw new PendingApprovalError();
+      }
+      await queryClient.invalidateQueries({ queryKey: detailKey(name) });
     },
     principalHref: (principalId) =>
       principalHref(

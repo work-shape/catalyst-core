@@ -23,9 +23,7 @@ export function createInstanceAssetKinds(input: {
   return createAssetKindRegistry([
     createAgentAssetKind(input.agent),
     createSkillAssetKind(input.skill),
-    ...(input.connections
-      ? [createConnectionAssetKind({ connectorTypes: input.connections.connectorTypes })]
-      : []),
+    ...(input.connections ? [createConnectionAssetKind(input.connections)] : []),
     createGuardrailAssetKind(),
     ...(input.modules.isEnabled("apps") ? [createAppAssetKind()] : []),
     ...input.moduleKinds

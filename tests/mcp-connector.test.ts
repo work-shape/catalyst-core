@@ -7,6 +7,7 @@ import {
   MCP_RESULT_MAX_BYTES,
   buildConnectionCatalog,
   compileJsonSchema,
+  connectionOriginOf,
   createConnectionCredentialResolver,
   createEgressChecker,
   createMcpConnectorType,
@@ -55,8 +56,7 @@ import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // The Connector type `mcp` against an MCP server in this process, through the real egress
 // checker (with a resolver of the test), the real Secret Store over real rows and
-// `openConnectorContext`. Every test fails without the type: before it nothing in the
-// platform speaks to an MCP server.
+// `openConnectorContext`. Every test fails without the type: nothing else speaks MCP.
 
 const clientInstanceId = asClientInstanceId("mcp-connector-test");
 /** The name the Connection is configured with. The test's resolver answers 127.0.0.1 for it. */
@@ -137,7 +137,8 @@ describe("the Connector type mcp", () => {
         binding: { connectionAssetId: stored.id, subject: SHARED_CREDENTIAL_SUBJECT },
         value: key,
         source: "runtime",
-        handle
+        handle,
+        origin: connectionOriginOf(type, connectionConfigSchema.parse(stored.config))
       });
     }
     const egress = loopbackEgress(setup.allow);
