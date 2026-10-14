@@ -35,7 +35,7 @@ import {
   normalizeGeneratedConversationTitle,
   temporaryAttachmentTitles
 } from "../conversation-title";
-import { requireOwnTranscript, requireReadableSubject } from "../platform-asset-calls";
+import { requireOwnTranscript, requireReadableSubject } from "../platform-asset-subject";
 import { modelBindingRefOf, reasoningEffortTheModelTakes } from "../system-model-call";
 import type { ChatServerOptions } from "../types";
 
