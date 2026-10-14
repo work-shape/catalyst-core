@@ -137,6 +137,28 @@ describe("the Actions side of a draft", () => {
     expect(load).not.toContain(">crm<");
   });
 
+  it("says under a Workflow action that it starts the Workflow with the input", () => {
+    const { name, toolName, inputSchema, policy, agentTool } = action();
+    const start: AppAction = {
+      name: `${name}_start`,
+      kind: "workflow",
+      effect: "changing",
+      toolName,
+      inputSchema,
+      policy,
+      agentTool,
+      workflow: { name: "visit-log" }
+    };
+
+    const row = rowOf(actionsView(ready([start])), "load_start");
+    expect(row).toContain("visit-log");
+    expect(row).toContain("The Workflow and the input the action starts it with");
+    expect(row).not.toContain("The connection");
+    expect(rowOf(actionsView(ready([start]), true, "de"), "load_start")).toContain(
+      "Der Workflow und die Eingabe, mit der die Aktion ihn startet"
+    );
+  });
+
   it("gives an sql action the same row, with the Data Store where the Connection would be", () => {
     const { name, effect, toolName, inputSchema, policy, agentTool } = action();
     const list: AppAction = {
