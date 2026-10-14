@@ -195,6 +195,10 @@ export class ConversationWorkflow {
     await requireOwnTranscript(this.options, conversation);
     if (command.toolCallId !== undefined) {
       await this.requirePendingOpen(conversationId, command.toolCallId, subject);
+      // A confirmation sent again, by a second tab or a retry, changes nothing: the
+      // conversation is about that asset already, and the audit holds the one step.
+      const current = conversation.subject;
+      if (current?.kind === subject.kind && current.name === subject.name) return conversation;
     }
     const updated = await this.options.stores.conversations.setConversationSubject({
       clientInstanceId: this.options.clientInstanceId,
