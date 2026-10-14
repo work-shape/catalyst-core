@@ -20,53 +20,88 @@ import { MANIFEST_FILENAME, readManifest, resolveInstance } from "./working-copy
 export async function loginCommand(options: ConfigCommandOptions): Promise<number> {
   try {
     const url = await resolveInstanceUrl(options);
-    assertSafeApiKeyExchangeUrl(url, "receive an API key");
-    const sleep = options.sleep ?? defaultSleep;
-    const client = createApiClient({
-      baseUrl: url,
-      fetchImpl: instanceFetch(options.fetchImpl)
-    });
-    const started = await call(() =>
-      client.connect_codes.start({ body: { clientLabel: `catalyst CLI on ${hostname()}` } })
-    );
+    const key = await loginByConnectCode(options, url, `catalyst CLI on ${hostname()}`);
+    if (key === undefined) {
+      writeError(options, "The code expired before it was confirmed. Run 'catalyst login' again.");
+      return 1;
+    }
     writeOutput(
       options,
       [
-        `Open ${url}${started.confirmPath}`,
-        `and confirm the code ${started.userCode} with the scopes this key may use.`,
-        `Waiting for the confirmation until ${formatTime(started.expiresAt)}…`
+        `Logged in to ${credentialOrigin(url)} with the key '${key.name}' (${key.keyPrefix}…).`,
+        `It may: ${key.scopes.join(", ")}, as far as your rights reach, until ${formatTime(key.expiresAt)}.`,
+        `Saved in ${key.path}. Revoke it in Settings, API keys.`
       ].join("\n")
     );
-    const deadline = Date.parse(started.expiresAt);
-    while (Date.now() < deadline) {
-      await sleep(started.intervalSeconds * 1000);
-      const answer = await call(() =>
-        client.connect_codes.redeem({ body: { deviceCode: started.deviceCode } })
-      );
-      if (answer.status === "pending") continue;
-      const path = await saveCredential(readConfigCliEnv(options.env), url, {
-        apiKey: answer.secret,
-        keyId: answer.key.id,
-        name: answer.key.name,
-        expiresAt: answer.key.expiresAt,
-        savedAt: new Date().toISOString()
-      });
-      writeOutput(
-        options,
-        [
-          `Logged in to ${credentialOrigin(url)} with the key '${answer.key.name}' (${answer.key.keyPrefix}…).`,
-          `It may: ${answer.key.scopes.join(", ")}, as far as your rights reach, until ${formatTime(answer.key.expiresAt)}.`,
-          `Saved in ${path}. Revoke it in Settings, API keys.`
-        ].join("\n")
-      );
-      return 0;
-    }
-    writeError(options, "The code expired before it was confirmed. Run 'catalyst login' again.");
-    return 1;
+    return 0;
   } catch (error) {
     writeError(options, formatCommandError(error));
     return 1;
   }
+}
+
+/** The key a confirmed connect code issued, as it was saved. It holds no secret. */
+export interface ConnectedKey {
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  expiresAt: string;
+  /** The credential file it was saved in. */
+  path: string;
+}
+
+/**
+ * Starts a connect code under `clientLabel`, prints where to confirm it, waits for the
+ * confirmation and saves the key it issues. `openUrl` also opens the address in a browser.
+ * Answers nothing when the code expired unconfirmed. A refusal throws.
+ */
+export async function loginByConnectCode(
+  options: ConfigCommandOptions,
+  url: string,
+  clientLabel: string,
+  openUrl?: (address: string) => void
+): Promise<ConnectedKey | undefined> {
+  assertSafeApiKeyExchangeUrl(url, "receive an API key");
+  const sleep = options.sleep ?? defaultSleep;
+  const client = createApiClient({
+    baseUrl: url,
+    fetchImpl: instanceFetch(options.fetchImpl)
+  });
+  const started = await call(() => client.connect_codes.start({ body: { clientLabel } }));
+  const address = `${url}${started.confirmPath}`;
+  writeOutput(
+    options,
+    [
+      `Open ${address}`,
+      `and confirm the code ${started.userCode} with the scopes this key may use.`,
+      `Waiting for the confirmation until ${formatTime(started.expiresAt)}…`
+    ].join("\n")
+  );
+  openUrl?.(address);
+  const deadline = Date.parse(started.expiresAt);
+  while (Date.now() < deadline) {
+    await sleep(started.intervalSeconds * 1000);
+    const answer = await call(() =>
+      client.connect_codes.redeem({ body: { deviceCode: started.deviceCode } })
+    );
+    if (answer.status === "pending") continue;
+    const path = await saveCredential(readConfigCliEnv(options.env), url, {
+      apiKey: answer.secret,
+      keyId: answer.key.id,
+      name: answer.key.name,
+      scopes: answer.key.scopes,
+      expiresAt: answer.key.expiresAt,
+      savedAt: new Date().toISOString()
+    });
+    return {
+      name: answer.key.name,
+      keyPrefix: answer.key.keyPrefix,
+      scopes: answer.key.scopes,
+      expiresAt: answer.key.expiresAt,
+      path
+    };
+  }
+  return undefined;
 }
 
 /** Forgets the saved key of the instance. Revoking it is the interface's, in Settings. */
@@ -88,7 +123,7 @@ export async function logoutCommand(options: ConfigCommandOptions): Promise<numb
 }
 
 /** An address given as it is, or an instance named in the working copy's manifest. */
-async function resolveInstanceUrl(options: ConfigCommandOptions): Promise<string> {
+export async function resolveInstanceUrl(options: ConfigCommandOptions): Promise<string> {
   const requested = options.instance;
   if (requested !== undefined && /^https?:\/\//u.test(requested)) {
     return requested.replace(/\/+$/u, "");
@@ -113,7 +148,7 @@ async function call<Output>(request: () => Promise<Output>): Promise<Output> {
   }
 }
 
-function formatTime(iso: string): string {
+export function formatTime(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 

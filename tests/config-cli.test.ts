@@ -11,7 +11,7 @@ import { retiredReleasePaths } from "./support/retired-api-paths";
 import { createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   ASSET_SYNC_BODY_MAX_BYTES,
@@ -65,6 +65,7 @@ import {
   readManifest,
   readWorkingCopy,
   readStateFile,
+  renderCatalystSkill,
   resolveSkillResourceTarget,
   resolveInstance,
   runCli,
@@ -79,7 +80,8 @@ import {
   agentConfig as namespaceAgentConfig,
   grantKaiNamespace,
   inDays,
-  setupPersonalKeyInstance
+  setupPersonalKeyInstance,
+  type PersonalKeyInstance
 } from "./support/personal-api-keys";
 import {
   agent as namespaceAgent,
@@ -3516,3 +3518,254 @@ function createUnusedModelProvider(): ModelProvider {
     }
   };
 }
+
+// `catalyst setup <tool> --instance <url>` connects a local agent in one step: a connect code
+// the person confirms in Settings where no working key is saved, then the Catalyst skill where
+// the tool reads skills. Platform Access acceptance check 53 (CONNECT-1a).
+
+const SETUP_INSTANCE = "https://catalyst.test";
+const keysSchema = z.object({
+  items: z.array(z.object({ id: z.string(), name: z.string() }).loose())
+});
+
+/** One person's computer: a home folder, a CLI config folder, and the CLI as it runs there. */
+async function computerOf(t: PersonalKeyInstance) {
+  const home = await createTemporaryDirectory();
+  const env = { HOME: home, CATALYST_CONFIG_HOME: join(home, ".config", "catalyst") };
+  const paths: string[] = [];
+  const instanceFetch = createTestFetch(t.instance);
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    paths.push(new URL(request.url).pathname);
+    return instanceFetch(request);
+  };
+  const opened: string[] = [];
+
+  /** Runs setup; the person confirms the code it shows as Settings would, with its label as the name. */
+  async function setup(args: string[]) {
+    const out: string[] = [];
+    const err: string[] = [];
+    let confirmed = false;
+    const sleep = async () => {
+      if (confirmed) return;
+      const userCode = /code ([A-Z]{4}-[A-Z]{4})/u.exec(out.join(""))?.[1] ?? "";
+      const asking = await t.expectOk(t.kai.id, "me.connect_codes.get", {
+        params: { userCode }
+      });
+      const clientLabel = z.object({ clientLabel: z.string() }).parse(asking.json()).clientLabel;
+      await t.expectOk(t.kai.id, "me.connect_codes.confirm", {
+        params: { userCode },
+        payload: { name: clientLabel, scopes: ["agent.read:kai-"], expiresAt: inDays(30) }
+      });
+      confirmed = true;
+    };
+    const code = await runCli(["setup", ...args], {
+      env,
+      fetchImpl,
+      sleep,
+      openUrl: (address) => opened.push(address),
+      stdout: (text) => out.push(text),
+      stderr: (text) => err.push(text)
+    });
+    return { code, out: out.join(""), err: err.join("") };
+  }
+
+  return { home, env, paths, opened, setup };
+}
+
+async function savedKey(configHome: string): Promise<string> {
+  const saved = await readFile(join(configHome, "credentials.json"), "utf8");
+  const key = /cat\.apic_[^"]+/u.exec(saved)?.[0];
+  if (!key) throw new Error("No key was saved");
+  return key;
+}
+
+describe("catalyst setup", () => {
+  it("logs Claude Code in by a confirmed code, writes its skill, prints no key, and keeps the key on a second run", async () => {
+    const t = await setupPersonalKeyInstance();
+    await grantKaiNamespace(t);
+    const computer = await computerOf(t);
+    const skillPath = join(computer.home, ".claude", "skills", "catalyst", "SKILL.md");
+
+    const first = await computer.setup(["claude-code", "--instance", SETUP_INSTANCE]);
+    expect(first.err).toBe("");
+    expect(first.code).toBe(0);
+    expect(computer.opened).toEqual([
+      expect.stringMatching(/^https:\/\/catalyst\.test\/settings\/you\/api-keys\?code=/u)
+    ]);
+    expect(first.out).toContain(`Instance: ${SETUP_INSTANCE}`);
+    expect(first.out).toContain(`Logged in with the key 'Claude Code on ${hostname()}'`);
+    expect(first.out).toContain("agent.read:kai-");
+    expect(first.out).toContain(`Wrote the Catalyst skill to ${skillPath}.`);
+    expect(await readFile(skillPath, "utf8")).toBe(await renderCatalystSkill());
+    const key = await savedKey(computer.env.CATALYST_CONFIG_HOME);
+    expect(first.out).not.toContain(key);
+
+    // API keys lists the key by the tool and the computer.
+    const keys = keysSchema.parse((await t.expectOk(t.kai.id, "me.api_keys.list")).json());
+    expect(keys.items.map((item) => item.name)).toEqual([`Claude Code on ${hostname()}`]);
+
+    // A second run keeps the key, starts no code, and rewrites a skill an older CLI wrote.
+    const older = (await renderCatalystSkill()).replace("# Catalyst", "# Catalyst, older");
+    await writeFile(skillPath, older.replace(/sha256 [0-9a-f]{64}/u, sha256Mark(older)));
+    computer.paths.length = 0;
+    const second = await computer.setup(["claude-code", "--instance", SETUP_INSTANCE]);
+    expect(second.code).toBe(0);
+    expect(second.out).toContain(`Kept the saved key 'Claude Code on ${hostname()}'`);
+    expect(second.out).toContain(`Wrote the Catalyst skill to ${skillPath}.`);
+    expect(computer.paths).not.toContain(testOperations["connect_codes.start"].path);
+    expect(await readFile(skillPath, "utf8")).toBe(await renderCatalystSkill());
+    expect(await savedKey(computer.env.CATALYST_CONFIG_HOME)).toBe(key);
+    expect(second.out + second.err).not.toContain(key);
+
+    // A third run finds the skill current.
+    expect((await computer.setup(["claude-code", "--instance", SETUP_INSTANCE])).out).toContain(
+      "is current"
+    );
+  });
+
+  it("keeps a different skill file and says so, and with --force keeps it as SKILL.md.bak", async () => {
+    const t = await setupPersonalKeyInstance();
+    await grantKaiNamespace(t);
+    const computer = await computerOf(t);
+    const skillPath = join(computer.home, ".claude", "skills", "catalyst", "SKILL.md");
+    await mkdir(join(skillPath, ".."), { recursive: true });
+    await writeFile(skillPath, "---\nname: catalyst\n---\nMy own notes.\n");
+
+    const kept = await computer.setup(["claude-code", "--instance", SETUP_INSTANCE]);
+    expect(kept.code).toBe(1);
+    expect(kept.err).toContain(`Kept ${skillPath}: it is not the skill this CLI writes.`);
+    expect(kept.err).toContain("--force");
+    expect(await readFile(skillPath, "utf8")).toBe("---\nname: catalyst\n---\nMy own notes.\n");
+
+    // The person edited a skill setup wrote: that is a different file too.
+    const edited = `${await renderCatalystSkill()}My addition.\n`;
+    await writeFile(skillPath, edited);
+    expect((await computer.setup(["claude-code", "--instance", SETUP_INSTANCE])).code).toBe(1);
+
+    const forced = await computer.setup(["claude-code", "--instance", SETUP_INSTANCE, "--force"]);
+    expect(forced.code).toBe(0);
+    expect(forced.out).toContain(`${skillPath}.bak`);
+    expect(await readFile(`${skillPath}.bak`, "utf8")).toBe(edited);
+    expect(await readFile(skillPath, "utf8")).toBe(await renderCatalystSkill());
+  });
+
+  it("writes the skill of Codex and of another tool to ~/.agents/skills, and tells Other where it is", async () => {
+    const t = await setupPersonalKeyInstance();
+    await grantKaiNamespace(t);
+    const computer = await computerOf(t);
+    const skillPath = join(computer.home, ".agents", "skills", "catalyst", "SKILL.md");
+
+    const codex = await computer.setup(["codex", "--instance", SETUP_INSTANCE]);
+    expect(codex.code).toBe(0);
+    expect(codex.out).toContain(`Logged in with the key 'Codex on ${hostname()}'`);
+    expect(await readFile(skillPath, "utf8")).toBe(await renderCatalystSkill());
+
+    await rm(skillPath);
+    const other = await computer.setup(["other", "--instance", SETUP_INSTANCE]);
+    expect(other.code).toBe(0);
+    expect(other.out).toContain(`Wrote the Catalyst skill to ${skillPath}.`);
+    expect(other.out).toContain("Point your tool at that file");
+    expect(await readFile(skillPath, "utf8")).toBe(await renderCatalystSkill());
+  });
+
+  it("logs in again where the saved key was revoked", async () => {
+    const t = await setupPersonalKeyInstance();
+    await grantKaiNamespace(t);
+    const computer = await computerOf(t);
+    expect((await computer.setup(["codex", "--instance", SETUP_INSTANCE])).code).toBe(0);
+    const keys = keysSchema.parse((await t.expectOk(t.kai.id, "me.api_keys.list")).json());
+    await t.expectOk(t.kai.id, "me.api_keys.revoke", {
+      params: { keyId: keys.items[0]?.id ?? "" }
+    });
+
+    const again = await computer.setup(["codex", "--instance", SETUP_INSTANCE]);
+    expect(again.code).toBe(0);
+    expect(again.out).toContain("Logged in with the key");
+    expect(computer.opened).toHaveLength(2);
+  });
+
+  it("refuses a tool it does not know and a run without the instance, before any call", async () => {
+    const errors: string[] = [];
+    const stderr = (text: string) => errors.push(text);
+    expect(await runCli(["setup", "cursor", "--instance", SETUP_INSTANCE], { stderr })).toBe(2);
+    expect(await runCli(["setup", "codex"], { stderr })).toBe(2);
+    expect(await runCli(["login", "--force", "--instance", SETUP_INSTANCE], { stderr })).toBe(2);
+    expect(errors.join("")).toContain(
+      "Usage: catalyst setup <claude-code|codex|other> --instance <url> [--force]"
+    );
+  });
+});
+
+/** The mark of a skill `catalyst setup` wrote, for this text before the mark. */
+function sha256Mark(rendered: string): string {
+  const body = rendered.slice(0, rendered.lastIndexOf("\n<!-- Written by catalyst setup"));
+  return `sha256 ${createHash("sha256").update(body).digest("hex")}`;
+}
+
+/**
+ * The commands and options a skill names that `catalyst --help` does not list. A command is a
+ * line of a code block or a code span that starts with `catalyst`; an option is any `--word`
+ * of the skill.
+ */
+function unlistedInHelp(skill: string, help: string): string[] {
+  const listed = (word: string) =>
+    new RegExp(`(?:^|\\n)\\s+${word}\\s|catalyst ${word}\\b|<kind> ${word}\\b`, "u").test(help);
+  const commands = [
+    ...[...skill.matchAll(/```sh\n([\s\S]*?)```/gu)].flatMap((block) =>
+      (block[1] ?? "").split("\n")
+    ),
+    ...[...skill.matchAll(/`([^`\n]+)`/gu)].map((span) => span[1] ?? "")
+  ].filter((line) => line.startsWith("catalyst "));
+  const problems: string[] = [];
+  for (const command of commands) {
+    const [, first = "", second = ""] = command.split(/\s+/u);
+    if (first.startsWith("-")) continue;
+    if (["config", "context", "kinds", "references", "login", "logout", "setup"].includes(first)) {
+      if (!listed(first)) problems.push(`command '${first}' in: ${command}`);
+      if (first === "config" && !listed(second)) {
+        problems.push(`command 'config ${second}' in: ${command}`);
+      }
+    } else if (second === "" || second.startsWith("-")) {
+      problems.push(`command '${first}' in: ${command}`);
+    } else if (!listed(second)) {
+      // Any other first word is a kind; its second word is a verb of every kind.
+      problems.push(`'${first} ${second}' in: ${command}`);
+    }
+  }
+  for (const [option] of skill.matchAll(/--[a-z][a-z-]*/gu)) {
+    if (!help.includes(option)) problems.push(`option '${option}'`);
+  }
+  return [...new Set(problems)];
+}
+
+describe("the Catalyst skill the CLI ships", () => {
+  it("names only commands and options that `catalyst --help` lists", async () => {
+    const out: string[] = [];
+    expect(await runCli(["--help"], { stdout: (text) => out.push(text) })).toBe(0);
+    const help = out.join("");
+    const skill = await renderCatalystSkill();
+    expect(skill).toContain("catalyst config pull");
+    expect(unlistedInHelp(skill, help)).toEqual([]);
+
+    // The check sees a command, a verb and an option the CLI does not have.
+    expect(
+      unlistedInHelp(
+        "Run `catalyst init` and `catalyst agent rename x`, then `catalyst config sync --all`.",
+        help
+      )
+    ).toEqual([
+      "command 'init' in: catalyst init",
+      "'agent rename' in: catalyst agent rename x",
+      "command 'config sync' in: catalyst config sync --all",
+      "option '--all'"
+    ]);
+  });
+
+  it("is generic: no instance address, no key and no customer wording", async () => {
+    const skill = await renderCatalystSkill();
+    expect(skill).toMatch(/^---\nname: catalyst\ndescription: /u);
+    expect(skill).not.toMatch(/https?:\/\//u);
+    expect(skill).not.toMatch(/cat\.apic_|immobilien|finanzierung|vivd/iu);
+  });
+});

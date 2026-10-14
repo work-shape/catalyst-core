@@ -43,6 +43,8 @@ A key acts as you, narrowed to its scopes. A scope is a right such as `agent.wri
 
 `catalyst logout --instance <address>` removes the saved key from this machine. It stays valid until you revoke it in Settings.
 
+`catalyst setup <claude-code|codex|other> --instance <address>` logs in the same way where no working key is saved, then writes the Catalyst skill for an AI tool on your computer. [Work with a local agent](/getting-started/local-agent/) describes it.
+
 A working copy that belongs to one Namespace names it beside the instance:
 
 ```yaml

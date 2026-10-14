@@ -8,6 +8,8 @@ export interface StoredCredential {
   apiKey: string;
   keyId: string;
   name: string;
+  /** What the key may do, as it was issued. Left out by a CLI before `catalyst setup`. */
+  scopes?: string[];
   expiresAt: string;
   savedAt: string;
 }

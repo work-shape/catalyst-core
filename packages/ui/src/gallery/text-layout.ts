@@ -172,6 +172,8 @@ export interface LayoutGalleryText {
   codeCutNumbered: string;
   codeWrapped: string;
   codeAsFile: string;
+  codeCommand: string;
+  codeCommandLabel: string;
   codeConfigName: string;
   codeOutputName: string;
   countPrimary: string;
@@ -354,6 +356,8 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeCutNumbered: "Cut to four lines",
     codeWrapped: "Long lines broken",
     codeAsFile: "As a file, with colours and its controls",
+    codeCommand: "One command to copy",
+    codeCommandLabel: "Command for the terminal",
     codeConfigName: "agents/support.yaml",
     codeOutputName: "Output of the step",
     countPrimary: "Needs you",
@@ -534,6 +538,8 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeCutNumbered: "Auf vier Zeilen gekürzt",
     codeWrapped: "Lange Zeilen umbrochen",
     codeAsFile: "Als Datei, mit Farben und Bedienelementen",
+    codeCommand: "Ein Befehl zum Kopieren",
+    codeCommandLabel: "Befehl für das Terminal",
     codeConfigName: "agents/support.yaml",
     codeOutputName: "Ausgabe des Schritts",
     countPrimary: "Braucht dich",
