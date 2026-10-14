@@ -32,18 +32,22 @@ import {
 import { useAppsHost, type AppsHost } from "./apps-host";
 
 /**
- * The test of one reading action of a draft. It is the call a tile of the draft makes: the
- * dialog asks for the address of the draft's frame and calls the action through it, with the
- * builder's own session. So the right on the App, the right on the Connection and the policy
- * are asked where every call asks them, and the call leaves its Operation Run.
+ * The test of one action of a draft. It is the call a tile of the draft makes: the dialog asks
+ * for the address of the draft's frame and calls the action through it, with the builder's own
+ * session. So the right on the App, the right on the Connection and the policy are asked where
+ * every call asks them, and the call leaves its Operation Run. A changing action is simulated
+ * there and answers what it would have done, unless the builder switched it live once.
  */
 export function ActionTestDialog({
   app,
   action,
+  onTested,
   onClose
 }: {
   app: string;
   action: AppAction;
+  /** A call was made: it may have used up the builder's "Run live once". */
+  onTested(): void;
   onClose(): void;
 }) {
   const { client } = useWorkspaceApiClient();
@@ -75,13 +79,18 @@ export function ActionTestDialog({
     setWorking(true);
     try {
       const calls = await frame();
+      // A changing call carries its own key, as a tile's does: a test made twice is two calls.
+      const key = action.effect === "changing" ? { idempotencyKey: crypto.randomUUID() } : {};
       setOutcome(
         calls
           ? appActionTestOutcome(
-              await calls.run({ type: "action", name: action.name, input: read.input })
+              await calls.run({ type: "action", name: action.name, input: read.input, ...key })
             )
           : { status: "failed" }
       );
+      if (calls) {
+        onTested();
+      }
     } catch {
       // The address of the draft could not be had: nothing was called.
       setOutcome({ status: "failed" });
@@ -144,23 +153,21 @@ export function ActionTestDialogView({
       size="lg"
       title={t("apps.actionTestTitle", { name: action.name })}
       description={
-        // A draft starts no Workflow: its test asks the rights and the input, and lists no run.
-        action.kind === "workflow" ? (
-          t("apps.actionTestBodyWorkflow")
-        ) : (
-          <>
-            {t("apps.actionTestBody")}{" "}
-            {operations ? (
-              <Button asChild variant="link" size="sm" className="h-auto px-0 align-baseline">
-                <a href={operations.href} data-app-action-test-operations>
-                  {t("apps.actionTestListed")}
-                </a>
-              </Button>
-            ) : (
-              t("apps.actionTestListed")
-            )}
-          </>
-        )
+        <>
+          {/* A changing call is simulated in a draft, unless "Run live once" is on for it. */}
+          {t(
+            action.effect === "changing" ? "apps.actionTestBodyChanging" : "apps.actionTestBody"
+          )}{" "}
+          {operations ? (
+            <Button asChild variant="link" size="sm" className="h-auto px-0 align-baseline">
+              <a href={operations.href} data-app-action-test-operations>
+                {t("apps.actionTestListed")}
+              </a>
+            </Button>
+          ) : (
+            t("apps.actionTestListed")
+          )}
+        </>
       }
       onClose={onClose}
       footer={
@@ -274,11 +281,7 @@ function TestOutcome({
         ) : null}
       </div>
       {outcome.status === "dry_run" ? (
-        <p className="text-body text-muted-foreground">
-          {action.kind === "workflow"
-            ? t("apps.actionTestDryRunWorkflow", { workflow: action.workflow.name })
-            : outcome.message}
-        </p>
+        <p className="text-body text-muted-foreground">{outcome.message}</p>
       ) : null}
       {result ? (
         <div className="grid grid-cols-1 gap-1" data-truncated={result.truncated || undefined}>

@@ -121,12 +121,17 @@ describe("a frame's call when the App changes around it", () => {
       { "idempotency-key": "fresh-draft-direct" }
     );
 
-    for (const response of [inDraft, direct]) {
-      expect(response.statusCode).toBe(409);
-      expect(t.refusal(response).details).toMatchObject({ reason: "draft_safe_mode" });
-    }
-    expect({ handed: t.handed.length, runs: (await t.runs()).length }).toEqual(before);
-    expect((await t.can(t.admin.id, draft)).save).toBe("deny");
+    // The named action is simulated (ADR-0031); the direct Connection call is refused.
+    expectStatus(inDraft, 200);
+    expect(inDraft.json()).toMatchObject({ status: "dry_run" });
+    expect(await t.runOf(inDraft.headers["operation-run-id"])).toMatchObject({
+      target: "dry_run",
+      status: "done"
+    });
+    expect(direct.statusCode).toBe(409);
+    expect(t.refusal(direct).details).toMatchObject({ reason: "draft_safe_mode" });
+    expect(t.handed.length).toBe(before.handed);
+    expect((await t.runs()).length - before.runs).toBe(1);
     // The published view of the same file set carries the change out.
     const inPublished = await t.callAction(
       t.admin.id,

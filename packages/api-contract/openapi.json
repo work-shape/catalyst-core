@@ -3049,7 +3049,7 @@
     "/api/v1/assets/{kind}/{name}/run-live-once": {
       "post": {
         "operationId": "assets.run_live_once",
-        "summary": "Make the next call of one action or step of the draft live instead of simulated, once",
+        "summary": "Make your own next call of one action or step of the draft live instead of simulated, once",
         "tags": [
           "Assets"
         ],
@@ -18386,6 +18386,9 @@
                   "deny"
                 ]
               },
+              "target": {
+                "$ref": "#/components/schemas/OperationTarget"
+              },
               "agentTool": {
                 "type": "boolean"
               },
@@ -18461,6 +18464,9 @@
                   "deny"
                 ]
               },
+              "target": {
+                "$ref": "#/components/schemas/OperationTarget"
+              },
               "agentTool": {
                 "type": "boolean"
               },
@@ -18531,6 +18537,9 @@
                   "approval",
                   "deny"
                 ]
+              },
+              "target": {
+                "$ref": "#/components/schemas/OperationTarget"
               },
               "agentTool": {
                 "type": "boolean"
@@ -24330,12 +24339,7 @@
             "$ref": "#/components/schemas/OperationRunOrigin"
           },
           "target": {
-            "type": "string",
-            "enum": [
-              "live",
-              "test",
-              "dry_run"
-            ]
+            "$ref": "#/components/schemas/OperationTarget"
           },
           "app": {
             "type": "object",
@@ -24700,6 +24704,14 @@
           "failed",
           "denied",
           "expired"
+        ]
+      },
+      "OperationTarget": {
+        "type": "string",
+        "enum": [
+          "live",
+          "test",
+          "dry_run"
         ]
       },
       "Page": {

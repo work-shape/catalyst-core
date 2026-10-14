@@ -1,11 +1,27 @@
 import type { ClientInstanceId } from "./ids";
+import type { OperationTarget } from "./operation-runs";
+import type { OperationEffect } from "./operations";
 import type { ISODateString } from "./time";
 
 // "Run live once" (ADR-0031). A changing call of a draft is simulated. A holder of the write
 // right on the draft switches one App action or one Workflow step of one draft revision live:
-// the next call of it is made live, through the central policy like a call of a published
-// revision. The call that takes the switch uses it up, and a switch whose draft has changed
-// since is cleared, so an approval given for one draft never carries over to an edited one.
+// the next call of it that the same person makes is made live, through the central policy like
+// a call of a published revision. Another person's call stays simulated. The call that takes
+// the switch uses it up, and a switch whose draft has changed since is cleared, so an approval
+// given for one draft never carries over to an edited one.
+
+/**
+ * Where a call of a draft goes, by what it does and whether its caller's "Run live once"
+ * covers it: a read goes live, a change is simulated unless switched live. `runOperation()`
+ * decides a call by this rule, and what shows a draft's parts says the same with it. DT-2 and
+ * DT-3 add the test target of the called asset here, which every call of a draft then reaches.
+ */
+export function draftCallTarget(input: {
+  effect: OperationEffect;
+  liveOnce: boolean;
+}): OperationTarget {
+  return input.effect === "reading" || input.liveOnce ? "live" : "dry_run";
+}
 
 /** One switch: an action or a step of one draft revision, and who set it. */
 export interface LiveOnceSwitch {
@@ -29,16 +45,27 @@ export interface LiveOnceSwitchStore {
     switch: LiveOnceSwitch;
   }): Promise<{ cleared: LiveOnceSwitch[] }>;
   /**
-   * Takes the switch of one part of one draft revision, where it is set: of two calls that
-   * ask at once, one takes it. Clears first every switch of the asset whose revision is no
-   * longer its draft, and answers them.
+   * Takes the switch of one part of one draft revision, where `takenBy` set it: of two calls
+   * that ask at once, one takes it, and a call of anybody else takes none. Clears first every
+   * switch of the asset whose revision is no longer its draft, and answers them.
    */
   take(input: {
     clientInstanceId: ClientInstanceId;
     assetId: string;
     revisionId: string;
     part: string;
+    /** The id of the person calling. */
+    takenBy: string;
   }): Promise<{ taken?: LiveOnceSwitch; cleared: LiveOnceSwitch[] }>;
+  /**
+   * The switches of one draft revision of an asset that are not used yet, one per part at
+   * most. Reads only: a switch of an earlier revision is left for the next write to clear.
+   */
+  list(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    revisionId: string;
+  }): Promise<LiveOnceSwitch[]>;
   /**
    * Clears every switch of the asset whose revision is no longer its draft, and answers them.
    * Asked before a discard, which makes an earlier revision the draft again: a switch left

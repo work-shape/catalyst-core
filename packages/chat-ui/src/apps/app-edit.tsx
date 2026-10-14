@@ -214,7 +214,7 @@ export function AppEdit({ app }: { app: string }) {
             publishedRevision={published}
           />
         ) : null}
-        {view === "actions" ? <AppDraftActions app={app} rights={rights} /> : null}
+        {view === "actions" ? <AppDraftActions app={app} rights={rights} writes={writes} /> : null}
       </AppEditFrame>
       {publishAsk ? (
         <PublishDialog

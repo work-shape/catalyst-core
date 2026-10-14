@@ -1,6 +1,7 @@
 import {
   AppError,
   boundedActorAccess,
+  draftCallTarget,
   isAuthenticatedServicePrincipal,
   type ActingServicePrincipal,
   type ActorAccess,
@@ -41,11 +42,11 @@ export function draftCallOf(call: OperationCall): OperationCall {
 /**
  * Where the call goes. A call of what is live goes live, and so does every reading call of a
  * draft, with the rights of the person testing. A changing call of a draft is simulated,
- * unless "Run live once" is switched on for its action or step of its revision, which it then
- * uses up. Only a call that may be made takes the switch: a caller the surface or the right
- * refuses leaves it for the next call, so nobody without the right uses up a builder's switch.
- * A test target of the called asset (a Data Store's test copy, a Connection's test
- * credential) will send every call of a draft there; DT-2 and DT-3 add it here.
+ * unless its caller switched "Run live once" on for its action or step of its revision, which
+ * it then uses up; a switch somebody else set leaves this call simulated. Only a call that may
+ * be made takes the switch: a call the surface or the right refuses leaves it for the next.
+ * The rule itself is `draftCallTarget`, where DT-2 and DT-3 add the test target of the called
+ * asset (a Data Store's test copy, a Connection's test credential).
  */
 export async function decideTarget(input: {
   call: OperationCall;
@@ -62,14 +63,16 @@ export async function decideTarget(input: {
     clientInstanceId: deps.clientInstanceId,
     assetId: draft.asset.id,
     revisionId: draft.revisionId,
-    part: draft.part
+    part: draft.part,
+    takenBy: call.actor.id
   });
   for (const stale of cleared) {
     await emitSwitchEvent("live_once.cleared", stale, call, deps, { reason: "draft_changed" });
   }
-  if (!taken) return "dry_run";
-  await emitSwitchEvent("live_once.used", taken, call, deps, { operation: definition.name });
-  return "live";
+  if (taken) {
+    await emitSwitchEvent("live_once.used", taken, call, deps, { operation: definition.name });
+  }
+  return draftCallTarget({ effect: definition.effect, liveOnce: taken !== undefined });
 }
 
 /** One audit row of a switch, with the asset as its subject. */

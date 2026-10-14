@@ -13,6 +13,8 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 // the result and finds the run in Instance > Operations with the origin App. The run stays
 // after the App is deleted and then says so. Fails without S3-43: a draft had two sides, an
 // action could be called from a tile alone, and a run said "App" and nothing of its App.
+// The changing action is simulated in the draft and says what it would have done; "Run live
+// once" carries out the builder's next test of it (APP-4).
 
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
@@ -43,9 +45,12 @@ input:
   mapping: { text: "{{text}}" }
 `,
     "actions/book-row.action.yaml": `connection: ${app.connection}
-operation: book
+operation: record
 effect: changing
 description: Books one row into the stock system.
+input:
+  schema: { type: object, properties: { text: { type: string } }, required: [text] }
+  mapping: { text: "{{text}}" }
 `
   };
   return Object.entries(files).map(([path, text]) => ({ path, text }));
@@ -157,7 +162,7 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     authScheme: "none" as const,
     operations: [
       { name: "echo", effect: "reading" as const, exposure: ["bridge", "agent"], enabled: true },
-      { name: "book", effect: "changing" as const, exposure: ["bridge"], enabled: true }
+      { name: "record", effect: "changing" as const, exposure: ["bridge"], enabled: true }
     ]
   };
   test.setTimeout(shotsDir ? 600_000 : 180_000);
@@ -224,11 +229,20 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     await expect(draft.locator("[data-app-actions-intro]")).toContainText(
       "What this app can read or change in other systems."
     );
-    // A changing action is not carried out in a draft, and nothing offers to test it.
+    // A changing action is simulated in a draft (ADR-0031): its row says so, offers its test
+    // and "Run live once" to this builder, who writes the App.
     await expect(row("book-row")).toContainText("Changing");
-    await expect(row("book-row")).toContainText("Not carried out in a draft");
-    await expect(row("book-row").getByRole("button")).toHaveCount(0);
-    await expect(draft.getByRole("button", { name: /^Test /u })).toHaveCount(1);
+    await expect(row("book-row").locator("[data-target]")).toHaveAttribute(
+      "data-target",
+      "dry_run"
+    );
+    await expect(row("book-row")).toContainText("Simulated");
+    await expect(row("book-row").locator("[data-run-live-once]")).toHaveAttribute(
+      "data-run-live-once",
+      "off"
+    );
+    await expect(row("load-rows").locator("[data-run-live-once]")).toHaveCount(0);
+    await expect(draft.getByRole("button", { name: /^Test /u })).toHaveCount(2);
 
     // At 390 wide each action is a block: nothing runs out of sight sideways, and the test
     // is on the screen under nothing else.
@@ -384,6 +398,59 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     await expect(outcome).toContainText("You may not use the connection Stock system");
     await shoot(page, "test-refused", refuse, [...usualLooks, ["dark", "de", 1440]]);
     await page.unroute(actionCall);
+
+    // The changing action, tested from the draft, is simulated: it answers what it would have
+    // done with the input, and nothing is booked.
+    const closeDialog = async () => {
+      await dialog
+        .getByRole("button", { name: /^(Close|Schließen)$/u })
+        .last()
+        .click();
+      await closed(page, dialog);
+    };
+    const testBook = async (status: "dry_run" | "done") => {
+      await row("book-row")
+        .getByRole("button", { name: /^(Test book-row|book-row testen)$/u })
+        .click();
+      await expect(dialog).toBeVisible();
+      await input.fill('{"text": "Row 7"}');
+      await runTest.click();
+      await expect(outcome).toHaveAttribute("data-app-action-test-status", status);
+    };
+    await openActions(appId);
+    await testBook("dry_run");
+    await expect(dialog).toContainText("It is simulated and changes nothing");
+    await expect(outcome).toContainText("Not carried out in the draft");
+    await expect(outcome).toContainText(
+      `Would have called the action 'book-row' with {"text":"Row 7"}.`
+    );
+    await expect(outcome).toContainText('Publish the App, or switch on "Run live once"');
+    await expect(outcome.getByRole("region")).toContainText('"text": "Row 7"');
+    await shoot(page, "test-dry-run", async () => {
+      await openActions(appId);
+      await testBook("dry_run");
+    });
+    await closeDialog();
+
+    // "Run live once": the row says the builder's next call runs live, also after a load.
+    const liveOnce = row("book-row").locator("[data-run-live-once]");
+    await row("book-row").getByRole("button", { name: "Run book-row live once" }).click();
+    await expect(liveOnce).toHaveAttribute("data-run-live-once", "on");
+    await expect(row("book-row")).toContainText("Your next call runs live.");
+    await expect(row("book-row").locator("[data-target]")).toHaveAttribute("data-target", "live");
+    await openActions(appId);
+    await expect(liveOnce).toHaveAttribute("data-run-live-once", "on");
+    await shoot(page, "actions-live-once", async () => {
+      await openActions(appId);
+      await expect(liveOnce).toHaveAttribute("data-run-live-once", "on");
+    });
+    // The next test is carried out and uses the switch up: the row is simulated again.
+    await testBook("done");
+    await expect(outcome).toContainText("Done");
+    await expect(outcome.getByRole("region")).toContainText('"text": "Row 7"');
+    await closeDialog();
+    await expect(liveOnce).toHaveAttribute("data-run-live-once", "off");
+    await expect(row("book-row")).toContainText("Simulated");
 
     // The link leads to the run in Instance > Operations: origin App, the action, done, the
     // Connection and its operation, and nothing of the input or the result.

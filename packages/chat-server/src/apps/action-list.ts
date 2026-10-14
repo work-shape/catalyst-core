@@ -18,6 +18,7 @@ import {
   DATA_STORE_ASSET_KIND,
   appActionOperationName,
   connectionOperationName,
+  draftCallTarget,
   liveRevisionId,
   type ActorAccess,
   type AuthenticatedIdentity,
@@ -194,13 +195,14 @@ export class AppActionList {
       const { asset } = revision;
       const resource = appResourceOf(scoped(asset));
       const host = appRevisionHost(asset.name, resource, revision.view, revision.dataStores);
+      const targetOf = await this.draftTargets(caller.actor, revision);
       const can = await appActionPermissions(environment, {
         viewer: caller.actor,
         access: caller.access,
         // The reader has no frame open. Nothing of the decision reads the page session.
         pageSessionId: "",
-        // The policy's word, for a changing action of a draft too: that a draft carries none
-        // out is a fact of the view, which the answer names.
+        // The policy's word, for a changing action of a draft too: where a call of the draft
+        // goes instead is its target, which the answer names beside it.
         mode: "published",
         host,
         revisionId: revision.revisionId,
@@ -221,7 +223,8 @@ export class AppActionList {
               ...(action.description === undefined ? {} : { description: action.description }),
               toolName: appActionOperationName(asset.name, action.name),
               inputSchema: action.input.schema,
-              policy: can[action.name] ?? "deny"
+              policy: can[action.name] ?? "deny",
+              ...(targetOf ? { target: targetOf(action) } : {})
             };
             if (action.kind === "sql") {
               // The rule of a call: the store is listed, published, in the App's scope and
@@ -275,6 +278,27 @@ export class AppActionList {
       });
     }
     return { apps, truncated };
+  }
+
+  /**
+   * Where the reader's next call of each action of a draft goes, by the rule of the call path
+   * (`draftCallTarget`) and the reader's own "Run live once" switches of that revision: a
+   * switch somebody else set covers no call of the reader's. Nothing for a published revision.
+   */
+  private async draftTargets(
+    reader: AuthenticatedIdentity,
+    revision: ListedRevision
+  ): Promise<((action: CompiledAppAction) => AppAction["target"]) | undefined> {
+    if (revision.view !== "draft") return undefined;
+    const switches = await this.options.stores.liveOnceSwitches.list({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId: revision.asset.id,
+      revisionId: revision.revisionId
+    });
+    const mine = new Set(
+      switches.flatMap((set) => (set.switchedBy.id === reader.id ? [set.part] : []))
+    );
+    return (action) => draftCallTarget({ effect: action.effect, liveOnce: mine.has(action.name) });
   }
 
   private app(name: string): Promise<ConfigAssetRecord | undefined> {

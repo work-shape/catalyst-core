@@ -46,11 +46,30 @@ export async function takeLiveOnceSwitch(
         eq(liveOnceSwitches.clientInstanceId, input.clientInstanceId),
         eq(liveOnceSwitches.assetId, input.assetId),
         eq(liveOnceSwitches.part, input.part),
-        eq(liveOnceSwitches.revisionId, input.revisionId)
+        eq(liveOnceSwitches.revisionId, input.revisionId),
+        eq(liveOnceSwitches.switchedById, input.takenBy)
       )
     )
     .returning();
   return { ...(taken ? { taken: mapSwitch(taken) } : {}), cleared };
+}
+
+/** One point read on the leading column of the key, so its cost grows with the asset's parts. */
+export async function listLiveOnceSwitches(
+  db: PostgresConnection,
+  input: Input<"list">
+): Promise<LiveOnceSwitch[]> {
+  const rows = await db
+    .select()
+    .from(liveOnceSwitches)
+    .where(
+      and(
+        eq(liveOnceSwitches.clientInstanceId, input.clientInstanceId),
+        eq(liveOnceSwitches.assetId, input.assetId),
+        eq(liveOnceSwitches.revisionId, input.revisionId)
+      )
+    );
+  return rows.map(mapSwitch);
 }
 
 export function clearStaleLiveOnceSwitches(
