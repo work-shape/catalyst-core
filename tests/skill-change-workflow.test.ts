@@ -1,188 +1,22 @@
 import { builtInModelCapabilities } from "./support/model-gateway";
 import { accessOf } from "./support/access";
-import {
-  createTestAssetKinds,
-  createTestInstance,
-  getTestExecution
-} from "./support/test-instance";
+import { createTestInstance, getTestExecution } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
-import {
-  asAgentRunId,
-  asClientInstanceId,
-  asConversationId,
-  asToolCallId,
-  isJsonObject,
-  StoreBackedAuditRecorder,
-  unknownToJsonValue,
-  type AuthenticatedUser,
-  type JsonObject,
-  type SkillConfig
-} from "@vivd-catalyst/core";
-
-import {
-  agentConfigSchema,
-  createSkillChangePreview,
-  getModelProviderConfigs,
-  type SkillChangeOperation
-} from "@vivd-catalyst/config-schema";
-import {
-  ApprovalRequestWorkflow,
-  createSkillChangeApprovalHandler
-} from "@vivd-catalyst/chat-server";
-import {
-  createProposeSkillChangeTool,
-  createSkillSourceVersion
-} from "@vivd-catalyst/tool-execution";
-
-import { createConfigAssetSource } from "../packages/client-assembly/src/config-asset-source";
 import { findConfigAssetAgentValidationIssues } from "../packages/client-assembly/src/assembly-validation";
 import { createSystemInstructions } from "../packages/agent-runtime/src/system-instructions";
 import { createTestConfig } from "./support/fixtures";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
-
-const clientInstanceId = asClientInstanceId("test-client");
-const requester: AuthenticatedUser = {
-  id: "requester",
-  externalUserId: "requester",
-  displayLabel: "Requester",
-  roles: ["user"],
-  permissionRefs: [],
+import {
   clientInstanceId,
-  authSource: "test"
-};
-const reviewer: AuthenticatedUser = {
-  ...requester,
-  id: "reviewer",
-  displayLabel: "Reviewer",
-  permissions: ["agent_skills.approve"]
-};
-const context = { correlationId: "skill-test" };
-const skill: SkillConfig = {
-  name: "review",
-  title: "Review",
-  description: "Review guidance",
-  content: "Check facts.\n\nKeep evidence."
-};
-const operations: SkillChangeOperation[] = [
-  { type: "replace_text", target: "root", oldText: "Check", newText: "Verify" }
-];
-const creation: SkillChangeOperation[] = [
-  {
-    type: "create_skill",
-    name: "new_skill",
-    title: "New skill",
-    description: "New guidance",
-    content: "Ask for evidence."
-  }
-];
-function json(input: unknown): JsonObject {
-  const value = unknownToJsonValue(input);
-  if (!isJsonObject(value)) throw new Error("Expected object");
-  return value;
-}
-async function fixture() {
-  const config = createTestConfig({
-    tools: [{ name: "read_skill" }, { name: "propose_skill_change" }]
-  });
-  config.administration.agentConfiguration.agentSkillChanges = {
-    enabled: true,
-    allowSkillCreation: true
-  };
-  const store = (await createTestInstance()).stores;
-  const agent = agentConfigSchema.parse({
-    name: "assistant",
-    displayName: "Assistant",
-    instructions: "Help users",
-    toolNames: ["read_skill", "propose_skill_change"],
-    skillNames: [skill.name]
-  });
-  await applyAtCurrentRevisions(store.configAssets, {
-    clientInstanceId,
-    mutations: [
-      { type: "upsert", kind: "agent", name: agent.name, config: json(agent) },
-      { type: "upsert", kind: "skill", name: skill.name, config: json(skill) },
-      { type: "setDefaultAgent", agentName: agent.name }
-    ]
-  });
-  const source = createConfigAssetSource({ store: store.configAssets, clientInstanceId });
-  const validationRefs = {
-    modelProviderIds: getModelProviderConfigs(config).map((provider) => provider.id),
-    modelBindingIds: [],
-    modelBindings: [],
-    fastModeModelBindingIds: [],
-    reasoningEfforts: [],
-    enabledToolNames: ["read_skill", "propose_skill_change"]
-  };
-  const handler = createSkillChangeApprovalHandler({
-    config,
-    clientInstanceId,
-    configAssets: {
-      store: store.configAssets,
-      source,
-      kinds: createTestAssetKinds({ config, validationRefs }),
-      validationRefs
-    }
-  });
-  const onDecided = vi.fn();
-  const workflow = new ApprovalRequestWorkflow({
-    clientInstanceId,
-    store: store.approvals,
-    handlers: new Map([[handler.kind, handler]]),
-    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit }),
-    onDecided
-  });
-  const propose = (ops = operations, name = skill.name) =>
-    workflow.createRequest(requester, context, {
-      kind: "skill_change",
-      summary: "Verify facts carefully.",
-      payload: json({
-        agentName: agent.name,
-        skillName: name,
-        operations: ops,
-        baseSourceVersion: ops[0]?.type === "create_skill" ? null : createSkillSourceVersion(skill),
-        preview: createSkillChangePreview(ops[0]?.type === "create_skill" ? undefined : skill, ops)
-      })
-    });
-  const approve = (requestId: string) =>
-    workflow.decideRequest(reviewer, accessOf(reviewer), context, {
-      requestId,
-      decision: "approve"
-    });
-  const revisions = (name = skill.name, kind: "agent" | "skill" = "skill") =>
-    store.configAssets.listConfigAssetRevisions({ clientInstanceId, kind, name });
-  const tool = createProposeSkillChangeTool({
-    assetSource: source,
-    policy: config.administration.agentConfiguration.agentSkillChanges,
-    creator: workflow
-  });
-  const toolContext = {
-    ...context,
-    user: requester,
-    clientInstanceId,
-    toolRequest: {
-      agentName: agent.name,
-      agentRunId: asAgentRunId("run"),
-      conversationId: asConversationId("conversation"),
-      toolCallId: asToolCallId("call"),
-      toolName: tool.name,
-      input: {}
-    }
-  };
-  return {
-    config,
-    store,
-    source,
-    handler,
-    workflow,
-    propose,
-    approve,
-    revisions,
-    agent,
-    onDecided,
-    tool,
-    toolContext
-  };
-}
+  context,
+  creation,
+  fixture,
+  json,
+  operations,
+  requester,
+  reviewer,
+  skill
+} from "./support/skill-change-fixture";
 
 describe("skill change approval workflow", () => {
   it("applies as the approver with provenance despite disabled interactive administration, then reverts", async () => {
@@ -246,6 +80,62 @@ describe("skill change approval workflow", () => {
     ).rejects.toMatchObject({
       code: "CONFLICT"
     });
+  });
+  // Fails without the change: the approval applied the skill unread, so a guardrail added after
+  // the agent proposed the change never saw it.
+  it("refuses to apply an approved change a guardrail on asset writes blocks, and says why", async () => {
+    const f = await fixture({
+      no_iban: {
+        displayName: "No IBAN in skills",
+        on: "asset.before_write",
+        filter: { kind: "skill" },
+        check: {
+          kind: "pattern",
+          pattern: "(?i)\\bDE\\d{2}(?:\\s?\\d{4}){4}\\s?\\d{2}\\b",
+          reason: "Skills hold no bank account."
+        },
+        outcome: "block"
+      }
+    });
+    const request = await f.propose([
+      {
+        type: "replace_text",
+        target: "root",
+        oldText: "Check facts.",
+        newText: "Pay to DE89 3704 0044 0532 0130 00."
+      }
+    ]);
+    const decided = await f.approve(request.id);
+    expect(decided).toMatchObject({
+      status: "superseded",
+      decision: { approved: true, decidedBy: reviewer.id },
+      applyResult: {
+        execution: "refused",
+        error: {
+          code: "GUARDRAIL_BLOCKED",
+          message:
+            "Guardrail 'No IBAN in skills' blocked skill 'review': Skills hold no bank account."
+        }
+      }
+    });
+    expect(await f.revisions()).toHaveLength(1);
+    expect(f.onDecided).toHaveBeenLastCalledWith(decided);
+    const [hit, ...more] = await f.store.guardrails.listHits({
+      clientInstanceId,
+      guardrailName: "no_iban",
+      limit: 5
+    });
+    expect(more).toEqual([]);
+    expect(hit).toMatchObject({
+      event: "asset.before_write",
+      outcome: "block",
+      subjectKind: "skill",
+      subjectName: "review"
+    });
+    expect(JSON.stringify(hit)).not.toContain("3704 0044");
+
+    // A change the guardrail lets through is applied.
+    expect(await f.approve((await f.propose()).id)).toMatchObject({ status: "approved" });
   });
   it("approves independent pending changes to different paragraphs in sequence", async () => {
     const f = await fixture();

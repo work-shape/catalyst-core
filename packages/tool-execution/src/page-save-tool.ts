@@ -215,7 +215,10 @@ async function savePage(
     return refuse(outcome.errors);
   }
   // Once the Page is the App of this conversation, the save is the App's next draft.
-  const app = await options.apps?.saveIntoSubjectApp(context, { pageId: outcome.pageId });
+  const app = await options.apps?.saveIntoSubjectApp(context, {
+    pageId: outcome.pageId,
+    fileSetId: outcome.fileSetId
+  });
   return toolSuccess<PageSaveOutput>(
     {
       pageId: outcome.pageId,

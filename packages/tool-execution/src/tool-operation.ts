@@ -128,6 +128,7 @@ export function toolOperation(
             origin.kind === "agent" ? (tool.beforeEvents?.(input, origin) ?? []) : []
         }
       : {}),
+    ...(tool.heldInputKeys ? { heldInputKeys: tool.heldInputKeys } : {}),
     action: null,
     authorize(_input, context) {
       for (const permissionRef of requiredPermissionRefs) {
@@ -212,7 +213,8 @@ function toolCallOf(
       operationRun: {
         id: context.runId,
         ...(context.workspaceId ? { workspaceId: context.workspaceId } : {})
-      }
+      },
+      ...(context.beforeEvents ? { beforeEvents: context.beforeEvents } : {})
     }
   };
 }
