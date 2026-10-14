@@ -13,7 +13,9 @@ import { expect, test } from "./test";
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
-const databaseUrl = `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
+const databaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
 const clientInstanceId = "demo-e2e";
 const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 /** The member the grant is written for. No other spec uses this member. */

@@ -7,6 +7,7 @@ export {
   type CardPadding,
   type CardProps
 } from "./card";
+export { CardReachable, CardTarget, type CardTargetProps } from "./card-target";
 export {
   Disclosure,
   DisclosureContent,

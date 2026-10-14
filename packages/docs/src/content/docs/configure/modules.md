@@ -26,6 +26,7 @@ modules:
 | `assetManagement` | Changing agents and skills in the interface. Running agents and `catalyst config push` work without it. | Nothing. `administration.agentConfiguration` still says what a person may change. |
 | `userInvitations` | Inviting a user by an emailed link to set a password.                                                   | A mail sender under `infrastructure.mail` and standalone password sign-in.        |
 | `connections`     | Connections to outside systems: the asset kind `connection`, its rights and its list in Studio.         | `secretStore.keys` and `egress.allow` once `connections` names a Connection.      |
+| `personalApiKeys` | Keys a person issues that act as them, and `catalyst login`. See [the CLI](/configure/cli/).            | Nothing. Off, no personal key signs in; stored keys stay.                         |
 
 The document processing capability is part of the paid capabilities and not in the open repository. The other modules ship with the open platform.
 

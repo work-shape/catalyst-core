@@ -70,6 +70,9 @@
       "name": "Pages"
     },
     {
+      "name": "Personal API Keys"
+    },
+    {
       "name": "Platform"
     },
     {
@@ -3216,6 +3219,109 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "auth"
+      }
+    },
+    "/api/v1/auth/connect-codes": {
+      "post": {
+        "operationId": "connect_codes.start",
+        "summary": "Start a connect code for the CLI; a person confirms it in Settings",
+        "tags": [
+          "Personal API Keys"
+        ],
+        "security": [],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartConnectCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartConnectCodeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "auth"
+      }
+    },
+    "/api/v1/auth/connect-codes/redeem": {
+      "post": {
+        "operationId": "connect_codes.redeem",
+        "summary": "Collect the personal API key of a confirmed connect code, once",
+        "tags": [
+          "Personal API Keys"
+        ],
+        "security": [],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemConnectCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeemConnectCodeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -9909,6 +10015,213 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/instance/personal-api-keys": {
+      "get": {
+        "operationId": "personal_api_keys.list",
+        "summary": "List every person's personal API keys, newest first",
+        "tags": [
+          "Personal API Keys"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "api_access:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "api_access:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PersonalApiKey"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "api_access.manage"
+        ],
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/instance/personal-api-keys/{keyId}/revoke": {
+      "post": {
+        "operationId": "personal_api_keys.revoke",
+        "summary": "Revoke any person's personal API key; its next call is refused",
+        "tags": [
+          "Personal API Keys"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "api_access:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "api_access:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalApiKey"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "api_access.manage"
+        ],
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/instance/service-principals": {
       "get": {
         "operationId": "service_principals.list",
@@ -11582,6 +11895,489 @@
         },
         "x-catalyst-effect": "changing",
         "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/me/api-keys": {
+      "get": {
+        "operationId": "me.api_keys.list",
+        "summary": "List the signed-in user's personal API keys, newest first",
+        "tags": [
+          "Personal API Keys"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "me:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "me:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PersonalApiKey"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      },
+      "post": {
+        "operationId": "me.api_keys.create",
+        "summary": "Issue a personal API key that acts as the signed-in user, narrowed to its scopes",
+        "tags": [
+          "Personal API Keys"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "me:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "me:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmConnectCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePersonalApiKeyResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/me/api-keys/{keyId}/revoke": {
+      "post": {
+        "operationId": "me.api_keys.revoke",
+        "summary": "Revoke one of the signed-in user's personal API keys; its next call is refused",
+        "tags": [
+          "Personal API Keys"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "me:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "me:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalApiKey"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/me/connect-codes/{userCode}": {
+      "get": {
+        "operationId": "me.connect_codes.get",
+        "summary": "Read the connect code a CLI shows, before confirming it",
+        "tags": [
+          "Personal API Keys"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "me:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "me:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectCode"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "auth"
+      }
+    },
+    "/api/v1/me/connect-codes/{userCode}/confirm": {
+      "post": {
+        "operationId": "me.connect_codes.confirm",
+        "summary": "Confirm a CLI's connect code: the CLI collects a personal API key of these scopes",
+        "tags": [
+          "Personal API Keys"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "me:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "me:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmConnectCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "confirmed": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "confirmed"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "auth"
       }
     },
     "/api/v1/me/model-preference": {
@@ -16061,6 +16857,16 @@
           }
         }
       },
+      "ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOutputNotRetained": {
+        "description": "`CONFLICT`: The request conflicts with the current state of the resource. `IDEMPOTENCY_KEY_REUSED`: The `Idempotency-Key` was already used for another operation or another input. Send a new key. `OPERATION_IN_PROGRESS`: The first call with this `Idempotency-Key` has not ended, or it was interrupted and its outcome is not known (`details.interrupted` is `true`). `details.operationRunId` names its run. An interrupted call is never run again under its key: check what it changed, then send a new key. `OUTPUT_NOT_RETAINED`: The call with this `Idempotency-Key` completed, and its answer is not kept: it was too large, or it held a secret that is shown once. Read the result from what the call changed. A secret is not shown again.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      },
       "IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained": {
         "description": "`IDEMPOTENCY_KEY_REUSED`: The `Idempotency-Key` was already used for another operation or another input. Send a new key. `OPERATION_IN_PROGRESS`: The first call with this `Idempotency-Key` has not ended, or it was interrupted and its outcome is not known (`details.interrupted` is `true`). `details.operationRunId` names its run. An interrupted call is never run again under its key: check what it changed, then send a new key. `OPERATION_EXPIRED`: The call waited for an approval until it expired, and nothing was executed. Call again with a new key. `OUTPUT_NOT_RETAINED`: The call with this `Idempotency-Key` completed, and its answer is not kept: it was too large, or it held a secret that is shown once. Read the result from what the call changed. A secret is not shown again.",
         "content": {
@@ -20183,6 +20989,50 @@
           "references"
         ]
       },
+      "ConfirmConnectCodeRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "scopes": {
+            "minItems": 1,
+            "maxItems": 64,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonalApiKeyScope"
+            }
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "name",
+          "scopes",
+          "expiresAt"
+        ]
+      },
+      "ConnectCode": {
+        "type": "object",
+        "properties": {
+          "clientLabel": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "createdAt",
+          "expiresAt"
+        ]
+      },
       "Conversation": {
         "type": "object",
         "properties": {
@@ -21114,6 +21964,21 @@
           "scopeKind"
         ]
       },
+      "CreatePersonalApiKeyResponse": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/PersonalApiKey"
+          },
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "secret"
+        ]
+      },
       "CreateServicePrincipalRequest": {
         "type": "object",
         "properties": {
@@ -21195,50 +22060,34 @@
         ]
       },
       "DelegatedActor": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "default": "service_principal",
-            "type": "string",
-            "const": "service_principal"
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SessionTokenDelegatedActor"
           },
-          "id": {
-            "type": "string"
-          },
-          "displayLabel": {
-            "type": "string"
-          },
-          "authSource": {
-            "type": "string"
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "api_key"
+              },
+              "id": {
+                "type": "string"
+              },
+              "displayLabel": {
+                "type": "string"
+              },
+              "authSource": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "displayLabel",
+              "authSource"
+            ]
           }
-        },
-        "required": [
-          "kind",
-          "id",
-          "authSource"
-        ]
-      },
-      "DelegatedActorInput": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "default": "service_principal",
-            "type": "string",
-            "const": "service_principal"
-          },
-          "id": {
-            "type": "string"
-          },
-          "displayLabel": {
-            "type": "string"
-          },
-          "authSource": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "authSource"
         ]
       },
       "DeleteAssetRequest": {
@@ -21852,7 +22701,7 @@
             }
           },
           "delegatedActor": {
-            "$ref": "#/components/schemas/DelegatedActorInput"
+            "$ref": "#/components/schemas/SessionTokenDelegatedActorInput"
           }
         },
         "required": [
@@ -23859,6 +24708,58 @@
           "createdAt"
         ]
       },
+      "PersonalApiKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ownerUserId": {
+            "type": "string"
+          },
+          "ownerDisplayLabel": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonalApiKeyScope"
+            }
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "revokedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "lastUsedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "ownerUserId",
+          "name",
+          "keyPrefix",
+          "scopes",
+          "createdAt",
+          "expiresAt"
+        ]
+      },
+      "PersonalApiKeyScope": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
       "PlatformAssetKind": {
         "type": "object",
         "properties": {
@@ -24151,6 +25052,55 @@
           "high",
           "xhigh",
           "max"
+        ]
+      },
+      "RedeemConnectCodeRequest": {
+        "type": "object",
+        "properties": {
+          "deviceCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "deviceCode"
+        ]
+      },
+      "RedeemConnectCodeResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "pending"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "issued"
+              },
+              "key": {
+                "$ref": "#/components/schemas/PersonalApiKey"
+              },
+              "secret": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "key",
+              "secret"
+            ]
+          }
         ]
       },
       "RenameConversationRequest": {
@@ -25027,6 +25977,53 @@
           "disabled"
         ]
       },
+      "SessionTokenDelegatedActor": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "default": "service_principal",
+            "type": "string",
+            "const": "service_principal"
+          },
+          "id": {
+            "type": "string"
+          },
+          "displayLabel": {
+            "type": "string"
+          },
+          "authSource": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "authSource"
+        ]
+      },
+      "SessionTokenDelegatedActorInput": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "default": "service_principal",
+            "type": "string",
+            "const": "service_principal"
+          },
+          "id": {
+            "type": "string"
+          },
+          "displayLabel": {
+            "type": "string"
+          },
+          "authSource": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "authSource"
+        ]
+      },
       "SetAssetAvailabilityRequest": {
         "type": "object",
         "properties": {
@@ -25100,6 +26097,45 @@
         },
         "required": [
           "version"
+        ]
+      },
+      "StartConnectCodeRequest": {
+        "type": "object",
+        "properties": {
+          "clientLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "StartConnectCodeResponse": {
+        "type": "object",
+        "properties": {
+          "userCode": {
+            "type": "string"
+          },
+          "deviceCode": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "confirmPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "userCode",
+          "deviceCode",
+          "expiresAt",
+          "intervalSeconds",
+          "confirmPath"
         ]
       },
       "StartConversationRunRequest": {

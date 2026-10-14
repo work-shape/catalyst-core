@@ -27,12 +27,24 @@ export const authPrincipalSchema = z.object({
   externalUserId: z.string().optional()
 });
 
-export const delegatedActorSchema = z.object({
+/** The backend of an embedding host that names a user in a session token. */
+export const sessionTokenDelegatedActorSchema = z.object({
   kind: z.literal("service_principal").default("service_principal"),
   id: z.string(),
   displayLabel: z.string().optional(),
   authSource: z.string()
 });
+
+/** Who acts for the user of a call: an embedding host's backend, or the user's own API key. */
+export const delegatedActorSchema = z.union([
+  sessionTokenDelegatedActorSchema,
+  z.object({
+    kind: z.literal("api_key"),
+    id: z.string(),
+    displayLabel: z.string(),
+    authSource: z.string()
+  })
+]);
 
 export const apiUserSchema = z.object({
   id: z.string(),
@@ -61,7 +73,7 @@ export const issueSessionTokenRequestSchema = z.object({
   permissions: z.array(z.string()).optional(),
   correlationId: z.string().optional(),
   scopes: z.array(authScopeSchema.exclude(["*"])).optional(),
-  delegatedActor: delegatedActorSchema.optional()
+  delegatedActor: sessionTokenDelegatedActorSchema.optional()
 });
 
 export const issueSessionTokenResponseSchema = z.object({

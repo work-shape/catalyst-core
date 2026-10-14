@@ -19,6 +19,7 @@ import { inbox } from "./inbox";
 import { navigation } from "./navigation";
 import { operations } from "./operations";
 import { pages } from "./pages";
+import { personalApiKeys } from "./personal-api-keys";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { tools } from "./tools";
@@ -51,6 +52,7 @@ export const translations = combineTranslations(common)
   .and(navigation)
   .and(operations)
   .and(pages)
+  .and(personalApiKeys)
   .and(settings)
   .and(signIn)
   .and(tools)
