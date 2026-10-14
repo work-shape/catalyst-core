@@ -3,6 +3,10 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+The entries of the next release are files in `changes/unreleased/`, one per change; a change
+adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
+in, and `pnpm changelog` prints the next release's section as it will read.
+
 ## Unreleased
 
 ### Added
@@ -2268,14 +2272,14 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
-- **Guardrails on UTF-16 without a mark and on the App draft of a `page.save`:** a file is now
-  read as UTF-16 without a byte order mark where at least 90% of the bytes at one parity of its
-  first KiB are NUL and at most 10% at the other. Before, it took a NUL in every other byte, so
-  one letter outside Latin-1, as in "Łukasz", left the file printable runs and an IBAN in it
-  passed. A guardrail that warns about the App draft a `page.save` writes is now passed on to
-  the agent (`app.warnings` of the answer). One that asks for an approval there blocks the draft
-  and is kept as a `block` hit, as no request is filed and nobody could approve it; the answer
-  says that the person's Update app on the Page can wait for the approval.
+- **A service principal calls no operation that a person calls:** an operation registered with
+  `auth: "user"`, such as `workspaces.create`, is refused to a service principal on the call
+  path as its route refuses one, also where the call takes no route, as from a step of a
+  Workflow. The call is denied before the operation runs, with an Operation Run that is
+  `denied` and the reason `user_only`, and the step says that only a person may call it. Such
+  a refusal names no right where the operation names none: `action` of a forbidden denial is
+  optional, and is left out where no right opens the call.
+  Before, the step's call ran into the operation and failed there.
 - **Parallel browser suites on one Postgres:** `scripts/run-chat-e2e.mjs`, `playwright.config.ts`
   and the specs hard-coded the database `agent_chat`, so several runs on one machine erased each
   other's data. `E2E_DATABASE_URL` now replaces that URL for the migration, the API, the worker
