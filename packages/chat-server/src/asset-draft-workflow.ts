@@ -13,6 +13,7 @@ import {
   type JsonObject
 } from "@vivd-catalyst/core";
 import type { AssetCall } from "./asset-access";
+import type { AssetWarning } from "./asset-placement";
 import {
   buildAssetFileSet,
   copyFileSetToAsset,
@@ -58,11 +59,7 @@ export interface AssetWorkflowHost {
       /** The files of the write as its event names them: path, hash and size, no content. */
       auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
     }
-  ): Promise<{
-    version: number;
-    revision: number;
-    warnings: { code: string; message: string }[];
-  }>;
+  ): Promise<{ version: number; revision: number; warnings: AssetWarning[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
 }
 

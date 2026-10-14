@@ -17,7 +17,7 @@ import {
 import { AreaFrame, useAreaTitleFocus } from "../area-frame";
 import { agentKind } from "../build-area/agent-kind";
 import type { BuildAssetStart } from "../build-area/build-asset-kind";
-import { BuildCreateDialog } from "../build-area/build-create-dialog";
+import { BuildCreateDialog, type BuildCreateStart } from "../build-area/build-create-dialog";
 import { useTranslation } from "../i18n";
 import { RouteLink } from "../route-link";
 import type { WorkspaceRoute } from "../workspace/workspace-route";
@@ -44,7 +44,11 @@ export interface AgentsPageProps {
    * Present for a person who may create an agent. Its dialog opens on this page, and only
    * Continue leads to Studio, where the new agent is written.
    */
-  newAgent?: AgentCreation & { onStart(start: BuildAssetStart): void };
+  newAgent?: AgentCreation & {
+    /** Where the new agent starts available: the open workspace, as one made in Studio does. */
+    startsIn: BuildCreateStart;
+    onStart(start: BuildAssetStart): void;
+  };
 }
 
 /**
@@ -126,6 +130,7 @@ export function AgentsPage({
           entry={agentKind}
           namespaces={newAgent.namespaces}
           mayNameFreely={newAgent.mayNameFreely}
+          startsIn={newAgent.startsIn}
           onClose={() => setCreating(false)}
           onStart={(start) => {
             setCreating(false);

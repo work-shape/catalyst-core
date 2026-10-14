@@ -28,6 +28,8 @@ export interface SettingsPageContextValue {
   selectThemePreference(preference: ThemeModePreference): void;
   /** The shared workspace the Workspace pages change; absent on every other page. */
   workspace: CollaborationWorkspaceWithRole | undefined;
+  /** The workspace the person works in, personal or shared: where a new agent starts. */
+  activeWorkspace: CollaborationWorkspaceWithRole | undefined;
   /** The person deleted their account: the session is over. */
   onAccountDeleted(): void;
   /** The person left the workspace they were changing. */
