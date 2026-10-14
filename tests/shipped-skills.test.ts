@@ -191,7 +191,7 @@ describe("the skills that ship with the platform", () => {
         }
       ]
     });
-    expect(result).toEqual({ created: [], updated: [GUIDE], removed: [] });
+    expect(result).toEqual({ created: [], updated: [GUIDE], removed: [], unlisted: [] });
     const replaced = await read(without, GUIDE);
     expect(replaced.revision).toBeGreaterThan(guide.revision);
     expect(replaced.config.content).toBe("# The next release's guide");

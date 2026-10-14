@@ -181,6 +181,11 @@ export const EVENTS = {
     name: "config_asset.reverted",
     subject: "config_asset"
   },
+  "config_asset.shipped_skill_unlisted": {
+    ...LEGACY_AUDIT,
+    name: "config_asset.shipped_skill_unlisted",
+    subject: "config_asset"
+  },
   "config_asset.updated": {
     ...LEGACY_AUDIT,
     name: "config_asset.updated",

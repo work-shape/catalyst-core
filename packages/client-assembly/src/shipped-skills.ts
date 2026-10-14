@@ -53,7 +53,7 @@ function shippedSkillsOf(modules: ModuleSnapshot): ShippedSkill[] {
 /** Makes the stored shipped skills what this build ships, and logs what it changed. */
 export async function seedInstanceShippedSkills(execution: {
   clientInstanceId: ClientInstanceId;
-  store: Pick<PlatformStores, "configAssets">;
+  store: Pick<PlatformStores, "configAssets" | "audit">;
   modules: ModuleSnapshot;
   logger: Logger;
 }): Promise<void> {
@@ -63,6 +63,7 @@ export async function seedInstanceShippedSkills(execution: {
     skills: shippedSkillsOf(execution.modules)
   });
   if (result.created.length + result.updated.length + result.removed.length > 0) {
+    // Names only: the skills, and the agents that listed a removed one.
     execution.logger.info({ skills: result }, "Shipped skills reconciled");
   }
 }

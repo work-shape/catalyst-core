@@ -1,6 +1,7 @@
 import { skillConfigSchema } from "@vivd-catalyst/config-schema";
 import {
   AppError,
+  createPlatformId,
   isAppError,
   type AuditActor,
   type ClientInstanceId,
@@ -14,10 +15,13 @@ import { configValuesEqual, readDefinitionField } from "./asset-kinds/shared";
 
 // The seed of the skills that ship with the platform. When the API process starts it makes the
 // stored skills of origin `release` equal to what this build ships: a new one is created, a
-// changed one gets a revision, and one the build no longer ships is deleted. It writes to the
-// store and through no operation, which refuse every write to such a skill.
+// changed one gets a revision, and one the build no longer ships is deleted. An agent that lists
+// a skill being deleted gets a revision without it first, in the same write, or every later
+// write of the instance would be refused for the reference it left. It writes to the store and
+// through no operation, which refuse every write to such a skill.
 
 const SKILL_KIND = "skill";
+const AGENT_KIND = "agent";
 
 /** Who a seeded revision is written by, as History shows it. */
 const SYSTEM_ACTOR: AuditActor = { displayLabel: "System", roles: [] };
@@ -27,11 +31,13 @@ export interface ShippedSkillSeedResult {
   created: string[];
   updated: string[];
   removed: string[];
+  /** The agents that listed a removed skill and were written without it. */
+  unlisted: { agentName: string; skillName: string }[];
 }
 
 export interface SeedShippedSkillsInput {
   clientInstanceId: ClientInstanceId;
-  stores: Pick<PlatformStores, "configAssets">;
+  stores: Pick<PlatformStores, "configAssets" | "audit">;
   /** What this build ships, with the modules that are on. */
   skills: readonly ShippedSkill[];
 }
@@ -88,7 +94,7 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
       asset
     ])
   );
-  const result: ShippedSkillSeedResult = { created: [], updated: [], removed: [] };
+  const result: ShippedSkillSeedResult = { created: [], updated: [], removed: [], unlisted: [] };
   const mutations: ConfigAssetMutation[] = [];
   const baseRevisions: Record<string, number | null> = {};
   for (const [name, config] of shipped) {
@@ -114,13 +120,58 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
     baseRevisions[`${SKILL_KIND}:${asset.name}`] = asset.revision;
     result.removed.push(asset.name);
   }
-  if (mutations.length > 0) {
-    await store.applyConfigAssetMutations({
+  if (result.removed.length > 0) {
+    const removed = new Set(result.removed);
+    for (const agent of await store.listActiveConfigAssets({
       clientInstanceId,
-      actor: SYSTEM_ACTOR,
-      baseRevisions,
-      mutations
-    });
+      kind: AGENT_KIND
+    })) {
+      const config = agent.config;
+      const skillNames = config?.skillNames;
+      if (!config || !Array.isArray(skillNames)) continue;
+      const listsRemoved = (name: unknown): name is string =>
+        typeof name === "string" && removed.has(name);
+      const dropped = skillNames.filter(listsRemoved);
+      if (dropped.length === 0) continue;
+      // Only the reference goes; a copy of the skill under a name of the instance's own stays.
+      mutations.push({
+        type: "upsert",
+        kind: AGENT_KIND,
+        name: agent.name,
+        config: { ...config, skillNames: skillNames.filter((name) => !listsRemoved(name)) }
+      });
+      baseRevisions[`${AGENT_KIND}:${agent.name}`] = agent.revision;
+      for (const skillName of dropped) result.unlisted.push({ agentName: agent.name, skillName });
+    }
+  }
+  const written =
+    mutations.length > 0
+      ? await store.applyConfigAssetMutations({
+          clientInstanceId,
+          actor: SYSTEM_ACTOR,
+          baseRevisions,
+          mutations
+        })
+      : undefined;
+  if (written && result.unlisted.length > 0) {
+    // One correlation for the start that wrote them; names only, never an agent's content.
+    const correlationId = createPlatformId("seed");
+    for (const { agentName, skillName } of result.unlisted) {
+      await input.stores.audit.appendAuditEvent({
+        clientInstanceId,
+        type: "config_asset.shipped_skill_unlisted",
+        status: "success",
+        actor: SYSTEM_ACTOR,
+        correlationId,
+        metadata: {
+          kind: AGENT_KIND,
+          name: agentName,
+          skillName,
+          revision: written.revisions[`${AGENT_KIND}:${agentName}`] ?? null,
+          version: written.version
+        }
+      });
+    }
   }
   return result;
 }
