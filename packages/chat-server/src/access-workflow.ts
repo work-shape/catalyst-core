@@ -1,9 +1,9 @@
 import {
   AppError,
+  authorizeHeldRights,
   userInDeletionError,
   asUserId,
   auditActorFromUser,
-  hasAuthScope,
   requireAuthScope,
   isAuthenticatedServicePrincipal,
   isGrantableAction,
@@ -13,7 +13,6 @@ import {
   moduleOffError,
   isSuperadmin,
   listAccessEntries,
-  operationDenialError,
   type AccessEntry,
   type AccessHolder,
   type ActorAccess,
@@ -22,6 +21,7 @@ import {
   type OperationAuthorization,
   type OperationExecutionContext,
   type GrantScopeAsset,
+  type HeldRight,
   type JsonObject,
   type Namespace,
   type NamespaceUsage,
@@ -30,10 +30,17 @@ import {
   type StorePage,
   type UserRecord
 } from "@vivd-catalyst/core";
+import { SERVICE_PRINCIPALS_ACTION } from "./api-access-administration-workflow";
 import {
-  SERVICE_PRINCIPALS_ACTION,
-  authorizePrincipalAdministration
-} from "./api-access-administration-workflow";
+  authorizePrincipalHolderWrite,
+  holderNotAdministrable,
+  mayManageHolder,
+  ownRowRefusal,
+  requireAuthorized,
+  requireManageableHolder,
+  seesPrincipals
+} from "./grant-holder-rules";
+import { rightAtScope, scopeAssets } from "./person-rights";
 import { assetRight, authorizeGivingToPrincipal } from "./principal-rights";
 import type { ChatServerOptions } from "./types";
 
@@ -50,8 +57,7 @@ type GrantWriteContext = Pick<OperationExecutionContext, "correlationId" | "acce
  * row; a service principal's row is written under `SERVICE_PRINCIPALS_ACTION`.
  */
 const MANAGE_ACTION = "users.manage";
-/** What a credential carries to change, and to read, service principals. */
-const API_ACCESS_WRITE_SCOPE = "api_access:write";
+/** What a credential carries to read service principals. */
 const API_ACCESS_READ_SCOPE = "api_access:read";
 const GRANT_OPERATION = "permissions.grant";
 const REVOKE_OPERATION = "permissions.revoke";
@@ -110,9 +116,9 @@ export class AccessWorkflow {
     if (!right.allowed) {
       return { allowed: false, action: MANAGE_ACTION, reason: right.reason };
     }
-    return command.holderKind === "user"
-      ? this.authorizeUserHolderWrite(actor, operation, command.holderId)
-      : { allowed: true };
+    if (command.holderKind !== "user") return { allowed: true };
+    if (command.holderId === actor.id) return ownRowRefusal(operation);
+    return this.authorizeUserHolderWrite(actor, operation, command.holderId);
   }
 
   /**
@@ -200,13 +206,19 @@ export class AccessWorkflow {
         `'${command.action}' cannot be granted at the scope kind '${command.scopeKind}'`
       );
     }
-    const scope = await this.grantScope(command);
+    const { scope, right } = await this.grantScope(command);
     const holder = await this.findUser(command.holderId);
     if (!holder) {
       throw new AppError("NOT_FOUND", "User not found", { reason: "unknown_holder" });
     }
     // Asked before the policy by `authorizeGrant`, and again here on the holder as it is now.
     requireManageableHolder(actor, holder);
+    if (holder.id === actor.id) requireAuthorized(ownRowRefusal(GRANT_OPERATION));
+    // The rule of no escalation, for an allow and a deny alike: a deny is written only by a
+    // holder of what it refuses, as an allow is given only by one.
+    requireAuthorized(
+      authorizeHeldRights(context.access, [right], { gives: { label: holder.displayLabel } })
+    );
     // The store refuses the same for a deletion requested after this read.
     if (holder.status === "deleting") throw userInDeletionError();
     const grant = await this.options.stores.access.createGrant({
@@ -310,6 +322,8 @@ export class AccessWorkflow {
       const holder = await this.findUser(existing.holderId);
       if (holder) {
         requireManageableHolder(actor, holder);
+        if (existing.effect === "deny")
+          await this.requireMayLiftDeny(actor, context, existing, holder);
       }
     }
     if (existing.holderKind === "service_principal") {
@@ -472,17 +486,24 @@ export class AccessWorkflow {
     return namespace;
   }
 
-  private async grantScope(
-    command: GrantCommand
-  ): Promise<Pick<PermissionGrant, "scopeKind" | "scopeId" | "namespace">> {
+  /** Where a person's row is written, with the right it gives there as the rule asks it. */
+  private async grantScope(command: GrantCommand): Promise<{
+    scope: Pick<PermissionGrant, "scopeKind" | "scopeId" | "namespace">;
+    right: HeldRight;
+  }> {
+    const { action } = command;
     if (command.scopeKind === "namespace") {
       if (command.namespace === undefined || command.scopeId !== undefined) {
         throw refused("invalid_scope", "A Namespace grant names a prefix and no scope id");
       }
-      return { scopeKind: "namespace", namespace: command.namespace };
+      return {
+        scope: { scopeKind: "namespace", namespace: command.namespace },
+        right: { action, resource: { name: command.namespace } }
+      };
     }
     if (command.scopeKind === "asset") {
-      return { scopeKind: "asset", scopeId: (await this.grantableAsset(command)).id };
+      const asset = await this.grantableAsset(command);
+      return { scope: { scopeKind: "asset", scopeId: asset.id }, right: assetRight(action, asset) };
     }
     if (command.scopeKind === "workspace") {
       if (command.scopeId === undefined || command.namespace !== undefined) {
@@ -490,11 +511,36 @@ export class AccessWorkflow {
       }
       // The store refuses a workspace that is not a Shared Workspace of this instance, under
       // the lock that keeps a row from appearing while the workspace is deleted.
-      return { scopeKind: "workspace", scopeId: command.scopeId };
+      return {
+        scope: { scopeKind: "workspace", scopeId: command.scopeId },
+        right: { action, resource: { workspaceId: command.scopeId } }
+      };
     }
     throw refused(
       "invalid_scope",
       "A grant can be written for a Namespace, one asset or one workspace only"
+    );
+  }
+
+  /**
+   * Removing a person's deny gives back what it refused, so it asks what giving asks: never
+   * one's own, and only by a holder of the action where the row refuses it.
+   */
+  private async requireMayLiftDeny(
+    actor: AuthenticatedUser,
+    context: GrantWriteContext,
+    row: PermissionGrant,
+    holder: UserRecord
+  ): Promise<void> {
+    if (holder.id === actor.id) requireAuthorized(ownRowRefusal(REVOKE_OPERATION));
+    const assets = await scopeAssets(
+      { clientInstanceId: this.options.clientInstanceId, access: this.options.stores.access },
+      [row]
+    );
+    requireAuthorized(
+      authorizeHeldRights(context.access, [rightAtScope(row, assets)], {
+        gives: { label: holder.displayLabel }
+      })
     );
   }
 
@@ -659,69 +705,6 @@ function kindOfAction(action: string): string {
 
 function refused(reason: string, message: string): AppError {
   return new AppError("VALIDATION_FAILED", message, { reason });
-}
-
-/**
- * No right is missing that the caller could be given, so the refusal names the operation and
- * its text says who writes the row.
- */
-function holderNotAdministrable(operation: string, message: string): OperationAuthorization {
-  return { allowed: false, action: operation, reason: "holder_not_administrable", message };
-}
-
-/** Whom the list of service principals is shown to, and so the rows they hold. */
-function seesPrincipals(actor: AuthenticatedUser, access: ActorAccess): boolean {
-  return (
-    access.authorize(SERVICE_PRINCIPALS_ACTION).allowed &&
-    hasAuthScope(actor, API_ACCESS_READ_SCOPE)
-  );
-}
-
-/**
- * Who writes a service principal's grant row: whoever administers service principals, by that
- * one check and no second rule. The credential is asked what the operations that administer
- * principals ask of it, so a key issued for managing users writes no row for a principal.
- */
-function authorizePrincipalHolderWrite(
-  actor: AuthenticatedUser,
-  access: ActorAccess,
-  operation: string
-): OperationAuthorization {
-  const administration = authorizePrincipalAdministration({ actor, access }, operation);
-  if (!administration.allowed) {
-    return administration;
-  }
-  return hasAuthScope(actor, API_ACCESS_WRITE_SCOPE)
-    ? { allowed: true }
-    : {
-        allowed: false,
-        // The right is held. What is missing is a scope of the credential, and it is named.
-        action: `auth_scope:${API_ACCESS_WRITE_SCOPE}`,
-        reason: "no_grant",
-        message: `Missing auth scope '${API_ACCESS_WRITE_SCOPE}'`
-      };
-}
-
-function requireAuthorized(authorization: OperationAuthorization): void {
-  if (!authorization.allowed) {
-    throw operationDenialError({
-      kind: "forbidden",
-      action: authorization.action,
-      reason: authorization.reason,
-      ...(authorization.message === undefined ? {} : { message: authorization.message })
-    });
-  }
-}
-
-/** A caller who is not a superadmin writes no row for a holder who is one. */
-function mayManageHolder(actor: AuthenticatedUser, holder: UserRecord): boolean {
-  return !isSuperadmin(holder) || isSuperadmin(actor);
-}
-
-function requireManageableHolder(actor: AuthenticatedUser, holder: UserRecord): void {
-  if (!mayManageHolder(actor, holder)) {
-    throw new AppError("FORBIDDEN", "Only superadmins can manage superadmin users");
-  }
 }
 
 /**

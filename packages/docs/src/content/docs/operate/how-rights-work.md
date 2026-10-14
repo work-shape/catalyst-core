@@ -247,6 +247,10 @@ A switch is stored as grants for the whole instance, one per action the right st
 
 Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin level, changes another Superadmin, deletes a user, or switches "Manage API access" and "Manage agent model settings" on or off.
 
+"Manage users" does not let you hand out more than you hold. Giving a person a level, a switch or a grant asks whether you hold every right it carries, at the place it is given. Writing a deny, and taking one away, ask the same of the right the deny names. Nobody gives a right to themselves, and nobody writes or lifts a grant of their own, even one they already hold.
+
+Changing a person's account asks whether you hold every right the person holds: their level, their switches, their grants and the Shared Workspaces they are a member of. Their own Personal Workspace does not count. This covers the name and email, the password, a sign-in, the status, the level and the switches, and it holds for a person who is switched off as well, since switching them on is a change too. So a person with "Manage users" and nothing else can change only people who hold nothing beyond their Personal Workspace. Where a personal API key makes the call, its scopes count too. A refusal names the first right that is missing.
+
 "Approve skill changes" also lets a person decide an action that waits for an approval.
 
 One right is on no switch. Pushing a release with `catalyst config push` needs `config_assets.release`, and only a Service Principal can hold it. See [API keys and Service Principals](#api-keys-and-service-principals).

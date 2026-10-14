@@ -27,7 +27,10 @@ import type { DeletionOutcome } from "./subject-deletion";
 import { changedPermissionEntries, requireMayAdministerUser } from "./user-administration-rights";
 
 /** What a changing user administration operation takes from its Operation Run. */
-type ChangeContext = Pick<OperationExecutionContext, "actor" | "audit" | "correlationId">;
+type ChangeContext = Pick<
+  OperationExecutionContext,
+  "actor" | "access" | "audit" | "correlationId"
+>;
 
 interface CreateUserCommand {
   displayLabel: string;
@@ -105,7 +108,8 @@ export class UserAdministrationWorkflow {
     command: CreateUserCommand
   ): Promise<UserRecord> {
     const actor = personOf(context.actor);
-    requireMayAdministerUser(operationId, actor, undefined, {
+    await requireMayAdministerUser(this.options, operationId, context, undefined, {
+      displayLabel: command.displayLabel,
       roles: command.roles,
       permissions: command.permissions
     });
@@ -141,7 +145,7 @@ export class UserAdministrationWorkflow {
   ): Promise<UserRecord> {
     const actor = personOf(context.actor);
     const existing = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, existing, {
+    await requireMayAdministerUser(this.options, operationId, context, existing, {
       roles: command.roles,
       permissions: command.permissions
     });
@@ -168,13 +172,14 @@ export class UserAdministrationWorkflow {
     command: DeleteUserCommand
   ): Promise<DeletionOutcome<UserRecord>> {
     const actor = personOf(context.actor);
-    // The operation's `authorize` refused everybody else before. Asked again where it deletes.
-    requireMayAdministerUser(operationId, actor, undefined, { superadminOnly: true });
     if (command.userId === actor.id) {
       throw new AppError("VALIDATION_FAILED", "Superadmins cannot delete their own user account");
     }
-
     const existing = await this.getUserOrThrow(command.userId);
+    // The operation's `authorize` refused everybody else before. Asked again where it deletes.
+    await requireMayAdministerUser(this.options, operationId, context, existing, {
+      superadminOnly: true
+    });
     await this.requireAtLeastOneRemainingSuperadmin(existing);
     return requestAccountDeletion(this.options, {
       userId: command.userId,
@@ -191,9 +196,9 @@ export class UserAdministrationWorkflow {
     context: ChangeContext,
     command: UpsertUserIdentityCommand
   ): Promise<UserRecord> {
-    const actor = personOf(context.actor);
+    personOf(context.actor);
     const existing = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, existing);
+    await requireMayAdministerUser(this.options, operationId, context, existing);
     requireNotInDeletion(existing);
     const updated = await this.options.stores.users.upsertUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
@@ -225,9 +230,9 @@ export class UserAdministrationWorkflow {
     context: ChangeContext,
     command: DeleteUserIdentityCommand
   ): Promise<UserRecord> {
-    const actor = personOf(context.actor);
+    personOf(context.actor);
     const existing = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, existing);
+    await requireMayAdministerUser(this.options, operationId, context, existing);
     requireNotInDeletion(existing);
     const updated = await this.options.stores.users.deleteUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
@@ -261,7 +266,7 @@ export class UserAdministrationWorkflow {
     context: ChangeContext,
     command: ResetUserPasswordCommand
   ): Promise<{ ok: true }> {
-    const actor = personOf(context.actor);
+    personOf(context.actor);
     const setPassword = this.options.standaloneAuth?.setPassword;
     if (!setPassword) {
       throw new AppError(
@@ -270,7 +275,7 @@ export class UserAdministrationWorkflow {
       );
     }
     const user = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, user);
+    await requireMayAdministerUser(this.options, operationId, context, user);
     requireNotInDeletion(user);
     const identity = user.identities.find(
       (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
@@ -319,7 +324,7 @@ export class UserAdministrationWorkflow {
       );
     }
     let user = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, user);
+    await requireMayAdministerUser(this.options, operationId, context, user);
     if (user.status !== "active") {
       throw new AppError("VALIDATION_FAILED", "Only active users can be invited");
     }

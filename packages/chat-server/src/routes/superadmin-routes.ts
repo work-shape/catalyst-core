@@ -13,8 +13,8 @@ const PASSWORD_MARK = "[password]";
 
 /**
  * Instance > Users and Usage. The two reads are plain routes. The seven user changes are
- * registered operations: each call is an Operation Run and checks `users.manage` and the
- * superadmin rules before it runs.
+ * registered operations: each call is an Operation Run and checks `users.manage`, the
+ * superadmin rules and the rule of no escalation before it runs.
  */
 export function registerSuperadminRoutes(route: Route, options: ChatServerOptions): void {
   const userAdministration = new UserAdministrationWorkflow(options);
@@ -48,6 +48,7 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     changeClass: "reversible",
     authorize: (input, context) =>
       authorizeUserAdministration(options, create.id, context, {
+        displayLabel: input.displayLabel,
         roles: input.roles,
         permissions: input.permissions
       }),

@@ -1,14 +1,20 @@
 import {
-  AppError,
+  ROLE_DEFAULT_ACTIONS,
   asUserId,
+  authorizeHeldRights,
   isAuthenticatedServicePrincipal,
+  isPermission,
   isSuperadmin,
+  operationDenialError,
+  type ActorAccess,
   type AuthenticatedIdentity,
+  type HeldRight,
   type OperationAuthorization,
-  type OperationAuthorizeContext,
   type UserRecord,
   type UserRole
 } from "@vivd-catalyst/core";
+import { personRights } from "./person-rights";
+import { RELEASE_KEY } from "./principal-rights";
 import type { ChatServerOptions } from "./types";
 
 /** The right every user administration operation asks for, on the instance. */
@@ -33,9 +39,19 @@ interface UserRightsChange {
 interface UserAdministrationCall extends UserRightsChange {
   /** The user the call changes. A call that creates one names none. */
   userId?: string;
+  /** The name of the user a call creates, as a refusal names them. */
+  displayLabel?: string;
   /** Only a superadmin makes this call at all: deleting a user. */
   superadminOnly?: true;
 }
+
+/** Who makes the call, with the rights of the call itself. */
+interface Caller {
+  actor: AuthenticatedIdentity;
+  access: ActorAccess;
+}
+
+type RulesOptions = Pick<ChatServerOptions, "stores" | "clientInstanceId">;
 
 /** The entries a submitted list of rights adds to or removes from the list a user has. */
 export function changedPermissionEntries(
@@ -52,16 +68,149 @@ export function changedPermissionEntries(
 }
 
 /**
+ * Who may call a user administration operation. It is the `authorize` of the seven changing
+ * operations, so the run records the check and a refusal, and nothing of the operation runs
+ * for anybody else. `users.manage` is asked first, so a caller without it causes no read, and
+ * so is the deletion only a superadmin makes. A refusal by a superadmin rule names the
+ * operation and says the rule, since no right a caller can be granted opens it. A user that
+ * does not exist passes: the operation answers that itself.
+ */
+export async function authorizeUserAdministration(
+  options: RulesOptions,
+  operationId: string,
+  caller: Caller,
+  call: UserAdministrationCall
+): Promise<OperationAuthorization> {
+  const right = caller.access.authorize(USERS_MANAGE_ACTION);
+  if (!right.allowed) {
+    return { allowed: false, action: USERS_MANAGE_ACTION, reason: right.reason };
+  }
+  // A service principal administers no user, whatever it was granted.
+  if (isAuthenticatedServicePrincipal(caller.actor)) {
+    return {
+      allowed: false,
+      action: operationId,
+      reason: "no_grant",
+      message: "Only a signed-in user may administer users"
+    };
+  }
+  if (call.superadminOnly && !isSuperadminActor(caller.actor)) {
+    return superadminRuleRefusal(operationId, "Only a superadmin may delete a user");
+  }
+  const target =
+    call.userId === undefined
+      ? undefined
+      : await options.stores.users.getUser({
+          clientInstanceId: options.clientInstanceId,
+          userId: asUserId(call.userId)
+        });
+  if (call.userId !== undefined && target === undefined) return { allowed: true };
+  return userAdministrationRule(options, operationId, caller, target, call);
+}
+
+/**
+ * The same rules, asked again inside the operation on the user as they are when it writes: a
+ * user may have become a superadmin, or been given a right, since the call was admitted. The
+ * refusal ends the run as denied, like the one before it.
+ */
+export async function requireMayAdministerUser(
+  options: RulesOptions,
+  operationId: string,
+  caller: Caller,
+  target: UserRecord | undefined,
+  call: Omit<UserAdministrationCall, "userId"> = {}
+): Promise<void> {
+  const decision = await userAdministrationRule(options, operationId, caller, target, call);
+  if (!decision.allowed) {
+    throw operationDenialError({
+      kind: "forbidden",
+      action: decision.action,
+      reason: decision.reason,
+      ...(decision.message === undefined ? {} : { message: decision.message })
+    });
+  }
+}
+
+/**
+ * The rules of user administration, in order. The superadmin rules, which no right opens.
+ * Nobody gives themselves a right. Whoever changes an account holds every right the account
+ * holds, since changing its password, sign-in, status or roles hands the account to them or
+ * takes it from its owner. And whoever gives a role or a legacy key holds each action given.
+ * `target` is the user as they are now, or nobody for a call that creates one.
+ */
+async function userAdministrationRule(
+  options: RulesOptions,
+  operationId: string,
+  caller: Caller,
+  target: UserRecord | undefined,
+  call: Omit<UserAdministrationCall, "userId">
+): Promise<OperationAuthorization> {
+  const named = superadminRuleAgainst(caller.actor, target, call);
+  if (named !== undefined) return superadminRuleRefusal(operationId, named);
+  const given = rightsGiven(target, call);
+  if (target !== undefined && target.id === caller.actor.id && given.length > 0) {
+    return {
+      allowed: false,
+      action: operationId,
+      reason: "holder_not_administrable",
+      message: "Nobody gives themselves a role or a right: another holder of it gives it"
+    };
+  }
+  if (target !== undefined) {
+    const account = authorizeHeldRights(
+      caller.access,
+      await personRights(
+        {
+          clientInstanceId: options.clientInstanceId,
+          access: options.stores.access,
+          workspaces: options.stores.workspaces
+        },
+        target
+      ),
+      { changes: { label: target.displayLabel } }
+    );
+    if (!account.allowed) return account;
+  }
+  return authorizeHeldRights(caller.access, given, {
+    gives: { label: target?.displayLabel ?? call.displayLabel ?? "the new user" }
+  });
+}
+
+/**
+ * What a call gives: each role it adds, as the actions the role holds by default on the whole
+ * instance, and each legacy key it adds or whose revocation it removes. Removing a role, a key
+ * or adding a revocation takes away and gives nothing. An entry that is no key, and the release
+ * key, which a person never carries, are left to the operation, which refuses them by name.
+ */
+function rightsGiven(
+  target: Pick<UserRecord, "roles" | "permissions"> | undefined,
+  call: UserRightsChange
+): HeldRight[] {
+  const roles = (call.roles ?? []).filter((role) => !target?.roles.includes(role));
+  const roleActions = roles.flatMap((role): readonly string[] =>
+    role === "user" || role === "admin" || role === "superadmin" ? ROLE_DEFAULT_ACTIONS[role] : []
+  );
+  const existing = target?.permissions ?? [];
+  const keys = changedPermissionEntries(call.permissions, existing)
+    .flatMap((entry) => {
+      if (!entry.startsWith("!")) return existing.includes(entry) ? [] : [entry];
+      // A revocation that the call removes gives the key back.
+      return existing.includes(entry) ? [entry.slice(1)] : [];
+    })
+    .filter((key) => isPermission(key) && key !== RELEASE_KEY);
+  return [...new Set([...roleActions, ...keys])].map((action) => ({ action }));
+}
+
+/**
  * The rules of user administration that depend on the superadmin role, as the sentence a
- * refused caller reads, or nothing where the actor may. A superadmin may make every change.
- * Anybody else may not change a superadmin, may not give the superadmin role, and may not give
- * or take a right only a superadmin assigns. `target` is the user as they are now, or nobody
- * for a call that creates one.
+ * refused caller reads, or nothing where the actor may. A superadmin passes them all. Anybody
+ * else may not change a superadmin, may not give the superadmin role, and may not give or take
+ * a right only a superadmin assigns.
  */
 function superadminRuleAgainst(
   actor: AuthenticatedIdentity,
   target: Pick<UserRecord, "roles" | "permissions"> | undefined,
-  call: Pick<UserAdministrationCall, "roles" | "permissions" | "superadminOnly"> = {}
+  call: Omit<UserAdministrationCall, "userId">
 ): string | undefined {
   if (isSuperadminActor(actor)) return undefined;
   if (call.superadminOnly) return "Only a superadmin may delete a user";
@@ -77,65 +226,10 @@ function superadminRuleAgainst(
     : `Only a superadmin may give or take the right '${assigned}'`;
 }
 
-/**
- * Who may call a user administration operation. It is the `authorize` of the seven changing
- * operations, so the run records the check and a refusal, and nothing of the operation runs
- * for anybody else. `users.manage` is asked first, so a caller without it causes no read. A
- * refusal by a superadmin rule names the operation and says the rule, since no right a caller
- * can be granted opens it. A user that does not exist passes: the operation answers that
- * itself.
- */
-export async function authorizeUserAdministration(
-  options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
-  operationId: string,
-  { actor, access }: Pick<OperationAuthorizeContext, "actor" | "access">,
-  call: UserAdministrationCall
-): Promise<OperationAuthorization> {
-  const right = access.authorize(USERS_MANAGE_ACTION);
-  if (!right.allowed) {
-    return { allowed: false, action: USERS_MANAGE_ACTION, reason: right.reason };
-  }
-  // A service principal administers no user, whatever it was granted.
-  if (isAuthenticatedServicePrincipal(actor)) {
-    return {
-      allowed: false,
-      action: operationId,
-      reason: "no_grant",
-      message: "Only a signed-in user may administer users"
-    };
-  }
-  if (isSuperadmin(actor)) return { allowed: true };
-  // Deleting is refused whoever the user is, so that refusal causes no read either.
-  const target =
-    call.superadminOnly || call.userId === undefined
-      ? undefined
-      : await options.stores.users.getUser({
-          clientInstanceId: options.clientInstanceId,
-          userId: asUserId(call.userId)
-        });
-  const message = superadminRuleAgainst(actor, target, call);
-  return message === undefined
-    ? { allowed: true }
-    : { allowed: false, action: operationId, reason: "no_grant", message };
+function superadminRuleRefusal(operationId: string, message: string): OperationAuthorization {
+  return { allowed: false, action: operationId, reason: "no_grant", message };
 }
 
 function isSuperadminActor(actor: AuthenticatedIdentity): boolean {
   return !isAuthenticatedServicePrincipal(actor) && isSuperadmin(actor);
-}
-
-/**
- * The same rules, asked again inside the operation on the user as they are when it writes: a
- * user may have become a superadmin since the call was admitted. The refusal ends the run as
- * denied, like the one before it.
- */
-export function requireMayAdministerUser(
-  operationId: string,
-  actor: AuthenticatedIdentity,
-  target: Pick<UserRecord, "roles" | "permissions"> | undefined,
-  call: Pick<UserAdministrationCall, "roles" | "permissions" | "superadminOnly"> = {}
-): void {
-  const message = superadminRuleAgainst(actor, target, call);
-  if (message !== undefined) {
-    throw new AppError("FORBIDDEN", message, { action: operationId, reason: "no_grant" });
-  }
 }
