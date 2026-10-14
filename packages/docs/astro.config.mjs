@@ -80,6 +80,10 @@ export default defineConfig({
           items: ["connect/connect-a-system"]
         },
         {
+          label: "How it works",
+          items: ["how-it-works/rights"]
+        },
+        {
           label: "Manage",
           items: [
             "operate/how-rights-work",

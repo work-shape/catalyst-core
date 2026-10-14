@@ -5,6 +5,8 @@ description: Who may do what in Workshape Catalyst, explained from the start. Ro
 
 ## The short version
 
+[Rights at a glance](/how-it-works/rights/) explains the same in three pictures.
+
 1. An action is checked before it runs, in a fixed order, whether you click a button, a script calls the API or an agent uses a tool for you.
 2. The instance first finds out who is calling, and for an API key what that key may be used for.
 3. Then it asks whether the caller holds the right for this action in this place. A right comes from your role, from a single right on the Users page, or from a grant on the Access page.
