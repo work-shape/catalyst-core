@@ -86,6 +86,13 @@ export function createProposeSkillChangeTool(options: {
         });
         // Whole, with its resources: the change and its base version are made from them.
         const skill = await options.assetSource.getSkill(parsed.skillName);
+        if (skill?.origin === "release") {
+          // A release writes it and nothing else: an approval could never apply the change.
+          throw new AppError(
+            "FORBIDDEN",
+            `The skill '${parsed.skillName}' ships with the release and cannot be changed on this instance. A person can copy it to a skill of the instance's own in Studio and change the copy`
+          );
+        }
         const preview = createSkillChangePreview(skill, parsed.operations);
         const payload = unknownToJsonValue({
           agentName: run.agentName,
