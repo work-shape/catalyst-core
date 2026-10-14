@@ -168,6 +168,8 @@ export function createSkillChangeApprovalHandler(
       const data = validatePayload(request.payload);
       if (data.operations[0]?.type === "create_skill") return [];
       const history = await listSkillRevisions(data.skillName);
+      // An undo already written, whose status was not recorded, is recovered as it is.
+      if (revertedBy(history, request.id)) return [];
       const applied = findRequestRevision(history, request.id);
       const before =
         applied && history.find((revision) => revision.revision === applied.revision - 1);
@@ -253,11 +255,7 @@ export function createSkillChangeApprovalHandler(
       }
       const latest = history.at(-1);
       // A previous revert may have committed before its request transition failed.
-      if (
-        latest !== undefined &&
-        appliedBy(latest, request.id) &&
-        (latest.operation === "revert" || latest.operation === "delete")
-      ) {
+      if (latest !== undefined && revertedBy(history, request.id)) {
         return revisionResult(data.skillName, latest);
       }
       if (latest?.id !== applied.id) {
@@ -366,6 +364,16 @@ function validatePayload(payload: JsonObject) {
 /** Whether the revision was written for this request. */
 function appliedBy(revision: ConfigAssetRevisionRecord, requestId: string): boolean {
   return revision.origin?.kind === "approval_request" && revision.origin.requestId === requestId;
+}
+
+/** Whether the newest revision is the undo of this request, written by an earlier revert. */
+function revertedBy(history: readonly ConfigAssetRevisionRecord[], requestId: string): boolean {
+  const latest = history.at(-1);
+  return (
+    latest !== undefined &&
+    appliedBy(latest, requestId) &&
+    (latest.operation === "revert" || latest.operation === "delete")
+  );
 }
 
 function findRequestRevision(revisions: ConfigAssetRevisionRecord[], requestId: string) {
