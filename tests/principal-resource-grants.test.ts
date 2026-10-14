@@ -488,33 +488,23 @@ describe("what a service principal's grant row may give", () => {
     expect(await s.principalRows()).toEqual([]);
   });
 
-  it("refuses a use right of the list that no loaded kind registers", async () => {
+  it("refuses a use right of the list whose module is off", async () => {
     const s = await setup();
     const { t } = s;
     const crm = await t.seed("crm", forWorkflows);
-    // The kinds of Data Stores and of Workflows belong to modules that are off here, so their
-    // rights are refused like everything else of those modules.
+    // The kinds of Data Stores, Knowledge Bases and Workflows belong to modules that are off
+    // here, so their rights are refused like everything else of those modules.
     const ofModule: Record<string, string> = {
       "data_store.read": "dataStores",
       "data_store.insert": "dataStores",
       "data_store.execute": "dataStores",
+      "knowledge_base.use": "knowledge",
       "workflow.use": "workflows"
     };
-    // No kind of Knowledge Bases is loaded and no module owns one yet. Its right is in the
-    // list and is handed out once a kind registers it.
-    const unregistered = PRINCIPAL_GRANTABLE_ACTIONS.filter(
-      (name) => name !== "connection.use" && !(name in ofModule)
-    );
-    expect(unregistered).toEqual(["knowledge_base.use"]);
-    for (const action of unregistered) {
-      const error = await t.expectRefused(
-        t.root.id,
-        "permissions.grant",
-        { payload: s.payload(crm, { action }) },
-        { status: 422, code: "VALIDATION_FAILED" }
-      );
-      expect(error.details, action).toMatchObject({ reason: "action_not_grantable_to_principal" });
-    }
+    // Every right of the list but a Connection's belongs to one of them.
+    expect(
+      PRINCIPAL_GRANTABLE_ACTIONS.filter((name) => name !== "connection.use" && !(name in ofModule))
+    ).toEqual([]);
     for (const [action, module] of Object.entries(ofModule)) {
       expect(PRINCIPAL_GRANTABLE_ACTIONS, action).toContain(action);
       const error = await t.expectRefused(

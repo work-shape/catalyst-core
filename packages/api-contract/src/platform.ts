@@ -67,7 +67,14 @@ export const platformContextWorkspaceSchema = z.object({
 /** Where a caller is and what it can do there: the first read of an outside editor. */
 export const platformContextSchema = z.object({
   instance: z.object({ id: z.string(), name: z.string() }),
-  release: z.object({ version: z.string() }),
+  release: z.object({
+    version: z.string(),
+    /**
+     * The version of `@work-shape/catalyst-cli` on npm that connects a local agent to this
+     * instance. Absent while none is published for it.
+     */
+    cliVersion: z.string().optional()
+  }),
   kinds: z.array(platformAssetKindSchema),
   /**
    * The actions of the listed kinds the caller can use on the instance's own assets as a

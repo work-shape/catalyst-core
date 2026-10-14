@@ -24,10 +24,10 @@ export const personalApiKeys = defineTranslations({
       "What the key may do. It never does more than you may do at the time of the call.",
     "personalApiKeys.namespace": "Limit to a Namespace",
     "personalApiKeys.namespaceHint":
-      "A Namespace prefix such as kai-. Empty: wherever you hold the chosen scopes.",
+      "A Namespace prefix such as tax-. Empty: wherever you hold the chosen scopes.",
     "personalApiKeys.namespaceInvalid":
-      "A Namespace prefix is lowercase words joined by hyphens and ends in a hyphen, such as kai-.",
-    "personalApiKeys.namespacePlaceholder": "kai-",
+      "A Namespace prefix is lowercase words joined by hyphens and ends in a hyphen, such as tax-.",
+    "personalApiKeys.namespacePlaceholder": "tax-",
     "personalApiKeys.expiry": "Expires after",
     "personalApiKeys.expiryDays": "{days} days",
     "personalApiKeys.connectTitle": "Connect the CLI",
@@ -76,10 +76,10 @@ export const personalApiKeys = defineTranslations({
       "Was der Schlüssel darf. Er darf nie mehr, als du zum Zeitpunkt des Aufrufs darfst.",
     "personalApiKeys.namespace": "Auf einen Namespace begrenzen",
     "personalApiKeys.namespaceHint":
-      "Ein Namespace-Präfix wie kai-. Leer: überall, wo du die gewählten Berechtigungen hast.",
+      "Ein Namespace-Präfix wie tax-. Leer: überall, wo du die gewählten Berechtigungen hast.",
     "personalApiKeys.namespaceInvalid":
-      "Ein Namespace-Präfix besteht aus kleingeschriebenen Wörtern mit Bindestrichen und endet mit einem Bindestrich, etwa kai-.",
-    "personalApiKeys.namespacePlaceholder": "kai-",
+      "Ein Namespace-Präfix besteht aus kleingeschriebenen Wörtern mit Bindestrichen und endet mit einem Bindestrich, etwa tax-.",
+    "personalApiKeys.namespacePlaceholder": "tax-",
     "personalApiKeys.expiry": "Läuft ab nach",
     "personalApiKeys.expiryDays": "{days} Tagen",
     "personalApiKeys.connectTitle": "CLI verbinden",

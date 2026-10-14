@@ -1,4 +1,8 @@
-import { RELEASE_VERSION, type PlatformContext } from "@vivd-catalyst/api-contract";
+import {
+  PUBLISHED_CLI_VERSION,
+  RELEASE_VERSION,
+  type PlatformContext
+} from "@vivd-catalyst/api-contract";
 import {
   ASSET_GET_FILES_MAX_BYTES,
   ASSET_PUT_FILES_MAX_BYTES,
@@ -187,7 +191,10 @@ export async function readPlatformContext(
       id: options.clientInstanceId,
       name: options.config.clientInstance.displayName
     },
-    release: { version: RELEASE_VERSION },
+    release: {
+      version: RELEASE_VERSION,
+      ...(PUBLISHED_CLI_VERSION === undefined ? {} : { cliVersion: PUBLISHED_CLI_VERSION })
+    },
     kinds: kinds.map((kind) => ({
       kind: kind.kind,
       plural: kind.plural,

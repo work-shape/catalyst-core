@@ -26,6 +26,8 @@ All roles, the database and its grants are created in one function, `provisionDa
 ALTER ROLE <platform role> CREATEDB CREATEROLE;
 ```
 
+For pgvector, which a store of a Knowledge Base with semantic search needs (`ensureVectorExtension`), the server needs the extension and the platform's role has to be a superuser: on the instance's own Postgres image (`docker/postgres/`) `vector` is not a trusted extension, so only a superuser creates it. The platform creates it in that store's database alone, in the schema `public`, and owns it; the roles of the store use its types and operators and cannot create, change or drop it. A store role holds no `CREATE` on its database, and where `vector` is trusted on a server the platform takes it from both roles again when it creates the extension. Without pgvector on the server the call stops with `vector_extension_missing`, and with a platform role that may not create it with `vector_extension_not_permitted`.
+
 An instance whose `secretStore.keys` is empty does not start with the module on: the passwords of the store roles are kept in the Secret Store.
 
 ## Assumptions of this data flow
