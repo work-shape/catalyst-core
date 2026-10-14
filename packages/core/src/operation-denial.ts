@@ -43,6 +43,8 @@ export type OperationDenial =
        * policy refuses the call itself.
        */
       reason?: "approval_unavailable";
+      /** The guardrail whose `require_approval` asked for the approval, where one did. */
+      guardrail?: { id: string; label: string };
     }
   | { kind: "guardrail"; guardrailId: string; message?: string }
   | { kind: "declined"; by: string; comment?: string };
@@ -60,8 +62,12 @@ export function operationDenialError(denial: OperationDenial): AppError {
       return denial.reason === "approval_unavailable"
         ? new AppError(
             "POLICY_DENIED",
-            `The instance's policy asks for another person's approval of '${denial.operation}', and this call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`,
-            { operation: denial.operation, reason: denial.reason }
+            `${denial.guardrail ? `The guardrail '${denial.guardrail.label}'` : "The instance's policy"} asks for another person's approval of '${denial.operation}', and this call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`,
+            {
+              operation: denial.operation,
+              reason: denial.reason,
+              ...(denial.guardrail ? { guardrailId: denial.guardrail.id } : {})
+            }
           )
         : new AppError(
             "POLICY_DENIED",

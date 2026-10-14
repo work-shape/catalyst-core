@@ -105,8 +105,10 @@ export const operationRunSchema = z.object({
       /**
        * `inherited_approval_not_applied`: the instance default asked for an approval and the
        * call ran on its caller's word, because its answer is a secret that is shown once.
+       * `workflow_publish`: a step of a run of a published Workflow revision made a call whose
+       * policy asks for a confirmation, and publishing the Workflow was that confirmation.
        */
-      reason: z.enum(["inherited_approval_not_applied"]).optional(),
+      reason: z.enum(["inherited_approval_not_applied", "workflow_publish"]).optional(),
       by: z.string(),
       /** The name of who decided, where the decision was another person's. */
       byLabel: z.string().optional(),

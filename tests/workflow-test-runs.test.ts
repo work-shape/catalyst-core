@@ -196,12 +196,9 @@ describe("a test run of a Workflow draft", () => {
       ["live_once.switched_on", "send", t.kai.id],
       ["live_once.used", "send", t.kai.id]
     ]);
-    // The tester's start satisfied `confirm`; a published run would ask for an approval here.
-    expect(sends.map((step) => step.publishedWouldAsk)).toEqual([
-      "approval",
-      "approval",
-      "approval"
-    ]);
+    // The tester's start satisfied `confirm`, and so does the publish of a published run: it
+    // asks nobody here either.
+    expect(sends.map((step) => step.publishedWouldAsk)).toEqual([undefined, undefined, undefined]);
     expect(live.steps.find((step) => step.stepId === "clients")?.publishedWouldAsk).toBeUndefined();
 
     // The next test run simulates the step again.

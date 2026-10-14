@@ -159,6 +159,20 @@ function guardrailRefusalMessage(
  * reason; where only a hold refused a read, which cannot wait, the one that asked for the
  * approval is named. An emitter that names no guardrail leaves the event that asked.
  */
+/** A guardrail as a refusal names it. */
+export interface GuardrailNamed {
+  id: string;
+  label: string;
+}
+
+/** The guardrail whose `require_approval` asked for an approval, where one did. */
+export function approvalAskedBy(answers: readonly SubjectAnswer[]): GuardrailNamed | undefined {
+  const asking = answers
+    .flatMap((answer) => answer.guardrails)
+    .find((answer) => answer.outcome === "require_approval");
+  return asking ? { id: asking.guardrailName, label: asking.displayName } : undefined;
+}
+
 export function guardrailDenial(answers: readonly SubjectAnswer[], event: string): OperationDenial {
   const named = answers.flatMap((answer) => answer.guardrails);
   const refusing =

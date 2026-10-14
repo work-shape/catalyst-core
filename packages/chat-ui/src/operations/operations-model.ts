@@ -72,7 +72,7 @@ export const operationOriginLabelKeys: Record<OperationRunOriginKind, Translatio
   schedule: "operations.originSchedule"
 };
 
-export const operationDecisionLabelKeys: Record<
+const operationDecisionLabelKeys: Record<
   NonNullable<OperationRunResource["decision"]>["mode"],
   TranslationKey
 > = {
@@ -81,6 +81,15 @@ export const operationDecisionLabelKeys: Record<
   approved: "operations.decisionApproved",
   declined: "operations.decisionDeclined"
 };
+
+/** The words of a run's decision: its reason where it names one the mode does not say. */
+export function operationDecisionLabelKey(
+  decision: Pick<NonNullable<OperationRunResource["decision"]>, "mode" | "reason">
+): TranslationKey {
+  return decision.reason === "workflow_publish"
+    ? "operations.decisionWorkflowPublish"
+    : operationDecisionLabelKeys[decision.mode];
+}
 
 /** The filters of the list. Each is one field of the query of `operations.list_runs`. */
 export interface OperationRunFilter {
