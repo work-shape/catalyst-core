@@ -64,15 +64,25 @@ export function isAgentAvailableInWorkspace(
     : workspace.id !== undefined && availability.collaborationWorkspaceIds.includes(workspace.id);
 }
 
+/**
+ * A skill as every turn reads it: what the agent is told of it, without its resources. A
+ * skill's resources can be large, such as the product docs of `platform-docs`, and are read
+ * one skill at a time, when a call asks for them.
+ */
+export type RuntimeSkill = Omit<SkillConfig, "resources">;
+
 export interface RuntimeAssetSnapshot {
   version: number;
   defaultAgentName?: string;
   agents: AgentConfig[];
-  skills: SkillConfig[];
+  skills: RuntimeSkill[];
 }
 
 export interface ConfigAssetSource {
+  /** The agents and skills, read for each turn and each tool call. */
   getSnapshot(): Promise<RuntimeAssetSnapshot>;
+  /** One skill whole, with its resources, or nothing where none of the name is active. */
+  getSkill(name: string): Promise<SkillConfig | undefined>;
 }
 
 export interface ConfigAssetRecord {
@@ -376,6 +386,11 @@ export interface ConfigAssetStore {
     kind?: ConfigAssetKind;
     /** Only assets whose name starts with this text, such as a Namespace prefix. */
     namePrefix?: string;
+    /**
+     * Skills without their `resources`, left out by the store before they are read: what the
+     * runtime snapshot reads. `getConfigAsset` reads one skill whole.
+     */
+    withoutSkillResources?: boolean;
   }): Promise<ConfigAssetRecord[]>;
   /**
    * One page of the active assets of a kind in one scope, in the byte order of their names.

@@ -17,6 +17,7 @@ import {
   assertSkillChangeScope,
   createSkillChangePreview,
   skillChangeOperationsSchema,
+  skillConfigSchema,
   skillNameSchema
 } from "@vivd-catalyst/config-schema";
 import {
@@ -106,8 +107,7 @@ export function createSkillChangeApprovalHandler(
       if (context.status !== "pending") {
         return toJsonObject(data.preview);
       }
-      const snapshot = await options.configAssets.source.getSnapshot();
-      const skill = snapshot.skills.find((candidate) => candidate.name === data.skillName);
+      const skill = await options.configAssets.source.getSkill(data.skillName);
       try {
         return toJsonObject(createSkillChangePreview(skill, data.operations));
       } catch {
@@ -128,7 +128,7 @@ export function createSkillChangeApprovalHandler(
       if (!agent || (!creation && !agent.skillNames.includes(data.skillName))) {
         return true;
       }
-      const skill = snapshot.skills.find((candidate) => candidate.name === data.skillName);
+      const skill = await options.configAssets.source.getSkill(data.skillName);
       try {
         applySkillChange(skill, data.operations);
         return false;
@@ -161,8 +161,7 @@ export function createSkillChangeApprovalHandler(
         skillName: data.skillName,
         operations: data.operations
       });
-      const current = snapshot.skills.find((candidate) => candidate.name === data.skillName);
-      const skill = applySkillChange(current, data.operations);
+      const skill = applySkillChange(snapshot.skill, data.operations);
       const mutations: ConfigAssetMutation[] = [
         { type: "upsert", kind: "skill", name: skill.name, config: toJsonObject(skill) }
       ];
@@ -299,6 +298,11 @@ export function createSkillChangeApprovalHandler(
     ]);
     return {
       ...(await options.configAssets.source.getSnapshot()),
+      /**
+       * The skill whole, with its resources, which the snapshot leaves out: the content of the
+       * revision read above, so a change is made from what its base names.
+       */
+      skill: skill?.status === "active" ? skillConfigSchema.parse(skill.config) : undefined,
       /** The last revision of the asset, a deleted one's included, or `null` for none. */
       revisionOf: (kind: "skill" | "agent", name: string) =>
         revisions.get(`${kind}:${name}`) ?? null

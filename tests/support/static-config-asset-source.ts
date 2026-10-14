@@ -19,6 +19,9 @@ export function createStaticConfigAssetSource(input: {
         agents: input.agents ?? [],
         skills: input.skills ?? []
       };
+    },
+    async getSkill(name) {
+      return input.skills?.find((skill) => skill.name === name);
     }
   };
 }

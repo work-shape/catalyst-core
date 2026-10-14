@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { seedShippedSkills } from "@vivd-catalyst/chat-server";
+import { createConfigAssetSource, platformDocsSkill } from "@vivd-catalyst/client-assembly";
 import { asClientInstanceId } from "@vivd-catalyst/core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
@@ -231,6 +232,21 @@ describe("the skills that ship with the platform", () => {
       .object({ config: z.object({ resources: z.array(z.object({ path: z.string() })) }) })
       .parse((await now.call("assets.get", { params: { kind: "skill", name: GUIDE } })).json());
     expect(docs.config.resources.map(({ path }) => path)).toContain("references/configure/cli.md");
+  });
+
+  it("leaves its references out of the snapshot every turn reads, and reads them with the skill", async () => {
+    const app = await start(false);
+    const source = createConfigAssetSource({ store: app.stores.configAssets, clientInstanceId });
+    // Read for every turn and tool call: the docs' 400 KB of references stay in the database.
+    const snapshot = await source.getSnapshot();
+    const docs = snapshot.skills.find((skill) => skill.name === GUIDE);
+    expect(docs?.content).toBe(platformDocsSkill.content);
+    expect(docs).not.toHaveProperty("resources");
+    expect(JSON.stringify(snapshot).length).toBeLessThan(50_000);
+    // What read_skill reads: the one skill, whole.
+    const whole = await source.getSkill(GUIDE);
+    expect(whole?.resources).toEqual(platformDocsSkill.resources);
+    expect(await source.getSkill("no-such-skill")).toBeUndefined();
   });
 
   it("is stored once by starts that run at the same time", async () => {

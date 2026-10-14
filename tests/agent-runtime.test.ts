@@ -146,7 +146,8 @@ describe("local agent runtime", () => {
               ],
               skills: []
             };
-          }
+          },
+          getSkill: async () => undefined
         },
         modelProviders: [providerConfig],
         defaultModelProvider: providerConfig,

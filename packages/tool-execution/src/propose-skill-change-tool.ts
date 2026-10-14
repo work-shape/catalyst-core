@@ -60,7 +60,8 @@ export function createProposeSkillChangeTool(options: {
           skillName: parsed.skillName,
           operations: parsed.operations
         });
-        const skill = snapshot.skills.find((candidate) => candidate.name === parsed.skillName);
+        // Whole, with its resources: the change and its base version are made from them.
+        const skill = await options.assetSource.getSkill(parsed.skillName);
         const preview = createSkillChangePreview(skill, parsed.operations);
         const payload = unknownToJsonValue({
           agentName: run.agentName,

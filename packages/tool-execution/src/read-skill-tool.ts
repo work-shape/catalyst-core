@@ -101,7 +101,10 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         );
       }
 
-      const skill = assets.skills.find((candidate) => candidate.name === input.name);
+      // The snapshot carries no skill's resources: the skill read is read whole.
+      const skill = assets.skills.some((candidate) => candidate.name === input.name)
+        ? await options.assetSource.getSkill(input.name)
+        : undefined;
       if (!skill) {
         return toolFailed("validation_failed", `Skill '${input.name}' is not defined`);
       }
