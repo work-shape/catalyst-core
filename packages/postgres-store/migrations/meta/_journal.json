@@ -526,6 +526,27 @@
       "when": 1791945073684,
       "tag": "0074_draft_call_targets_validate",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1791949512147,
+      "tag": "0075_personal_api_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1791949512826,
+      "tag": "0076_personal_api_keys_validate",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1791949513500,
+      "tag": "0077_personal_api_keys_indexes",
+      "breakpoints": true
     }
   ]
 }

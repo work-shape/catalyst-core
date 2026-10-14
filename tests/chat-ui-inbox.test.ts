@@ -26,7 +26,7 @@ import {
   type InboxItemKind,
   type InboxTab
 } from "./chat-ui-inbox-harness";
-import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
+import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
 
 // Every test here fails without the Inbox frame: the modules it reads did not exist.
 

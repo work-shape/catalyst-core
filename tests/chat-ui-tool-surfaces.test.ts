@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
-import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
+import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
 import { ToolSurfaceList } from "../packages/chat-ui/src/tool-surface-card";
 import { dedupeToolSurfaceRefs } from "../packages/chat-ui/src/tool-surfaces";
 

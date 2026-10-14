@@ -28,6 +28,7 @@ import type { PagesStore } from "./pages";
 import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
+import type { PersonalApiKeyStore } from "./personal-api-keys";
 import type { StructuredDataStore } from "./structured-data";
 import type { WorkflowRunDatasetsStore } from "./workflows";
 import type { WorkflowRunsStore } from "./workflow-runs";
@@ -71,6 +72,7 @@ export interface PlatformStores {
   users: UserStore;
   workspaces: CollaborationWorkspaceStore;
   apiAccess: ApiAccessStore;
+  personalApiKeys: PersonalApiKeyStore;
   access: AccessAdministrationStore;
   configAssets: ConfigAssetStore;
   approvals: ApprovalsStore;

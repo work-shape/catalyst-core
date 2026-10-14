@@ -7,6 +7,27 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Personal API keys and `catalyst login`:** the module `personalApiKeys` (off by default)
+  lets a person issue keys that act as themself, in Settings, API keys, or by confirming the
+  code `catalyst login` prints; the CLI collects the key itself and saves it in
+  `~/.config/catalyst/credentials.json` with mode 600. A key has a name, scopes
+  (`agent.write` or `agent.write:kai-`; reading, writing, deleting and publishing actions
+  only), and an expiry of at most a year. Every call acts as the key's owner with the owner's
+  rights of that moment, intersected with the key's scopes, so a removed grant or a disabled
+  owner narrows or stops the key at once; a refusal by the key reads `FORBIDDEN` with the
+  reason `outside_key_scope`. Audit names the owner and the key (`credentialId`,
+  `delegatedActor.kind: "api_key"`). Whoever holds `api_access.manage` lists and revokes
+  every person's keys. A key cannot issue keys or confirm codes. A working copy may name its
+  Namespace in `catalyst.yaml` (`namespace: kai-`); its push names it, and its pull, diff
+  and list read only the assets the key may read, without the instance overview. Operations:
+  `me.api_keys.list|create|revoke`, `me.connect_codes.get|confirm`,
+  `connect_codes.start|redeem` (public), `personal_api_keys.list|revoke`. **Operators:**
+  migrations `0075_personal_api_keys` (expand: `api_credentials.owner_user_id`, the owner
+  check and foreign key `NOT VALID`, table `api_connect_codes`),
+  `0076_personal_api_keys_validate` and `0077_personal_api_keys_indexes` (concurrent) run
+  before the new release; the previous release runs on them unchanged, as it writes only
+  service principal keys. Rolling back the release leaves personal keys stored and unusable.
+  Turn the module on with `modules.personalApiKeys.enabled: true`.
 - **Calls made by a draft (ADR-0031):** a call that carries a draft context (`OperationCall.draft`:
   the App or Workflow, the draft revision and the action or step) is decided in
   `runOperation()`. A reading call reads live with the caller's rights; a changing call answers
@@ -38,6 +59,15 @@ contain breaking changes; a patch version does not.
   1.3.0. `page.save` documents the kind. The kit's `page.css` for a plain Page leaves out the
   flow canvas rules the library's stylesheet brings. **Operators:** the chat-server tarball
   limit rises to 2.1 MB for the fourth kit version.
+- **Cards open as a whole:** the UI library's `CardTarget` marks a card's one link or button to
+  what the card stands for and stretches its clickable area over the card. Every other control
+  in the card keeps its own action, the keyboard meets the target once under the name of its
+  action and the card's title ("Open Trip planner"), a press dragged across the card opens
+  nothing, and the card shows the hover state and its target's focus on its edge. Text under
+  the area cannot be selected; `CardReachable` keeps content such as a time with its full date
+  as a tooltip, or an id to copy, above it. Agent cards start a chat, App cards open the App (a
+  builder's draft-only App opens its draft) and Workflow cards open the Workflow, from a click
+  anywhere on the card. A card whose reader has nowhere to go opens nothing.
 - **Guardrails replace approval checks, and Build lists them:** release config takes
   `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
   `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
@@ -2214,6 +2244,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   a refusal names no right where the operation names none: `action` of a forbidden denial is
   optional, and is left out where no right opens the call.
   Before, the step's call ran into the operation and failed there.
+- **Parallel browser suites on one Postgres:** `scripts/run-chat-e2e.mjs`, `playwright.config.ts`
+  and the specs hard-coded the database `agent_chat`, so several runs on one machine erased each
+  other's data. `E2E_DATABASE_URL` now replaces that URL for the migration, the API, the worker
+  and the specs; without it nothing changes. The runner still creates and drops no database or
+  role. Use it with `E2E_EXTERNAL_POSTGRES=1` and an empty database per run.
 - **Backups of the whole database server:** `backup-postgres.sh` of the deployment kit dumped
   only `POSTGRES_DB`, so no Data Store database and no role was in a nightly or pre-deploy
   backup. A backup is now one tar archive, `<instance>-<database>-<timestamp>[-<label>].tar`,

@@ -343,7 +343,8 @@ const forbiddenDetailsSchema = z.object({
     "unknown_action",
     "holder_inactive",
     "holder_not_administrable",
-    "user_only"
+    "user_only",
+    "outside_key_scope"
   ])
 });
 const issuesSchema = z.object({

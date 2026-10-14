@@ -133,6 +133,9 @@ export const administration = defineTranslations({
     "modules.assetManagementDescription": "Changing agents and skills in the interface.",
     "modules.userInvitations": "User invitations",
     "modules.userInvitationsDescription": "Inviting a user by an emailed link to set a password.",
+    "modules.personalApiKeys": "Personal API keys",
+    "modules.personalApiKeysDescription":
+      "Keys a person issues for the CLI and scripts, acting as them within the key's scopes.",
     "modules.apps": "Apps",
     "modules.appsDescription":
       "The Pages of a conversation and the sandboxed frame that shows them.",
@@ -321,6 +324,9 @@ export const administration = defineTranslations({
     "modules.userInvitations": "Einladungen",
     "modules.userInvitationsDescription":
       "Benutzer per E-Mail-Link einladen, über den sie ein Passwort festlegen.",
+    "modules.personalApiKeys": "Persönliche API-Schlüssel",
+    "modules.personalApiKeysDescription":
+      "Schlüssel, die eine Person für die CLI und Skripte ausstellt und die in ihren Berechtigungen als sie handeln.",
     "modules.apps": "Apps",
     "modules.appsDescription":
       "Die Pages einer Unterhaltung und der abgeschirmte Rahmen, der sie anzeigt.",
