@@ -88,6 +88,71 @@ export const pageManifestSchema = z.strictObject({
 
 export type PageManifest = z.infer<typeof pageManifestSchema>;
 
+// Keys that a coming part of Apps will give a meaning. Each is refused with what brings it, so
+// a manifest or an action file that names one never builds and then half works. Rights inside an
+// App are not decided yet; the `code` action, a script on the sandbox with declared reads and at
+// most one declared write, waits for its slice in the build plan.
+const RESERVED_RIGHTS =
+  "Rights inside an App are not decided yet and come with a later slice. An App runs with the rights of whoever looks at it.";
+const RESERVED_CODE_ACTION =
+  "A code action, with its 'reads' and 'writes', comes with a later slice. Reach a Connection through a connection action, a Data Store through an sql action, and start a Workflow through a workflow action.";
+
+/** The keys at the top of `app.yaml` that are reserved, with why each is refused. */
+const RESERVED_MANIFEST_KEYS: Readonly<Record<string, string>> = {
+  rights: RESERVED_RIGHTS,
+  requires: RESERVED_RIGHTS
+};
+
+/** The keys of an action that are reserved for the `code` action. */
+const RESERVED_ACTION_KEYS = ["reads", "writes"] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Why an action, as a line of the manifest or as its action file, names what only the `code`
+ * action will have: the kind `code`, or `reads` or `writes`. Nothing for any other action.
+ */
+export function reservedActionKeyMessage(action: unknown): string | undefined {
+  if (!isRecord(action)) return undefined;
+  const named = [
+    ...(action.kind === "code" ? ["kind: code"] : []),
+    ...RESERVED_ACTION_KEYS.filter((key) => key in action).map((key) => `'${key}'`)
+  ];
+  return named.length === 0
+    ? undefined
+    : `${named.join(", ")} ${named.length === 1 ? "is" : "are"} reserved. ${RESERVED_CODE_ACTION}`;
+}
+
+/** The refusals of the reserved keys a manifest names, each with what brings the key. */
+function reservedManifestKeyErrors(manifest: unknown): PageBuildError[] {
+  if (!isRecord(manifest)) return [];
+  const errors: PageBuildError[] = Object.entries(RESERVED_MANIFEST_KEYS).flatMap(([key, why]) =>
+    key in manifest
+      ? [
+          {
+            file: PAGE_MANIFEST_FILE,
+            code: "key_reserved" as const,
+            message: `'${key}' is reserved. ${why}`
+          }
+        ]
+      : []
+  );
+  const actions = Array.isArray(manifest.actions) ? manifest.actions : [];
+  for (const action of actions) {
+    const message = reservedActionKeyMessage(action);
+    if (message === undefined) continue;
+    const name = isRecord(action) && typeof action.name === "string" ? action.name : undefined;
+    errors.push({
+      file: PAGE_MANIFEST_FILE,
+      code: "key_reserved",
+      message: `${name === undefined ? "An action" : `The action '${name}'`}: ${message}`
+    });
+  }
+  return errors;
+}
+
 /**
  * The manifest as a build writes it: the author's, with the entry and the pages it derived and
  * with the actions as they were compiled from their files.
@@ -161,6 +226,10 @@ export function parsePageManifest(bytes: Uint8Array): ParsedPageManifest {
     return fail(read.issue.message, read.issue.line);
   }
   const value = read.value;
+  const reserved = reservedManifestKeyErrors(value);
+  if (reserved.length > 0) {
+    return { status: "errors", errors: reserved };
+  }
   const parsed = pageManifestSchema.safeParse(value);
   if (parsed.success) {
     return { status: "valid", manifest: parsed.data };
