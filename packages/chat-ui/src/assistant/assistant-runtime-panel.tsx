@@ -415,6 +415,7 @@ function AssistantRuntimePane({
           optimisticPending={optimisticPending}
           messagesEnabled={Boolean(selectedConversationId)}
           messagesLoaded={messagesLoaded}
+          threadLoading={snapshotStatus === "loading"}
           loadedMessageCount={initialMessages.length}
           conversationId={selectedConversationId}
           composerFocusRequestId={composerFocusRequestId}

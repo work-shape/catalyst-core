@@ -8,7 +8,7 @@ import {
 import { ArrowDown, CircleAlert, Lock } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
-import { Banner, cn, SkillIcon, Starter, StarterList } from "@vivd-catalyst/ui";
+import { Banner, cn, SkillIcon, Spinner, Starter, StarterList } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import {
   agentChipDisplayFor,
@@ -66,6 +66,7 @@ export function AssistantThread({
   optimisticPending,
   messagesEnabled,
   messagesLoaded,
+  threadLoading,
   loadedMessageCount,
   conversationId,
   composerFocusRequestId,
@@ -115,6 +116,8 @@ export function AssistantThread({
   messagesEnabled: boolean;
   /** False while a selected conversation is still loading, so it is not mistaken for an empty one. */
   messagesLoaded: boolean;
+  /** The open conversation's thread has not arrived yet: a line says so while the send waits. */
+  threadLoading?: boolean;
   /**
    * How many messages the loaded conversation holds. The thread runtime takes them up one
    * effect later, so its own empty state alone would show the start page for a frame.
@@ -204,6 +207,17 @@ export function AssistantThread({
                 fallbackWelcomeMessage={config?.ui.welcomeMessage ?? t("genericWelcome")}
                 onSelectAgent={onSelectAgent}
               />
+            ) : null}
+
+            {threadLoading ? (
+              <p
+                className="flex items-center gap-2 py-1 text-body text-muted-foreground"
+                data-testid="thread-loading"
+                role="status"
+              >
+                <Spinner size="sm" />
+                {t("loadingConversation")}
+              </p>
             ) : null}
 
             {messagesEnabled ? (

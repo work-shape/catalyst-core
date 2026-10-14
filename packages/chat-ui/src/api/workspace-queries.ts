@@ -338,13 +338,19 @@ export function threadQueryRetry(failureCount: number, error: unknown): boolean 
   return failureCount < THREAD_LOAD_RETRIES && !isRefusal(error);
 }
 
-/** The default backoff, or longer when a rate limit says how long to wait. */
+/** The longest single wait before a thread is asked for again. */
+const THREAD_RETRY_MAX_WAIT_MS = 30_000;
+
+/**
+ * The default backoff, or longer when a rate limit says how long to wait, never past
+ * `THREAD_RETRY_MAX_WAIT_MS`.
+ */
 export function threadRetryDelay(failureCount: number, error: unknown): number {
-  const backoffMs = Math.min(1_000 * 2 ** failureCount, 30_000);
+  const backoffMs = 1_000 * 2 ** failureCount;
   const retryAfterSeconds = error instanceof ApiError ? error.retryAfterSeconds : undefined;
-  return retryAfterSeconds === undefined
-    ? backoffMs
-    : Math.max(backoffMs, retryAfterSeconds * 1_000);
+  const waitMs =
+    retryAfterSeconds === undefined ? backoffMs : Math.max(backoffMs, retryAfterSeconds * 1_000);
+  return Math.min(waitMs, THREAD_RETRY_MAX_WAIT_MS);
 }
 
 export function useConversationResourcesQuery(

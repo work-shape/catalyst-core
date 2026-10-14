@@ -288,4 +288,12 @@ describe("loading a conversation thread", () => {
     expect(threadRetryDelay(0, limited)).toBe(7_000);
     expect(threadRetryDelay(1, new ApiError(429, "slow down", undefined))).toBe(2_000);
   });
+
+  it("never waits longer than 30 seconds for one more try", () => {
+    const limited = new ApiError(429, "slow down", {
+      error: { code: "RATE_LIMITED", message: "slow down", details: { retryAfterSeconds: 60 } }
+    });
+    expect(threadRetryDelay(0, limited)).toBe(30_000);
+    expect(threadRetryDelay(8, new ApiError(503, "unavailable", undefined))).toBe(30_000);
+  });
 });

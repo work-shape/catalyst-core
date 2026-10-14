@@ -154,8 +154,12 @@ test("on a slow connection, the dock holds what was typed until its thread is th
   await composer.press("Enter");
   const send = chatColumn(page).getByRole("button", { name: "Send message" });
   await expect(send).toBeDisabled();
+  // A line says why: the conversation is still on its way.
+  const loading = chatColumn(page).getByTestId("thread-loading");
+  await expect(loading).toHaveText("Loading conversation");
 
   await expect(send).toBeEnabled({ timeout: 10_000 });
+  await expect(loading).toHaveCount(0);
   await expect(composer).toHaveValue("words typed while it loads");
   expect(sendsBeforeLoad).toEqual([]);
   await expect(page).toHaveURL(new RegExp(`chat=${conversation.id}$`, "u"));
