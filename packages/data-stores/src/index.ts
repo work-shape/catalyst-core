@@ -5,6 +5,7 @@ import {
   DATA_STORE_JOB_KINDS,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_OPERATION_PREFIX,
+  AppError,
   StoreBackedAuditRecorder,
   defineAssetKind,
   defineModule,
@@ -46,6 +47,7 @@ export function dataStorePageOperationName(
 ): string {
   return `${DATA_STORE_OPERATION_PREFIX}${store}.${part}`;
 }
+import { ensureVectorExtension } from "./provisioning";
 import { createDataStoreServer } from "./server";
 
 /**
@@ -107,6 +109,15 @@ export interface DataStores {
   readonly jobHandlers: readonly RegisteredJobHandler[];
   readonly schedules: readonly JobSchedule[];
   readonly jobRetries: readonly JobRetry[];
+  /**
+   * Creates pgvector in the database of a provisioned store, as the platform's role: for a
+   * store a Knowledge Base with semantic search owns, and for no other (ADR-0023). Throws with
+   * the code `vector_extension_missing` where the server has no pgvector and
+   * `vector_extension_not_permitted` where only a superuser may create it and the platform's
+   * role is none; `NOT_FOUND` for a store that does not exist or is retired. A store whose
+   * migrations use the extension's types needs it before its first migration.
+   */
+  ensureVectorExtension(storeId: string, signal: AbortSignal): Promise<void>;
   /** Closes the idle connections to the stores. Call it when the process stops. */
   close(): Promise<void>;
 }
@@ -186,6 +197,13 @@ export function createDataStores(input: {
     jobHandlers: jobs.handlers,
     schedules: jobs.schedules,
     jobRetries: jobs.retries,
+    async ensureVectorExtension(storeId, signal) {
+      const record = await stores.dataStores.getDataStore({ clientInstanceId, id: storeId });
+      if (!record || record.status === "retired") {
+        throw new AppError("NOT_FOUND", `No Data Store has the id '${storeId}'.`);
+      }
+      await ensureVectorExtension(server, record, signal);
+    },
     close: () => server.executor.close()
   };
 }
