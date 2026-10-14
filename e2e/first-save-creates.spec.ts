@@ -187,3 +187,51 @@ test("New agent in a workspace's Studio opens the dock, and the first save creat
     await expect(page.getByTestId("asset-opened-line").last()).toBeVisible();
   });
 });
+
+test("the first save of a Data Store in a personal chat opens its draft in Studio's Personal scope, and Publish makes it", async ({
+  page
+}) => {
+  test.setTimeout(180_000);
+  const name = `leads-${randomUUID().slice(0, 8)}`;
+  await page.setViewportSize(WIDE);
+  await signIn(page);
+  page.setDefaultTimeout(30_000);
+  const personalId = await personalWorkspaceId(page);
+
+  // A plain chat of the person's own workspace, about nothing yet.
+  await page.goto(`/w/${personalId}`);
+  await sendToolCall(page, "platform.assets.put", {
+    kind: "data_store",
+    name,
+    files: [
+      { path: "store.yaml", text: `id: ${name}\nname: Leads ${name.slice(-8)}\n` },
+      { path: "migrations/0001_init.sql", text: "create table leads (name text not null);" }
+    ]
+  });
+
+  // The person moves to the draft, read where it is: the Personal Workspace owns it.
+  await expect(page).toHaveURL((url) => url.pathname === `/build/data-stores/${name}`);
+  await expect(page.getByTestId("asset-opened-line").last()).toHaveText(
+    `Opened Leads ${name.slice(-8)}`
+  );
+  const draft = page.locator("[data-data-store-draft]");
+  await expect(draft).toHaveText("Draft · not published");
+  await expect(page.locator("[data-data-store-draft-migration]")).toHaveText("0001_init.sql");
+  const publish = page.locator("[data-data-store-publish]");
+  await expect(publish).toBeVisible();
+  await shootLocales(page, "nav-2-data-store-draft", async () => {
+    await expect(draft).toHaveText(/^(?:Draft · not published|Entwurf · nicht veröffentlicht)$/u);
+  });
+  await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
+  await page.reload();
+
+  // Publish is the person's click: the store then has a database and a state.
+  await page.locator("[data-data-store-publish]").click();
+  await expect(page.locator("[data-data-store-draft]")).toHaveCount(0);
+  await expect(page.locator("[data-data-store-state]")).toBeVisible();
+
+  // Studio lists it under Personal.
+  await page.goto("/build/data-stores");
+  await expect(page.getByRole("button", { name: "Scope: Personal" })).toBeVisible();
+  await expect(page.getByText(`Leads ${name.slice(-8)}`).first()).toBeVisible();
+});
