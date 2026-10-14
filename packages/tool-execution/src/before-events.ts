@@ -1,3 +1,4 @@
+import { PLATFORM_ASSET_TOOLS } from "./platform-asset-tools";
 import {
   GUARDRAIL_ASSET_KIND,
   type GuardrailAnswer,
@@ -84,12 +85,28 @@ export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectA
   return answers;
 }
 
+/** The asset operations that act on the asset of the kind their input names. */
+const ASSET_OPERATIONS_OF_A_KIND: ReadonlySet<string> = new Set([
+  "assets.put",
+  "assets.delete",
+  "assets.revert",
+  "assets.publish",
+  "assets.discard_draft",
+  "assets.validate"
+]);
+
+/** The agent's tools that save or check the asset its conversation is about. */
+const SUBJECT_ASSET_TOOLS: ReadonlySet<string> = new Set([
+  PLATFORM_ASSET_TOOLS.put.name,
+  PLATFORM_ASSET_TOOLS.validate.name
+]);
+
 /**
- * Whether a call writes, publishes, deletes or tests guardrails and nothing else: an operation
- * of `guardrails.*`, an asset operation on the kind `guardrail`, a sync of guardrails alone, or
- * a call whose own events are all about guardrails, as an agent's save of the guardrail its
- * conversation is about. A sync that carries another kind beside them is not: its guardrails
- * are its other assets' too.
+ * Whether a call writes, publishes, deletes or tests guardrails and nothing else, decided by
+ * the operation and never by the shape of an input another operation takes: an operation of
+ * `guardrails.*`; an asset operation on the kind `guardrail`; a sync of guardrails alone; the
+ * agent's save or check of the guardrail its conversation is about, whose events say so. A
+ * sync that carries another kind beside them is not: its guardrails are its other assets' too.
  */
 function aboutGuardrails(
   operation: string,
@@ -97,12 +114,14 @@ function aboutGuardrails(
   own: readonly OperationBeforeEvent[]
 ): boolean {
   if (operation.startsWith("guardrails.")) return true;
-  if (own.length > 0 && own.every((event) => event.subject.kind === GUARDRAIL_ASSET_KIND)) {
-    return true;
+  if (SUBJECT_ASSET_TOOLS.has(operation)) {
+    return own.length > 0 && own.every((event) => event.subject.kind === GUARDRAIL_ASSET_KIND);
   }
   if (typeof input !== "object" || input === null) return false;
-  if ("kind" in input) return input.kind === GUARDRAIL_ASSET_KIND;
-  if ("items" in input && Array.isArray(input.items)) {
+  if (ASSET_OPERATIONS_OF_A_KIND.has(operation)) {
+    return "kind" in input && input.kind === GUARDRAIL_ASSET_KIND;
+  }
+  if (operation === "assets.sync" && "items" in input && Array.isArray(input.items)) {
     const items: unknown[] = input.items;
     return (
       items.length > 0 &&
