@@ -502,6 +502,42 @@ describe("a Connection through the asset operations", () => {
     await t.closeAll();
   });
 
+  it("refuses the delete of a Connection only the published revision of an App names", async () => {
+    const t = await setupAppActions();
+    await t.seed("crm", { origin: "runtime" });
+    // The draft no longer names `crm`; the published revision 1 still serves it.
+    const draft = await t.putApp(t.admin.id, "orders", [
+      {
+        path: "app.yaml",
+        text: JSON.stringify({
+          id: "orders",
+          name: "Orders",
+          kit: "1.1.0",
+          entry: "index.html",
+          connections: ["erp"]
+        })
+      },
+      { path: "index.html", text: "<!doctype html><title>Orders</title><p>erp only</p>" }
+    ]);
+    expect(draft.statusCode).toBe(200);
+    const deleted = await t.call(t.admin.id, "assets.delete", {
+      params: { kind: "connection", name: "crm" },
+      payload: { expectedRevision: 2 }
+    });
+    expect(deleted.statusCode).toBe(409);
+    await t.expectRefused(
+      t.admin.id,
+      "assets.delete",
+      { params: { kind: "connection", name: "crm" }, payload: { expectedRevision: 2 } },
+      {
+        status: 409,
+        code: "CONFLICT",
+        details: { reason: "connection_in_use", agentCount: 0, appCount: 1 }
+      }
+    );
+    await t.closeAll();
+  });
+
   it("says in validate what a put would be refused for", async () => {
     const t = await setupConnectionInstance();
     const validate = async (overrides: JsonObject) => {

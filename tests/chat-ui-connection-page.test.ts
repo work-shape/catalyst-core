@@ -588,6 +588,34 @@ describe("Connection page", () => {
       "Wer sie verwenden darf"
     );
   });
+  it("shows the whole new description of an operation whose description is accepted again", () => {
+    const runtime = connectionAsset("ledger", { origin: "runtime" });
+    const markup = renderPage({
+      asset: runtime,
+      detail: {
+        operations: [
+          {
+            name: "update_customer",
+            toolName: "connection.ledger.update_customer",
+            effect: "changing",
+            exposure: ["agent"],
+            enabled: true,
+            status: "needs_review",
+            description: "Changes one customer.\nTwo.\nThree.\nThe fourth line.",
+            discoveredFingerprint: "b".repeat(64)
+          }
+        ]
+      }
+    });
+    const row =
+      /<li[^>]*data-connection-operation="update_customer".*?<\/li>/su.exec(markup)?.[0] ?? "";
+    expect(row).toContain("Accept");
+    // Whoever accepts the new description reads all of what the model will read.
+    expect(row).toMatch(
+      /<p class="(?![^"]*line-clamp)[^"]*">Changes one customer\.[^<]*The fourth line\.</u
+    );
+  });
+
   it("lets a writer change a Connection made on the instance: settings, key and tools", () => {
     const runtime = connectionAsset("ledger", { origin: "runtime" });
     const detail: Partial<ConnectionDetail> = {

@@ -253,6 +253,38 @@ describe("a Connection made on the instance", () => {
     expect((await setSecret(instance, generateTestSecret(), null)).statusCode).toBe(200);
   });
 
+  it("never sends the key to the new origin when removing it beside the write fails", async () => {
+    const w = world();
+    const elsewhere = "93.184.216.35";
+    const instance = await w.start({
+      egress: [
+        { protocol: "https", host: OUTSIDE_HOST, port: 443 },
+        { protocol: "https", host: elsewhere, port: 443 }
+      ]
+    });
+    started.push(instance);
+    await put(instance, definition(), null);
+    const key = generateTestSecret();
+    await setSecret(instance, key, null);
+    await runJobs(instance);
+    const handedBefore = w.connector.handed.length;
+
+    // The store fails once, after the write is committed.
+    vi.spyOn(instance.stores.connections, "deleteSecrets").mockRejectedValueOnce(
+      new Error("connection reset")
+    );
+    const moved = await put(
+      instance,
+      definition({ settings: { url: `https://${elsewhere}/mcp` } }),
+      1
+    );
+    expect(moved.statusCode).toBe(200);
+    // Whoever reads the tools again next, a person or a job, uses what is stored now.
+    await instance.call("connections.discover", { params: { name: NAME } });
+    await runJobs(instance);
+    expect(w.connector.handed.slice(handedBefore)).not.toContain(key);
+  });
+
   it("keeps the handle the key is stored under when an earlier revision is restored", async () => {
     const instance = await start();
     await put(instance, definition(), null);
