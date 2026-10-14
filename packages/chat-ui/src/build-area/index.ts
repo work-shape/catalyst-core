@@ -1,5 +1,6 @@
 export { AgentAvailabilityEditor, AgentEditor } from "./agent-editor";
 export { AssetEditorShell } from "./asset-editor-shell";
+export { PlatformInstructionsBody } from "./platform-instructions";
 export { FieldRefusals } from "./asset-form-fields";
 export * from "./asset-form-model";
 export { isEditableKind } from "./build-asset-kind";

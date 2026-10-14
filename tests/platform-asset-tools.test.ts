@@ -1,3 +1,4 @@
+import { PLATFORM_TOOL_NAMES } from "@vivd-catalyst/client-assembly";
 import type { ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -115,6 +116,8 @@ describe("a conversation about a Workflow", () => {
   async function fixture(agentRuns: "in_process" | "separate" = "in_process") {
     // No release names `read_skill` here: the skill of a subject is readable all the same.
     const config = createTestConfig({
+      // The agent holds the platform's tools: its definition lists them.
+      toolNames: [...PLATFORM_TOOL_NAMES],
       developmentAuth: {
         enabled: true,
         defaultUserId: OWNER,

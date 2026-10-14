@@ -317,7 +317,18 @@ export const configAssetReferencesSchema = z.object({
    * Tools the instance enables whose module is off. No agent can use one. An agent that
    * still names one shows it as unavailable, so it can be removed.
    */
-  moduleOffTools: z.array(z.object({ name: z.string(), module: z.string() })).optional()
+  moduleOffTools: z.array(z.object({ name: z.string(), module: z.string() })).optional(),
+  /**
+   * What the platform tells every agent before its own instructions, read-only: the rules
+   * every agent gets, and the orientation an agent gets whose tools name one of `toolNames`.
+   */
+  platformInstructions: z
+    .object({
+      rules: z.string(),
+      orientation: z.string(),
+      toolNames: z.array(z.string())
+    })
+    .optional()
 });
 
 export const configAssetsOverviewSchema = z.object({

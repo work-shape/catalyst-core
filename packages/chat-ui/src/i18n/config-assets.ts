@@ -112,6 +112,13 @@ export const configAssets = defineTranslations({
     configStarterPromptsDescription: "Suggestion cards shown before the first message is sent.",
     configSystemPrompt: "System prompt",
     configSystemPromptHint: "The agent's system prompt.",
+    configPlatformInstructions: "Platform instructions",
+    configPlatformInstructionsHint:
+      "The platform sends these before the instructions below. They come with each release and cannot be changed here.",
+    configPlatformRules: "Rules for every agent",
+    configPlatformOrientation: "How this platform works",
+    configPlatformOrientationNone:
+      "Only for an agent that holds the platform tools. This agent holds none, so it does not get this part.",
     configTitle: "Title",
     configTools: "Tools",
     configToolsOfInstance: "Instance tools",
@@ -239,6 +246,13 @@ export const configAssets = defineTranslations({
       "Vorschlagskarten, die vor dem Senden der ersten Nachricht angezeigt werden.",
     configSystemPrompt: "Systemanweisung",
     configSystemPromptHint: "Die Systemanweisung des Agenten.",
+    configPlatformInstructions: "Plattform-Anweisungen",
+    configPlatformInstructionsHint:
+      "Die Plattform sendet sie vor den Anweisungen unten. Sie kommen mit jedem Release und lassen sich hier nicht ändern.",
+    configPlatformRules: "Regeln für jeden Agenten",
+    configPlatformOrientation: "So funktioniert die Plattform",
+    configPlatformOrientationNone:
+      "Nur für einen Agenten mit den Plattform-Werkzeugen. Dieser Agent hat keines, darum bekommt er diesen Teil nicht.",
     configTitle: "Titel",
     configTools: "Werkzeuge",
     configToolsOfInstance: "Werkzeuge der Instanz",

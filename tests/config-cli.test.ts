@@ -671,10 +671,10 @@ skills:
         {
           type: "upsert",
           kind: "skill",
-          name: "platform-guide",
+          name: "platform-docs",
           config: {
-            name: "platform-guide",
-            title: "How this platform works",
+            name: "platform-docs",
+            title: "Platform documentation",
             description: "Shipped.",
             content: "Shipped.",
             origin: "release",
@@ -747,10 +747,10 @@ skills:
       ]
     });
     expect(pruneStdout.join("")).not.toContain("crm");
-    expect(mergeStdout.join("") + pruneStdout.join("")).not.toContain("platform-guide");
+    expect(mergeStdout.join("") + pruneStdout.join("")).not.toContain("platform-docs");
     for (const [kind, name] of [
       ["connection", "crm"],
-      ["skill", "platform-guide"]
+      ["skill", "platform-docs"]
     ] as const) {
       expect(
         await fixture.store.configAssets.getConfigAsset({
