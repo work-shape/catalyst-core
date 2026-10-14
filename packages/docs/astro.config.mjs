@@ -84,8 +84,12 @@ export default defineConfig({
           ]
         },
         {
-          label: "Apps",
-          items: ["apps/build"]
+          label: "Automate",
+          items: ["automate/apps", "apps/build", "automate/workflows"]
+        },
+        {
+          label: "Connect",
+          items: ["connect/connect-a-system"]
         },
         {
           label: "Extend",
@@ -100,6 +104,7 @@ export default defineConfig({
             "operate/auth-and-embedding",
             "operate/governance",
             "operate/how-rights-work",
+            "manage/guardrails",
             "operate/rights-and-namespaces",
             "operate/execution-workspaces",
             "operate/runner-security"
