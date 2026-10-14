@@ -151,7 +151,10 @@ describe("the Agents page", () => {
     expect(taxCard).not.toContain("Vorsteuer prüfen");
     expect(taxCard).not.toContain("Reverse Charge");
     expect(markup).not.toContain('aria-label="Suggestions"');
-    expect(taxCard).toMatch(/<button[^>]*aria-describedby="[^"]+"[^>]*>Start chat<\/button>/u);
+    // Start chat is named by its text and the agent's name.
+    expect(taxCard).toMatch(
+      /<button[^>]*aria-labelledby="[^" ]+ [^"]+"[^>]*>Start chat<\/button>/u
+    );
     // The whole card starts the chat: Start chat is its one target.
     expect(taxCard.match(/data-card-target=""/gu)).toHaveLength(1);
     expect(taxCard).toMatch(/<button[^>]*data-card-target=""[^>]*>Start chat<\/button>/u);

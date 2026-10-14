@@ -180,8 +180,8 @@ function AgentCard({
         ) : null}
       </CardHeader>
       <CardFooter className="justify-between">
-        <CardTarget>
-          <Button size="sm" aria-describedby={titleId} onClick={() => onStartChat(agent.name)}>
+        <CardTarget titleId={titleId}>
+          <Button size="sm" onClick={() => onStartChat(agent.name)}>
             {t("agents.startChat")}
           </Button>
         </CardTarget>

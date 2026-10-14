@@ -201,6 +201,8 @@ export interface GalleryText
   cardEdit: string;
   cardStarted: string;
   cardEditOpened: string;
+  cardChanged: string;
+  cardChangedAt: string;
   tableName: string;
   tableState: string;
   tableUpdated: string;
@@ -435,6 +437,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     cardEdit: "Edit",
     cardStarted: "The chat started.",
     cardEditOpened: "The editor opened.",
+    cardChanged: "Changed yesterday",
+    cardChangedAt: "13 October 2026, 09:12",
     tableName: "Name",
     tableState: "State",
     tableUpdated: "Updated",
@@ -676,6 +680,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     cardEdit: "Bearbeiten",
     cardStarted: "Der Chat hat begonnen.",
     cardEditOpened: "Der Editor ist offen.",
+    cardChanged: "Gestern geändert",
+    cardChangedAt: "13. Oktober 2026, 09:12",
     tableName: "Name",
     tableState: "Status",
     tableUpdated: "Geändert",

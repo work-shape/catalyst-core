@@ -9,6 +9,7 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
+  CardReachable,
   CardTarget,
   CardTitle,
   DropdownMenu,
@@ -366,17 +367,24 @@ function AppCard({
         {/* The list is the one of the open workspace, so no card names it. */}
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
           {/* The id is part of the App's address: a builder's, as the revision is. */}
-          {builder ? <code className="min-w-0 font-mono break-all">{app.name}</code> : null}
-          <time dateTime={app.updatedAt} title={formatDateTime(app.updatedAt, locale)}>
-            {t("apps.changed", { when: formatUpdated(app.updatedAt, now, locale) })}
-          </time>
+          {/* Both stay reachable above the card's target: the id to copy, the date as a tooltip. */}
+          {builder ? (
+            <CardReachable>
+              <code className="min-w-0 font-mono break-all">{app.name}</code>
+            </CardReachable>
+          ) : null}
+          <CardReachable>
+            <time dateTime={app.updatedAt} title={formatDateTime(app.updatedAt, locale)}>
+              {t("apps.changed", { when: formatUpdated(app.updatedAt, now, locale) })}
+            </time>
+          </CardReachable>
         </p>
       </CardContent>
       {route || editRoute || menu.length > 0 ? (
         <CardFooter>
           {route ? (
-            <CardTarget>
-              <RouteLink route={route} variant="primary" describedBy={titleId} onOpen={onOpenRoute}>
+            <CardTarget titleId={titleId}>
+              <RouteLink route={route} variant="primary" onOpen={onOpenRoute}>
                 {t(route.kind === "app" ? "apps.open" : "apps.edit")}
               </RouteLink>
             </CardTarget>

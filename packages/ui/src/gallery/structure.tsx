@@ -20,10 +20,10 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
-  CardTarget,
   CardTitle,
   type CardPadding
 } from "../structure/card";
+import { CardReachable, CardTarget } from "../structure/card-target";
 import {
   Disclosure,
   DisclosureContent,
@@ -178,7 +178,7 @@ function SectionSamples({ text }: { text: GalleryText }) {
 
 /**
  * A card that opens as a whole: a click anywhere on it starts the chat, while Edit keeps its own
- * action. The line under it says what the last click did.
+ * action and the time keeps its tooltip. The line under it says what the last click did.
  */
 function OpeningCardSample({ text }: { text: GalleryText }) {
   const titleId = useId();
@@ -189,10 +189,17 @@ function OpeningCardSample({ text }: { text: GalleryText }) {
         <CardHeader>
           <CardTitle id={titleId}>{text.cardTitle}</CardTitle>
           <p className="text-body text-muted-foreground">{text.cardBody}</p>
+          <p className="text-caption text-muted-foreground">
+            <CardReachable>
+              <time dateTime="2026-10-13T09:12" title={text.cardChangedAt}>
+                {text.cardChanged}
+              </time>
+            </CardReachable>
+          </p>
         </CardHeader>
         <CardFooter>
-          <CardTarget>
-            <Button size="sm" aria-describedby={titleId} onClick={() => setDone(text.cardStarted)}>
+          <CardTarget titleId={titleId}>
+            <Button size="sm" onClick={() => setDone(text.cardStarted)}>
               {text.cardAction}
             </Button>
           </CardTarget>
@@ -361,7 +368,15 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "Card",
-      components: ["Card", "CardHeader", "CardTitle", "CardContent", "CardFooter", "CardTarget"],
+      components: [
+        "Card",
+        "CardHeader",
+        "CardTitle",
+        "CardContent",
+        "CardFooter",
+        "CardTarget",
+        "CardReachable"
+      ],
       render: (text) => (
         <div className="grid gap-4 sm:grid-cols-2">
           {cardPaddings.map((padding) => (

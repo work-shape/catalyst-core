@@ -562,11 +562,36 @@ test("a card opens from anywhere on it, its other control keeps its action, and 
     await expect(done).toHaveText("The chat started.");
   }
 
-  // The hover state is the card's: its edge darkens under the pointer.
+  // A press dragged across the text, as when selecting it, opens nothing.
+  const text = card.getByText("Answers questions from the product handbook.");
+  const textBox = await text.boundingBox();
+  const atY = (textBox?.y ?? 0) + (textBox?.height ?? 0) / 2;
+  await edit.click();
+  await page.mouse.move((textBox?.x ?? 0) + 2, atY);
+  await page.mouse.down();
+  await page.mouse.move((textBox?.x ?? 0) + (textBox?.width ?? 0) - 2, atY, { steps: 5 });
+  await page.mouse.up();
+  await expect(done).toHaveText("The editor opened.");
+
+  // Over the text the pointer is on the target: the card darkens its edge and the pointer
+  // shows that it opens. Over Edit the card stays at rest.
   await page.mouse.move(0, 0);
   const atRest = await style(card, "border-top-color");
-  await card.getByText("Answers questions from the product handbook.").hover({ force: true });
+  await text.hover({ force: true });
   await expect.poll(() => style(card, "border-top-color")).not.toBe(atRest);
+  expect(await style(start, "cursor")).toBe("pointer");
+  await edit.hover();
+  await expect.poll(() => style(card, "border-top-color")).toBe(atRest);
+
+  // The time stays reachable above the target: the pointer meets it, so its full date shows
+  // as a tooltip, and a click on it opens nothing.
+  const time = card.locator("time");
+  await expect(time).toHaveAttribute("title", "13 October 2026, 09:12");
+  expect(await hitAtCentre(time)).toBe("TIME");
+  expect(await hitAtCentre(text)).toBe("BUTTON");
+  await time.click();
+  await expect(done).toHaveText("The editor opened.");
+  await expect.poll(() => style(card, "border-top-color")).toBe(atRest);
 
   // One tab stop leads into the card, the next to Edit and the one after out of it; the name
   // and the card are no stops of their own. Enter on the target opens the card.
@@ -578,7 +603,8 @@ test("a card opens from anywhere on it, its other control keeps its action, and 
   await expect(card.locator(":focus")).toHaveCount(0);
   await page.keyboard.press("Tab");
   await expect(start).toBeFocused();
-  await expect(start).toHaveAccessibleDescription("Support assistant");
+  // The target is named by its text and the card's title.
+  await expect(start).toHaveAccessibleName("Start chat Support assistant");
   expect(await style(start, "outline-style")).toBe("solid");
   await page.keyboard.press("Enter");
   await expect(done).toHaveText("The chat started.");
@@ -587,6 +613,14 @@ test("a card opens from anywhere on it, its other control keeps its action, and 
   await page.keyboard.press("Tab");
   await expect(card.locator(":focus")).toHaveCount(0);
 });
+
+/** The tag of the element the pointer meets at the centre of `locator`. */
+function hitAtCentre(locator: Locator): Promise<string | undefined> {
+  return locator.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.tagName;
+  });
+}
 
 /** The section and every box around it that is wider inside than it shows, by tag and class. */
 function widerThanItsBox(page: Page): Promise<string[]> {

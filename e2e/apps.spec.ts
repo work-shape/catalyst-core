@@ -232,7 +232,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await memberPage.goto(appsPath);
   const memberArea = memberPage.getByTestId("apps-area");
   await expect(memberArea).toContainText(appName);
-  await memberArea.getByRole("link", { name: "Open", exact: true }).click();
+  await memberArea.getByRole("link", { name: `Open ${appName}`, exact: true }).click();
   await expect(memberPage).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const memberView = memberPage.getByTestId("app-view");
   const memberApp = appIn(memberPage, "app-view");
@@ -288,8 +288,18 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   // The App is a card with one main action. The id and the way to the draft are a builder's,
   // and the menu holds what a member does beside opening.
   const memberCard = memberArea.getByRole("listitem").filter({ hasText: appName });
-  const memberOpen = memberCard.getByRole("link", { name: "Open", exact: true });
+  // Open is named with the App it opens.
+  const memberOpen = memberCard.getByRole("link", { name: `Open ${appName}`, exact: true });
   await expect(memberOpen).toHaveAttribute("href", appPath);
+  // The time stands above the card's Open, so the pointer meets it and its full date shows.
+  const changed = memberCard.locator("time");
+  await expect(changed).toHaveAttribute("title", /\d/u);
+  expect(
+    await changed.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === element;
+    })
+  ).toBe(true);
   await expect(memberCard.getByRole("link", { name: "Edit", exact: true })).toHaveCount(0);
   await expect(memberCard).not.toContainText(appId);
   // The menu stands above the card that opens the App, and opens itself.
@@ -405,7 +415,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     "href",
     draftPathOf(appPath)
   );
-  await card.getByRole("link", { name: "Open", exact: true }).click();
+  await card.getByRole("link", { name: `Open ${appName}`, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const viewReady = async () => {
     await expect(

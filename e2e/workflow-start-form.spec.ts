@@ -316,7 +316,7 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     await expect(card.getByRole("button", { name: "Start now", exact: true })).toHaveCount(0);
     // The whole card opens the Workflow: a click on its name lands on Open, whose area lies
     // over it.
-    await expect(card.getByRole("link", { name: "Open", exact: true })).toHaveCount(1);
+    await expect(card.getByRole("link", { name: `Open ${name}`, exact: true })).toHaveCount(1);
     await card.getByRole("heading", { name, exact: true }).click({ force: true });
     const workflowPage = page.getByTestId("workflow-page");
     await expect(workflowPage.getByRole("heading", { level: 1 })).toHaveText(name);

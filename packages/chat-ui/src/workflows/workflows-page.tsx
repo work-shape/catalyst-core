@@ -8,6 +8,7 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
+  CardReachable,
   CardTarget,
   CardTitle,
   EmptyState,
@@ -196,13 +197,16 @@ function WorkflowCard({
             <>
               <span>{t("workflows.lastRun")}</span>
               <RunStateBadge status={lastRun.status} />
+              {/* The full date stays reachable as a tooltip above the card's target. */}
               {lastRun.startedAt === undefined ? null : (
-                <time
-                  dateTime={lastRun.startedAt}
-                  title={formatDateTime(lastRun.startedAt, locale)}
-                >
-                  {formatUpdated(lastRun.startedAt, now, locale)}
-                </time>
+                <CardReachable>
+                  <time
+                    dateTime={lastRun.startedAt}
+                    title={formatDateTime(lastRun.startedAt, locale)}
+                  >
+                    {formatUpdated(lastRun.startedAt, now, locale)}
+                  </time>
+                </CardReachable>
               )}
             </>
           )}
@@ -211,11 +215,10 @@ function WorkflowCard({
       {/* A Workflow without a published revision has nothing a reader could open. */}
       {workflow.published ? (
         <CardFooter>
-          <CardTarget>
+          <CardTarget titleId={titleId}>
             <RouteLink
               route={{ kind: "workflow", ...address }}
               variant="primary"
-              describedBy={titleId}
               onOpen={onOpenRoute}
             >
               {t("workflows.open")}
