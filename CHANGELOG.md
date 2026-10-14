@@ -7,6 +7,20 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Apps, an action that starts a Workflow (App Kit 1.3.0):** an action file
+  `actions/<name>.action.yaml` with `workflow: <id>` and `input.schema`/`input.mapping` starts
+  the published Workflow as the viewer, who needs `workflow.use` on it; without it the call is
+  refused with the right named. Its effect is always `changing`. The call answers
+  `{ runId, status, result }` with the Workflow Run in `result`; the Page follows it with the
+  kit's `useWorkflowRun(result.id)` or `workflowRuns.get(result.id)`, through the new operation
+  `apps.sessions.get_workflow_run`
+  (`POST /api/v1/app-content-sessions/:pageSessionId/workflow-runs/:runId`), which reads only
+  runs of the Workflows the App's actions start and only for the viewer who started them. In a
+  draft the call starts nothing and answers `status: "dry_run"` with "Would have started the
+  Workflow '<id>' with <input>". The build refuses a Workflow action in an App on a kit before
+  1.3.0. `page.save` documents the kind. The kit's `page.css` for a plain Page leaves out the
+  flow canvas rules the library's stylesheet brings. **Operators:** the chat-server tarball
+  limit rises to 2.1 MB for the fourth kit version.
 - **Guardrails replace approval checks, and Build lists them:** release config takes
   `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
   `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
@@ -44,7 +58,9 @@ contain breaking changes; a patch version does not.
   writes them at start: a changed one gets a revision in History, one a release no longer ships
   is deleted, and the same release writes nothing. They are read-only: a write, delete or revert
   of one is refused with `403` and the reason `shipped_skill`, and a skill that names `origin`
-  or `icon` is refused with `422`. Studio lists them with the label "Platform" and offers "Copy
+  or `icon` is refused with `422`. A skill of the instance's own under the name of either is
+  refused with `422` whether Workflows is on or not: "The platform ships a skill named '<name>',
+  also where its module is off: choose a name of your own". Studio lists them with the label "Platform" and offers "Copy
   to edit", which creates an ordinary skill. The config CLI neither pulls, diffs nor prunes
   them. **Upgrade:** an instance that holds a skill of its own named `platform-guide` or
   `workflow-authoring` stops at start with "The platform ships the skill '<name>', and a skill
@@ -977,6 +993,18 @@ id from config_assets where status = 'deleted')`.
   conversation and fails the check, naming the conversation.
 
 ### Changed
+
+- **New agents start in the workspace they were made in:** an agent created in a Shared
+  Workspace, in Studio or by the Build Agent in a conversation there, is available in that
+  workspace only. One created in a Personal Workspace, by `catalyst config push` without the
+  release right, or by `assets.put` without a workspace starts hidden; `assets.put` answers the
+  warning `agent_hidden` and `assets.sync` names the agents in `hiddenAgentNames`. Before, every
+  new agent was available in all workspaces. `assets.put` takes `availableIn` (`"all"` with the
+  right to write agents on the whole instance, or `{ "workspaceId" }`), and the create dialog in
+  Studio offers "All workspaces" to that holder. A release push and the first agent of an
+  instance start in all workspaces as before. **Operators:** a script that creates agents
+  through the API and expects them in every workspace passes `availableIn: "all"` or sets the
+  availability after the write.
 
 - **Skill icons:** a skill's line icon sits on one neutral tile in lists and on starters (32 px
   tile, 18 px icon; 24 px in the picker rows), in ink for a skill that ships with the platform
@@ -2128,6 +2156,17 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   scripts neither list nor restore a `.tar` backup; restore one with this release's
   `restore-postgres.sh`.
 
+- **Outside hosts of an App on the viewer's own network:** `externalHosts` in `app.yaml` took a
+  name under `.localhost`, `.local`, `.internal`, `.lan` or `.home.arpa`, which reaches the
+  viewer's own machine or network. The build refuses one with "a host on the internet: a name
+  under .localhost, .local, .internal, .lan, .home.arpa reaches the viewer's own machine or
+  network", and a host listed twice with "lists the host '<host>' twice". The content policy of
+  a revision stored before leaves such a name out and names each host once. **Upgrade:** a Page
+  whose manifest lists one no longer builds until the entry is removed.
+- **A JSON request body the server does not read:** an empty body with a JSON content type, one
+  that does not parse, and one that names `__proto__` or `constructor.prototype` as a key
+  answered `500` on every operation. Each now answers `400` `BAD_REQUEST` with
+  `details.reason` `invalid_json_body`.
 - **Chat starters:** a starter of a skill that ships with the platform shows that skill's
   icon. Every starter showed the generic book, because the agent's starters did not carry the
   skill's `icon`. A skill of the instance's own keeps the generic book.

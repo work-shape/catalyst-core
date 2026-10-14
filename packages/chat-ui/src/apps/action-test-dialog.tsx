@@ -144,18 +144,23 @@ export function ActionTestDialogView({
       size="lg"
       title={t("apps.actionTestTitle", { name: action.name })}
       description={
-        <>
-          {t("apps.actionTestBody")}{" "}
-          {operations ? (
-            <Button asChild variant="link" size="sm" className="h-auto px-0 align-baseline">
-              <a href={operations.href} data-app-action-test-operations>
-                {t("apps.actionTestListed")}
-              </a>
-            </Button>
-          ) : (
-            t("apps.actionTestListed")
-          )}
-        </>
+        // A draft starts no Workflow: its test asks the rights and the input, and lists no run.
+        action.kind === "workflow" ? (
+          t("apps.actionTestBodyWorkflow")
+        ) : (
+          <>
+            {t("apps.actionTestBody")}{" "}
+            {operations ? (
+              <Button asChild variant="link" size="sm" className="h-auto px-0 align-baseline">
+                <a href={operations.href} data-app-action-test-operations>
+                  {t("apps.actionTestListed")}
+                </a>
+              </Button>
+            ) : (
+              t("apps.actionTestListed")
+            )}
+          </>
+        )
       }
       onClose={onClose}
       footer={
@@ -239,7 +244,12 @@ function TestOutcome({
   runHref: ((runId: string) => string) | undefined;
 }) {
   const { t } = useTranslation();
-  const result = outcome.status === "done" ? formatAppActionResult(outcome.result) : undefined;
+  const result =
+    outcome.status === "done"
+      ? formatAppActionResult(outcome.result)
+      : outcome.status === "dry_run"
+        ? formatAppActionResult(outcome.input)
+        : undefined;
   const href = outcome.runId === undefined ? undefined : runHref?.(outcome.runId);
   return (
     <section
@@ -249,7 +259,11 @@ function TestOutcome({
     >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <Badge tone={appActionTestTones[outcome.status]} dot>
-          {t(operationStatusLabelKeys[outcome.status])}
+          {t(
+            outcome.status === "dry_run"
+              ? "apps.actionTestDryRun"
+              : operationStatusLabelKeys[outcome.status]
+          )}
         </Badge>
         {href ? (
           <Button asChild variant="link" size="sm" className="h-auto px-0">
@@ -259,11 +273,23 @@ function TestOutcome({
           </Button>
         ) : null}
       </div>
+      {outcome.status === "dry_run" ? (
+        <p className="text-body text-muted-foreground">
+          {action.kind === "workflow"
+            ? t("apps.actionTestDryRunWorkflow", { workflow: action.workflow.name })
+            : outcome.message}
+        </p>
+      ) : null}
       {result ? (
         <div className="grid grid-cols-1 gap-1" data-truncated={result.truncated || undefined}>
           <CodeBlock
             code={result.text}
-            label={t("apps.actionResultOf", { name: action.name })}
+            label={t(
+              outcome.status === "dry_run" ? "apps.actionDryRunInput" : "apps.actionResultOf",
+              {
+                name: action.name
+              }
+            )}
             className="max-h-72"
           />
           {result.truncated ? (
