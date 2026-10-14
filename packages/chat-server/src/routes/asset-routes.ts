@@ -1,6 +1,7 @@
 import { ASSET_SYNC_BODY_MAX_BYTES, apiOperations } from "@vivd-catalyst/api-contract";
 import { asCollaborationWorkspaceId, type OperationResource } from "@vivd-catalyst/core";
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../asset-files";
+import { assetWriteEvent, publishEvents, syncWriteEvents } from "../asset-guardrail-events";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { authorizeAssetPlacement, setAssetAvailability, setAssetDefault } from "../asset-placement";
 import { AssetWorkflow } from "../asset-workflow";
@@ -35,6 +36,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     // No module: a release is pushed through this operation also where changing assets in
     // the interface is off. The workflow asks the switch of everyone but the release holder.
     bodyLimitBytes: ASSET_SYNC_BODY_MAX_BYTES,
+    beforeEvents: syncWriteEvents,
     execute: (input, context) => workflow.sync(context, input)
   });
 
@@ -79,6 +81,9 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     bodyLimitBytes: ASSET_PUT_BODY_LIMIT_BYTES,
+    beforeEvents: ({ kind, name, config, files }) => [
+      assetWriteEvent({ kind, name, config, files })
+    ],
     execute: (input, context) => workflow.put(context, input)
   });
 
@@ -88,6 +93,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
+    beforeEvents: (input) => publishEvents(options, input),
     execute: (input, context) => workflow.drafts.publish(context, input)
   });
 
