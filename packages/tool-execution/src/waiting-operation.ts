@@ -5,6 +5,7 @@ import {
   assertOperationChecksRights,
   isDataToolName,
   type AuthenticatedIdentity,
+  type JsonObject,
   type OperationCall,
   type OperationDefinition,
   type OperationDenial,
@@ -36,6 +37,12 @@ export interface WaitingOperationCall {
    * actor no longer exists or may not act any more.
    */
   call: Omit<OperationCall, "actor"> & { actor: AuthenticatedIdentity | undefined };
+  /**
+   * What the call's before-events read when it was held, such as the revision of a Page it
+   * copies. Merged into the input once the input's hash is checked, so the call the approval
+   * answers is asked about and executes what the approval was asked about.
+   */
+  heldInput?: JsonObject;
 }
 
 /** Who decided on a waiting call. */
@@ -235,7 +242,7 @@ async function admitAgain(
   // The input was validated when the call was made and is not read through the schema again:
   // a schema that changes what it reads would refuse its own output. The hash says that what
   // is executed is what was asked for.
-  if (hashInput(call.input) !== run.inputHash) {
+  if (hashInput(waiting.call.input) !== run.inputHash) {
     const error = {
       code: "VALIDATION_FAILED",
       message: "The input of this call is no longer valid"
@@ -360,7 +367,15 @@ async function waitingContext(
   if (!actor) {
     return { actorGone: true, definition };
   }
-  const call: OperationCall = { ...waiting.call, actor };
+  const { heldInput } = waiting;
+  const call: OperationCall = {
+    ...waiting.call,
+    actor,
+    // What the guardrails read when the call was held is read and executed again.
+    ...(heldInput && isRecord(waiting.call.input)
+      ? { input: { ...waiting.call.input, ...heldInput } }
+      : {})
+  };
   requireModuleOn(call, deps.modules);
   return createRunContext({
     run,
@@ -555,4 +570,8 @@ export async function refuseWaitingOperation(
 /** Whether a waiting call was taken for execution: it ran, runs, or was cut off while running. */
 export function wasTakenForExecution(run: OperationRun | undefined): boolean {
   return run?.decision?.mode === "approved";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

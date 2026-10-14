@@ -8,6 +8,7 @@ import {
   operationDenialError,
   recordsAllowedCalls,
   type ActorAccess,
+  type JsonObject,
   type NewOperationRun,
   type OperationAuthorization,
   type OperationCall,
@@ -440,9 +441,16 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       return { ending: await denyRun(context, unavailable) };
     }
     const expiresAt = new Date(now().getTime() + PENDING_APPROVAL_EXPIRES_AFTER_MS).toISOString();
+    // The call the approval answers reads what its guardrails read now: what they read that
+    // could change meanwhile, such as the newest revision of a Page, is held beside its input.
+    const heldInput = (context.beforeEvents ?? []).reduce<JsonObject>(
+      (held, event) => ({ ...held, ...event.heldInput?.() }),
+      {}
+    );
     const filed = await deps.approvals.request({
       run,
       call,
+      ...(Object.keys(heldInput).length > 0 ? { heldInput } : {}),
       resource: context.resource,
       runtime: context.runtime,
       expiresAt,

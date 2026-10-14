@@ -33,7 +33,13 @@ export const createAppFromPageRequestSchema = z
     /** What people read as the App's name. */
     title: z.string().min(1).max(120),
     /** The workspace the App belongs to. */
-    workspaceId: z.string().min(1)
+    workspaceId: z.string().min(1),
+    /**
+     * The revision of the Page to copy, by its file set's id. Without it the newest is copied.
+     * A call held for an approval keeps the one its guardrails read, so the approval answers
+     * what is written. A revision that is gone is refused with `CONFLICT`.
+     */
+    fileSetId: z.string().min(1).optional()
   })
   .strict();
 
@@ -52,6 +58,12 @@ export const updateAppFromPageRequestSchema = z
     conversationId: z.string().min(1),
     /** The Page the App is updated from. An App of another Page is written only with `link`. */
     pageId: z.string().min(1),
+    /**
+     * The revision of the Page to copy, by its file set's id. Without it the newest is copied.
+     * A call held for an approval keeps the one its guardrails read, so the approval answers
+     * what is written. A revision that is gone is refused with `CONFLICT`.
+     */
+    fileSetId: z.string().min(1).optional(),
     /** The workspace the App belongs to. */
     workspaceId: z.string().min(1),
     /**

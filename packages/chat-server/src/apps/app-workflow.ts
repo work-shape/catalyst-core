@@ -7,6 +7,7 @@ import {
   asConversationId,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
+  isFileSetId,
   isPageId,
   liveRevisionId,
   type ActorAccess,
@@ -39,10 +40,21 @@ import { appOutsideHosts } from "./app-outside-hosts";
  */
 const checkedFileSets = new WeakMap<OperationBeforeEvent, FileSetId>();
 
+/**
+ * The Page revision a call names, `undefined` where it names none, and `null` where what it
+ * names can be no file set's id.
+ */
+function requestedFileSet(fileSetId: string | undefined): FileSetId | null | undefined {
+  if (fileSetId === undefined) return undefined;
+  return isFileSetId(fileSetId) ? fileSetId : null;
+}
+
 /** What `apps.create_from_page` is called with. */
 export interface CreateAppFromPageInput {
   conversationId: string;
   pageId: string;
+  /** The Page revision to copy. The newest where absent. */
+  fileSetId?: string | undefined;
   name: string;
   title: string;
   workspaceId: string;
@@ -53,6 +65,8 @@ export interface UpdateAppFromPageInput {
   app: string;
   conversationId: string;
   pageId: string;
+  /** The Page revision to copy. The newest where absent. */
+  fileSetId?: string | undefined;
   workspaceId: string;
   expectedRevision: number;
   link?: boolean | undefined;
@@ -124,39 +138,50 @@ export class AppWorkflow {
     title?: string;
     conversationId: string;
     pageId: string;
+    fileSetId?: string | undefined;
     workspaceId: string;
   }): OperationBeforeEvent {
-    const event = fileSetWriteEvent(this.options, {
-      kind: APP_ASSET_KIND,
-      name: input.app,
-      read: async () => {
-        const page = isPageId(input.pageId)
-          ? await this.options.stores.pages.getPage({
+    const event: OperationBeforeEvent = {
+      ...fileSetWriteEvent(this.options, {
+        kind: APP_ASSET_KIND,
+        name: input.app,
+        read: async () => {
+          const page = isPageId(input.pageId)
+            ? await this.options.stores.pages.getPage({
+                clientInstanceId: this.options.clientInstanceId,
+                conversationId: asConversationId(input.conversationId),
+                pageId: input.pageId
+              })
+            : undefined;
+          const requested = requestedFileSet(input.fileSetId);
+          const fileSet =
+            page &&
+            requested !== null &&
+            (await this.options.stores.pages.getPageFileSet({
               clientInstanceId: this.options.clientInstanceId,
-              conversationId: asConversationId(input.conversationId),
-              pageId: input.pageId
+              pageId: page.id,
+              ...(requested ? { fileSetId: requested } : {})
+            }));
+          if (!fileSet) return undefined;
+          // The write copies this revision, whatever the Page is saved as meanwhile.
+          checkedFileSets.set(event, fileSet.id);
+          const title = input.title ?? (await this.currentTitle(input.app, input.workspaceId));
+          return {
+            fileSet,
+            config: appConfigOf({
+              name: input.app,
+              manifest: fileSet.manifest,
+              ...(title === undefined ? {} : { title })
             })
-          : undefined;
-        const fileSet =
-          page &&
-          (await this.options.stores.pages.getPageFileSet({
-            clientInstanceId: this.options.clientInstanceId,
-            pageId: page.id
-          }));
-        if (!fileSet) return undefined;
-        // The write copies this revision, whatever the Page is saved as meanwhile.
-        checkedFileSets.set(event, fileSet.id);
-        const title = input.title ?? (await this.currentTitle(input.app, input.workspaceId));
-        return {
-          fileSet,
-          config: appConfigOf({
-            name: input.app,
-            manifest: fileSet.manifest,
-            ...(title === undefined ? {} : { title })
-          })
-        };
+          };
+        }
+      }),
+      // Held for an approval, the call keeps the revision its guardrails read.
+      heldInput: () => {
+        const fileSetId = checkedFileSets.get(event);
+        return fileSetId ? { fileSetId } : undefined;
       }
-    });
+    };
     return event;
   }
 
@@ -348,21 +373,25 @@ export class AppWorkflow {
    */
   private async newestPageRevision(
     actor: AssetCall["actor"],
-    input: { conversationId: string; pageId: string },
+    input: { conversationId: string; pageId: string; fileSetId?: string | undefined },
     checked: readonly OperationBeforeEvent[] = []
   ): Promise<{ source: FileSet; origin: PageRevisionOrigin }> {
     const page = await this.requireReadablePage(actor, input);
-    const pinned = checked.flatMap((event) => checkedFileSets.get(event) ?? []).at(0);
-    const source = await this.options.stores.pages.getPageFileSet({
-      clientInstanceId: this.options.clientInstanceId,
-      pageId: page.id,
-      ...(pinned ? { fileSetId: pinned } : {})
-    });
+    const requested = requestedFileSet(input.fileSetId);
+    const pinned = checked.flatMap((event) => checkedFileSets.get(event) ?? []).at(0) ?? requested;
+    const source =
+      pinned === null
+        ? undefined
+        : await this.options.stores.pages.getPageFileSet({
+            clientInstanceId: this.options.clientInstanceId,
+            pageId: page.id,
+            ...(pinned ? { fileSetId: pinned } : {})
+          });
     if (!source) {
-      throw pinned
+      throw pinned !== undefined
         ? new AppError(
             "CONFLICT",
-            "The revision of the Page the guardrails read is gone. Save the App from the Page again."
+            "The revision of the Page to copy is gone. Save the App from the Page again."
           )
         : pageNotFound();
     }

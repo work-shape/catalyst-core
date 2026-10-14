@@ -1,5 +1,6 @@
 import { GUARDRAIL_NAME_MAX_LENGTH, GUARDRAIL_NAME_PATTERN } from "@vivd-catalyst/asset-schemas";
 import type { ClientInstanceId } from "./ids";
+import type { JsonObject } from "./json";
 import type { OperationOrigin } from "./operations";
 import type { ISODateString } from "./time";
 
@@ -160,6 +161,12 @@ export interface OperationBeforeEvent {
   subject: GuardrailSubject;
   /** The event's checkable fields, read only where a guardrail applies and never kept. */
   checkable(): GuardrailFields | Promise<GuardrailFields>;
+  /**
+   * What the call's input gains where it is held for an approval, so the call the approval
+   * answers reads what this event read, such as the revision of a Page it copies. Asked after
+   * the fields were read; nothing where they were not.
+   */
+  heldInput?(): JsonObject | undefined;
 }
 
 /**

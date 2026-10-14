@@ -74,6 +74,11 @@ export interface OperationApprovalRequests {
     run: OperationRun;
     /** The call with its validated input, frozen as the request's payload. */
     call: OperationCall;
+    /**
+     * What the call's before-events read that could change while it waits, kept beside its
+     * input and merged into it when the call is executed (`WaitingOperationCall.heldInput`).
+     */
+    heldInput?: JsonObject;
     resource: OperationResource | undefined;
     /** What the live call has. An agent's call carries the hold of its run here. */
     runtime: OperationCallRuntime;

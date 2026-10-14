@@ -177,8 +177,9 @@ describe("a guardrail on an App written from a Page", () => {
 
 describe("a guardrail that holds an App written from a Page", () => {
   // Fails without the change: after the approval the call read the Page's newest revision
-  // again, so a revision saved while the guardrails were asked once more was copied unread.
-  it("copies the revision the guardrails read when the approved call is asked again", async () => {
+  // again, so a revision nobody was asked about was copied. The held call keeps the revision
+  // its guardrails read, and the call asked again reads and copies that one.
+  it("copies the revision the approval was asked about, whatever the Page is saved as meanwhile", async () => {
     let t: AppInstance | undefined;
     let page: { conversationId: string; pageId: string } | undefined;
     let asked = 0;
@@ -238,8 +239,8 @@ describe("a guardrail that holds an App written from a Page", () => {
           clientInstanceId: accessInstanceId,
           assetId: asset.id
         }));
-      // Read when asked again: the second revision. The third came while it was read.
-      expect(origin?.fileSetNumber).toBe(2);
+      // The revision the approval was asked about. The second and the third came later.
+      expect(origin?.fileSetNumber).toBe(1);
     } finally {
       await t?.close();
     }
