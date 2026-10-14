@@ -9,6 +9,7 @@ import {
   type ConfigAssetMutation,
   type PolicyTarget
 } from "@vivd-catalyst/core";
+import { clearLiveOnceSwitches } from "./asset-after-write";
 import { z } from "zod";
 import { readDefinitionName } from "./asset-kinds/shared";
 import {
@@ -448,6 +449,12 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
   // The batch is committed: every asset is written. A row of the trail that cannot be written
   // is logged, the others are still written, and the caller is told what was written.
   await recordCommitted(options, call, records);
+  for (const entry of ready) {
+    const id = result.assetIds[assetKey(entry.kind.kind, entry.name)];
+    if (!entry.absent && entry.item.type === "put") {
+      await clearLiveOnceSwitches(options, call, entry.kind, entry.name, id);
+    }
+  }
   return {
     version: result.version,
     items,

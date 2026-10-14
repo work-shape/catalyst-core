@@ -96,6 +96,12 @@ export interface OperationDraftContext {
    * made as the person testing and allowed only where the principal holds the right too.
    */
   boundBy?: ActingServicePrincipal;
+  /**
+   * A test run whose start was the tester's own confirmation: they called `workflows.test`
+   * themselves, or confirmed an agent's call of it. A step's `confirm` is then satisfied by
+   * that start, as a person's direct call satisfies it; `approval` still gates the step.
+   */
+  startConfirmed?: boolean;
 }
 
 export interface OperationCall<TInput = unknown> {
@@ -184,6 +190,22 @@ export type OperationResult<TOutput = unknown> =
  * act for somebody who is not the caller.
  */
 export function callerCanConfirm(origin: OperationOrigin): boolean {
+  return originConfirms(origin);
+}
+
+/**
+ * Whether the call is its caller's own confirmation: a call from an origin whose caller is
+ * present, or a step of a Workflow test run whose tester's own start was the confirmation
+ * (ADR-0031). A step of any other run has nobody to ask.
+ */
+export function callConfirmedByCaller(call: Pick<OperationCall, "origin" | "draft">): boolean {
+  return (
+    originConfirms(call.origin) ||
+    (call.draft?.boundBy !== undefined && call.draft.startConfirmed === true)
+  );
+}
+
+function originConfirms(origin: OperationOrigin): boolean {
   switch (origin.kind) {
     case "user":
     case "cli":

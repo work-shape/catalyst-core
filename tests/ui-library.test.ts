@@ -406,6 +406,21 @@ describe("Badge", () => {
   });
 });
 
+describe("Badge that truncates", () => {
+  it("narrows to its row and keeps its whole text as its name and title", () => {
+    const text = "Eine veröffentlichte Ausführung fragt hier nach Freigabe";
+    const markup = renderToStaticMarkup(
+      createElement(library.Badge, { tone: "warning", truncate: true }, text)
+    );
+    expect(markup).toContain(`title="${text}"`);
+    expect(markup).toContain(`<span class="truncate">${text}</span>`);
+    expect(markup).toMatch(/class="[^"]*\bmin-w-0\b[^"]*"/u);
+    expect(markup).not.toMatch(/class="[^"]*\bshrink-0\b[^"]*"/u);
+    // A badge that does not ask for it keeps its width.
+    expect(renderToStaticMarkup(createElement(library.Badge, null, "Done"))).toMatch(/shrink-0/u);
+  });
+});
+
 describe("Banner", () => {
   const inRoot = (banner: ReactNode) =>
     renderToStaticMarkup(createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, banner));
@@ -425,6 +440,22 @@ describe("Banner", () => {
     expect(banner).not.toMatch(/border|bg-|rounded|text-warning/u);
     expect(line).toMatch(/<span class="[^"]*text-warning[^"]*"><svg>/u);
     expect(line).not.toContain("<button");
+  });
+
+  it("wraps its actions where one line is too narrow for them", () => {
+    const button = (label: string) => createElement("button", { type: "button" }, label);
+    const markup = inRoot(
+      createElement(
+        Banner,
+        {
+          title: "Entwurf, noch nicht veröffentlicht",
+          action: createElement("span", null, button("Testlauf"), button("Veröffentlichen"))
+        },
+        "Body"
+      )
+    );
+    const row = /<div class="([^"]*)"><span><button/u.exec(markup)?.[1];
+    expect(row?.split(" ")).toEqual(expect.arrayContaining(["flex", "flex-wrap", "min-w-0"]));
   });
 
   it("keeps the box and the tone's fill for the other layouts", () => {

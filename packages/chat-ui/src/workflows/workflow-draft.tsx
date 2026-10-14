@@ -9,7 +9,8 @@ import type { WorkflowView } from "./workflow-views";
 import { useWorkflowsHost } from "./workflows-host";
 
 // The draft of a Workflow on its page: the conversation in which the agent changes it, and the
-// bar that says the draft is not what is published, with the publish and the discard.
+// bar that says the draft is not what is published, with the test run, the publish and the
+// discard.
 
 /** "Edit with the agent" as the head of a Workflow shows it. */
 export interface WorkflowEdit {
@@ -81,6 +82,8 @@ export function EditRefusedBanner({
 /** The bar of a draft as the page of a Workflow shows it. */
 export interface WorkflowDraftBarState {
   state: WorkflowDraftState;
+  /** Absent for a reader who may not write the Workflow. */
+  onTest?: () => void;
   /** Absent for a reader who may not publish Workflows. */
   onPublish?: () => void;
   /** Absent where there is nothing to go back to, and for a reader who may not write. */
@@ -89,10 +92,10 @@ export interface WorkflowDraftBarState {
 
 /**
  * Says that what the page draws is a draft that is not the published revision, and offers to
- * publish it or to discard it to whoever may. A draft of a Workflow that was never published
- * is said as that: there is no published revision it could differ from.
+ * test it, publish it or discard it to whoever may. A draft of a Workflow that was never
+ * published is said as that: there is no published revision it could differ from.
  */
-export function WorkflowDraftBar({ state, onPublish, onDiscard }: WorkflowDraftBarState) {
+export function WorkflowDraftBar({ state, onTest, onPublish, onDiscard }: WorkflowDraftBarState) {
   const { t } = useTranslation();
   return (
     <Banner
@@ -102,8 +105,13 @@ export function WorkflowDraftBar({ state, onPublish, onDiscard }: WorkflowDraftB
       data-workflow-draft={state}
       title={t(state === "ahead" ? "workflows.draft.ahead" : "workflows.draft.unpublished")}
       action={
-        onPublish === undefined && onDiscard === undefined ? undefined : (
+        onTest === undefined && onPublish === undefined && onDiscard === undefined ? undefined : (
           <>
+            {onTest === undefined ? null : (
+              <Button variant="outline" size="sm" onClick={onTest}>
+                {t("workflows.test.button")}
+              </Button>
+            )}
             {onPublish === undefined ? null : (
               <Button variant="outline" size="sm" onClick={onPublish}>
                 {t("workflows.draft.publish")}

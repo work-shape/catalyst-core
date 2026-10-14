@@ -5,6 +5,7 @@ import { WORKFLOW_CODE_JOB_KIND, WORKFLOW_CODE_SWEEP_JOB_KIND } from "./step-job
 export const WORKFLOW_OPERATION_IDS = [
   "workflows.list",
   "workflows.start",
+  "workflows.test",
   "workflows.get_run",
   "workflows.list_runs",
   "workflows.list_step_runs",
@@ -82,10 +83,12 @@ export {
 export {
   createWorkflowEngine,
   type StartWorkflowRunInput,
+  type TestWorkflowRunInput,
   type WorkflowEngine,
   type WorkflowEngineOptions
 } from "./engine";
 export { workflowStepJobKind } from "./step-job";
+export { WORKFLOW_TEST_RUN_ERRORS } from "./test-run";
 export * from "./limits";
 export { replaceScheduleJob, workflowScheduleJobKind } from "./schedule-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";

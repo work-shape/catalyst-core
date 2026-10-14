@@ -1,6 +1,7 @@
 import { RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
+  Badge,
   Banner,
   Breadcrumb,
   Button,
@@ -18,6 +19,7 @@ import type { WorkspaceRoute } from "../workspace/workspace-route";
 import { FailureBanner } from "./failure-banner";
 import { startedByText } from "./runs-list";
 import { useStartRun } from "./start-run";
+import { useRunLiveOnce, useTestRun, type LiveOnceControl } from "./test-run";
 import { WorkflowCanvas } from "./workflow-canvas";
 import {
   useWorkflow,
@@ -82,6 +84,9 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
     form: definition.workflow?.startForm,
     again: true
   });
+  const testAgain = useTestRun(workflow, definition.workflow);
+  const liveOnce = useRunLiveOnce(workflow, definition.workflow, read.run?.ended === true);
+  const test = read.run?.test === true;
 
   if (!host || workspaceId === undefined) {
     return null;
@@ -112,7 +117,12 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
         read={read}
         now={now}
         canCancel={read.run !== undefined && cancelOffered(read.run, host.viewerId, host.rights)}
-        canRunAgain={definition.workflow !== undefined && startOffered(definition.workflow)}
+        // A test run is run again as a test of the draft, a run of what is published as a run.
+        canRunAgain={
+          test
+            ? testAgain !== undefined
+            : definition.workflow !== undefined && startOffered(definition.workflow)
+        }
         // A run that ended while the cancellation was on its way is not stopping: it reads as
         // what it ended as.
         stopping={(stopping && read.run?.ended !== true) || read.run?.stopping === true}
@@ -120,10 +130,12 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
           setCancelError(undefined);
           setCancelling(true);
         }}
-        onRunAgain={again.open}
+        onRunAgain={test && testAgain !== undefined ? testAgain.open : again.open}
         onOpenRoute={host.showRoute}
+        {...(test && liveOnce !== undefined ? { liveOnce } : {})}
       />
       {again.dialog}
+      {testAgain?.dialog}
       {cancelling ? (
         <CancelRunDialog
           loading={cancelBusy}
@@ -150,7 +162,8 @@ export function WorkflowRunPageView({
   stopping,
   onCancel,
   onRunAgain,
-  onOpenRoute
+  onOpenRoute,
+  liveOnce
 }: {
   workspaceId: string;
   workflowId: string;
@@ -166,6 +179,11 @@ export function WorkflowRunPageView({
   onCancel(): void;
   onRunAgain(): void;
   onOpenRoute: OpenRoute;
+  /** On a test run, for a reader who may write the Workflow: "Run live once" per step. */
+  liveOnce?: (
+    step: WorkflowStepView,
+    stepRun: WorkflowStepRunView | undefined
+  ) => LiveOnceControl | undefined;
 }) {
   const translation = useTranslation();
   const { locale, t } = translation;
@@ -174,7 +192,9 @@ export function WorkflowRunPageView({
   const title =
     run === undefined
       ? undefined
-      : t("workflows.run.title", { date: formatMoment(run.createdAt, locale) });
+      : t(run.test ? "workflows.run.testTitle" : "workflows.run.title", {
+          date: formatMoment(run.createdAt, locale)
+        });
   const duration = run === undefined ? undefined : durationText(run, now, translation);
   // Who started the run and how long it took or has been going.
   const secondary =
@@ -228,7 +248,18 @@ export function WorkflowRunPageView({
           </BackLink>
         }
         title={title ?? <TitlePlaceholder>{t("workflows.sectionRuns")}</TitlePlaceholder>}
-        state={run ? <RunStateBadge status={run.status} stopping={stopping} /> : undefined}
+        state={
+          run === undefined ? undefined : (
+            <>
+              {run.test ? (
+                <Badge tone="info" size="sm" data-test-run="">
+                  {t("workflows.run.testBadge")}
+                </Badge>
+              ) : null}
+              <RunStateBadge status={run.status} stopping={stopping} />
+            </>
+          )
+        }
         primaryAction={
           run === undefined ? undefined : !run.ended ? (
             canCancel && !stopping ? (
@@ -240,7 +271,7 @@ export function WorkflowRunPageView({
             // What happened is the page's subject, so the next action is no primary button.
             <Button variant="outline" onClick={onRunAgain}>
               <RotateCw aria-hidden="true" />
-              {t("workflows.run.again")}
+              {t(run.test ? "workflows.run.testAgain" : "workflows.run.again")}
             </Button>
           ) : undefined
         }
@@ -298,7 +329,9 @@ export function WorkflowRunPageView({
               }
               // The canvas draws the published definition. A run keeps the revision it started
               // on, so where the two differ the page says that the steps are not the run's own.
+              // A test run is of a draft, which the canvas draws for whoever may test it.
               earlierRevision={
+                !run.test &&
                 run.revisionId !== undefined &&
                 workflow?.revisionId !== undefined &&
                 run.revisionId !== workflow.revisionId
@@ -310,7 +343,16 @@ export function WorkflowRunPageView({
           <div className="relative min-h-0 flex-1">
             <WorkflowCanvas
               workflow={run === undefined ? undefined : workflow}
-              run={run === undefined ? undefined : { run, stepRuns: read.stepRuns, now }}
+              run={
+                run === undefined
+                  ? undefined
+                  : {
+                      run,
+                      stepRuns: read.stepRuns,
+                      now,
+                      ...(liveOnce === undefined ? {} : { liveOnce })
+                    }
+              }
               onOpenChild={openChild}
             />
           </div>
@@ -342,6 +384,10 @@ function RunNotices({
   stepRunsCut: boolean;
 }) {
   const { locale, t } = useTranslation();
+  const testLine =
+    run.test && run.startedBy !== undefined
+      ? t("workflows.run.testLine", { person: run.startedBy.name })
+      : undefined;
   const line =
     stopping && !run.ended
       ? // A call that is going is not broken off: the run ends when it has.
@@ -357,6 +403,7 @@ function RunNotices({
   if (
     silentFor === undefined &&
     line === undefined &&
+    testLine === undefined &&
     !earlierRevision &&
     !stepRunsCut &&
     !(showFailure && run.failure)
@@ -371,6 +418,11 @@ function RunNotices({
       {silentFor === undefined ? null : (
         <Banner tone="warning" layout="line">
           {t("workflows.run.stale", { seconds: silentFor })}
+        </Banner>
+      )}
+      {testLine === undefined ? null : (
+        <Banner tone="info" layout="line" data-run-test="">
+          {testLine}
         </Banner>
       )}
       {line === undefined ? null : (

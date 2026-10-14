@@ -28,7 +28,7 @@ type RunDecision = (
 ) => OperationAuthorization;
 
 /**
- * The runs of a Workflow: the start by hand, the reads and the cancel. Each is an operation
+ * The runs of a Workflow: the start by hand, the test run of its draft, the reads and the cancel. Each is an operation
  * of the registry and brings its check, because the right is decided on the Workflow the
  * call or its run names. The right of the caller opens the call and nothing more: a run acts
  * with the grants of the service principal its Workflow names.
@@ -134,6 +134,39 @@ function registerWorkflowRoutes(
           correlationId: context.correlationId
         })
       )
+  });
+
+  // A test run of the draft (ADR-0031). It acts as the person who starts it, bounded by the
+  // Workflow's principal, so it needs the right to write the Workflow and nothing that lends
+  // the principal's grants: publishing still asks that. Only a person starts one.
+  route.operation(apiOperations["workflows.test"], {
+    authorize: async (input, { access, actor }) =>
+      isAuthenticatedServicePrincipal(actor)
+        ? {
+            allowed: false,
+            action: WORKFLOW_ACTIONS.write,
+            reason: "no_grant",
+            message: "Only a person starts a test run of a Workflow's draft"
+          }
+        : decide(access, WORKFLOW_ACTIONS.write, await resourceOf(input.workflow)),
+    resource: workflowResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, context) => {
+      const { actor } = context;
+      // The check above refused every other caller; the types do not carry it here.
+      if (isAuthenticatedServicePrincipal(actor)) {
+        throw new AppError("FORBIDDEN", "Only a person starts a test run of a Workflow's draft");
+      }
+      return toRunResource(
+        await required().test({
+          workflow: input.workflow,
+          input: input.input,
+          startedBy: actor,
+          operationRunId: context.runId,
+          correlationId: context.correlationId
+        })
+      );
+    }
   });
 
   route.operation(apiOperations["workflows.list_runs"], {
