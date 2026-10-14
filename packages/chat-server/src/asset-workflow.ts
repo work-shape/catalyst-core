@@ -13,7 +13,9 @@ import {
   type AssetRepoWrite,
   type FileSet,
   type JsonObject,
+  type OperationApproval,
   type OperationAuthorization,
+  type OperationOrigin,
   type PolicyTarget
 } from "@vivd-catalyst/core";
 import { afterRemove, afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
@@ -79,6 +81,7 @@ import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import { assertReferencesWithinOwners } from "./asset-owner-references";
+import { publishApproval } from "./publish-approval";
 import type { AssetWorkflowOptions } from "./types";
 
 type MutationBatch = Omit<
@@ -129,11 +132,34 @@ export class AssetWorkflow {
    */
   async authorizePublish(
     access: ActorAccess,
-    address: AssetAddress
+    address: AssetAddress,
+    origin: OperationOrigin
   ): Promise<OperationAuthorization> {
     const target = await this.target(address);
-    const { publish } = target.kind.actions;
-    return publish === undefined ? { allowed: true } : decide(access, publish, target.resource);
+    const { publish, approve } = target.kind.actions;
+    if (publish === undefined) return { allowed: true };
+    // A revision that an approver's click makes live goes live only on a person's click: the
+    // interface's Publish or the answer to the CLI's prompt. Until a call of an agent or an MCP
+    // client can wait as a confirmation in the person's Inbox (OP-4), it is refused.
+    if (approve !== undefined && origin.kind !== "user" && origin.kind !== "cli") {
+      return {
+        allowed: false,
+        action: publish,
+        reason: "user_only",
+        message: `Publishing a ${target.kind.kind} needs a person's click: publish it in the interface, or answer the prompt of 'catalyst ${target.kind.kind} publish' in a terminal.`
+      };
+    }
+    return decide(access, publish, target.resource);
+  }
+
+  /**
+   * Who decides a publish that a guardrail holds: the holders of the kind's `approve` right,
+   * and the caller's own click where they hold it. None for a kind whose publish is not held.
+   */
+  async publishApproval(
+    input: AssetAddress & { revision: number }
+  ): Promise<OperationApproval | undefined> {
+    return publishApproval(await this.target(input), input.revision);
   }
 
   async authorizeDelete(

@@ -28,6 +28,7 @@ import {
   type Logger,
   type ModuleSnapshot,
   type NewOperationRun,
+  type OperationApproval,
   type OperationAuthorization,
   type OperationBeforeEvent,
   type OperationCall,
@@ -86,6 +87,8 @@ export interface OperationApprovalRequests {
     expiresAt: string;
     /** Where the value came from that makes the call wait. */
     policySource: PolicySource;
+    /** Who decides it, where the operation names them: see `approval` of its definition. */
+    approval?: OperationApproval;
   }): Promise<{ approvalRequestId: string } | undefined>;
 }
 
@@ -510,11 +513,14 @@ export async function denyRun(
  * throws ends the run as failed; a refusal it raises through `context.access.require` ends it
  * as denied.
  */
-/** The decision of a call that ran on its own caller's word, with why where that needs saying. */
-export interface DirectDecision {
-  mode: "direct";
-  reason?: OperationRunDecisionReason;
-}
+/**
+ * The decision of a call that ran on its own caller's word, with why where that needs saying:
+ * `direct` where it was their confirmation, `approved` where it was the approval a guardrail
+ * asked for and they hold the right that decides it.
+ */
+export type DirectDecision =
+  | { mode: "direct"; reason?: OperationRunDecisionReason }
+  | { mode: "approved"; reason: "approved_by_caller" };
 
 /** Thrown by the `begin` of `executeAdmitted`: the operation was not called. */
 export class OperationNotBegunError extends Error {

@@ -3,10 +3,16 @@ import {
   AppError,
   GUARDRAIL_ACTIONS,
   GUARDRAIL_ASSET_KIND,
+  SHIPPED_GUARDRAILS,
+  auditActorFromIdentity,
+  shippedGuardrail,
   type ActorAccess,
   type OperationAuthorization,
-  type OperationResource
+  type OperationResource,
+  type ShippedGuardrail,
+  type ShippedGuardrailSwitch
 } from "@vivd-catalyst/core";
+import type { ShippedGuardrailView } from "@vivd-catalyst/api-contract";
 import { accessResource, decide } from "../asset-access";
 import { AssetWorkflow } from "../asset-workflow";
 import { GuardrailRunner } from "../guardrail-runner";
@@ -106,6 +112,51 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
     }
   });
 
+  // A shipped guardrail belongs to the instance: its right is asked at instance scope.
+  route.operation(apiOperations["guardrails.list_shipped"], {
+    async execute(_input, context) {
+      const switches = await options.stores.guardrails.listShippedGuardrailSwitches({
+        clientInstanceId
+      });
+      return {
+        items: SHIPPED_GUARDRAILS.map((guardrail) =>
+          shippedView(
+            guardrail,
+            switches.find((entry) => entry.name === guardrail.name),
+            context.access.authorize(GUARDRAIL_ACTIONS.publish, shippedResource(guardrail.name))
+              .allowed
+          )
+        )
+      };
+    }
+  });
+
+  route.operation(apiOperations["guardrails.switch_shipped"], {
+    resource: (input) => shippedResource(input.name),
+    changeClass: "reversible",
+    async execute(input, context) {
+      const guardrail = shippedGuardrail(input.name);
+      if (!guardrail) {
+        throw new AppError("NOT_FOUND", `The release ships no Guardrail '${input.name}'`);
+      }
+      const switched = await options.stores.guardrails.switchShippedGuardrail({
+        clientInstanceId,
+        name: guardrail.name,
+        enabled: input.enabled,
+        switchedBy: { id: context.actor.id, label: context.actor.displayLabel },
+        switchedAt: (options.operations?.now?.() ?? new Date()).toISOString()
+      });
+      await context.audit.record({
+        type: "guardrail.shipped_switched",
+        status: "success",
+        actor: auditActorFromIdentity(context.actor),
+        correlationId: context.correlationId,
+        metadata: { kind: GUARDRAIL_ASSET_KIND, name: guardrail.name, enabled: input.enabled }
+      });
+      return shippedView(guardrail, switched, true);
+    }
+  });
+
   route.operation(apiOperations["guardrails.list_hits"], {
     authorize: (input, { access }) => authorizeOn(access, input.name),
     resource: guardrailResource,
@@ -140,6 +191,28 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
       };
     }
   });
+}
+
+/** A shipped guardrail as a right is asked on it: the instance's, with no workspace. */
+function shippedResource(name: string): OperationResource {
+  return { kind: GUARDRAIL_ASSET_KIND, id: name, name };
+}
+
+function shippedView(
+  guardrail: ShippedGuardrail,
+  switched: ShippedGuardrailSwitch | undefined,
+  canSwitch: boolean
+): ShippedGuardrailView {
+  return {
+    name: guardrail.name,
+    displayName: guardrail.displayName,
+    reason: guardrail.reason,
+    on: [...guardrail.on],
+    outcome: guardrail.outcome,
+    enabled: switched?.enabled ?? true,
+    ...(switched ? { switchedBy: switched.switchedBy, switchedAt: switched.switchedAt } : {}),
+    canSwitch
+  };
 }
 
 /** What the call touches, as its run and its events name it. */

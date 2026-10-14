@@ -142,6 +142,32 @@ export const unpublishGuardrailResponseSchema = z.object({
   unpublishedRevision: z.number().int().positive()
 });
 
+/**
+ * A guardrail the release ships, such as "Publishing needs an instance admin's approval": on
+ * until an instance admin switches it off, with who switched it last.
+ */
+export const shippedGuardrailSchema = z.object({
+  name: z.string(),
+  displayName: z.string(),
+  /** What a person it stops or holds is told. */
+  reason: z.string(),
+  /** The before-events it is bound to, such as `app.before_publish`. */
+  on: z.array(z.string()),
+  outcome: guardrailOutcomeSchema,
+  enabled: z.boolean(),
+  /** Who switched it last and when. Absent while nobody has: it is on as the release ships it. */
+  switchedBy: z.object({ id: z.string(), label: z.string() }).optional(),
+  switchedAt: timestampSchema.optional(),
+  /** The caller holds `guardrail.publish` at instance scope and may switch it. */
+  canSwitch: z.boolean()
+});
+
+export const shippedGuardrailsSchema = z.object({ items: z.array(shippedGuardrailSchema) });
+
+export const switchShippedGuardrailRequestSchema = z.object({ enabled: z.boolean() }).strict();
+
+export type ShippedGuardrailView = z.infer<typeof shippedGuardrailSchema>;
+
 export type TestGuardrailRequest = z.infer<typeof testGuardrailRequestSchema>;
 export type TestGuardrailResponse = z.infer<typeof testGuardrailResponseSchema>;
 export type DryRunGuardrailResponse = z.infer<typeof dryRunGuardrailResponseSchema>;
@@ -194,6 +220,37 @@ export const guardrailOperations = {
     body: dryRunGuardrailRequestSchema,
     response: json(dryRunGuardrailResponseSchema),
     errors: ["NOT_FOUND", "VALIDATION_FAILED"],
+    rateClass: "write"
+  }),
+  "guardrails.list_shipped": defineRegisteredOperation({
+    id: "guardrails.list_shipped",
+    method: "GET",
+    path: "/api/v1/guardrails/shipped",
+    summary:
+      "List the guardrails the release ships, whether each is switched on, and who switched it last",
+    tag: "Guardrails",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: ["guardrail.read"],
+    effect: "reading",
+    response: json(shippedGuardrailsSchema),
+    errors: [],
+    rateClass: "read"
+  }),
+  "guardrails.switch_shipped": defineRegisteredOperation({
+    id: "guardrails.switch_shipped",
+    method: "POST",
+    path: "/api/v1/guardrails/shipped/:name/switch",
+    summary:
+      "Switch a guardrail the release ships off or on again, for the whole instance. A release never switches it back on",
+    tag: "Guardrails",
+    auth: "user",
+    scope: "config_assets:publish",
+    requires: ["guardrail.publish"],
+    effect: "changing",
+    body: switchShippedGuardrailRequestSchema,
+    response: json(shippedGuardrailSchema),
+    errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
   "guardrails.unpublish": defineRegisteredOperation({

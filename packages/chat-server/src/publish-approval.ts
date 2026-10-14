@@ -1,0 +1,241 @@
+import {
+  WORKFLOW_ASSET_KIND,
+  isJsonObject,
+  type AssetKindRegistry,
+  type ConfigAssetRevisionRecord,
+  type ConfigAssetStore,
+  type ClientInstanceId,
+  type JsonObject,
+  type OperationApproval,
+  type OperationEffect,
+  type PagesStore,
+  type PlatformAction
+} from "@vivd-catalyst/core";
+import { z } from "zod";
+import type { AssetTarget } from "./asset-target";
+import type { WorkflowAssetKind } from "./asset-kinds/shared";
+import type { HeldCallApprovalKind } from "./operation-call-approval-handler";
+
+// A publish that a guardrail holds waits as a request of its own kind, `app_publish` or
+// `workflow_publish`, which the holders of the kind's `approve` right decide and nobody else.
+// The request freezes what it publishes: approving makes exactly that revision live, and the
+// request cannot be approved once the draft or the live revision moved. Spec:
+// events-workflows-and-guardrails.md, Publishing needs a person's click.
+
+/** The approval kind of a held publish, by the asset kind it publishes. */
+export const PUBLISH_APPROVAL_KINDS: Readonly<Record<string, string>> = {
+  app: "app_publish",
+  [WORKFLOW_ASSET_KIND]: "workflow_publish"
+};
+
+/** What a held publish is about, frozen when it is filed: the asset and its two pointers then. */
+const publishSubjectSchema = z.object({
+  kind: z.string().min(1),
+  name: z.string().min(1),
+  assetId: z.string().min(1),
+  /** The revision the publish makes live. */
+  revision: z.number().int().positive(),
+  /** The draft when the request was filed. */
+  draftRevision: z.number().int().positive(),
+  /** The live revision when the request was filed. Null before the first publish. */
+  liveRevision: z.number().int().positive().nullable()
+});
+
+type PublishSubject = z.infer<typeof publishSubjectSchema>;
+
+/**
+ * Who decides a held publish of this target: the holders of the kind's `approve` right. None
+ * for a kind without a held publish, or an asset that is not there to publish.
+ */
+export function publishApproval(
+  target: AssetTarget,
+  revision: number
+): OperationApproval | undefined {
+  const kind = PUBLISH_APPROVAL_KINDS[target.kind.kind];
+  const { approve } = target.kind.actions;
+  const { asset } = target;
+  if (kind === undefined || approve === undefined || asset?.status !== "active") return undefined;
+  const subject: PublishSubject = {
+    kind: target.kind.kind,
+    name: target.name,
+    assetId: asset.id,
+    revision,
+    draftRevision: asset.revision,
+    liveRevision: asset.publishedRevision ?? null
+  };
+  return { kind, action: approve, resource: target.resource, subject };
+}
+
+/** Why a held publish can no longer be approved: the asset, its draft or its live revision moved. */
+async function publishMoved(
+  clientInstanceId: ClientInstanceId,
+  subject: PublishSubject,
+  store: Pick<ConfigAssetStore, "getConfigAsset">
+): Promise<string | undefined> {
+  const asset = await store.getConfigAsset({
+    clientInstanceId,
+    kind: subject.kind,
+    name: subject.name
+  });
+  if (!asset || asset.id !== subject.assetId || asset.status !== "active") {
+    return `The ${subject.kind} '${subject.name}' is gone. Nothing was published.`;
+  }
+  if (asset.revision !== subject.draftRevision) {
+    return `The draft of '${subject.name}' changed since the request was filed. Nothing was published; publish again to ask for the new draft.`;
+  }
+  if ((asset.publishedRevision ?? null) !== subject.liveRevision) {
+    return `Another revision of '${subject.name}' was published since the request was filed. Nothing was published.`;
+  }
+  return undefined;
+}
+
+export interface PublishApprovalKindsOptions {
+  clientInstanceId: ClientInstanceId;
+  kinds: AssetKindRegistry<WorkflowAssetKind>;
+  store: Pick<ConfigAssetStore, "getConfigAsset" | "getConfigAssetRevision">;
+  files: Pick<PagesStore, "getAssetFileSet">;
+  /** The effect of an operation a Workflow step calls, where it is registered. */
+  effectOf(operation: string): Promise<OperationEffect | undefined>;
+}
+
+/** The held-call kinds of a publish: one for each kind of asset whose publish can be held. */
+export function publishApprovalKinds(options: PublishApprovalKindsOptions): HeldCallApprovalKind[] {
+  const { clientInstanceId } = options;
+  return Object.entries(PUBLISH_APPROVAL_KINDS).flatMap(([assetKind, kind]) => {
+    const approve = options.kinds.get(assetKind)?.actions.approve;
+    return approve === undefined
+      ? []
+      : [
+          {
+            kind,
+            requiredPermission: approve as PlatformAction,
+            async moved(subject, store) {
+              const parsed = publishSubjectSchema.safeParse(subject);
+              return parsed.success
+                ? publishMoved(clientInstanceId, parsed.data, store)
+                : "The request names no revision it publishes.";
+            },
+            async review(subject) {
+              const parsed = publishSubjectSchema.safeParse(subject);
+              if (!parsed.success) return undefined;
+              const moved = await publishMoved(clientInstanceId, parsed.data, options.store);
+              return {
+                ...(await publishReview(options, parsed.data)),
+                ...(moved ? { stale: moved } : {})
+              };
+            },
+            subjectKey(subject) {
+              const parsed = publishSubjectSchema.safeParse(subject);
+              return parsed.success ? { assetId: parsed.data.assetId } : subject;
+            }
+          }
+        ];
+  });
+}
+
+/**
+ * What the person who decides a held publish reads: the revision and the live one it replaces,
+ * the files that differ, and what the revision reaches as its kind reads it. Computed from the
+ * two stored revisions until the server's own review replaces it (DT-1b).
+ */
+async function publishReview(
+  options: PublishApprovalKindsOptions,
+  subject: PublishSubject
+): Promise<JsonObject> {
+  const { clientInstanceId, store } = options;
+  const kind = options.kinds.get(subject.kind);
+  const read = (revision: number) =>
+    store.getConfigAssetRevision({
+      clientInstanceId,
+      kind: subject.kind,
+      name: subject.name,
+      revision
+    });
+  const next = await read(subject.revision);
+  const live = subject.liveRevision === null ? undefined : await read(subject.liveRevision);
+  const reach = kind?.publishReach?.(configOf(next), live ? configOf(live) : undefined);
+  const calls = reach
+    ? await Promise.all(
+        reach.calls.map(async (call) => ({
+          ...call,
+          effect: call.effect ?? (call.operation ? await options.effectOf(call.operation) : undefined)
+        }))
+      )
+    : [];
+  return {
+    kind: subject.kind,
+    name: subject.name,
+    title: titleOf(kind, next) ?? subject.name,
+    revision: subject.revision,
+    liveRevision: subject.liveRevision,
+    files: await changedFiles(options, subject.assetId, next, live),
+    ...(reach
+      ? {
+          // Only what changes something: a reading call reaches nothing new.
+          changing: calls
+            .filter((call) => call.effect === "changing")
+            .map(({ label, change }) => ({ label, change })),
+          hostsAdded: [...reach.hostsAdded],
+          connections: [...reach.connections],
+          dataStores: reach.dataStores.map((store) => ({
+            name: store.name,
+            ...(store.minSchema === undefined ? {} : { minSchema: store.minSchema })
+          })),
+          ...(reach.runAs ? { runAs: reach.runAs } : {})
+        }
+      : {})
+  };
+}
+
+function configOf(revision: ConfigAssetRevisionRecord | undefined): JsonObject {
+  return revision?.config && isJsonObject(revision.config) ? revision.config : {};
+}
+
+function titleOf(
+  kind: WorkflowAssetKind | undefined,
+  revision: ConfigAssetRevisionRecord | undefined
+): string | undefined {
+  if (!kind || !revision?.config) return undefined;
+  try {
+    return kind.summarize(revision.config).title;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The files of the revision that differ from the live one, each added, removed or changed. A
+ * kind that keeps its files in a file set is compared file by file; another kind by the files
+ * its config holds.
+ */
+async function changedFiles(
+  options: PublishApprovalKindsOptions,
+  assetId: string,
+  next: ConfigAssetRevisionRecord | undefined,
+  live: ConfigAssetRevisionRecord | undefined
+): Promise<JsonObject[]> {
+  const files = async (revision: ConfigAssetRevisionRecord | undefined) => {
+    if (revision?.fileSetId) {
+      const set = await options.files.getAssetFileSet({
+        clientInstanceId: options.clientInstanceId,
+        assetId,
+        fileSetId: revision.fileSetId
+      });
+      return new Map((set?.sourceFiles ?? []).map((file) => [file.path, file.sha256]));
+    }
+    const listed = configFilesSchema.safeParse(revision?.config).data?.files ?? [];
+    return new Map(listed.map((file) => [file.path, file.content]));
+  };
+  const [after, before] = await Promise.all([files(next), files(live)]);
+  const paths = [...new Set([...after.keys(), ...before.keys()])].sort();
+  return paths.flatMap((path) => {
+    const now = after.get(path);
+    const then = before.get(path);
+    if (now === then) return [];
+    return [{ path, change: then === undefined ? "added" : now === undefined ? "removed" : "changed" }];
+  });
+}
+
+const configFilesSchema = z.object({
+  files: z.array(z.object({ path: z.string(), content: z.string() }))
+});

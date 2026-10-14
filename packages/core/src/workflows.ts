@@ -781,6 +781,7 @@ export const WORKFLOW_ACTIONS = {
   read: "workflow.read",
   write: "workflow.write",
   publish: "workflow.publish",
+  approve: "workflow.approve",
   delete: "workflow.delete",
   use: "workflow.use",
   readRunData: "workflow.read_run_data"

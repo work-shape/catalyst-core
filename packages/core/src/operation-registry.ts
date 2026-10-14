@@ -37,6 +37,22 @@ export interface OperationResource extends AccessResource {
 }
 
 /** What an operation's implementation knows about the call it serves. */
+/** Who decides a call that waits for an approval: see `approval` of the definition. */
+export interface OperationApproval {
+  /** The kind of the approval request, such as `app_publish`. */
+  kind: string;
+  /** The right that decides it, such as `app.approve`. */
+  action: string;
+  /** What the right is decided on. The call's resource where absent. */
+  resource?: AccessResource;
+  /**
+   * What the request is about, frozen when it is filed, such as the revision a publish makes
+   * live and the live one then. The request's kind reads it to show it and to tell whether
+   * it moved.
+   */
+  subject?: JsonObject;
+}
+
 export interface OperationExecutionContext {
   runId: OperationRunId;
   actor: AuthenticatedIdentity;
@@ -202,6 +218,14 @@ interface OperationDefinitionBase<Input, Output> {
   policyFloorOf?(
     origin: OperationOrigin
   ): PolicyValue | undefined | Promise<PolicyValue | undefined>;
+  /**
+   * Who decides a call of the operation that waits for an approval, where it is not every
+   * holder of `operations.approve`: the kind its request is filed as, which the approvers'
+   * Inbox lists, and the right that decides it on the call's resource. A caller who holds that
+   * right answers a guardrail's `require_approval` with their own call, from the interface or
+   * the CLI: the run records them as caller and as approver, and no request is filed.
+   */
+  approval?(input: unknown): OperationApproval | undefined | Promise<OperationApproval | undefined>;
   /**
    * The answer holds a secret that is shown once, such as a new key. The run keeps no output,
    * so a repeated call with the same key answers OUTPUT_NOT_RETAINED and never the secret

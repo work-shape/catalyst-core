@@ -3,10 +3,11 @@ import {
   createPlatformId,
   type GuardrailDryRunSubject,
   type GuardrailHit,
-  type GuardrailStore
+  type GuardrailStore,
+  type ShippedGuardrailSwitch
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "../postgres-database";
-import { guardrailHits } from "../schema/guardrails";
+import { guardrailHits, shippedGuardrailSwitches } from "../schema/guardrails";
 
 /** The only code that reads or writes `guardrail_hits`. */
 export function createPostgresGuardrailsStore(db: PostgresConnection): GuardrailStore {
@@ -34,6 +35,31 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
           convertedFrom: hit.convertedFrom ?? null
         }))
       );
+    },
+    async listShippedGuardrailSwitches({ clientInstanceId }) {
+      const rows = await db
+        .select()
+        .from(shippedGuardrailSwitches)
+        .where(eq(shippedGuardrailSwitches.clientInstanceId, clientInstanceId));
+      return rows.map(switchOf);
+    },
+    async switchShippedGuardrail({ clientInstanceId, name, enabled, switchedBy, switchedAt }) {
+      const values = {
+        enabled,
+        switchedById: switchedBy.id,
+        switchedByLabel: switchedBy.label,
+        switchedAt: new Date(switchedAt)
+      };
+      const [row] = await db
+        .insert(shippedGuardrailSwitches)
+        .values({ clientInstanceId, guardrailName: name, ...values })
+        .onConflictDoUpdate({
+          target: [shippedGuardrailSwitches.clientInstanceId, shippedGuardrailSwitches.guardrailName],
+          set: values
+        })
+        .returning();
+      if (!row) throw new Error(`Shipped guardrail '${name}' was not switched`);
+      return switchOf(row);
     },
     async listHits({ clientInstanceId, guardrailName, limit }) {
       const rows = await db
@@ -195,4 +221,13 @@ function inList(values: readonly string[]): SQL {
         values.map((value) => sql`${value}`),
         sql`, `
       )})`;
+}
+
+function switchOf(row: typeof shippedGuardrailSwitches.$inferSelect): ShippedGuardrailSwitch {
+  return {
+    name: row.guardrailName,
+    enabled: row.enabled,
+    switchedBy: { id: row.switchedById, label: row.switchedByLabel },
+    switchedAt: row.switchedAt.toISOString()
+  };
 }

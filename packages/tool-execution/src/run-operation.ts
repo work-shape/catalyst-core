@@ -10,6 +10,7 @@ import {
   type ActorAccess,
   type JsonObject,
   type NewOperationRun,
+  type OperationApproval,
   type OperationAuthorization,
   type OperationCall,
   type OperationCallRuntime,
@@ -17,7 +18,8 @@ import {
   type OperationDenial,
   type OperationResult,
   type OperationRun,
-  type OperationRunActor
+  type OperationRunActor,
+  type PolicyResolution
 } from "@vivd-catalyst/core";
 import {
   accessOf,
@@ -477,6 +479,13 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     throw new AppError("INTERNAL", "This surface cannot hold a call for a confirmation");
   }
   if (policy.next === "await_approval") {
+    const approval = await definition.approval?.(call.input);
+    if (approval && approvedByCaller(context, policy, approval, accessOf(rights))) {
+      return {
+        access: accessOf(rights),
+        decision: { mode: "approved", reason: "approved_by_caller" }
+      };
+    }
     // A held call is executed later, when nobody is there to be shown the secret once. An
     // approval the instance default alone asks for never gets here: the policy takes it as a
     // confirmation. So this refuses what a setting for the operation or a guardrail asked.
@@ -510,7 +519,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       resource: context.resource,
       runtime: context.runtime,
       expiresAt,
-      policySource: policy.source
+      policySource: policy.source,
+      ...(approval ? { approval } : {})
     });
     if (!filed) {
       return { ending: await denyRun(context, unavailable) };
@@ -537,6 +547,26 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
         ? { mode: policy.decisionMode, reason: policy.decisionReason }
         : undefined
   };
+}
+
+/**
+ * Whether the caller's own call is the approval a guardrail asked for: they hold the right that
+ * decides it, and the call is their own click in the interface or their answer in the CLI. An
+ * agent's call, an MCP client's and a step of a run are never one.
+ */
+function approvedByCaller(
+  context: RunContext,
+  policy: PolicyResolution,
+  approval: OperationApproval,
+  access: ActorAccess
+): boolean {
+  const { call } = context;
+  return (
+    policy.source === "guardrail" &&
+    (call.origin.kind === "user" || call.origin.kind === "cli") &&
+    call.draft === undefined &&
+    access.authorize(approval.action, approval.resource ?? context.resource).allowed
+  );
 }
 
 /** What the before-events of a call hold beside its input, in the keys its operation declares. */

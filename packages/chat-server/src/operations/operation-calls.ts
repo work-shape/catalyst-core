@@ -15,6 +15,7 @@ import {
   createOperationApprovalFiler,
   createOperationCallApprovalHandler
 } from "../operation-call-approval-handler";
+import { publishApprovalKinds } from "../publish-approval";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
 import { createAuditingEventEmitter } from "./event-emitter";
 import type { GuardrailRunner } from "../guardrail-runner";
@@ -48,10 +49,11 @@ export type OperationCallsOptions = Pick<
 export function createOperationCalls(options: OperationCallsOptions): OperationCalls {
   const registry = createOperationRegistry();
   const { clientInstanceId } = options;
-  const handler = createOperationCallApprovalHandler({
+  const handlerOptions = {
     clientInstanceId,
     deps: () => deps,
     users: options.stores.users,
+    configAssets: options.stores.configAssets,
     ...(options.configAssets
       ? {
           assetPreview: createHeldAssetPreviewer({
@@ -63,14 +65,30 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
           })
         }
       : {})
-  });
+  };
+  // A held publish is decided by the holders of the kind's `approve` right.
+  const held = options.configAssets
+    ? publishApprovalKinds({
+        clientInstanceId,
+        kinds: options.configAssets.kinds,
+        store: options.stores.configAssets,
+        files: options.stores.pages,
+        effectOf: async (operation) => (await deps.registry.resolve(operation))?.effect
+      })
+    : [];
+  const handlers = [
+    createOperationCallApprovalHandler(handlerOptions),
+    ...held.map((kind) => createOperationCallApprovalHandler(handlerOptions, kind))
+  ];
   const approvalRequestHandlers = new Map([
     ...(options.approvalRequests?.handlers ?? []),
-    [handler.kind, handler]
+    ...handlers.map((handler) => [handler.kind, handler] as const)
   ]);
   const filer = options.approvalRequests
     ? createOperationApprovalFiler({
         clientInstanceId,
+        approvals: options.approvalRequests.store,
+        held,
         creator: new ApprovalRequestWorkflow({
           ...options.approvalRequests,
           handlers: approvalRequestHandlers,

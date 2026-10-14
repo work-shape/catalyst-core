@@ -39,10 +39,11 @@ export type OperationDenial =
       operation: string;
       /**
        * `approval_unavailable`: the policy asks for another person's approval and the call
-       * cannot be held for one, as no call of a service principal can. Without a reason the
-       * policy refuses the call itself.
+       * cannot be held for one, as no call of a service principal can. `approval_stale`: the
+       * call waited for an approval, and what it is about moved since, or a newer call about
+       * the same replaced it. Without a reason the policy refuses the call itself.
        */
-      reason?: "approval_unavailable";
+      reason?: "approval_unavailable" | "approval_stale";
     }
   | { kind: "guardrail"; guardrailId: string; message?: string }
   | { kind: "declined"; by: string; comment?: string };
@@ -57,6 +58,12 @@ export function operationDenialError(denial: OperationDenial): AppError {
         ...(denial.boundBy ? { boundBy: denial.boundBy } : {})
       });
     case "policy":
+      if (denial.reason === "approval_stale") {
+        return new AppError("POLICY_DENIED", approvalStaleMessage(denial.operation), {
+          operation: denial.operation,
+          reason: denial.reason
+        });
+      }
       return denial.reason === "approval_unavailable"
         ? new AppError(
             "POLICY_DENIED",
@@ -78,6 +85,11 @@ export function operationDenialError(denial: OperationDenial): AppError {
         ...(denial.comment === undefined ? {} : { comment: denial.comment })
       });
   }
+}
+
+/** Why a call that waited for an approval can no longer be approved. */
+export function approvalStaleMessage(operation: string): string {
+  return `The call of '${operation}' waited for an approval, and what it is about changed since or a newer call replaced it. Make the call again.`;
 }
 
 function forbiddenMessage(denial: Extract<OperationDenial, { kind: "forbidden" }>): string {
