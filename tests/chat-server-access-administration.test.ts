@@ -16,7 +16,6 @@ import {
   agent,
   clientInstanceId,
   errorSchema,
-  grantSchema,
   otherClientInstanceId,
   setupAccessInstance as setup,
   skill
