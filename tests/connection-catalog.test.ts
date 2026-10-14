@@ -476,9 +476,9 @@ describe("the names and reasons of Connection operations", () => {
     expect(exposureOfOrigin({ kind: "workflow", workflowRunId: "w", stepRunId: "s" })).toBe(
       "workflow"
     );
-    expect(exposureOfOrigin({ kind: "user" })).toBe("any");
-    expect(exposureOfOrigin({ kind: "cli" })).toBe("any");
-    expect(exposureOfOrigin({ kind: "mcp" })).toBe("any");
+    expect(exposureOfOrigin({ kind: "cli" })).toBe("outside");
+    expect(exposureOfOrigin({ kind: "mcp" })).toBe("outside");
+    expect(exposureOfOrigin({ kind: "user" })).toBeUndefined();
     expect(exposureOfOrigin({ kind: "schedule", scheduleId: "s" })).toBeUndefined();
   });
 
