@@ -110,11 +110,16 @@ export function DockHead({
       className="bg-background max-md:ps-[calc(var(--layout-gutter)+var(--layout-header-control))]"
       leading={
         over ? (
-          <Button variant="ghost" size="sm" onClick={onShowPage}>
-            <PanelRight aria-hidden="true" />
+          <>
+            <Button variant="ghost" size="sm" className="max-sm:hidden" onClick={onShowPage}>
+              <PanelRight aria-hidden="true" />
+              {t("dock.showPage")}
+            </Button>
             {/* On a phone the conversation's name wins the row: the button keeps its icon. */}
-            <span className="max-sm:sr-only">{t("dock.showPage")}</span>
-          </Button>
+            <IconButton label={t("dock.showPage")} className="sm:hidden" onClick={onShowPage}>
+              <PanelRight aria-hidden="true" />
+            </IconButton>
+          </>
         ) : undefined
       }
       title={title}

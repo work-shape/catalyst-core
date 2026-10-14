@@ -233,6 +233,13 @@ test("in a narrow window the dock lies over the page, and each brings the other 
   await pageAction(page).click();
   await expect(chatColumn(page)).toBeVisible();
   await expect(pageAction(page)).toHaveCount(0);
+
+  // On a phone the button keeps only its icon, and its tooltip names it.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const showPage = dockHead(page).getByRole("button", { name: "Show page" });
+  await expect(showPage).toHaveText("");
+  await showPage.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Show page");
 });
 
 // DOCK-1: fails where the width is not kept, or where the dock and the page lose their minimum.
