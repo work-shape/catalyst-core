@@ -39,11 +39,15 @@ import {
   type WorkspaceRouteChangeOptions,
   type WorkspaceRouteView
 } from "./workspace-route";
+import { useWorkspaceDock, type WorkspaceDock } from "./use-workspace-dock";
 
 interface WorkspaceRouteContextValue {
   route: WorkspaceRoute;
   view: WorkspaceRouteView;
+  /** The conversation on the screen: the chat route's, or the dock's on every other page. */
   selectedConversationId: string | undefined;
+  /** The chat dock beside every page but the chat route. */
+  dock: WorkspaceDock;
   goToDefaultChat(
     collaborationWorkspaceId: string | undefined,
     options?: WorkspaceRouteChangeOptions
@@ -110,14 +114,23 @@ const WorkspaceConversationActivityContext = createContext<
 
 export function WorkspaceUiStateProvider({
   route,
-  onRouteChange,
+  chat,
+  onRouteChange: changeRoute,
   children
 }: {
   route: WorkspaceRoute;
+  /** The conversation of the dock, as the address names it. */
+  chat: string | undefined;
   onRouteChange(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
   children: ReactNode;
 }) {
-  const selectedConversationId = routeConversationId(route);
+  // Every change of route goes through the dock, which carries its conversation along.
+  const { dock, showRoute: onRouteChange } = useWorkspaceDock({
+    route,
+    chat,
+    onRouteChange: changeRoute
+  });
+  const selectedConversationId = routeConversationId(route) ?? dock.conversationId;
   const selectedConversationIdRef = useRef<string | undefined>(undefined);
   const lastChatRouteRef = useRef<WorkspaceRoute>(defaultWorkspaceRoute());
   const backgroundActiveRunsRef = useRef<Set<string>>(new Set());
@@ -329,6 +342,7 @@ export function WorkspaceUiStateProvider({
       route,
       view,
       selectedConversationId,
+      dock,
       goToDefaultChat,
       showConversation,
       showSettings,
@@ -338,6 +352,7 @@ export function WorkspaceUiStateProvider({
       resetRouteMemory
     }),
     [
+      dock,
       goToDefaultChat,
       isConversationVisible,
       onRouteChange,

@@ -192,7 +192,7 @@ export function AssistantThread({
           <ConversationRunTopAnchor activeRunId={activeRunId} />
           <div
             ref={columnRef}
-            className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20"
+            className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-(--thread-start,5rem)"
           >
             {startPage ? (
               <ThreadWelcomeHeading

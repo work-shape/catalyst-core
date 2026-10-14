@@ -82,6 +82,7 @@ function AssistantRuntimePane({
     selectedConversationId,
     selectedConversationRetainedUntil,
     selectedConversationSubject,
+    docked,
     openRoute,
     messagesLoaded,
     snapshotStatus,
@@ -154,7 +155,8 @@ function AssistantRuntimePane({
     activeRun,
     conversationId: selectedConversationId,
     storedSubject: selectedConversationSubject,
-    workspaceId: collaborationWorkspaceId
+    workspaceId: collaborationWorkspaceId,
+    docked
   });
   useAutoOpenPageSurface(
     activeRun,

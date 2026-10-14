@@ -399,6 +399,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["a configuration the interface cannot read shows an error that a retry recovers from"]
   },
   {
+    name: "dock-conversation-not-readable",
+    reason:
+      "Chromium's own log line: the address names a conversation of another person in the " +
+      "dock, the instance refuses its thread, and the dock opens empty, which the test asserts.",
+    matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(404).source}`, "u"),
+    path: /^\/api\/v1\/conversations\/[^/]+\/(?:thread|draft-attachments|resources)$/u,
+    tests: ["a person who may not read the dock's conversation gets an empty dock and no error"]
+  },
+  {
     // C-95: resize observer loop of the top-anchored thread.
     name: "thread-resize-observer-loop",
     reason:
