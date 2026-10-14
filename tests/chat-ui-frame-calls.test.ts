@@ -325,6 +325,12 @@ describe("the calls of a frame", () => {
         refusal(403, "FORBIDDEN", "Not listed", { reason: "connection_not_declared" })
       )
     ).toEqual({ code: "connection_not_declared", message: "Not listed", retryable: false });
+    // Fails without the change: a Page that reads a Data Store was offered to try again.
+    expect(
+      frameCallFailure(
+        refusal(409, "CONFLICT", "Save it as an App", { reason: "data_store_needs_app" })
+      )
+    ).toEqual({ code: "data_store_needs_app", message: "Save it as an App", retryable: false });
     // A limit passes, so the Page may offer to try again.
     expect(frameCallFailure(refusal(429, "RATE_LIMITED", "Too many calls"))).toEqual({
       code: "rate_limited",
