@@ -1,0 +1,322 @@
+import { ChevronRight, ClipboardPaste, Sparkles } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import {
+  Button,
+  Card,
+  CardTarget,
+  Dialog,
+  Field,
+  FormNotice,
+  IconButton,
+  IconTile,
+  Textarea
+} from "@vivd-catalyst/ui";
+import { useTranslation, type TranslationContextValue } from "../i18n";
+import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
+import { ConnectionApprovalList, approveLabel, useApprovalChoice } from "./connection-approval";
+import {
+  pastedCandidates,
+  selectedCandidates,
+  type ApprovalCandidate,
+  type PasteIssue
+} from "./connection-approval-model";
+import { connectionConfigToForm, withApprovedOperations } from "./connection-form-model";
+import type { ConnectionSource } from "./connection-source";
+
+// How the operations of a REST API come in: it names none itself, so a person pastes them as
+// YAML, or asks the agent beside the page to draft them from the API's description. Either way
+// they reach the approval list, and the person's confirmation is the save.
+
+/** One way to add tools, as a card that opens as a whole. */
+export function ChoiceCard({
+  icon,
+  title,
+  text,
+  onChoose,
+  ...data
+}: {
+  icon: ReactNode;
+  title: string;
+  text: string;
+  onChoose(): void;
+  [data: `data-${string}`]: string;
+}) {
+  return (
+    <Card padding="md" className="flex min-w-0 items-center gap-3 p-3" {...data}>
+      <IconTile size="lg">{icon}</IconTile>
+      <div className="grid min-w-0 flex-1 gap-0.5">
+        <span className="text-label">{title}</span>
+        <span className="text-caption text-muted-foreground">{text}</span>
+      </div>
+      <CardTarget label={title}>
+        <IconButton label={title} onClick={onChoose}>
+          <ChevronRight aria-hidden="true" />
+        </IconButton>
+      </CardTarget>
+    </Card>
+  );
+}
+
+/** The two ways to add the tools of a REST API. Without a chat beside the page only pasting. */
+export function AddToolsChoices({
+  onPaste,
+  onDraft
+}: {
+  onPaste(): void;
+  /** Absent where the page has no chat to draft in. */
+  onDraft?: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="grid min-w-0 gap-2" data-connection-add-tools="">
+      {onDraft ? (
+        <ChoiceCard
+          icon={<Sparkles aria-hidden="true" />}
+          title={t("connectionCreate.draftTitle")}
+          text={t("connectionCreate.draftText")}
+          onChoose={onDraft}
+          data-connection-draft=""
+        />
+      ) : null}
+      <ChoiceCard
+        icon={<ClipboardPaste aria-hidden="true" />}
+        title={t("connectionCreate.pasteTitle")}
+        text={t("connectionCreate.pasteText")}
+        onChoose={onPaste}
+        data-connection-paste=""
+      />
+    </div>
+  );
+}
+
+/** What is wrong with a pasted text, in the reader's language. */
+function pasteIssueText(issue: PasteIssue, t: TranslationContextValue["t"]): string {
+  switch (issue.kind) {
+    case "yaml":
+      return issue.line === undefined
+        ? t("connectionCreate.pasteYaml", { message: issue.message })
+        : t("connectionCreate.pasteYamlLine", { line: issue.line, message: issue.message });
+    case "shape":
+      return t("connectionCreate.pasteShape");
+    case "unnamed":
+      return t("connectionCreate.pasteUnnamed", { index: issue.index });
+    case "duplicate":
+      return t("connectionCreate.pasteDuplicate", { name: issue.name });
+    case "empty":
+      return t("connectionCreate.pasteEmpty");
+  }
+}
+
+/** The field the YAML is pasted into, with what is wrong with it. */
+export function PasteToolsField({
+  value,
+  error,
+  onChange
+}: {
+  value: string;
+  error: string | undefined;
+  onChange(value: string): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Field
+      label={t("connectionCreate.pasteField")}
+      hint={t("connectionCreate.pasteHint")}
+      error={error}
+    >
+      <Textarea
+        variant="code"
+        rows={12}
+        autoFocus
+        spellCheck={false}
+        value={value}
+        data-connection-paste-field=""
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </Field>
+  );
+}
+
+/** Reads the pasted text: the rows of the list, or what is wrong, in the reader's language. */
+export function readPaste(
+  text: string,
+  t: TranslationContextValue["t"]
+): { candidates: ApprovalCandidate[] } | { error: string } {
+  const read = pastedCandidates(text);
+  return read.ok ? { candidates: read.candidates } : { error: pasteIssueText(read.issue, t) };
+}
+
+/**
+ * The page's way to add the tools of a REST API by pasting them: the YAML, then the approval
+ * list, then one save of the definition through the page.
+ */
+function PasteToolsDialog({
+  onClose,
+  approve
+}: {
+  onClose(): void;
+  /** Saves the approved operations with the surfaces. Answers what refused them, or nothing. */
+  approve(
+    approved: ApprovalCandidate[],
+    surfaces: readonly string[]
+  ): Promise<string[] | undefined>;
+}) {
+  const { t } = useTranslation();
+  const [text, setText] = useState("");
+  const [pasteError, setPasteError] = useState<string>();
+  const [candidates, setCandidates] = useState<ApprovalCandidate[]>();
+  const [saving, setSaving] = useState(false);
+  const [refusals, setRefusals] = useState<string[]>();
+  const approval = useApprovalChoice([]);
+  const chosen = candidates ? selectedCandidates(candidates, approval.choice.selected) : [];
+
+  const review = () => {
+    const read = readPaste(text, t);
+    if ("error" in read) {
+      setPasteError(read.error);
+      return;
+    }
+    setPasteError(undefined);
+    setCandidates(read.candidates);
+    approval.reset(read.candidates);
+  };
+  const save = () => {
+    setSaving(true);
+    setRefusals(undefined);
+    approve(chosen, [...approval.choice.surfaces])
+      .then((refused) => {
+        if (refused === undefined) onClose();
+        else setRefusals(refused);
+      })
+      .catch(() => undefined)
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <Dialog
+      open
+      title={t(candidates ? "connectionCreate.approveHeading" : "connectionCreate.pasteHeading")}
+      onClose={onClose}
+      footer={
+        candidates ? (
+          <>
+            <Button variant="outline" disabled={saving} onClick={() => setCandidates(undefined)}>
+              {t("connectionCreate.discard")}
+            </Button>
+            <Button
+              loading={saving}
+              disabled={chosen.length === 0}
+              data-connection-approve=""
+              onClick={save}
+            >
+              {approveLabel(chosen.length, t)}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="outline" onClick={onClose}>
+              {t("connectionCreate.cancel")}
+            </Button>
+            <Button disabled={text.trim() === ""} data-connection-paste-check="" onClick={review}>
+              {t("connectionCreate.pasteCheck")}
+            </Button>
+          </>
+        )
+      }
+    >
+      {candidates ? (
+        <div className="grid min-w-0 gap-4">
+          <ConnectionApprovalList
+            candidates={candidates}
+            choice={approval.choice}
+            onSelectedChange={approval.setSelected}
+            onSurfacesChange={approval.setSurfaces}
+            declared
+            source={text}
+            disabled={saving}
+          />
+          {refusals ? <ApprovalRefusals refusals={refusals} /> : null}
+        </div>
+      ) : (
+        <PasteToolsField value={text} error={pasteError} onChange={setText} />
+      )}
+    </Dialog>
+  );
+}
+
+/** Why the instance did not take the approved tools: each sentence as it said it. */
+export function ApprovalRefusals({ refusals }: { refusals: readonly string[] }) {
+  const { t } = useTranslation();
+  return (
+    <FormNotice tone="error" data-connection-approve-refused="">
+      <span className="grid gap-1">
+        <span>{t("connectionCreate.approveRefused")}</span>
+        {refusals.map((refusal, index) => (
+          <span key={index} className="break-words">
+            {refusal}
+          </span>
+        ))}
+      </span>
+    </FormNotice>
+  );
+}
+
+/**
+ * The tools of a REST API on its page: pasted as YAML into the approval list, or drafted by the
+ * agent in the chat beside the page, whose YAML is pasted here in turn. Nothing is saved before
+ * the person approves.
+ */
+export function RestToolsSection({
+  asset,
+  frame,
+  source,
+  written
+}: {
+  asset: BuildAsset;
+  frame: BuildAssetEditorProps;
+  source: ConnectionSource;
+  written(): void;
+}) {
+  const { t } = useTranslation();
+  const [pasting, setPasting] = useState(false);
+  const { config } = asset;
+  const title =
+    typeof config.displayName === "string" && config.displayName !== ""
+      ? config.displayName
+      : asset.name;
+  const baseUrl = connectionConfigToForm(config).url;
+  const startChat = source.draftInChat;
+  return (
+    <>
+      <AddToolsChoices
+        onPaste={() => setPasting(true)}
+        {...(startChat
+          ? {
+              onDraft: () =>
+                startChat(
+                  t("connectionCreate.draftRequest", { title, name: asset.name, url: baseUrl })
+                )
+            }
+          : {})}
+      />
+      {pasting ? (
+        <PasteToolsDialog
+          onClose={() => setPasting(false)}
+          approve={async (approved, surfaces) => {
+            const outcome = await frame.save(
+              withApprovedOperations(asset.config, approved, surfaces)
+            );
+            if (outcome.ok) {
+              written();
+              return undefined;
+            }
+            // A conflict is told by the frame's notice above the page.
+            return outcome.conflict
+              ? [t("connections.writeFailed")]
+              : outcome.refusals.map((refusal) => refusal.message);
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
