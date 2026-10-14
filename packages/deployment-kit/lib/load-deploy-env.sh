@@ -6,7 +6,9 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   exit 1
 fi
 
-deploy_env_file="${1:-../../.env.deploy}"
+# Without an argument: the workspace root, the directory that holds platform/ and the
+# deployment checkouts, found from this file and not from the current directory.
+deploy_env_file="${1:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../../.." && pwd)/.env.deploy}"
 
 if [[ ! -f "$deploy_env_file" ]]; then
   echo "Missing deploy env file: $deploy_env_file" >&2

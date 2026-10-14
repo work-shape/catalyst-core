@@ -65,12 +65,13 @@ GHCR_PULL_TOKEN=replace-with-read-packages-token
 Load it in the shell that runs Terraform, from the deployment repo:
 
 ```sh
-source ../platform/packages/deployment-kit/lib/load-deploy-env.sh ../.env.deploy
+source ../platform/packages/deployment-kit/lib/load-deploy-env.sh
 ```
 
 The script exports `HCLOUD_TOKEN`, which the Hetzner provider reads, from `HETZNER_API_TOKEN`, and
 the zone id and the Object Storage key pair as `TF_VAR_` variables. It stops when one of them is
-empty. Without an argument it reads `../../.env.deploy`, relative to the current directory.
+empty. Without an argument it reads `.env.deploy` at the workspace root, from any directory; an
+argument names another file.
 
 - **Cloudflare.** Use an account token when one token should manage several zones. It needs
   `Zone` → `Zone` → `Read` and `Zone` → `DNS` → `Edit`. Give it all zones only when it is meant
