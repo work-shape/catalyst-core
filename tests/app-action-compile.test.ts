@@ -201,6 +201,60 @@ describe("the action files of a Page", () => {
     ]);
   });
 
+  // Fails without the change: a YAML file of `actions/` with another ending was passed over, so
+  // the action was missing at the first call, and a missing key read "expected string, received
+  // undefined".
+  it("tell the author the fix for a misnamed file, a missing key and a line that is no action's", async () => {
+    expect(
+      await errorsOf(
+        page(
+          { connections: ["crm"], entry: "index.html" },
+          { "actions/load.yaml": "connection: crm\noperation: list\neffect: reading\n" }
+        )
+      )
+    ).toEqual([
+      {
+        file: "actions/load.yaml",
+        code: "action_invalid",
+        message: expect.stringContaining("is the file 'actions/load.action.yaml'")
+      }
+    ]);
+    expect(
+      await errorsOf(
+        page(
+          { connections: ["crm"], entry: "index.html" },
+          { "actions/load.action.yaml": "connection: crm\neffect: reading\n" }
+        )
+      )
+    ).toEqual([
+      {
+        file: "actions/load.action.yaml",
+        code: "action_invalid",
+        message: expect.stringMatching(
+          /^'operation' is missing: the name of an operation the Connection offers/u
+        )
+      }
+    ]);
+    expect(
+      await errorsOf(
+        page(
+          {
+            connections: ["crm"],
+            entry: "index.html",
+            actions: [{ name: "load", kind: "connection", effect: "reading" }]
+          },
+          { "actions/load.action.yaml": "connection: crm\noperation: list\neffect: reading\n" }
+        )
+      )
+    ).toEqual([
+      {
+        file: "app.yaml",
+        code: "manifest_invalid",
+        message: expect.stringContaining("needs no line")
+      }
+    ]);
+  });
+
   it("names the limit a Page with too many actions runs into", async () => {
     const files = Object.fromEntries(
       Array.from({ length: APP_MAX_ACTIONS + 1 }, (_, index) => [
