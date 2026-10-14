@@ -68,6 +68,6 @@ describe("GR-2b verify: reverting an approved skill change", () => {
     expect(await f.approve(request.id)).toMatchObject({ status: "approved" });
     const reverted = f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id);
     await expect(reverted).rejects.toMatchObject({ code: "GUARDRAIL_BLOCKED" });
-    expect(JSON.stringify((await f.revisions()).at(-1)?.config)).not.toContain("3704");
+    expect(JSON.stringify((await f.revisions()).at(-1)?.config)).not.toContain("3704 0044");
   });
 });

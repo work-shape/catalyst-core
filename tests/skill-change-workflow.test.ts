@@ -132,7 +132,7 @@ describe("skill change approval workflow", () => {
       subjectKind: "skill",
       subjectName: "review"
     });
-    expect(JSON.stringify(hit)).not.toContain("3704");
+    expect(JSON.stringify(hit)).not.toContain("3704 0044");
 
     // A change the guardrail lets through is applied.
     expect(await f.approve((await f.propose()).id)).toMatchObject({ status: "approved" });

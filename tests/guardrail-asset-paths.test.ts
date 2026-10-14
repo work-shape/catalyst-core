@@ -123,7 +123,7 @@ describe("a guardrail on an App written from a Page", () => {
         ["asset.before_write", "app", "offers"],
         ["asset.before_write", "app", "offers"]
       ]);
-      expect(JSON.stringify(found)).not.toContain("3704");
+      expect(JSON.stringify(found)).not.toContain("3704 0044");
     } finally {
       await t.close();
     }

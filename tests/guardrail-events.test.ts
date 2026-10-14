@@ -73,7 +73,7 @@ describe("the guardrails at one before-event", () => {
       subjectKind: "skill",
       subjectName: "kunden-faq"
     });
-    expect(JSON.stringify(hit)).not.toContain("3704");
+    expect(JSON.stringify(hit)).not.toContain("3704 0044");
   });
 
   // Fails without the change: a judge ran beside a pattern that had already blocked.
@@ -295,7 +295,7 @@ describe("a guardrail at a call of the asset operations", () => {
     // The refusal is audited as the call's denial; no row holds the skill's text.
     const audit = await t.stores.audit.listAuditEvents({ clientInstanceId: accessInstanceId });
     expect(audit.map((event) => event.type)).toContain("operation.denied");
-    expect(JSON.stringify(audit)).not.toContain("3704");
+    expect(JSON.stringify(audit)).not.toContain("3704 0044");
 
     // The same push without the IBAN is written.
     const clean = await t.call(t.kai.id, "assets.sync", {

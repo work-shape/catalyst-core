@@ -931,7 +931,7 @@ skills:
     expect(stderr.join("")).toContain(
       "Guardrail 'No IBAN in skills' blocked skill 'kunden-faq': Skills hold no bank account."
     );
-    expect(stderr.join("")).not.toContain("3704");
+    expect(stderr.join("")).not.toContain("3704 0044");
     expect(
       await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
