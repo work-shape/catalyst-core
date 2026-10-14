@@ -1,18 +1,18 @@
 ---
-title: Local Demo
-description: Run the repository's demo client instance locally.
+title: Run the reference client locally
+description: Start the repository's reference client as a local test instance.
 ---
 
-The repository includes a demo client instance at `clients/demo`. It is useful for local testing and for understanding the client assembly shape.
+The repository includes a reference client at `clients/demo`. It runs as a local test instance and shows how a client assembly is put together.
 
 ## Requirements
 
 - Node.js compatible with the workspace toolchain
 - pnpm 10
 - Docker for the local Postgres service, the workers and the command sandbox
-- an OpenAI API key for the default model-backed demo path
+- an OpenAI API key for the default model
 
-## Start The Demo
+## Start It
 
 From the repository root:
 
@@ -23,19 +23,19 @@ pnpm build
 pnpm dev
 ```
 
-Add your OpenAI API key to `.env` before using the model-backed demo. The demo client owns
-its configured tools, prompts, and domain-specific tool result widgets under `clients/demo`.
+Add your OpenAI API key to `.env` before you chat with an agent. The reference client keeps
+its tools, prompts, and tool result widgets under `clients/demo`.
 
-The demo starts:
+This starts:
 
 - chat API on `http://127.0.0.1:4100`
-- demo chat UI on `http://127.0.0.1:5173`
+- the chat UI on `http://127.0.0.1:5173`
 - Postgres through `clients/demo/docker-compose.yml`
 - the artifact preview worker and the workspace command worker, which runs the agent's commands and Page builds in containers of the runner image it builds
 
 ## Default Standalone Users
 
-The demo seeds representative standalone users from release config.
+The reference client seeds standalone users from release config.
 
 Use the credentials configured by:
 

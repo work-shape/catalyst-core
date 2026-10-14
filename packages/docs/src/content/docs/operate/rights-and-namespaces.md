@@ -1,5 +1,5 @@
 ---
-title: Rights and Namespaces
+title: Rights for one person or asset
 description: Give one person rights on one asset, and check what a person may do.
 ---
 

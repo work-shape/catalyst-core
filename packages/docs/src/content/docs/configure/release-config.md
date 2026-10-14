@@ -1,5 +1,5 @@
 ---
-title: Release Config
+title: Release configuration
 description: Use source-controlled config as the source of truth for instance behavior.
 ---
 
@@ -865,7 +865,7 @@ setting refuses the call with 403 and the code `POLICY_DENIED`, since a secret c
 nobody issues a key or sets a password while the setting stands. A `users.create` without a
 password carries no secret and waits like any other change. A run never keeps the answer of
 such a call, and the hash it keeps of the input is taken with the password left out.
-See also [Governance](/operate/governance/#inbox).
+See also [Retention, audit and deletion](/operate/governance/#inbox).
 
 ## Infrastructure
 
