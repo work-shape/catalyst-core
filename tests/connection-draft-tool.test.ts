@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { PLATFORM_TOOL_NAMES, platformModules } from "@vivd-catalyst/client-assembly";
 import { createHttpApiConnectorType, HTTP_API_CONNECTOR_TYPE } from "@vivd-catalyst/connections";
 import {
   asClientInstanceId,
   createConnectorTypeRegistry,
+  createModuleRegistry,
   isJsonObject,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
-  createConnectionDraftTool
+  createConnectionDraftTool,
+  ToolRegistry
 } from "@vivd-catalyst/tool-execution";
 
 // The agent's draft of the tools of a REST API (CS-5c): the tool checks the declarations as a
@@ -266,5 +269,33 @@ describe("the agent's draft of REST API tools", () => {
         "operations.0.path"
       );
     }
+  });
+});
+
+describe("where the draft tool is offered", () => {
+  /** The release's registry with every module on, but `connections` as given. */
+  const registryWith = (connections: boolean) =>
+    new ToolRegistry({
+      tools: [tool],
+      enabledToolNames: new Set([CONNECTION_DRAFT_TOOL_NAME]),
+      modules: createModuleRegistry(platformModules).snapshot(
+        Object.fromEntries(
+          platformModules.map((module) => [
+            module.name,
+            { enabled: module.name !== "connections" || connections }
+          ])
+        )
+      )
+    });
+
+  it("is a tool of the module connections: off with it, on with it", () => {
+    expect(registryWith(false).has(CONNECTION_DRAFT_TOOL_NAME)).toBe(false);
+    expect(registryWith(true).has(CONNECTION_DRAFT_TOOL_NAME)).toBe(true);
+  });
+
+  it("is no tool every agent may hold whatever the modules: an agent lists it by name", () => {
+    // Fixtures hand an agent every name of the list; with connections off, that agent would be
+    // refused for naming a tool of a module that is off.
+    expect(PLATFORM_TOOL_NAMES).not.toContain(CONNECTION_DRAFT_TOOL_NAME);
   });
 });

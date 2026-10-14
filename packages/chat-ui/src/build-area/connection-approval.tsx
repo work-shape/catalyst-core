@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Badge, Button, Checkbox, List, Textarea } from "@vivd-catalyst/ui";
+import { Badge, Button, Checkbox, FoldedText, List, Textarea } from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import {
   APPROVAL_SURFACES,
@@ -151,9 +151,18 @@ export function ConnectionApprovalList({
                   label={candidate.title}
                   description={
                     candidate.request ? (
-                      <code className="font-mono text-code break-all">
-                        {candidate.request.method} {candidate.request.path}
-                      </code>
+                      <>
+                        <code className="block font-mono text-code break-all">
+                          {candidate.request.method} {candidate.request.path}
+                        </code>
+                        {candidate.description ? (
+                          // The agent that carries the tool reads it, and a draft's author may
+                          // be an agent: whoever approves it sees it. A long one folds.
+                          <FoldedText className="mt-0.5" data-approval-description="">
+                            {candidate.description}
+                          </FoldedText>
+                        ) : null}
+                      </>
                     ) : candidate.description ? (
                       // Whole: the model of an agent that carries the tool reads all of it, so
                       // whoever approves it does too. A long one scrolls.

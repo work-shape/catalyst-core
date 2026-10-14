@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Braces } from "lucide-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import type { ApiClient } from "@vivd-catalyst/api-client";
@@ -19,9 +20,21 @@ import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 // draft; nothing is saved before the person approves there. Only a reader who may write
 // Connections gets the button.
 
+/** A Connection the draft's id already names. */
+interface ExistingConnection {
+  connectorType: string;
+  /** Its own name in words. */
+  title: string;
+}
+
 /** How the card opens a draft. Absent where the reader may write no Connection. */
 export interface ConnectionDraftHost {
   open(draft: ConnectionDraft): Promise<ConnectionDraftOpening>;
+  /**
+   * The Connection of an id as the instance holds it, or nothing where there is none: the card
+   * names an existing Connection by its own title, never by the agent's.
+   */
+  connectionOf(name: string): Promise<ExistingConnection | undefined>;
 }
 
 const ConnectionDraftHostContext = createContext<ConnectionDraftHost | undefined>(undefined);
@@ -50,18 +63,25 @@ export function connectionDraftHost(input: {
   showRoute(route: WorkspaceRoute): void;
 }): ConnectionDraftHost | undefined {
   if (!input.mayWriteConnections) return undefined;
+  const connectionOf = (name: string): Promise<ExistingConnection | undefined> =>
+    input.client.assets.get({ params: { kind: "connection", name }, query: {} }).then(
+      ({ config }) => ({
+        connectorType: typeof config.connectorType === "string" ? config.connectorType : "",
+        title:
+          typeof config.displayName === "string" && config.displayName !== ""
+            ? config.displayName
+            : name
+      }),
+      (error: unknown) => {
+        if (apiErrorCode(error) === "NOT_FOUND") return undefined;
+        throw error;
+      }
+    );
   return {
+    connectionOf,
     open: (draft) =>
       openConnectionDraft(draft, {
-        connectorTypeOf: (name) =>
-          input.client.assets.get({ params: { kind: "connection", name }, query: {} }).then(
-            (asset) =>
-              typeof asset.config.connectorType === "string" ? asset.config.connectorType : "",
-            (error: unknown) => {
-              if (apiErrorCode(error) === "NOT_FOUND") return undefined;
-              throw error;
-            }
-          ),
+        connectorTypeOf: (name) => connectionOf(name).then((found) => found?.connectorType),
         showConnection: (name) =>
           input.showRoute(
             buildRouteOfLocation({
@@ -77,9 +97,26 @@ export function connectionDraftHost(input: {
 /** The card of one draft in the thread. */
 export function ConnectionDraftCard({ draft }: { draft: ConnectionDraft }) {
   const host = useContext(ConnectionDraftHostContext);
+  const { name } = draft.connection;
+  const existing = useQuery({
+    queryKey: ["connection-draft-target", name],
+    queryFn: () => (host ? host.connectionOf(name) : Promise.resolve(undefined)),
+    enabled: host !== undefined
+  });
+  // The agent's title names only a new Connection: an existing one goes by its own, and the id
+  // stands in until the read tells which it is.
+  const title = !host
+    ? draft.connection.title
+    : existing.isSuccess
+      ? (existing.data?.title ?? draft.connection.title)
+      : name;
   return (
     <div className="chat-tool-part my-3 max-w-3xl" data-testid="tool-call-card">
-      <ConnectionDraftCardView draft={draft} {...(host ? { onOpen: host.open } : {})} />
+      <ConnectionDraftCardView
+        draft={draft}
+        title={title}
+        {...(host ? { onOpen: host.open } : {})}
+      />
     </div>
   );
 }
@@ -87,15 +124,18 @@ export function ConnectionDraftCard({ draft }: { draft: ConnectionDraft }) {
 /** The card as it shows a draft, with the button where `onOpen` is given. */
 export function ConnectionDraftCardView({
   draft,
+  title = draft.connection.title,
   onOpen
 }: {
   draft: ConnectionDraft;
+  /** The Connection's title: its own for an existing one, the draft's for a new one. */
+  title?: string;
   onOpen?: (draft: ConnectionDraft) => Promise<ConnectionDraftOpening>;
 }) {
   const { t } = useTranslation();
   const [opening, setOpening] = useState(false);
   const [outcome, setOutcome] = useState<ConnectionDraftOpening>();
-  const { title, name } = draft.connection;
+  const { name } = draft.connection;
   const count = draft.operations.length;
 
   const open = () => {

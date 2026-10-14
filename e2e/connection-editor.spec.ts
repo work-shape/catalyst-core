@@ -326,10 +326,22 @@ test("cancel after a failed connect asks, then deletes the Connection", async ({
 });
 
 /** The draft the agent answers for the Connection `id`: the sample server's health, read. */
+/** The title the agent drafts with; an existing Connection keeps its own. */
+const DRAFT_TITLE = "Sample API";
+/** The title of the Connection the draft is for on its page. */
+const EXISTING_TITLE = "Sample health service";
+/** A description longer than the three lines the approval list shows before "Show more". */
+const LONG_DESCRIPTION = [
+  "Reads the status of the sample service: whether it runs, since when, and which version it serves.",
+  "Call it before any other tool of this Connection when a person asks whether the service is reachable,",
+  "and again after an error, to tell an outage of the service from a refused request.",
+  "It reads only and changes nothing; it takes no parameter and answers in a few milliseconds."
+].join(" ");
+
 function healthDraft(id: string) {
   return {
     connection: id,
-    title: "Exampledata",
+    title: DRAFT_TITLE,
     baseUrl: sampleBase,
     headerNames: ["x-e2e"],
     operations: [
@@ -340,10 +352,21 @@ function healthDraft(id: string) {
         method: "GET",
         path: "/healthz",
         effect: "reading"
+      },
+      {
+        name: "status",
+        title: "Status",
+        description: LONG_DESCRIPTION,
+        method: "GET",
+        path: "/healthz",
+        effect: "reading"
       }
     ]
   };
 }
+
+/** The control that unfolds a long description. */
+const showMore: Record<Locale, string> = { en: "Show more", de: "Mehr anzeigen" };
 
 /** Pictures of what stands now, light and dark, at 1280 and at 390; the page is not reloaded. */
 async function shootModes(page: Page, locale: Locale, name: string): Promise<void> {
@@ -390,7 +413,7 @@ for (const locale of LOCALES) {
           expectedRevision: null,
           config: {
             name: existing,
-            displayName: "Exampledata",
+            displayName: EXISTING_TITLE,
             connectorType: "http_api",
             settings: { baseUrl: sampleBase, testPath: "/healthz" },
             authScheme: "none",
@@ -410,14 +433,31 @@ for (const locale of LOCALES) {
         `[data-testid="connection-draft-card"][data-connection="${existing}"]`
       );
       await expect(card.locator('[data-connection-draft-tool="health"]')).toHaveText("Health");
+      // The card names the existing Connection by its own title, never by the agent's.
+      await expect(card).toContainText(EXISTING_TITLE);
+      await expect(card).not.toContainText(DRAFT_TITLE);
       await shootModes(page, locale, "card");
 
-      // The button opens the approval list on the page. Discarding it saves nothing.
+      // The button opens the approval list on the page, with what each tool tells an agent.
+      // Discarding it saves nothing.
       await card.locator("[data-connection-draft-open]").click();
       const dialog = page.getByRole("dialog");
-      await expect(dialog.locator('li[data-approval-tool="health"]')).toContainText("GET /healthz");
-      await expect(dialog.locator("[data-connection-drafted]")).toBeVisible();
+      const health = dialog.locator('li[data-approval-tool="health"]');
+      await expect(health).toContainText("GET /healthz");
+      await expect(health.locator("[data-approval-description]")).toHaveText(
+        "Says whether the service runs."
+      );
+      await expect(dialog.locator("[data-connection-drafted]")).toContainText(EXISTING_TITLE);
+      await expect(dialog.locator("[data-connection-drafted]")).not.toContainText(DRAFT_TITLE);
+      const status = dialog.locator('li[data-approval-tool="status"]');
+      const more = status.getByRole("button", { name: showMore[locale] });
+      await expect(more).toBeVisible();
       await shootModes(page, locale, "approve");
+      await more.click();
+      await expect(status.locator("[data-approval-description]")).toContainText(
+        "answers in a few milliseconds."
+      );
+      await shootModes(page, locale, "approve-unfolded");
       await dialog.locator("[data-connection-discard]").click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(main.locator('[data-connection-operation="health"]')).toHaveCount(0);
@@ -438,7 +478,7 @@ for (const locale of LOCALES) {
       const create = page.getByRole("dialog");
       await expect(create.locator('[data-connection-create-form="http_api"]')).toBeVisible();
       const field = (name: string) => create.locator(`[data-connection-field="${name}"]`);
-      await expect(field("title")).toHaveValue("Exampledata");
+      await expect(field("title")).toHaveValue(DRAFT_TITLE);
       await expect(field("url")).toHaveValue(sampleBase);
       await expect(field("id")).toHaveValue(fresh);
       await expect(field("secret")).toHaveValue("");

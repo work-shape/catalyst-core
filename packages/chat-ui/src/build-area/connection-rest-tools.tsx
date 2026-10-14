@@ -153,10 +153,13 @@ export function readPaste(
  * it opens at the list, and discarding the draft closes it.
  */
 function AddToolsDialog({
+  title,
   drafted,
   onClose,
   approve
 }: {
+  /** The Connection's own title: a draft's intro names it, never the agent's title. */
+  title: string;
   drafted?: ConnectionDraft;
   onClose(): void;
   /** Saves the approved operations with the surfaces. Answers what refused them, or nothing. */
@@ -239,7 +242,7 @@ function AddToolsDialog({
         <div className="grid min-w-0 gap-4">
           {drafted ? (
             <p className="text-body text-muted-foreground" data-connection-drafted="">
-              {t("connectionCreate.draftedIntro", { title: drafted.connection.title })}
+              {t("connectionCreate.draftedIntro", { title })}
             </p>
           ) : null}
           <ConnectionApprovalList
@@ -320,6 +323,7 @@ export function RestToolsSection({
         <AddToolsDialog
           // A draft opened over a paste in progress starts its own dialog.
           key={opened.draft ? "drafted" : "pasted"}
+          title={title}
           {...(opened.draft ? { drafted: opened.draft } : {})}
           onClose={() => {
             setPasting(false);

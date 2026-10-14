@@ -1,14 +1,16 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
+import { createApiClient } from "@vivd-catalyst/api-client";
 import {
   ConnectionCreateFlow,
   ConnectionDraftCardView,
+  connectionDraftHost,
   openConnectionDraft,
   readConnectionDraft,
   type ConnectionDraft,
   type ConnectionSource
 } from "@vivd-catalyst/chat-ui/build-area";
-import { connectionDetail } from "./chat-ui-connection-fixtures";
+import { connectionAsset, connectionDetail } from "./chat-ui-connection-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The card of the agent's draft of REST API tools (CS-5c): what it reads of the tool's answer,
@@ -130,6 +132,45 @@ describe("the card's button", () => {
   });
 });
 
+describe("the card's host", () => {
+  /** A client whose instance holds the Connections of `held`, by id. */
+  const client = (held: Record<string, Record<string, unknown>>) =>
+    createApiClient({
+      baseUrl: "https://catalyst.example.test",
+      fetchImpl: async (input, init) => {
+        const name = decodeURIComponent(
+          new URL(new Request(input, init).url).pathname.split("/").at(-1) ?? ""
+        );
+        const config = held[name];
+        return config
+          ? Response.json(connectionAsset(name, config))
+          : Response.json(
+              { error: { code: "NOT_FOUND", message: "No such Connection" } },
+              { status: 404 }
+            );
+      }
+    });
+
+  it("gives the button only to a reader who may write Connections", () => {
+    const input = { client: client({}), showRoute: () => undefined };
+    expect(connectionDraftHost({ ...input, mayWriteConnections: false })).toBeUndefined();
+    expect(connectionDraftHost({ ...input, mayWriteConnections: true })).toBeDefined();
+  });
+
+  it("names an existing Connection by its own title, and a new id by nothing", async () => {
+    const host = connectionDraftHost({
+      client: client({ exampledata: { connectorType: "http_api", displayName: "Kanzlei-API" } }),
+      mayWriteConnections: true,
+      showRoute: () => undefined
+    });
+    expect(await host?.connectionOf("exampledata")).toEqual({
+      connectorType: "http_api",
+      title: "Kanzlei-API"
+    });
+    expect(await host?.connectionOf("crm")).toBeUndefined();
+  });
+});
+
 describe("the card", () => {
   const render = (locale: "en" | "de", writer: boolean) =>
     renderToStaticMarkup(
@@ -156,6 +197,18 @@ describe("the card", () => {
     expect(de).toContain("Entwurf · 2 Tools, lesend");
     expect(de).toContain("Prüfen und freigeben");
     expect(de).toContain("Gespeichert wird erst mit deiner Freigabe.");
+  });
+
+  it("shows the title it is given: an existing Connection's own, not the agent's", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale: "de" },
+        createElement(ConnectionDraftCardView, { draft: draft(), title: "Kanzlei-API" })
+      )
+    );
+    expect(markup).toContain("Tools für Kanzlei-API");
+    expect(markup).not.toContain("Exampledata");
   });
 
   it("has no button for a reader who may write no Connection", () => {
