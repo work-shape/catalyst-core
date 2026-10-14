@@ -21509,6 +21509,28 @@
                 "module"
               ]
             }
+          },
+          "platformInstructions": {
+            "type": "object",
+            "properties": {
+              "rules": {
+                "type": "string"
+              },
+              "orientation": {
+                "type": "string"
+              },
+              "toolNames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "rules",
+              "orientation",
+              "toolNames"
+            ]
           }
         },
         "required": [
@@ -22999,7 +23021,6 @@
                   "type": "string",
                   "enum": [
                     "role",
-                    "legacy",
                     "legacy_ref",
                     "grant",
                     "membership"

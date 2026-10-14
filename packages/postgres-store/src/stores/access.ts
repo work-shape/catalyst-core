@@ -270,6 +270,7 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
             input.excludeServicePrincipalHolders
               ? ne(permissionGrants.holderKind, "service_principal")
               : undefined,
+            input.excludeInstanceScope ? ne(permissionGrants.scopeKind, "instance") : undefined,
             keysetFilter(input.page, order, false)
           )
         )

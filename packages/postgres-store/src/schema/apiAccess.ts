@@ -62,6 +62,8 @@ export const apiCredentials = pgTable(
     name: text("name").notNull(),
     keyPrefix: text("key_prefix").notNull(),
     secretHash: text("secret_hash").notNull(),
+    // `["*"]` for every scope of the principal. Null only in a row a release before AP-4 wrote;
+    // the column becomes required once no supported release writes null.
     scopes: jsonb("scopes").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),

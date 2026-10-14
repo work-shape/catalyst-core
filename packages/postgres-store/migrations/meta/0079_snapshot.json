@@ -1,5 +1,5 @@
 {
-  "id": "0aaecb8e-7531-488f-a4f8-99738e236202",
+  "id": "bb818bb5-938a-4f2d-a5d3-c8dd198bc7cb",
   "prevId": "c68d5ed1-155b-431a-a8c5-f9866bb38609",
   "version": "7",
   "dialect": "postgresql",
@@ -6624,18 +6624,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
-        },
-        "used_by_run_id": {
-          "name": "used_by_run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "used_at": {
-          "name": "used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -6655,15 +6643,33 @@
         }
       },
       "compositePrimaryKeys": {
-        "live_once_switches_owner_pk": {
-          "name": "live_once_switches_owner_pk",
+        "live_once_switches_pk": {
+          "name": "live_once_switches_pk",
           "columns": [
             "asset_id",
-            "part",
-            "switched_by_id"
+            "part"
           ]
         }
       },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.legacy_permission_restores": {
+      "name": "legacy_permission_restores",
+      "schema": "",
+      "columns": {
+        "restored_at": {
+          "name": "restored_at",
+          "type": "timestamp with time zone",
+          "primaryKey": true,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -7870,18 +7876,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "target": {
-          "name": "target",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "published_would_ask": {
-          "name": "published_would_ask",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "staged": {
           "name": "staged",
           "type": "jsonb",
@@ -8027,14 +8021,6 @@
         "workflow_step_runs_status_check": {
           "name": "workflow_step_runs_status_check",
           "value": "\"workflow_step_runs\".\"status\" in ('queued', 'running', 'waiting', 'done', 'failed', 'cancelled')"
-        },
-        "workflow_step_runs_target_check": {
-          "name": "workflow_step_runs_target_check",
-          "value": "\"workflow_step_runs\".\"target\" is null or \"workflow_step_runs\".\"target\" in ('live', 'test', 'dry_run')"
-        },
-        "workflow_step_runs_published_would_ask_check": {
-          "name": "workflow_step_runs_published_would_ask_check",
-          "value": "\"workflow_step_runs\".\"published_would_ask\" is null or \"workflow_step_runs\".\"published_would_ask\" = 'approval'"
         },
         "workflow_step_runs_iteration_check": {
           "name": "workflow_step_runs_iteration_check",

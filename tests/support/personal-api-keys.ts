@@ -47,7 +47,7 @@ export async function setupPersonalKeyInstance(
       return {
         authAdapter: new CompositeAuthAdapter([
           new HmacServiceAccessTokenAuthAdapter(keys),
-          recordAuthAdapter(stores)
+          recordAuthAdapter()
         ]),
         serviceAccessToken: { exchange: new ApiKeyAccessTokenExchange(keys) }
       };

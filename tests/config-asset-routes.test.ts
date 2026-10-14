@@ -1386,15 +1386,17 @@ async function createFixture(
     server: {
       config,
       clientInstanceId,
-      authAdapter: serviceAccessOptions
-        ? new IdentityResolvingAuthAdapter(
-            new CompositeAuthAdapter([
+      // As an assembled instance does: a signed-in person is a stored user, whose legacy list
+      // the first sign-in writes as rows (AP-4).
+      authAdapter: new IdentityResolvingAuthAdapter(
+        serviceAccessOptions
+          ? new CompositeAuthAdapter([
               new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
               new HmacSessionTokenAuthAdapter(authOptions)
-            ]),
-            store.users
-          )
-        : new HmacSessionTokenAuthAdapter(authOptions),
+            ])
+          : new HmacSessionTokenAuthAdapter(authOptions),
+        store.users
+      ),
       stores: store,
       usageGovernance: new ModelUsageGovernance({
         store: store.usage,
@@ -1470,15 +1472,19 @@ async function mintToken(
       | undefined;
   } = {}
 ): Promise<string> {
+  const roles = overrides.roles ?? ["user"];
+  const permissions = overrides.permissions ?? [
+    "config_assets.read",
+    "config_assets.write",
+    "config_assets.release"
+  ];
   const payload = {
-    externalUserId: "config-cli",
+    // The first sign-in of a person writes the rights the token names; a later token does not
+    // change them. A token with other rights is therefore another person.
+    externalUserId: `config-cli:${[...roles, ...permissions].join(",")}`,
     displayLabel: "Config CLI",
-    roles: overrides.roles ?? ["user"],
-    permissions: overrides.permissions ?? [
-      "config_assets.read",
-      "config_assets.write",
-      "config_assets.release"
-    ],
+    roles,
+    permissions,
     scopes: overrides.scopes ?? [
       "config_assets:read",
       "config_assets:write",
