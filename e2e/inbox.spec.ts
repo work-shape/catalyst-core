@@ -1,5 +1,5 @@
 import {
-  allowInWorkspace,
+  allowOnInstance,
   apiBaseUrl,
   decidedCount,
   expectInboxFrameStill,
@@ -787,7 +787,7 @@ test("the title and the tabs stand still from a tab with rows to an empty one", 
   }
 });
 
-/** May write and publish the Apps of the test's workspace, and may not approve a publish. */
+/** May write and publish Apps, and may not approve a publish. */
 const publisher = {
   email: "e2e-publish-member@example.test",
   password: "e2e-publish-member-password"
@@ -808,6 +808,14 @@ test("a member's publish of an App waits in the Inbox with its review, and an ad
   const appId = `publish-review-${testInfo.retry}`;
   const appName = "Visit report";
 
+  // The member signs in once, so the instance knows them.
+  const memberContext = await browser.newContext({
+    baseURL,
+    viewport: { width: 1280, height: 900 }
+  });
+  await pageErrors.watch(memberContext);
+  const memberPage = await memberContext.newPage();
+  await signIn(memberPage, publisher);
   // The admin's workspace, with the member in it, and an App of two files.
   await signIn(page, reviewer);
   const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
@@ -840,18 +848,7 @@ test("a member's publish of an App waits in the Inbox with its review, and an ad
   expect(written.ok(), await written.text()).toBe(true);
 
   // The member clicks Publish: the revision waits, and the page says for whom.
-  const memberContext = await browser.newContext({
-    baseURL,
-    viewport: { width: 1280, height: 900 }
-  });
-  await pageErrors.watch(memberContext);
-  const memberPage = await memberContext.newPage();
-  await signIn(memberPage, publisher);
-  const takeBack = await allowInWorkspace(publisher.email, workspaceId, [
-    "app.read",
-    "app.write",
-    "app.publish"
-  ]);
+  const takeBack = await allowOnInstance(publisher.email, ["app.read", "app.write", "app.publish"]);
   try {
     await memberPage.goto(`/w/${workspaceId}/app-drafts/${appId}`);
     const edit = memberPage.getByTestId("app-edit");

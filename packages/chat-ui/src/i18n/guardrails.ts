@@ -24,7 +24,7 @@ export const guardrails = defineTranslations({
     "guardrails.shippedSwitchFailed": "The switch was not saved.",
     "guardrails.search": "Search guardrails",
     "guardrails.empty":
-      "No guardrails yet. A guardrail checks an action before it happens and warns, holds it for approval or blocks it. The operator sets them in the release config, and further ones are written with the CLI.",
+      "No further guardrails yet. A guardrail checks an action before it happens and warns, holds it for approval or blocks it. The operator sets them in the release config, and further ones are written with the CLI.",
     "guardrails.missing": "There is no guardrail with the id {name}.",
     "guardrails.scopeInstance": "Instance",
     "guardrails.whenItRuns": "When it runs",
@@ -140,7 +140,7 @@ export const guardrails = defineTranslations({
     "guardrails.shippedSwitchFailed": "Das Umschalten wurde nicht gespeichert.",
     "guardrails.search": "Leitplanken durchsuchen",
     "guardrails.empty":
-      "Noch keine Leitplanken. Eine Leitplanke prüft eine Aktion, bevor sie geschieht, und warnt, hält sie zur Freigabe an oder blockiert sie. Der Betreiber legt sie in der Release-Konfiguration fest, weitere werden mit der CLI geschrieben.",
+      "Noch keine weiteren Leitplanken. Eine Leitplanke prüft eine Aktion, bevor sie geschieht, und warnt, hält sie zur Freigabe an oder blockiert sie. Der Betreiber legt sie in der Release-Konfiguration fest, weitere werden mit der CLI geschrieben.",
     "guardrails.missing": "Es gibt keine Leitplanke mit der Kennung {name}.",
     "guardrails.scopeInstance": "Instanz",
     "guardrails.whenItRuns": "Wann sie greift",

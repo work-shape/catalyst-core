@@ -39,6 +39,8 @@ export const PUBLISH_APPROVAL_KINDS: readonly string[] = Object.values(PUBLISH_A
 const publishSubjectSchema = z.object({
   kind: z.string().min(1),
   name: z.string().min(1),
+  /** The name people read, when the request was filed. */
+  title: z.string().min(1),
   assetId: z.string().min(1),
   /** The revision the publish makes live. */
   revision: z.number().int().positive(),
@@ -64,6 +66,7 @@ export function publishApproval(
   const subject: PublishSubject = {
     kind: target.kind.kind,
     name: target.name,
+    title: titleOf(target.kind, asset) ?? target.name,
     assetId: asset.id,
     revision,
     draftRevision: asset.revision,
@@ -129,9 +132,14 @@ export function publishApprovalKinds(options: PublishApprovalKindsOptions): Held
       const moved = await publishMoved(clientInstanceId, parsed.data, store);
       return moved && MOVED_SENTENCES[moved](parsed.data.name);
     },
-    async review(subject) {
+    async review(subject, inList): Promise<JsonObject | undefined> {
       const parsed = publishSubjectSchema.safeParse(subject);
       if (!parsed.success) return undefined;
+      // A row of a list reads nothing: it names what is published as it was filed.
+      if (inList) {
+        const { kind, name, title, revision, liveRevision } = parsed.data;
+        return { kind, name, title, revision, liveRevision };
+      }
       const moved = await publishMoved(clientInstanceId, parsed.data, options.store);
       return {
         ...(await publishReview(options, parsed.data)),
@@ -178,7 +186,7 @@ async function publishReview(
   return {
     kind: subject.kind,
     name: subject.name,
-    title: titleOf(kind, next) ?? subject.name,
+    title: subject.title,
     revision: subject.revision,
     liveRevision: subject.liveRevision,
     files: await changedFiles(options, subject.assetId, next, live),
@@ -204,13 +212,14 @@ function configOf(revision: ConfigAssetRevisionRecord | undefined): JsonObject {
   return revision?.config && isJsonObject(revision.config) ? revision.config : {};
 }
 
+/** The name people read of a stored revision, as its kind reads it. */
 function titleOf(
-  kind: WorkflowAssetKind | undefined,
-  revision: ConfigAssetRevisionRecord | undefined
+  kind: Pick<WorkflowAssetKind, "summarize">,
+  record: { config: JsonObject | null }
 ): string | undefined {
-  if (!kind || !revision?.config) return undefined;
+  if (!record.config) return undefined;
   try {
-    return kind.summarize(revision.config).title;
+    return kind.summarize(record.config).title;
   } catch {
     return undefined;
   }

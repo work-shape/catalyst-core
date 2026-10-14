@@ -182,10 +182,10 @@ export function createOperationCallApprovalHandler(
         call.operation === HELD_ASSET_OPERATION
           ? await options.assetPreview?.(unknownToJsonValue(call.input), context.viewer)
           : undefined;
-      // What the call is about, for one opened request while it waits.
+      // What the call is about, while it waits.
       const review =
-        held && call.subject && context.status === "pending" && !context.viewer?.inList
-          ? await held.review(call.subject)
+        held && call.subject && context.status === "pending"
+          ? await held.review(call.subject, context.viewer?.inList ?? false)
           : undefined;
       return toJsonObject({
         ...previewOf(call),

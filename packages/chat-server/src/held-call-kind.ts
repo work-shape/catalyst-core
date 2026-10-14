@@ -16,8 +16,11 @@ export interface HeldCallApprovalKind {
     subject: JsonObject,
     store: Pick<ConfigAssetStore, "getConfigAsset">
   ): Promise<string | undefined>;
-  /** What one opened request shows of what the call is about, with `stale` where it moved. */
-  review(subject: JsonObject): Promise<JsonObject | undefined>;
+  /**
+   * What a request shows of what the call is about: for one opened request all of it, with
+   * `stale` where it moved; for a row of a list what the subject itself says, reading nothing.
+   */
+  review(subject: JsonObject, inList: boolean): Promise<JsonObject | undefined>;
   /**
    * The fields of a subject that say what it is about. A newer request whose subject holds
    * the same replaces the one that still waits.
