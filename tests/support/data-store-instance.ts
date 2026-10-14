@@ -80,7 +80,12 @@ export function useDataStoreInstance(): {
     /** Who may sign in, where a test needs more than the administrator. */
     developmentAuth?: unknown,
     /** The guardrails of release config of both processes, as `guardrails` holds them. */
-    guardrails?: Record<string, unknown>
+    guardrails?: Record<string, unknown>,
+    /**
+     * The module `knowledge` on beside the Data Stores, with agents that may be created and
+     * given Knowledge Bases.
+     */
+    knowledge?: boolean
   ): Promise<DataStoreInstance>;
   /** Closes the processes of every instance the test started. */
   close(): Promise<unknown>;
@@ -106,9 +111,15 @@ export function useDataStoreInstance(): {
         { database_name: string; app_role: string; migration_role: string }[]
       >`select database_name, app_role, migration_role from data_stores`;
       for (const record of records) {
+        // The role of a Knowledge Base on the store is found by what it may connect to.
+        const readers = await sql<{ name: string }[]>`
+          select rolname as name from pg_roles
+          where rolname like 'catalyst_kb_%'
+            and has_database_privilege(oid, ${record.database_name}, 'CONNECT')`;
         await sql.unsafe(`drop database if exists "${record.database_name}" with (force)`);
         await sql.unsafe(`drop role if exists "${record.app_role}"`);
         await sql.unsafe(`drop role if exists "${record.migration_role}"`);
+        for (const reader of readers) await sql.unsafe(`drop role if exists "${reader.name}"`);
       }
     } finally {
       await sql.end();
@@ -127,14 +138,37 @@ export function useDataStoreInstance(): {
     dataStores: boolean,
     changing?: PolicyValue,
     developmentAuth?: unknown,
-    guardrails?: Record<string, unknown>
+    guardrails?: Record<string, unknown>,
+    knowledge = false
   ): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
     const base = createTestConfig(developmentAuth === undefined ? {} : { developmentAuth });
     const settings = {
       ...base,
-      modules: { assetManagement: { enabled: true }, dataStores: { enabled: dataStores } },
+      modules: {
+        assetManagement: { enabled: true },
+        dataStores: { enabled: dataStores },
+        ...(knowledge ? { knowledge: { enabled: true } } : {})
+      },
+      ...(knowledge
+        ? {
+            administration: {
+              agentConfiguration: {
+                enabled: true,
+                editableAgentFields: [
+                  "displayName",
+                  "instructions",
+                  "toolNames",
+                  "skillNames",
+                  "knowledgeBases",
+                  "initialPrompts"
+                ],
+                allowAgentCreation: true
+              }
+            }
+          }
+        : {}),
       secretStore: { keys: [{ id: "k1", ref: KEY_VARIABLE }] },
       infrastructure: {
         ...base.infrastructure,

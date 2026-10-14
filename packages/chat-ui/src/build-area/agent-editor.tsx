@@ -6,7 +6,6 @@ import type {
 } from "@vivd-catalyst/api-client";
 import {
   Badge,
-  Banner,
   Button,
   Checkbox,
   Chip,
@@ -23,7 +22,6 @@ import {
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { modelDisplayLabel } from "../model-label";
-import { useModuleName } from "../module-texts";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import {
   CheckboxGroup,
@@ -48,8 +46,10 @@ import {
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
-import { isConnectionToolName, type ConnectionToolChoice } from "./connection-tools";
-import { ConnectionToolsGroup } from "./connection-tools-group";
+import type { ConnectionToolChoice } from "./connection-tools";
+import { withImpliedTools } from "./instance-tools";
+import { ToolPackagesSection } from "./tool-packages-section";
+import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import { PlatformInstructions } from "./platform-instructions";
 import type { SkillFacts } from "./skill-facts";
 
@@ -66,9 +66,11 @@ export function AgentEditor({
   initialForm,
   isDefault,
   references,
+  referencesLoading = false,
   editableAgentFields,
   canManageAgentModels,
   skillChoice,
+  knowledgeChoice,
   connectionTools = NO_CONNECTION_TOOLS,
   appTools = NO_APP_TOOLS,
   onMakeDefault,
@@ -78,10 +80,17 @@ export function AgentEditor({
   initialForm: AgentFormState;
   isDefault: boolean;
   references: ConfigAssetReferences | undefined;
+  /**
+   * The references are on their way. The Tools section waits for them, so no tool shows by its
+   * id before its package is known. Without references after that, the agent's own names show.
+   */
+  referencesLoading?: boolean;
   /** The fields the instance lets people change. The model settings follow their own right. */
   editableAgentFields: readonly string[];
   canManageAgentModels: boolean;
   skillChoice: SkillChoice;
+  /** The Knowledge Bases on offer. Left out where the instance has none: the section is not shown. */
+  knowledgeChoice?: KnowledgeBaseChoice;
   /** The tools of Connections on offer. Left out, the page shows only those the agent holds. */
   connectionTools?: ConnectionToolChoice;
   /** The actions of Apps on offer. Left out, the page shows only those the agent holds. */
@@ -96,7 +105,6 @@ export function AgentEditor({
   const { form, setForm, outcome } = state;
   const [saving, setSaving] = useState(false);
   const [defaultError, setDefaultError] = useState<string>();
-  const moduleName = useModuleName();
   const { canWrite } = frame;
   const canEdit = (field: string) => canWrite && editableAgentFields.includes(field);
   const canEditModel = canWrite && canManageAgentModels;
@@ -314,38 +322,49 @@ export function AgentEditor({
               </Picker>
             </div>
           ) : null}
-          {form.skillNames.length > 0 && !form.toolNames.includes("read_skill") ? (
-            <Banner tone="warning">{t("configSkillsRequireReadSkill")}</Banner>
-          ) : null}
           <FieldRefusals messages={refusalsOf(outcome, "skills")} />
         </>
       )
     },
+    ...(knowledgeChoice
+      ? [
+          {
+            id: "knowledge",
+            label: t("knowledge.agentSection"),
+            description: t("knowledge.agentSectionDescription"),
+            count: form.knowledgeBases.length,
+            refusalField: "knowledge" as const,
+            body: (
+              <>
+                <AgentKnowledge
+                  choice={knowledgeChoice}
+                  value={form.knowledgeBases}
+                  editable={canEdit("knowledgeBases")}
+                  onChange={(knowledgeBases) => update({ knowledgeBases })}
+                />
+                <FieldRefusals messages={refusalsOf(outcome, "knowledge")} />
+              </>
+            )
+          }
+        ]
+      : []),
     {
       id: "tools",
       label: t("configTools"),
-      count: form.toolNames.length,
+      count: withImpliedTools(form.toolNames, form.skillNames).length,
       refusalField: "tools",
-      // One group per source of tools, each a sibling with its heading: the instance's own,
-      // then the Connections, then the Apps. A further source is a further sibling.
+      description: t("configToolsDescription"),
+      // The packages, this instance's own tools and the Connections as chips, as the Skills
+      // above; then the Apps.
       body: (
         <>
-          <CheckboxGroup
-            label={t("configToolsOfInstance")}
-            description={t("configToolsOfInstanceHint")}
-            options={toolOptions(references, form.toolNames)}
+          <ToolPackagesSection
+            references={references}
+            loading={referencesLoading}
             selected={form.toolNames}
-            unavailable={(references?.moduleOffTools ?? []).map((tool) => ({
-              option: tool.name,
-              reason: t("configToolModuleOff", { module: moduleName(tool.module) })
-            }))}
-            disabled={!canEdit("toolNames")}
-            emptyHint={t("configNoTools")}
-            onChange={(toolNames) => update({ toolNames })}
-          />
-          <ConnectionToolsGroup
-            choice={connectionTools}
-            selected={form.toolNames}
+            skillNames={form.skillNames}
+            connectionTools={connectionTools}
+            isOtherSource={isAppToolName}
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
           />
@@ -431,28 +450,6 @@ export function AgentEditor({
 const NO_CONNECTION_TOOLS: ConnectionToolChoice = { read: { status: "unknown" } };
 /** The same for the actions of Apps. */
 const NO_APP_TOOLS: AppToolsRead = { status: "unknown" };
-
-/**
- * The instance's own tools on offer, and the ones the agent names that the reader was not told
- * of. A tool of a Connection or of an App is shown in the group of its source.
- */
-function toolOptions(
-  references: ConfigAssetReferences | undefined,
-  selected: readonly string[]
-): string[] {
-  const offered = references?.enabledToolNames ?? [];
-  const off = new Set((references?.moduleOffTools ?? []).map((tool) => tool.name));
-  return [
-    ...offered,
-    ...selected.filter(
-      (name) =>
-        !offered.includes(name) &&
-        !off.has(name) &&
-        !isConnectionToolName(name) &&
-        !isAppToolName(name)
-    )
-  ];
-}
 
 /**
  * Where an agent can be chosen. It is stored apart from the agent's definition and has its own

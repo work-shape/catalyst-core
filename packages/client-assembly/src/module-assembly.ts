@@ -5,6 +5,7 @@ import type {
   DataToolSource,
   JobRetry,
   JobSchedule,
+  KnowledgeBackend,
   Logger,
   ModuleSnapshot,
   OperationSource,
@@ -74,6 +75,8 @@ export interface ModuleAssembly {
   readonly assetKinds?: readonly WorkflowAssetKind[];
   /** Agent tools, registered with the tools of the assembly. */
   readonly tools?: readonly ToolAssemblyDefinition[];
+  /** Where a Knowledge Base reads the tables it describes, where this module offers that. */
+  readonly knowledgeBackend?: KnowledgeBackend;
   /** The operations of each Asset of the kind. Built here and resolved when one is called. */
   operationSources?(runtime: ModuleRuntime): readonly OperationSource[];
   start?(runtime: ModuleRuntime): ModuleRuntimeAssembly | Promise<ModuleRuntimeAssembly>;
@@ -81,10 +84,12 @@ export interface ModuleAssembly {
 
 /**
  * The seam of one module: its one place in the assembly. It answers nothing where the module
- * is off, so nothing of a module that is off is built.
+ * is off, so nothing of a module that is off is built. `earlier` are the assemblies of the
+ * seams before it, in their order, for what one module offers another.
  */
 export type ModuleSeam = (
-  parts: ModuleAssemblyParts
+  parts: ModuleAssemblyParts,
+  earlier: readonly ModuleAssembly[]
 ) => ModuleAssembly | undefined | Promise<ModuleAssembly | undefined>;
 
 /** What the seams of one process add together, each list in the order of the seams. */

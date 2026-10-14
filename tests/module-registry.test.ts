@@ -366,6 +366,7 @@ describe("the snapshot in a running instance", () => {
           "reasoningEffort",
           "toolNames",
           "skillNames",
+          "knowledgeBases",
           "initialPrompts"
         ],
         allowAgentCreation: true,

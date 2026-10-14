@@ -29,6 +29,13 @@ import { resolveWorkspaceHandle } from "./workspace";
 export function workspaceImportFilesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.import_files",
+    title: { en: "Import attachment files", de: "Angehängte Dateien übernehmen" },
+    summary: {
+      en: "Copies files attached to the conversation into its own files, to work on them.",
+      de: "Kopiert angehängte Dateien in die Dateien der Unterhaltung, um damit zu arbeiten."
+    },
+    group: "files",
+    icon: "files",
     effect: "changing",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },

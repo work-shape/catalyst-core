@@ -14,6 +14,13 @@ import { findWorkspaceFile } from "./workspace";
 export function workspacePromoteArtifactTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.promote_artifact",
+    title: { en: "Publish artifact download", de: "Datei zum Herunterladen geben" },
+    summary: {
+      en: "Hands a finished file to the user as a download.",
+      de: "Gibt eine fertige Datei als Download an die Person weiter."
+    },
+    group: "files",
+    icon: "file",
     effect: "changing",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },

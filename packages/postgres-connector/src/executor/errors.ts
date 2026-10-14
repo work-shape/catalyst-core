@@ -103,6 +103,9 @@ function kindOfSqlState(code: string): FixedSentenceKind {
   if (code === "25006") return "read_only_violation";
   if (code === "57014") return "timeout";
   if (code.startsWith("28")) return "unauthorized";
+  // A statement past a limit of its session, such as `temp_file_limit`, failed for what it
+  // asked: the server is there, and the same statement fails again.
+  if (code === "53400") return "failed";
   // Connection exceptions, too many connections, a server that is shutting down or starting,
   // and a database that does not exist.
   if (code.startsWith("08") || code.startsWith("53") || code.startsWith("57P") || code === "3D000")

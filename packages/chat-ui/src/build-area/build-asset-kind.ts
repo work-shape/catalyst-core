@@ -56,6 +56,11 @@ export interface BuildAssetEditorProps {
   back: ReactNode;
   /** The page's own actions, for the end of the page head: History and the menu with Delete. */
   actions: ReactNode;
+  /**
+   * What the frame says beside the name of an asset whose kind has a draft and a published
+   * revision: that the saved draft is ahead of what is published, or that nothing is.
+   */
+  draftState?: ReactNode;
   /** What the frame says above the save bar: a conflict with the way to the newer version. */
   notice: ReactNode;
   /** Hears whether the page holds changes that are not saved: the frame asks before it is left. */
