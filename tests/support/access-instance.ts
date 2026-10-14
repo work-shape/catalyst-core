@@ -14,6 +14,7 @@ import {
   type UserRole
 } from "@vivd-catalyst/core";
 import { atCurrentRevision } from "./asset-revisions";
+import { createStoredConfigAssetSource } from "./static-config-asset-source";
 import type { TestCallInput, TestOperationName } from "./operations";
 import {
   createTestAssetKinds,
@@ -235,6 +236,11 @@ export interface AccessInstanceOptions {
   /** Switches of `modules`, such as `{ connections: { enabled: true } }`. */
   modules?: ModuleSwitches;
   /**
+   * The runtime reads the stored agents and skills, as an assembled instance does, so what a
+   * workspace offers follows the writes. Left out, the runtime sees none.
+   */
+  storedAssetSource?: true;
+  /**
    * Further server options, built from the stores and the config of the instance. They
    * replace the ones this file sets, such as the call path with a further operation source.
    */
@@ -270,6 +276,14 @@ export async function setupAccessInstance(
       configAssets: {
         store: stores.configAssets,
         validationRefs,
+        ...(options.storedAssetSource
+          ? {
+              source: createStoredConfigAssetSource({
+                store: stores.configAssets,
+                clientInstanceId
+              })
+            }
+          : {}),
         ...(furtherKinds.length === 0
           ? {}
           : {

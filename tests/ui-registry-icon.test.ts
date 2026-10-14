@@ -154,3 +154,20 @@ describe("RegistryIcon in the gallery", () => {
     }
   });
 });
+
+describe("kind icons", () => {
+  // One icon per kind, the same in Studio, on the rail and on the canvas.
+  it.each([
+    ["agent", "bot"],
+    ["skill", "book-open"],
+    ["connection", "plug"],
+    ["workflow", "workflow"],
+    ["app", "layout-grid"],
+    ["datastore", "database"],
+    ["guardrail", "shield-check"]
+  ])("draws the kind %s as %s", (kind, lucideName) => {
+    expect(renderToStaticMarkup(createElement(RegistryIcon, { name: kind }))).toContain(
+      `lucide-${lucideName}`
+    );
+  });
+});

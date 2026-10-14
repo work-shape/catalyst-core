@@ -8,6 +8,7 @@ import {
   IconButton,
   NavGroup,
   NavItem,
+  RegistryIcon,
   Sidebar,
   Skeleton,
   useSidebarCollapsed
@@ -52,7 +53,10 @@ interface WorkspaceRailProps {
   canViewBuild?: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox?: RailSectionsGiven["inbox"];
-  /** The session has workspaces: the Agents row shows. */
+  /**
+   * The session has workspaces and the open one offers two agents or more, or the person may
+   * write one: the Agents row shows.
+   */
   agents?: boolean;
   /** The Apps module is on: the Apps row shows. */
   apps?: boolean;
@@ -170,7 +174,7 @@ function RailHeader({
     const row = (
       <NavItem
         key={section.id}
-        icon={<section.icon aria-hidden="true" />}
+        icon={<RegistryIcon name={section.icon} />}
         selected={view === section.view && !(section.id === "apps" && listedAppOpen)}
         count={count > 0 ? count : undefined}
         aria-label={count > 0 && section.countLabel ? t(section.countLabel, { count }) : undefined}

@@ -424,6 +424,22 @@ contain breaking changes; a patch version does not.
   nothing more, and there is no block without the Apps module or for a person without a
   published App. The rail reads the first page of the Apps list, so in a workspace with more
   than fifty Apps it chooses among those fifty.
+- **No empty Apps or Workflows row for members:** the rows "Apps" and "Workflows" of the main
+  rail, open and collapsed, show only while their module is on and the person is shown at least
+  one App of the open workspace or one Workflow, or may write one (`app.write` on the instance,
+  in that workspace or on one of its Apps; `workflow.write` on the instance, in a Namespace or on
+  one Workflow). A builder keeps the empty row to make the first one. The server decides both:
+  `workspaces.agents.list` answers `visibleSections` with `apps` where that row is there for the
+  caller in the workspace, by the check of `assets.list`, and `platform.context.get` with
+  `workflows`, by the check of `workflows.list`; the rail follows the two flags alone. Whoever
+  the flag names the Workflows row also reaches the Workflows page, such as a member who may
+  only start Workflows; the Apps page and its addresses are unchanged.
+- **No Agents row for one agent:** the row "Agents" of the main rail, open and collapsed, shows
+  only while the open workspace offers the person two agents or more, or the person may write
+  one (`agent.write` on the instance, in a Namespace or on one agent). With one agent New chat
+  starts it, and the composer's agent picker stays as it is. The page and its address are
+  unchanged. `workspaces.agents.list` answers `visibleSections`, which names `agents` where the
+  row is there for the caller in that workspace, counted over every page of the list.
 - **New chat from the Recent heading:** the "Recent" heading of the main rail has a small plus
   at its right end that starts a new chat as the "New chat" row does. It shows while the pointer
   is over the Recent section or the keyboard is on it, and always on a screen without hover.
@@ -962,6 +978,15 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Skill icons:** a skill's line icon sits on one neutral tile in lists and on starters (32 px
+  tile, 18 px icon; 24 px in the picker rows), in ink for a skill that ships with the platform
+  and muted for the generic book. Inline, as in a chip, it stands bare at 16 px. The tile is
+  never tinted: colour means a file type, and the file-type pages stay as drawn.
+- **Kind icons:** each kind has one icon, read from the icon registry in Studio, on the rail,
+  over the composer and on the canvas: Agent a bot, Skill a book, Connection a plug (in place
+  of the cable), Workflow, App a grid, Data store a database and Guardrail a shield. The
+  registry's `agent` key draws the bot in place of the sparkles and gains `app`, `datastore`,
+  `guardrail` and `inbox`.
 - **Agents page:** a card shows the agent mark in place of the initials, the name, the default
   badge, what the agent does in two lines at most, and Start chat. Its starter prompts are no
   longer on the card; they wait in the empty chat with that agent. New agent opens its dialog
@@ -2103,6 +2128,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   scripts neither list nor restore a `.tar` backup; restore one with this release's
   `restore-postgres.sh`.
 
+- **Chat starters:** a starter of a skill that ships with the platform shows that skill's
+  icon. Every starter showed the generic book, because the agent's starters did not carry the
+  skill's `icon`. A skill of the instance's own keeps the generic book.
 - **The agent opens no asset of the instance on its own:** `platform.assets.open` moves the
   conversation's subject onto an asset of the conversation's workspace, such as an App, as
   before, but no longer onto an asset of the whole instance, such as a Workflow or an agent. A

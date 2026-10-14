@@ -418,7 +418,11 @@ describe("workspace-scoped agents", () => {
 
   it("offers the active workspace's agents and default instead of the instance view", () => {
     const result = scoped({
-      workspaceAgents: { defaultAgentName: "contracts", items: [agent("contracts")] }
+      workspaceAgents: {
+        defaultAgentName: "contracts",
+        visibleSections: [],
+        items: [agent("contracts")]
+      }
     });
 
     expect(result.config?.agents.map((entry) => entry.name)).toEqual(["contracts"]);
@@ -434,7 +438,7 @@ describe("workspace-scoped agents", () => {
   });
 
   it("reports a workspace without agents as empty, not as loading", () => {
-    const result = scoped({ workspaceAgents: { items: [] } });
+    const result = scoped({ workspaceAgents: { visibleSections: [], items: [] } });
 
     expect(result.config?.agents).toEqual([]);
     expect(result).toMatchObject({ agentsLoading: false, workspaceScoped: true });
@@ -464,6 +468,14 @@ describe("workspace-scoped agents", () => {
     expect(
       activeAgentNameFor({ defaultAgentName: undefined, agents: [] }, "general")
     ).toBeUndefined();
+  });
+
+  it("shows the Agents row as the instance names it, open and collapsed (NAV-VIS-1)", () => {
+    for (const collapsed of [false, true]) {
+      const rail = (agents: boolean) => renderRail(undefined, undefined, [], { agents, collapsed });
+      expect(rail(true)).toContain("lucide-bot");
+      expect(rail(false)).not.toContain("lucide-bot");
+    }
   });
 });
 
