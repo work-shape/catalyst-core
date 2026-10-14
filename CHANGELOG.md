@@ -38,6 +38,15 @@ contain breaking changes; a patch version does not.
   1.3.0. `page.save` documents the kind. The kit's `page.css` for a plain Page leaves out the
   flow canvas rules the library's stylesheet brings. **Operators:** the chat-server tarball
   limit rises to 2.1 MB for the fourth kit version.
+- **Cards open as a whole:** the UI library's `CardTarget` marks a card's one link or button to
+  what the card stands for and stretches its clickable area over the card. Every other control
+  in the card keeps its own action, the keyboard meets the target once under the name of its
+  action and the card's title ("Open Trip planner"), a press dragged across the card opens
+  nothing, and the card shows the hover state and its target's focus on its edge. Text under
+  the area cannot be selected; `CardReachable` keeps content such as a time with its full date
+  as a tooltip, or an id to copy, above it. Agent cards start a chat, App cards open the App (a
+  builder's draft-only App opens its draft) and Workflow cards open the Workflow, from a click
+  anywhere on the card. A card whose reader has nowhere to go opens nothing.
 - **Guardrails replace approval checks, and Build lists them:** release config takes
   `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
   `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and

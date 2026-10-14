@@ -8,7 +8,12 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   padding?: CardPadding;
 }
 
-/** One self-contained object, such as a tile or a confirmation. Not the wrapper of a page section. */
+/**
+ * One self-contained object, such as a tile or a confirmation. Not the wrapper of a page section.
+ * A card with a `CardTarget` opens as a whole: while the pointer is on its target's area it shows
+ * the hover state, and while its target holds the keyboard focus its edge does too. A control
+ * above that area keeps the card at rest.
+ */
 export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
   { className, padding = "lg", ...props },
   ref
@@ -16,8 +21,13 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
   return (
     <div
       ref={ref}
+      data-card=""
       data-padding={padding}
-      className={cn("group/card rounded-lg border bg-card text-card-foreground", className)}
+      className={cn(
+        "group/card rounded-lg border bg-card text-card-foreground",
+        "has-[[data-card-target]]:relative has-[[data-card-target]]:transition-colors has-[[data-card-target]:hover]:border-input-strong has-[[data-card-target]:hover]:bg-state-hover has-[[data-card-target]:focus-visible]:border-input-strong",
+        className
+      )}
       {...props}
     />
   );
