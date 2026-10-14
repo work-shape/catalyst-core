@@ -9,6 +9,7 @@ import { retryUnlessGone } from "../pages/page-address";
 import type { WorkflowRunsSource, WorkflowStepRunStatusFilter } from "./source-shapes";
 import { useWorkflowsSource } from "./workflow-source";
 import type {
+  LiveOnceSwitchView,
   WorkflowListItem,
   WorkflowRunView,
   WorkflowStepRunView,
@@ -48,7 +49,8 @@ function useWorkflowKeys() {
         WORKFLOW_ASSET_KIND,
         source.key
       ] as const,
-      runs: ["workflow-runs", source.key] as const
+      runs: ["workflow-runs", source.key] as const,
+      liveOnce: ["workflow-live-once", source.key] as const
     }),
     [apiBaseUrl, source.key]
   );
@@ -342,6 +344,26 @@ export function useWorkflowWrites(): WorkflowWrites {
   }, [keys, queryClient, runs]);
 }
 
+/**
+ * The reader's own "Run live once" switches on the draft of one Workflow. A test run uses
+ * them, so they are read again when the run the page shows has ended (`runEnded` is part of
+ * the key). Nothing is read where `enabled` is false.
+ */
+export function useLiveOnceSwitches(
+  workflow: string,
+  enabled: boolean,
+  runEnded: boolean
+): readonly LiveOnceSwitchView[] | undefined {
+  const { drafts } = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  const query = useQuery({
+    queryKey: [...keys.liveOnce, workflow, runEnded],
+    queryFn: ({ signal }) => drafts?.listLiveOnce(workflow, signal) ?? Promise.resolve([]),
+    enabled: enabled && drafts !== undefined
+  });
+  return query.data;
+}
+
 /** What a person does to the draft of a Workflow from its page and from a test run. */
 export interface WorkflowDraftWrites {
   publish(workflow: string, revision: number): Promise<void>;
@@ -363,15 +385,20 @@ export function useWorkflowDraftWrites(): WorkflowDraftWrites | undefined {
       return undefined;
     }
     const changed = () => queryClient.invalidateQueries({ queryKey: keys.assets });
-    const ran = () => queryClient.invalidateQueries({ queryKey: keys.runs });
+    const ran = () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: keys.runs }),
+        queryClient.invalidateQueries({ queryKey: keys.liveOnce })
+      ]);
     return {
       publish: async (workflow, revision) => drafts.publish(workflow, revision).finally(changed),
       discard: async (workflow, expectedRevision) =>
         drafts.discard(workflow, expectedRevision).finally(changed),
       test: async (workflow, input) => drafts.test(workflow, input).finally(ran),
-      // A switch changes nothing a page reads: the next test run shows it.
       runLiveOnce: async (workflow, step, expectedRevision) =>
-        drafts.runLiveOnce(workflow, step, expectedRevision)
+        drafts
+          .runLiveOnce(workflow, step, expectedRevision)
+          .finally(() => queryClient.invalidateQueries({ queryKey: keys.liveOnce }))
     };
   }, [drafts, keys, queryClient]);
 }

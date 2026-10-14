@@ -4,7 +4,7 @@ import { instanceSentence, readRefusalDetails } from "../build-area/build-refusa
 import { useTranslation } from "../i18n";
 import type { StartRefusalIssue } from "./start-form";
 import { StartDialog } from "./start-run";
-import { useWorkflowDraftWrites, workflowWriteRefusal } from "./workflow-data";
+import { useLiveOnceSwitches, useWorkflowDraftWrites, workflowWriteRefusal } from "./workflow-data";
 import { editOffered } from "./workflow-model";
 import type { WorkflowStepRunView, WorkflowStepView, WorkflowView } from "./workflow-views";
 import { useWorkflowsHost } from "./workflows-host";
@@ -93,18 +93,28 @@ export function useTestRun(
 
 /** "Run live once" for one step, as the panel of a step in a test run offers it. */
 export interface LiveOnceControl {
-  state: "idle" | "busy" | "done";
+  /**
+   * `off`: not set. `set`: the reader's next test run makes the step live. `used`: a test run
+   * of the reader's used it, and it covers no further run until it is set again.
+   */
+  state: "off" | "busy" | "set" | "used";
+  /** The test run that used the switch, and when. */
+  used?: { runId: string; at: string };
   error?: string;
   switchOn(): void;
 }
 
 /**
- * "Run live once" for the steps of a test run: one switch per step that changes something,
- * for the draft the reader is shown. Nothing for a reader who may not write the Workflow.
+ * "Run live once" for the steps of a test run: one switch of the reader's own per step that
+ * changes something, for the draft the reader is shown. What is set and what a test run used
+ * is read from the instance, so it stands after a reload. Nothing for a reader who may not
+ * write the Workflow.
  */
 export function useRunLiveOnce(
   workflow: string,
-  view: Pick<WorkflowView, "draft"> | undefined
+  view: Pick<WorkflowView, "draft"> | undefined,
+  /** The run the page shows has ended: the switches are read again, as it may have used one. */
+  runEnded: boolean
 ):
   | ((
       step: WorkflowStepView,
@@ -114,28 +124,29 @@ export function useRunLiveOnce(
   const { t } = useTranslation();
   const host = useWorkflowsHost();
   const writes = useWorkflowDraftWrites();
-  const [states, setStates] = useState<
-    ReadonlyMap<string, { state: LiveOnceControl["state"]; error?: string }>
-  >(new Map());
   const draft = view?.draft;
-  if (
-    host === undefined ||
-    writes === undefined ||
-    draft === undefined ||
-    !editOffered(host.rights, view)
-  ) {
+  const offered =
+    host !== undefined &&
+    writes !== undefined &&
+    draft !== undefined &&
+    editOffered(host.rights, view);
+  const switches = useLiveOnceSwitches(workflow, offered, runEnded);
+  const [pending, setPending] = useState<ReadonlyMap<string, { busy: boolean; error?: string }>>(
+    new Map()
+  );
+  if (!offered || writes === undefined || draft === undefined) {
     return undefined;
   }
-  const set = (step: string, next: { state: LiveOnceControl["state"]; error?: string }) =>
-    setStates((current) => new Map(current).set(step, next));
+  const set = (step: string, next: { busy: boolean; error?: string }) =>
+    setPending((current) => new Map(current).set(step, next));
   const switchOn = async (step: string) => {
-    set(step, { state: "busy" });
+    set(step, { busy: true });
     try {
       await writes.runLiveOnce(workflow, step, draft.revision);
-      set(step, { state: "done" });
+      set(step, { busy: false });
     } catch (failure) {
       set(step, {
-        state: "idle",
+        busy: false,
         error:
           failure instanceof ApiError && failure.status === 412
             ? t("workflows.liveOnce.stale")
@@ -149,9 +160,17 @@ export function useRunLiveOnce(
     if (step.kind !== "operation" || (stepRun?.effect ?? step.effect) === "reading") {
       return undefined;
     }
-    const held = states.get(step.id);
+    const held = pending.get(step.id);
+    const stored = switches?.find((entry) => entry.step === step.id);
     return {
-      state: held?.state ?? "idle",
+      state: held?.busy
+        ? "busy"
+        : stored === undefined
+          ? "off"
+          : stored.used === undefined
+            ? "set"
+            : "used",
+      ...(stored?.used === undefined ? {} : { used: stored.used }),
       ...(held?.error === undefined ? {} : { error: held.error }),
       switchOn: () => {
         switchOn(step.id).catch(() => undefined);

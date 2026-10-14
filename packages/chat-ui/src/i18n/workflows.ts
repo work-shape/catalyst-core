@@ -3,6 +3,17 @@ import { defineTranslations } from "./translation-area";
 /** Workflows: their list, what one does, its runs, and one run with its steps. */
 export const workflows = defineTranslations({
   en: {
+    "workflows.liveOnce.again": "Run live once again",
+    "workflows.liveOnce.used": "Ran live in your test run of {time}.",
+    "workflows.simulated.wouldAskConfirmation":
+      "Live, the call would have asked for a confirmation.",
+    "workflows.simulated.wouldAskApproval":
+      "Live, the call would have waited for another person's approval.",
+    "workflows.simulated.would":
+      "Simulated: nothing was changed. Live, this step would have called “{operation}” with these values.",
+    "workflows.simulated.nothing": "Simulated: nothing was changed.",
+    "workflows.run.publishedAsksShort": "Asks for approval when published",
+    "workflows.run.publishedAsksApproval": "A published run asks for approval here",
     "workflows.advice.testerMissingRight":
       "Ask an administrator for the right, or ask someone who holds it to test the workflow.",
     "workflows.reason.testerMissingRight":
@@ -28,8 +39,8 @@ export const workflows = defineTranslations({
     "workflows.target.dry_run": "Simulated",
     "workflows.liveOnce.button": "Run live once",
     "workflows.liveOnce.hint":
-      "In the next test run this step runs for real, under the instance's rules.",
-    "workflows.liveOnce.done": "Runs live in the next test run.",
+      "In your next test run this step runs for real, under the instance's rules.",
+    "workflows.liveOnce.done": "Runs live in your next test run.",
     "workflows.liveOnce.failed": "The step could not be set to run live.",
     "workflows.liveOnce.stale":
       "The draft has changed since. Open the workflow again to set the step live.",
@@ -286,6 +297,18 @@ export const workflows = defineTranslations({
     "workflows.unavailable": "This workflow is not available to you."
   },
   de: {
+    "workflows.liveOnce.again": "Noch einmal echt ausführen",
+    "workflows.liveOnce.used": "Lief echt in deinem Testlauf vom {time}.",
+    "workflows.simulated.wouldAskConfirmation":
+      "Echt ausgeführt hätte der Aufruf nach einer Bestätigung gefragt.",
+    "workflows.simulated.wouldAskApproval":
+      "Echt ausgeführt hätte der Aufruf auf die Freigabe einer anderen Person gewartet.",
+    "workflows.simulated.would":
+      "Simuliert: Es wurde nichts geändert. Echt ausgeführt hätte dieser Schritt „{operation}“ mit diesen Werten aufgerufen.",
+    "workflows.simulated.nothing": "Simuliert: Es wurde nichts geändert.",
+    "workflows.run.publishedAsksShort": "Fragt veröffentlicht nach Freigabe",
+    "workflows.run.publishedAsksApproval":
+      "Eine veröffentlichte Ausführung fragt hier nach Freigabe",
     "workflows.advice.testerMissingRight":
       "Bitte einen Administrator um das Recht, oder bitte jemanden, der es hat, den Workflow zu testen.",
     "workflows.reason.testerMissingRight":
@@ -295,7 +318,7 @@ export const workflows = defineTranslations({
     "workflows.test.button": "Testlauf",
     "workflows.test.title": "„{name}“ testen?",
     "workflows.test.body":
-      "Der Testlauf liest echte Daten als du, im Rahmen dessen, was das Konto des Workflows darf. Schritte, die etwas ändern, werden nur simuliert, außer einer ist auf einmal live gestellt.",
+      "Der Testlauf liest echte Daten mit deinen Rechten, im Rahmen dessen, was das Konto des Workflows darf. Schritte, die etwas ändern, werden nur simuliert, außer du lässt einen davon einmal echt ausführen.",
     "workflows.test.confirm": "Testlauf starten",
     "workflows.test.failed": "Der Testlauf konnte nicht gestartet werden.",
     "workflows.test.pending": "Der Testlauf wartet auf eine Freigabe.",
@@ -303,19 +326,19 @@ export const workflows = defineTranslations({
     "workflows.run.testAgain": "Erneut testen",
     "workflows.run.testBadge": "Testlauf",
     "workflows.run.testLine":
-      "Testlauf des Entwurfs. Er liest echte Daten als {person}; Schritte, die etwas ändern, werden simuliert, außer sie laufen einmal live.",
+      "Testlauf des Entwurfs. Er liest echte Daten als {person}; Schritte, die etwas ändern, werden simuliert, außer sie sollen einmal echt laufen.",
     "workflows.run.testTitle": "Testlauf vom {date}",
     "workflows.target.label": "Ziel",
     "workflows.target.live": "Live",
     "workflows.target.test": "Test",
     "workflows.target.dry_run": "Simuliert",
-    "workflows.liveOnce.button": "Einmal live ausführen",
+    "workflows.liveOnce.button": "Einmal echt ausführen",
     "workflows.liveOnce.hint":
-      "Im nächsten Testlauf läuft dieser Schritt echt, nach den Regeln der Instanz.",
-    "workflows.liveOnce.done": "Läuft im nächsten Testlauf live.",
-    "workflows.liveOnce.failed": "Der Schritt konnte nicht live gestellt werden.",
+      "In deinem nächsten Testlauf läuft dieser Schritt echt, nach den Regeln der Instanz.",
+    "workflows.liveOnce.done": "Läuft in deinem nächsten Testlauf echt.",
+    "workflows.liveOnce.failed": "Der Schritt konnte nicht zum echten Ausführen vorgemerkt werden.",
     "workflows.liveOnce.stale":
-      "Der Entwurf hat sich inzwischen geändert. Öffne den Workflow neu, um den Schritt live zu stellen.",
+      "Der Entwurf hat sich inzwischen geändert. Öffne den Workflow neu, um den Schritt echt ausführen zu lassen.",
     "workflows.advice.accountInactive":
       "Ein Administrator muss das Konto wiederherstellen oder im Workflow ein anderes nennen.",
     "workflows.advice.crashed":

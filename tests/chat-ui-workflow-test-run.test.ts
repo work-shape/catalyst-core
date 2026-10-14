@@ -13,7 +13,8 @@ import {
   toWorkflow,
   toWorkflowRun,
   toWorkflowStepRun,
-  workflowGraph
+  workflowGraph,
+  type LiveOnceControl
 } from "@vivd-catalyst/chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { recordedApiClient } from "./support/recorded-api-client";
@@ -153,6 +154,31 @@ describe("the instance's source for a test run", () => {
     expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({ input: { note: "Hello" } });
   });
 
+  it("reads the reader's own switches, and the test run that used one", async () => {
+    const { client } = recordedApiClient(() => ({
+      items: [
+        { part: "send", switchedAt: "2026-10-14T09:00:00.000Z" },
+        {
+          part: "bill",
+          switchedAt: "2026-10-14T08:00:00.000Z",
+          usedByRunId: "wr_1",
+          usedAt: "2026-10-14T08:30:00.000Z"
+        }
+      ]
+    }));
+    const source = createInstanceSource(client, "k");
+    expect(
+      await source.drafts?.listLiveOnce("notify-clients", new AbortController().signal)
+    ).toEqual([
+      { step: "send", switchedAt: "2026-10-14T09:00:00.000Z" },
+      {
+        step: "bill",
+        switchedAt: "2026-10-14T08:00:00.000Z",
+        used: { runId: "wr_1", at: "2026-10-14T08:30:00.000Z" }
+      }
+    ]);
+  });
+
   it("switches one step live for the next test run, for the draft it read", async () => {
     const { source, calls } = instance();
     await source.drafts?.runLiveOnce("notify-clients", "send", 3);
@@ -168,7 +194,23 @@ describe("the page of a test run", () => {
   const steps = [
     stepRun({ id: "sr_start", stepId: "start", stepType: "trigger" }),
     stepRun({ id: "sr_clients", stepId: "clients", effect: "reading", target: "live" }),
-    stepRun({ id: "sr_send", stepId: "send", effect: "changing", target: "dry_run" })
+    stepRun({
+      id: "sr_send",
+      stepId: "send",
+      effect: "changing",
+      target: "dry_run",
+      publishedWouldAsk: "approval",
+      outputPreview: {
+        text: JSON.stringify({
+          wouldHaveDone: {
+            operation: "connection.crm.write",
+            input: { client: "client-anna", note: "Hello" },
+            wouldAsk: "approval"
+          }
+        }),
+        truncated: false
+      }
+    })
   ].map(toWorkflowStepRun);
 
   it("says it is a test run of the draft and whose rights it read with", () => {
@@ -203,7 +245,11 @@ describe("the page of a test run", () => {
   });
 
   /** The panel of one step of the test run, with "Run live once" where it is offered. */
-  const panel = (stepId: string, liveOnce?: { state: "idle" | "busy" | "done" }) => {
+  const panel = (
+    stepId: string,
+    liveOnce?: Omit<LiveOnceControl, "switchOn">,
+    locale: "en" | "de" = "en"
+  ) => {
     const graph = workflowGraph(draft.steps, en, {
       run: toWorkflowRun(testRun()),
       stepRuns: steps,
@@ -226,7 +272,8 @@ describe("the page of a test run", () => {
         onTabChange: noop,
         entries: null,
         onClose: noop
-      })
+      }),
+      locale
     );
   };
 
@@ -238,12 +285,47 @@ describe("the page of a test run", () => {
     expect(send).toContain(`>${t("workflows.target.dry_run")}</`);
   });
 
-  it("offers Run live once beside a simulated step, and says when it is set", () => {
-    expect(panel("send", { state: "idle" })).toContain(`>${t("workflows.liveOnce.button")}</`);
-    const set = panel("send", { state: "done" });
+  it("offers Run live once beside a simulated step, and says when it is set and when used", () => {
+    expect(panel("send", { state: "off" })).toContain(`>${t("workflows.liveOnce.button")}</`);
+    const set = panel("send", { state: "set" });
     expect(set).toContain(t("workflows.liveOnce.done"));
     expect(set).not.toContain(`>${t("workflows.liveOnce.button")}</`);
+    const used = panel("send", {
+      state: "used",
+      used: { runId: "wr_test", at: "2026-10-14T09:00:05.000Z" }
+    });
+    expect(used).toContain('data-live-once="used"');
+    expect(used).toContain(`>${t("workflows.liveOnce.again")}</`);
+    expect(used).toMatch(/Ran live in your test run of [^<]+\./u);
     expect(panel("send")).not.toContain(t("workflows.liveOnce.button"));
+    // German speaks of running for real, not of "live" at once.
+    expect(panel("send", { state: "off" }, "de")).toContain(
+      `>${de("workflows.liveOnce.button")}</`
+    );
+    expect(de("workflows.test.body")).not.toContain("auf einmal live");
+  });
+
+  it("says in sentences what a simulated step would have done, without the engine's keys", () => {
+    const send = panel("send");
+    expect(send).toContain("data-simulated");
+    expect(send).toContain(t("workflows.simulated.would", { operation: "connection.crm.write" }));
+    expect(send).toContain(t("workflows.simulated.wouldAskApproval").replaceAll("'", "&#x27;"));
+    expect(send).toContain(">client-anna<");
+    expect(send).not.toMatch(/wouldHaveDone|wouldAsk/u);
+    const german = panel("send", undefined, "de");
+    expect(german).toContain(
+      de("workflows.simulated.would", { operation: "connection.crm.write" })
+    );
+    expect(german).not.toMatch(/wouldHaveDone|wouldAsk/u);
+  });
+
+  it("warns where a published run would ask for an approval the test did not", () => {
+    expect(panel("send")).toContain('data-published-asks="approval"');
+    expect(panel("send")).toContain("A published run asks for approval here");
+    expect(panel("send", undefined, "de")).toContain(
+      "Eine veröffentlichte Ausführung fragt hier nach Freigabe"
+    );
+    expect(panel("clients")).not.toContain("data-published-asks");
   });
 
   it("marks each entry of a loop with where its changing step went", () => {

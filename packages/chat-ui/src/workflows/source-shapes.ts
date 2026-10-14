@@ -1,4 +1,5 @@
 import type {
+  LiveOnceSwitchView,
   WorkflowListItem,
   WorkflowRunView,
   WorkflowStepRunView,
@@ -83,4 +84,6 @@ interface WorkflowDraftsSource {
   test(workflow: string, input: Readonly<Record<string, unknown>>): Promise<WorkflowRunView>;
   /** Lets one step of the draft run live in the next test run. `expectedRevision` is the draft read. */
   runLiveOnce(workflow: string, step: string, expectedRevision: number): Promise<void>;
+  /** The reader's own switches on the draft, and the test run that used each. */
+  listLiveOnce(workflow: string, signal: AbortSignal): Promise<LiveOnceSwitchView[]>;
 }

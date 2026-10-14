@@ -125,6 +125,13 @@ interface WorkflowDraftView {
   testForm: StartForm;
 }
 
+/** One "Run live once" switch of the reader's, by step, and the test run that used it. */
+export interface LiveOnceSwitchView {
+  step: string;
+  switchedAt: string;
+  used?: { runId: string; at: string };
+}
+
 /** Where the call of a step went: the live asset, its test target, or nowhere (simulated). */
 export type WorkflowStepTarget = "live" | "test" | "dry_run";
 
@@ -238,6 +245,11 @@ export interface WorkflowStepRunView {
   source?: string;
   /** On the step run of an operation step: where its call went. */
   target?: WorkflowStepTarget;
+  /**
+   * In a test run: the tester's start let the step run without asking, and a run of the
+   * published revision asks for an approval here.
+   */
+  publishedWouldAsk?: "approval";
   /** On the step run of a `workflow` step: the child run it started or was answered. */
   childRunId?: string;
   failure?: WorkflowFailure;

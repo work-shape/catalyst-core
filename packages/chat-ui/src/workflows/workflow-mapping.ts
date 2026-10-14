@@ -216,6 +216,9 @@ export function toWorkflowStepRun(stepRun: WorkflowStepRunResource): WorkflowSte
     ...(stepRun.effect === undefined ? {} : { effect: stepRun.effect }),
     ...(stepRun.source === undefined ? {} : { source: stepRun.source }),
     ...(stepRun.target === undefined ? {} : { target: stepRun.target }),
+    ...(stepRun.publishedWouldAsk === undefined
+      ? {}
+      : { publishedWouldAsk: stepRun.publishedWouldAsk }),
     ...(childRunId === undefined ? {} : { childRunId }),
     ...times(stepRun),
     ...toFailure(stepRun.error),

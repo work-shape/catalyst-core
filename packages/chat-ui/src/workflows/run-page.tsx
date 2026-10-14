@@ -85,7 +85,7 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
     again: true
   });
   const testAgain = useTestRun(workflow, definition.workflow);
-  const liveOnce = useRunLiveOnce(workflow, definition.workflow);
+  const liveOnce = useRunLiveOnce(workflow, definition.workflow, read.run?.ended === true);
   const test = read.run?.test === true;
 
   if (!host || workspaceId === undefined) {

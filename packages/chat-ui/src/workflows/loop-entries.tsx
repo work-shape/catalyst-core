@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Badge,
   Button,
   List,
   ListRow,
@@ -30,6 +31,8 @@ export interface LoopEntry {
   failed?: WorkflowStepRunView;
   /** Where the calls of its steps that change something went, each once, in a test run. */
   targets?: readonly WorkflowStepTarget[];
+  /** In a test run: a run of the published revision would ask for an approval in this entry. */
+  publishedWouldAsk?: true;
 }
 
 /**
@@ -56,7 +59,11 @@ export function loopEntries(stepRuns: readonly WorkflowStepRunView[]): LoopEntry
       target === undefined || stepRun.effect !== "changing" || held.targets?.includes(target)
         ? held.targets
         : [...(held.targets ?? []), target];
-    const counted = targets === undefined ? held : { ...held, targets };
+    const counted = {
+      ...held,
+      ...(targets === undefined ? {} : { targets }),
+      ...(stepRun.publishedWouldAsk === "approval" ? { publishedWouldAsk: true as const } : {})
+    };
     entries.set(
       index,
       stepRun.status === "failed"
@@ -211,6 +218,11 @@ function LoopEntryRow({ entry, loop }: { entry: LoopEntry; loop: WorkflowStepVie
           {(entry.targets ?? []).map((target) => (
             <StepTargetBadge key={target} target={target} />
           ))}
+          {entry.publishedWouldAsk ? (
+            <Badge tone="warning" size="sm" data-published-asks="approval">
+              {t("workflows.run.publishedAsksShort")}
+            </Badge>
+          ) : null}
           <RunStateBadge status={entry.status} />
         </>
       }
