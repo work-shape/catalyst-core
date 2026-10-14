@@ -201,11 +201,11 @@ export const GRANTABLE_ACTION_SCOPES = {
   "skill.read": ["namespace", "asset"],
   "skill.write": ["namespace", "asset"],
   "skill.delete": ["namespace", "asset"],
-  // Reading and using a Connection are granted in a Namespace, on one Connection or on what
-  // a workspace owns. Writing, deleting and approving stay with the role until a slice opens
-  // them.
-  "connection.read": ["namespace", "asset", "workspace"],
-  "connection.use": ["namespace", "asset", "workspace"],
+  // Reading and using a Connection are granted in a Namespace or on one Connection. No
+  // workspace owns a Connection, so a right at workspace scope would cover nothing. Writing,
+  // deleting and approving stay with the role until a slice opens them.
+  "connection.read": ["namespace", "asset"],
+  "connection.use": ["namespace", "asset"],
   // A Workflow is the instance's own: its rights are granted in a Namespace or on one Workflow,
   // and no workspace owns one yet. Reading shows it and its runs, using starts it, writing
   // edits the draft and publishing moves the published pointer; making a revision live that

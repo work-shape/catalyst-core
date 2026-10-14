@@ -82,6 +82,7 @@ function AssistantRuntimePane({
     selectedConversationId,
     selectedConversationRetainedUntil,
     selectedConversationSubject,
+    docked,
     openRoute,
     messagesLoaded,
     snapshotStatus,
@@ -133,9 +134,18 @@ function AssistantRuntimePane({
         workspaceBlock,
         snapshotStatus,
         noAgentsMessage,
+        queueWhileLoading: !docked,
         t
       }),
-    [conversationRunning, noAgentsMessage, rootSubmitPending, snapshotStatus, t, workspaceBlock]
+    [
+      conversationRunning,
+      docked,
+      noAgentsMessage,
+      rootSubmitPending,
+      snapshotStatus,
+      t,
+      workspaceBlock
+    ]
   );
   const sendDisabledReason = sendBlock?.reason;
   const [queuedSend, setQueuedSend] = useState<QueuedSend | undefined>(undefined);
@@ -154,7 +164,8 @@ function AssistantRuntimePane({
     activeRun,
     conversationId: selectedConversationId,
     storedSubject: selectedConversationSubject,
-    workspaceId: collaborationWorkspaceId
+    workspaceId: collaborationWorkspaceId,
+    docked
   });
   useAutoOpenPageSurface(
     activeRun,
@@ -404,6 +415,7 @@ function AssistantRuntimePane({
           optimisticPending={optimisticPending}
           messagesEnabled={Boolean(selectedConversationId)}
           messagesLoaded={messagesLoaded}
+          threadLoading={snapshotStatus === "loading"}
           loadedMessageCount={initialMessages.length}
           conversationId={selectedConversationId}
           composerFocusRequestId={composerFocusRequestId}

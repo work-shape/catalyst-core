@@ -215,6 +215,27 @@
     }
   }
 
+  /* The chat dock: the conversation narrows into the dock beside a page, or widens out of it
+     into its own route, in this time on `--ease-move`. While it narrows, the page comes in at
+     the dock's moving edge (`dock-page-in`); while it widens, the conversation uncovers its
+     width from the dock's, `--dock-from` (`dock-widen`). Use them behind `motion-safe:`. */
+  --duration-dock: 250ms;
+  --animate-dock-page-in: dock-page-in var(--duration-dock) var(--ease-move) both;
+  --animate-dock-widen: dock-widen var(--duration-dock) var(--ease-move) both;
+
+  @keyframes dock-page-in {
+    from {
+      clip-path: inset(0 0 0 100%);
+      opacity: 0;
+    }
+  }
+
+  @keyframes dock-widen {
+    from {
+      clip-path: inset(0 calc(100% - var(--dock-from, 0px)) 0 0);
+    }
+  }
+
   /* A loading layout stays unseen this long, then fades in. An answer that comes sooner shows
      no loading state at all: a stand-in that is replaced at once reads as a flicker. */
   --duration-loading-delay: 180ms;

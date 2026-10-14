@@ -39,8 +39,6 @@ interface KindWords {
   actionOnKind: TranslationKey;
   /** "Workflow {name}": one asset as the place of a row. */
   scopeAsset: TranslationKey;
-  /** What a right in a Namespace covers. */
-  inNamespaceDescription: TranslationKey;
   /** The choice of one asset as the place, and what it means. */
   onAsset: TranslationKey;
   onAssetDescription: TranslationKey;
@@ -53,7 +51,6 @@ interface KindWords {
 }
 
 const configAssetWords = {
-  inNamespaceDescription: "access.scopeInNamespaceDescription",
   onAsset: "access.scopeOnAsset",
   onAssetDescription: "access.scopeOnAssetDescription",
   assetField: "access.grantAsset",
@@ -76,7 +73,6 @@ export const kindWords: Record<GrantKind, KindWords> = {
   connection: {
     actionOnKind: "access.actionOnConnection",
     scopeAsset: "access.scopeConnection",
-    inNamespaceDescription: "access.scopeInNamespaceConnectionDescription",
     onAsset: "access.scopeOnConnection",
     onAssetDescription: "access.scopeOnConnectionDescription",
     assetField: "access.grantConnection",
@@ -87,7 +83,6 @@ export const kindWords: Record<GrantKind, KindWords> = {
   workflow: {
     actionOnKind: "access.actionOnWorkflow",
     scopeAsset: "access.scopeWorkflow",
-    inNamespaceDescription: "access.scopeInNamespaceWorkflowDescription",
     onAsset: "access.scopeOnWorkflow",
     onAssetDescription: "access.scopeOnWorkflowDescription",
     assetField: "access.grantWorkflow",
@@ -96,11 +91,10 @@ export const kindWords: Record<GrantKind, KindWords> = {
     assetsLoadFailed: "access.workflowsLoadFailed"
   },
   // `guardrail.publish` is granted for one workspace only: the asset words name no choice
-  // the dialog offers, and say so where they are read.
+  // the dialog offers.
   guardrail: {
     actionOnKind: "access.actionOnGuardrail",
     scopeAsset: "access.scopeGuardrail",
-    inNamespaceDescription: "access.scopeInNamespaceGuardrailDescription",
     onAsset: "access.scopeOnGuardrail",
     onAssetDescription: "access.scopeOnGuardrailDescription",
     assetField: "access.grantGuardrail",
@@ -145,14 +139,17 @@ export function scopeChoice(
 ): { label: TranslationKey; description: TranslationKey } {
   const words = kindWords[kind];
   switch (scopeKind) {
-    case "namespace":
-      return { label: "access.scopeInNamespace", description: words.inNamespaceDescription };
-    case "asset":
-      return { label: words.onAsset, description: words.onAssetDescription };
     case "workspace":
       return {
         label: "access.scopeInWorkspace",
         description: "access.scopeInWorkspaceDescription"
+      };
+    case "asset":
+      return { label: words.onAsset, description: words.onAssetDescription };
+    case "instance":
+      return {
+        label: "access.scopeWholeInstance",
+        description: "access.scopeWholeInstanceDescription"
       };
   }
 }

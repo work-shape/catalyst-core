@@ -23,7 +23,8 @@ export function ControlPlaneRoutes({
   appsArea?: ReactNode;
   /** The Workflows area, present while one of its routes is open. */
   workflowsArea?: ReactNode;
-  children: ReactNode;
+  /** What shows where no area is open. */
+  children?: ReactNode;
 }) {
   const { settings, build } = controlPlane;
 

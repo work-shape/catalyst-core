@@ -43,13 +43,8 @@ function accessOf(t: AccessInstance, user: UserRecord): Promise<ActorAccess> {
   });
 }
 
-function resourceOf(name: string, assetId: string, workspaceId?: string): AccessResource {
-  return {
-    kind: "connection",
-    name,
-    assetId,
-    ...(workspaceId === undefined ? {} : { workspaceId })
-  };
+function resourceOf(name: string, assetId: string): AccessResource {
+  return { kind: "connection", name, assetId };
 }
 
 /** What `require` refuses with: the action and the reason. */
@@ -122,19 +117,15 @@ describe("the vocabulary of Connection rights", () => {
     ]);
   });
 
-  it("lets a grant row name reading and using, in a Namespace, on one Connection or one workspace", () => {
+  it("lets a grant row name reading and using, in a Namespace or on one Connection", () => {
     expect(GRANTABLE_ACTIONS.filter((action) => action.startsWith("connection."))).toEqual([
       "connection.read",
       "connection.use"
     ]);
-    expect(GRANTABLE_ACTION_SCOPES["connection.read"]).toEqual(["namespace", "asset", "workspace"]);
-    expect(GRANTABLE_ACTION_SCOPES["connection.use"]).toEqual(["namespace", "asset", "workspace"]);
-    // The scopes of agents and skills are the ones they had. A guardrail's publish is granted
-    // for one workspace alone.
+    // No workspace owns a Connection, so no right on Connections is written at workspace scope.
+    // A guardrail's publish is granted for one workspace alone.
     expect(GRANTABLE_ACTION_SCOPES["guardrail.publish"]).toEqual(["workspace"]);
-    for (const action of GRANTABLE_ACTIONS.filter(
-      (name) => !name.startsWith("connection.") && name !== "guardrail.publish"
-    )) {
+    for (const action of GRANTABLE_ACTIONS.filter((name) => name !== "guardrail.publish")) {
       expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(["namespace", "asset"]);
     }
   });
@@ -304,8 +295,17 @@ describe("a right on a Connection", () => {
   it("on one workspace's Connections, or denied on one, is named or not by the platform context", async () => {
     const t = await setupConnectionInstance();
     const a = await t.seed("alpha");
-    const workspaceId = await t.sharedWorkspace("Team");
-    await t.grant(t.kai.id, "connection.read", { workspaceId });
+    // No grant writes this row any more; one written before is still read.
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.kai.id,
+      action: "connection.read",
+      effect: "allow",
+      scopeKind: "workspace",
+      scopeId: await t.sharedWorkspace("Team"),
+      grantedBy: t.root.id
+    });
     await t.grant(t.lena.id, "connection.read", { assetId: a }, "deny");
     const assetActionsOf = async (userId: string, scopes?: string) =>
       (
@@ -448,85 +448,70 @@ describe("a grant of a Connection right", () => {
     expect(rows).toHaveLength(2);
   });
 
-  it("is written on a Shared Workspace, covers what that workspace owns, and goes with it", async () => {
+  it("is refused on a workspace, which owns no Connection", async () => {
     const t = await setupConnectionInstance();
-    const a = await t.seed("alpha");
     const team = await t.sharedWorkspace("Team");
-    const other = await t.sharedWorkspace("Other team");
+    for (const action of ["connection.use", "connection.read"]) {
+      const error = await t.expectRefused(
+        t.admin.id,
+        "permissions.grant",
+        {
+          payload: {
+            holderKind: "user",
+            holderId: t.kai.id,
+            action,
+            scopeKind: "workspace",
+            scopeId: team
+          }
+        },
+        invalidScope
+      );
+      expect(error.details, action).toMatchObject({ reason: "invalid_scope" });
+    }
+    expect(await t.stores.access.listGrants({ clientInstanceId, scopeKind: "workspace" })).toEqual(
+      []
+    );
+  });
+});
+
+// No operation writes a workspace row today. The store keeps such a row to a Shared Workspace
+// and removes it with its workspace, for the kinds a workspace will own.
+describe("a grant row on a workspace", () => {
+  it("is written on a Shared Workspace only, and goes with it", async () => {
+    const t = await setupConnectionInstance();
+    const team = await t.sharedWorkspace("Team");
     const personal = await t.stores.workspaces.ensurePersonalWorkspace({
       clientInstanceId,
       userId: t.kai.id
     });
-    const grant = (action: string, workspaceId: string) => ({
-      payload: {
+    const rowOn = (holderId: string, workspaceId: string) =>
+      t.stores.access.createGrant({
+        clientInstanceId,
         holderKind: "user",
-        holderId: t.kai.id,
-        action,
+        holderId,
+        action: "agent.read",
+        effect: "allow",
         scopeKind: "workspace",
-        scopeId: workspaceId
-      }
-    });
-
-    await t.expectOk(t.admin.id, "permissions.grant", grant("connection.use", team));
-    await t.expectOk(t.admin.id, "permissions.grant", grant("connection.read", team));
-    for (const [action, workspaceId] of [
-      ["connection.use", personal.id],
-      ["connection.use", "ws_not_there"],
-      // An agent or skill right has no workspace row yet.
-      ["agent.read", team],
-      ["skill.write", team]
-    ] as const) {
-      const error = await t.expectRefused(
-        t.admin.id,
-        "permissions.grant",
-        grant(action, workspaceId),
-        invalidScope
+        scopeId: workspaceId,
+        grantedBy: t.root.id
+      });
+    const refusal = (holderId: string, workspaceId: string) =>
+      rowOn(holderId, workspaceId).then(
+        () => "written",
+        (error: unknown) => (isAppError(error) ? error.details : error)
       );
-      expect(error.details, `${action} ${workspaceId}`).toMatchObject({ reason: "invalid_scope" });
+
+    await rowOn(t.kai.id, team);
+    for (const workspaceId of [personal.id, "ws_not_there"]) {
+      expect(await refusal(t.lena.id, workspaceId), workspaceId).toMatchObject({
+        reason: "invalid_scope"
+      });
     }
-    const missingId = await t.expectRefused(
-      t.admin.id,
-      "permissions.grant",
-      { payload: { ...grant("connection.use", team).payload, scopeId: undefined } },
-      invalidScope
-    );
-    expect(missingId.details).toMatchObject({ reason: "invalid_scope" });
-
-    const kai = await accessOf(t, t.kai);
-    // A Connection the workspace owns is covered, one of another workspace or of the instance
-    // is not.
-    expect(kai.authorize("connection.use", resourceOf("team-crm", "asset_1", team)).allowed).toBe(
-      true
-    );
-    expect(kai.authorize("connection.use", resourceOf("other-crm", "asset_2", other))).toEqual({
-      allowed: false,
-      reason: "no_grant"
-    });
-    expect(kai.authorize("connection.use", resourceOf("alpha", a))).toEqual({
-      allowed: false,
-      reason: "no_grant"
-    });
-    await t.expectRefused(
-      t.kai.id,
-      "assets.get",
-      { params: { kind: "connection", name: "alpha" } },
-      t.forbidden("connection.read", "no_grant")
-    );
-
-    // The rows go with the workspace they name.
     await t.stores.workspaces.markWorkspaceDeletionRequested({
       clientInstanceId,
       collaborationWorkspaceId: team
     });
-    const closed = await t.expectRefused(
-      t.admin.id,
-      "permissions.grant",
-      {
-        payload: { ...grant("connection.use", team).payload, holderId: t.lena.id }
-      },
-      invalidScope
-    );
-    expect(closed.details).toMatchObject({ reason: "invalid_scope" });
+    expect(await refusal(t.lena.id, team)).toMatchObject({ reason: "invalid_scope" });
     await t.stores.workspaces.deleteWorkspace({
       clientInstanceId,
       collaborationWorkspaceId: team

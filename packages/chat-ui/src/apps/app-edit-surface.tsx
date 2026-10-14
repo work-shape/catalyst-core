@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { IconButton } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
+import { openWorkspacePageInNewTab } from "../routes";
 import { useApp } from "./app-data";
 import { AppPreview } from "./app-preview";
 import { useAppsHost } from "./apps-host";
@@ -27,7 +28,7 @@ export function AppEditSurface({
   return <AppPreview app={app} mode="draft" name={name} turn={read.app?.revision ?? 0} />;
 }
 
-/** Opens the App's page of its draft from the head of its surface. */
+/** Opens the App's page of its draft in a new tab from the head of its surface. */
 export function AppEditSurfaceActions({
   app,
   workspaceId
@@ -44,7 +45,7 @@ export function AppEditSurfaceActions({
     <IconButton
       label={t("apps.surface.openPage")}
       onClick={() =>
-        host.showRoute({ kind: "app-edit", collaborationWorkspaceId: workspaceId, app })
+        openWorkspacePageInNewTab({ kind: "app-edit", collaborationWorkspaceId: workspaceId, app })
       }
     >
       <ExternalLink aria-hidden="true" />
