@@ -67,7 +67,7 @@ The page of a Connection shows it and changes nothing. It never shows a credenti
 | Ready | The outside system answered the test. | Nothing. |
 | Not tested | Nobody has tested the Connection yet. | Test it. |
 | Unauthorized | The outside system refused the credential. | The operator sets a new credential in the instance's environment and restarts the instance. |
-| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress). | The operator adds the host to `egress.allow` and restarts the instance. |
+| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress), or it resolves to an address the instance may not reach. | The operator adds the host to `egress.allow`, or for a public HTTPS host on port 443 sets `egress.allowPublicHttps`, and restarts the instance. |
 | Unavailable | The outside system did not answer. | Check the address under Settings. It is changed in the release config. |
 | Not configured | The credential is missing. | The operator supplies it in the instance's environment and restarts the instance. |
 | Credential unreadable | A credential is stored and the instance cannot read it. | The operator restores the Secret Store key it was stored with, or supplies the credential again, and restarts the instance. |

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Badge,
   Button,
   List,
   ListRow,
@@ -11,8 +12,13 @@ import { useTranslation } from "../i18n";
 import { FailureBanner } from "./failure-banner";
 import { useLoopEntries, type LoopEntriesRead } from "./workflow-data";
 import { failureHappened } from "./workflow-model";
-import type { WorkflowLoopCounts, WorkflowStepRunView, WorkflowStepView } from "./workflow-views";
-import { LoadError, RunStateBadge } from "./workflows-frame";
+import type {
+  WorkflowLoopCounts,
+  WorkflowStepRunView,
+  WorkflowStepTarget,
+  WorkflowStepView
+} from "./workflow-views";
+import { LoadError, RunStateBadge, StepTargetBadge } from "./workflows-frame";
 
 type EntryFilter = "failed" | "running" | "all";
 
@@ -23,6 +29,10 @@ export interface LoopEntry {
   status: "failed" | "running" | "done" | "cancelled";
   /** The step run that failed, where one did. */
   failed?: WorkflowStepRunView;
+  /** Where the calls of its steps that change something went, each once, in a test run. */
+  targets?: readonly WorkflowStepTarget[];
+  /** In a test run: a run of the published revision would ask for an approval in this entry. */
+  publishedWouldAsk?: true;
 }
 
 /**
@@ -44,17 +54,27 @@ export function loopEntries(stepRuns: readonly WorkflowStepRunView[]): LoopEntry
     };
     const going =
       stepRun.status === "queued" || stepRun.status === "running" || stepRun.status === "waiting";
+    const { target } = stepRun;
+    const targets =
+      target === undefined || stepRun.effect !== "changing" || held.targets?.includes(target)
+        ? held.targets
+        : [...(held.targets ?? []), target];
+    const counted = {
+      ...held,
+      ...(targets === undefined ? {} : { targets }),
+      ...(stepRun.publishedWouldAsk === "approval" ? { publishedWouldAsk: true as const } : {})
+    };
     entries.set(
       index,
       stepRun.status === "failed"
-        ? { ...held, status: "failed", failed: stepRun }
-        : held.status === "failed"
-          ? held
+        ? { ...counted, status: "failed", failed: stepRun }
+        : counted.status === "failed"
+          ? counted
           : going
-            ? { ...held, status: "running" }
-            : stepRun.status === "cancelled" && held.status === "done"
-              ? { ...held, status: "cancelled" }
-              : held
+            ? { ...counted, status: "running" }
+            : stepRun.status === "cancelled" && counted.status === "done"
+              ? { ...counted, status: "cancelled" }
+              : counted
     );
   }
   return [...entries.values()];
@@ -193,7 +213,19 @@ function LoopEntryRow({ entry, loop }: { entry: LoopEntry; loop: WorkflowStepVie
       description={reason}
       // The panel is a narrow column in every window: the reason is read whole.
       descriptionWraps="always"
-      chips={<RunStateBadge status={entry.status} />}
+      chips={
+        <>
+          {(entry.targets ?? []).map((target) => (
+            <StepTargetBadge key={target} target={target} />
+          ))}
+          {entry.publishedWouldAsk ? (
+            <Badge tone="warning" size="sm" truncate data-published-asks="approval">
+              {t("workflows.run.publishedAsksShort")}
+            </Badge>
+          ) : null}
+          <RunStateBadge status={entry.status} />
+        </>
+      }
       expandable={failure !== undefined}
     >
       {failure === undefined ? null : <FailureBanner failure={failure} />}

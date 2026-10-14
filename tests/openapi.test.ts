@@ -49,6 +49,7 @@ describe("the released OpenAPI document", () => {
       "assets.discard_draft  POST /api/v1/assets/{kind}/{name}/discard-draft",
       "assets.get  GET /api/v1/assets/{kind}/{name}",
       "assets.list  GET /api/v1/assets/{kind}",
+      "assets.list_live_once  GET /api/v1/assets/{kind}/{name}/run-live-once",
       "assets.publish  POST /api/v1/assets/{kind}/{name}/publish",
       "assets.put  PUT /api/v1/assets/{kind}/{name}",
       "assets.revert  POST /api/v1/assets/{kind}/{name}/revert",

@@ -18,10 +18,11 @@ export interface WorkflowRunAsOptions {
 
 /**
  * Answers the service principal a Workflow names under `runAs`, for a caller who may let a
- * Workflow act as it. Publishing a revision and running a draft as a test both lend the
- * principal's grants, so both ask this, with the name of their operation. The caller needs
+ * Workflow act as it. Making a revision live lends the principal's grants to everyone who
+ * holds `workflow.use`, so it asks this, with the name of its operation. The caller needs
  * exactly what administering principals needs: no second rule exists. The right is asked
- * before the name is looked up, so a caller without it does not learn which names exist.
+ * before the name is looked up, so a caller without it does not learn which names exist. A
+ * test run of a draft lends nothing and does not ask it (`workflowRunAsPrincipal`, ADR-0031).
  */
 export async function requireWorkflowRunAs(
   options: WorkflowRunAsOptions,
@@ -44,6 +45,18 @@ export async function requireWorkflowRunAs(
       message: `The Workflow '${input.workflow}' acts as the service principal '${input.runAs}'. Letting a Workflow act as a service principal needs what administering service principals needs`
     });
   }
+  return workflowRunAsPrincipal(options, { workflow: input.workflow, runAs: input.runAs });
+}
+
+/**
+ * The active service principal a Workflow names under `runAs`, without a right of the caller:
+ * a test run of a draft is bounded by it and lends its grants to nobody (ADR-0031). Refuses a
+ * name the instance does not have and a principal that is disabled, as a publish does.
+ */
+export async function workflowRunAsPrincipal(
+  options: WorkflowRunAsOptions,
+  input: { workflow: string; runAs: string }
+): Promise<ServicePrincipalRecord> {
   const principal = await options.apiAccess.findServicePrincipalByName({
     clientInstanceId: options.clientInstanceId,
     name: input.runAs

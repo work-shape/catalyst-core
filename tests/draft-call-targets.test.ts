@@ -9,6 +9,7 @@ import {
   type UserRecord
 } from "@vivd-catalyst/core";
 import { runOperation } from "@vivd-catalyst/tool-execution";
+import { parseWorkflowManifest } from "@vivd-catalyst/workflows";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { runIdentity, workflowOrigin } from "./support/principal-grants";
 import type { WorkflowFixture } from "./support/workflow-instance";
@@ -22,6 +23,13 @@ import { NOTE, notifyClients, readyWorkflows } from "./support/workflow-runs";
 // call is made the way a test run will make it.
 
 const WORKFLOW = "notify-clients";
+
+/** A definition as the engine reads it. */
+function manifestOf(value: unknown) {
+  const parsed = parseWorkflowManifest(value);
+  if (!parsed.ok) throw new Error("The definition of the test does not parse");
+  return parsed.manifest;
+}
 const address = { kind: WORKFLOW_ASSET_KIND, name: WORKFLOW };
 const writeSchema = z.object({ revision: z.number() });
 const runResourceSchema = z.object({ id: z.string(), target: z.string() }).loose();
@@ -99,19 +107,50 @@ describe("a call made by a draft", () => {
     };
   }
 
+  /**
+   * A test run of the draft, as a row of the store: each call stands for a step of a test run
+   * of its own, since a switch covers one run and a run's bindings belong to its row.
+   */
+  async function testRunOf(t: WorkflowFixture, tester: UserRecord): Promise<string> {
+    const now = new Date();
+    const run = await t.stores.workflowRuns.createRun({
+      id: createPlatformId<"WorkflowRunId">("wfr"),
+      clientInstanceId,
+      workflow: WORKFLOW,
+      definitionRevisionId: (await draftOf(t, "send")).revisionId,
+      mode: "test",
+      trigger: "manual",
+      principal: {
+        id: t.principal.id,
+        name: t.principal.name,
+        displayLabel: t.principal.displayLabel
+      },
+      startedBy: { kind: "user", id: tester.id, label: tester.displayLabel },
+      deadlineAt: new Date(now.getTime() + 60_000).toISOString(),
+      correlationId: "corr_draft",
+      createdAt: now.toISOString(),
+      definition: manifestOf(notifyClients()),
+      input: { note: NOTE }
+    });
+    if (!run) throw new Error("The test run was not written");
+    return run.id;
+  }
+
   /** A step of a test run calls the Connection, as the tester bounded by a principal. */
   async function stepCall(t: WorkflowFixture, call: DraftCall = {}) {
     const operation = call.operation ?? "write";
     const tester = call.tester ?? t.kai;
     t.executed.length = 0;
     const draft = await draftOf(t, operation === "write" ? "send" : "clients");
+    const workflowRunId = await testRunOf(t, tester);
     return runOperation(
       {
         operation: `connection.crm.${operation}`,
         effect: operation === "write" ? "changing" : "reading",
         input: operation === "write" ? { client: "client-anna", note: NOTE } : { text: NOTE },
         actor: identityOf(tester),
-        origin: workflowOrigin,
+        // Each call stands for a step of a test run of its own: a switch covers one run.
+        origin: { kind: "workflow", workflowRunId, stepRunId: "wfstep_test" },
         correlationId: "corr_draft",
         ...(operation === "write" ? { idempotencyKey: call.key ?? crypto.randomUUID() } : {}),
         ...(call.live
@@ -237,7 +276,8 @@ describe("a call made by a draft", () => {
     expect(t.executed).toEqual([]);
     expect(await switchRows(t)).toEqual([
       { type: "live_once.switched_on", part: "send", revisionId: switched, actor: t.kai.id },
-      { type: "live_once.cleared", part: "send", revisionId: switched, actor: t.kai.id }
+      // Cleared at the save, by the person who saved the draft.
+      { type: "live_once.cleared", part: "send", revisionId: switched, actor: t.admin.id }
     ]);
 
     // A switch for a revision the caller has not seen is refused, and nobody without the

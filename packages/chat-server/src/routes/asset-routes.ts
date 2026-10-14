@@ -120,6 +120,14 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.drafts.runLiveOnce(context, input)
   });
 
+  // The caller's own switches: whoever may switch one on reads them.
+  route.operation(apiOperations["assets.list_live_once"], {
+    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    execute: (input, context) => workflow.drafts.listLiveOnce(context, input)
+  });
+
   route.operation(apiOperations["assets.delete"], {
     authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "delete"),
     resource: assetResource,

@@ -213,9 +213,13 @@ export function failureHappened(
   failure: Pick<WorkflowFailure, "reason" | "action">,
   t: (key: TranslationKey, values?: Record<string, string>) => string
 ): string {
-  return failure.reason === "missingRight" && failure.action !== undefined
-    ? t("workflows.reason.missingRightNamed", { right: failure.action })
-    : t(failureSentences(failure.reason).happened);
+  if (failure.action !== undefined && failure.reason === "missingRight") {
+    return t("workflows.reason.missingRightNamed", { right: failure.action });
+  }
+  if (failure.action !== undefined && failure.reason === "testerMissingRight") {
+    return t("workflows.reason.testerMissingRightNamed", { right: failure.action });
+  }
+  return t(failureSentences(failure.reason).happened);
 }
 
 /** What happened, and what the reader can do about it, for why something did not end as done. */
