@@ -159,6 +159,9 @@ test("an agent's sections are an outline right of the content: its mark follows 
     "Tools",
     "Starter prompts"
   ]);
+  // The steps of 40 can stop a pixel short of the end, which the loop counts as the end: where
+  // the page scrolls one pixel past a multiple of 40, the last section is still a pixel away.
+  await scrollPage("end");
   await expect(current).toHaveText("Available in");
   await expect(current).toHaveCount(1);
 

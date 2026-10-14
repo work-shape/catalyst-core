@@ -1,3 +1,4 @@
+import { PLATFORM_TOOL_NAMES } from "@vivd-catalyst/client-assembly";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -43,6 +44,8 @@ describe("a policy on assets.put and the agent's save", () => {
   async function fixture() {
     const settings: CentralPolicySetting[] = [];
     const config = createTestConfig({
+      // The agent holds the platform's tools: its definition lists them.
+      toolNames: [...PLATFORM_TOOL_NAMES],
       developmentAuth: {
         enabled: true,
         defaultUserId: "owner",

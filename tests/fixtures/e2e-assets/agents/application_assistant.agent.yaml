@@ -14,6 +14,14 @@ toolNames:
   - workspace.apply_patch
   - workspace.write_file
   - page.save
+  - platform.context
+  - platform.assets.list
+  - platform.files.list
+  - platform.assets.open
+  - platform.assets.get
+  - platform.assets.validate
+  - platform.assets.put
+  - platform.assets.operations
 initialPrompts:
   - title: Find review risks
     prompt: List the most important application or document review risks I should check first.

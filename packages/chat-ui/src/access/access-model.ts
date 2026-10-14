@@ -536,7 +536,7 @@ export interface CheckableAsset {
  * grant it stands in for.
  */
 function checkedReason(
-  source: "role" | "legacy" | "legacy_ref" | "grant" | "membership"
+  source: "role" | "legacy_ref" | "grant" | "membership"
 ): "role" | "legacy" | "grant" {
   if (source === "legacy_ref") return "legacy";
   return source === "membership" ? "grant" : source;

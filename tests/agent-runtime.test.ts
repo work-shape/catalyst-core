@@ -146,7 +146,8 @@ describe("local agent runtime", () => {
               ],
               skills: []
             };
-          }
+          },
+          getSkill: async () => undefined
         },
         modelProviders: [providerConfig],
         defaultModelProvider: providerConfig,
@@ -1453,6 +1454,7 @@ describe("local agent runtime", () => {
       clientInstanceId,
       messages: []
     });
+    const offeredFor: string[][] = [];
     const requests: Parameters<FakeModelProvider["complete"]>[0][] = [];
     const providerConfig: ModelProviderConfig = {
       id: "test-provider",
@@ -1511,12 +1513,14 @@ describe("local agent runtime", () => {
         }),
         runTool: createUnusedToolRunner(),
         conversationOffer: {
-          async offerOf({ conversationId }) {
+          async offerOf({ conversationId, agentToolNames }) {
+            offeredFor.push([...agentToolNames]);
             return conversationId === about
               ? {
                   subject: { kind: "workflow", name: "month-end" },
                   toolNames: ["platform.assets.get", "platform.assets.put"],
-                  skillNames: []
+                  skillNames: [],
+                  orientation: "The platform keeps assets."
                 }
               : undefined;
           }
@@ -1551,15 +1555,26 @@ describe("local agent runtime", () => {
     expect(first.system).toContain(
       "Read it with platform.assets.get, naming no asset, before you answer"
     );
-    expect(first.system.indexOf("Subject of this conversation:")).toBeLessThan(
-      first.system.indexOf("Client agent instructions:")
-    );
+    // The offer is asked with the tools the agent's definition lists, and what it offers comes
+    // in the order that keeps what stays the same first: the platform's rules, the orientation,
+    // the agent's instructions, then the subject.
+    expect(offeredFor[0]).toEqual(["platform.assets.get"]);
+    const order = [
+      "Platform rules:",
+      "How this platform works:\nThe platform keeps assets.",
+      "Client agent instructions:",
+      "Runtime context:",
+      "Subject of this conversation:"
+    ].map((heading) => first.system.indexOf(heading));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((left, right) => left - right)).toEqual(order);
     expect(first.tools).toEqual(
       expect.arrayContaining(["platform.assets.get", "platform.assets.put"])
     );
 
     const other = await firstRequestOf(aboutNothing);
     expect(other.system).not.toContain("Subject of this conversation:");
+    expect(other.system).not.toContain("How this platform works:");
     expect(other.system).not.toContain("month-end");
     expect(other.tools).not.toContain("platform.assets.get");
   });

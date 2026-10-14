@@ -232,6 +232,8 @@ The three roles are fixed. You cannot change what a role carries, and you cannot
 
 Below the Access level, the same page has a card named **Rights** with one switch per right. A switch adds a right the role does not carry, or takes away one it does. The card shows where each right comes from: "by role", "granted individually" or "revoked individually". A revoked right stays revoked even though the role carries it.
 
+A switch is stored as grants for the whole instance, one per action the right stands for, and each records who set it and when. These grants are changed on the Users page and on the API access page for a Service Principal, not in the Grants list of the Access page, which leaves them out.
+
 | Switch on the Users page | Name in the API | Carried by |
 | --- | --- | --- |
 | View agent configuration | `config_assets.read` | Admin, Superadmin |

@@ -177,7 +177,6 @@ describe("the rights of an App", () => {
     id: "user_1",
     clientInstanceId: asClientInstanceId("demo-local"),
     roles,
-    permissions: [],
     permissionRefs: []
   });
   const app = (workspaceId: string) => ({ kind: "app", name: "offers", workspaceId });

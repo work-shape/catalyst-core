@@ -1,12 +1,13 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 
 // The skills that ship with the platform, in Studio: marked "Platform", read-only, and copied
-// into an ordinary skill of the instance. Fails without the change: the guide to the platform
-// was no stored skill, so the Skills list did not show it.
+// into an ordinary skill of the instance. The shipped skill here is the product docs,
+// `platform-docs`. Fails without the change: the docs were no stored skill, so the Skills list
+// did not show them.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 /** Where the pictures of the list, the read-only page and the copy go. Unset, none is taken. */
@@ -15,7 +16,7 @@ const superadminUser = {
   email: "e2e-superadmin@example.test",
   password: "e2e-superadmin-password"
 };
-const GUIDE_TITLE = "How this platform works";
+const GUIDE_TITLE = "Platform documentation";
 const skillPath = (name: string) => `${apiBaseUrl}/api/v1/assets/skill/${name}`;
 
 async function signInViaApi(page: Page): Promise<void> {
@@ -31,6 +32,17 @@ async function deleteSkill(page: Page, name: string): Promise<void> {
       data: { expectedRevision: await assetRevision(page, skillPath(name)) }
     });
   }
+}
+
+/**
+ * The shipped skill's row, and not that of a copy another test of this file holds at the same
+ * time: the copy's title starts with the same words.
+ */
+function shippedGuide(list: Locator): Locator {
+  return list
+    .getByRole("listitem")
+    .filter({ hasText: GUIDE_TITLE })
+    .filter({ has: list.page().locator('[data-skill-origin="release"]') });
 }
 
 async function shot(page: Page, name: string): Promise<void> {
@@ -57,7 +69,7 @@ for (const theme of ["light", "dark"] as const) {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto("/build/skills");
       const list = page.getByRole("list", { name: "Skills" });
-      const guide = list.getByRole("listitem").filter({ hasText: GUIDE_TITLE });
+      const guide = shippedGuide(list);
       await expect(guide.locator('[data-skill-origin="release"]')).toHaveText("Platform");
       await expect(guide.locator("[data-skill-icon]")).toHaveAttribute("data-skill-icon", "guide");
       await shot(page, `platform-skills-list-${theme}-1440`);
@@ -83,7 +95,7 @@ for (const theme of ["light", "dark"] as const) {
 
       // The copy starts from the shipped text and is the instance's own.
       const content = page.getByRole("textbox", { name: /^Content/u });
-      await expect(content).toHaveValue(/# How this platform works/u);
+      await expect(content).toHaveValue(/# Workshape Catalyst documentation/u);
       await page.getByRole("button", { name: "Create skill" }).click();
       await expect(page).toHaveURL(new RegExp(`/build/skills/${copyName}$`, "u"));
       await expect(page.locator("[data-build-read-only]")).toHaveCount(0);
@@ -103,10 +115,7 @@ test("the label and the copy speak German", async ({ page }) => {
   await signInViaApi(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/build/skills");
-  const guide = page
-    .getByRole("list", { name: "Skills" })
-    .getByRole("listitem")
-    .filter({ hasText: GUIDE_TITLE });
+  const guide = shippedGuide(page.getByRole("list", { name: "Skills" }));
   await expect(guide.locator('[data-skill-origin="release"]')).toHaveText("Plattform");
   await guide.getByRole("link").click();
   await expect(page.locator("[data-build-read-only]")).toContainText(

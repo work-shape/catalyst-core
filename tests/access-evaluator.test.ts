@@ -8,6 +8,7 @@ import {
   asUserId,
   createActorAccess,
   evaluateAccess,
+  legacyGrantRows,
   listAccessEntries,
   type AccessHolder,
   type AccessResource,
@@ -24,7 +25,6 @@ function holder(input: Partial<AccessHolder> = {}): AccessHolder {
     id: "kai",
     clientInstanceId,
     roles: ["user"],
-    permissions: [],
     permissionRefs: [],
     ...input
   };
@@ -45,6 +45,11 @@ function grant(input: Partial<PermissionGrant> = {}): PermissionGrant {
     createdAt: "2026-10-10T00:00:00.000Z",
     ...input
   };
+}
+
+/** The instance-wide rows a legacy list became (AP-4). */
+function legacyRows(entries: string[]): PermissionGrant[] {
+  return legacyGrantRows(entries).map((row) => grant(row));
 }
 
 function persisted(grants: PermissionGrant[] = [], holderActive = true): PersistedAccess {
@@ -245,20 +250,23 @@ describe("access evaluator: deny wins", () => {
     expect(decide({ holder: superadmin, grants: [grant({ effect: "deny" })] })).toEqual(denied);
   });
 
-  it("reads a legacy revocation as a deny on every target, over a row and over a role", () => {
-    const revoked = holder({ roles: ["user", "admin"], permissions: ["!config_assets.write"] });
+  it("reads a legacy revocation, now instance deny rows, as a deny on every target, over a row and over a role", () => {
+    const admin = holder({ roles: ["user", "admin"] });
+    const revocation = legacyRows(["!config_assets.write"]);
     for (const action of ["agent.write", "agent.delete", "skill.write", "skill.delete"]) {
-      expect(decide({ holder: revoked, grants: [grant({ action })], action })).toEqual(denied);
+      expect(decide({ holder: admin, grants: [...revocation, grant({ action })], action })).toEqual(
+        denied
+      );
       expect(
         decide({
-          holder: revoked,
-          grants: [grant({ action, ...scopes.namespace })],
+          holder: admin,
+          grants: [...revocation, grant({ action, ...scopes.namespace })],
           action,
           resource: sharedResource
         })
       ).toEqual(denied);
     }
-    expect(decide({ holder: revoked, action: "agent.read" })).toEqual({
+    expect(decide({ holder: admin, grants: revocation, action: "agent.read" })).toEqual({
       allowed: true,
       source: "role"
     });
@@ -266,17 +274,14 @@ describe("access evaluator: deny wins", () => {
 });
 
 describe("access evaluator: the classes of action", () => {
-  it("answers a legacy key from the role, the column and instance rows, never from a narrower row", () => {
+  it("answers a legacy key from the role and instance rows, never from a narrower row", () => {
     expect(decide({ action: "config_assets.write" })).toEqual(noGrant);
     expect(
       decide({ holder: holder({ roles: ["user", "admin"] }), action: "config_assets.write" })
     ).toEqual({ allowed: true, source: "role" });
     expect(
-      decide({
-        holder: holder({ permissions: ["config_assets.write"] }),
-        action: "config_assets.write"
-      })
-    ).toEqual({ allowed: true, source: "legacy" });
+      decide({ grants: legacyRows(["config_assets.write"]), action: "config_assets.write" })
+    ).toEqual(allowedByGrant);
 
     const narrow = ["agent.write", "agent.delete", "skill.write", "skill.delete"].map((action) =>
       grant({ action, ...scopes.namespace })
@@ -337,10 +342,9 @@ describe("access evaluator: the classes of action", () => {
     }
   });
 
-  it("skips an entry of the legacy column that names no key", () => {
-    const odd = holder({ permissions: ["agent.write", "!agent.write", "nonsense", "!"] });
-    expect(listAccessEntries(odd, persisted())).toEqual([]);
-    expect(decide({ holder: odd })).toEqual(noGrant);
+  it("writes no row for an entry of a legacy list that names no key", () => {
+    expect(legacyGrantRows(["agent.write", "!agent.write", "nonsense", "!"])).toEqual([]);
+    expect(listAccessEntries(holder(), persisted())).toEqual([]);
   });
 });
 
@@ -348,10 +352,9 @@ describe("access evaluator: an inactive holder", () => {
   it("holds nothing from any source", () => {
     const superadmin = holder({
       roles: ["user", "admin", "superadmin"],
-      permissions: ["config_assets.release"],
       permissionRefs: ["demo-tools"]
     });
-    const grants = [grant()];
+    const grants = [grant(), ...legacyRows(["config_assets.release"])];
     for (const action of [...ACTIONS, ...PERMISSIONS, "ref:demo-tools", "agent.publish"]) {
       expect(decide({ holder: superadmin, grants, action, holderActive: false })).toEqual({
         allowed: false,
@@ -417,8 +420,11 @@ describe("actor access", () => {
 
   it("lists the legacy keys a holder holds in full", () => {
     const access = createActorAccess(
-      holder({ roles: ["user", "admin"], permissions: ["!usage.view", "config_assets.release"] }),
-      persisted([grant({ action: "audit.view", effect: "deny" })])
+      holder({ roles: ["user", "admin"] }),
+      persisted([
+        ...legacyRows(["!usage.view", "config_assets.release"]),
+        grant({ action: "audit.view", effect: "deny" })
+      ])
     );
     expect(allowedLegacyPermissions(access)).toEqual([
       "agent_skills.approve",
