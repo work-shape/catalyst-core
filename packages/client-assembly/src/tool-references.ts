@@ -1,6 +1,49 @@
-import type { AgentToolReference } from "@vivd-catalyst/chat-server";
+import type { AgentToolReference, ConfigAssetValidationRefs } from "@vivd-catalyst/chat-server";
+import { getEnabledToolNames, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { REASONING_EFFORTS, type ModelProviderConfig } from "@vivd-catalyst/core";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "@vivd-catalyst/model-provider";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import { agentListableToolNames } from "./platform-orientation";
+
+/**
+ * What a definition of the instance may refer to, and the tools it offers with what each tells
+ * people. The tools are described once the assembly registered them, which needs what is built
+ * from the references, so `describe` fills them later and `tools` reads them on each ask.
+ */
+export function createConfigAssetReferences(
+  config: ClientInstanceConfig,
+  modelProviders: readonly ModelProviderConfig[]
+) {
+  const selectable = config.modelBindings.filter((binding) => binding.agentSelectable !== false);
+  const validationRefs: ConfigAssetValidationRefs = {
+    modelProviderIds: modelProviders.map((provider) => provider.id),
+    modelBindingIds: selectable.map((binding) => binding.id),
+    modelBindings: selectable.map((binding) => {
+      const model =
+        binding.model ??
+        modelProviders.find((provider) => provider.id === binding.providerId)?.model;
+      if (model === undefined) throw new Error(`Model binding ${binding.id} has no model`);
+      return { id: binding.id, model, ...(binding.label ? { label: binding.label } : {}) };
+    }),
+    fastModeModelBindingIds: fastModeModelBindingIds(config),
+    reasoningEfforts: [...REASONING_EFFORTS],
+    enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
+  };
+  let described: AgentToolReference[] = [];
+  return {
+    validationRefs,
+    tools: (): readonly AgentToolReference[] => described,
+    describe(tools: readonly AnyToolDefinition[]): void {
+      described = agentToolReferences(validationRefs.enabledToolNames, tools);
+    }
+  };
+}
+
+export function fastModeModelBindingIds(config: ClientInstanceConfig): string[] {
+  return config.modelBindings
+    .filter((binding) => binding.supportsFastMode)
+    .map((binding) => binding.id);
+}
 
 /** Tools the model provider carries out itself: no code registers them, so they are told here. */
 const MODEL_TOOL_REFERENCES: readonly AgentToolReference[] = [
