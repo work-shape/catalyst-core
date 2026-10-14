@@ -110,7 +110,7 @@ function draftGuardrailRefusal(answer: PlatformEventAnswer, event: OperationBefo
     (guardrail) => guardrail.outcome === "block" && !guardrail.approvalCannotWait
   );
   // The refusal ends in the guardrail's reason, which may end a sentence of its own.
-  const first = /[.!?]$/u.test(why) ? why : `${why}.`;
+  const first = /[.!?…]$/u.test(why) ? why : `${why}.`;
   return asksForApproval && !blocked
     ? `${first} It asks for another person's approval, which a save of a Page cannot wait for. The App's draft was not written; the Page is saved. Ask the person to use Update app on the Page, where the write can wait for the approval.`
     : `${first} The App's draft was not written; the Page is saved.`;

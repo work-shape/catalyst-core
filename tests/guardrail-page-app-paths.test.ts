@@ -376,6 +376,30 @@ describe("an App the agent writes from a Page of its conversation", () => {
       await t.close();
     }
   });
+
+  // Fails without the change: a reason that ends in an ellipsis was given a full stop after it.
+  for (const outcome of ["block", "require_approval"] as const) {
+    it(`ends the first sentence of the refusal in the ellipsis of the reason (${outcome})`, async () => {
+      const { t, calls } = await setup({
+        no_iban: noIban({
+          displayName: "No IBAN",
+          filter: { kind: "app" },
+          check: { kind: "pattern", pattern: ibanPattern, reason: "Bitte Kontonummer prüfen…" },
+          outcome
+        })
+      });
+      try {
+        expect(await savedAgain(t, calls)).toMatchObject({
+          saved: false,
+          message: expect.stringMatching(
+            /^Guardrail 'No IBAN' blocked app 'offers': Bitte Kontonummer prüfen… (?:It asks|The App's)/u
+          )
+        });
+      } finally {
+        await t.close();
+      }
+    });
+  }
 });
 
 describe("a page.save_as_app a guardrail holds, through the operation runner", () => {
