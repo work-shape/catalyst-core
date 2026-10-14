@@ -319,7 +319,12 @@ describe("operation contracts", () => {
           message?: string;
           boundBy?: { id: string; label: string };
         }
-      | { kind: "policy"; operation: string; reason?: "approval_unavailable" }
+      | {
+          kind: "policy";
+          operation: string;
+          reason?: "approval_unavailable" | "workflow_deleted";
+          guardrail?: { id: string; label: string; reason?: string };
+        }
       | { kind: "guardrail"; guardrailId: string; message?: string }
       | { kind: "declined"; by: string; comment?: string }
     >();

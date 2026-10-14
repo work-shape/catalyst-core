@@ -119,6 +119,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
       }
       isDefault={isDefault}
       references={referencesQuery.data}
+      referencesLoading={referencesQuery.isPending}
       editableAgentFields={management.editableAgentFields}
       canManageAgentModels={canManageAgentModels(user)}
       skillChoice={{

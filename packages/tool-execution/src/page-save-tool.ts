@@ -91,6 +91,13 @@ export function createPageSaveTool(options: PageSaveToolOptions): AnyToolDefinit
   const { apps } = options;
   return defineTool({
     name: PAGE_SAVE_TOOL_NAME,
+    title: { en: "Save page", de: "Page speichern" },
+    summary: {
+      en: "Builds a Page, a small web app the user can open again beside the chat.",
+      de: "Baut eine Page, eine kleine Web-App, die man neben dem Chat wieder öffnen kann."
+    },
+    group: "results",
+    icon: "app",
     // A saved revision outlives the call and shows beside the conversation.
     effect: "changing",
     description: [

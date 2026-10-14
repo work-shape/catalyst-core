@@ -51,6 +51,7 @@ export type {
 } from "./knowledge-base-source";
 export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
 export { toggleToolName } from "./tool-group";
+export { setPackageTools, toolPackages, withImpliedTools } from "./instance-tools";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export {
   PendingApprovalError,

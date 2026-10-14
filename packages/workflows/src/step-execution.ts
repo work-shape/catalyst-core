@@ -1,6 +1,7 @@
 import { compileJsonSchema } from "@vivd-catalyst/connections";
 import {
   WORKFLOW_DATASET_KEY,
+  isAppError,
   operationDenialError,
   workflowDatasetReferenceSchema,
   workflowStepIdempotencyKey,
@@ -31,6 +32,7 @@ import {
   type WorkflowStepFiles
 } from "./code-step";
 import type { WorkflowStepIndex } from "./definition";
+import type { WorkflowDefinitionSource } from "./definition-source";
 import {
   holdsBrokenDatasetReference,
   holdsDatasetReference,
@@ -82,6 +84,8 @@ export interface StepExecutorOptions {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   operationCalls: WorkflowOperationCalls;
+  /** Where a step of a published run reads whether its Workflow is still published. */
+  definitions: Pick<WorkflowDefinitionSource, "read">;
   limits: WorkflowRunLimits;
   now(): Date;
   /** Where the script of a code step is read. */
@@ -100,7 +104,7 @@ export interface StepAttempt {
 }
 
 export function createStepExecutor(options: StepExecutorOptions) {
-  const { clientInstanceId, stores, operationCalls, limits, now } = options;
+  const { clientInstanceId, stores, operationCalls, definitions, limits, now } = options;
 
   /** Fails a step whose value does not fit a schema its definition declares. */
   function fitsSchema(schema: JsonObject, value: JsonValue, code: string, what: string): void {
@@ -212,12 +216,17 @@ export function createStepExecutor(options: StepExecutorOptions) {
 
   /**
    * Who an operation step calls as. A run of the published revision acts as its principal; a
-   * test run of a draft acts as the person testing, bounded by the principal.
+   * test run of a draft acts as the person testing, bounded by the principal. A run goes on
+   * after its Workflow is deleted, and its calls then say so: the publish confirms none.
    */
   async function callerOf(
     run: WorkflowRun,
     stepRun: WorkflowStepRun
-  ): Promise<{ actor: AuthenticatedIdentity; draft?: OperationDraftContext }> {
+  ): Promise<{
+    actor: AuthenticatedIdentity;
+    draft?: OperationDraftContext;
+    workflowDeleted?: true;
+  }> {
     if (run.mode === "test") return testRunCall(stores, run, stepRun);
     const actor = await workflowRunActor(stores.apiAccess, run);
     if (!actor) {
@@ -227,7 +236,18 @@ export function createStepExecutor(options: StepExecutorOptions) {
         { systemic: true }
       );
     }
-    return { actor };
+    return { actor, ...((await workflowDeleted(run)) ? { workflowDeleted: true as const } : {}) };
+  }
+
+  /** Whether the Workflow of a run of what is published is published no more. */
+  async function workflowDeleted(run: WorkflowRun): Promise<boolean> {
+    try {
+      return (await definitions.read(run.workflow)) === undefined;
+    } catch (error) {
+      // A published revision this engine refuses to run is published all the same.
+      if (isAppError(error)) return false;
+      throw error;
+    }
   }
 
   /** Does the work of one step and writes nothing of it but the id of its Operation Run. */

@@ -27,8 +27,11 @@ export interface WorkspaceDock {
   open: boolean;
   /** Where the dock lies over the page: whether it is in front of it. */
   inFront: boolean;
-  /** Goes to a page with this conversation in the dock. */
-  openPage(route: WorkspaceRoute, conversationId: string): void;
+  /**
+   * Goes to a page with this conversation in the dock. `replace` takes the place of the current
+   * entry of the history, as a later open of the same run does.
+   */
+  openPage(route: WorkspaceRoute, conversationId: string, options?: { replace?: boolean }): void;
   /** Puts a conversation into the open dock of this page; without one, the dock is empty. */
   show(conversationId: string | undefined, options?: { replace?: boolean }): void;
   /** Hides the dock and keeps its conversation for the "Chat" button. */
@@ -99,9 +102,9 @@ export function useWorkspaceDock({
   );
 
   const openPage = useCallback(
-    (target: WorkspaceRoute, conversationId: string) => {
+    (target: WorkspaceRoute, conversationId: string, options?: { replace?: boolean }) => {
       setMemory((current) => (current.inFront ? current : { ...current, inFront: true }));
-      go(target, conversationId);
+      go(target, conversationId, options);
     },
     [go]
   );
