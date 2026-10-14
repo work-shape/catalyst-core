@@ -3,7 +3,7 @@ import { defineTranslations } from "./translation-area";
 export const access = defineTranslations({
   en: {
     "access.description":
-      "Give a person rights inside a Namespace, in a shared workspace or on one asset, and check what a person may do.",
+      "Give a person rights on agents, skills and other assets, and check what a person may do.",
     "access.tabs": "Parts of Access",
     "access.tabNamespaces": "Namespaces",
     "access.tabGrants": "Rights",
@@ -70,7 +70,7 @@ export const access = defineTranslations({
 
     "access.grantsLoadFailed": "The rights could not be loaded.",
     "access.grantsEmpty":
-      "No right given yet. A right allows or denies one person an action in a Namespace or on one asset.",
+      "No right given yet. A right allows or denies one person an action in one place.",
     "access.newGrant": "New right",
     "access.grantHolder": "Person",
     "access.grantAction": "Action",
@@ -110,8 +110,6 @@ export const access = defineTranslations({
     "access.actionPublishWorkflowNote":
       "Not enough on its own today: publishing a Workflow also needs the superadmin role and the right to manage API access. For anyone else this right changes nothing yet.",
     "access.scopeWorkflow": "Workflow {name}",
-    "access.scopeInNamespaceWorkflowDescription":
-      "Every Workflow whose name starts with the prefix, future ones included.",
     "access.scopeOnWorkflow": "On one Workflow",
     "access.scopeOnWorkflowDescription": "One existing Workflow.",
     "access.grantWorkflow": "Workflow",
@@ -120,7 +118,7 @@ export const access = defineTranslations({
     "access.workflowsLoadFailed": "The Workflows could not be loaded.",
     "access.noAssets": "This instance has none of this kind yet.",
     "access.grantRightNotOffered":
-      "This right cannot be given in a Namespace or on one asset. Reload the page and choose one of the actions it offers.",
+      "This right cannot be given at this place. Reload the page and choose one of the actions it offers.",
     "access.grantModuleOff":
       "The module of this kind is switched off on this instance, so it has no rights to give. Reload the page.",
     "access.grantMissingManageRight":
@@ -137,7 +135,10 @@ export const access = defineTranslations({
     "access.scopeOnConnectionDescription": "One existing connection.",
     "access.scopeInWorkspace": "In a shared workspace",
     "access.scopeInWorkspaceDescription":
-      "Every connection that belongs to the workspace. This gives no access to its conversations.",
+      "Everything of this kind the workspace owns, also what is made later. This gives no access to its conversations.",
+    "access.scopeWholeInstance": "Whole instance",
+    "access.scopeWholeInstanceDescription":
+      "Everything of this kind on the instance, also what is made later.",
     "access.grantConnection": "Connection",
     "access.chooseConnection": "Choose a connection",
     "access.noConnections": "This instance has no connection yet.",
@@ -154,25 +155,16 @@ export const access = defineTranslations({
       "{name} is no longer denied this: {action}, {scope}. Other grants and the person's role then decide.",
     "access.revokeFailed": "The right could not be revoked.",
     "access.grantDialogTitle": "New right",
-    "access.grantDialogDescription":
-      "Gives one person a right in one place: a Namespace, a single asset, or a shared workspace. Rights on the whole instance are set on the Users page.",
+    "access.grantDialogDescription": "Gives one person rights on one kind of asset, in one place.",
     "access.choosePerson": "Choose a person",
     "access.usersLoadFailed": "The users could not be loaded.",
     "access.grantKind": "Kind",
     "access.grantActions": "Actions",
     "access.grantScopeKind": "Where",
-    "access.scopeInNamespace": "In a Namespace",
-    "access.scopeInNamespaceDescription":
-      "Every agent or skill whose name starts with the prefix, future ones included.",
-    "access.scopeInNamespaceConnectionDescription":
-      "Every connection whose name starts with the prefix, future ones included.",
     "access.scopeOnAsset": "On one asset",
     "access.scopeOnAssetDescription": "One existing agent or skill.",
-    "access.chooseNamespace": "Choose a Namespace",
     "access.chooseAsset": "Choose an asset",
-    "access.grantNamespace": "Namespace",
     "access.grantAsset": "Asset",
-    "access.noNamespaces": "Register a Namespace first.",
     "access.effectAllowDescription": "The person may do the ticked actions there.",
     "access.effectDenyDescription":
       "Refuses the ticked actions here, even for an administrator. Exporting an asset and setting the default agent are not affected.",
@@ -181,7 +173,6 @@ export const access = defineTranslations({
     "access.grantFailed": "The right could not be written.",
     "access.grantUserBeingDeleted": "User account is being deleted",
     "access.grantUnknownHolder": "This user no longer exists.",
-    "access.grantUnknownNamespace": "This Namespace is no longer registered.",
     "access.grantAssetGone":
       "This asset no longer exists, or the action cannot be given at this place. Reload the page and choose again.",
     "access.grantPartlyWritten": "{written} of {total} rows were written before this.",
@@ -272,7 +263,7 @@ export const access = defineTranslations({
   },
   de: {
     "access.description":
-      "Gib einer Person Rechte in einem Namespace, in einem geteilten Arbeitsbereich oder an einem einzelnen Asset und prüfe, was eine Person darf.",
+      "Gib einer Person Rechte an Agenten, Skills und anderen Assets und prüfe, was eine Person darf.",
     "access.tabs": "Abschnitte der Zugriffsseite",
     "access.tabNamespaces": "Namespaces",
     "access.tabGrants": "Rechte",
@@ -340,7 +331,7 @@ export const access = defineTranslations({
 
     "access.grantsLoadFailed": "Die Rechte konnten nicht geladen werden.",
     "access.grantsEmpty":
-      "Noch kein Recht vergeben. Ein Recht erlaubt oder verweigert einer Person eine Aktion in einem Namespace oder an einem Asset.",
+      "Noch kein Recht vergeben. Ein Recht erlaubt oder verweigert einer Person eine Aktion an einem Ort.",
     "access.newGrant": "Neues Recht",
     "access.grantHolder": "Person",
     "access.grantAction": "Aktion",
@@ -380,8 +371,6 @@ export const access = defineTranslations({
     "access.actionPublishWorkflowNote":
       "Reicht heute allein nicht: Einen Workflow zu veröffentlichen braucht zusätzlich die Superadmin-Rolle und das Recht, den API-Zugriff zu verwalten. Für alle anderen ändert dieses Recht noch nichts.",
     "access.scopeWorkflow": "Workflow {name}",
-    "access.scopeInNamespaceWorkflowDescription":
-      "Jeder Workflow, dessen Name mit dem Präfix beginnt, auch künftige.",
     "access.scopeOnWorkflow": "An einem Workflow",
     "access.scopeOnWorkflowDescription": "Ein vorhandener Workflow.",
     "access.grantWorkflow": "Workflow",
@@ -390,7 +379,7 @@ export const access = defineTranslations({
     "access.workflowsLoadFailed": "Die Workflows konnten nicht geladen werden.",
     "access.noAssets": "Auf dieser Instanz gibt es davon noch nichts.",
     "access.grantRightNotOffered":
-      "Dieses Recht lässt sich nicht in einem Namespace oder an einem einzelnen Asset vergeben. Lade die Seite neu und wähle eine der angebotenen Aktionen.",
+      "Dieses Recht lässt sich an diesem Ort nicht vergeben. Lade die Seite neu und wähle eine der angebotenen Aktionen.",
     "access.grantModuleOff":
       "Das Modul dieser Art ist auf dieser Instanz abgeschaltet und hat deshalb keine Rechte zu vergeben. Lade die Seite neu.",
     "access.grantMissingManageRight":
@@ -407,7 +396,10 @@ export const access = defineTranslations({
     "access.scopeOnConnectionDescription": "Eine vorhandene Verbindung.",
     "access.scopeInWorkspace": "In einem geteilten Arbeitsbereich",
     "access.scopeInWorkspaceDescription":
-      "Jede Verbindung, die dem Arbeitsbereich gehört. Das gibt keinen Zugang zu seinen Unterhaltungen.",
+      "Alles dieser Art, was dem Arbeitsbereich gehört, auch später Angelegtes. Das gibt keinen Zugang zu seinen Unterhaltungen.",
+    "access.scopeWholeInstance": "Ganze Instanz",
+    "access.scopeWholeInstanceDescription":
+      "Alles dieser Art auf der Instanz, auch später Angelegtes.",
     "access.grantConnection": "Verbindung",
     "access.chooseConnection": "Verbindung wählen",
     "access.noConnections": "Auf dieser Instanz gibt es noch keine Verbindung.",
@@ -425,24 +417,16 @@ export const access = defineTranslations({
     "access.revokeFailed": "Das Recht konnte nicht entzogen werden.",
     "access.grantDialogTitle": "Neues Recht",
     "access.grantDialogDescription":
-      "Gibt einer Person ein Recht an einem Ort: in einem Namespace, an einem einzelnen Asset oder in einem geteilten Arbeitsbereich. Rechte für die ganze Instanz setzt du auf der Seite Benutzer.",
+      "Gibt einer Person Rechte an einer Art von Asset, an einem Ort.",
     "access.choosePerson": "Person wählen",
     "access.usersLoadFailed": "Die Benutzer konnten nicht geladen werden.",
     "access.grantKind": "Art",
     "access.grantActions": "Aktionen",
     "access.grantScopeKind": "Wo",
-    "access.scopeInNamespace": "In einem Namespace",
-    "access.scopeInNamespaceDescription":
-      "Jeder Agent oder Skill, dessen Name mit dem Präfix beginnt, auch künftige.",
-    "access.scopeInNamespaceConnectionDescription":
-      "Jede Verbindung, deren Name mit dem Präfix beginnt, auch künftige.",
     "access.scopeOnAsset": "An einem Asset",
     "access.scopeOnAssetDescription": "Ein vorhandener Agent oder Skill.",
-    "access.chooseNamespace": "Namespace wählen",
     "access.chooseAsset": "Asset wählen",
-    "access.grantNamespace": "Namespace",
     "access.grantAsset": "Asset",
-    "access.noNamespaces": "Registriere zuerst einen Namespace.",
     "access.effectAllowDescription": "Die Person darf die angehakten Aktionen dort ausführen.",
     "access.effectDenyDescription":
       "Verweigert die angehakten Aktionen hier, auch für Administratoren. Exportieren und das Festlegen des Standard-Agenten bleiben möglich.",
@@ -451,7 +435,6 @@ export const access = defineTranslations({
     "access.grantFailed": "Das Recht konnte nicht geschrieben werden.",
     "access.grantUserBeingDeleted": "Das Benutzerkonto wird gerade gelöscht",
     "access.grantUnknownHolder": "Diesen Benutzer gibt es nicht mehr.",
-    "access.grantUnknownNamespace": "Dieser Namespace ist nicht mehr registriert.",
     "access.grantAssetGone":
       "Dieses Asset gibt es nicht mehr, oder die Aktion lässt sich an diesem Ort nicht vergeben. Lade die Seite neu und wähle erneut.",
     "access.grantPartlyWritten": "Davor wurden {written} von {total} Zeilen geschrieben.",

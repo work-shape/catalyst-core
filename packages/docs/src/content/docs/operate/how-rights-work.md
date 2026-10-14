@@ -45,7 +45,7 @@ Three words come up on every screen, so here they are once.
 
 - A **right** is the permission to do one kind of thing, such as "write agents". In the API a right has a short name like `agent.write`.
 - A **grant** is one row that gives or refuses one person one right in one place. You write grants on the Access page.
-- A **Namespace** is a registered beginning of a name, such as `tax-`. Every agent and skill whose name starts with it belongs to it, and so does every Connection where that module is on. See [Namespaces](#namespaces). It is not a workspace, as the next section shows.
+- A **Namespace** is a registered beginning of a name, such as `tax-`. Every agent and skill whose name starts with it belongs to it, and so does every Connection where that module is on. See [Namespaces](#namespaces). It is not a workspace, as the next section shows. Namespaces are being retired: a new right is no longer given in one, and those already registered keep working until a later release removes them.
 
 ## Namespace or workspace?
 
@@ -154,7 +154,7 @@ Two exceptions. The default agent of the instance is always available everywhere
 
 Nothing links a Namespace to a workspace today. You cannot say "the agents of `tax-` belong to the workspace Tax team". The only bridge is the **Available in** setting, agent by agent, and only a person with the instance-wide right sets it.
 
-One kind of grant does name a workspace. With the module `connections` on, a grant to read or use Connections can be written "In a shared workspace", and it covers the Connections that workspace owns. The same kind of grant can instead be written in a Namespace or on one Connection. A grant on a workspace says nothing about agents, skills or conversations, and it has nothing to do with a Namespace.
+No new grant names a workspace. A grant to read or use Connections is written on one Connection: the instance owns every Connection, so a grant on a workspace would cover nothing, and the instance refuses one. A Connection grant written on a workspace before keeps applying until it is revoked. It says nothing about agents, skills or conversations.
 
 ## The four questions
 
@@ -189,7 +189,7 @@ The instance collects everything that speaks about you:
 
 1. Your **role** gives you a fixed set of rights on the whole instance.
 2. A **single right** on the Users page adds one right to that set or takes one away, also for the whole instance.
-3. A **grant** on the Access page allows or denies one action in one place. For agents and skills the place is one Namespace or one asset. For Connections it is one Namespace, one Connection or one Shared Workspace.
+3. A **grant** on the Access page allows or denies one action in one place. A new grant is written on one asset. Grants written before in a Namespace, and Connection grants written before on a Shared Workspace, keep applying until they are revoked.
 
 Then it decides:
 
@@ -262,9 +262,9 @@ A role and a single right always apply to the whole instance. A grant is for eve
 | Part | Choices today |
 | --- | --- |
 | Who | One person. |
-| Kind | Agents, or skills. Connections too, when the module `connections` is on. |
-| Action | Read, write, delete for agents and skills. Read and use for Connections. |
-| Where | For agents and skills, one Namespace or one existing asset. For Connections, one Namespace, one existing Connection or one Shared Workspace. |
+| Kind | Agents, or skills. Connections and Workflows too, where their modules are on. |
+| Action | Read, write, delete for agents and skills. Read and use for Connections. Read, use, write and publish for Workflows. |
+| Where | One existing asset. Rows written before in a Namespace or on a Shared Workspace stay until they are revoked. |
 | Effect | Allow, or deny. |
 
 So the answer to "can rights only be given to single people" is yes, today. A grant names one person. There are no groups, and a role cannot hold a grant.
@@ -277,6 +277,8 @@ So the answer to "can rights only be given to single people" is yes, today. A gr
 
 ## Namespaces
 
+Namespaces are being retired. The **New right** dialog no longer offers one, and a later release removes them. Until then the Namespaces already registered, their lists and the grants that name them keep working, and this section explains them.
+
 A Namespace answers the question "which agents belong to this team". It does that through names.
 
 You register a prefix, for example `tax-`. From then on every agent and skill of the instance whose name starts with `tax-` belongs to the Namespace. That includes agents somebody creates next month. A grant "write agents in `tax-`" therefore covers the whole family, and you never have to list the members.
@@ -284,7 +286,7 @@ You register a prefix, for example `tax-`. From then on every agent and skill of
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 660 430" role="img" aria-labelledby="rights-fig-3-title rights-fig-3-desc">
 <title id="rights-fig-3-title">Where a right can sit</title>
-<desc id="rights-fig-3-desc">The Client Instance contains the agents and skills of the instance and the Collaboration Workspaces. Among the agents and skills, the Namespace tax- holds three assets and is covered by one grant. In the Namespace hr-, a grant sits on the single asset hr-onboarding. The asset helpdesk is in no Namespace. Workspaces hold conversations, and access to them comes from membership. A grant can name a workspace only for the Connections that workspace owns.</desc>
+<desc id="rights-fig-3-desc">The Client Instance contains the agents and skills of the instance and the Collaboration Workspaces. Among the agents and skills, the Namespace tax- holds three assets and is covered by one grant. In the Namespace hr-, a grant sits on the single asset hr-onboarding. The asset helpdesk is in no Namespace. Workspaces hold conversations, and access to them comes from membership. No new grant names a workspace.</desc>
 <defs><marker id="rights-arrow-3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
 <rect class="frame" x="8" y="8" width="644" height="414" rx="12"/>
 <text x="24" y="34" class="strong">Client Instance</text>
@@ -315,18 +317,18 @@ You register a prefix, for example `tax-`. From then on every agent and skill of
 <text x="456" y="144" class="small">conversations and their files.</text>
 <text x="456" y="184" class="small">Access to conversations comes</text>
 <text x="456" y="204" class="small">from Workspace Membership.</text>
-<text x="456" y="244" class="small">A grant can name a workspace</text>
-<text x="456" y="264" class="small">only for its Connections.</text>
+<text x="456" y="244" class="small">No new grant names</text>
+<text x="456" y="264" class="small">a workspace.</text>
 </svg>
-<figcaption>The tinted boxes show where a grant on agents and skills can sit: a whole Namespace, or one asset. A grant on Connections sits in a Namespace, on one Connection or on a Shared Workspace. Everything wider is a role or a single right on the Users page.</figcaption>
+<figcaption>The tinted boxes show where a grant can sit: one asset, or a whole Namespace for a grant written before Namespaces were retired. Everything wider is a role or a single right on the Users page.</figcaption>
 </figure>
 
 ### An example
 
 A company has a tax team. Its agents are named `tax-vat-helper` and `tax-year-end`, and it has a skill named `tax-audit-notes`.
 
-1. An administrator registers the Namespace `tax-` with the display name "Tax team".
-2. The administrator grants Mara read and write on agents in `tax-`.
+1. The instance has the Namespace `tax-` with the display name "Tax team", registered before Namespaces were retired.
+2. Mara holds read and write on agents in `tax-`, granted at that time.
 3. Mara opens **Studio**. She sees the two tax agents and can change them. She does not see `hr-onboarding` or `helpdesk`.
 4. Mara creates `tax-travel-costs`. The name starts with the prefix, so her grant covers it at once.
 5. Jonas from the same team gets a grant on one asset instead, read on `tax-year-end`. He sees **Studio** with a list of agents that holds this one agent and nothing else. It opens read-only.
@@ -563,30 +565,25 @@ Now she tries the same on `hr-onboarding`, which a colleague sent her as a link.
 3. The instance answers `403 FORBIDDEN`. Studio says "You may not read this asset."
 4. The refused call is on the Operations page with the status "Denied".
 
-## Give a colleague the right to edit the agents of one team
+## Give a colleague the right to edit an agent
 
-You need "Manage users" yourself. Open **Settings > Instance > Access**.
-
-**First, the Namespace.** If the team has none, open the tab **Namespaces** and choose **New Namespace**. Enter the prefix, for example `tax-`, and a display name. Leave "Limit tools" and "Limit models" off unless you want the lists. The team's agents must already carry the prefix in their names, or be created with it.
-
-**Then the grant.** Open the tab **Grants** and choose **New grant**. In the German interface the button is "Neues Recht". The dialog has six fields.
+You need "Manage users" yourself. Open **Settings > Instance > Access**, the tab **Rights**, and choose **New right**. In the German interface the button is "Neues Recht". The dialog has five fields.
 
 | Field | What you choose | What it means |
 | --- | --- | --- |
-| Person | One person from the list | The grant is for this person alone. To give it to three colleagues, send the dialog three times. |
-| Kind | Agents or Skills | One kind per dialog. A team that edits both needs the dialog twice. With the module `connections` on, the dialog offers Connections as a third kind. |
-| Actions | Read, Write, Delete | Tick Read and Write for somebody who should edit. Tick Delete only if they should remove agents too. The dialog writes one row per tick. |
-| Where | "In a Namespace" or "On one asset" | "In a Namespace" covers every agent whose name starts with the prefix, future ones included. "On one asset" covers one agent that exists now. For Connections the choices are "In a Namespace", "On one connection" and "In a shared workspace". |
-| Namespace, or Asset | The Namespace `tax-`, or the one agent | Only registered Namespaces are offered. If the list is empty, register one first. |
+| Person | One person from the list | The right is for this person alone. To give it to three colleagues, send the dialog three times. |
+| Kind | Agents or Skills | One kind per dialog. A colleague who edits both needs the dialog twice. With the modules `connections` and `workflows` on, the dialog offers Connections and Workflows too. |
+| Actions | Read, Write, Delete | Tick Read and Write for somebody who should edit. Tick Delete only if they should remove the agent too. The dialog writes one row per tick. |
+| Asset | The one agent | The right covers this agent, which exists now. The dialog asks for no place today, because one asset is the only place a new right can be written. |
 | Effect | Allow or Deny | Allow gives the ticked actions there. Deny refuses them there and beats every allow and every role. For this task choose Allow. |
 
-Press **Create grant**. Under the default policy the grant works at once. On an instance that sends changes to an approval, it works once the approval is given. Your colleague sees **Studio** in the main rail the next time the interface loads, with the agents of `tax-`. If these grants are all they hold, they see nothing else.
+Press **Create right**. Under the default policy the right works at once. On an instance that sends changes to an approval, it works once the approval is given. Your colleague sees **Studio** in the main rail the next time the interface loads, with the agent. If these rights are all they hold, they see nothing else. For a team with several agents, send the dialog once per agent.
 
 Three things to know afterwards.
 
 - You can send the same dialog again. Rows the person already has are left alone, and the dialog says how many it added.
-- **Check** on the same page confirms the result. Choose the person, enter `tax-vat-helper` and read the answer for each action. You need "View agent configuration" for that.
-- A save can still be refused for a reason that is not a right. Examples are a tool that is off the Namespace's list, or a model setting that needs "Manage agent model settings". The Check tab lists these under its result.
+- **Check** on the same page confirms the result. Choose the person, enter the agent's name and read the answer for each action. You need "View agent configuration" for that.
+- A save can still be refused for a reason that is not a right. Examples are a tool that is off the list of a Namespace the agent's name lies in, or a model setting that needs "Manage agent model settings". The Check tab lists these under its result.
 
 To take the right away, open the menu of the line in the list and choose **Revoke** for the action. Once the revocation has run, the next call of your colleague is refused.
 
@@ -609,8 +606,8 @@ A release push reaches every agent and skill of the instance and is not held bac
 | --- | --- | --- |
 | Make somebody an Admin or a Superadmin | Settings > Instance > Users, Access level | Manage users. Superadmin for the Superadmin level. |
 | Give or take one right for the whole instance | Settings > Instance > Users, Rights | Manage users |
-| Let somebody edit the agents of one team | Settings > Instance > Access, Grants | Manage users |
-| Register a team's prefix, limit its tools or models | Settings > Instance > Access, Namespaces | Manage users |
+| Let somebody edit an agent | Settings > Instance > Access, Rights | Manage users |
+| Change the lists of a Namespace registered before | Settings > Instance > Access, Namespaces | Manage users |
 | Find out why somebody can or cannot do something | Settings > Instance > Access, Check | Manage users and View agent configuration |
 | Create a key for the CLI or a script | Settings > Instance > API access | Superadmin |
 | Decide a call or a skill change that waits | Inbox | Approve skill changes |
@@ -623,7 +620,7 @@ A release push reaches every agent and skill of the instance and is not held bac
 - **Groups and teams.** A grant names one person. Nothing gives a right to a group.
 - **Custom roles.** The three roles are fixed. The Rights card on the Users page shows which rights a person has by role, and nothing edits what a role carries.
 - **Company sign-in with group mapping.** People are not signed in through a company identity provider with its groups.
-- **Grants on a workspace for agents and skills, and grants for other kinds.** A grant covers agents and skills, in a Namespace or on one asset, and Connections, in a Namespace, on one Connection or in one Shared Workspace. Writing, deleting and approving a Connection stay with the Admin role. Reading, using, writing and publishing a Workflow can be granted in a Namespace or on one Workflow through the API; the Access page does not offer the kind yet. Data Stores and Apps have no grant for a person.
+- **Grants on a workspace or on the whole instance, and grants for other kinds.** A new grant covers one agent, skill, Connection or Workflow. Grants written before in a Namespace, or on a Shared Workspace for Connections, keep applying until they are revoked. Writing, deleting and approving a Connection stay with the Admin role. Data Stores and Apps have no grant for a person.
 - **Policy settings for administrators.** The instance can already resolve a policy value per action, per Namespace, per workspace and per kind of asset. Nothing stores such settings and no screen edits them. Today the policy is two instance-wide defaults and the mode a tool states. An administrator cannot set "saving in `tax-` needs an approval" in the interface.
 - **Guardrails.** The step exists and nothing is plugged in.
 - **An agent that waits for a person.** A run cannot pause for a confirmation or an approval and continue.
