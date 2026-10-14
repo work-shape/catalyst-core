@@ -18,3 +18,6 @@ section: Added
   `tools` beside `enabledToolNames`, with the module whose switch governs each tool.
 - **`Chip` takes a count and a panel:** `trailing` shows small muted text after the label, and
   `popover` makes the chip open a panel under it.
+- **`SkeletonChips`:** the loading layout of a row of chips with the picker below. The agent
+  page's Tools section shows it while the instance's references load, so no tool stands by its
+  id before its package is known.
