@@ -164,7 +164,12 @@ export async function runOperation(
         runtime
       });
       const ending = await admitAndExecute(context, surface);
-      return { ...ending, replayed: false, ...(context.unrecorded ? { unrecorded: true } : {}) };
+      return {
+        ...ending,
+        replayed: false,
+        ...(context.unrecorded ? { unrecorded: true } : {}),
+        ...(context.publishedWouldAsk ? { publishedWouldAsk: context.publishedWouldAsk } : {})
+      };
     }
     if (heldKey === undefined) break;
     const held = await deps.runs.findByIdempotencyKey({
@@ -460,6 +465,11 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return { ending: await denyRun(context, guarded.denial) };
   }
   const { policy } = guarded;
+  // A call of a test run resolves `confirm` as its tester's own call when their start was the
+  // confirmation. A run of the published revision has nobody to ask, and asks for an approval.
+  if (call.draft?.boundBy !== undefined && policy.value === "confirm") {
+    context.publishedWouldAsk = "approval";
+  }
   if (run.target === "dry_run") {
     return { ending: await simulateRun(context, policy) };
   }

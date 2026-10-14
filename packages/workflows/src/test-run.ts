@@ -97,8 +97,7 @@ export async function testRunCall(
       revisionId: run.definitionRevisionId,
       part: stepRun.stepId,
       boundBy: principal,
-      startConfirmed,
-      ...(run.liveSteps?.includes(stepRun.stepId) ? { liveForRun: true } : {})
+      startConfirmed
     }
   };
 }

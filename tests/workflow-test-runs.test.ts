@@ -15,6 +15,16 @@ import { NOTE, notifyClients, readyWorkflows, stepRunsOf } from "./support/workf
 const WORKFLOW = "notify-clients";
 const address = { kind: WORKFLOW_ASSET_KIND, name: WORKFLOW };
 const writeSchema = z.object({ revision: z.number() });
+const liveOnceListSchema = z.object({
+  items: z.array(
+    z.object({
+      part: z.string(),
+      switchedAt: z.string(),
+      usedByRunId: z.string().optional(),
+      usedAt: z.string().optional()
+    })
+  )
+});
 const testRunSchema = runSchema.extend({ mode: z.string() });
 const operationRunSchema = z
   .object({
@@ -174,15 +184,23 @@ describe("a test run of a Workflow draft", () => {
       decision: { mode: "direct", by: t.kai.id }
     });
     const audit = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 });
+    // The switch is used once, by the run, and both rows name its owner.
     expect(
       audit
         .filter((event) => event.type.startsWith("live_once."))
-        .map((event) => [event.type, event.metadata?.part])
+        .map((event) => [event.type, event.metadata?.part, event.metadata?.switchedBy])
         .reverse()
     ).toEqual([
-      ["live_once.switched_on", "send"],
-      ["live_once.used", "send"]
+      ["live_once.switched_on", "send", t.kai.id],
+      ["live_once.used", "send", t.kai.id]
     ]);
+    // The tester's start satisfied `confirm`; a published run would ask for an approval here.
+    expect(sends.map((step) => step.publishedWouldAsk)).toEqual([
+      "approval",
+      "approval",
+      "approval"
+    ]);
+    expect(live.steps.find((step) => step.stepId === "clients")?.publishedWouldAsk).toBeUndefined();
 
     // The next test run simulates the step again.
     t.executed.length = 0;
@@ -191,6 +209,52 @@ describe("a test run of a Workflow draft", () => {
       ["dry_run", "dry_run", "dry_run"]
     );
     expect(t.executed.map((call) => call.operation)).toEqual(["echo"]);
+  });
+
+  it("says nothing of an approval where a published run would not ask one", async () => {
+    const t = await ready();
+    // `readyWorkflows` lets the write run without asking, as a published run would too.
+    const { steps } = await testRun(t);
+    const sends = steps.filter((step) => step.stepId === "send");
+    expect(sends.map((step) => step.publishedWouldAsk)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("keeps a switch its owner's, and says which of their test runs used it", async () => {
+    const t = await ready();
+    await t.allow({ kind: "user", id: t.lena.id }, "connection.use");
+    await t.allow({ kind: "user", id: t.lena.id }, "workflow.write");
+    await switchOn(t, 1);
+    const listed = async (user: UserRecord) =>
+      liveOnceListSchema.parse(
+        (await t.expectOk(user.id, "assets.list_live_once", { params: address })).json()
+      ).items;
+    expect(await listed(t.kai)).toEqual([{ part: "send", switchedAt: expect.any(String) }]);
+    // Lena sees none of Kai's switches, and her test run is simulated.
+    expect(await listed(t.lena)).toEqual([]);
+    const lenas = await testRun(t, t.lena);
+    expect(lenas.steps.filter((step) => step.stepId === "send").map((step) => step.target)).toEqual(
+      ["dry_run", "dry_run", "dry_run"]
+    );
+    expect(await listed(t.kai)).toEqual([{ part: "send", switchedAt: expect.any(String) }]);
+
+    // Kai's own test run uses it, and the read says so after any reload.
+    const kais = await testRun(t);
+    expect(kais.steps.filter((step) => step.stepId === "send").map((step) => step.target)).toEqual([
+      "live",
+      "live",
+      "live"
+    ]);
+    expect(await listed(t.kai)).toEqual([
+      {
+        part: "send",
+        switchedAt: expect.any(String),
+        usedByRunId: kais.started.id,
+        usedAt: expect.any(String)
+      }
+    ]);
+    // Set again, it is unused again.
+    await switchOn(t, 1);
+    expect(await listed(t.kai)).toEqual([{ part: "send", switchedAt: expect.any(String) }]);
   });
 
   it("gates a switched step on an approval the policy asks for", async () => {

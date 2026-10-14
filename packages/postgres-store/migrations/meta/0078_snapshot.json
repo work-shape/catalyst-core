@@ -1,5 +1,5 @@
 {
-  "id": "e753a2d3-2ace-494d-97f5-b8698fe73046",
+  "id": "c914b896-0592-4bc0-b416-185e026950d3",
   "prevId": "3cb7baca-38df-4b85-99bb-9ed4a4038377",
   "version": "7",
   "dialect": "postgresql",
@@ -6624,6 +6624,18 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
+        },
+        "used_by_run_id": {
+          "name": "used_by_run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -6643,11 +6655,12 @@
         }
       },
       "compositePrimaryKeys": {
-        "live_once_switches_pk": {
-          "name": "live_once_switches_pk",
+        "live_once_switches_owner_pk": {
+          "name": "live_once_switches_owner_pk",
           "columns": [
             "asset_id",
-            "part"
+            "part",
+            "switched_by_id"
           ]
         }
       },
@@ -7632,12 +7645,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "live_steps": {
-          "name": "live_steps",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -7863,6 +7870,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "published_would_ask": {
+          "name": "published_would_ask",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "staged": {
           "name": "staged",
           "type": "jsonb",
@@ -8008,6 +8021,14 @@
         "workflow_step_runs_status_check": {
           "name": "workflow_step_runs_status_check",
           "value": "\"workflow_step_runs\".\"status\" in ('queued', 'running', 'waiting', 'done', 'failed', 'cancelled')"
+        },
+        "workflow_step_runs_target_check": {
+          "name": "workflow_step_runs_target_check",
+          "value": "\"workflow_step_runs\".\"target\" is null or \"workflow_step_runs\".\"target\" in ('live', 'test', 'dry_run')"
+        },
+        "workflow_step_runs_published_would_ask_check": {
+          "name": "workflow_step_runs_published_would_ask_check",
+          "value": "\"workflow_step_runs\".\"published_would_ask\" is null or \"workflow_step_runs\".\"published_would_ask\" = 'approval'"
         },
         "workflow_step_runs_iteration_check": {
           "name": "workflow_step_runs_iteration_check",

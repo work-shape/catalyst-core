@@ -284,20 +284,6 @@ export function createStepExecutor(options: StepExecutorOptions) {
               })
           });
           const { output, ...trace } = result;
-          // A changing call of a test run that went live took a "Run live once" switch, which
-          // covers the step for the rest of the run: the next item of a loop goes live too.
-          if (
-            run.mode === "test" &&
-            trace.call?.effect === "changing" &&
-            trace.call.target === "live" &&
-            run.liveSteps?.includes(step.id) !== true
-          ) {
-            await stores.workflowRuns.noteLiveStep({
-              clientInstanceId,
-              id: run.id,
-              stepId: step.id
-            });
-          }
           try {
             withinStepData(output, "The output of the step");
           } catch (error) {

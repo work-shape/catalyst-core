@@ -636,12 +636,10 @@ export interface WorkflowStepRunCall {
   effect?: OperationEffect;
   /** The name of the Connection, Data Store, Knowledge Base or App of the operation. */
   source?: string;
-  /**
-   * Where the call went, as its Operation Run records it (ADR-0031): `live`, `test` or, for a
-   * changing step of a test run that was not made, `dry_run`. Every step of a run of the
-   * published revision is `live`.
-   */
+  /** Where the call went (ADR-0031). Every step of a run of the published revision is `live`. */
   target?: OperationTarget;
+  /** In a test run: the tester's start satisfied `confirm`; a published run asks approval. */
+  publishedWouldAsk?: "approval";
 }
 
 /** What a run page needs of a run beside its status. Types; the engine slices fill them. */

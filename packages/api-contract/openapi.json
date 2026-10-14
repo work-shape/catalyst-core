@@ -3047,6 +3047,97 @@
       }
     },
     "/api/v1/assets/{kind}/{name}/run-live-once": {
+      "get": {
+        "operationId": "assets.list_live_once",
+        "summary": "List the caller's own Run live once switches on the draft, and the test run that used each",
+        "tags": [
+          "Assets"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveOnceList"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      },
       "post": {
         "operationId": "assets.run_live_once",
         "summary": "Make the next call of one action or step of the draft live instead of simulated, once",
@@ -13738,6 +13829,12 @@
                               "dry_run"
                             ]
                           },
+                          "publishedWouldAsk": {
+                            "type": "string",
+                            "enum": [
+                              "approval"
+                            ]
+                          },
                           "log": {
                             "type": "object",
                             "properties": {
@@ -23137,6 +23234,38 @@
       "JobStatusList": {
         "type": "string",
         "pattern": "^(?:queued|running|succeeded|failed|dead|cancelled)(?:,(?:queued|running|succeeded|failed|dead|cancelled))*$"
+      },
+      "LiveOnceList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "part": {
+                  "type": "string"
+                },
+                "switchedAt": {
+                  "$ref": "#/components/schemas/Timestamp"
+                },
+                "usedByRunId": {
+                  "type": "string"
+                },
+                "usedAt": {
+                  "$ref": "#/components/schemas/Timestamp"
+                }
+              },
+              "required": [
+                "part",
+                "switchedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
       },
       "LocaleCode": {
         "type": "string",

@@ -287,7 +287,11 @@ export async function callStepOperation(input: {
     throw refusalOf(error, operation, made, refused) ?? error;
   }
   const { result } = outcome;
-  const trace = traceOf(made, outcome.unrecorded ? undefined : result.runId, outcome.run.target);
+  const trace = traceOf(
+    outcome.publishedWouldAsk ? { ...made, publishedWouldAsk: outcome.publishedWouldAsk } : made,
+    outcome.unrecorded ? undefined : result.runId,
+    outcome.run.target
+  );
   switch (result.status) {
     case "done": {
       const output = jsonValueSchema.safeParse(result.output ?? null);

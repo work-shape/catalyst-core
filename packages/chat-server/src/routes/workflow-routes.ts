@@ -252,13 +252,7 @@ function startedBy(run: WorkflowRunView, actor: AuthenticatedIdentity): boolean 
 
 /** A run as the API answers it: without the instance and the correlation id it carries. */
 function toRunResource(run: WorkflowRunView) {
-  const {
-    clientInstanceId: _instance,
-    correlationId: _correlation,
-    liveSteps: _liveSteps,
-    principal,
-    ...resource
-  } = run;
+  const { clientInstanceId: _instance, correlationId: _correlation, principal, ...resource } = run;
   return {
     ...resource,
     principal: { id: principal.id, name: principal.name, displayLabel: principal.displayLabel },

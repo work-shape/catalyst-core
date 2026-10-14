@@ -104,8 +104,7 @@ function mapRun(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowR
     ...(row.cancelledBy === null ? {} : { cancelledBy: row.cancelledBy }),
     ...(row.cancelledAt === null ? {} : { cancelledAt: row.cancelledAt.toISOString() }),
     ...(row.scheduledFor === null ? {} : { scheduledFor: row.scheduledFor.toISOString() }),
-    ...(row.dataPrunedAt === null ? {} : { dataPrunedAt: row.dataPrunedAt.toISOString() }),
-    ...(row.liveSteps === null ? {} : { liveSteps: row.liveSteps })
+    ...(row.dataPrunedAt === null ? {} : { dataPrunedAt: row.dataPrunedAt.toISOString() })
   };
 }
 
@@ -135,6 +134,7 @@ function mapStepRun(
     ...(row.effect === null ? {} : { effect: row.effect }),
     ...(row.source === null ? {} : { source: row.source }),
     ...(row.target === null ? {} : { target: row.target }),
+    ...(row.publishedWouldAsk === null ? {} : { publishedWouldAsk: row.publishedWouldAsk }),
     ...(row.error === null ? {} : { error: row.error }),
     createdAt: row.createdAt.toISOString(),
     ...(row.startedAt === null ? {} : { startedAt: row.startedAt.toISOString() }),
@@ -391,6 +391,9 @@ export async function endWorkflowStepRun(
       ...(ref.call?.effect === undefined ? {} : { effect: ref.call.effect }),
       ...(ref.call?.source === undefined ? {} : { source: ref.call.source }),
       ...(ref.call?.target === undefined ? {} : { target: ref.call.target }),
+      ...(ref.call?.publishedWouldAsk === undefined
+        ? {}
+        : { publishedWouldAsk: ref.call.publishedWouldAsk }),
       error: ref.error ?? null
     })
     .where(and(stepRunIs(ref), notEnded(workflowStepRuns.status)))
@@ -472,19 +475,6 @@ export async function noteWorkflowStepRunOperation(
     .update(workflowStepRuns)
     .set({ operationRunId: ref.operationRunId })
     .where(and(stepRunIs(ref), notEnded(workflowStepRuns.status)));
-}
-
-export async function noteWorkflowLiveStep(
-  db: PostgresConnection,
-  ref: Input<"noteLiveStep">
-): Promise<void> {
-  const step = JSON.stringify([ref.stepId]);
-  await db
-    .update(workflowRuns)
-    .set({ liveSteps: sql`coalesce(${workflowRuns.liveSteps}, '[]'::jsonb) || ${step}::jsonb` })
-    .where(
-      and(runIs(ref), sql`not coalesce(${workflowRuns.liveSteps}, '[]'::jsonb) @> ${step}::jsonb`)
-    );
 }
 
 export async function listOpenWorkflowStepRuns(

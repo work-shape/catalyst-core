@@ -612,14 +612,46 @@ export class AssetDraftWorkflow {
         reason: "draft_changed"
       });
     }
+    // The switch is its owner's: only a call or a test run of theirs uses it.
     await recordAssetEvent(call, "live_once.switched_on", {
       kind: kind.kind,
       name,
       revision: asset.revision,
       revisionId: asset.activeRevisionId,
-      part: input.part
+      part: input.part,
+      switchedBy: call.actor.id
     });
     return { draftRevision: asset.revision, part: input.part };
+  }
+
+  /**
+   * The caller's own "Run live once" switches on the current draft, with the test run that
+   * used each, so a page shows them as they stand after a reload.
+   */
+  async listLiveOnce(call: AssetCall, input: AssetAddress) {
+    const target = await this.host.target(input);
+    const { kind } = target;
+    call.access.require(kind.actions.write, target.resource);
+    if (!kind.draftCalls) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `A draft of the kind '${kind.kind}' makes no calls that could run live`
+      );
+    }
+    const asset = requireActive(target);
+    const switches = await this.options.stores.liveOnceSwitches.list({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId: asset.id,
+      switchedBy: call.actor.id
+    });
+    return {
+      items: switches.map((set) => ({
+        part: set.part,
+        switchedAt: set.switchedAt,
+        ...(set.usedByRunId === undefined ? {} : { usedByRunId: set.usedByRunId }),
+        ...(set.usedAt === undefined ? {} : { usedAt: set.usedAt })
+      }))
+    };
   }
 
   /**

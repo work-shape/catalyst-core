@@ -102,11 +102,6 @@ export interface OperationDraftContext {
    * that start, as a person's direct call satisfies it; `approval` still gates the step.
    */
   startConfirmed?: boolean;
-  /**
-   * The step took a "Run live once" switch earlier in this test run: the switch covers the step
-   * for the whole run, so this call goes live where it may be made, without another switch.
-   */
-  liveForRun?: boolean;
 }
 
 export interface OperationCall<TInput = unknown> {
@@ -195,6 +190,22 @@ export type OperationResult<TOutput = unknown> =
  * act for somebody who is not the caller.
  */
 export function callerCanConfirm(origin: OperationOrigin): boolean {
+  return originConfirms(origin);
+}
+
+/**
+ * Whether the call is its caller's own confirmation: a call from an origin whose caller is
+ * present, or a step of a Workflow test run whose tester's own start was the confirmation
+ * (ADR-0031). A step of any other run has nobody to ask.
+ */
+export function callConfirmedByCaller(call: Pick<OperationCall, "origin" | "draft">): boolean {
+  return (
+    originConfirms(call.origin) ||
+    (call.draft?.boundBy !== undefined && call.draft.startConfirmed === true)
+  );
+}
+
+function originConfirms(origin: OperationOrigin): boolean {
   switch (origin.kind) {
     case "user":
     case "cli":

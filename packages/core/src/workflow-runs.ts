@@ -96,12 +96,6 @@ export interface WorkflowRun extends WorkflowRunRecordView {
    * the run still has its values.
    */
   dataPrunedAt?: ISODateString;
-  /**
-   * Of a test run: the steps whose first call took a "Run live once" switch. The switch covers
-   * the step for the whole run, so every further call of it, such as the next item of a loop,
-   * goes live as well (ADR-0031). Missing where no switch was taken.
-   */
-  liveSteps?: string[];
 }
 
 export type NewWorkflowRun = Pick<
@@ -348,8 +342,6 @@ export interface WorkflowRunsStore {
    * soon as it is known and before the call has an outcome.
    */
   noteStepRunOperation(ref: WorkflowStepRunRef & { operationRunId: OperationRunId }): Promise<void>;
-  /** Keeps on a test run that a "Run live once" switch made this step live for the run. */
-  noteLiveStep(ref: WorkflowRunRef & { stepId: string }): Promise<void>;
   /**
    * Moves a running code step run to `waiting` and keeps what its container is given. From
    * then on the command worker has the step, and the engine takes it up when the script ended.

@@ -134,6 +134,11 @@ export const workflowStepRunSchema = z.object({
    */
   target: z.enum(["live", "test", "dry_run"]).optional(),
   /**
+   * On a step run of a test run: the tester's start satisfied the step's `confirm`, and a run
+   * of the published revision asks for an approval here.
+   */
+  publishedWouldAsk: z.enum(["approval"]).optional(),
+  /**
    * On the step run of a code step that ran: what its script wrote to its output and error
    * streams beside its result, each cut to 16 KiB.
    */
