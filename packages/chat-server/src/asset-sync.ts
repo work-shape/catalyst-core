@@ -62,6 +62,7 @@ import {
   replacedSchema
 } from "./asset-sync-items";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
+import { assertDefaultOwnedByInstance } from "./asset-owner-references";
 
 export type { AssetSyncInput } from "./asset-sync-refusals";
 import type { AssetWorkflowOptions } from "./types";
@@ -338,6 +339,8 @@ async function checkBatch(
   if (defaultChange) {
     mutations.push({ type: "setDefaultAgent", agentName: defaultChange.agentName });
   }
+  // Asked here as well as by the writer, so that a check of the batch refuses it too.
+  assertDefaultOwnedByInstance(kinds.kinds, mutations, stored.assets);
   return {
     planned,
     ready: ready(),

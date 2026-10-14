@@ -11,6 +11,7 @@ import {
   type AccessResource,
   type ActorAccess,
   type AgentConfig,
+  type AssetScope,
   type AuditRecorder,
   type AuthenticatedIdentity,
   type ConfigAssetKind,
@@ -520,7 +521,38 @@ export function requireInstanceDefaultChange(
   }
 }
 
-export function setsInitialDefault(set: AssetSet, kind: WorkflowAssetKind): boolean {
+/**
+ * Whether a write of the first asset of a kind with an instance default makes it the default.
+ * Only an asset the instance owns becomes it: a workspace's agent is never the default.
+ */
+export function setsInitialDefault(
+  set: AssetSet,
+  kind: WorkflowAssetKind,
+  scope: AssetScope
+): boolean {
+  return scope.kind === "instance" && isFirstOfDefaultKind(set, kind);
+}
+
+/**
+ * Refuses a workspace's asset as the first of a kind with an instance default. An instance
+ * that holds such an asset has a default, which only an asset of the instance can be, so the
+ * first one is made for the whole instance.
+ */
+export function requireInstanceFirstForDefault(
+  set: AssetSet,
+  kind: WorkflowAssetKind,
+  scope: AssetScope
+): void {
+  if (scope.kind === "workspace" && isFirstOfDefaultKind(set, kind)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `The instance has no ${kind.kind} yet. Its first ${kind.kind} becomes its default, which only a ${kind.kind} of the whole instance can be`,
+      { reason: "default_owned_by_workspace" }
+    );
+  }
+}
+
+function isFirstOfDefaultKind(set: AssetSet, kind: WorkflowAssetKind): boolean {
   return (
     kind.holdsInstanceDefault &&
     definitionsOf(set, kind.kind).length === 0 &&

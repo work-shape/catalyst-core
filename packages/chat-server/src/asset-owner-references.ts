@@ -10,7 +10,7 @@ import type { WorkflowAssetKind } from "./asset-kinds/shared";
 type OwnedWrite =
   | { type: "upsert"; kind: string; name: string; scope?: AssetScope; config: unknown }
   | { type: "delete"; kind: string; name: string }
-  | { type: "setDefaultAgent" };
+  | { type: "setDefaultAgent"; agentName?: string | undefined };
 
 interface Owned {
   kind: string;
@@ -73,6 +73,36 @@ export function assertReferencesWithinOwners(
         );
       }
     }
+  }
+}
+
+/**
+ * Refuses a write that makes an agent a workspace owns the instance's default (Felix,
+ * 2026-10-14): the default is offered in every workspace, and a workspace's agent is its own.
+ * Only a write that sets the default is asked, so one that leaves it is never refused here.
+ */
+export function assertDefaultOwnedByInstance(
+  kinds: readonly WorkflowAssetKind[],
+  mutations: readonly OwnedWrite[],
+  assets: readonly ConfigAssetRecord[]
+): void {
+  const kind = kinds.find((each) => each.holdsInstanceDefault);
+  const set = mutations.findLast((mutation) => mutation.type === "setDefaultAgent");
+  if (!kind || set?.type !== "setDefaultAgent" || set.agentName === undefined) return;
+  const name = set.agentName;
+  const written = mutations.findLast(
+    (mutation) => mutation.type === "upsert" && mutation.kind === kind.kind && mutation.name === name
+  );
+  const scope =
+    written?.type === "upsert"
+      ? (written.scope ?? INSTANCE_ASSET_SCOPE)
+      : assets.find((asset) => asset.kind === kind.kind && asset.name === name)?.scope;
+  if (scope?.kind === "workspace") {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Config ${kind.kind} '${name}' belongs to a workspace, and only a ${kind.kind} of the whole instance can be its default`,
+      { reason: "default_owned_by_workspace" }
+    );
   }
 }
 

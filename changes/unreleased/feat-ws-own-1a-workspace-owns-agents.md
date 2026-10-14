@@ -12,7 +12,11 @@ section: Added
   names it is refused with `invalid_scope`, and a workspace agent names an instance skill only
   where its writer holds `skill.read` on it. A name that is taken is refused without saying
   where. A new workspace agent is offered in the workspace it was made in when its maker is a
-  member there, and starts hidden after a push. Agent and skill rights can be granted "In
+  member there, and starts hidden after a push; offering it in another workspace is an
+  instance admin's step. A workspace's agent is never the instance default: `assets.set_default`
+  and a release naming one are refused with `default_owned_by_workspace`, and so is a
+  workspace's agent as the first agent of an instance. A workspace's builder starts a Build
+  conversation about its agents, and the agent's asset tools read them by name. Agent and skill rights can be granted "In
   workspace X" on Instance > Access. Studio has a scope filter, shows a workspace chip on a
   workspace's assets and writes into the scope chosen. `platform.context` names, per workspace,
   the actions the caller holds on what it owns (`workspaces`), and each kind's `owners`. What a

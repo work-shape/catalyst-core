@@ -1,9 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { createPlatformAssetCalls } from "@vivd-catalyst/chat-server";
 import {
+  asAgentRunId,
+  asConversationId,
+  asToolCallId,
   asUserId,
   isAgentAvailableInWorkspace,
+  isAppError,
   type CollaborationWorkspaceId,
+  type ToolExecutionContext,
   type UserRecord
 } from "@vivd-catalyst/core";
 import {
@@ -14,6 +21,8 @@ import {
   skill,
   type AccessInstance
 } from "./support/access-instance";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import { testServerOptions } from "./support/test-instance";
 
 // A workspace owns the agents and skills made in it (WS-OWN-1a, access acceptance check 33):
 // made in a workspace's Studio or through a CLI root bound with `--workspace`, the workspace
@@ -254,5 +263,132 @@ describe("the owner of an agent or a skill", () => {
       (await t.stores.configAssets.listAgentAvailability({ clientInstanceId })).get("team-helper")
     ).toBeUndefined();
     expect(await ownerOf(t, "skill", "handbook")).toEqual({ kind: "instance" });
+  });
+});
+
+describe("the instance default and a workspace's agent", () => {
+  const ownedByWorkspace = {
+    status: 422,
+    code: "VALIDATION_FAILED",
+    reason: "default_owned_by_workspace"
+  };
+  const defaultOf = async (t: AccessInstance) =>
+    (await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).defaultAgentName;
+
+  it("never makes a workspace's agent the default, and refuses one as an instance's first agent", async () => {
+    const { t, team } = await setup();
+    // An instance without agents: its first one is its default, so a workspace's is refused.
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        { type: "setDefaultAgent", agentName: undefined },
+        { type: "delete", kind: "agent", name: "assistant" }
+      ]
+    });
+    expect(await put(t, t.admin.id, "agent", agent("team-first"), team)).toEqual(ownedByWorkspace);
+    expect(await ownerOf(t, "agent", "team-first")).toBeUndefined();
+    expect(await put(t, t.admin.id, "agent", agent("house-first"))).toEqual({ status: 200 });
+    expect(await defaultOf(t)).toBe("house-first");
+    expect(await put(t, t.kai.id, "agent", agent("team-first"), team)).toEqual({ status: 200 });
+    expect(await defaultOf(t)).toBe("house-first");
+
+    // Offered everywhere by the administrator, it is still no default.
+    await t.expectOk(t.admin.id, "assets.set_availability", {
+      params: { kind: "agent", name: "team-first" },
+      payload: { mode: "all" }
+    });
+    const named = await t.call(t.admin.id, "assets.set_default", {
+      params: { kind: "agent" },
+      payload: { name: "team-first" }
+    });
+    expect(named.statusCode).toBe(422);
+    expect(errorSchema.parse(named.json()).error.details?.reason).toBe(
+      "default_owned_by_workspace"
+    );
+    expect(await defaultOf(t)).toBe("house-first");
+  });
+
+  it("offers a new workspace agent in another workspace only for an instance admin", async () => {
+    const { t, team, other } = await setup();
+    await join(t, t.kai, other);
+    const putOfferedIn = (userId: string, name: string, workspaceId: string) =>
+      t.call(userId, "assets.put", {
+        params: { kind: "agent", name },
+        payload: {
+          config: agent(name),
+          expectedRevision: null,
+          workspaceId: team,
+          availableIn: { workspaceId }
+        }
+      });
+    expect((await putOfferedIn(t.kai.id, "kai-helper", other)).statusCode).toBe(403);
+    expect(await ownerOf(t, "agent", "kai-helper")).toBeUndefined();
+    // Its own workspace, named or not, is the builder's to offer it in.
+    expect((await putOfferedIn(t.kai.id, "kai-helper", team)).statusCode).toBe(200);
+    expect(await offeredIn(t, "kai-helper", team)).toBe(true);
+
+    expect((await putOfferedIn(t.admin.id, "admin-helper", other)).statusCode).toBe(200);
+    expect(await offeredIn(t, "admin-helper", other)).toBe(true);
+    expect(await offeredIn(t, "admin-helper", team)).toBe(false);
+  });
+});
+
+describe("a Build conversation about a workspace's agent", () => {
+  it("reads the workspace's agents with the builder's right in that workspace", async () => {
+    const { t, team, other } = await setup();
+    const lenaRights = [...AGENT_RIGHTS, ...SKILL_RIGHTS];
+    await join(t, t.lena, other);
+    for (const action of lenaRights) await t.grant(t.lena.id, action, { workspaceId: other });
+    expect(await put(t, t.kai.id, "agent", agent("team-helper"), team)).toEqual({ status: 200 });
+    expect(await put(t, t.kai.id, "agent", agent("team-second"), team)).toEqual({ status: 200 });
+    expect(await put(t, t.lena.id, "agent", agent("other-agent"), other)).toEqual({ status: 200 });
+
+    const started = await t.expectOk(t.kai.id, "conversations.create", {
+      payload: { collaborationWorkspaceId: team, subject: { kind: "agent", name: "team-helper" } }
+    });
+    const conversationId = z.object({ id: z.string() }).parse(started.json()).id;
+
+    await t.instance.call("health.get");
+    const options = testServerOptions(t.instance);
+    if (!options) throw new Error("The instance has no server options");
+    const calls = createPlatformAssetCalls(options);
+    const context: ToolExecutionContext = {
+      user: {
+        id: t.kai.id,
+        externalUserId: t.kai.id,
+        displayLabel: t.kai.displayLabel,
+        roles: t.kai.roles,
+        permissions: t.kai.permissions,
+        permissionRefs: t.kai.permissionRefs,
+        clientInstanceId,
+        authSource: "test"
+      },
+      clientInstanceId,
+      correlationId: `corr_${randomUUID()}`,
+      toolRequest: {
+        toolName: "platform.assets.get",
+        toolCallId: asToolCallId(`call_${randomUUID()}`),
+        agentRunId: asAgentRunId(`run_${randomUUID()}`),
+        conversationId: asConversationId(conversationId),
+        agentName: "assistant",
+        input: {}
+      }
+    };
+
+    expect((await calls.get(context)).name).toBe("team-helper");
+    expect((await calls.get(context, { kind: "agent", name: "team-second" })).name).toBe(
+      "team-second"
+    );
+    // Another workspace's agent is answered as one that does not exist.
+    const refusal = async (name: string) => {
+      try {
+        await calls.get(context, { kind: "agent", name });
+      } catch (error) {
+        return isAppError(error) ? { code: error.code, details: error.details } : error;
+      }
+      return "read";
+    };
+    expect(await refusal("other-agent")).toEqual(await refusal("nobody-agent"));
+    expect(await refusal("other-agent")).toMatchObject({ code: "NOT_FOUND" });
   });
 });

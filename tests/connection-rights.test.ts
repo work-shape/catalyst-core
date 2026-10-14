@@ -122,9 +122,15 @@ describe("the vocabulary of Connection rights", () => {
       "connection.read",
       "connection.use"
     ]);
-    // No workspace owns a Connection, so no right on Connections is written at workspace scope.
+    // A workspace owns agents and skills (WS-OWN-1a), so their rights are written there too.
+    // No workspace owns a Connection, so no right on Connections is written at workspace scope,
+    // nor on any other kind a workspace does not own yet.
     for (const action of GRANTABLE_ACTIONS) {
-      expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(["namespace", "asset"]);
+      expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(
+        /^(?:agent|skill)\./u.test(action)
+          ? ["workspace", "namespace", "asset"]
+          : ["namespace", "asset"]
+      );
     }
   });
 });

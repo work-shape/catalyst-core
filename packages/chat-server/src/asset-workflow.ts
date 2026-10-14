@@ -60,6 +60,7 @@ import {
   missingUpsertRightOf,
   type StoredAssets,
   requireInstanceDefaultChange,
+  requireInstanceFirstForDefault,
   requireAssetKindModuleOn,
   requireMatchingConfigName,
   setsInitialDefault,
@@ -229,7 +230,7 @@ export class AssetWorkflow {
     const changesDefault =
       right === "delete"
         ? target.asset?.status === "active" && clearsLastDefault(stored.set, kind, name)
-        : setsInitialDefault(stored.set, kind);
+        : setsInitialDefault(stored.set, kind, target.scope);
     return changesDefault
       ? { allowed: false, action: kind.actions.write, reason: instanceWrite.reason }
       : { allowed: true };
@@ -593,7 +594,8 @@ export class AssetWorkflow {
     const stored = await loadStoredAssets(this.options);
     const current = findDefinition(stored.set, kind.kind, name);
     kind.assertStoredWritable?.({ current });
-    const setsDefault = setsInitialDefault(stored.set, kind);
+    requireInstanceFirstForDefault(stored.set, kind, target.scope);
+    const setsDefault = setsInitialDefault(stored.set, kind, target.scope);
     requireInstanceDefaultChange(call.access, kind, setsDefault);
     // A revert restores what was stored: only what the kind's server decides is kept as it is.
     const principalId = call.actor.id;

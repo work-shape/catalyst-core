@@ -9,7 +9,10 @@ import {
 } from "@vivd-catalyst/core";
 import { assetSetOf, validateAssetSet, withDefaultAgentName, type AssetSet } from "./asset-set";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
-import { assertReferencesWithinOwners } from "./asset-owner-references";
+import {
+  assertDefaultOwnedByInstance,
+  assertReferencesWithinOwners
+} from "./asset-owner-references";
 import type { AssetWorkflowOptions } from "./types";
 
 export type ConfigAssetWriterOptions = Pick<
@@ -86,6 +89,7 @@ export async function applyValidatedConfigAssetMutations(
   const validate = (stored: { state: ConfigAssetState; assets: ConfigAssetRecord[] }) => {
     validateMutations(kinds.kinds, mutations, stored);
     assertReferencesWithinOwners(kinds.kinds, mutations, stored.assets);
+    assertDefaultOwnedByInstance(kinds.kinds, mutations, stored.assets);
   };
   validate({ state, assets });
   const read = new Set(assets.map((asset) => asset.activeRevisionId));

@@ -14,6 +14,7 @@ import {
   type ActorAccess,
   type AuditRecorder,
   type AuthenticatedIdentity,
+  type ConfigAssetRecord,
   type Conversation,
   type ConversationSubject,
   type JsonObject,
@@ -103,6 +104,8 @@ const subjectUnavailable = () =>
  * not have, an asset that does not exist and one the caller holds no read right on are told
  * the same way, so the refusal says nothing of what is stored. An asset of a kind without a
  * draft, such as an agent, may be a subject: the agent reads it, and its tools save drafts only.
+ * The right is asked where the asset is: an asset a workspace owns is read with a right in
+ * that workspace, as `assets.get` naming the workspace reads it.
  */
 export async function requireReadableSubject(
   options: AssetWorkflowOptions,
@@ -110,21 +113,23 @@ export async function requireReadableSubject(
   subject: ConversationSubject
 ): Promise<void> {
   let decision: OperationAuthorization;
+  let asset: ConfigAssetRecord | undefined;
   try {
-    decision = await new AssetWorkflow(options).authorizeRead(
-      await accessOf(options, actor),
-      subject
-    );
+    asset = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: subject.kind,
+      name: subject.name
+    });
+    decision = await new AssetWorkflow(options).authorizeRead(await accessOf(options, actor), {
+      kind: subject.kind,
+      name: subject.name,
+      ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+    });
   } catch {
     // The kind is unknown here, or of a module that is off.
     throw subjectUnavailable();
   }
   if (!decision.allowed) throw subjectUnavailable();
-  const asset = await options.configAssets.store.getConfigAsset({
-    clientInstanceId: options.clientInstanceId,
-    kind: subject.kind,
-    name: subject.name
-  });
   if (asset?.status !== "active") throw subjectUnavailable();
 }
 
