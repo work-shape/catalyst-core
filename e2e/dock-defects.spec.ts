@@ -4,7 +4,8 @@ import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// Defects the DOCK-1 verifier found (PR 54). Both tests fail on d31cb094.
+// Defects the DOCK-1 verifier found (PR 54). The first two failed on d31cb094 and pass on
+// 9af39400; the last two fail on 9af39400.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const member = { email: "e2e-dock@example.test", password: "e2e-dock-password" };
@@ -60,6 +61,67 @@ test("the dock's head names its conversation also when the sidebar has not loade
   await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "dock");
   await expect(chatColumn(page).getByPlaceholder("Message")).toBeVisible();
   await expect(dockHead(page)).toContainText(title);
+});
+
+// DOCK-1 round 2: fails because a first load of a thread never blocks the composer
+// (`use-conversation-controller.ts` keeps "ready" while it loads), so on a slow connection a
+// message typed into the dock of a refused link is still sent and refused with an alert.
+test("on a slow connection, a message typed into the dock of a refused link is not sent", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, member);
+  const own = await createConversation(page, `Own ${Date.now()}`);
+  const workspace = encodeURIComponent(own.collaborationWorkspaceId);
+  const missing = `conv_${randomUUID()}`;
+  await page.route(`**/api/v1/conversations/${missing}/thread`, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await route.continue();
+  });
+  const refusedSends: string[] = [];
+  page.on("response", (response) => {
+    if (response.request().method() === "POST" && response.status() === 404) {
+      refusedSends.push(new URL(response.url()).pathname);
+    }
+  });
+
+  await page.goto(`/w/${workspace}/agents?chat=${missing}`);
+  const composer = chatColumn(page).getByPlaceholder("Message");
+  await composer.fill("first words to a shared link");
+  await composer.press("Enter");
+
+  await expect(page).toHaveURL(new RegExp(`/w/${workspace}/agents$`, "u"), { timeout: 10_000 });
+  await expect(dockHead(page)).toContainText("New chat");
+  await page.waitForTimeout(1_000);
+  expect(refusedSends).toEqual([]);
+  await expect(chatColumn(page).getByRole("alert")).toHaveCount(0);
+});
+
+// DOCK-1 round 2: fails because the thread query now gives up on every 4xx, also on 429 (and
+// 408), which ask to be tried again; the dock then keeps a titled conversation without messages.
+test("a thread answered once with 429 is tried again and shows in the dock", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, member);
+  const conversation = await createConversation(page, `Rate limited ${Date.now()}`);
+  const workspace = encodeURIComponent(conversation.collaborationWorkspaceId);
+  let calls = 0;
+  await page.route(`**/api/v1/conversations/${conversation.id}/thread`, async (route) => {
+    calls += 1;
+    if (calls === 1) {
+      await route.fulfill({
+        status: 429,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "RATE_LIMITED", message: "Try again later" } })
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto(`/w/${workspace}/agents?chat=${conversation.id}`);
+  await expect.poll(() => calls, { timeout: 10_000 }).toBeGreaterThan(1);
+  await expect(chatColumn(page).getByPlaceholder("Message")).toBeEnabled();
+  await expect(chatColumn(page).getByRole("alert")).toHaveCount(0);
 });
 
 async function signIn(page: Page, user: { email: string; password: string }): Promise<void> {
