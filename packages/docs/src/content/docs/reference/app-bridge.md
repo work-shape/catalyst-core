@@ -13,7 +13,7 @@ The bridge protocol is version 1. Every message of either side carries `catalyst
 - Changes to version 1 are additive only: a new message type, a new call of the kit, or a new optional field. An App written against version 1 keeps working.
 - A new call needs a named App that cannot be built without it. It is added as a new member, never by renaming one.
 - A breaking change, such as removing or renaming a message, a field or a call, or changing what one means, is version 2. Version 2 runs beside version 1, and the interface keeps answering version 1.
-- A kit version is frozen too. An App names the exact kit version it was built with (`kit` in `app.yaml`) and keeps loading those files.
+- A kit version is frozen too. An App names the exact kit version it was built with (`kit` in `app.yaml`) and keeps loading those files. A new Page or App names kit 1.4.0.
 
 ## Calls of the kit
 

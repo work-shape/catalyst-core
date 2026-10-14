@@ -45,7 +45,9 @@ describe("the reserved keys of an App", () => {
       {
         file: "app.yaml",
         code: "key_reserved",
-        message: expect.stringMatching(/^'requires' is reserved\. Rights inside Apps are not yet decided/u)
+        message: expect.stringMatching(
+          /^'requires' is reserved\. Rights inside Apps are not yet decided/u
+        )
       }
     ]);
     // An empty value is refused all the same: the key is what is reserved.
@@ -115,7 +117,11 @@ describe("the reserved keys of an App", () => {
         )
       )
     ).toEqual([
-      { file: "actions/load.action.yaml", code: "key_reserved", message: expect.stringMatching(why) }
+      {
+        file: "actions/load.action.yaml",
+        code: "key_reserved",
+        message: expect.stringMatching(why)
+      }
     ]);
     expect(
       await errorsOf(page({ actions: [{ name: "load", effect: "reading", requires: [] }] }))
