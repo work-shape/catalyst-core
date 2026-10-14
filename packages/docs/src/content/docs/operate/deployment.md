@@ -143,6 +143,8 @@ run checks
 
 Production deploys should be explicit. A GitHub Actions workflow can call the same deploy script that an operator can run manually with the right credentials.
 
+For an instance that Workshape operates, the deployment kit runs this flow. [Operated Instances](/operate/operated-instances/) covers its accounts, Terraform, releases, backups and bucket retention.
+
 ## Environment Contract
 
 Do not commit production env files.

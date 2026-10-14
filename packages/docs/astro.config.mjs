@@ -109,6 +109,7 @@ export default defineConfig({
                 "getting-started/operating-models",
                 "operate/instance-brief",
                 "operate/deployment",
+                "operate/operated-instances",
                 "operate/capacity-and-limits",
                 "operate/auth-and-embedding",
                 "operate/execution-workspaces",
