@@ -80,6 +80,7 @@ export function createInstanceOperationCalls(
     modules: input.modules,
     configAssets: input.configAssets,
     operations: input.operations,
+    guardrails,
     approvalRequests: {
       store: store.approvals,
       handlers: input.approvalRequestHandlers,

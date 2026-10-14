@@ -66,6 +66,22 @@ describe("operation over HTTP: an input that holds a secret", () => {
     expect(await runs()).toHaveLength(2);
   });
 
+  // Fails without the change: a judge on `operation.before_call` read the password and sent it
+  // to its model.
+  it("hands the guardrails of the call the input without the secret", async () => {
+    const { server, checked } = await createServer({
+      register: registerWithSecretInput([]),
+      guardrail: { event: "operation.before_call", outcome: "block" }
+    });
+    const refused = await server.call(
+      "testRunChange",
+      change("pw-hunter22", "ok", "k-1"),
+      person()
+    );
+    expect(refused.statusCode).toBe(403);
+    expect(checked).toEqual([{ input: JSON.stringify({ name: MARK, mode: "ok" }) }]);
+  });
+
   it("treats a call without a secret as any other: hashed whole, answered again", async () => {
     const executed: string[] = [];
     const { server, runs } = await createServer({ register: registerWithSecretInput(executed) });

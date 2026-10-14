@@ -2,8 +2,8 @@ import { z } from "zod";
 import { timestampSchema } from "../shared";
 import { defineRegisteredOperation, json } from "./define-operation";
 
-// What a Guardrail's page reads beyond the asset itself: the times it warned or blocked, and how
-// often. The asset, with its event, check and outcome, is read through `assets.get`. A hit names
+// What a Guardrail's page reads beyond the asset itself: the times it warned, held or blocked,
+// and how often. The asset, with its event, check and outcome, is read through `assets.get`. A hit names
 // no person: hits are counted by rule and period, never listed by person (works-council
 // co-determination, §87(1) no. 6 BetrVG). Who made a request is in the audit log.
 
@@ -12,13 +12,20 @@ export const GUARDRAIL_HITS_LIMIT = 50;
 
 export const guardrailHitSchema = z.object({
   id: z.string(),
-  /** The before-event the guardrail answered at, such as `approval_request.before_create`. */
+  /** The before-event the guardrail answered at, such as `asset.before_write`. */
   event: z.string(),
-  outcome: z.enum(["warn", "block"]),
+  outcome: z.enum(["warn", "require_approval", "block"]),
   /** The guardrail's reason, one sentence. Empty where the check could not run and it warned. */
   message: z.string(),
-  /** What was checked: for an approval request its kind, such as `skill_change`. */
+  /**
+   * What was checked: the kind of an asset, such as `skill`, `operation` for a call, or the
+   * kind of an approval request, such as `skill_change`.
+   */
   subjectKind: z.string(),
+  /** The asset's id, where the hit was on an asset that existed. */
+  subjectId: z.string().optional(),
+  /** The asset's name, or the operation's for a call. Absent on hits before they were named. */
+  subjectName: z.string().optional(),
   createdAt: timestampSchema
 });
 

@@ -6,6 +6,7 @@ import { DATA_STORE_OPERATION_PREFIX, KNOWLEDGE_OPERATION_PREFIX } from "./data-
 import { DATA_TOOL_PREFIXES } from "./data-tool-names";
 import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
+import type { OperationBeforeEvent } from "./guardrails";
 import type { AuthenticatedIdentity, OperationScope } from "./identity";
 import type { CollaborationWorkspaceId, OperationRunId } from "./ids";
 import type { JsonObject } from "./json";
@@ -232,6 +233,15 @@ interface OperationDefinitionBase<Input, Output> {
   policyTargets?(input: Input): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
   /** The operation's own events, emitted beside the ones every call has. */
   events?: { before?: PlatformEventName; after?: PlatformEventName };
+  /**
+   * The before-events of a call beside `operation.before_call`, one per subject it writes or
+   * makes live: a write of assets names `asset.before_write` for each asset. The guardrails of
+   * each read the fields it hands them. Asked after the caller's right, with the policy.
+   */
+  beforeEvents?(
+    input: Input,
+    origin: OperationOrigin
+  ): readonly OperationBeforeEvent[] | Promise<readonly OperationBeforeEvent[]>;
   /** Where the operation is reached over HTTP. An agent tool has no such face. */
   http?: { method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; path: string };
   /** A run still `running` after this long counts as interrupted. */

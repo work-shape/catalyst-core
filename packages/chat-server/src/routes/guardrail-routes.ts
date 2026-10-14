@@ -61,6 +61,8 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
           outcome: hit.outcome,
           message: hit.message,
           subjectKind: hit.subjectKind,
+          ...(hit.subjectId === undefined ? {} : { subjectId: hit.subjectId }),
+          ...(hit.subjectName === undefined ? {} : { subjectName: hit.subjectName }),
           createdAt: hit.createdAt
         })),
         counts,

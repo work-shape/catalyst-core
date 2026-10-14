@@ -120,11 +120,9 @@ function proposal(
   return {
     event: "approval_request.before_create" as const,
     subjectKind: request.kind,
-    content: () => {
+    fields: () => {
       const newContent = requestHandler.checkContent?.(request.payload);
-      return newContent === undefined
-        ? undefined
-        : JSON.stringify({ summary: request.summary, newContent });
+      return newContent === undefined ? undefined : { summary: request.summary, newContent };
     },
     ...(request.origin ? { origin: request.origin } : {})
   };
@@ -426,7 +424,9 @@ describe("guardrail runner", () => {
       "id",
       "message",
       "outcome",
-      "subject_kind"
+      "subject_id",
+      "subject_kind",
+      "subject_name"
     ]);
   });
 
@@ -679,6 +679,36 @@ describe("guardrails on a skill change", () => {
     for (const expected of ["New title", "New description", "New body"]) {
       expect(f.skillHandler.checkContent?.(newPayload)).toContain(expected);
     }
+  });
+
+  // Fails without the change: a guardrail on `asset.before_write` never saw a skill an agent
+  // proposed, and the approval wrote it.
+  it("hands asset.before_write the skill as the change would write it", async () => {
+    const f = await skillFixture();
+    const events =
+      (await f.tool.beforeEvents?.(
+        {
+          skillName: f.skill.name,
+          summary: "Bank details",
+          operations: [
+            {
+              type: "replace_text",
+              target: "root",
+              oldText: "Private old text",
+              newText: "Überweise an DE89 3704 0044 0532 0130 00."
+            }
+          ]
+        },
+        { conversationId: asConversationId("conversation") }
+      )) ?? [];
+    expect(events.map((event) => [event.name, event.subject])).toEqual([
+      ["asset.before_write", { kind: "skill", name: f.skill.name }]
+    ]);
+    const fields = await events[0]?.checkable();
+    expect(fields?.name).toBe(f.skill.name);
+    expect(fields?.content).toContain("DE89 3704 0044 0532 0130 00");
+    expect(fields?.content).toContain("Existing title");
+    expect(fields?.content).not.toContain("Private old text");
   });
 
   it("returns a model-readable blocked proposal failure and stores no request or asset change", async () => {
