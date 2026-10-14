@@ -1,4 +1,5 @@
 import {
+  allowInWorkspace,
   apiBaseUrl,
   decidedCount,
   expectInboxFrameStill,
@@ -783,5 +784,131 @@ test("the title and the tabs stand still from a tab with rows to an empty one", 
       );
     }
     await reviewerContext.close();
+  }
+});
+
+/** May write and publish the Apps of the test's workspace, and may not approve a publish. */
+const publisher = {
+  email: "e2e-publish-member@example.test",
+  password: "e2e-publish-member-password"
+};
+
+// GR-PUB-1: "Publishing needs an instance admin's approval" is on, as on every instance. Fails
+// without it: the member's Publish made the revision live at once, and no item existed.
+test("a member's publish of an App waits in the Inbox with its review, and an admin's approval makes it live", async ({
+  page,
+  browser,
+  baseURL,
+  pageErrors,
+  accessState: _accessState
+}, testInfo) => {
+  test.setTimeout(shotsDir ? 300_000 : 120_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  // An App's id is taken once for the whole instance, so a retried run names its App anew.
+  const appId = `publish-review-${testInfo.retry}`;
+  const appName = "Visit report";
+
+  // The admin's workspace, with the member in it, and an App of two files.
+  await signIn(page, reviewer);
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+    data: { name: `Publish review ${testInfo.retry}` }
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const workspaceId = String(((await created.json()) as { id: string }).id);
+  const added = await requestWithOrigin(
+    page,
+    "post",
+    `${apiBaseUrl}/api/v1/workspaces/${workspaceId}/members`,
+    { data: { email: publisher.email } }
+  );
+  expect(added.ok(), await added.text()).toBe(true);
+  const appUrl = `${apiBaseUrl}/api/v1/assets/app/${appId}`;
+  const written = await requestWithOrigin(page, "put", appUrl, {
+    data: {
+      workspaceId,
+      expectedRevision: null,
+      files: [
+        {
+          path: "app.yaml",
+          text: `id: ${appId}\nname: ${appName}\nkit: 1.1.0\nentry: index.html\n`
+        },
+        { path: "index.html", text: "<!doctype html><title>Visits</title><p>Visits</p>" }
+      ]
+    },
+    timeout: 90_000
+  });
+  expect(written.ok(), await written.text()).toBe(true);
+
+  // The member clicks Publish: the revision waits, and the page says for whom.
+  const memberContext = await browser.newContext({
+    baseURL,
+    viewport: { width: 1280, height: 900 }
+  });
+  await pageErrors.watch(memberContext);
+  const memberPage = await memberContext.newPage();
+  await signIn(memberPage, publisher);
+  const takeBack = await allowInWorkspace(publisher.email, workspaceId, [
+    "app.read",
+    "app.write",
+    "app.publish"
+  ]);
+  try {
+    await memberPage.goto(`/w/${workspaceId}/app-drafts/${appId}`);
+    const edit = memberPage.getByTestId("app-edit");
+    await expect(edit).toContainText("Draft · not published");
+    await edit.getByRole("button", { name: "Publish", exact: true }).click();
+    const publishDialog = memberPage.getByRole("dialog", { name: `Publish “${appName}”?` });
+    await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(publishDialog).toBeHidden();
+    const waits = memberPage.getByTestId("app-publish-waits");
+    await expect(waits).toHaveText(
+      "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is."
+    );
+    await expect(edit).toContainText("Draft · not published");
+    await shoot(memberPage, "gr-pub-1-publish-waits", async () => {
+      await expect(memberPage.getByTestId("app-edit")).toBeVisible();
+      await memberPage
+        .getByTestId("app-edit")
+        .getByRole("button", { name: /^(Publish|Veröffentlichen)$/u })
+        .click();
+      await memberPage
+        .getByRole("dialog")
+        .getByRole("button", { name: /^(Publish|Veröffentlichen)$/u })
+        .click();
+      await expect(memberPage.getByTestId("app-publish-waits")).toBeVisible();
+    });
+
+    // The admin finds the publish in the Inbox, with what it makes live.
+    await page.goto("/inbox");
+    const inbox = page.getByRole("region", { name: "Inbox", exact: true });
+    const row = inbox.getByTestId("inbox-row").filter({ hasText: appName });
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText("App to publish");
+    await row.getByRole("button").click();
+    const review = page.getByTestId("publish-review");
+    await expect(review.getByTestId("operation-call-headline")).toHaveText(
+      `E2E Zz Publish Member wants to publish a new version of the App “${appName}”.`
+    );
+    await expect(review.locator('[data-field="version"]')).toContainText(
+      "Version 1, the first one published"
+    );
+    await expect(review.locator('[data-field="files"]')).toContainText("index.html");
+    await expect(page.locator('button[data-decision="approve"]')).toHaveText("Approve and publish");
+    await shoot(page, "gr-pub-1-inbox-publish", async () => {
+      await expect(page.getByTestId("publish-review")).toBeVisible();
+    });
+
+    // Approving makes exactly that revision live, as the member's publish.
+    await page.locator('button[data-decision="approve"]').click();
+    await expect(page.getByTestId("inbox-item")).toContainText("Decision by E2E Superadmin");
+    await expect
+      .poll(async () => {
+        const read = await page.request.get(`${appUrl}?workspaceId=${workspaceId}`);
+        return ((await read.json()) as { publishedRevision?: number }).publishedRevision;
+      })
+      .toBe(1);
+  } finally {
+    await takeBack();
+    await memberContext.close();
   }
 });

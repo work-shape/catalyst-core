@@ -242,6 +242,17 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member of the publish test of the Inbox spec, used by no other spec: the test
+      # writes them the rights to write and publish one workspace's Apps, and not to approve
+      # a publish (GR-PUB-1). The label sorts after every other for the reason given above.
+      - email: e2e-publish-member@example.test
+        displayLabel: E2E Zz Publish Member
+        passwordEnvName: E2E_PUBLISH_MEMBER_PASSWORD
+        developmentPassword: e2e-publish-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900
