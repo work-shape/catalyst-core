@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ArrowLeft,
   Download,
@@ -29,10 +30,11 @@ import {
   type DisclosureVariant
 } from "../structure/disclosure";
 import { Page, PageFooter, type PageWidth } from "../structure/page";
-import { PageHeader, PageHeaderBack } from "../structure/page-header";
+import { PageHeader, PageHeaderBack, PageHeaderShellAction } from "../structure/page-header";
 import { PageLead } from "../structure/page-lead";
 import { Section, type SectionLayout } from "../structure/section";
-import { SurfaceFrame } from "../structure/surface-frame";
+import { SplitHandle } from "../structure/split-handle";
+import { SurfaceFrame, SurfaceHeader } from "../structure/surface-frame";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -132,6 +134,29 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
             description={<code className="font-mono">{text.headerIdentifier}</code>}
             {...actions}
           />
+        </div>
+      </Samples>
+      <Samples label={text.headerShellAction}>
+        <div className="w-full rounded-lg border px-(--layout-gutter) pt-6">
+          <PageHeaderShellAction
+            action={
+              <Button variant="secondary">
+                <MessageSquare aria-hidden="true" />
+                {text.headerShellChat}
+              </Button>
+            }
+          >
+            <PageHeader
+              title={text.headerListTitle}
+              description={text.headerListDescription}
+              primaryAction={
+                <Button>
+                  <Plus aria-hidden="true" />
+                  {text.headerNewAgent}
+                </Button>
+              }
+            />
+          </PageHeaderShellAction>
         </div>
       </Samples>
     </>
@@ -254,7 +279,33 @@ function SurfaceFrameSamples({ text }: { text: GalleryText }) {
           </SurfaceFrame>
         </div>
       </Samples>
+      <Samples label={text.surfaceHeaderAlone}>
+        <div className="w-full max-w-md overflow-hidden rounded-lg border">
+          <SurfaceHeader title={text.surfaceHeaderTitle} close={close} />
+        </div>
+      </Samples>
     </>
+  );
+}
+
+/** A panel at the left whose width the handle at its right edge sets. */
+function SplitHandleSample({ text }: { text: GalleryText }) {
+  const [width, setWidth] = useState(200);
+  return (
+    <div className="flex h-32 w-full overflow-hidden rounded-lg border" data-gallery-sample="split">
+      <div className="relative shrink-0 border-r bg-muted" style={{ width: `${width}px` }}>
+        <p className="p-3 text-caption text-muted-foreground">{text.splitHandleSample}</p>
+        <SplitHandle
+          label={text.splitHandleLabel}
+          edge="right"
+          width={width}
+          min={120}
+          max={360}
+          onResize={setWidth}
+        />
+      </div>
+      <div className="min-w-0 flex-1" />
+    </div>
   );
 }
 
@@ -291,7 +342,7 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "PageHeader",
-      components: ["PageHeader", "PageHeaderBack"],
+      components: ["PageHeader", "PageHeaderBack", "PageHeaderShellAction"],
       render: (text) => <PageHeaderSamples text={text} />
     },
     {
@@ -316,8 +367,13 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "SurfaceFrame",
-      components: ["SurfaceFrame"],
+      components: ["SurfaceFrame", "SurfaceHeader"],
       render: (text) => <SurfaceFrameSamples text={text} />
+    },
+    {
+      name: "SplitHandle",
+      components: ["SplitHandle"],
+      render: (text) => <SplitHandleSample text={text} />
     },
     {
       name: "Card",
