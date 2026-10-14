@@ -101,11 +101,20 @@ images" copies what the registry does not hold yet, with all platforms and the d
 original, from the first public registry that serves it. It runs when the list changes on `main`,
 every Monday and by hand. The weekly run pulls nothing; it fails when a copy is gone.
 
-Who pulls the copy: `.github/scripts/start-postgres.sh` here (first the copy, then the public
-registries), the service containers of the capabilities' `check.yml`, and those of a deployment's
-release checks. To move to another version, change the line in `.github/mirrored-images`, let
-"Mirror images" run on `main`, and then change the digest in the capabilities' and the
-deployments' workflows; the script here reads the list.
+Who pulls the copy: the service containers of a deployment's release checks, until they move
+to the instance's Postgres image below. To move to another version, change the line in
+`.github/mirrored-images`, let "Mirror images" run on `main`, and then change the digest in the
+deployments' workflows.
+
+The checks here and the capabilities' start the instance's own Postgres image instead
+(ADR-0023): `docker/postgres/Dockerfile`, the official image the live hosts ran plus pgvector,
+pinned by digest in `docker/postgres/pinned-image`. `.github/scripts/start-postgres.sh` and
+`pnpm check:local` read that file, and the demo Compose files repeat it. The workflow "Postgres
+image" checks the pinned image with `docker/postgres/check-image.sh`; when the Dockerfile changed,
+it builds the image, checks it, pushes it for amd64 and arm64 on a push to a branch of this
+repository and fails with the line to pin. Commit that line here and in the capabilities', the
+demo's and the deployments' files that name the digest. The package is the repository's; a job
+signs in to `ghcr.io` with its own token before it pulls.
 
 The package `mirror/postgres` is public, because it is the unchanged official image and a pull
 request from a fork has to read it. An image that is built from, not started (`node`, `nginx`,
@@ -154,3 +163,8 @@ commits the result with the version bump. It turns the Unreleased section of `CH
 `## <version> — <date>`, puts each file's entry after the entries already in its section, files in
 name order, and deletes the files. Entries in the Unreleased section of `CHANGELOG.md` are the ones
 written before change files existed.
+
+A release that offers the Connect a local agent command publishes the CLI of its version to npm
+before it names that version in `PUBLISHED_CLI_VERSION` and before the instance switches on
+`personalApiKeys`. The order is in `packages/docs/src/content/docs/configure/cli.md`, For
+maintainers.

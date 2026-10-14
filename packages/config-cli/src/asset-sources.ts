@@ -35,7 +35,7 @@ export async function readAssetSource(
  * the skill's resources, or from the folder of a guardrail, its `guardrail.yaml` with the
  * `check.md` beside it. A folder that holds a `SKILL.md` is read as that file.
  */
-export async function readDefinition(path: string): Promise<Record<string, unknown>> {
+async function readDefinition(path: string): Promise<Record<string, unknown>> {
   const folder = (await stat(path)).isDirectory();
   const guardrailFolder = folder
     ? path
