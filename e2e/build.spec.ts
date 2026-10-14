@@ -2,6 +2,13 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
+import {
+  addToolPackage,
+  closeToolPackage,
+  openToolPackage,
+  removeToolPackage,
+  toolChip
+} from "./tool-packages";
 import { loadNewerVersion } from "./build-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 
@@ -183,17 +190,20 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
 
     // A tool outside the Namespace's list is refused, and the refusal stands at the tools.
     const tools = page.locator("#tools");
-    // The instance's tools stand folded under their package, each by its title.
-    await tools.locator('[data-instance-tool-group="instance"] button[aria-expanded]').click();
-    await tools.locator('[data-instance-tool-group="results"] button[aria-expanded]').click();
-    await tools.getByLabel("Weather forecast", { exact: true }).check();
+    // An own tool of the instance is added from the picker, by its title.
+    await addToolPackage(page, tools, "Weather forecast");
     await page.getByRole("button", { name: "Create agent", exact: true }).click();
     await expect(tools.locator("[data-field-refusal]")).toHaveText(
       "The tool demo.weather_forecast is not allowed in Namespace kai-."
     );
     await expect(instructions(page)).toHaveValue("You help Kai.");
-    await tools.getByLabel("Weather forecast", { exact: true }).uncheck();
-    await tools.getByLabel("Show inline widget", { exact: true }).check();
+    await removeToolPackage(tools, "own:demo.weather_forecast");
+    // A package comes with all its tools on; its panel takes the one not wanted off.
+    await addToolPackage(page, tools, "Results");
+    const results = await openToolPackage(page, tools, "package:results");
+    await results.getByRole("checkbox", { name: "Save page" }).uncheck();
+    await closeToolPackage(page);
+    await expect(toolChip(tools, "package:results")).toContainText("1/2");
     await page.getByRole("button", { name: "Create agent", exact: true }).click();
     await expect(page).toHaveURL(/\/build\/agents\/kai-helper$/u);
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);

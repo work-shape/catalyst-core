@@ -1,20 +1,22 @@
 import { createElement, createRef } from "react";
 import { describe, expect, it } from "vitest";
 import type { ConfigAssetReferences, LocaleCode } from "@vivd-catalyst/api-client";
+import type { ConnectionToolsRead } from "@vivd-catalyst/chat-ui/build-area";
 import {
   AgentEditor,
   agentConfigToForm,
   agentFormToConfig,
-  instanceToolGroups,
-  switchToolGroup,
+  setPackageTools,
+  toolPackages,
   withImpliedTools,
   type BuildAssetEditorProps
 } from "@vivd-catalyst/chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
-// The instance's tools on an agent's page, by package (TOOLS-1): which group a tool stands in,
-// what its title is when it has none, the group's switch, and `read_skill` held because the
-// agent has skills. Without the grouping the page showed one flat list of ids.
+// The tools on an agent's page as chips, the way its Skills are (TOOLS-1, variant B): a chip per
+// package, per own tool of this instance and per Connection, the count on a chip that is partly
+// on, the picker's offer, the id where a tool has no title, and `read_skill` held because the
+// agent has skills. Without them the page showed one flat list of ids.
 
 const noop = () => undefined;
 
@@ -75,115 +77,165 @@ const described = references({
   ]
 });
 
-function groups(input: {
+const crmConnection: ConnectionToolsRead = {
+  status: "ready",
+  connections: [
+    {
+      name: "crm",
+      title: "CRM",
+      connectorType: "mcp",
+      tools: [
+        {
+          toolName: "connection.crm.find_customer",
+          operation: "find_customer",
+          description: "Finds a customer.",
+          effect: "reading"
+        },
+        {
+          toolName: "connection.crm.update_customer",
+          operation: "update_customer",
+          effect: "changing"
+        }
+      ]
+    }
+  ]
+};
+
+function packages(input: {
   selected?: string[];
   skillNames?: string[];
   locale?: LocaleCode;
   references?: ConfigAssetReferences;
+  connections?: ConnectionToolsRead;
 }) {
-  return instanceToolGroups({
+  return toolPackages({
     references: input.references ?? described,
     selected: input.selected ?? [],
     skillNames: input.skillNames ?? [],
     locale: input.locale ?? "en",
-    isOtherSource: (name) => name.startsWith("connection.") || name.startsWith("app.")
+    ...(input.connections ? { connections: input.connections } : {}),
+    isOtherSource: (name) => name.startsWith("app.")
   });
 }
 
-describe("instance tools by package", () => {
-  it("groups the tools by their package in the page's order, the instance's own last", () => {
-    const view = groups({});
+const byKey = (view: ReturnType<typeof packages>, key: string) =>
+  view.find((item) => item.key === key);
 
-    expect(view.map((group) => group.group)).toEqual([
-      "documents",
-      "web",
-      "files",
-      "skills",
-      "instance"
+describe("the chips of the Tools section", () => {
+  it("has a chip per package in the page's order, then one per own tool, then one per Connection", () => {
+    const view = packages({ connections: crmConnection });
+
+    expect(view.map((item) => item.key)).toEqual([
+      "package:documents",
+      "package:web",
+      "package:files",
+      "package:skills",
+      "own:crm.lookup",
+      "connection:crm"
     ]);
-    expect(view.find((group) => group.group === "skills")?.tools.map((tool) => tool.name)).toEqual([
+    expect(byKey(view, "package:skills")?.tools.map((tool) => tool.name)).toEqual([
       "read_skill",
       "propose_skill_change"
     ]);
-    // A tool without a group stands among the instance's own.
-    expect(view.at(-1)?.tools.map((tool) => tool.name)).toEqual(["crm.lookup"]);
+    // A Connection's operations are its tools, named by the operation.
+    expect(byKey(view, "connection:crm")).toMatchObject({
+      kind: "connection",
+      title: "CRM",
+      connection: { name: "crm", connectorType: "mcp" },
+      choosable: ["connection.crm.find_customer", "connection.crm.update_customer"]
+    });
+    expect(byKey(view, "connection:crm")?.tools[0]).toMatchObject({
+      title: "find_customer",
+      summary: "Finds a customer.",
+      effect: "reading"
+    });
   });
 
   it("shows the title and summary in the reader's language, and the id where the title is missing", () => {
-    const en = groups({});
-    const de = groups({ locale: "de" });
+    const en = packages({});
+    const de = packages({ locale: "de" });
 
-    expect(en[0]?.tools[0]).toMatchObject({
+    expect(byKey(en, "package:documents")?.tools[0]).toMatchObject({
       title: "Read document text",
       summary: "Reads the text of a document attached to the conversation.",
       module: "documents",
       effect: "reading"
     });
-    expect(de[0]?.tools[0]).toMatchObject({ title: "Dokumenttext lesen" });
-    // Registered without a title: the id stands, and there is no summary.
-    const exec = en.find((group) => group.group === "files")?.tools[0];
+    expect(byKey(de, "package:documents")?.tools[0]).toMatchObject({ title: "Dokumenttext lesen" });
+    const exec = byKey(en, "package:files")?.tools[0];
     expect(exec?.title).toBe("workspace.exec");
     expect(exec).not.toHaveProperty("summary");
-    expect(en.at(-1)?.tools[0]?.title).toBe("crm.lookup");
+    // A deployment's tool without wording is a chip of its own, named by its id.
+    expect(byKey(en, "own:crm.lookup")).toMatchObject({ kind: "own", title: "crm.lookup" });
   });
 
   it("lists every offered tool by its name where the server describes none", () => {
-    const view = groups({
+    const view = packages({
       references: references({ enabledToolNames: ["read_skill", "show_view"] })
     });
 
-    expect(view).toHaveLength(1);
-    expect(view[0]).toMatchObject({ group: "instance" });
-    expect(view[0]?.tools.map((tool) => tool.title)).toEqual(["read_skill", "show_view"]);
+    expect(view.map((item) => item.key)).toEqual(["own:read_skill", "own:show_view"]);
+    expect(view.map((item) => item.title)).toEqual(["read_skill", "show_view"]);
   });
 
-  it("keeps a tool the agent holds that nothing offers, and leaves Connection and App tools to their groups", () => {
-    const view = groups({
-      selected: ["legacy.tool", "connection.crm.lookup", "app.offer.save"]
+  it("keeps a tool the agent holds that nothing offers, and leaves App tools to their group", () => {
+    const view = packages({ selected: ["legacy.tool", "connection.crm.lookup", "app.offer.save"] });
+
+    expect(view.filter((item) => item.kind === "own").map((item) => item.key)).toEqual([
+      "own:crm.lookup",
+      "own:legacy.tool"
+    ]);
+    expect(byKey(view, "own:legacy.tool")?.heldCount).toBe(1);
+    // A Connection's tool stands with its Connection, an App's with the Apps.
+    const names = view.flatMap((item) => item.tools.map((tool) => tool.name));
+    expect(names).not.toContain("connection.crm.lookup");
+    expect(names).not.toContain("app.offer.save");
+  });
+
+  it("counts what is on, so a chip shows 1/2 while partly on and the picker offers what is off", () => {
+    const view = packages({
+      selected: ["read_skill", "web_fetch", "connection.crm.find_customer"],
+      connections: crmConnection
     });
-    const own = view.find((group) => group.group === "instance");
 
-    expect(own?.tools.map((tool) => tool.name)).toEqual(["crm.lookup", "legacy.tool"]);
-    expect(view.flatMap((group) => group.tools.map((tool) => tool.name))).not.toContain(
-      "connection.crm.lookup"
-    );
+    expect(byKey(view, "package:skills")).toMatchObject({ heldCount: 1, tools: { length: 2 } });
+    expect(byKey(view, "package:web")).toMatchObject({ heldCount: 1, tools: { length: 1 } });
+    expect(byKey(view, "connection:crm")?.heldCount).toBe(1);
+    // Off, a chip is what the picker offers.
+    expect(view.filter((item) => item.heldCount === 0).map((item) => item.key)).toEqual([
+      "package:documents",
+      "package:files",
+      "own:crm.lookup"
+    ]);
   });
 
-  it("sets the group's switch on, off or mixed and turns all its tools on or off", () => {
-    const skills = (selected: string[]) =>
-      groups({ selected }).find((group) => group.group === "skills");
+  it("adds a chip with all its tools on and removes only its own", () => {
+    const view = packages({ selected: ["web_fetch", "read_skill"] });
+    const skills = byKey(view, "package:skills");
+    if (!skills) throw new Error("no skills package");
 
-    expect(skills([])?.state).toBe("off");
-    expect(skills(["read_skill"])?.state).toBe("mixed");
-    expect(skills(["read_skill", "propose_skill_change"])?.state).toBe("on");
-
-    const group = skills(["web_fetch", "read_skill"]);
-    if (!group) throw new Error("no skills group");
-    // On adds what is missing and keeps the order of the rest; off removes only the group's.
-    expect(switchToolGroup(["web_fetch", "read_skill"], group, true)).toEqual([
+    // Adding adds what is missing and keeps the order of the rest; removing removes only the chip's.
+    expect(setPackageTools(["web_fetch", "read_skill"], skills, true)).toEqual([
       "web_fetch",
       "read_skill",
       "propose_skill_change"
     ]);
-    expect(switchToolGroup(["web_fetch", "read_skill"], group, false)).toEqual(["web_fetch"]);
+    expect(setPackageTools(["web_fetch", "read_skill"], skills, false)).toEqual(["web_fetch"]);
   });
 });
 
 describe("tools an agent holds because of something else", () => {
   it("shows read_skill as included, with no check box, while the agent has a skill", () => {
-    const skills = groups({ skillNames: ["tax-review"] }).find((group) => group.group === "skills");
+    const skills = byKey(packages({ skillNames: ["tax-review"] }), "package:skills");
 
     expect(skills?.tools.find((tool) => tool.name === "read_skill")?.includedBecause).toBe(
       "skills"
     );
-    // The switch reaches only what has a check box, and counts read_skill as held.
+    // Adding and removing reach only what has a check box; read_skill counts as held.
     expect(skills?.choosable).toEqual(["propose_skill_change"]);
-    expect(skills?.state).toBe("off");
     expect(skills?.heldCount).toBe(1);
     // Without a skill it is a check box like any other.
-    expect(
-      groups({}).find((group) => group.group === "skills")?.tools[0]?.includedBecause
-    ).toBeUndefined();
+    expect(byKey(packages({}), "package:skills")?.tools[0]?.includedBecause).toBeUndefined();
   });
 
   it("saves read_skill with an agent that has a skill, once", () => {
@@ -219,7 +271,7 @@ describe("the Tools section of the agent page", () => {
     };
   }
 
-  function page(toolNames: string[], locale: LocaleCode = "en"): string {
+  function page(toolNames: string[], locale: LocaleCode = "en", canEdit = true): string {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
@@ -236,35 +288,55 @@ describe("the Tools section of the agent page", () => {
           }),
           isDefault: false,
           references: described,
-          editableAgentFields: ["toolNames"],
+          editableAgentFields: canEdit ? ["toolNames"] : [],
           canManageAgentModels: false,
-          skillChoice: { options: [], onSearch: noop }
+          skillChoice: { options: [], onSearch: noop },
+          connectionTools: { read: crmConnection }
         })
       )
     );
   }
 
-  it("shows one group per package with its sentence and switch, and no raw id outside the technical details", () => {
-    const markup = page(["read_skill"]);
+  it("shows a chip per package in use, its count while partly on, and the picker to add more", () => {
+    const markup = page(["read_skill", "web_fetch", "connection.crm.find_customer"]);
 
-    for (const group of ["documents", "web", "files", "skills", "instance"]) {
-      expect(markup).toContain(`data-instance-tool-group="${group}"`);
-    }
-    expect(markup).toContain("Reads and inspects the documents people attach.");
-    expect(markup).toContain('aria-label="All tools of Skills"');
-    // Only read_skill of the two Skills tools is on.
-    expect(markup).toContain('aria-checked="mixed"');
+    expect(markup).toContain(
+      "What the agent can do. It always acts with the rights of the person it works for."
+    );
+    expect(markup).toContain('data-tool-package="package:skills"');
+    expect(markup).toContain('data-tool-package="package:web"');
+    expect(markup).toContain('data-tool-package="connection:crm"');
+    expect(markup).not.toContain('data-tool-package="package:documents"');
+    // Skills is partly on, Web fully: only Skills shows its count.
+    const chip = (key: string) =>
+      new RegExp(`data-tool-package="${key}">.*?</li>`, "u").exec(markup)?.[0] ?? "";
+    expect(chip("package:skills")).toContain("1/2");
+    expect(chip("package:web")).not.toContain("1/1");
+    expect(chip("connection:crm")).toContain("1/2");
+    expect(chip("package:skills")).toContain('aria-label="Remove"');
+    expect(markup).toContain("Add packages");
     expect(markup).toContain("Technical details");
-    // The tools are folded under their group, so no id shows on the page at rest.
+    // The tools stand in the chip's panel, so no id shows on the page at rest.
     expect(markup).not.toContain("propose_skill_change");
     expect(markup).not.toContain("Skills require the read_skill tool");
   });
 
-  it("speaks German", () => {
-    const markup = page([], "de");
+  it("says when no tool is chosen, and offers no picker and no removal to a reader", () => {
+    expect(page([])).toContain("No tools chosen yet.");
+    const reader = page(["web_fetch"], "en", false);
+    expect(reader).toContain('data-tool-package="package:web"');
+    expect(reader).not.toContain("Add packages");
+    expect(reader).not.toContain('aria-label="Remove"');
+  });
 
-    expect(markup).toContain("Dokumente");
+  it("speaks German", () => {
+    const markup = page(["web_fetch"], "de");
+
+    expect(markup).toContain(">Web<");
+    expect(markup).toContain("Pakete hinzufügen");
     expect(markup).toContain("Technische Details");
-    expect(markup).toContain('aria-label="Alle Werkzeuge von Skills"');
+    expect(markup).toContain(
+      "Was der Agent tun kann. Er handelt immer mit den Rechten der Person, für die er arbeitet."
+    );
   });
 });

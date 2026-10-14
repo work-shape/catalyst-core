@@ -46,10 +46,9 @@ import {
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
-import { isConnectionToolName, type ConnectionToolChoice } from "./connection-tools";
-import { ConnectionToolsGroup } from "./connection-tools-group";
+import type { ConnectionToolChoice } from "./connection-tools";
 import { withImpliedTools } from "./instance-tools";
-import { InstanceToolsGroup } from "./instance-tools-group";
+import { ToolPackagesSection } from "./tool-packages-section";
 import { PlatformInstructions } from "./platform-instructions";
 import type { SkillFacts } from "./skill-facts";
 
@@ -322,21 +321,17 @@ export function AgentEditor({
       label: t("configTools"),
       count: withImpliedTools(form.toolNames, form.skillNames).length,
       refusalField: "tools",
-      // One group per source of tools, each a sibling with its heading: the instance's own,
-      // then the Connections, then the Apps. A further source is a further sibling.
+      description: t("configToolsDescription"),
+      // The packages, this instance's own tools and the Connections as chips, as the Skills
+      // above; then the Apps.
       body: (
         <>
-          <InstanceToolsGroup
+          <ToolPackagesSection
             references={references}
             selected={form.toolNames}
             skillNames={form.skillNames}
-            isOtherSource={(name) => isConnectionToolName(name) || isAppToolName(name)}
-            disabled={!canEdit("toolNames")}
-            onChange={(toolNames) => update({ toolNames })}
-          />
-          <ConnectionToolsGroup
-            choice={connectionTools}
-            selected={form.toolNames}
+            connectionTools={connectionTools}
+            isOtherSource={isAppToolName}
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
           />

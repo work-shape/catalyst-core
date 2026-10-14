@@ -1,14 +1,22 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { type Locator, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 import { z } from "zod";
 import { expect, test } from "./test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
+import {
+  addToolPackage,
+  closeToolPackage,
+  openToolPackage,
+  removeToolPackage,
+  toolChip
+} from "./tool-packages";
 
-// The instance's tools on an agent's page, by package (TOOLS-1, navigation-and-layout checks 6
-// and 34): one group per package with its icon, sentence and switch, its tools folded below
-// with title and summary, read_skill shown as included once the agent has a skill, and the ids
-// under "Technical details". Fails without the change: the section was a flat list of ids.
+// The tools on an agent's page as chips, the way its Skills are (TOOLS-1 variant B,
+// navigation-and-layout checks 6 and 34): a chip per package, per own tool and per Connection,
+// "1/2" while partly on, a panel per chip with its tools, read_skill shown as included once the
+// agent has a skill, a picker that adds packages with all their tools on, and the ids under
+// "Technical details". Fails without the change: the section was a flat list of ids.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 /** Where the pictures of the section go. Unset, none is taken. */
@@ -75,21 +83,14 @@ async function putSkill(page: Page): Promise<void> {
   expect(answer.ok()).toBe(true);
 }
 
-const group = (tools: Locator, name: string) =>
-  tools.locator(`[data-instance-tool-group="${name}"]`);
-
-/** Unfolds a group's tools and answers the list of them. */
-async function unfold(tools: Locator, name: string): Promise<Locator> {
-  const card = group(tools, name);
-  const trigger = card.locator("button[aria-expanded]");
-  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
-    await trigger.click();
-  }
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
-  return card.getByRole("group");
+/** The keys of the chips in the order they stand. */
+async function chipKeys(page: Page): Promise<(string | null)[]> {
+  return page
+    .locator("#tools [data-tool-package]")
+    .evaluateAll((chips) => chips.map((chip) => chip.getAttribute("data-tool-package")));
 }
 
-test.describe("the grouped Tools section of an agent", () => {
+test.describe("the Tools section of an agent, as chips", () => {
   // Each test stores and deletes an agent of its own, so it takes its turn on the agents.
   test.beforeEach(async ({ page, instanceAgentsChange: _instanceAgentsChange }) => {
     await signIn(page);
@@ -103,88 +104,96 @@ test.describe("the grouped Tools section of an agent", () => {
     await deleteAsset(page, skillPath);
   });
 
-  test("groups the tools by package, folds them, shows read_skill as included and keeps the ids in the technical details", async ({
+  test("shows a chip per package with its count, opens its tools, adds from the picker, includes read_skill and keeps the ids in the technical details", async ({
     page
   }) => {
     test.setTimeout(90_000);
     await page.setViewportSize(SHOT_SIZE);
     await page.goto(`/build/agents/${agentName}`);
     const tools = page.locator("#tools");
-    const own = tools.getByRole("group", { name: "Instance tools", exact: true });
-    await expect(own).toBeVisible();
-
-    // One group per package of what the suite's instance enables, in the page's order.
-    await expect(own.locator("[data-instance-tool-group]")).toHaveCount(5);
-    expect(
-      await own
-        .locator("[data-instance-tool-group]")
-        .evaluateAll((cards) => cards.map((card) => card.getAttribute("data-instance-tool-group")))
-    ).toEqual(["files", "results", "skills", "platform", "instance"]);
-    await expect(group(own, "results")).toContainText("Results");
-    await expect(group(own, "results")).toContainText(
-      "Shows and keeps results: widgets, Pages and recorded facts."
+    await expect(tools).toContainText(
+      "What the agent can do. It always acts with the rights of the person it works for."
     );
-    // Folded at rest: no tool and no id is on the page.
-    await expect(own.getByRole("checkbox")).toHaveCount(0);
+
+    // A chip per package in use, then the instance's own tool, by its id where it has no title.
+    expect(await chipKeys(page)).toEqual([
+      "package:results",
+      "package:skills",
+      "own:demo.workflow_summary"
+    ]);
+    await expect(toolChip(tools, "package:results")).toContainText("Results1/2");
+    await expect(toolChip(tools, "own:demo.workflow_summary")).toHaveText(
+      /^demo\.workflow_summary/u
+    );
+    // At rest the page shows no check box and no id of a package's tool.
+    await expect(tools.getByRole("checkbox")).toHaveCount(0);
     await expect(tools).not.toContainText("show_view");
 
-    // Results: show_view is on and page.save is not, so the switch is mixed.
-    const results = await unfold(own, "results");
-    const widget = results.getByRole("checkbox", { name: "Show inline widget" });
-    await expect(widget).toBeChecked();
+    // The panel of Results: its sentence and its tools, one of them on.
+    let results = await openToolPackage(page, tools, "package:results");
+    await expect(results).toContainText(
+      "Shows and keeps results: widgets, Pages and recorded facts."
+    );
+    await expect(results.getByRole("checkbox", { name: "Show inline widget" })).toBeChecked();
     await expect(results).toContainText(
       "Shows a small table, chart or overview inside its answer."
     );
     await expect(results.getByRole("checkbox", { name: "Save page" })).not.toBeChecked();
-    const resultsSwitch = group(own, "results").getByRole("switch", {
-      name: "All tools of Results"
-    });
-    await expect(resultsSwitch).toHaveAttribute("aria-checked", "mixed");
-    // The switch turns every tool of the group on, then off.
-    await resultsSwitch.click();
-    await expect(resultsSwitch).toHaveAttribute("aria-checked", "true");
+    // "All on" turns every tool of it on, and the chip loses its count.
+    await results.getByRole("button", { name: "All on" }).click();
     await expect(results.getByRole("checkbox", { name: "Save page" })).toBeChecked();
-    await resultsSwitch.click();
-    await expect(resultsSwitch).toHaveAttribute("aria-checked", "false");
-    await expect(widget).not.toBeChecked();
-    await widget.check();
-    await expect(resultsSwitch).toHaveAttribute("aria-checked", "mixed");
+    await expect(toolChip(tools, "package:results")).toHaveText(/^Results$/u);
+    // "Remove package" takes all of it off, and the picker offers it again.
+    await results.getByRole("button", { name: "Remove package" }).click();
+    await expect(toolChip(tools, "package:results")).toHaveCount(0);
 
-    // This instance's own tools: one with its deployment's wording, one by its id alone.
-    const instance = await unfold(own, "instance");
-    await expect(instance.getByRole("checkbox", { name: "Weather forecast" })).not.toBeChecked();
-    await expect(instance).toContainText(
+    // The picker offers what is not in use, with its sentence and its number of tools.
+    await tools.getByRole("button", { name: "Tools: Add packages" }).click();
+    const picker = page.getByRole("dialog");
+    await expect(picker.getByRole("option", { name: /^Files and code/u })).toContainText("2 tools");
+    await expect(picker.getByRole("option", { name: /^Weather forecast/u })).toContainText(
       "Gives a sample weather forecast for planning trips and appointments."
     );
-    await expect(instance.getByRole("checkbox", { name: "demo.workflow_summary" })).toBeChecked();
+    await expect(picker.getByRole("option", { name: /^Skills/u })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+    // Added, a package comes with all its tools on; its panel takes one off again.
+    await addToolPackage(page, tools, "Results");
+    await expect(toolChip(tools, "package:results")).toHaveText(/^Results$/u);
+    results = await openToolPackage(page, tools, "package:results");
+    await results.getByRole("checkbox", { name: "Save page" }).uncheck();
+    await closeToolPackage(page);
+    await expect(toolChip(tools, "package:results")).toContainText("1/2");
+    // An own tool is a chip of its own, added and removed as one.
+    await addToolPackage(page, tools, "Weather forecast");
+    await expect(toolChip(tools, "own:demo.weather_forecast")).toHaveText(/^Weather forecast$/u);
+    await removeToolPackage(tools, "own:demo.weather_forecast");
 
     // Without a skill, read_skill is a check box like any other.
-    const skills = await unfold(own, "skills");
+    let skills = await openToolPackage(page, tools, "package:skills");
     await expect(skills.getByRole("checkbox", { name: "Read assigned skill" })).not.toBeChecked();
-    await expect(skills.locator('[data-included-tool="read_skill"]')).toHaveCount(0);
-
-    // With a skill it is included, has no check box, and is saved with the agent.
+    await closeToolPackage(page);
+    // With a skill it is included, has no check box, and the chip is fully on.
     await page
       .locator("section#skills")
       .getByRole("button", { name: "Skills: Choose skills" })
       .click();
-    const picker = page.getByRole("dialog");
-    await picker.getByRole("option", { name: "Tools probe skill" }).click();
+    const skillPicker = page.getByRole("dialog");
+    await skillPicker.getByRole("option", { name: "Tools probe skill" }).click();
     await page.keyboard.press("Escape");
-    await expect(picker).toBeHidden();
+    await expect(skillPicker).toBeHidden();
+    await expect(toolChip(tools, "package:skills")).toHaveText(/^Skills$/u);
+    skills = await openToolPackage(page, tools, "package:skills");
     const included = skills.locator('[data-included-tool="read_skill"]');
     await expect(included).toContainText("Read assigned skill");
     await expect(included).toContainText("Included");
     await expect(included).toContainText("Comes with the agent's skills.");
     await expect(skills.getByRole("checkbox", { name: "Read assigned skill" })).toHaveCount(0);
     await expect(skills.getByRole("checkbox", { name: "Propose skill change" })).toBeChecked();
-    await expect(
-      group(own, "skills").getByRole("switch", { name: "All tools of Skills" })
-    ).toHaveAttribute("aria-checked", "true");
-    await expect(group(own, "skills")).toContainText("2 of 2 on");
+    await closeToolPackage(page);
 
     // The ids, effects and packages stand under "Technical details", closed by default.
-    const details = own.locator("[data-tool-technical-details]");
+    const details = tools.locator("[data-tool-technical-details]");
     await expect(details.getByRole("table")).toHaveCount(0);
     await details.getByRole("button", { name: "Technical details" }).click();
     const table = details.getByRole("table");
@@ -207,6 +216,7 @@ test.describe("the grouped Tools section of an agent", () => {
     expect(config.skillNames).toEqual([skillName]);
     expect(config.toolNames).toContain("read_skill");
     expect(config.toolNames).toContain("show_view");
+    expect(config.toolNames).not.toContain("page.save");
   });
 
   for (const theme of ["light", "dark"] as const) {
@@ -224,37 +234,36 @@ test.describe("the grouped Tools section of an agent", () => {
         await page.setViewportSize(SHOT_SIZE);
         await page.goto(`/build/agents/${agentName}#tools`);
         const tools = page.locator("#tools");
-        const own = tools.locator('[data-tool-group="instance"]');
-        await expect(own.locator("[data-instance-tool-group]")).toHaveCount(5);
-        await unfold(own, "results");
-        await unfold(own, "skills");
-        await unfold(own, "instance");
-        await expect(own.locator('[data-included-tool="read_skill"]')).toBeVisible();
-        await own.locator("[data-tool-technical-details] button[aria-expanded]").click();
-        await expect(own.getByRole("table")).toBeVisible();
-        if (shotsDir) {
-          await mkdir(shotsDir, { recursive: true });
-          // The head of the section, then its end with the technical details.
-          for (const [part, element] of [
-            ["top", tools.getByRole("heading", { name: /^(Tools|Werkzeuge)$/u })],
-            ["end", own.getByRole("table")]
-          ] as const) {
-            await element.evaluate((target, block) => {
-              // The box that scrolls the page, as the page itself scrolls to a section.
-              let scroller = target.closest("section#tools")?.parentElement ?? null;
-              while (scroller && !/auto|scroll/u.test(getComputedStyle(scroller).overflowY)) {
-                scroller = scroller.parentElement;
-              }
-              const box = target.getBoundingClientRect();
-              const top = block === "top" ? box.top - 96 : box.bottom - window.innerHeight + 48;
-              scroller?.scrollBy({ top, behavior: "instant" });
-            }, part);
-            await page.screenshot({
-              path: join(shotsDir, `agent-tools-${locale}-${theme}-1280-${part}.png`),
-              animations: "disabled"
-            });
+        await expect(toolChip(tools, "package:results")).toBeVisible();
+        // The section at the top of the view, below the page's head.
+        await tools.evaluate((section) => {
+          let scroller = section.parentElement;
+          while (scroller && !/auto|scroll/u.test(getComputedStyle(scroller).overflowY)) {
+            scroller = scroller.parentElement;
           }
-        }
+          const top = section.getBoundingClientRect().top - 260;
+          scroller?.scrollBy({ top, behavior: "instant" });
+        });
+        if (!shotsDir) return;
+        await mkdir(shotsDir, { recursive: true });
+        const shot = (part: string) =>
+          page.screenshot({
+            path: join(shotsDir, `agent-tools-${locale}-${theme}-1280-${part}.png`),
+            animations: "disabled"
+          });
+        await openToolPackage(page, tools, "package:results");
+        await shot("panel");
+        await closeToolPackage(page);
+        await openToolPackage(page, tools, "package:skills");
+        await shot("included");
+        await closeToolPackage(page);
+        await tools.getByRole("button", { name: /^(Tools|Werkzeuge): / }).click();
+        await expect(page.getByRole("dialog")).toBeVisible();
+        await shot("picker");
+        await page.keyboard.press("Escape");
+        await tools.locator("[data-tool-technical-details] button[aria-expanded]").click();
+        await expect(tools.getByRole("table")).toBeVisible();
+        await shot("details");
       });
     }
   }

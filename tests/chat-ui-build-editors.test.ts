@@ -195,9 +195,9 @@ describe("agent page", () => {
       "tools"
     );
 
-    // It stands, folded, among the instance's own tools and counts as held there.
-    expect(tools).toContain('data-instance-tool-group="instance"');
-    expect(tools).toContain("2 of 2 on");
+    // It is a chip of its own among the instance's tools, named by its id.
+    expect(tools).toContain('data-tool-package="own:crm.lookup"');
+    expect(tools).toContain(">crm.lookup<");
     expect(tools).not.toContain("data-unavailable-option");
   });
 

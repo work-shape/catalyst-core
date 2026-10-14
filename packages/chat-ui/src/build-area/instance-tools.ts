@@ -3,10 +3,12 @@ import type {
   ConfigAssetReferences,
   ToolGroupName
 } from "@vivd-catalyst/api-client";
+import { isConnectionToolName, type ConnectionToolsRead } from "./connection-tools";
 
-// The instance's own tools in an agent's Tools section, grouped as the page shows them: what is
-// in each group, what the group's switch shows, and the tools an agent holds because of
-// something else. Pure, so the page and its tests read the same answer.
+// The tools of an agent's Tools section as the page shows them: one chip per package
+// ("Paket") the agent uses, per own tool of this instance and per Connection, each with its tools
+// for the panel the chip opens, and the ones the picker can add. Pure, so the page and its tests
+// read the same answer.
 
 /** The groups in the order the page shows them. A group without tools is left out. */
 const INSTANCE_TOOL_GROUPS: readonly ToolGroupName[] = [
@@ -38,15 +40,34 @@ export interface InstanceToolView {
   includedBecause?: ToolInclusionReason;
 }
 
-/** One group: its tools, and its switch over those that have a check box. */
-export interface InstanceToolGroupView {
+/** One group of the instance's tools: its tools, and those with a check box. */
+interface InstanceToolGroupView {
   group: ToolGroupName;
   tools: InstanceToolView[];
-  /** The names the switch turns on and off: the tools with a check box. */
+  /** The tools with a check box: what adding and removing the group turns on and off. */
   choosable: string[];
-  /** On, off, or mixed while only some of `choosable` are on. Off with nothing to choose. */
-  state: "on" | "off" | "mixed";
-  /** How many of the group's tools the agent holds, the included ones counted. */
+}
+
+/**
+ * One chip of the section, or one row of the picker that adds it: a package of the platform,
+ * one own tool of this instance, or one Connection.
+ */
+export interface ToolPackageView {
+  /** Unique within the section: `package:<group>`, `own:<tool>` or `connection:<name>`. */
+  key: string;
+  kind: "package" | "own" | "connection";
+  /** The package's group. Its title, sentence and icon are the interface's own words. */
+  group?: ToolGroupName;
+  /** The name people read of an own tool or a Connection. */
+  title?: string;
+  /** The sentence of an own tool, or nothing. */
+  summary?: string;
+  /** The Connection: its name for the way to its page, and what picks its icon. */
+  connection?: { name: string; service?: string; connectorType?: string };
+  tools: InstanceToolView[];
+  /** The tools with a check box: what adding and removing the chip turns on and off. */
+  choosable: string[];
+  /** How many of its tools the agent holds, the included ones counted. */
   heldCount: number;
 }
 
@@ -72,7 +93,7 @@ export function withImpliedTools(
  * reader was not told of, which stand among the instance's own by their name. `isOtherSource`
  * answers for a name another group of the section shows, a tool of a Connection or an App.
  */
-export function instanceToolGroups(input: {
+function instanceToolGroups(input: {
   references: ConfigAssetReferences | undefined;
   selected: readonly string[];
   skillNames: readonly string[];
@@ -113,30 +134,92 @@ export function instanceToolGroups(input: {
     if (!tools) {
       return [];
     }
-    const choosable = tools.filter((tool) => !tool.includedBecause).map((tool) => tool.name);
-    const on = choosable.filter((name) => selected.includes(name)).length;
-    return [
-      {
-        group,
-        tools,
-        choosable,
-        state: on === 0 ? "off" : on === choosable.length ? "on" : "mixed",
-        heldCount: tools.filter((tool) => tool.includedBecause || selected.includes(tool.name))
-          .length
-      }
-    ];
+    return [{ group, tools, choosable: choosableOf(tools) }];
   });
 }
 
-/** The agent's tool names after a group's switch was turned on or off. The rest keep their order. */
-export function switchToolGroup(
+/**
+ * Every chip the section can show, in its order: the packages, then this instance's own tools,
+ * one chip each, then the Connections. A chip the agent holds a tool of is active; the others
+ * are what the picker offers. `isOtherSource` answers for a name a later group shows, a tool of
+ * an App.
+ */
+export function toolPackages(input: {
+  references: ConfigAssetReferences | undefined;
+  selected: readonly string[];
+  skillNames: readonly string[];
+  locale: "en" | "de";
+  connections?: ConnectionToolsRead;
+  isOtherSource?: (name: string) => boolean;
+}): ToolPackageView[] {
+  const { selected } = input;
+  const held = (tools: readonly InstanceToolView[]) =>
+    tools.filter((tool) => tool.includedBecause || selected.includes(tool.name)).length;
+  const groups = instanceToolGroups({
+    ...input,
+    isOtherSource: (name) => isConnectionToolName(name) || (input.isOtherSource?.(name) ?? false)
+  });
+  const packages = groups
+    .filter((group) => group.group !== "instance")
+    .map((group): ToolPackageView => ({
+      key: `package:${group.group}`,
+      kind: "package",
+      group: group.group,
+      tools: group.tools,
+      choosable: group.choosable,
+      heldCount: held(group.tools)
+    }));
+  const own = (groups.find((group) => group.group === "instance")?.tools ?? []).map(
+    (tool): ToolPackageView => ({
+      key: `own:${tool.name}`,
+      kind: "own",
+      title: tool.title,
+      ...(tool.summary ? { summary: tool.summary } : {}),
+      tools: [tool],
+      choosable: choosableOf([tool]),
+      heldCount: held([tool])
+    })
+  );
+  const connections =
+    input.connections?.status === "ready"
+      ? input.connections.connections.map((connection): ToolPackageView => {
+          const tools = connection.tools.map((tool): InstanceToolView => ({
+            name: tool.toolName,
+            title: tool.operation,
+            ...(tool.description ? { summary: tool.description } : {}),
+            effect: tool.effect
+          }));
+          return {
+            key: `connection:${connection.name}`,
+            kind: "connection",
+            title: connection.title.trim() || connection.name,
+            connection: {
+              name: connection.name,
+              ...(connection.service ? { service: connection.service } : {}),
+              ...(connection.connectorType ? { connectorType: connection.connectorType } : {})
+            },
+            tools,
+            choosable: choosableOf(tools),
+            heldCount: held(tools)
+          };
+        })
+      : [];
+  return [...packages, ...own, ...connections];
+}
+
+/** The agent's tool names with all tools of a chip on, or none. The rest keep their order. */
+export function setPackageTools(
   selected: readonly string[],
-  group: Pick<InstanceToolGroupView, "choosable">,
+  item: Pick<ToolPackageView, "choosable">,
   on: boolean
 ): string[] {
   return on
-    ? [...selected, ...group.choosable.filter((name) => !selected.includes(name))]
-    : selected.filter((name) => !group.choosable.includes(name));
+    ? [...selected, ...item.choosable.filter((name) => !selected.includes(name))]
+    : selected.filter((name) => !item.choosable.includes(name));
+}
+
+function choosableOf(tools: readonly InstanceToolView[]): string[] {
+  return tools.filter((tool) => !tool.includedBecause).map((tool) => tool.name);
 }
 
 /** What the server describes, or the bare names of a server that describes nothing. */
