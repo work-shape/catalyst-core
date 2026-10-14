@@ -69,7 +69,8 @@ const pageSaveIntoAppSchema = z.union([
     name: z.string(),
     title: z.string(),
     saved: z.literal(true),
-    revision: z.number().int()
+    revision: z.number().int(),
+    warnings: z.array(z.string()).optional()
   }),
   z.object({ name: z.string(), title: z.string(), saved: z.literal(false), message: z.string() })
 ]);
@@ -102,7 +103,7 @@ export function createPageSaveTool(options: PageSaveToolOptions): AnyToolDefinit
       "A plain HTML Page names 'entry: index.html'; inline scripts and styles are allowed, inline event handler attributes such as onclick are not: add listeners in a script.",
       "With kit 1.2.0 or later a plain HTML Page is given the look of the platform without asking for it, also when its script imports the kit to call an action: room around the body, the font and type sizes, the colours of the interface in light and dark, and styles for headings, text, links, lists, code, tables, buttons and form fields. Write plain elements and set no page margin, font or colour unless the Page needs a look of its own. The Page's class names are its own: the platform's stylesheet for a plain Page defines no class. A rule of the Page's own wins when it stands outside any @layer or in a layer the Page names itself; do not write the Page's rules into @layer base or @layer components. A Page that sets a background sets the text colour with it. For a colour use the custom properties --background, --foreground, --muted, --muted-foreground, --border, --primary and --accent-foreground, which follow light and dark; a fixed colour does not. Which stylesheet an HTML file gets is decided per file by what its scripts import: a file with a script that imports react, react/jsx-runtime, react-dom, react-dom/client, @work-shape/catalyst-app-kit/ui, @work-shape/catalyst-app-kit/router or @tanstack/react-router gets the kit's component stylesheet and none of these styles for plain elements, so build such a Page as a React Page unless it must be HTML; every other HTML file gets the styles for plain elements, also one whose script imports @work-shape/catalyst-app-kit for actions or the context, or drawChart from @work-shape/catalyst-app-kit/charts.",
       "Returns the Page and its revision number, or the build errors with file and line. Fix the files and save again; a failed build stores nothing.",
-      "Where the Page became an App in this conversation (page.save_as_app), the save also writes the App's draft and answers it under 'app'; nothing is published."
+      "Where the Page became an App in this conversation (page.save_as_app), the save also writes the App's draft and answers it under 'app'; nothing is published. Tell the person each of the app's 'warnings', as it says."
     ].join(" "),
     inputSchema: pageSaveInputSchema,
     outputSchema: pageSaveOutputSchema,

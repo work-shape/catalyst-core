@@ -85,6 +85,8 @@ export type TestServerOptions = Omit<
      * behind the gateway for every model entry of the config. Left out, such a call fails.
      */
     modelProvider?: ScriptedModelProvider;
+    /** The tools an agent's definition lists, for the call path built here. Left out, none. */
+    agentToolNames?: Parameters<typeof createOperationCalls>[0]["agentToolNames"];
   };
 
 /** A test instance is assembled without capabilities unless the test names some. */
@@ -359,9 +361,7 @@ async function createConfiguredInstance(
 }
 
 const providerOfNoAnswers: ScriptedModelProvider = {
-  async complete() {
-    throw new Error("No provider configured");
-  }
+  complete: () => Promise.reject(new Error("No provider configured"))
 };
 
 /** The registry an assembled instance holds: the platform's own kinds, agent and skill. */
@@ -392,7 +392,7 @@ export function completeServerOptions(
   options: TestServerOptions,
   stores: PlatformStores
 ): ChatServerOptions {
-  const { modelProvider = providerOfNoAnswers, ...serverOptions } = options;
+  const { modelProvider = providerOfNoAnswers, agentToolNames, ...serverOptions } = options;
   const configAssets: NonNullable<TestServerOptions["configAssets"]> = options.configAssets ?? {
     store: stores.configAssets,
     validationRefs: {
@@ -427,14 +427,14 @@ export function completeServerOptions(
         })
     }
   };
-  // One call path for the server and for the jobs `getTestJobs` builds from these options, as
-  // on an assembled instance: the job that executes an approved call finds the operations the
-  // routes registered.
+  // One call path for the server and the jobs `getTestJobs` builds, as on an assembled instance:
+  // the job that executes an approved call finds the operations the routes registered.
   const authorizer = completed.authorizer ?? createAuthorizer(stores.access);
+  const calls = { ...completed, authorizer, agentToolNames };
   return {
     ...completed,
     authorizer,
-    operationCalls: completed.operationCalls ?? createOperationCalls({ ...completed, authorizer })
+    operationCalls: completed.operationCalls ?? createOperationCalls(calls)
   };
 }
 

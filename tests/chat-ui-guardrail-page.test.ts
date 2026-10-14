@@ -241,6 +241,26 @@ describe("Guardrail page", () => {
     expect(failed).toContain("Try again");
   });
 
+  // Fails without the change: a block that answered a request for an approval the action could
+  // not wait for read as any other block.
+  it("says where a block answered a request for an approval that could not wait", () => {
+    const converted = (locale: "en" | "de") =>
+      renderPage({
+        locale,
+        hits: {
+          status: "ready",
+          hits: {
+            items: [hit({ id: "ghit_2", convertedFrom: "require_approval" })],
+            hasMore: false,
+            counts: { last7Days: 1, last30Days: 1 }
+          }
+        }
+      });
+    expect(converted("en")).toContain('data-guardrail-hit-converted-from="require_approval"');
+    expect(converted("en")).toContain("Blocked: approval could not wait");
+    expect(converted("de")).toContain("Blockiert: konnte nicht auf Freigabe warten");
+  });
+
   it("reads in German", () => {
     const markup = renderPage({ locale: "de" });
     expect(markup).toContain("Bevor eine Freigabe-Anfrage gestellt wird");
