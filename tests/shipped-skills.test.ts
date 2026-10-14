@@ -135,6 +135,22 @@ describe("the skills that ship with the platform", () => {
     expect(posing.body).toContain("Only a skill that ships with the platform names an origin");
   });
 
+  it("keeps the name of a skill a module ships for the platform while that module is off", async () => {
+    // Before, Workflows off let an instance take `workflow-authoring`, and the start that
+    // turned Workflows on stopped on it.
+    const app = await start(false);
+    expect(await shippedNames(app)).toEqual([GUIDE]);
+    const taken = await app.call("assets.put", {
+      params: { kind: "skill", name: AUTHORING },
+      payload: {
+        config: { name: AUTHORING, title: "Ours", description: "Ours.", content: "Ours." },
+        expectedRevision: null
+      }
+    });
+    expect(taken.statusCode, taken.body).toBe(422);
+    expect(taken.body).toContain(`The platform ships a skill named '${AUTHORING}'`);
+  });
+
   it("copies one into an ordinary skill of the instance that can be changed", async () => {
     const app = await start(false);
     const { config } = await read(app, GUIDE);

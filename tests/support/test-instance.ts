@@ -16,7 +16,8 @@ import {
   createSkillAssetKind,
   type ChatServerExtensions,
   type ChatServerJobOptions,
-  type ChatServerOptions
+  type ChatServerOptions,
+  type OperationCalls
 } from "@vivd-catalyst/chat-server";
 import { frameworkBehind } from "../../packages/chat-server/src/http/framework";
 import { buildApiPath, operationPathParamNames } from "@vivd-catalyst/api-contract";
@@ -28,7 +29,6 @@ import {
   SecretNotResolvedError,
   type HttpRuntime,
   type JobWorker,
-  type OperationDefinition,
   type PlatformStores
 } from "@vivd-catalyst/core";
 import { createStaticConfigAssetSource } from "./static-config-asset-source";
@@ -370,7 +370,7 @@ export function createTestAssetKinds(
 ): ChatServerOptions["configAssets"]["kinds"] {
   return createAssetKindRegistry([
     createAgentAssetKind(input),
-    createSkillAssetKind({ config: input.config })
+    createSkillAssetKind({ config: input.config, shippedSkillNames: [] })
   ]);
 }
 
@@ -516,15 +516,15 @@ export function getTestJobs(instance: TestInstance, jobOptions?: ChatServerJobOp
 }
 
 /**
- * The operations the routes of the instance registered, as its call path holds them: each with
- * the module its registration names. The server, and with it the call path, is built on the
- * first request, so one is made here.
+ * The call path of the instance: the operations its routes registered, and a call no request
+ * can make, such as one made in a workspace. The server, and with it the call path, is built
+ * on the first request, so one is made here.
  */
-export async function getTestOperations(instance: TestInstance): Promise<OperationDefinition[]> {
+export async function getTestOperationCalls(instance: TestInstance): Promise<OperationCalls> {
   await instance.call("health.get");
   const calls = metadata.get(instance)?.serverOptions?.operationCalls;
   if (!calls) throw new Error("This fixture has no API process that registers operations");
-  return (await calls.registry.list()).operations;
+  return calls;
 }
 /** The options the server of an assembled instance was built with, once it answered a request. */
 export const testServerOptions = (instance: TestInstance) => metadata.get(instance)?.serverOptions;

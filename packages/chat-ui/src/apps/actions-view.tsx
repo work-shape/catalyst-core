@@ -16,7 +16,11 @@ import {
 import { useTranslation } from "../i18n";
 import { ActionTestDialog } from "./action-test-dialog";
 import { AppActionEffect, AppActionOutcomeBadge, AppActionTarget } from "./app-action-facts";
-import { appActionTestable, appActionUnavailableKeys } from "./app-actions-model";
+import {
+  appActionTargetKeys,
+  appActionTestable,
+  appActionUnavailableKeys
+} from "./app-actions-model";
 import { useAppActions, type AppActionsRead } from "./app-data";
 import type { AppRights } from "./app-model";
 
@@ -124,7 +128,7 @@ export function AppActionsView({
                 <TableCellDetail>
                   {action.unavailable
                     ? t(appActionUnavailableKeys[action.unavailable])
-                    : t("apps.actionKindConnection")}
+                    : t(appActionTargetKeys[action.kind])}
                 </TableCellDetail>
               </TableCell>
               {/* A row without a test gives its room to what a call would come to. */}

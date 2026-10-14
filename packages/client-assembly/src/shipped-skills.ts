@@ -15,6 +15,14 @@ import { platformDocsSkill } from "./platform-docs-skill";
 // them by name. A skill a release no longer ships, such as the former `platform-guide`, the
 // seed deletes.
 
+/**
+ * The names of every skill this build ships, whichever modules are on. A skill of the instance's
+ * own takes none of them.
+ */
+export const shippedSkillNames: readonly string[] = [platformSkill, workflowAuthoringSkill].map(
+  (skill) => skill.name
+);
+
 /** The kinds the platform ships a skill for. */
 const SHIPPED_SKILL_KINDS = [WORKFLOW_ASSET_KIND];
 

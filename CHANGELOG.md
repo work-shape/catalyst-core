@@ -35,6 +35,20 @@ contain breaking changes; a patch version does not.
   push the config to each environment, or that agent loses them. Agents may list them without
   the release config naming them. An instance skill named `platform-docs` stops startup; rename
   it before the upgrade.
+- **Apps, an action that starts a Workflow (App Kit 1.3.0):** an action file
+  `actions/<name>.action.yaml` with `workflow: <id>` and `input.schema`/`input.mapping` starts
+  the published Workflow as the viewer, who needs `workflow.use` on it; without it the call is
+  refused with the right named. Its effect is always `changing`. The call answers
+  `{ runId, status, result }` with the Workflow Run in `result`; the Page follows it with the
+  kit's `useWorkflowRun(result.id)` or `workflowRuns.get(result.id)`, through the new operation
+  `apps.sessions.get_workflow_run`
+  (`POST /api/v1/app-content-sessions/:pageSessionId/workflow-runs/:runId`), which reads only
+  runs of the Workflows the App's actions start and only for the viewer who started them. In a
+  draft the call starts nothing and answers `status: "dry_run"` with "Would have started the
+  Workflow '<id>' with <input>". The build refuses a Workflow action in an App on a kit before
+  1.3.0. `page.save` documents the kind. The kit's `page.css` for a plain Page leaves out the
+  flow canvas rules the library's stylesheet brings. **Operators:** the chat-server tarball
+  limit rises to 2.1 MB for the fourth kit version.
 - **Guardrails replace approval checks, and Build lists them:** release config takes
   `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
   `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
@@ -56,6 +70,36 @@ contain breaking changes; a patch version does not.
   ignores the table `guardrail_hits` and the stored guardrails, and it does not read
   `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
   no checks.
+- **Guardrails answer at every before-event:** a guardrail of release config binds to
+  `asset.before_write` (each asset `assets.put` and `assets.sync` save, an agent's save of its
+  conversation's subject, and the skill a `propose_skill_change` would write), `operation.before_call` (every call, and the operation an App's or a Page's action calls,
+  such as a Data Store's insert, with that operation's name), `app.before_publish`,
+  `workflow.before_publish` or `approval_request.before_create`. The before-events of a call go
+  through the event emitter, which runs the guardrails bound to them. A `filter` narrows by
+  what its event knows: `kind` (an asset's or a request's), `operation` (a name or a prefix
+  ending in `.*`), `origin` (`agent`, `user`, `cli`, `mcp`, `app`, `workflow`, `schedule`) and
+  `agent`. A new check kind `pattern` matches an RE2 expression (no backreferences, no
+  lookaround, linear time; `re2js`) over the fields the event declares checkable: `name` and
+  `content` of an asset, `input` of a call, `summary` and `newContent` of a request; a check may
+  name `fields`, and a pattern a `reason` it is shown with. A new outcome `require_approval`
+  holds a changing call for an approval in the Inbox and refuses a read; an outcome `allow`
+  lets the action go on and never overrides another answer. Patterns run first, and a block
+  among them skips the judges. Every guardrail that applies runs and the strictest answer wins.
+  A refusal names the guardrail, the asset and the reason, as `GUARDRAIL_BLOCKED` with
+  `details.guardrailId`, and `catalyst config push` prints it. Content longer than 2 Mi
+  characters is not read in part: a guardrail that blocks or holds answers as on a match. A
+  pattern reads less the larger its compiled program is (40 million steps a field, about half a
+  second at most on the server's one thread), so no pattern holds the server. A hit
+  now names its subject (the asset's kind, id and name, or the operation's name, never the run
+  and never a person), and Build > Guardrails links an asset's hit to its page (migration
+  `0072_guardrail_hit_subject`). A call that waited for an approval is asked again before it is
+  executed without keeping a second hit. **Operators:** release config refuses at start a
+  pattern RE2 does not compile, one longer than 2,000 characters, one whose program is too large
+  to read 64 Ki characters (such as `[a-z]{1000}`), a filter key or a field its
+  event does not have, and `require_approval` on `approval_request.before_create`.
+  **Rollback:** an earlier release ignores the two new columns, and refuses a config with a
+  guardrail it does not know: remove guardrails on the new events, of kind `pattern` or with
+  the new outcomes before rolling back.
 - **Embedding models:** a model binding of `kind: embedding` with `dimensions` turns text into
   vectors for Knowledge Bases, and `knowledge.defaultEmbeddingBinding` names the default. The
   gateway's `embed` is the one path for an embedding call, admitted, retried and settled like a
@@ -72,7 +116,9 @@ contain breaking changes; a patch version does not.
   writes them at start: a changed one gets a revision in History, one a release no longer ships
   is deleted, and the same release writes nothing. They are read-only: a write, delete or revert
   of one is refused with `403` and the reason `shipped_skill`, and a skill that names `origin`
-  or `icon` is refused with `422`. Studio lists them with the label "Platform" and offers "Copy
+  or `icon` is refused with `422`. A skill of the instance's own under the name of either is
+  refused with `422` whether Workflows is on or not: "The platform ships a skill named '<name>',
+  also where its module is off: choose a name of your own". Studio lists them with the label "Platform" and offers "Copy
   to edit", which creates an ordinary skill. The config CLI neither pulls, diffs nor prunes
   them. **Upgrade:** an instance that holds a skill of its own named `platform-guide` or
   `workflow-authoring` stops at start with "The platform ships the skill '<name>', and a skill
@@ -1005,6 +1051,18 @@ id from config_assets where status = 'deleted')`.
   conversation and fails the check, naming the conversation.
 
 ### Changed
+
+- **New agents start in the workspace they were made in:** an agent created in a Shared
+  Workspace, in Studio or by the Build Agent in a conversation there, is available in that
+  workspace only. One created in a Personal Workspace, by `catalyst config push` without the
+  release right, or by `assets.put` without a workspace starts hidden; `assets.put` answers the
+  warning `agent_hidden` and `assets.sync` names the agents in `hiddenAgentNames`. Before, every
+  new agent was available in all workspaces. `assets.put` takes `availableIn` (`"all"` with the
+  right to write agents on the whole instance, or `{ "workspaceId" }`), and the create dialog in
+  Studio offers "All workspaces" to that holder. A release push and the first agent of an
+  instance start in all workspaces as before. **Operators:** a script that creates agents
+  through the API and expects them in every workspace passes `availableIn: "all"` or sets the
+  availability after the write.
 
 - **Skill icons:** a skill's line icon sits on one neutral tile in lists and on starters (32 px
   tile, 18 px icon; 24 px in the picker rows), in ink for a skill that ships with the platform
@@ -2142,6 +2200,17 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Outside hosts of an App on the viewer's own network:** `externalHosts` in `app.yaml` took a
+  name under `.localhost`, `.local`, `.internal`, `.lan` or `.home.arpa`, which reaches the
+  viewer's own machine or network. The build refuses one with "a host on the internet: a name
+  under .localhost, .local, .internal, .lan, .home.arpa reaches the viewer's own machine or
+  network", and a host listed twice with "lists the host '<host>' twice". The content policy of
+  a revision stored before leaves such a name out and names each host once. **Upgrade:** a Page
+  whose manifest lists one no longer builds until the entry is removed.
+- **A JSON request body the server does not read:** an empty body with a JSON content type, one
+  that does not parse, and one that names `__proto__` or `constructor.prototype` as a key
+  answered `500` on every operation. Each now answers `400` `BAD_REQUEST` with
+  `details.reason` `invalid_json_body`.
 - **Chat starters:** a starter of a skill that ships with the platform shows that skill's
   icon. Every starter showed the generic book, because the agent's starters did not carry the
   skill's `icon`. A skill of the instance's own keeps the generic book.

@@ -57,7 +57,14 @@ export function createGuardrailAssetKind(): WorkflowAssetKind {
           checkKind: guardrail.check.kind,
           outcome: guardrail.outcome,
           origin: guardrail.origin,
-          ...(guardrail.filter?.kind === undefined ? {} : { appliesTo: guardrail.filter.kind })
+          ...(guardrail.filter?.kind === undefined ? {} : { appliesTo: guardrail.filter.kind }),
+          ...(guardrail.filter?.operation === undefined
+            ? {}
+            : { operation: guardrail.filter.operation }),
+          ...(guardrail.filter?.origin === undefined
+            ? {}
+            : { callOrigin: guardrail.filter.origin }),
+          ...(guardrail.filter?.agent === undefined ? {} : { agent: guardrail.filter.agent })
         }
       })
     }),

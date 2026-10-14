@@ -190,7 +190,10 @@ export interface ChatServerOptions {
   authorizer?: Authorizer;
   /** What the calls of registered operations run with beyond the server's own defaults. */
   operations?: {
-    /** The events of a call. Without one, audited events become audit rows and nothing blocks. */
+    /**
+     * The events of a call. Without one, the guardrails of release config answer at the
+     * before-events and audited events become audit rows; one given here does both.
+     */
     events?: PlatformEventEmitter;
     /** The admin's policy settings. Without them only the defaults apply. */
     centralPolicySettings?():

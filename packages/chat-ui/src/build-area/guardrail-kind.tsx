@@ -1,6 +1,6 @@
 import { Badge } from "@vivd-catalyst/ui";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
-import { GUARDRAIL_OUTCOME_VIEWS } from "./guardrail-model";
+import { GUARDRAIL_OUTCOME_VIEWS, readOutcome } from "./guardrail-model";
 import { GuardrailPage } from "./guardrail-page";
 import { useGuardrailSource } from "./guardrail-source";
 
@@ -27,15 +27,15 @@ export const guardrailKind: BuildListedKind = {
   icon: "guardrail",
   view: { Page: GuardrailAssetPage, missingText: "guardrails.missing" },
   rowText: (asset) => asset.description,
-  // Only what a hit does: every Guardrail is checked by a model so far, and its page says so.
+  // Only what a hit does: the page says when and how it checks.
   badges: (asset, t) => {
     const outcome = asset.attributes?.outcome;
-    const view =
-      outcome === "block" || outcome === "warn" ? GUARDRAIL_OUTCOME_VIEWS[outcome] : undefined;
-    return view ? (
+    if (outcome === undefined) return null;
+    const view = GUARDRAIL_OUTCOME_VIEWS[readOutcome(outcome)];
+    return (
       <Badge tone={view.tone} dot>
         {t(view.label)}
       </Badge>
-    ) : null;
+    );
   }
 };

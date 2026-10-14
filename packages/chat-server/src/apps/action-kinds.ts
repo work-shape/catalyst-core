@@ -7,6 +7,7 @@ import {
   AppError,
   CONNECTION_ASSET_KIND,
   DATA_STORE_ASSET_KIND,
+  WORKFLOW_ASSET_KIND,
   connectionCallError,
   connectionOperationName,
   dataStoreOperationName,
@@ -23,7 +24,8 @@ import {
 
 // What each kind of named action stands for. An action of every kind is one operation of the
 // registry, reached through that operation's own definition: a `connection` action an
-// operation of a Connection, an `sql` action the query or the insert of a Data Store. The
+// operation of a Connection, an `sql` action the query or the insert of a Data Store, a
+// `workflow` action the start of a Workflow by hand (`workflows.start`). The
 // call path knows this one interface and asks it by the action's kind; nothing else compares
 // a kind.
 //
@@ -87,21 +89,31 @@ export interface AppActionBinding {
   inputRefusal(): AppError;
   /** What an agent that carries the action as a tool reads, where its author wrote nothing. */
   describe(appTitle: string): string;
+  /**
+   * What a call in safe mode answers in place of a refusal, made of the parameters a caller
+   * passed: what it would have done, as a sentence, and the input it would have done it with.
+   * Nothing is called for it. A kind without it is refused in safe mode.
+   */
+  dryRun?(parameters: JsonObject): { wouldHave: string; input: JsonObject };
 }
 
-/** The caller's right on an operation, by that operation's own rule. */
+/**
+ * The caller's right on an operation, by that operation's own rule. `input` is what of the
+ * operation's input the action fixes, where its rule reads that.
+ */
 function authorizeCaller(
   operation: OperationDefinition,
-  context: OperationAuthorizeContext
+  context: OperationAuthorizeContext,
+  input?: JsonObject
 ): OperationAuthorization | Promise<OperationAuthorization> {
-  const resource = operation.resource(undefined);
+  const resource = operation.resource(input);
   if (operation.action !== null) {
     const decision = context.access.authorize(operation.action, resource);
     return decision.allowed
       ? { allowed: true }
       : { allowed: false, action: operation.action, reason: decision.reason };
   }
-  return operation.authorize(undefined, { ...context, resource });
+  return operation.authorize(input, { ...context, resource });
 }
 
 type ActionOfKind<Kind extends CompiledAppAction["kind"]> = Extract<
@@ -214,6 +226,48 @@ function dataStoreBinding(action: ActionOfKind<"sql">): AppActionBinding {
   };
 }
 
+/**
+ * A `workflow` action starts a run of the published revision of its Workflow, as the viewer:
+ * the viewer needs `workflow.use` on the Workflow beside the right on the App, by the rule of
+ * `workflows.start` itself, in a draft as in the published App. The run acts as the
+ * Workflow's own principal, never with the rights of the person who started it. The answer is
+ * the run as `workflows.start` answers it; its state is read later with
+ * `apps.sessions.get_workflow_run`.
+ */
+function workflowBinding(action: ActionOfKind<"workflow">): AppActionBinding {
+  const startOf = (parameters: JsonObject) => ({
+    workflow: action.workflow,
+    input: applyAppActionMapping(action.input.mapping, parameters)
+  });
+  return {
+    operation: "workflows.start",
+    target: { workflow: action.workflow },
+    assetKind: WORKFLOW_ASSET_KIND,
+    module: "workflows",
+    admit: (operation) =>
+      operation
+        ? { operation }
+        : { refusal: new AppError("NOT_FOUND", "This instance has no Workflows") },
+    authorize: (operation, context) =>
+      authorizeCaller(operation, context, { workflow: action.workflow }),
+    inputOf: startOf,
+    inputRefusal: () =>
+      new AppError(
+        "INTERNAL",
+        "The compiled mapping of an action does not fit the start of a Workflow"
+      ),
+    describe: (appTitle) =>
+      `Starts a run of the Workflow '${action.workflow}', as the action '${action.name}' of the App '${appTitle}' does. The answer is the run with its id and status; the run goes on after the answer.`,
+    dryRun(parameters) {
+      const start = startOf(parameters);
+      return {
+        wouldHave: `Would have started the Workflow '${action.workflow}' with ${JSON.stringify(start.input)}.`,
+        input: start
+      };
+    }
+  };
+}
+
 /** What a compiled action stands for, by its kind. */
 export function appActionBinding(action: CompiledAppAction): AppActionBinding {
   switch (action.kind) {
@@ -221,5 +275,7 @@ export function appActionBinding(action: CompiledAppAction): AppActionBinding {
       return connectionBinding(action);
     case "sql":
       return dataStoreBinding(action);
+    case "workflow":
+      return workflowBinding(action);
   }
 }

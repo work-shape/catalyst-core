@@ -90,6 +90,12 @@ const unknownOperationSchema = z.object({
  */
 export const BODY_TOO_LARGE_REASON = "body_too_large";
 
+/**
+ * `details.reason` of the 400 a server answers for a JSON request body it does not read: one
+ * that is empty, does not parse, or names `__proto__` or `constructor.prototype` as a key.
+ */
+export const INVALID_JSON_BODY_REASON = "invalid_json_body";
+
 export function isUnknownOperationResponse(payload: unknown): boolean {
   return unknownOperationSchema.safeParse(payload).success;
 }

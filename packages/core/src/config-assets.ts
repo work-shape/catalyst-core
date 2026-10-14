@@ -33,20 +33,30 @@ export interface AgentAvailability {
 }
 
 /**
- * Availability given to agents a mutation batch creates or revives.
- * `selected_when_replacing_selected` is the config push rule: a batch that also deletes a
- * `selected` agent is treated as a rename, so its new agents start hidden instead of `all`.
+ * Availability given to agents a mutation batch creates or revives: every workspace, none,
+ * or the one shared workspace the agent was made in. `selected_when_replacing_selected` is
+ * the release rule: a batch that also deletes a `selected` agent is treated as a rename, so
+ * its new agents start hidden instead of `all`.
  */
-export type InitialAgentAvailability = "all" | "selected" | "selected_when_replacing_selected";
+export type InitialAgentAvailability =
+  | "all"
+  | "hidden"
+  | { collaborationWorkspaceId: CollaborationWorkspaceId }
+  | "selected_when_replacing_selected";
 
-export function resolveInitialAgentAvailabilityMode(
+export function resolveInitialAgentAvailability(
   initial: InitialAgentAvailability | undefined,
   deletesSelectedAgent: boolean
-): AgentAvailabilityMode {
-  if (initial === "selected_when_replacing_selected") {
-    return deletesSelectedAgent ? "selected" : "all";
+): Pick<AgentAvailability, "mode" | "collaborationWorkspaceIds"> {
+  const hidden = { mode: "selected" as const, collaborationWorkspaceIds: [] };
+  if (initial === undefined || initial === "all") {
+    return { mode: "all", collaborationWorkspaceIds: [] };
   }
-  return initial ?? "all";
+  if (initial === "hidden") return hidden;
+  if (initial === "selected_when_replacing_selected") {
+    return deletesSelectedAgent ? hidden : { mode: "all", collaborationWorkspaceIds: [] };
+  }
+  return { mode: "selected", collaborationWorkspaceIds: [initial.collaborationWorkspaceId] };
 }
 
 export function isAgentAvailableInWorkspace(
