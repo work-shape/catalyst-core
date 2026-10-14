@@ -57,6 +57,7 @@ describe("the demo seed on the demo's own config", () => {
       "connection grant rows": 3,
       workspaces: 1,
       "workspace members": 4,
+      "workspace assets": 2,
       apps: 3,
       workflows: 1
     });

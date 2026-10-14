@@ -25,6 +25,12 @@ export interface ManifestInstance {
    * the instance's default agent alone, which only a release names.
    */
   namespace?: string;
+  /**
+   * The workspace this working copy is bound to, by its id: `catalyst config pull
+   * --workspace <id>` writes it. The root holds what that workspace owns, and everything it
+   * pushes is owned by that workspace. A root names a Namespace or a workspace, not both.
+   */
+  workspace?: string;
 }
 
 export interface CatalystManifest {
@@ -116,9 +122,16 @@ export function parseManifest(contents: string, source = MANIFEST_FILENAME): Cat
         `${source} instance '${name}' names no Namespace prefix: '${namespace}'. A prefix is lowercase words joined by '-' and ends in '-', such as 'kai-'.`
       );
     }
+    const workspace = readOptionalString(value, "workspace", `${source} instance '${name}'`);
+    if (namespace !== undefined && workspace !== undefined) {
+      throw new Error(
+        `${source} instance '${name}' names a Namespace and a workspace. A working copy belongs to one of them.`
+      );
+    }
     instances[name] = {
       url: normalizeUrl(value.url, `${source} instance '${name}'`),
-      ...(namespace === undefined ? {} : { namespace })
+      ...(namespace === undefined ? {} : { namespace }),
+      ...(workspace === undefined ? {} : { workspace })
     };
   }
 
@@ -465,6 +478,48 @@ export async function updateManifestDefaultAgent(
     }
   }
   await writeFile(path, updated, "utf8");
+}
+
+/**
+ * Binds the working copy's instance to a workspace: writes `workspace: <id>` below the
+ * instance's `url` in catalyst.yaml and leaves every other line as it is. An instance that is
+ * not written as a block with its own `url:` line is not changed, and the caller is told to
+ * add the line itself.
+ */
+export async function bindManifestWorkspace(
+  path: string,
+  instanceKey: string,
+  workspaceId: string
+): Promise<void> {
+  const contents = await readFile(path, "utf8");
+  const lines = contents.split("\n");
+  const keyLine = lines.findIndex((line) => {
+    const match = /^(\s+)(["']?)([^"':]+)\2:\s*(?:#.*)?$/u.exec(line.trimEnd());
+    return match?.[3] === instanceKey;
+  });
+  const keyIndent = keyLine < 0 ? -1 : indentOf(lines[keyLine] ?? "");
+  let urlLine = -1;
+  for (let index = keyLine + 1; keyLine >= 0 && index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (line.trim() === "" || line.trim().startsWith("#")) continue;
+    if (indentOf(line) <= keyIndent) break;
+    if (/^\s+url:/u.test(line)) {
+      urlLine = index;
+      break;
+    }
+  }
+  if (urlLine < 0) {
+    throw new Error(
+      `Cannot bind instance '${instanceKey}' in ${MANIFEST_FILENAME}: add 'workspace: ${workspaceId}' to that instance yourself, beside its url.`
+    );
+  }
+  const entry = yaml.dump({ workspace: workspaceId }, { lineWidth: -1 }).trimEnd();
+  lines.splice(urlLine + 1, 0, `${" ".repeat(indentOf(lines[urlLine] ?? ""))}${entry}`);
+  await writeFile(path, lines.join("\n"), "utf8");
+}
+
+function indentOf(line: string): number {
+  return line.length - line.trimStart().length;
 }
 
 /**

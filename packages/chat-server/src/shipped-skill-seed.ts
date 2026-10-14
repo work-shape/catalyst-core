@@ -137,10 +137,12 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
       const dropped = skillNames.filter(listsRemoved);
       if (dropped.length === 0) continue;
       // Only the reference goes; a copy of the skill under a name of the instance's own stays.
+      // The agent stays with its owner: a workspace's agent is written in that workspace.
       mutations.push({
         type: "upsert",
         kind: AGENT_KIND,
         name: agent.name,
+        scope: agent.scope,
         config: { ...config, skillNames: skillNames.filter((name) => !listsRemoved(name)) }
       });
       baseRevisions[`${AGENT_KIND}:${agent.name}`] = agent.revision;

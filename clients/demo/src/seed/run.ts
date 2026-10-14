@@ -26,9 +26,10 @@ import {
   offeredNowhere,
   type SeedApi
 } from "./api";
-import { seedApps } from "./apps";
+import { seedApps, seedWorkspace } from "./apps";
 import { seedBuilder } from "./builder";
 import { seedWorkflows } from "./workflows";
+import { seedWorkspaceAssets } from "./workspace-assets";
 import {
   assertLocalDevelopmentHost,
   assertLoopbackAddress,
@@ -164,7 +165,9 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   await seedBuilder(root, as, modules, instance.assetsDir, steps);
   await seedHeldCalls(root, as, steps);
   await seedConnections(root, as, userIds, modules, steps);
-  await seedApps(modules, as, instance.assetsDir, steps);
+  const workspaceId = await seedWorkspace(as, steps);
+  await seedWorkspaceAssets(as, workspaceId, steps);
+  await seedApps(modules, as, workspaceId, instance.assetsDir, steps);
   const seededWorkflows = await seedWorkflows(root, modules, instance.assetsDir);
   if (seededWorkflows) steps.push(seededWorkflows);
   return { steps };

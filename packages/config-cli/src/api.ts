@@ -51,6 +51,11 @@ export interface ConfigApiOptions {
   fetchImpl?: typeof fetch;
   /** Waits between tries. Tests pass one that does not wait. */
   sleep?: (milliseconds: number) => Promise<void>;
+  /**
+   * The workspace whose own assets the working copy holds, for a root bound with
+   * `--workspace`. Left out, the instance's own. The reads of assets name it.
+   */
+  workspaceId?: string;
 }
 
 type FetchImpl = NonNullable<ConfigApiOptions["fetchImpl"]>;
@@ -67,6 +72,7 @@ export async function createConfigApi(options: ConfigApiOptions) {
   });
 
   const sleep = options.sleep ?? defaultSleep;
+  const scope = options.workspaceId === undefined ? {} : { workspaceId: options.workspaceId };
 
   /**
    * Sends one changing call, all its tries under one key: a try whose answer never arrived is
@@ -120,7 +126,11 @@ export async function createConfigApi(options: ConfigApiOptions) {
         const page = await read(sleep, () =>
           client.assets.list({
             params: { kind },
-            query: { limit: MAX_LIST_LIMIT, ...(cursor === undefined ? {} : { cursor }) }
+            query: {
+              limit: MAX_LIST_LIMIT,
+              ...scope,
+              ...(cursor === undefined ? {} : { cursor })
+            }
           })
         );
         assets.push(...page.items);
@@ -131,7 +141,9 @@ export async function createConfigApi(options: ConfigApiOptions) {
     /** One asset with its content, or nothing where the instance holds none of that name. */
     getAsset: async (kind: string, name: string): Promise<Asset | undefined> => {
       try {
-        return await read(sleep, () => client.assets.get({ params: { kind, name } }));
+        return await read(sleep, () =>
+          client.assets.get({ params: { kind, name }, query: { ...scope } })
+        );
       } catch (error) {
         if (isMissingAsset(error)) return undefined;
         throw error;
@@ -140,7 +152,7 @@ export async function createConfigApi(options: ConfigApiOptions) {
     /** Who wrote the latest revision of one asset, a deleted one included. */
     getLatestRevision: async (kind: string, name: string) => {
       const page = await read(sleep, () =>
-        client.assets.revisions.list({ params: { kind, name }, query: { limit: 1 } })
+        client.assets.revisions.list({ params: { kind, name }, query: { limit: 1, ...scope } })
       );
       return page.items[0];
     },

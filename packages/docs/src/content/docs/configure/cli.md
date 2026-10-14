@@ -54,12 +54,21 @@ defaultInstance: production
 ```
 
 Its `push` names the Namespace, as the instance asks of everyone but the holder of the release right, and never changes the instance's default agent. Its `pull`, `diff` and `list` read only the agents and skills the key may read, and neither the instance's version nor its default agent, which only a reader of every agent and skill may read; a key of one Namespace pulls, diffs and lists its Namespace.
+
+A working copy can instead belong to one Shared Workspace: then the agents and skills it pushes are the workspace's own, and a pull reads only what the workspace owns. Bind an empty working copy once with its first pull:
+
+```sh
+catalyst config pull --workspace <workspace-id>
+```
+
+The pull writes `workspace: <workspace-id>` beside the instance's `url` in `catalyst.yaml`, and every later command of that working copy names the workspace. A working copy is bound once: one bound to another workspace, one of a Namespace and one that already pulled the instance's own assets are refused, so pull another workspace into a directory of its own. Its `push` is never a release and never changes the instance's default agent, which only an agent of the instance can be; an agent it creates starts hidden until an instance admin offers it, and a guardrail it creates belongs to the workspace as well. A workspace's agent may name the workspace's skills and the instance's skills you may read; no agent outside the workspace may name the workspace's skills.
+
 ## One command per asset operation
 
 Every operation on assets has a command, for every kind the instance registers: agents, skills, Apps, Workflows, Connections, Data Stores, guardrails. The kind is the first word, by its id, its plural or with dashes (`data-store`). The instance names its kinds; a kind a later release adds works without a new CLI.
 
 ```sh
-catalyst context                  # the instance, your rights and Namespaces, its kinds
+catalyst context                  # the instance, your rights in Namespaces and workspaces, its kinds
 catalyst kinds                    # each kind: lifecycle, folder or definition, rights
 catalyst references               # models, efforts and tools a definition may name
 catalyst agent list --prefix tax-

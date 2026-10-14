@@ -69,19 +69,16 @@ function resourceOf(connection: StoredConnection): OperationResource {
 
 /**
  * Whether the operation is exposed to the surface the call came through. An agent needs
- * `agent`, an App `bridge`, a Workflow `workflow`. A person, the CLI and an MCP client need
- * any one. An operation exposed to nobody is callable by nobody, and a schedule by none yet.
+ * `agent`, an App `bridge`, a Workflow `workflow`, the CLI and an MCP client `outside`. An
+ * operation exposed to nobody is callable by nobody, and a person outside an App and a
+ * schedule by none.
  */
 export function connectionExposureDenial(
   operation: Pick<ConnectionOperationConfig, "exposure">,
   origin: OperationOrigin
 ): Extract<OperationAuthorization, { allowed: false }> | undefined {
   const needed = exposureOfOrigin(origin);
-  const exposed =
-    needed === "any"
-      ? operation.exposure.length > 0
-      : needed !== undefined && operation.exposure.includes(needed);
-  return exposed
+  return needed !== undefined && operation.exposure.includes(needed)
     ? undefined
     : {
         allowed: false,

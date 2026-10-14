@@ -97,6 +97,7 @@ describe("the rights a service principal can be given", () => {
             plural: "connections",
             lifecycle: "active",
             representation: "config",
+            owners: ["instance"],
             actions: {
               read: "connection.read",
               use: "connection.use",

@@ -16,10 +16,18 @@ export interface BuildNamespace {
   displayName: string;
 }
 
+/** A Shared Workspace whose own assets the reader holds a right on, as the scope names it. */
+interface BuildWorkspace {
+  id: string;
+  name: string;
+  /** The reader is a member: a new agent made there starts offered there. */
+  member: boolean;
+}
+
 /**
  * What the reader may do in Build, as far as the browser can know it: the rights on the whole
- * instance from the session and the platform context, and the rights per Namespace from the
- * platform context. A grant
+ * instance from the session and the platform context, and the rights per Namespace and per
+ * workspace from the platform context. A grant
  * on one single asset tells that the kind has a list and nothing about the asset, so such an
  * asset opens read-only here. The instance
  * decides every call itself; this only chooses what the page offers.
@@ -33,9 +41,19 @@ export interface BuildRights {
   instanceWrite: boolean;
   /** The Namespaces the reader holds any right in, by prefix. */
   namespaces: readonly BuildNamespace[];
-  may(verb: Exclude<AssetVerb, "read">, asset: { kind: string; namespace?: string }): boolean;
-  /** The reader may start a new asset of the kind somewhere. */
-  mayCreate(kind: string): boolean;
+  /** The reader holds a right on some of the instance's own assets. */
+  readsInstance: boolean;
+  /** The Shared Workspaces whose own assets the reader holds a right on. */
+  workspaces: readonly BuildWorkspace[];
+  may(
+    verb: Exclude<AssetVerb, "read">,
+    asset: { kind: string; namespace?: string; workspaceId?: string }
+  ): boolean;
+  /**
+   * The reader may start a new asset of the kind: in the workspace named, or without one
+   * somewhere among the instance's own assets.
+   */
+  mayCreate(kind: string, workspaceId?: string): boolean;
   /** The Namespaces a new asset of the kind may be named in, by prefix. */
   creatableNamespaces(kind: string): readonly BuildNamespace[];
 }
@@ -66,25 +84,50 @@ export function resolveBuildRights(
   };
   const creatableNamespaces = (kind: string) =>
     held.filter((namespace) => holds(kind, "write", namespace.prefix)).map(toBuildNamespace);
+  // Studio offers the Shared Workspaces: what is made in a personal one starts hidden.
+  const inWorkspaces = (context?.workspaces ?? []).filter(
+    (workspace) => workspace.kind === "shared"
+  );
+  const holdsIn = (kind: string, verb: AssetVerb, workspaceId: string | undefined): boolean => {
+    const name = action(kind, verb);
+    return (
+      name !== undefined &&
+      inWorkspaces.some(
+        (workspace) => workspace.id === workspaceId && workspace.actions.includes(name)
+      )
+    );
+  };
+  const readsInstance =
+    instanceRead ||
+    instanceWrite ||
+    onInstance.length > 0 ||
+    onSingleAssets.length > 0 ||
+    held.length > 0;
 
   return {
-    readsAny:
-      instanceRead ||
-      instanceWrite ||
-      onInstance.length > 0 ||
-      onSingleAssets.length > 0 ||
-      held.length > 0,
+    readsAny: readsInstance || inWorkspaces.length > 0,
     reads: (kind) =>
       verbs.some((verb) => {
         const name = action(kind, verb);
         return name !== undefined && onInstance.includes(name);
       }) ||
       onSingleAssets.includes(action(kind, "read") ?? "") ||
-      held.some((namespace) => verbs.some((verb) => holds(kind, verb, namespace.prefix))),
+      held.some((namespace) => verbs.some((verb) => holds(kind, verb, namespace.prefix))) ||
+      inWorkspaces.some((workspace) => verbs.some((verb) => holdsIn(kind, verb, workspace.id))),
     instanceWrite,
     namespaces: held.map(toBuildNamespace),
-    may: (verb, asset) => instanceWrite || holds(asset.kind, verb, asset.namespace),
-    mayCreate: (kind) => instanceWrite || creatableNamespaces(kind).length > 0,
+    readsInstance,
+    workspaces: inWorkspaces.map(({ id, name, member }) => ({ id, name, member })),
+    may: (verb, asset) =>
+      instanceWrite ||
+      (asset.workspaceId === undefined
+        ? holds(asset.kind, verb, asset.namespace)
+        : holdsIn(asset.kind, verb, asset.workspaceId)),
+    mayCreate: (kind, workspaceId) =>
+      instanceWrite ||
+      (workspaceId === undefined
+        ? creatableNamespaces(kind).length > 0
+        : holdsIn(kind, "write", workspaceId)),
     creatableNamespaces
   };
 }
@@ -103,4 +146,69 @@ export function mayCreateAgents(
   management: { allowAgentCreation: boolean } | undefined
 ): boolean {
   return management?.allowAgentCreation === true && rights.mayCreate(AGENT_ASSET_KIND);
+}
+
+/** The owner Studio works in: the instance's own assets, or what one workspace owns. */
+export type BuildScope = { kind: "instance" } | { kind: "workspace"; workspaceId: string };
+
+/** The value a scope is kept and chosen as: `instance`, or the workspace's id. */
+const INSTANCE_SCOPE_VALUE = "instance";
+
+/**
+ * The owners Studio offers this reader: the instance where the reader holds a right on its own
+ * assets, and every Shared Workspace whose own assets the reader holds a right on.
+ */
+export function buildScopes(rights: Pick<BuildRights, "readsInstance" | "workspaces">) {
+  return [
+    ...(rights.readsInstance ? [{ kind: "instance" as const }] : []),
+    ...rights.workspaces.map((workspace) => ({
+      kind: "workspace" as const,
+      workspaceId: workspace.id
+    }))
+  ];
+}
+
+/**
+ * The owner Studio works in: the one chosen last where it is still offered, otherwise the
+ * instance, then the workspace the reader works in, then the first workspace offered.
+ */
+export function resolveBuildScope(
+  rights: Pick<BuildRights, "readsInstance" | "workspaces">,
+  chosen: string | undefined,
+  activeWorkspaceId: string | undefined
+): BuildScope {
+  const offered = buildScopes(rights);
+  const valueOf = (scope: BuildScope) =>
+    scope.kind === "instance" ? INSTANCE_SCOPE_VALUE : scope.workspaceId;
+  return (
+    offered.find((scope) => valueOf(scope) === chosen) ??
+    offered.find((scope) => scope.kind === "instance") ??
+    offered.find((scope) => valueOf(scope) === activeWorkspaceId) ??
+    offered[0] ?? { kind: "instance" }
+  );
+}
+
+/** The value of a scope, as the picker and the browser keep it. */
+export function buildScopeValue(scope: BuildScope): string {
+  return scope.kind === "instance" ? INSTANCE_SCOPE_VALUE : scope.workspaceId;
+}
+
+/** The owner Studio worked in last in this browser, as `instance` or a workspace's id. */
+const SCOPE_STORAGE_KEY = "vivd-catalyst:build-scope";
+
+/** The owner the reader chose last in this browser: `instance`, a workspace's id, or nothing. */
+export function readLastBuildScope(): string | undefined {
+  try {
+    return window.localStorage.getItem(SCOPE_STORAGE_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function storeLastBuildScope(scope: string): void {
+  try {
+    window.localStorage.setItem(SCOPE_STORAGE_KEY, scope);
+  } catch {
+    // A browser that refuses storage opens Studio in the scope it starts in.
+  }
 }
