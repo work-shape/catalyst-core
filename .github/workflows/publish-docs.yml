@@ -23,7 +23,7 @@ jobs:
     # Runs once the repository variable names the Cloudflare account, so the workflow can land
     # before the hosting exists.
     if: github.repository == 'vivd-solutions/vivd-catalyst' && github.ref == 'refs/heads/main' && vars.CLOUDFLARE_ACCOUNT_ID != ''
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
