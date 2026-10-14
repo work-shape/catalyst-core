@@ -76,7 +76,7 @@ After repairing a violation, run its target, read the reported difference and lo
 
 Counts may only fall. On a pull request, `baseline-guard.mjs` compares `quality-baseline.json` with the commit where the branch left its base and fails when a count is higher or an entry was added. Both workflows run it before the installation. A pull request that introduces a rule together with its measured entries fails the guard by design, and merging it needs the bypass.
 
-The manager can accept one raise in `acceptedRaises` of `quality-baseline.json`, as `{ key, to, reason, acceptedBy, date }`, where `key` is `target|rule|scope`. The guard then lets that key rise from the merge base to exactly `to`. A higher count, or a rise on any other key, still fails.
+The manager can accept one raise in `acceptedRaises` of `quality-baseline.json`, as `{ key, to, reason, acceptedBy, date }`, where `key` is `target|rule|scope`. The guard then lets that key rise from the merge base to exactly `to`, when the entry is absent at the merge base: an entry that is already on the base branch excuses no later raise. A higher count, or a rise on any other key, still fails.
 
 `platform/tests/quality-baseline.test.ts` tests the comparison and the guard. `platform/tests/quality-collector.test.ts` runs the real collector over a small project that breaks every rule once, including each known way around a rule; weakening a rule or the collection fails it.
 

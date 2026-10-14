@@ -211,6 +211,14 @@ describe("quality baseline", () => {
         "lint|test/rule|packages/example: count raised from 2 to 3"
       );
 
+      // An entry already on the base branch was accepted for an earlier change.
+      const stale = guardBranch(
+        { version: 1, entries: [entry], acceptedRaises: [accepted] },
+        raisedTo(3)
+      );
+      expect(stale.status).toBe(1);
+      expect(stale.stderr).toContain("lint|test/rule|packages/example: count raised from 2 to 3");
+
       // An accepted raise without its reason is no acceptance.
       const unexplained = guardBranch(baseline, raisedTo(3, { ...accepted, reason: " " }));
       expect(unexplained.status).not.toBe(0);
