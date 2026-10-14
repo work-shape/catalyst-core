@@ -199,7 +199,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await saveDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
-  await expect(edit).toContainText("Draft · revision 1");
+  await expect(edit).toContainText("Draft · not published");
   await expect(
     appIn(page, "app-edit").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();

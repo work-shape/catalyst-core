@@ -1,6 +1,7 @@
 import { groupPartByType, type GroupByContext, type PartState } from "@assistant-ui/react";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import { readToolDisplayPayloadFromToolResult } from "../domain-ui-widgets";
+import { standingAssetOpen } from "../conversation/subject-run";
 import { PAGE_SAVE_TOOL_NAME, readPageSave } from "../pages/page-save";
 import {
   isWorkspacePromotedArtifactsData,
@@ -29,8 +30,10 @@ export function createAssistantMessageGroupBy(): (
     "standalone-tool-call": []
   });
   // The card of a save says that a Page is being built, so it stands in the thread while the
-  // run goes on and does not fold into the count of tool calls.
-  return (part, context) => (isPageSaveCall(part) ? [] : byType(part, context));
+  // run goes on and does not fold into the count of tool calls. An open of an asset stands
+  // there too: a change of what the conversation is about is always seen.
+  return (part, context) =>
+    isPageSaveCall(part) || isStandingOpen(part) ? [] : byType(part, context);
 }
 
 export function createAssistantWorkTimelineItems(
@@ -120,6 +123,7 @@ interface AssistantPartOutline {
   data?: unknown;
   name?: string;
   result?: unknown;
+  isError?: boolean;
   toolName?: string;
   args?: unknown;
 }
@@ -169,6 +173,7 @@ function staysVisibleAfterRun(
     index === finalTextIndex ||
     isApprovalRequestToolCall(part) ||
     isPageSaveOutcome(parts, index) ||
+    isStandingOpen(part) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
   );
 }
@@ -205,6 +210,18 @@ function isPageSaveCall(part: { type: string; toolName?: string } | undefined): 
   return part?.type === "tool-call" && part.toolName === PAGE_SAVE_TOOL_NAME;
 }
 
+/** A call that opened an asset and stood: its line leads to the asset's page. */
+function isStandingOpen(
+  part: { type: string; toolName?: string; result?: unknown; isError?: boolean } | undefined
+): boolean {
+  return (
+    part?.type === "tool-call" &&
+    part.toolName !== undefined &&
+    standingAssetOpen({ toolName: part.toolName, result: part.result, isError: part.isError }) !==
+      undefined
+  );
+}
+
 export function findFinalAssistantTextPartIndex(
   parts: readonly { type: string; text?: string }[]
 ): number {
@@ -217,7 +234,7 @@ export function findFinalAssistantTextPartIndex(
   return -1;
 }
 
-export function isAssistantToolWorkPart(
+function isAssistantToolWorkPart(
   part: PartState | undefined,
   context: GroupByContext = {}
 ): boolean {
@@ -266,7 +283,7 @@ function isStandaloneToolCall(
   if (part.mcp?.app?.resourceUri?.startsWith("ui://")) {
     return true;
   }
-  if (isPageSaveCall(part)) {
+  if (isPageSaveCall(part) || isStandingOpen(part)) {
     return true;
   }
   return context.toolUIs?.[part.toolName]?.[0]?.standalone ?? false;
