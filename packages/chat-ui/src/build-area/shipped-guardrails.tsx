@@ -98,7 +98,7 @@ function ShippedGuardrailCard({
             checked={guardrail.enabled}
             disabled={!guardrail.canSwitch || switching}
             onCheckedChange={(enabled) => {
-              if (enabled) void switchTo(true);
+              if (enabled) switchTo(true).catch(() => undefined);
               else setAsking(true);
             }}
           />
@@ -118,7 +118,9 @@ function ShippedGuardrailCard({
         confirmLabel={t("guardrails.shippedOffConfirm")}
         tone="danger"
         loading={switching}
-        onConfirm={() => void switchTo(false)}
+        onConfirm={() => {
+          switchTo(false).catch(() => undefined);
+        }}
       >
         {words ? t(words.ask) : guardrail.reason}
       </ConfirmDialog>

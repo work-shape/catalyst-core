@@ -80,6 +80,16 @@ export function AppEdit({ app }: { app: string }) {
   const [heldBackHosts, setHeldBackHosts] = useState<readonly string[]>([]);
   // The publish was sent and waits for an approver: the live revision stays until then.
   const [publishWaits, setPublishWaits] = useState(false);
+  // Each save of the draft, also the agent's from the dock, is another revision: the frame asks
+  // for its address anew. The first read of the record is the revision the frame starts with.
+  const draftNow = record.app ? appDraftRevision(record.app) : undefined;
+  const [framedDraft, setFramedDraft] = useState(draftNow);
+  if (draftNow !== framedDraft) {
+    setFramedDraft(draftNow);
+    if (framedDraft !== undefined) {
+      setTurn((count) => count + 1);
+    }
+  }
 
   if (!host || !workspace || !rights) {
     return null;
@@ -378,12 +388,16 @@ export function AppEditFrame({
             state={
               known ? (
                 <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
-                  {t("apps.draftRevision", { number: draftRevision })}
+                  {publishedRevision === undefined
+                    ? t("apps.draftNotPublished")
+                    : t("apps.draftRevision", { number: draftRevision })}
                 </Badge>
               ) : (
                 <Badge size="sm">{t("apps.draft")}</Badge>
               )
             }
+            // A draft nobody published says so whatever the room: it runs nowhere yet.
+            keepState={known && publishedRevision === undefined}
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
             secondaryActions={

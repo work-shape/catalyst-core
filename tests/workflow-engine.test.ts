@@ -306,32 +306,25 @@ describe("the limits of a Workflow Run", () => {
 });
 
 describe("an operation a Workflow Run is refused", () => {
-  it("fails the step with the reason of the policy where a changing call would wait for a confirmation", async () => {
+  it("runs a changing call whose policy asks for a confirmation: publishing the Workflow was it", async () => {
     const t = await ready();
     t.state.centralSettings = [{ operation: "connection.crm.write", value: "confirm" }];
     const run = await t.finish((await start(t)).id);
 
-    expect(run.status).toBe("failed");
-    expect(run.error?.code).toBe("POLICY_DENIED");
-    expect(run.error?.message).toBe(
-      "The instance's policy asks for another person's approval of 'connection.crm.write', and this call cannot wait for one. In a Workflow, put an approval step before the step that calls it."
+    expect(run.error).toBeUndefined();
+    expect(run.status).toBe("done");
+    expect(writesOf(t)).toHaveLength(3);
+    // Each call says why nobody was asked.
+    const writes = (await t.runs()).filter(
+      (call) => call.origin.kind === "workflow" && call.operation === "connection.crm.write"
     );
-    expect(writesOf(t)).toEqual([]);
-    const stepRuns = await stepRunsOf(t, run.id);
-    const failed = stepRuns.find((stepRun) => stepRun.key === "each_client[0].send");
-    expect(failed).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
-    expect(run.error?.stepRunId).toBe(failed?.id);
-    expect(stepRuns.find((stepRun) => stepRun.key === "each_client")).toMatchObject({
-      status: "failed",
-      error: { code: "loop_step_failed" },
-      loop: { total: 3, done: 0, failed: 1, running: 0 }
-    });
-    // The refusal is an Operation Run of its own, which keeps why.
-    const denied = (await t.runs()).find((call) => call.id === failed?.operationRunId);
-    expect(denied).toMatchObject({
-      status: "denied",
-      denial: { kind: "policy", operation: "connection.crm.write" }
-    });
+    expect(writes).toHaveLength(3);
+    for (const write of writes) {
+      expect(write).toMatchObject({
+        status: "done",
+        decision: { mode: "direct", reason: "workflow_publish" }
+      });
+    }
   });
 
   it("refuses a call the policy would hold for an approval instead of filing it", async () => {

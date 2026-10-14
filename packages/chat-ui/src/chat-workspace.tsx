@@ -196,7 +196,7 @@ function ChatWorkspaceContent({
     workspaceId: railAppsWorkspaceId,
     openApp: appsRoute?.kind === "app" ? appsRoute.app : undefined
   });
-  const chatCovered = chatSurface.covering && displayPanel.open;
+  const chatCovered = onChatRoute && chatSurface.covering && displayPanel.open;
   // The header's button that opens the sidebar leaves the tab order where a surface covers it.
   const headerCovered = inboxRoute
     ? inboxSurface.covering && inboxRoute.kind === "inbox-item"
@@ -593,10 +593,13 @@ function ChatWorkspaceContent({
                                   />
                                 ) : null}
                               </div>
-                              <SurfaceSlot
-                                onBesideWidthChange={chatSurface.reportBesideWidth}
-                                onCoveringChange={chatSurface.reportCovering}
-                              />
+                              {/* Beside a page the dock's surfaces cover the page instead. */}
+                              {onChatRoute ? (
+                                <SurfaceSlot
+                                  onBesideWidthChange={chatSurface.reportBesideWidth}
+                                  onCoveringChange={chatSurface.reportCovering}
+                                />
+                              ) : null}
                             </div>
                             {/* Placed in the main area, not in the conversation: it keeps its
                                 place when a surface takes room from the conversation. */}

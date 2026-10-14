@@ -2,8 +2,7 @@ import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { ShippedGuardrailView } from "@vivd-catalyst/api-client";
 import { ShippedGuardrails, type ShippedGuardrailsRead } from "@vivd-catalyst/chat-ui/build-area";
-import { renderItem } from "./chat-ui-inbox-harness";
-import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { render, renderItem } from "./chat-ui-inbox-harness";
 
 // GR-PUB-1 in the interface: the switch of the guardrail the release ships on Build >
 // Guardrails, and the Inbox item of a publish that waits for an approver.
@@ -25,9 +24,7 @@ function renderShipped(items: ShippedGuardrailView[], locale: "de" | "en" = "en"
     switching: undefined,
     switchTo: () => Promise.resolve(undefined)
   };
-  return renderToStaticMarkup(
-    createElement(TranslationProvider, { locale }, createElement(ShippedGuardrails, { read }))
-  );
+  return render(createElement(ShippedGuardrails, { read }), locale);
 }
 
 describe("the guardrail the release ships, on Build > Guardrails", () => {

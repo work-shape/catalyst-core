@@ -702,6 +702,7 @@ export function createOperationApprovalFiler(
           { reason: "input_too_large_to_hold", limit: "HELD_OPERATION_INPUT_MAX_BYTES" }
         );
       }
+      const heldBy = payloadSchema.shape.heldBy.unwrap().safeParse(policySource);
       const payload: OperationCallPayload = {
         runId: run.id,
         operation: run.operation,
@@ -737,7 +738,8 @@ export function createOperationApprovalFiler(
             : {})
         },
         ...(call.workspaceId ? { workspaceId: call.workspaceId } : {}),
-        ...(policySource === "surface_cannot_pause" ? {} : { heldBy: policySource }),
+        // A source that refuses the call, and never makes it wait, is named by no request.
+        ...(heldBy.success ? { heldBy: heldBy.data } : {}),
         expiresAt
       };
       const request = await createWithinLimits(() =>

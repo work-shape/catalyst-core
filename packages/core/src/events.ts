@@ -287,6 +287,11 @@ export const EVENTS = {
     name: "conversation.retention_expired",
     subject: "conversation"
   },
+  "conversation.subject_opened": {
+    ...LEGACY_AUDIT,
+    name: "conversation.subject_opened",
+    subject: "conversation"
+  },
   "conversation.title_generated": {
     ...LEGACY_AUDIT,
     name: "conversation.title_generated",

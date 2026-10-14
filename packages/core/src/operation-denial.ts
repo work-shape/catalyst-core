@@ -41,9 +41,16 @@ export type OperationDenial =
        * `approval_unavailable`: the policy asks for another person's approval and the call
        * cannot be held for one, as no call of a service principal can. `approval_stale`: the
        * call waited for an approval, and what it is about moved since, or a newer call about
-       * the same replaced it. Without a reason the policy refuses the call itself.
+       * the same replaced it. `workflow_deleted`: the call is a step of a run of a published
+       * Workflow whose `confirm` its publish approved, and the Workflow was deleted since.
+       * Without a reason the policy refuses the call itself.
        */
-      reason?: "approval_unavailable" | "approval_stale";
+      reason?: "approval_unavailable" | "approval_stale" | "workflow_deleted";
+      /**
+       * The guardrail whose `require_approval` asked for the approval, where one did, with
+       * its reason where it gave one.
+       */
+      guardrail?: { id: string; label: string; reason?: string };
     }
   | { kind: "guardrail"; guardrailId: string; message?: string }
   | { kind: "declined"; by: string; comment?: string };
@@ -64,11 +71,24 @@ export function operationDenialError(denial: OperationDenial): AppError {
           reason: denial.reason
         });
       }
+      if (denial.reason === "workflow_deleted") {
+        return new AppError(
+          "POLICY_DENIED",
+          `The Workflow of this run was deleted, so its publish no longer confirms '${denial.operation}'`,
+          { operation: denial.operation, reason: denial.reason }
+        );
+      }
       return denial.reason === "approval_unavailable"
         ? new AppError(
             "POLICY_DENIED",
-            `The instance's policy asks for another person's approval of '${denial.operation}', and this call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`,
-            { operation: denial.operation, reason: denial.reason }
+            denial.guardrail
+              ? `The guardrail '${denial.guardrail.label}' asks for another person's approval of '${denial.operation}'${denial.guardrail.reason ? `: ${asSentence(denial.guardrail.reason)}` : "."} The call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`
+              : `The instance's policy asks for another person's approval of '${denial.operation}', and this call cannot wait for one. In a Workflow, put an approval step before the step that calls it.`,
+            {
+              operation: denial.operation,
+              reason: denial.reason,
+              ...(denial.guardrail ? { guardrailId: denial.guardrail.id } : {})
+            }
           )
         : new AppError(
             "POLICY_DENIED",
@@ -88,8 +108,13 @@ export function operationDenialError(denial: OperationDenial): AppError {
 }
 
 /** Why a call that waited for an approval can no longer be approved. */
-export function approvalStaleMessage(operation: string): string {
+function approvalStaleMessage(operation: string): string {
   return `The call of '${operation}' waited for an approval, and what it is about changed since or a newer call replaced it. Make the call again.`;
+}
+
+/** A reason as the end of a sentence: with its own full stop, or one added. */
+function asSentence(reason: string): string {
+  return /[.!?]$/u.test(reason) ? reason : `${reason}.`;
 }
 
 function forbiddenMessage(denial: Extract<OperationDenial, { kind: "forbidden" }>): string {

@@ -4,6 +4,7 @@ import {
   INTERRUPTED_RUN_ERROR,
   assertOperationChecksRights,
   createPlatformId,
+  holdsForPublishedRun,
   isAuthenticatedServicePrincipal,
   operationDenialError,
   recordsAllowedCalls,
@@ -37,7 +38,6 @@ import {
   executeAdmitted,
   failRun,
   requireModuleOn,
-  resolveGuardedPolicy,
   type DirectDecision,
   unrecordedRun,
   type OperationEnding,
@@ -45,6 +45,7 @@ import {
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
+import { resolveGuardedPolicy } from "./operation-policy-call";
 import { hashInput } from "./input-hash";
 
 /**
@@ -466,10 +467,15 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
   if ("denial" in guarded) {
     return { ending: await denyRun(context, guarded.denial) };
   }
-  const { policy } = guarded;
+  const { policy, approvalAskedBy } = guarded;
   // A call of a test run resolves `confirm` as its tester's own call when their start was the
-  // confirmation. A run of the published revision has nobody to ask, and asks for an approval.
-  if (call.draft?.boundBy !== undefined && policy.value === "confirm") {
+  // confirmation. A run of the published revision runs a `confirm` too, as its publish was the
+  // confirmation, except where the operation's floor asks for one: there it asks for an approval.
+  if (
+    call.draft?.boundBy !== undefined &&
+    policy.value === "confirm" &&
+    holdsForPublishedRun(definition.policyFloor)
+  ) {
     context.publishedWouldAsk = "approval";
   }
   if (run.target === "dry_run") {
@@ -495,7 +501,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     const unavailable: OperationDenial = {
       kind: "policy",
       operation: definition.name,
-      reason: "approval_unavailable"
+      reason: "approval_unavailable",
+      ...(approvalAskedBy ? { guardrail: approvalAskedBy } : {})
     };
     // A call of a draft that "Run live once" sent live does not wait: an approved call is
     // executed from the registry, which holds what is published and no draft, and a test run

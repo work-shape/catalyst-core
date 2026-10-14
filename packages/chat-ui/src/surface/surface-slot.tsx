@@ -71,6 +71,7 @@ export function SurfaceSlot({
   source,
   under,
   idle,
+  covers = false,
   onBesideWidthChange,
   onCoveringChange
 }: {
@@ -81,6 +82,11 @@ export function SurfaceSlot({
   under?: SurfaceSlotUnder;
   /** Shown beside the main side while there is no surface. Without it the empty slot is gone. */
   idle?: SurfaceSlotIdle;
+  /**
+   * The surface covers the area the slot stands in at any width, as over the page beside the
+   * dock, where the conversation is elsewhere.
+   */
+  covers?: boolean;
   /** Told how much of the main area the slot takes beside the conversation; 0 otherwise. */
   onBesideWidthChange?: (width: number) => void;
   /** Told whether the surface covers the main area, so what lies under it can go inert. */
@@ -95,7 +101,7 @@ export function SurfaceSlot({
   const [chosenWidths, setChosenWidths] = useState<Partial<Record<SurfaceKind, number>>>({});
   const [fullscreen, setFullscreen] = useState(false);
   const surface = source ? source.surface : panel.entry && panel.open ? panel.entry : undefined;
-  const placement = surfacePlacement(mainWidth, splitMin);
+  const placement = covers ? "covering" : surfacePlacement(mainWidth, splitMin);
   // An empty slot shows only where it would stand beside the main side.
   const idleContent =
     !surface && idle && mainWidth !== undefined && placement === "beside" ? idle : undefined;

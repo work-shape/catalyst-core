@@ -14,6 +14,7 @@ import {
   formatAsset,
   formatAssetList,
   formatContext,
+  formatDryRun,
   formatHistory,
   formatKinds,
   formatRefusal,
@@ -25,8 +26,11 @@ import {
   connectApi,
   formatCommandError,
   resolveWorkingDir,
+  writeError,
+  writeOutput,
   type ConfigCommandOptions
 } from "./command-support";
+import { askBeforePublish } from "./publish-question";
 import { readManifestIfPresent, resolveInstance } from "./working-copy";
 
 // `catalyst context`, `kinds`, `references` and `catalyst <kind> <verb>`: one command per
@@ -185,7 +189,7 @@ const VERBS: Record<string, Verb> = {
             body: { config: source.config, ...session.scope }
           })
         );
-        writeOut(
+        writeOutput(
           session.options,
           session.values.json
             ? JSON.stringify(result, null, 2)
@@ -251,8 +255,15 @@ const VERBS: Record<string, Verb> = {
           throw new UsageError("--confirm answers the dry run of a guardrail's publish.");
         }
         if (session.kind.actions.approve !== undefined) {
-          const answer = await askBeforePublish(session, name, revision);
-          if (answer !== undefined) return answer;
+          const asked = {
+            kind: session.kind.kind,
+            command: kindNoun(session.kind),
+            name,
+            revision
+          };
+          if (!(await askBeforePublish(session.options, { ...asked, yes: values.yes }))) {
+            return EXIT.refused;
+          }
         } else if (values.yes) {
           throw new UsageError(
             `A ${session.kind.kind} is published without a question; --yes answers none.`
@@ -502,8 +513,6 @@ function assetReference(value: string): { kind: string; name: string; revision?:
   };
 }
 
-type DryRun = Awaited<ReturnType<typeof guardrailDryRun>>;
-
 function guardrailDryRun(session: Session, name: string, revision: number | undefined) {
   return session.api.read((client) =>
     client.guardrails.dry_run({
@@ -511,19 +520,6 @@ function guardrailDryRun(session: Session, name: string, revision: number | unde
       body: revision === undefined ? {} : { revision }
     })
   );
-}
-
-function formatDryRun(name: string, answer: DryRun): string {
-  const people = (count: { actions: number; people: number }) =>
-    `${count.actions} action${count.actions === 1 ? "" : "s"} by ${count.people} ${count.people === 1 ? "person" : "people"}`;
-  return [
-    `Dry run of revision ${answer.revision} of guardrail '${name}' on '${answer.event}', over the last ${answer.days} days:`,
-    `  would have blocked ${people(answer.wouldBlock)}`,
-    `  would have asked for an approval on ${people(answer.wouldRequireApproval)}`,
-    `  would have warned on ${people(answer.wouldWarn)}`,
-    `  ${answer.evaluated} of ${answer.matched} matching actions checked again${answer.limitedTo === undefined ? "" : ` (at most ${answer.limitedTo})`}${answer.notEvaluable > 0 ? `; ${answer.notEvaluable} could not be, as their content or origin is not kept` : ""}.`,
-    "No names are shown and nothing was kept."
-  ].join("\n");
 }
 
 /**
@@ -539,7 +535,7 @@ async function guardrailDryRunBeforePublish(
   revision: number
 ): Promise<number | undefined> {
   const answer = await guardrailDryRun(session, name, revision);
-  if (!session.values.json) writeErr(session.options, formatDryRun(name, answer));
+  if (!session.values.json) writeError(session.options, formatDryRun(name, answer));
   const stops = answer.outcome === "block" || answer.outcome === "require_approval";
   const stopped = answer.wouldBlock.actions + answer.wouldRequireApproval.actions;
   const unchecked = stops ? answer.notEvaluable : 0;
@@ -556,41 +552,12 @@ async function guardrailDryRunBeforePublish(
   if (confirmed === String(named)) return undefined;
   const actions = (count: number) => `${count} action${count === 1 ? "" : "s"}`;
   const what = `${actions(stopped)} it would have stopped${unchecked > 0 ? ` and ${actions(unchecked)} it could not check` : ""}`;
-  writeErr(
+  writeError(
     session.options,
     confirmed === undefined
       ? `This first publish acts on ${what} in the last ${answer.days} days. Publish it with --confirm ${named}, or publish a draft with the outcome 'warn' first.`
       : `--confirm ${confirmed} does not name the ${named}: ${what}. Nothing was published.`
   );
-  return EXIT.refused;
-}
-
-/**
- * The question a publish of an App or a Workflow asks in the terminal before it is sent: a
- * revision of either goes live only on a person's click or their answer here (GR-PUB-1). An
- * answer that is not yes publishes nothing. `--yes`, or a terminal nobody can answer, is
- * refused until such a publish can wait as a confirmation in the person's Inbox (OP-4).
- * Answers an exit code where the publish stops here, and nothing where it goes ahead.
- */
-async function askBeforePublish(
-  session: Session,
-  name: string,
-  revision: number
-): Promise<number | undefined> {
-  const kind = session.kind.kind;
-  const prompt = session.options.prompt;
-  if (session.values.yes || !prompt) {
-    writeErr(
-      session.options,
-      `Publishing a ${kind} needs your answer here or your click in the interface, so ${session.values.yes ? "--yes" : "a run without a terminal to ask"} publishes nothing. Run 'catalyst ${kindNoun(session.kind)} publish ${name} --revision ${revision}' in a terminal and answer its question, or publish it in the interface.`
-    );
-    return EXIT.refused;
-  }
-  const answer = await prompt(
-    `Publish revision ${revision} of ${kind} '${name}'? Its users are then served it, or an approver is asked first if you may not approve it yourself. [y/N] `
-  );
-  if (/^y(?:es)?$/iu.test(answer.trim())) return undefined;
-  writeErr(session.options, "Nothing was published.");
   return EXIT.refused;
 }
 
@@ -608,7 +575,10 @@ export async function runAssetCommand(
   try {
     ({ values, positionals } = parseCommandLine(rest));
   } catch (error) {
-    writeErr(base, `${error instanceof Error ? error.message : String(error)}\n\n${assetHelpText}`);
+    writeError(
+      base,
+      `${error instanceof Error ? error.message : String(error)}\n\n${assetHelpText}`
+    );
     return EXIT.usage;
   }
   const options: ConfigCommandOptions = {
@@ -619,11 +589,11 @@ export async function runAssetCommand(
   const instanceCommand = INSTANCE_COMMANDS.find((command) => command === noun);
   const [verbName = "", name = "", ...extra] = positionals;
   if (values.help) {
-    writeOut(options, assetHelpText);
+    writeOutput(options, assetHelpText);
     return EXIT.done;
   }
   if (instanceCommand === undefined && verbName === "") {
-    writeErr(options, `Unknown command '${noun}'.\n\n${assetHelpText}`);
+    writeError(options, `Unknown command '${noun}'.\n\n${assetHelpText}`);
     return EXIT.usage;
   }
   try {
@@ -652,10 +622,10 @@ export async function runAssetCommand(
     });
   } catch (error) {
     if (error instanceof UsageError) {
-      writeErr(options, error.message);
+      writeError(options, error.message);
       return EXIT.usage;
     }
-    writeErr(
+    writeError(
       options,
       error instanceof ConfigApiError ? formatRefusal(error) : formatCommandError(error)
     );
@@ -671,7 +641,7 @@ async function runInstanceCommand(
   const { api } = await openInstance(options);
   const json = values.json;
   const out = (value: unknown, text: () => string) =>
-    writeOut(options, json ? JSON.stringify(value, null, 2) : text());
+    writeOutput(options, json ? JSON.stringify(value, null, 2) : text());
   if (command === "references") {
     const references = await api.read((client) => client.platform.references.get());
     out(references, () => formatReferences(references));
@@ -731,20 +701,20 @@ function settle<Output>(
     const { id, approvalRequestId } = outcome.run;
     const text = `Waits for an approval on the instance; nothing has changed yet (${approvalRequestId === undefined ? "" : `request ${approvalRequestId}, `}Operation Run ${id}).`;
     if (session.values.json)
-      writeOut(
+      writeOutput(
         session.options,
         JSON.stringify({ status: "pending_approval", run: outcome.run }, null, 2)
       );
-    else writeErr(session.options, text);
+    else writeError(session.options, text);
     return EXIT.pending;
   }
-  if (session.values.json) writeOut(session.options, JSON.stringify(outcome.output, null, 2));
-  else writeOut(session.options, lines(outcome.output).join("\n"));
+  if (session.values.json) writeOutput(session.options, JSON.stringify(outcome.output, null, 2));
+  else writeOutput(session.options, lines(outcome.output).join("\n"));
   return EXIT.done;
 }
 
 function print(session: Session, value: unknown, text: () => string): number {
-  writeOut(session.options, session.values.json ? JSON.stringify(value, null, 2) : text());
+  writeOutput(session.options, session.values.json ? JSON.stringify(value, null, 2) : text());
   return EXIT.done;
 }
 
@@ -783,14 +753,6 @@ function refuseFlags(values: Values, allowed: readonly OptionName[], command: st
 
 /** A command line this tool cannot run. Nothing was sent. */
 class UsageError extends Error {}
-
-function writeOut(target: Pick<ConfigCommandOptions, "stdout">, text: string): void {
-  (target.stdout ?? ((value: string) => process.stdout.write(value)))(`${text}\n`);
-}
-
-function writeErr(target: Pick<ConfigCommandOptions, "stderr">, text: string): void {
-  (target.stderr ?? ((value: string) => process.stderr.write(value)))(`${text}\n`);
-}
 
 export const assetHelpText = `Usage: catalyst <command> [options]
 
