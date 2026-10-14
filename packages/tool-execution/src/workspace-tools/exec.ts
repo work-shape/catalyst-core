@@ -39,6 +39,13 @@ import { resolveWorkspaceHandle } from "./workspace";
 export function workspaceExecTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.exec",
+    title: { en: "Run workspace command", de: "Befehl ausführen" },
+    summary: {
+      en: "Runs commands and scripts on the conversation's files, for example to calculate or convert.",
+      de: "Führt Befehle und Skripte auf den Dateien der Unterhaltung aus, etwa um zu rechnen oder umzuwandeln."
+    },
+    group: "files",
+    icon: "code",
     effect: "changing",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },

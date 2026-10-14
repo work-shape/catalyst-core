@@ -2,10 +2,6 @@ import { defineTranslations } from "./translation-area";
 
 export const conversation = defineTranslations({
   en: {
-    agentSurfaceMissing: "This agent is not available to you.",
-    agentSurfaceOpenBuild: "Open the agent in Build",
-    agentSurfaceReadOnly:
-      "Saved revision {number}, shown read-only. A saved change of an agent is live at once; a person changes it in Build.",
     confirmDeleteConversation: "Delete",
     conversationExpiresOn: "Will be deleted automatically on {date}",
     conversationExpiresShortly: "Will be deleted shortly",
@@ -16,10 +12,10 @@ export const conversation = defineTranslations({
     conversationRetentionNotice: "{hint}.",
     conversationRetentionNoticeKeptByMessage: "{hint}. A new message keeps this conversation.",
     conversationSubjectOther: "This conversation is about “{name}”.",
-    conversationSubjectWorkflow: "The agent edits the workflow",
-    conversationSubjectApp: "The agent edits the app",
-    conversationSubjectAgent: "Opened: the agent",
-    conversationSubjectShow: "Show",
+    conversationSubjectWorkingOn: "Working on:",
+    conversationOpened: "Opened {name}",
+    conversationOpenedGoTo: "Go to it",
+    conversationOpenedWaits: "Changes reach it only once you go to it.",
     conversationUnread: "New response",
     renameConversationField: "Conversation title",
     renameConversationMenuItem: "Rename conversation",
@@ -30,10 +26,6 @@ export const conversation = defineTranslations({
     deleteFailed: "Delete failed"
   },
   de: {
-    agentSurfaceMissing: "Dieser Agent ist für dich nicht verfügbar.",
-    agentSurfaceOpenBuild: "Agenten in Build öffnen",
-    agentSurfaceReadOnly:
-      "Gespeicherte Revision {number}, nur zum Lesen. Eine gespeicherte Änderung eines Agenten gilt sofort; geändert wird er in Build.",
     confirmDeleteConversation: "Löschen",
     conversationExpiresOn: "Wird am {date} automatisch gelöscht",
     conversationExpiresShortly: "Wird in Kürze gelöscht",
@@ -45,10 +37,10 @@ export const conversation = defineTranslations({
     conversationRetentionNoticeKeptByMessage:
       "{hint}. Mit einer neuen Nachricht bleibt diese Unterhaltung erhalten.",
     conversationSubjectOther: "In dieser Unterhaltung geht es um „{name}“.",
-    conversationSubjectWorkflow: "Der Agent bearbeitet den Workflow",
-    conversationSubjectApp: "Der Agent bearbeitet die App",
-    conversationSubjectAgent: "Geöffnet: der Agent",
-    conversationSubjectShow: "Anzeigen",
+    conversationSubjectWorkingOn: "In Arbeit:",
+    conversationOpened: "{name} geöffnet",
+    conversationOpenedGoTo: "Zur Seite",
+    conversationOpenedWaits: "Änderungen kommen dort erst an, wenn du zur Seite wechselst.",
     conversationUnread: "Neue Antwort",
     renameConversationField: "Titel der Unterhaltung",
     renameConversationMenuItem: "Unterhaltung umbenennen",

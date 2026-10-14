@@ -102,6 +102,27 @@ describe("assistant work grouping", () => {
     expect(groupPaths(parts)).toEqual([[ASSISTANT_WORK_GROUP], []]);
   });
 
+  it("keeps every open of an asset that stood in the thread, during and after the run", () => {
+    // Fails without the rule for opens: the line "Opened <name>" folded into "2 tool calls", and
+    // a change of what the conversation is about was not seen (navigation check 27).
+    const opened = openPart("call_open", { kind: "workflow", name: "intake", title: "Intake" });
+    const refused = openPart("call_refused", undefined, true);
+    const parts = [
+      toolPart("call_read", "platform.assets.get"),
+      opened,
+      refused,
+      textPart("Done.")
+    ];
+
+    expect(groupPaths(parts.slice(0, 3))).toEqual([
+      [ASSISTANT_WORK_GROUP],
+      [],
+      [ASSISTANT_WORK_GROUP]
+    ]);
+    expect(createCompletedAssistantWorkIndices(parts, 3)).toEqual([0, 2]);
+    expect(createVisibleFinalAssistantPartIndices(parts, 3)).toEqual([3, 1]);
+  });
+
   it("keeps the card of a refused save when the answer ended with it", () => {
     // Fails without the rule for the last save: the card folded into the work summary, and an
     // answer whose Page was never built showed nothing of what the build found.
@@ -315,6 +336,19 @@ function toolPart(toolCallId: string, toolName = "demo.lookup"): PartState {
     toolName,
     args: {},
     argsText: "{}",
+    status: { type: "complete" }
+  } as PartState;
+}
+
+function openPart(toolCallId: string, result: unknown, isError = false): PartState {
+  return {
+    type: "tool-call",
+    toolCallId,
+    toolName: "platform.assets.open",
+    args: {},
+    argsText: "{}",
+    result,
+    isError,
     status: { type: "complete" }
   } as PartState;
 }

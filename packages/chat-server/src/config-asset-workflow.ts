@@ -88,6 +88,10 @@ export function configAssetReferences(
 ) {
   const refs = options.configAssets.validationRefs;
   const { platformInstructions } = options.configAssets;
+  // A tool of a module that is off is not offered for an agent.
+  const enabledToolNames = refs.enabledToolNames.filter(
+    (toolName) => options.modules.offModuleOf("tool", toolName) === undefined
+  );
   return {
     ...refs,
     // Shown read-only on an agent's page, as the agent gets them.
@@ -99,14 +103,31 @@ export function configAssetReferences(
           }
         }
       : {}),
-    // A tool of a module that is off is not offered for an agent.
-    enabledToolNames: refs.enabledToolNames.filter(
-      (toolName) => options.modules.offModuleOf("tool", toolName) === undefined
-    ),
+    enabledToolNames,
+    tools: offeredToolReferences(options, enabledToolNames),
     // An agent that still names one shows it as unavailable and can drop it.
     moduleOffTools: refs.enabledToolNames.flatMap((name) => {
       const module = options.modules.offModuleOf("tool", name);
       return module === undefined ? [] : [{ name, module }];
     })
   };
+}
+
+/**
+ * The offered tools with what each tells people and the module whose switch governs it, in the
+ * order of `enabledToolNames`. A tool nothing describes is listed by its name alone.
+ */
+function offeredToolReferences(
+  options: Pick<ChatServerOptions, "configAssets" | "modules">,
+  enabledToolNames: readonly string[]
+) {
+  const described = new Map(
+    (options.configAssets.tools?.() ?? []).map((tool) => [tool.name, tool])
+  );
+  return enabledToolNames.map((name) => {
+    const module = options.modules.modules.find((state) =>
+      state.definition?.tools?.includes(name)
+    )?.name;
+    return { ...described.get(name), name, ...(module === undefined ? {} : { module }) };
+  });
 }

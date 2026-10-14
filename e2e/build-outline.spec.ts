@@ -33,7 +33,8 @@ test("an agent's sections are an outline right of the content: its mark follows 
   await signInViaApi(page, superadminUser);
   await page.setViewportSize(WIDE);
   await page.goto("/build/agents/research_assistant");
-  const heading = (name: string) => page.locator("form").getByRole("heading", { name });
+  const heading = (name: string) =>
+    page.locator("form").getByRole("heading", { name, exact: true });
   await expect(heading("Overview")).toBeVisible();
   const outline = page.getByRole("navigation", { name: "On this page" });
   const current = outline.locator("[aria-current]");

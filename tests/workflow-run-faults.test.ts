@@ -317,8 +317,8 @@ describe("a loop that continues past a failed item", () => {
 
   it("stops where the instance's policy refuses the operation, and does not end done", async () => {
     const t = await continuing();
-    // The policy asks for a confirmation nobody is there to give: every item would be refused.
-    t.state.centralSettings = [{ operation: "connection.crm.write", value: "confirm" }];
+    // The policy asks for an approval nobody can give a run: every item would be refused.
+    t.state.centralSettings = [{ operation: "connection.crm.write", value: "approval" }];
     const run = await t.finish((await start(t)).id);
     expect(run.status).toBe("failed");
     expect(run.error?.code).toBe("POLICY_DENIED");

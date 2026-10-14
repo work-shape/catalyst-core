@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   APP_ASSET_KIND,
+  type AgentRunProjection,
   type ApiClient,
   type ApiUser,
   type CollaborationWorkspaceAgents,
@@ -58,6 +59,8 @@ import {
   type ConversationControllerState
 } from "../conversation/conversation-controller-state";
 import { useConversationController } from "../conversation/use-conversation-controller";
+import { useAgentOpens, type AgentOpens } from "../conversation/use-agent-opens";
+import { assetPageRoute } from "../conversation/subject-run";
 import { useDraftAttachmentController } from "../conversation/draft-attachment-controller";
 import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
@@ -359,6 +362,8 @@ export interface SelectedChatModel {
   docked: boolean;
   /** Goes to a route of the interface, such as the page of that asset. */
   openRoute(route: WorkspaceRoute): void;
+  /** The assets the agent opened, and the way to their pages. */
+  agentOpens: AgentOpens;
   messages: Message[] | undefined;
   completedRunProjections: ConversationControllerState["completedRunProjections"];
   messagesLoaded: boolean;
@@ -730,7 +735,7 @@ export function useWorkspaceChatModel({
   /**
    * A conversation of the open workspace about one asset, opened once the instance made it.
    * What a conversation is about is set when it is made, so it is made before its first turn;
-   * the asset opens beside it as the conversation opens.
+   * it opens in the dock of the asset's page.
    */
   async function startConversationAbout(subject: { kind: string; name: string }): Promise<void> {
     if (!activeCollaborationWorkspaceId) {
@@ -743,8 +748,13 @@ export function useWorkspaceChatModel({
         subject
       }
     });
-    // It opens on the chat route with the asset beside it, from whichever page it was started.
-    routeState.showConversation(conversation.collaborationWorkspaceId, conversation.id);
+    // The asset's page opens with the conversation in the dock beside it.
+    const page = assetPageRoute(subject, conversation.collaborationWorkspaceId);
+    if (page === undefined) {
+      routeState.showConversation(conversation.collaborationWorkspaceId, conversation.id);
+    } else {
+      dock.openPage(page, conversation.id);
+    }
     setNotice(undefined);
     workspaceCache.invalidateConversations();
     chrome.requestComposerFocus();
@@ -885,6 +895,19 @@ export function useWorkspaceChatModel({
   const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
   const selectedThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
+  const agentOpens = useAgentOpens({
+    activeRun: controller.activeRun,
+    messages,
+    completedRunProjections: controller.completedRunProjections ?? NO_RUN_PROJECTIONS,
+    conversationId: selectedConversationId,
+    storedSubject: selectedThread?.conversation.subject,
+    workspaceId: activeCollaborationWorkspaceId,
+    route,
+    dock,
+    client,
+    onSubjectChanged: workspaceCache.invalidateConversationStarted,
+    onError: setNotice
+  });
   const modelPicks = conversationModelPicks({
     agent: activeAgent,
     changed: selectedConversationId
@@ -916,9 +939,9 @@ export function useWorkspaceChatModel({
   const configuredCompactThresholdTokens =
     selectedModel?.compactThresholdTokens ?? activeAgent?.compactThresholdTokens;
 
-  // A layout effect: it runs before the effects of the thread, so the surface of the next
-  // conversation's subject opens after this close and not before it. A conversation that goes
-  // into the dock leaves what stood beside it too: the page takes that room.
+  // A layout effect: it runs before the effects of the thread, so what the next conversation
+  // opens opens after this close and not before it. A conversation that goes into the dock
+  // leaves what stood beside it too: the page takes that room.
   useLayoutEffect(() => {
     displayPanel.close();
   }, [displayPanel.close, selectedConversationId, docked]);
@@ -1040,6 +1063,7 @@ export function useWorkspaceChatModel({
   }
 
   function runStarted(response: StartConversationRunResponse) {
+    agentOpens.sent(response.run.id);
     workspaceCache.cacheRunStarted(response);
     showCreatedConversation(response.conversation, {
       replace: route.kind === "new-conversation"
@@ -1259,6 +1283,7 @@ export function useWorkspaceChatModel({
       selectedConversationSubject: selectedThread?.conversation.subject,
       selectedConversationTitle: selectedThread?.conversation.title,
       docked,
+      agentOpens,
       // A page the conversation links to opens with the conversation in the dock beside it.
       openRoute: (target) =>
         selectedConversationId === undefined
@@ -1355,6 +1380,7 @@ export function useWorkspaceChatModel({
 }
 
 const NO_CONVERSATIONS: readonly ConversationListItem[] = [];
+const NO_RUN_PROJECTIONS: Readonly<Record<string, AgentRunProjection>> = {};
 
 // The code a run is failed with when no worker took it within its queue limit.
 const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";

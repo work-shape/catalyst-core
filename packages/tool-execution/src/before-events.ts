@@ -154,6 +154,27 @@ function guardrailRefusalMessage(
   return `Guardrail '${refusing.displayName}' blocked${about}${reason}`;
 }
 
+/** A guardrail as a refusal names it. */
+export interface GuardrailNamed {
+  id: string;
+  label: string;
+  /** Its reason in plain language, where it gave one. */
+  reason?: string;
+}
+
+/** The guardrail whose `require_approval` asked for an approval, where one did. */
+export function approvalAskedBy(answers: readonly SubjectAnswer[]): GuardrailNamed | undefined {
+  const asking = answers
+    .flatMap((answer) => answer.guardrails)
+    .find((answer) => answer.outcome === "require_approval");
+  if (!asking) return undefined;
+  return {
+    id: asking.guardrailName,
+    label: asking.displayName,
+    ...(asking.reason === "" ? {} : { reason: asking.reason })
+  };
+}
+
 /**
  * The refusal of a call a guardrail stopped. The guardrail that refused names itself and its
  * reason; where only a hold refused a read, which cannot wait, the one that asked for the

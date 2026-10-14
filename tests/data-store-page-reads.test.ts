@@ -161,8 +161,8 @@ describe("the reads of a Data Store's page", () => {
       path: "migrations/0002_kinds.sql",
       text: `create table plain (n integer not null, label text);
         create table parted (n integer not null, label text) partition by range (n);
-        create table parted_low partition of parted for values from (0) to (60);
-        create table parted_high partition of parted for values from (60) to (1000);
+        create table parted_low partition of parted for values from (0) to (52);
+        create table parted_high partition of parted for values from (52) to (1000);
         create table keyed_parted (n integer primary key, label text) partition by hash (n);
         create table keyed_parted_0 partition of keyed_parted for values with (modulus 2, remainder 0);
         create table keyed_parted_1 partition of keyed_parted for values with (modulus 2, remainder 1);
@@ -171,44 +171,55 @@ describe("the reads of a Data Store's page", () => {
     };
     const world = await published("kinds", [manifest(), init, kinds]);
     const store = connect(world.record.location.database);
-    // 113 rows each: no multiple of a page size. The child repeats keys of its parent.
+    // No count is a multiple of a page size above one. The first part of `parted` and of
+    // `parent` holds more rows than the largest page, so a page of every size starts behind a
+    // row of the first part and goes on in the second. The child repeats keys of its parent.
     for (const table of ["plain", "parted", "keyed_parted"]) {
       await store.unsafe(
-        `insert into ${table} select n, 'row ' || n from generate_series(0, 112) n`
+        `insert into ${table} select n, 'row ' || n from generate_series(0, 56) n`
       );
     }
-    await store`insert into parent select n, 'parent ' || n from generate_series(0, 59) n`;
-    await store`insert into child select n, 'child ' || n from generate_series(0, 52) n`;
+    await store`insert into parent select n, 'parent ' || n from generate_series(0, 51) n`;
+    await store`insert into child select n, 'child ' || n from generate_series(0, 8) n`;
     const expected: Record<string, [string, number]> = {
-      plain: ["physical", 113],
-      parted: ["physical", 113],
-      keyed_parted: ["key", 113],
+      plain: ["physical", 57],
+      parted: ["physical", 57],
+      keyed_parted: ["key", 57],
       // The key of the parent does not hold for the rows of its child.
-      parent: ["physical", 113],
-      child: ["physical", 53],
-      parted_low: ["physical", 60]
+      parent: ["physical", 61],
+      child: ["physical", 9],
+      parted_low: ["physical", 52]
     };
 
-    for (const [table, [by, count]] of Object.entries(expected)) {
-      for (const limit of [1, 7, 50]) {
-        const labels: unknown[] = [];
-        const places = new Set<string>();
-        let after: string | undefined;
-        do {
-          const answer = await page(world, { table, limit, ...(after ? { after } : {}) });
-          expect(answer.order, table).toMatchObject({ by });
-          expect(answer.rows.length, `${table} by ${limit}`).toBeLessThanOrEqual(limit);
-          for (const row of answer.rows) {
-            labels.push(row.values.label);
-            places.add(row.at);
-          }
-          after = answer.next;
-        } while (after !== undefined);
-        expect(labels, `${table} by ${limit}`).toHaveLength(count);
-        expect(new Set(labels).size, `${table} by ${limit}`).toBe(count);
-        expect(places.size, `${table} by ${limit}`).toBe(count);
-      }
+    /** Reads the table a page of `limit` at a time, from its first page to its last. */
+    async function walk(table: string, by: string, count: number, limit: number) {
+      const labels: unknown[] = [];
+      const places = new Set<string>();
+      let after: string | undefined;
+      do {
+        const answer = await page(world, { table, limit, ...(after ? { after } : {}) });
+        expect(answer.order, table).toMatchObject({ by });
+        expect(answer.rows.length, `${table} by ${limit}`).toBeLessThanOrEqual(limit);
+        for (const row of answer.rows) {
+          labels.push(row.values.label);
+          places.add(row.at);
+        }
+        // A cursor that answers a row again ends here, and not at the timeout.
+        expect(labels.length, `${table} by ${limit}`).toBeLessThanOrEqual(count);
+        after = answer.next;
+      } while (after !== undefined);
+      expect(labels, `${table} by ${limit}`).toHaveLength(count);
+      expect(new Set(labels).size, `${table} by ${limit}`).toBe(count);
+      expect(places.size, `${table} by ${limit}`).toBe(count);
     }
+    // Nothing writes to the store while it is read, so the tables are read side by side. Every
+    // read ends before the test does, also where one of them failed.
+    const walked = await Promise.allSettled(
+      Object.entries(expected).map(async ([table, [by, count]]) => {
+        for (const limit of [1, 7, 50]) await walk(table, by, count, limit);
+      })
+    );
+    for (const outcome of walked) if (outcome.status === "rejected") throw outcome.reason;
     // A row of a part of a table is found again by its part and its place in it.
     const firstPage = await page(world, { table: "parted", limit: 50 });
     const [beyond] = (
