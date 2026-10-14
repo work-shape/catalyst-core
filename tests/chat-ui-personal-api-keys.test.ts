@@ -7,7 +7,6 @@ import {
   buildPersonalKeyScopes,
   connectCodeOfSearch,
   formatConnectCode,
-  heldKeyActions,
   initialPersonalKeyDraft,
   instanceUrl,
   isCompleteConnectCode,
@@ -19,7 +18,7 @@ import {
 } from "../packages/chat-ui/src/control-plane/personal-api-keys-model";
 import { settingsCatalog, visibleSettingsPages } from "../packages/chat-ui/src/settings/catalog";
 import { ConnectCodeConfirm } from "../packages/chat-ui/src/settings/pages/api-keys";
-import { platformContext, taxNamespace } from "./chat-ui-build-fixtures";
+import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { personalWorkspace, settingsUser } from "./chat-ui-settings-fixtures";
 
@@ -77,15 +76,14 @@ describe("personal API key model", () => {
     expect(new Set(offer).size).toBe(offer.length);
   });
 
-  it("checks at first the actions the person holds on the instance or in a Namespace", () => {
-    const context = platformContext([taxNamespace], ["skill.write"]);
-    expect(heldKeyActions(personalKeyActionOffer(context), context)).toEqual([
-      "agent.read",
-      "agent.write",
-      "agent.delete",
-      "skill.read",
-      "skill.write"
-    ]);
+  it("starts a new key with no scope ticked, so it gets only what the person ticks", () => {
+    expect(initialPersonalKeyDraft().actions).toEqual([]);
+    expect(initialPersonalKeyDraft("catalyst CLI")).toMatchObject({
+      name: "catalyst CLI",
+      actions: []
+    });
+    // Nothing is sent until a scope is ticked.
+    expect(personalKeyDraftProblem(initialPersonalKeyDraft("laptop"))).toBe("scopes");
   });
 
   it("limits every chosen action to the Namespace where one is given", () => {
@@ -97,7 +95,7 @@ describe("personal API key model", () => {
   });
 
   it("sends a draft once it has a name, a scope and a well-formed Namespace", () => {
-    const draft = initialPersonalKeyDraft(["agent.write"], "laptop");
+    const draft = { ...initialPersonalKeyDraft("laptop"), actions: ["agent.write"] };
     expect(draft.expiryDays).toBe(90);
     expect(personalKeyDraftProblem({ ...draft, name: " " })).toBe("name");
     expect(personalKeyDraftProblem({ ...draft, actions: [] })).toBe("scopes");
@@ -114,7 +112,7 @@ describe("personal API key model", () => {
     expect(personalKeyExpiryOf("365")).toBe(365);
     expect(personalKeyExpiryOf("400")).toBeUndefined();
     const longest = personalKeyRequest(
-      { ...initialPersonalKeyDraft(["agent.read"], "x"), expiryDays: 365 },
+      { ...initialPersonalKeyDraft("x"), actions: ["agent.read"], expiryDays: 365 },
       now
     );
     expect(longest?.expiresAt).toBe("2027-10-13T12:00:00.000Z");
@@ -173,7 +171,7 @@ describe("You > API keys", () => {
               createdAt: "2026-10-13T11:58:00.000Z",
               expiresAt: "2026-10-13T12:13:00.000Z"
             },
-            offer: { actions: ["agent.read", "agent.write"], held: ["agent.read"], namespaces: [] },
+            offer: { actions: ["agent.read", "agent.write"], namespaces: [] },
             pending: false,
             onConfirm: async () => undefined
           })
