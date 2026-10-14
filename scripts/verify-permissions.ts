@@ -15,9 +15,11 @@
 // before, and is read so; one given `*` by hand had it taken out by the migration.
 //
 // `--restore-legacy-columns` is the way back to a release before AP-4, which reads the columns
-// and not the rows: it writes each holder's instance-wide rows back into its column as the
-// legacy list and every `["*"]` back to null, prints what it changed, and checks nothing. Run it
-// with the new release stopped and start the old release after it.
+// and every grant row: it writes each holder's instance-wide rows back into its column as the
+// legacy list and removes those rows, turns every `["*"]` back to null and removes the record of
+// the migration, so the next upgrade moves the lists into rows again. It prints what it changed
+// and checks nothing. Run it with the new release stopped and start the old release after it.
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import postgres, { type Sql } from "postgres";
 import { deriveEffectiveServiceGrants } from "@vivd-catalyst/auth";
@@ -26,8 +28,8 @@ import {
   asApiCredentialId,
   asClientInstanceId,
   asServicePrincipalId,
-  authScopeForPermission,
   createAuthorizer,
+  isPermission,
   legacyPermissionList,
   type AccessStore,
   type ApiAccessStore,
@@ -225,7 +227,6 @@ function listBeforeBackfill(scopes: string[] | null): string[] | undefined {
  * A holder that is not active could not sign in before and holds nothing now, so the expected
  * answer for it is "no" throughout. Each key is asked as a key and as each action it stands
  * for, so a row the migration left out or wrote with the wrong effect is found by its action.
- * `gate` is the credential's scope: a credential is refused a key whose scope it lacks.
  */
 async function compareHolder(input: {
   holder: string;
@@ -234,11 +235,9 @@ async function compareHolder(input: {
   actor: AuthenticatedIdentity;
   legacySubject: LegacySubject;
   legacy: LegacyFunctions;
-  gate?: (key: LegacyKey) => boolean;
 }): Promise<HolderComparison> {
   const access = await input.authorizer.forActor(input.actor);
   const active = input.status === "active";
-  const gate = input.gate ?? (() => true);
   const comparison: HolderComparison = {
     holder: input.holder,
     status: input.status,
@@ -248,14 +247,14 @@ async function compareHolder(input: {
   };
   for (const key of LEGACY_KEYS) {
     const before = active && input.legacy.hasPermission(input.legacySubject, key);
-    const now = gate(key) && access.authorize(key).allowed;
+    const now = access.authorize(key).allowed;
     if (now) comparison.keys.push(key);
     if (before !== now) {
       comparison.differences.push(`${key}: legacy ${String(before)}, evaluator ${String(now)}`);
       continue;
     }
     for (const action of LEGACY_PERMISSION_ACTIONS[key]) {
-      const actionNow = gate(key) && access.authorize(action).allowed;
+      const actionNow = access.authorize(action).allowed;
       if (actionNow !== before) {
         comparison.differences.push(
           `${action} (${key}): legacy ${String(before)}, evaluator ${String(actionNow)}`
@@ -329,7 +328,8 @@ export async function verifyPermissions(input: {
       authSource: "verify-permissions",
       scopes: []
     };
-    // What the principal itself holds, before any credential narrows it.
+    // What the principal itself holds, before any credential narrows it: a token that carries
+    // every key.
     comparisons.push(
       await compareHolder({
         holder: `service_principal ${principal.id}`,
@@ -337,7 +337,11 @@ export async function verifyPermissions(input: {
         authorizer,
         legacy,
         legacySubject: { permissions: principal.permissions },
-        actor: { ...actor, credentialId: asApiCredentialId("verify-permissions") }
+        actor: {
+          ...actor,
+          permissions: [...LEGACY_KEYS],
+          credentialId: asApiCredentialId("verify-permissions")
+        }
       })
     );
     const owned = credentials.filter(
@@ -351,8 +355,12 @@ export async function verifyPermissions(input: {
         clientInstanceId,
         credentialId
       });
-      // The scopes the product's token carries now, from the rows behind the principal's list.
-      const scopes = resolved ? deriveEffectiveServiceGrants(resolved).scopes : [];
+      // The token the product issues now, from the rows behind the principal's list: what it
+      // is allowed is compared, not what a route's scope check would let through to the
+      // evaluator, so a right the token's scopes do not cap is found.
+      const token = resolved
+        ? deriveEffectiveServiceGrants(resolved)
+        : { scopes: [], permissions: [] };
       comparisons.push(
         await compareHolder({
           holder: `credential ${credential.id} of ${principal.id}`,
@@ -365,11 +373,7 @@ export async function verifyPermissions(input: {
               credentialScopes: listBeforeBackfill(credential.scopes)
             })
           },
-          actor: { ...actor, credentialId, scopes },
-          gate: (key) => {
-            const scope = authScopeForPermission(key);
-            return scope !== undefined && scopes.some((held) => held === scope);
-          }
+          actor: { ...actor, credentialId, scopes: token.scopes, permissions: token.permissions }
         })
       );
     }
@@ -428,15 +432,61 @@ function sameEntries(left: readonly string[], right: readonly string[]): boolean
   return left.length === right.length && left.every((entry) => right.includes(entry));
 }
 
+/** The journal time of the migration that moved the lists into rows, which the database records. */
+function legacyMigrationTime(): number {
+  const journal: unknown = JSON.parse(
+    readFileSync(
+      new URL("../packages/postgres-store/migrations/meta/_journal.json", import.meta.url),
+      "utf8"
+    )
+  );
+  const entries =
+    typeof journal === "object" && journal !== null && "entries" in journal
+      ? journal.entries
+      : undefined;
+  if (Array.isArray(entries)) {
+    for (const candidate of entries) {
+      if (
+        typeof candidate === "object" &&
+        candidate !== null &&
+        "tag" in candidate &&
+        "when" in candidate &&
+        typeof candidate.tag === "string" &&
+        candidate.tag.endsWith("_legacy_permission_grants") &&
+        typeof candidate.when === "number"
+      )
+        return candidate.when;
+    }
+  }
+  throw new Error("The migration journal names no legacy_permission_grants migration");
+}
+
 /**
- * Writes each holder's legacy list, as its instance-wide rows say it, into its column, and
- * `["*"]` back to null, in one transaction. Returns the number of rows it changed.
+ * The way back to a release before AP-4, in one transaction. That release reads each holder's
+ * column and every grant row, so the column takes the legacy list the holder's instance-wide
+ * rows say, and the rows the list now stands for are removed. Every `["*"]` turns back to null,
+ * and the record of the migration is removed, so the next upgrade moves the lists the old
+ * release kept into rows again. Run a second time, it finds no record and changes nothing.
+ * Returns the number of rows it changed.
  */
 export async function restoreLegacyColumns(input: {
   sql: Sql;
   write: (line: string) => void;
 }): Promise<number> {
+  const when = legacyMigrationTime();
   return input.sql.begin(async (tx) => {
+    const recorded = await tx<{ created_at: string }[]>`
+      select created_at from drizzle.__drizzle_migrations where created_at >= ${when}
+    `;
+    if (!recorded.some((record) => Number(record.created_at) === when)) {
+      input.write("The lists are in the columns already: the migration is not recorded");
+      return 0;
+    }
+    if (recorded.some((record) => Number(record.created_at) > when)) {
+      throw new Error(
+        "Migrations after legacy_permission_grants are recorded: the upgrade would not move the lists again. Roll back from the release that brought AP-4."
+      );
+    }
     const rows = await tx<InstanceRow[]>`
       select holder_kind, holder_id, client_instance_id, action, effect,
         scope_kind as "scopeKind"
@@ -449,7 +499,9 @@ export async function restoreLegacyColumns(input: {
       ["service_principals", "service_principal"]
     ] as const) {
       const holders = await tx<{ id: string; client_instance_id: string; permissions: string[] }[]>`
-        select id, client_instance_id, permissions from ${tx(table)} order by id
+        select id, client_instance_id, permissions from ${tx(table)}
+        where ${table === "product_users" ? tx`deletion_requested_at is null` : tx`true`}
+        order by id
       `;
       for (const holder of holders) {
         const list = legacyPermissionList(
@@ -460,15 +512,27 @@ export async function restoreLegacyColumns(input: {
               row.client_instance_id === holder.client_instance_id
           )
         );
-        if (sameEntries(list, holder.permissions)) continue;
-        await tx`
-          update ${tx(table)} set permissions = ${tx.json(list)}
-          where id = ${holder.id} and client_instance_id = ${holder.client_instance_id}
+        if (!sameEntries(list, holder.permissions)) {
+          await tx`
+            update ${tx(table)} set permissions = ${tx.json(list)}
+            where id = ${holder.id} and client_instance_id = ${holder.client_instance_id}
+          `;
+          changed += 1;
+          input.write(
+            `restored   ${kind} ${holder.id} [${holder.permissions.join(",")}] -> [${list.join(",")}]`
+          );
+        }
+        const listed = list.flatMap((entry) => {
+          const key = entry.startsWith("!") ? entry.slice(1) : entry;
+          return isPermission(key) ? [...LEGACY_PERMISSION_ACTIONS[key]] : [];
+        });
+        if (listed.length === 0) continue;
+        const removed = await tx`
+          delete from permission_grants
+          where client_instance_id = ${holder.client_instance_id} and holder_kind = ${kind}
+            and holder_id = ${holder.id} and scope_kind = 'instance' and action in ${tx(listed)}
         `;
-        changed += 1;
-        input.write(
-          `restored   ${kind} ${holder.id} [${holder.permissions.join(",")}] -> [${list.join(",")}]`
-        );
+        changed += removed.count;
       }
     }
     const credentials = await tx<{ id: string }[]>`
@@ -478,6 +542,7 @@ export async function restoreLegacyColumns(input: {
       input.write(`restored   credential ${credential.id} ["*"] -> null`);
     }
     changed += credentials.length;
+    await tx`delete from drizzle.__drizzle_migrations where created_at = ${when}`;
     input.write(`${changed} rows restored for a release that reads the legacy columns`);
     return changed;
   });

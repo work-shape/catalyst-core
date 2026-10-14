@@ -56,6 +56,11 @@ export interface ApiCredentialRecord {
 export interface ResolvedApiCredential {
   credential: ApiCredentialRecord;
   servicePrincipal: ServicePrincipalRecord;
+  /**
+   * The legacy keys the principal's rows hold (`legacyKeysHeld`), which the credential's token
+   * carries as far as its scopes reach.
+   */
+  heldKeys: string[];
   /** Auth-only verification material. Never expose this through management APIs. */
   secretHash: string;
 }

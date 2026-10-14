@@ -23,6 +23,7 @@ import { mapApiCredential, mapServicePrincipal } from "./rows";
 import {
   legacyPermissionListOf,
   legacyPermissionLists,
+  principalLegacyKeys,
   writeLegacyPermissionList
 } from "./legacy-permission-lists";
 import { apiCredentials, permissionGrants, productUsers, servicePrincipals } from "./schema";
@@ -346,12 +347,14 @@ export async function resolveApiCredential(
   if (!row) {
     return undefined;
   }
+  const keys = await principalLegacyKeys(db, {
+    clientInstanceId: asClientInstanceId(row.servicePrincipal.clientInstanceId),
+    principalId: row.servicePrincipal.id
+  });
   return {
     credential: mapApiCredential(row.credential),
-    servicePrincipal: mapServicePrincipal(
-      row.servicePrincipal,
-      await principalList(db, row.servicePrincipal)
-    ),
+    servicePrincipal: mapServicePrincipal(row.servicePrincipal, keys.list),
+    heldKeys: keys.held,
     secretHash: row.credential.secretHash
   };
 }

@@ -979,15 +979,20 @@ id from config_assets where status = 'deleted')`.
   `legacy` is gone from the contract, and the Check tab calls such a right "Given right". An API
   key created without scopes is stored with `["*"]`; the migration gives `["*"]` to every key
   without a list, keeps an empty list empty (it still gives nothing) and takes `*` out of a
-  list that held it (it gave nothing before and would give everything now). No user, service
-  principal or API key gains or loses a right. **Operators:** after the migration and before
+  list that held it (it gave nothing before and would give everything now). An API key's
+  scopes still cap its service principal: a key holds a principal's instance-wide right only
+  when one of its scopes carries the legacy key behind it, one key per scope as before. No user,
+  service principal or API key gains or loses a right. **Operators:** after the migration and before
   anyone changes a right, run `node --experimental-strip-types scripts/verify-permissions.ts`
   with `DATABASE_URL` set: it compares every holder's rights from the rows with what the columns
   answered and exits `1` on a difference. Do not change rights while a release before this one
   still runs beside it: that release writes the column only, and the change is not seen.
   **Rollback:** the columns are kept for one release. Stop this release, run the script with
-  `--restore-legacy-columns`, which writes each holder's rows back into its column and `["*"]`
-  back to null, then start the earlier release. A later release drops the columns.
+  `--restore-legacy-columns`, then start the earlier release. It writes each holder's rows back
+  into its column and removes them (the earlier release reads every row as well), turns
+  `["*"]` back to null and removes the record of migration `0072`, so that the next upgrade
+  runs it again over the lists the earlier release kept. It refuses when a later migration is
+  recorded. A later release drops the columns.
 - **Agents page:** a card shows the agent mark in place of the initials, the name, the default
   badge, what the agent does in two lines at most, and Start chat. Its starter prompts are no
   longer on the card; they wait in the empty chat with that agent. New agent opens its dialog

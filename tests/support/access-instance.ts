@@ -10,7 +10,9 @@ import {
   asClientInstanceId,
   type CollaborationWorkspaceId,
   asServicePrincipalId,
+  authScopeForPermission,
   createAssetKindRegistry,
+  isPermission,
   legacyGrantRows,
   type UserRecord,
   type UserRole
@@ -114,7 +116,11 @@ export function recordAuthAdapter(): AuthAdapter {
           credentialId: asApiCredentialId("cred_test"),
           displayLabel: "Service",
           permissionRefs: [],
-          permissions: TEST_SERVICE_KEYS,
+          // The keys the scopes reach, as `deriveEffectiveServiceGrants` gives a real token.
+          permissions: TEST_SERVICE_KEYS.filter((key) => {
+            const scope = isPermission(key) ? authScopeForPermission(key) : undefined;
+            return scopes.includes("*") || (scope !== undefined && scopes.includes(scope));
+          }),
           clientInstanceId,
           authSource: "test",
           scopes

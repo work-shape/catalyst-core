@@ -7,6 +7,7 @@ import {
   asApiCredentialId,
   asClientInstanceId,
   asServicePrincipalId,
+  asUserId,
   authScopeForPermission,
   createAuthorizer,
   legacyPermissionFor,
@@ -59,14 +60,30 @@ const RESOURCES: (AccessResource | undefined)[] = [
 ];
 
 interface Seeded {
-  users: { id: string; instance: string; roles: string[]; permissions: unknown; refs: string[]; active: boolean }[];
+  users: {
+    id: string;
+    instance: string;
+    roles: string[];
+    permissions: unknown;
+    refs: string[];
+    active: boolean;
+  }[];
   principals: { id: string; instance: string; permissions: unknown; active: boolean }[];
-  credentials: { id: string; instance: string; principalId: string; scopes: string[] | undefined }[];
+  credentials: {
+    id: string;
+    instance: string;
+    principalId: string;
+    scopes: string[] | undefined;
+  }[];
 }
 
 async function seed(sql: Sql, seedNumber: number): Promise<Seeded> {
   const random = prng(seedNumber);
-  const pick = <T>(values: readonly T[]): T => values[Math.floor(random() * values.length)] as T;
+  const pick = <T>(values: readonly T[]): T => {
+    const value = values[Math.floor(random() * values.length)];
+    if (value === undefined) throw new Error("pick from an empty list");
+    return value;
+  };
   const entryPool = [
     ...PERMISSIONS,
     ...PERMISSIONS.map((key) => `!${key}`),
@@ -95,7 +112,14 @@ async function seed(sql: Sql, seedNumber: number): Promise<Seeded> {
       values (${id}, ${instance}, ${id}, ${JSON.stringify(roles)}::text::jsonb,
         ${JSON.stringify(refs)}::text::jsonb, ${JSON.stringify(permissions)}::text::jsonb,
         ${status}, ${deleting ? new Date() : null}, now(), now())`;
-    seeded.users.push({ id, instance, roles, permissions, refs, active: status === "active" && !deleting });
+    seeded.users.push({
+      id,
+      instance,
+      roles,
+      permissions,
+      refs,
+      active: status === "active" && !deleting
+    });
   }
   for (let index = 0; index < 60; index += 1) {
     const instance = pick(INSTANCES);
@@ -150,14 +174,36 @@ async function seed(sql: Sql, seedNumber: number): Promise<Seeded> {
   const seen = new Set<string>();
   for (const holder of [
     ...seeded.users.map((user) => ({ kind: "user", id: user.id, instance: user.instance })),
-    ...seeded.principals.map((sp) => ({ kind: "service_principal", id: sp.id, instance: sp.instance }))
+    ...seeded.principals.map((sp) => ({
+      kind: "service_principal",
+      id: sp.id,
+      instance: sp.instance
+    }))
   ]) {
     const count = random() < 0.4 ? Math.floor(random() * 4) : 0;
     for (let index = 0; index < count; index += 1) {
-      const action = random() < 0.7 ? pick(ACTIONS.filter((a) => {
-        try { legacyPermissionFor(a); return true; } catch { return false; }
-      })) : pick(ACTIONS);
-      const scopeKind = pick(["instance", "namespace", "asset", "workspace"] as const);
+      const action =
+        random() < 0.7
+          ? pick(
+              ACTIONS.filter((a) => {
+                try {
+                  legacyPermissionFor(a);
+                  return true;
+                } catch {
+                  return false;
+                }
+              })
+            )
+          : pick(ACTIONS);
+      // No release before AP-4 wrote a row at instance scope: the Access page refused it
+      // (`invalid_scope`). A user's row there is still compared; a service principal's is not,
+      // because once migration 0072 merged it with a key of the list nothing tells the two
+      // apart, and a credential's scopes cap the list's keys but did not cap such a row.
+      const scopeKind = pick(
+        holder.kind === "user"
+          ? (["instance", "namespace", "asset", "workspace"] as const)
+          : (["namespace", "asset", "workspace"] as const)
+      );
       const scopeId = scopeKind === "asset" ? "asset_1" : scopeKind === "workspace" ? "ws_1" : null;
       const namespace = scopeKind === "namespace" ? "sales-" : null;
       const key = `${holder.instance}|${holder.kind}|${holder.id}|${action}|${scopeKind}|${scopeId}|${namespace}`;
@@ -197,8 +243,8 @@ async function snapshotGrants(sql: Sql): Promise<PermissionGrant[]> {
     scopeKind: row.scope_kind,
     ...(row.scope_id === null ? {} : { scopeId: row.scope_id }),
     ...(row.namespace === null ? {} : { namespace: row.namespace }),
-    grantedBy: "usr_x" as PermissionGrant["grantedBy"],
-    createdAt: new Date().toISOString() as PermissionGrant["createdAt"]
+    grantedBy: asUserId("usr_x"),
+    createdAt: new Date().toISOString()
   }));
 }
 
@@ -224,6 +270,15 @@ function preDerive(principalPermissions: string[], credentialScopes: string[] | 
 }
 
 const QUESTIONS = [...ACTIONS, ...PERMISSIONS, "ref:demo"];
+
+/** The legacy key behind an action, or none. */
+function legacyKeyOf(action: (typeof ACTIONS)[number]) {
+  try {
+    return legacyPermissionFor(action);
+  } catch {
+    return undefined;
+  }
+}
 
 function asList(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [];
@@ -309,7 +364,9 @@ describe("AP-4 verifier: rights before and after migration 0072", () => {
         clientInstanceId,
         credentialId: asApiCredentialId(credential.id)
       });
-      const now = resolved ? deriveEffectiveServiceGrants(resolved) : { scopes: [], permissions: [] };
+      const now = resolved
+        ? deriveEffectiveServiceGrants(resolved)
+        : { scopes: [], permissions: [] };
       if ([...old.scopes].sort().join() !== [...now.scopes].sort().join()) {
         scopeDifferences.push(
           `${credential.id} list=${JSON.stringify(principal.permissions)} scopes=${JSON.stringify(credential.scopes)}: token scopes before ${JSON.stringify(old.scopes)}, after ${JSON.stringify(now.scopes)}`
@@ -344,21 +401,19 @@ describe("AP-4 verifier: rights before and after migration 0072", () => {
         permissions: now.permissions,
         clientInstanceId,
         authSource: "service-access-token",
-        scopes: now.scopes as never
+        scopes: now.scopes
       });
       for (const question of QUESTIONS) {
         const was = before.authorize(question).allowed;
         const is = after.authorize(question).allowed;
         if (was === is) continue;
-        let key: string | undefined;
-        try {
-          key = PERMISSIONS.includes(question as never) ? question : legacyPermissionFor(question as never);
-        } catch {
-          key = undefined;
-        }
-        const scope = key === undefined ? undefined : authScopeForPermission(key as never);
+        const action = ACTIONS.find((candidate) => candidate === question);
+        const key =
+          PERMISSIONS.find((candidate) => candidate === question) ??
+          (action === undefined ? undefined : legacyKeyOf(action));
+        const scope = key === undefined ? undefined : authScopeForPermission(key);
         const line = `${credential.id} list=${JSON.stringify(principal.permissions)} scopes=${JSON.stringify(credential.scopes)} token=${JSON.stringify(now.scopes)} ${question}: before ${was}, after ${is}`;
-        if (scope !== undefined && now.scopes.includes(scope as never)) gated.push(line);
+        if (scope !== undefined && now.scopes.some((held) => held === scope)) gated.push(line);
         else ungated.push(line);
       }
     }

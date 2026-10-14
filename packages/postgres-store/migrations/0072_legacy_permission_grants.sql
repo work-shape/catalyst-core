@@ -3,7 +3,9 @@
 -- `service_principals` keep what they hold, are read and written by no code of this release,
 -- and are dropped by a later migration once this release is the oldest supported one. Rolling
 -- back to a release before this one: `scripts/verify-permissions.ts --restore-legacy-columns`
--- writes the rows back into the columns and `["*"]` back to null, then the old release starts.
+-- writes the rows back into the columns, removes them, turns `["*"]` back to null and removes
+-- the record of this migration, then the old release starts. The next upgrade runs this
+-- migration again, over the lists the old release kept.
 --
 -- Each key of a list becomes one instance-wide row per action it stands for
 -- (`LEGACY_PERMISSION_ACTIONS` in `core/src/permissions.ts`): an allow for `key`, a deny for
@@ -60,7 +62,9 @@ DO UPDATE SET "effect" = 'deny'
 WHERE "excluded"."effect" = 'deny' AND "permission_grants"."effect" <> 'deny';--> statement-breakpoint
 -- Before this release `*` in a credential's list gave no scope, and from this release it gives
 -- every scope of the principal. It is taken out of the lists that have it, so they keep meaning
--- what they meant. No credential could be given `*` through the API, so none is expected.
+-- what they meant. No credential could be given `*` through the API, so none is expected. The
+-- comment this migration puts on the column at its end says the lists were read so: run once
+-- more, the migration keeps the `["*"]` it wrote.
 UPDATE "api_credentials"
 SET "scopes" = coalesce(
   (
@@ -70,10 +74,15 @@ SET "scopes" = coalesce(
   ),
   '[]'::jsonb
 )
-WHERE jsonb_typeof("scopes") = 'array' AND "scopes" @> '["*"]'::jsonb;--> statement-breakpoint
+WHERE jsonb_typeof("scopes") = 'array' AND "scopes" @> '["*"]'::jsonb
+  AND col_description(
+    '"api_credentials"'::regclass,
+    (SELECT "attnum" FROM pg_attribute WHERE "attrelid" = '"api_credentials"'::regclass AND "attname" = 'scopes')
+  ) IS DISTINCT FROM 'The scopes the credential carries of its principal''s; ["*"] carries every one (AP-4).';--> statement-breakpoint
 -- A credential without a list had every scope of its principal; `["*"]` says so. An empty list
 -- gives no scope and stays empty. The column becomes required in a later migration: a release
 -- before this one writes null for such a credential and may run beside this one in a deploy.
 UPDATE "api_credentials"
 SET "scopes" = '["*"]'::jsonb
-WHERE "scopes" IS NULL OR "scopes" = 'null'::jsonb;
+WHERE "scopes" IS NULL OR "scopes" = 'null'::jsonb;--> statement-breakpoint
+COMMENT ON COLUMN "api_credentials"."scopes" IS 'The scopes the credential carries of its principal''s; ["*"] carries every one (AP-4).';

@@ -55,93 +55,22 @@ export function legacyPermissionFor(action: PlatformAction): Permission {
   throw new AppError("VALIDATION_FAILED", `No legacy permission for action '${action}'`);
 }
 
-/**
- * Who wrote a grant row that a legacy permission list stands for when no person did: the
- * migration of the lists, a first sign-in whose claims bring a list, a seed.
- */
-export const LEGACY_LIST_GRANTOR = "legacy_permission_list";
-
-/** One instance-wide row that a key of a legacy list stands for. */
-export interface LegacyGrantRow {
-  action: PlatformAction;
-  effect: PermissionGrant["effect"];
-}
-
-/** What a holder's instance-wide rows, or a legacy list, say about one key. */
-type LegacyKeyState = PermissionGrant["effect"] | "none" | "partial";
-
-type LegacyRowView = Pick<PermissionGrant, "action" | "effect" | "scopeKind">;
-
-function keyStateOfRows(rows: readonly LegacyRowView[], key: Permission): LegacyKeyState {
-  const effects = LEGACY_PERMISSION_ACTIONS[key].map(
-    (action) =>
-      rows.find((row) => row.scopeKind === "instance" && row.action === action)?.effect ?? "none"
-  );
-  const [first] = effects;
-  return first !== undefined && effects.every((effect) => effect === first) ? first : "partial";
-}
-
-/** A revocation wins over an entry of the same key, as it did in the list. */
-function keyStateOfList(entries: readonly string[], key: Permission): LegacyKeyState {
-  if (entries.includes(`!${key}`)) return "deny";
-  return entries.includes(key) ? "allow" : "none";
-}
+/** What the legacy list helpers read of a holder's grant rows. */
+export type LegacyRowView = Pick<PermissionGrant, "action" | "effect" | "scopeKind">;
 
 /**
- * The legacy list a holder's instance-wide rows add up to: a key whose actions are all
- * allowed, `!key` for one whose actions are all denied. A key whose actions differ is in
- * neither form. The Users and API access screens read and write this list until the User
- * page shows rows one by one.
+ * The keys a holder's instance-wide rows stand for: every action of the key has a row and one
+ * of them allows. These are the keys of the holder's legacy list, a key whose single action a
+ * row of other origin denies included, which the list held all the same. A service principal's
+ * credential can carry these keys, as far as its scopes reach.
  */
-export function legacyPermissionList(rows: readonly LegacyRowView[]): string[] {
-  return PERMISSIONS.flatMap((key) => {
-    const state = keyStateOfRows(rows, key);
-    return state === "allow" ? [key] : state === "deny" ? [`!${key}`] : [];
+export function legacyKeysHeld(rows: readonly LegacyRowView[]): Permission[] {
+  return PERMISSIONS.filter((key) => {
+    const effects = LEGACY_PERMISSION_ACTIONS[key].map(
+      (action) => rows.find((row) => row.scopeKind === "instance" && row.action === action)?.effect
+    );
+    return effects.every((effect) => effect !== undefined) && effects.includes("allow");
   });
-}
-
-/** The instance-wide rows a legacy list stands for, and nothing for an entry it does not know. */
-export function legacyGrantRows(entries: readonly string[]): LegacyGrantRow[] {
-  return PERMISSIONS.flatMap((key) => {
-    const state = keyStateOfList(entries, key);
-    return state === "allow" || state === "deny"
-      ? LEGACY_PERMISSION_ACTIONS[key].map((action) => ({ action, effect: state }))
-      : [];
-  });
-}
-
-/** The rows to remove and to write so that a holder's rows say what a submitted list says. */
-export interface LegacyGrantChange {
-  remove: PlatformAction[];
-  add: LegacyGrantRow[];
-}
-
-/**
- * Changes only the keys whose state the list changes, so a row keeps who wrote it and when.
- * A key the list does not name keeps rows whose actions differ: the list cannot show them.
- */
-export function legacyGrantChange(
-  rows: readonly LegacyRowView[],
-  entries: readonly string[]
-): LegacyGrantChange {
-  const change: LegacyGrantChange = { remove: [], add: [] };
-  for (const key of PERMISSIONS) {
-    const before = keyStateOfRows(rows, key);
-    const after = keyStateOfList(entries, key);
-    if (before === after || (before === "partial" && after === "none")) continue;
-    change.remove.push(...LEGACY_PERMISSION_ACTIONS[key]);
-    if (after === "allow" || after === "deny") {
-      change.add.push(
-        ...LEGACY_PERMISSION_ACTIONS[key].map((action) => ({ action, effect: after }))
-      );
-    }
-  }
-  return change;
-}
-
-/** The entries of a submitted list that are neither a key nor the revocation of one. */
-export function unknownLegacyEntries(entries: readonly string[]): string[] {
-  return entries.filter((entry) => !isPermission(entry.startsWith("!") ? entry.slice(1) : entry));
 }
 
 export const ROLE_DEFAULT_ACTIONS: Record<
@@ -344,6 +273,12 @@ export interface AccessHolder {
   clientInstanceId: ClientInstanceId;
   roles: readonly string[];
   permissionRefs: readonly string[];
+  /**
+   * The legacy keys the token of a service principal's credential carries, which its scopes
+   * left of the principal's keys. A key the principal holds and the token does not carry
+   * allows nothing on this request, as before AP-4. Absent for every other holder.
+   */
+  tokenKeys?: readonly string[];
 }
 
 /** One thing a holder is allowed or denied, with the source that says so. */
@@ -364,7 +299,10 @@ export function accessHolderFromIdentity(actor: AuthenticatedIdentity): AccessHo
       id: actor.id,
       clientInstanceId: actor.clientInstanceId,
       roles: [],
-      permissionRefs: actor.permissionRefs
+      permissionRefs: actor.permissionRefs,
+      // A credential's token carries the keys its scopes reach; a Workflow Run holds its
+      // principal's own rights.
+      ...("credentialId" in actor ? { tokenKeys: actor.permissions } : {})
     };
   }
   if ("kind" in actor) {
@@ -411,6 +349,13 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
       });
     }
   }
+  const ownRows = persisted.grants.filter(
+    (grant) =>
+      grant.clientInstanceId === holder.clientInstanceId &&
+      grant.holderKind === holder.kind &&
+      grant.holderId === holder.id
+  );
+  const uncarried = actionsTheTokenDoesNotCarry(holder, ownRows);
   for (const grant of persisted.grants) {
     // A row of another client instance or of another holder never applies. Rows held through a
     // role or a group are the store's answer for this holder.
@@ -426,6 +371,14 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
     if (!isPlatformAction(grant.action)) {
       continue;
     }
+    if (
+      grant.scopeKind === "instance" &&
+      grant.effect === "allow" &&
+      grant.holderKind === holder.kind &&
+      uncarried.has(grant.action)
+    ) {
+      continue;
+    }
     entries.push({
       action: grant.action,
       effect: grant.effect,
@@ -436,6 +389,23 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
     });
   }
   return entries;
+}
+
+/**
+ * The actions of the keys a service principal holds whose scope its credential's token lacks.
+ * Their instance-wide allows give nothing on the token's request: the scopes cap the keys.
+ */
+function actionsTheTokenDoesNotCarry(
+  holder: AccessHolder,
+  ownRows: readonly LegacyRowView[]
+): ReadonlySet<string> {
+  const carried = holder.tokenKeys;
+  if (carried === undefined) return new Set();
+  return new Set(
+    legacyKeysHeld(ownRows)
+      .filter((key) => !carried.includes(key))
+      .flatMap((key) => LEGACY_PERMISSION_ACTIONS[key])
+  );
 }
 
 function entryCovers(entry: AccessEntry, resource: AccessResource | undefined): boolean {

@@ -2,6 +2,7 @@ import postgres, { type Sql } from "postgres";
 import { afterEach, describe, expect, inject, it } from "vitest";
 import {
   asClientInstanceId,
+  asUserId,
   createAuthorizer,
   type AuthenticatedIdentity,
   type PermissionGrant
@@ -77,8 +78,8 @@ async function preAp4Decision(sql: Sql, userId: string, action: string): Promise
         action: row.action,
         effect: row.effect,
         scopeKind: row.scope_kind,
-        grantedBy: "x" as PermissionGrant["grantedBy"],
-        createdAt: "2026-10-14T00:00:00.000Z" as PermissionGrant["createdAt"]
+        grantedBy: asUserId("x"),
+        createdAt: "2026-10-14T00:00:00.000Z"
       })),
       memberWorkspaceIds: []
     }
@@ -133,8 +134,10 @@ describe("AP-4 verifier: rollback", () => {
     await restoreLegacyColumns({ sql, write: () => undefined });
     // On the old release: users.manage is taken away, audit.view is given.
     await sql`update product_users set permissions = '["audit.view"]'::jsonb where id = 'usr_manager'`;
-    // Upgrade again: 0072 is recorded as applied and does not run again.
-    expect(await migrateDatabase({ databaseUrl })).toEqual([]);
+    // Upgrade again: the restore removed the record of 0072, so it moves the lists again.
+    expect(await migrateDatabase({ databaseUrl })).toEqual([
+      expect.stringMatching(/_legacy_permission_grants$/u)
+    ]);
     const stores = await storesOn(databaseUrl);
     cleanups.push(() => stores.close());
     const actor: AuthenticatedIdentity = {

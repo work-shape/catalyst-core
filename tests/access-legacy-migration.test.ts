@@ -1,10 +1,14 @@
 import postgres, { type Sql } from "postgres";
 import { afterEach, describe, expect, inject, it } from "vitest";
+import { deriveEffectiveServiceGrants } from "@vivd-catalyst/auth";
 import {
   LEGACY_LIST_GRANTOR,
   PERMISSIONS,
+  asApiCredentialId,
   asClientInstanceId,
+  asServicePrincipalId,
   asUserId,
+  createAuthorizer,
   legacyGrantRows
 } from "@vivd-catalyst/core";
 import { migrateDatabase } from "@vivd-catalyst/postgres-store";
@@ -558,11 +562,12 @@ describe("AP-4 rollback: the columns back for a release that reads them", () => 
     });
 
     const lines: string[] = [];
-    expect(await restoreLegacyColumns({ sql, write: (line) => lines.push(line) })).toBe(2);
+    // One column, the six rows the lists now stand for, and one credential.
+    expect(await restoreLegacyColumns({ sql, write: (line) => lines.push(line) })).toBe(8);
     expect(lines).toEqual([
       "restored   user usr_admin [!usage.view,config_assets.release] -> [config_assets.release,!users.manage,audit.view]",
       'restored   credential cred_unscoped ["*"] -> null',
-      "2 rows restored for a release that reads the legacy columns"
+      "8 rows restored for a release that reads the legacy columns"
     ]);
     expect(await sql`select id, permissions from product_users order by id`).toEqual([
       { id: "usr_admin", permissions: ["config_assets.release", "!users.manage", "audit.view"] },
@@ -574,14 +579,97 @@ describe("AP-4 rollback: the columns back for a release that reads them", () => 
       { id: "cred_star", scopes: [] },
       { id: "cred_unscoped", scopes: null }
     ]);
-
-    // The columns now say what the rows say: the frozen rules agree with the evaluator.
-    const after = await verify(databaseUrl);
-    expect(after.different).toEqual([]);
-    expect(after.exitCode).toBe(0);
+    // The release before AP-4 reads every row: those the lists stand for are gone with them.
+    expect(await grantRows(sql)).toEqual([]);
 
     const again: string[] = [];
     expect(await restoreLegacyColumns({ sql, write: (line) => again.push(line) })).toBe(0);
-    expect(again).toEqual(["0 rows restored for a release that reads the legacy columns"]);
+    expect(again).toEqual(["The lists are in the columns already: the migration is not recorded"]);
+
+    // The next upgrade moves the lists into rows again, and every right is what it was.
+    await database.migrate();
+    const after = await verify(databaseUrl);
+    expect(after.different).toEqual([]);
+    expect(after.exitCode).toBe(0);
+  });
+
+  it("refuses when a migration after AP-4's is recorded, and changes nothing", async () => {
+    const database = await databaseBeforeMigration();
+    await seedSmall(database.sql);
+    await database.migrate();
+    await database.sql`
+      insert into drizzle.__drizzle_migrations (hash, created_at)
+      select 'later', max(created_at) + 1 from drizzle.__drizzle_migrations`;
+    await expect(
+      restoreLegacyColumns({ sql: database.sql, write: () => undefined })
+    ).rejects.toThrow(/Migrations after legacy_permission_grants are recorded/u);
+    expect(await grantRows(database.sql, "usr_admin")).toHaveLength(2);
+  });
+});
+
+describe("AP-4: a credential's scopes cap its principal's keys", () => {
+  it("carries a key one of whose actions a row denies, and one key of a shared scope", async () => {
+    const database = await databaseBeforeMigration();
+    const { sql, databaseUrl } = database;
+    await seedPrincipal(sql, {
+      id: "sp_mixed",
+      permissions: ["config_assets.read", "config_assets.release", "usage.view", "audit.view"]
+    });
+    await sql`
+      insert into permission_grants (id, client_instance_id, holder_kind, holder_id, action,
+        scope_kind, effect, granted_by, created_at)
+      values ('grant_deny', ${instance}, 'service_principal', 'sp_mixed', 'agent.read',
+        'instance', 'deny', 'usr_boss', now())`;
+    await seedCredential(sql, { id: "cred_all", principalId: "sp_mixed", scopes: null });
+    await seedCredential(sql, {
+      id: "cred_release",
+      principalId: "sp_mixed",
+      scopes: '["config_assets:release"]'
+    });
+    await database.migrate();
+    const stores = await storesOn(databaseUrl);
+    cleanups.push(() => stores.close());
+    const rights = async (credentialId: string) => {
+      const resolved = await stores.apiAccess.resolveApiCredential({
+        clientInstanceId: asClientInstanceId(instance),
+        credentialId: asApiCredentialId(credentialId)
+      });
+      if (!resolved) throw new Error(`No credential ${credentialId}`);
+      const token = deriveEffectiveServiceGrants(resolved);
+      const access = await createAuthorizer(stores.access).forActor({
+        kind: "service",
+        id: asServicePrincipalId("sp_mixed"),
+        credentialId: asApiCredentialId(credentialId),
+        displayLabel: "sp_mixed",
+        permissionRefs: [],
+        permissions: token.permissions,
+        clientInstanceId: asClientInstanceId(instance),
+        authSource: "test",
+        scopes: token.scopes
+      });
+      return Object.fromEntries(
+        ["agent.read", "skill.read", "assets.release", "usage.view", "audit.view"].map((action) => [
+          action,
+          access.authorize(action).allowed
+        ])
+      );
+    };
+
+    // The list showed config_assets.read although a row denied agent.read; `governance:read`
+    // carried one of usage.view and audit.view, the later key.
+    expect(await rights("cred_all")).toEqual({
+      "agent.read": false,
+      "skill.read": true,
+      "assets.release": true,
+      "usage.view": false,
+      "audit.view": true
+    });
+    expect(await rights("cred_release")).toEqual({
+      "agent.read": false,
+      "skill.read": false,
+      "assets.release": true,
+      "usage.view": false,
+      "audit.view": false
+    });
   });
 });

@@ -70,9 +70,11 @@ describe("AP-4 verifier: migration 0072 SQL", () => {
         key_prefix, secret_hash, scopes, created_at)
       values ('cred_a', ${instance}, 'sp_a', 'cred_a', 'p', 'h', null, now())`;
     await migrateDatabase({ databaseUrl });
-    const grantsAfterFirst = await sql`select action, effect from permission_grants order by action`;
+    const grantsAfterFirst =
+      await sql`select action, effect from permission_grants order by action`;
     await sql.unsafe(migrationSql.replaceAll("--> statement-breakpoint", ""));
-    const grantsAfterSecond = await sql`select action, effect from permission_grants order by action`;
+    const grantsAfterSecond =
+      await sql`select action, effect from permission_grants order by action`;
     expect(grantsAfterSecond).toEqual(grantsAfterFirst);
     const [credential] = await sql<{ scopes: unknown }[]>`select scopes from api_credentials`;
     expect(credential?.scopes).toEqual(["*"]);

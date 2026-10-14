@@ -108,20 +108,15 @@ describe("legacy equivalence: service tokens", () => {
         expect(verified.permissions, credentialState).toEqual(expectedKeys);
 
         for (const actor of [issued.principal, verified]) {
-          // The evaluator answers the principal's rows; the credential's scopes are the gate in
-          // front of it, as a route checks them.
+          // The credential's scopes cap the principal's rows: the evaluator answers what the
+          // token held before AP-4, without a route's scope check in front of it.
           const access = await authorizer.forActor(actor);
           for (const key of LEGACY_KEYS) {
             const before = frozenHasPermission({ permissions: actor.permissions }, key);
             expect(hasPermission(actor, key), `${credentialState} ${key} product copy`).toBe(
               before
             );
-            const scope = authScopeForPermission(key);
-            const gate = scope !== undefined && actor.scopes.includes(scope);
-            expect(gate && access.authorize(key).allowed, `${credentialState} ${key}`).toBe(before);
-            expect(access.authorize(key).allowed, `${principalState} ${key} principal`).toBe(
-              frozenHasPermission({ permissions: principalPermissions }, key)
-            );
+            expect(access.authorize(key).allowed, `${credentialState} ${key}`).toBe(before);
             // A credential can only narrow what its principal holds.
             if (before) expect(principalPermissions).toContain(key);
           }

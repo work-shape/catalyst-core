@@ -4,6 +4,7 @@ import {
   PERMISSIONS,
   createPlatformId,
   legacyGrantChange,
+  legacyKeysHeld,
   legacyPermissionList,
   type ClientInstanceId,
   type PermissionGrant
@@ -21,13 +22,15 @@ type LegacyHolderKind = Extract<PermissionGrant["holderKind"], "user" | "service
 
 const LEGACY_ACTIONS: string[] = PERMISSIONS.flatMap((key) => [...LEGACY_PERMISSION_ACTIONS[key]]);
 
-/** The legacy list of each holder, by id. A holder without rows has an empty list. */
-export async function legacyPermissionLists(
+type LegacyRow = Pick<PermissionGrant, "holderId" | "action" | "effect" | "scopeKind">;
+
+/** The instance-wide rows of legacy actions of each holder, by id. */
+async function legacyRowsOf(
   db: PostgresConnection | PostgresTransaction,
   input: { clientInstanceId: ClientInstanceId; holderKind: LegacyHolderKind; holderIds: string[] }
-): Promise<Map<string, string[]>> {
-  const lists = new Map<string, string[]>();
-  if (input.holderIds.length === 0) return lists;
+): Promise<Map<string, LegacyRow[]>> {
+  const byHolder = new Map<string, LegacyRow[]>(input.holderIds.map((id) => [id, []]));
+  if (input.holderIds.length === 0) return byHolder;
   const rows = await db
     .select({
       holderId: permissionGrants.holderId,
@@ -45,10 +48,35 @@ export async function legacyPermissionLists(
         inArray(permissionGrants.action, LEGACY_ACTIONS)
       )
     );
-  for (const holderId of input.holderIds) {
-    lists.set(holderId, legacyPermissionList(rows.filter((row) => row.holderId === holderId)));
-  }
-  return lists;
+  for (const row of rows) byHolder.get(row.holderId)?.push(row);
+  return byHolder;
+}
+
+/** The legacy list of each holder, by id. A holder without rows has an empty list. */
+export async function legacyPermissionLists(
+  db: PostgresConnection | PostgresTransaction,
+  input: { clientInstanceId: ClientInstanceId; holderKind: LegacyHolderKind; holderIds: string[] }
+): Promise<Map<string, string[]>> {
+  const rows = await legacyRowsOf(db, input);
+  return new Map([...rows].map(([holderId, held]) => [holderId, legacyPermissionList(held)]));
+}
+
+/**
+ * A service principal's legacy list, and the keys its rows hold, which its credentials can
+ * carry (`legacyKeysHeld`): a key one of whose actions a row of other origin denies is held but
+ * not in the list.
+ */
+export async function principalLegacyKeys(
+  db: PostgresConnection | PostgresTransaction,
+  input: { clientInstanceId: ClientInstanceId; principalId: string }
+): Promise<{ list: string[]; held: string[] }> {
+  const rows = await legacyRowsOf(db, {
+    clientInstanceId: input.clientInstanceId,
+    holderKind: "service_principal",
+    holderIds: [input.principalId]
+  });
+  const own = rows.get(input.principalId) ?? [];
+  return { list: legacyPermissionList(own), held: legacyKeysHeld(own) };
 }
 
 /** The legacy list of one holder. */

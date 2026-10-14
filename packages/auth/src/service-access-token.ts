@@ -9,7 +9,6 @@ import {
   isPermission,
   parseApiCredentialSecret,
   permissionForAuthScope,
-  resolveEffectivePermissions,
   type ApiAccessStore,
   type AuthenticatedServicePrincipal,
   type AuthScope,
@@ -162,15 +161,17 @@ export function extractApiKey(headers: AuthRequestHeaders): string | undefined {
 }
 
 /**
- * The scopes a credential's token carries: those of its list that its principal's legacy keys
- * name, or all of them for a credential without a list. The rights behind them are decided by
- * the evaluator; this decides the credential's gate.
+ * The scopes a credential's token carries, those of its list that its principal's keys name,
+ * and the keys behind them. The evaluator allows the principal's instance-wide rights of a key
+ * only when the token carries that key, so the scopes cap the principal's rights as they did
+ * before AP-4. A scope carries one key, as before AP-4: of `usage.view` and `audit.view`,
+ * which share `governance:read`, the later in key order.
  */
 export function deriveEffectiveServiceGrants(
   resolved: ResolvedApiCredential
 ): EffectiveServiceGrants {
   const principalScopes = new Map<string, string>();
-  for (const permission of resolveEffectivePermissions(resolved.servicePrincipal)) {
+  for (const permission of resolved.heldKeys.filter(isPermission)) {
     const scope = authScopeForPermission(permission);
     if (scope) {
       principalScopes.set(scope, permission);
