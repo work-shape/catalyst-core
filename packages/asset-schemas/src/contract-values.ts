@@ -194,8 +194,12 @@ export const CONNECTION_NAME_MAX_LENGTH = 64;
 export const GUARDRAIL_NAME_PATTERN = /^[a-z][a-z0-9]*([_-][a-z0-9]+)*$/u;
 export const GUARDRAIL_NAME_MAX_LENGTH = 64;
 
-/** Who may call an accepted operation. An operation exposed to nobody is callable by nobody. */
-export const CONNECTION_EXPOSURES = ["agent", "bridge", "workflow"] as const;
+/**
+ * Who may call an accepted operation. An operation exposed to nobody is callable by nobody.
+ * `outside` admits the CLI and the platform MCP server, a caller with an API credential whose
+ * results leave the instance; no operation has it unless an admin turns it on.
+ */
+export const CONNECTION_EXPOSURES = ["agent", "bridge", "workflow", "outside"] as const;
 export type ConnectionExposure = (typeof CONNECTION_EXPOSURES)[number];
 
 /** The health of a Connection as its page and its list show it. */

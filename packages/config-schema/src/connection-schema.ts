@@ -12,6 +12,7 @@ import {
   CONNECTOR_TYPE_PATTERN,
   EGRESS_PROTOCOLS,
   WORKFLOW_ERROR_CODES,
+  connectionExposureRefusal,
   operationLimitsSchema,
   operationPagingSchema,
   secretRef,
@@ -293,6 +294,16 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
           path: ["operations", index, "exposure"],
           message: "An exposure is listed once"
         });
+      }
+      for (const exposure of operation.exposure) {
+        const refusal = connectionExposureRefusal(connection.credentialMode, exposure);
+        if (refusal) {
+          context.addIssue({
+            code: "custom",
+            path: ["operations", index, "exposure"],
+            message: refusal
+          });
+        }
       }
       // A policy only tightens. A reading operation runs or is denied; only a changing one
       // can wait for an approval.

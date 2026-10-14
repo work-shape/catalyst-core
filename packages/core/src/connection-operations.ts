@@ -59,10 +59,11 @@ export const CONNECTION_EXPOSURE_ACTION_PREFIX = "connection_exposure:";
 
 /**
  * The exposure an operation needs to be called from an origin. An agent needs `agent`, an App
- * `bridge`, a Workflow `workflow`. A person, the CLI and an MCP client need any one of them:
- * `any`. Nothing is answered for an origin no exposure admits, which is refused.
+ * `bridge`, a Workflow `workflow`, the CLI and an MCP client `outside`. Nothing is answered for
+ * an origin no exposure admits, which is refused: a person in the browser outside an App and a
+ * schedule reach a Connection's operation only through an agent, an App or a Workflow.
  */
-export function exposureOfOrigin(origin: OperationOrigin): ConnectionExposure | "any" | undefined {
+export function exposureOfOrigin(origin: OperationOrigin): ConnectionExposure | undefined {
   switch (origin.kind) {
     case "agent":
       return "agent";
@@ -70,13 +71,37 @@ export function exposureOfOrigin(origin: OperationOrigin): ConnectionExposure | 
       return "bridge";
     case "workflow":
       return "workflow";
-    case "user":
     case "cli":
     case "mcp":
-      return "any";
+      return "outside";
+    case "user":
     case "schedule":
       return undefined;
   }
+}
+
+/**
+ * The mode of a Connection's credential: `shared`, one credential for everyone who may use it,
+ * or `user`, a personal connection on which each person acts with their own account (CS-9).
+ */
+export type ConnectionCredentialMode = "shared" | "user";
+
+/** The only exposure a personal connection accepts: its owner's token is used in an agent run. */
+const PERSONAL_CONNECTION_EXPOSURE: ConnectionExposure = "agent";
+
+/**
+ * Why a Connection of the mode may not list the exposure, or nothing where it may. A personal
+ * connection accepts `agent` only, so its data never reaches an App, a Workflow or a tool
+ * outside the instance.
+ */
+export function connectionExposureRefusal(
+  credentialMode: ConnectionCredentialMode,
+  exposure: ConnectionExposure
+): string | undefined {
+  if (credentialMode !== "user" || exposure === PERSONAL_CONNECTION_EXPOSURE) return undefined;
+  return exposure === "outside"
+    ? "A personal connection cannot be exposed to outside clients (CLI, MCP): it accepts only the exposure 'agent'"
+    : `A personal connection accepts only the exposure 'agent', not '${exposure}'`;
 }
 
 /** One tool as the last discovery read it. Untrusted data. */
