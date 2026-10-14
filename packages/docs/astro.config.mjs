@@ -53,8 +53,10 @@ export default defineConfig({
       title: "Workshape Catalyst",
       description:
         "Documentation for configuring, extending, and running dedicated Workshape Catalyst client instances.",
-      // The mark is the Catalyst mark, the application's default favicon; it follows the colour scheme itself.
+      // The docs variant of the Catalyst mark: the application's colours swapped, so a docs tab
+      // stands apart from an instance tab. It follows the colour scheme itself.
       logo: { src: "./public/favicon.svg", alt: "" },
+      routeMiddleware: "./src/route-data.ts",
       customCss: ["./src/styles/theme.css"],
       // Code is highlighted with the themes the chat interface uses, on the site's own surfaces.
       expressiveCode: {
@@ -66,62 +68,82 @@ export default defineConfig({
         {
           label: "Get started",
           items: [
-            "getting-started/overview",
-            "getting-started/operating-models",
+            "start/first-conversation",
+            "start/workspaces",
             "getting-started/local-agent",
-            "getting-started/local-demo",
-            "getting-started/execution-workspaces-local"
+            "reference/glossary"
           ]
         },
         {
-          label: "Configure",
-          items: [
-            "configure/client-assembly",
-            "configure/release-config",
-            "configure/modules",
-            "configure/config-assets",
-            "configure/cli",
-            "configure/build"
-          ]
+          label: "Build agents and Apps",
+          items: ["configure/build", "automate/apps", "apps/build"]
         },
         {
           label: "Automate",
-          items: ["automate/apps", "apps/build", "automate/workflows"]
+          items: ["automate/workflows"]
         },
         {
-          label: "Connect",
+          label: "Connect systems",
           items: ["connect/connect-a-system"]
         },
         {
-          label: "Extend",
-          items: ["extend/custom-tools"]
+          label: "How it works",
+          items: ["how-it-works/rights"]
         },
         {
-          label: "Operate",
+          label: "Manage",
           items: [
-            "operate/instance-brief",
-            "operate/deployment",
-            "operate/capacity-and-limits",
-            "operate/auth-and-embedding",
-            "operate/governance",
             "operate/how-rights-work",
-            "manage/guardrails",
             "operate/rights-and-namespaces",
-            "operate/execution-workspaces",
-            "operate/runner-security"
+            "manage/guardrails",
+            "operate/governance"
           ]
         },
         {
-          label: "Reference",
+          label: "For operators and developers",
           items: [
-            "reference/current-status",
-            "reference/glossary",
-            "reference/app-bridge",
             {
-              // Written by scripts/generate-api-reference.mjs from the release's OpenAPI document.
-              label: "API",
-              collapsed: true,
-              items: [{ autogenerate: { directory: "reference/api" } }]
+              label: "Set up an instance",
+              items: [
+                "getting-started/overview",
+                "getting-started/operating-models",
+                "operate/instance-brief",
+                "operate/deployment",
+                "operate/capacity-and-limits",
+                "operate/auth-and-embedding",
+                "operate/execution-workspaces",
+                "operate/runner-security"
+              ]
+            },
+            {
+              label: "Configure",
+              items: [
+                "configure/client-assembly",
+                "configure/release-config",
+                "configure/modules",
+                "configure/config-assets",
+                "configure/cli"
+              ]
+            },
+            {
+              label: "Extend with code",
+              items: ["extend/custom-tools", "reference/app-bridge"]
+            },
+            {
+              label: "Run locally",
+              items: ["getting-started/local-demo", "getting-started/execution-workspaces-local"]
+            },
+            {
+              label: "Reference",
+              items: [
+                "reference/current-status",
+                {
+                  // Written by scripts/generate-api-reference.mjs from the release's OpenAPI document.
+                  label: "API",
+                  collapsed: true,
+                  items: [{ autogenerate: { directory: "reference/api" } }]
+                }
+              ]
             }
           ]
         }

@@ -1,5 +1,5 @@
 ---
-title: Runner Security Assumptions
+title: Runner security
 description: Security boundary and assumptions for execution workspace runners.
 ---
 
