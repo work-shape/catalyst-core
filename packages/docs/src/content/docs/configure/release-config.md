@@ -1151,15 +1151,15 @@ dataStores:
 
 ### Build rules for data scope (SCOPE-0)
 
-Prepare stores and their readers for the later Mandant filter:
+Prepare stores and their readers for a later per-person filter by client (Mandant):
 
-- Give every per-Mandant table a `NOT NULL` column named `mandant_nr`, including findings, snapshots, open items and run history. Aggregate views group by that column.
-- A Workflow copying from Exampledata writes the Mandant number on every row. Per-Mandant work uses child runs keyed by the Mandant (EW-13); retain the key in aggregates too.
-- Every future `http_api` operation takes a named Mandant parameter (`clientId` or `clientNumber`) and returns it on every item. For Exampledata, `listClients` returns `number`, per-client paths take `{clientId}`, and the Workflow fills a table mapping DATEV client ids to Mandant numbers. The `http_api` connector is not built yet.
-- App `sql` reads use those per-Mandant tables. Do not put a structured Knowledge Base with free SQL on these stores; use named queries once DS-6a is available.
-- State the demo's audience: everyone in it may see every Mandant the service profile sees. Restrict the profile in DATEV Rechteverwaltung to the agreed Mandanten.
+- Give every per-client table a `NOT NULL` column for the client key, for example `mandant_nr`, including findings, snapshots, open items and run history. Aggregate views group by that column.
+- A Workflow that copies data from an outside system writes the client key on every row. Per-client work runs as child runs keyed by the client, and aggregates keep the key.
+- Every `http_api` operation whose path or result is per client takes the client as a named parameter and returns the client key on every item.
+- App `sql` reads use those per-client tables. Do not put a structured Knowledge Base with free SQL on these stores.
+- Until the filter exists, everyone who can use the App sees every client the Connection's outside account sees. Limit that account in the outside system to the agreed clients.
 
-App SQL validation refuses the parameter name `scope` with SCOPE-1/2 named, and `$viewer.scope` and `$viewer.scope_all` with SCOPE-1 named. `$viewer.groups` was dropped and is refused too. Use an ordinary parameter such as `mandant_nr` for now. The planned `scope` table metadata and config `scopes` belong to SCOPE-1; operation-declaration `scope` belongs to SCOPE-2. These build rules do not provide per-person filtering.
+App SQL validation refuses the parameter name `scope` and the bindings `$viewer.scope` and `$viewer.scope_all`; they are reserved for the later data-scope slices. The binding `$viewer.groups` is refused too. Use an ordinary parameter such as `mandant_nr` for now. These rules do not filter anything per person yet.
 
 ## Config Is Not A Secret Store
 
