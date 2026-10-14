@@ -2114,6 +2114,14 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **A Workflow step calls no asset operation:** an `operation` step that names `assets.*`
+  (`assets.list`, `assets.get`, `assets.put`, `assets.publish`, `assets.sync` and the rest) is
+  refused when the Workflow is saved or published, with the reason `operation_not_callable` and
+  the step's path. A run acts as its service principal, and a principal that holds
+  `config_assets.read` or `config_assets.release` could read every agent's and skill's
+  definition through a step or reach `assets.sync`. A definition stored before this release is
+  listed as not runnable with the same reason, and a run that reaches such a step fails it
+  before anything is called.
 - **Chat starters:** a starter of a skill that ships with the platform shows that skill's
   icon. Every starter showed the generic book, because the agent's starters did not carry the
   skill's `icon`. A skill of the instance's own keeps the generic book.

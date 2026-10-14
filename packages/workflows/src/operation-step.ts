@@ -18,7 +18,7 @@ import {
 } from "@vivd-catalyst/core";
 import { runOperation, type RunOperationDeps } from "@vivd-catalyst/tool-execution";
 import { z } from "zod";
-import { indexWorkflowSteps } from "./definition";
+import { indexWorkflowSteps, stepOperationRefusal } from "./definition";
 import { jsonValueSchema } from "./json";
 import { WORKFLOW_STEP_JOB_MAX_ATTEMPTS } from "./limits";
 import { WorkflowStepFailure, type WorkflowStepFailureOptions } from "./step-failure";
@@ -207,6 +207,12 @@ export async function callStepOperation(input: {
   noteOperationRun(id: OperationRunId): Promise<void>;
 }): Promise<OperationStepResult> {
   const { calls, run, stepRun, operation } = input;
+  // A save refuses such a step. A definition stored before it did is refused here, by the
+  // name alone and before anything is resolved or called.
+  const notCallable = stepOperationRefusal(operation);
+  if (notCallable) {
+    throw new OperationStepFailure(notCallable.code, notCallable.message, {}, { systemic: true });
+  }
   const definition = await calls.registry.resolve(operation);
   if (!definition) {
     throw new OperationStepFailure(
