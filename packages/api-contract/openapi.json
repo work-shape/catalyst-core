@@ -1327,7 +1327,7 @@
     "/api/v1/assets/sync": {
       "post": {
         "operationId": "assets.sync",
-        "summary": "Apply puts and deletes in one Namespace, all of them or none",
+        "summary": "Apply puts and deletes in one Namespace or workspace, all of them or none",
         "tags": [
           "Assets"
         ],
@@ -25920,6 +25920,16 @@
               "files"
             ]
           },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "instance",
+                "workspace"
+              ]
+            }
+          },
           "actions": {
             "type": "object",
             "properties": {
@@ -25997,6 +26007,7 @@
           "plural",
           "lifecycle",
           "representation",
+          "owners",
           "actions"
         ]
       },
@@ -26053,6 +26064,12 @@
               "$ref": "#/components/schemas/PlatformContextNamespace"
             }
           },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformContextWorkspace"
+            }
+          },
           "visibleSections": {
             "type": "array",
             "items": {
@@ -26070,6 +26087,7 @@
           "actions",
           "assetActions",
           "namespaces",
+          "workspaces",
           "visibleSections"
         ]
       },
@@ -26092,6 +26110,40 @@
         "required": [
           "prefix",
           "displayName",
+          "actions"
+        ]
+      },
+      "PlatformContextWorkspace": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "shared"
+            ]
+          },
+          "member": {
+            "type": "boolean"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "member",
           "actions"
         ]
       },
@@ -27525,6 +27577,10 @@
         "type": "object",
         "properties": {
           "namespace": {
+            "type": "string",
+            "minLength": 1
+          },
+          "workspaceId": {
             "type": "string",
             "minLength": 1
           },

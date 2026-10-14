@@ -108,6 +108,45 @@ export const workspace: {
   members: ["jonas", "tobias", "elif", "sven"]
 };
 
+/**
+ * What the company's workspace owns of its own: one skill and one agent that names it, saved
+ * by the workspace's owner in its Studio, so the workspace owns both (WS-OWN-1a). Only an
+ * asset of that workspace may name the skill, and the agent is offered there and nowhere else.
+ */
+export const workspaceAssets: {
+  savedBy: PersonKey;
+  skill: { name: string; title: string; description: string; content: string };
+  agent: {
+    name: string;
+    displayName: { de: string; en: string };
+    description: { de: string; en: string };
+    instructions: string;
+    toolNames: string[];
+    skillNames: string[];
+  };
+} = {
+  savedBy: "mara",
+  skill: {
+    name: "nordlicht-house-style",
+    title: "Nordlicht house style",
+    description: "Use when a text leaves the firm: a letter, an offer or a mail to a client.",
+    content:
+      "# Nordlicht house style\n\n- Address clients with Sie, and sign with the name of the person who writes.\n- One topic per paragraph, the answer before the reasons.\n- Name dates as dates and amounts in euros with two decimals.\n"
+  },
+  agent: {
+    name: "nordlicht-front-desk",
+    displayName: { de: "Empfang", en: "Front desk" },
+    description: {
+      de: "Entwirft Antworten an Mandanten im Stil des Hauses.",
+      en: "Drafts replies to clients in the firm's house style."
+    },
+    instructions:
+      "You draft replies to the firm's clients. Read the skill nordlicht-house-style first and follow it. Answer in the language of the question.\n",
+    toolNames: ["read_skill"],
+    skillNames: ["nordlicht-house-style"]
+  }
+};
+
 interface SeedApp {
   /** The id of the App, and its folder under `seed/apps`. */
   name: string;

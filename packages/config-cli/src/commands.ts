@@ -14,6 +14,7 @@ import {
   readStateFile,
   readWorkingCopy,
   removeStaleManifestAssets,
+  bindManifestWorkspace,
   type CatalystManifest,
   resolveInstance,
   skillAssetPath,
@@ -27,7 +28,9 @@ import {
   byKey,
   byName,
   canonicalBundleFiles,
+  batchScope,
   connectApi,
+  holdsWholeInstance,
   fetchRemoteAsset,
   formatCommandError,
   formatCount,
@@ -92,9 +95,8 @@ export async function runConfigCommand(
 
 export async function pullConfig(options: ConfigCommandOptions): Promise<number> {
   const workingDir = resolveWorkingDir(options);
-  const manifest = await readManifest(workingDir);
-  const instance = resolveInstance(manifest, options.instance);
-  const api = await connectApi(instance.url, options);
+  const { manifest, instance } = await bindWorkspace(workingDir, options);
+  const api = await connectApi(instance.url, options, instance);
   const overview = await readInstanceOverview(api, instance);
   const listing = await listRemoteAssets(api, workingCopyKinds(manifest));
   const selectors = parseOnlySelectors(options.only);
@@ -183,8 +185,8 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
       force: true
     });
   }
-  // A working copy of one Namespace never names the instance's default agent.
-  const fullInstancePull = selectors.length === 0 && instance.namespace === undefined;
+  // A working copy of one Namespace or one workspace never names the instance's default agent.
+  const fullInstancePull = selectors.length === 0 && holdsWholeInstance(instance);
   if (selectors.length === 0) {
     await removeStaleManifestAssets(workingDir, manifest, desiredPaths);
   }
@@ -215,6 +217,52 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     `Pulled ${formatCounts(selected)}${overview.version === undefined ? "" : `, version ${overview.version}`}.${selectors.length === 0 ? "" : " Scoped pull; selected asset baselines updated."}`
   );
   return 0;
+}
+
+/**
+ * The manifest and the instance a pull reads, with the root bound to the workspace `--workspace`
+ * names where it is not yet. A root is bound once and stays: one bound elsewhere, one of a
+ * Namespace and one that holds the instance's own assets already are refused, so a pull
+ * never mixes the assets of two owners in one working copy.
+ */
+async function bindWorkspace(workingDir: string, options: ConfigCommandOptions) {
+  const manifest = await readManifest(workingDir);
+  const instance = resolveInstance(manifest, options.instance);
+  const wanted = options.workspace;
+  if (wanted === undefined || instance.workspace === wanted) return { manifest, instance };
+  if (instance.workspace !== undefined) {
+    throw new Error(
+      `This working copy is bound to workspace '${instance.workspace}'. Pull another workspace into a directory of its own.`
+    );
+  }
+  if (instance.namespace !== undefined) {
+    throw new Error(
+      `This working copy belongs to Namespace '${instance.namespace}'. Pull a workspace into a directory of its own.`
+    );
+  }
+  const baseline = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[
+    instance.key
+  ];
+  if (baseline !== undefined) {
+    throw new Error(
+      `This working copy holds the instance's own assets of '${instance.key}'. Pull a workspace into a directory of its own.`
+    );
+  }
+  if (manifest.instances[instance.key] === undefined) {
+    throw new Error(
+      `Name the instance in ${MANIFEST_FILENAME} to bind it to a workspace: '${instance.key}' is not one of its instances.`
+    );
+  }
+  await bindManifestWorkspace(resolve(workingDir, MANIFEST_FILENAME), instance.key, wanted);
+  const bound = await readManifest(workingDir);
+  const boundInstance = resolveInstance(bound, options.instance);
+  if (boundInstance.workspace !== wanted) {
+    throw new Error(
+      `Could not bind instance '${instance.key}' in ${MANIFEST_FILENAME}: add 'workspace: ${wanted}' to that instance yourself, beside its url.`
+    );
+  }
+  writeOutput(options, `Bound this working copy to workspace '${wanted}'.`);
+  return { manifest: bound, instance: boundInstance };
 }
 
 /** Where a pull writes an asset of the kind: the canonical layout. */
@@ -260,7 +308,7 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
   const manifest = await readManifest(workingDir);
   const instance = resolveInstance(manifest, options.instance);
   const local = await readWorkingCopy(workingDir, manifest);
-  const api = await connectApi(instance.url, options);
+  const api = await connectApi(instance.url, options, instance);
   const overview = await readInstanceOverview(api, instance);
   const remoteAssets = await listRemoteAssets(api, workingCopyKinds(manifest));
   const baseline = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[
@@ -332,7 +380,7 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
   const manifest = await readManifest(workingDir);
   const instance = resolveInstance(manifest, options.instance);
   const bundle = await readWorkingCopy(workingDir, manifest);
-  const api = await connectApi(instance.url, options);
+  const api = await connectApi(instance.url, options, instance);
   const listing = await listRemoteAssets(api, workingCopyKinds(manifest));
   const deleted = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[instance.key]
     ?.deleted;
@@ -357,6 +405,7 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
   try {
     if (items.length > 0 || bundle.defaultAgentName !== undefined) {
       await checkSyncOnThisRelease(api, {
+        ...batchScope(instance),
         items,
         ...(bundle.defaultAgentName === undefined
           ? {}
@@ -380,7 +429,7 @@ export async function listConfig(options: ConfigCommandOptions): Promise<number>
   const manifest = await readManifest(workingDir);
   const instance = resolveInstance(manifest, options.instance);
   const local = await readWorkingCopy(workingDir, manifest);
-  const api = await connectApi(instance.url, options);
+  const api = await connectApi(instance.url, options, instance);
   const version = String((await readInstanceOverview(api, instance)).version ?? "-");
   const remote = await listRemoteAssets(api, workingCopyKinds(manifest));
   const localKeys = new Set(assetEntries(local).map((asset) => asset.key));
@@ -411,7 +460,7 @@ export async function showConfig(options: ConfigCommandOptions): Promise<number>
   const workingDir = resolveWorkingDir(options);
   const manifest = await readManifest(workingDir);
   const instance = resolveInstance(manifest, options.instance);
-  const api = await connectApi(instance.url, options);
+  const api = await connectApi(instance.url, options, instance);
   const remote = await fetchRemoteAsset(api, options.assetKind, options.assetName);
   if (!remote) {
     throw new Error(`Remote ${options.assetKind} '${options.assetName}' was not found.`);

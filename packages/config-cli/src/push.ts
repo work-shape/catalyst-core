@@ -20,7 +20,9 @@ import {
   assetHash,
   bundleOf,
   byKey,
+  batchScope,
   connectApi,
+  holdsWholeInstance,
   fetchRemoteAsset,
   formatCounts,
   isRecord,
@@ -64,7 +66,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     );
   }
   const baselineAssets = baseline.assets;
-  const api = await connectApi(instance.url, options);
+  const api = await connectApi(instance.url, options, instance);
   // Read to its last page or not at all: a listing that fails stops the push, so a prune
   // never takes an asset it could not list for one that is gone.
   const listing = await listRemoteAssets(api, workingCopyKinds(manifest));
@@ -76,9 +78,9 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   const deleteAssets = options.prune
     ? [...listing.values()].filter((asset) => !localKeys.has(asset.key))
     : [];
-  // A working copy of one Namespace never names the instance's default agent.
+  // A working copy of one Namespace or one workspace never names the instance's default agent.
   const changesDefault =
-    instance.namespace === undefined &&
+    holdsWholeInstance(instance) &&
     selectors.length === 0 &&
     (bundle.defaultAgentName ?? null) !== baseline.defaultAgentName;
   if (changesDefault && baseline.defaultAgentName === undefined) {
@@ -178,7 +180,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   if (items.length > 0 || changesDefault) {
     // The default agent the push is made against, as the revisions are: the one of the last pull.
     const batch: SyncBatch = {
-      ...(instance.namespace === undefined ? {} : { namespace: instance.namespace }),
+      ...batchScope(instance),
       items,
       ...(changesDefault
         ? {
@@ -236,6 +238,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     baseOf,
     listing,
     afterSync: items.length > 0 || changesDefault,
+    ...(instance.workspace === undefined ? {} : { workspaceId: instance.workspace }),
     options
   });
 }
@@ -303,10 +306,13 @@ async function writeGuardrails(
     baseOf: (key: string) => { id?: string; revision: number } | undefined;
     listing: ReadonlyMap<string, RemoteAsset>;
     afterSync: boolean;
+    /** The workspace a bound root writes for: it owns the guardrails the push creates. */
+    workspaceId?: string;
     options: ConfigCommandOptions;
   }
 ): Promise<number> {
   const { options } = input;
+  const owner = input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId };
   let written = input.afterSync;
   const record = (
     asset: LocalAsset | undefined,
@@ -330,7 +336,11 @@ async function writeGuardrails(
         (client, idempotencyKey) =>
           client.assets.put({
             params: { kind: asset.kind, name: asset.name },
-            body: { config: { ...asset.config }, expectedRevision: base?.revision ?? null },
+            body: {
+              config: { ...asset.config },
+              expectedRevision: base?.revision ?? null,
+              ...owner
+            },
             idempotencyKey
           }),
         "It may have been written: run 'catalyst config diff' before pushing again."
@@ -359,7 +369,7 @@ async function writeGuardrails(
         (client, idempotencyKey) =>
           client.assets.delete({
             params: { kind: asset.kind, name: asset.name },
-            body: { expectedRevision: base.revision },
+            body: { expectedRevision: base.revision, ...owner },
             idempotencyKey
           }),
         "It may have been applied: run 'catalyst config diff' before pushing again."

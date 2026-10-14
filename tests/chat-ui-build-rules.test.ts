@@ -3,11 +3,13 @@ import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
   assetIdFromTitle,
+  buildScopes,
   PendingApprovalError,
   mayCreateAgents,
   readBuildRefusal,
   refusalsOf,
-  resolveBuildRights
+  resolveBuildRights,
+  resolveBuildScope
 } from "@vivd-catalyst/chat-ui/build-area";
 import { createAssetWrites } from "../packages/chat-ui/src/api/asset-writes";
 import {
@@ -148,6 +150,67 @@ describe("Studio rights", () => {
     expect(resolveBuildRights({ permissions: ["config_assets.read"] }, undefined).readsAny).toBe(
       true
     );
+  });
+});
+
+describe("Studio scope", () => {
+  const team = { id: "cws_team", name: "Team", kind: "shared" as const };
+  const inTeam = (actions: string[], permissions: string[] = []) =>
+    resolveBuildRights(
+      { permissions },
+      {
+        ...platformContext([], instanceActions(permissions)),
+        workspaces: [
+          { ...team, member: true, actions },
+          // A personal workspace is no scope of Studio: what is made there starts hidden.
+          {
+            id: "cws_mine",
+            name: "Mine",
+            kind: "personal",
+            member: true,
+            actions: ["agent.write"]
+          }
+        ]
+      }
+    );
+
+  it("lets a holder of rights in a workspace read and write what it owns, and nothing of the instance", () => {
+    const member = inTeam(["agent.read", "agent.write", "skill.read"]);
+
+    expect(member.readsAny).toBe(true);
+    expect(member.readsInstance).toBe(false);
+    expect(member.workspaces).toEqual([{ id: "cws_team", name: "Team", member: true }]);
+    expect(member.reads("agent")).toBe(true);
+    expect(member.may("write", { kind: "agent", workspaceId: "cws_team" })).toBe(true);
+    expect(member.may("delete", { kind: "agent", workspaceId: "cws_team" })).toBe(false);
+    expect(member.may("write", { kind: "skill", workspaceId: "cws_team" })).toBe(false);
+    expect(member.may("write", { kind: "agent", workspaceId: "cws_mine" })).toBe(false);
+    expect(member.may("write", { kind: "agent" })).toBe(false);
+    expect(member.mayCreate("agent", "cws_team")).toBe(true);
+    expect(member.mayCreate("agent")).toBe(false);
+    expect(buildScopes(member)).toEqual([{ kind: "workspace", workspaceId: "cws_team" }]);
+    expect(resolveBuildScope(member, undefined, undefined)).toEqual({
+      kind: "workspace",
+      workspaceId: "cws_team"
+    });
+  });
+
+  it("offers the instance first, then each workspace, and keeps the scope chosen last", () => {
+    const admin = inTeam(["agent.read", "agent.write"], ["config_assets.write"]);
+
+    expect(buildScopes(admin)).toEqual([
+      { kind: "instance" },
+      { kind: "workspace", workspaceId: "cws_team" }
+    ]);
+    expect(resolveBuildScope(admin, undefined, "cws_team")).toEqual({ kind: "instance" });
+    expect(resolveBuildScope(admin, "cws_team", undefined)).toEqual({
+      kind: "workspace",
+      workspaceId: "cws_team"
+    });
+    // A scope no longer offered falls back to the first.
+    expect(resolveBuildScope(admin, "cws_gone", undefined)).toEqual({ kind: "instance" });
+    // An instance writer writes in every workspace.
+    expect(admin.may("delete", { kind: "skill", workspaceId: "cws_team" })).toBe(true);
   });
 });
 

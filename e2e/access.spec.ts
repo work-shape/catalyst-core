@@ -126,14 +126,17 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
       })
     ).toHaveAttribute("href", `${rightsDocs}#do-you-hold-the-right-here`);
 
-    // Grant E2E User reading kai-helper. An agent right has one place, one agent, so the
-    // dialog asks for no place, and it offers no Namespace.
+    // Grant E2E User reading kai-helper. An agent right is given in a shared workspace, which
+    // the dialog starts in (WS-OWN-1a), or on one agent; it offers no Namespace.
     await tab(page, "Rights").click();
     await expect(page.getByText("No right given yet.")).toBeVisible();
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-    await expect(grantDialog.getByRole("radiogroup", { name: "Where" })).toHaveCount(0);
-    await expect(grantDialog.getByText(/Namespace/u)).toHaveCount(0);
+    const inWorkspace = grantDialog.getByRole("radio", { name: /^In a shared workspace/u });
+    const onAsset = grantDialog.getByRole("radio", { name: /^On one asset/u });
+    await expect(inWorkspace).toBeChecked();
+    await expect(grantDialog.getByRole("radio", { name: /Namespace/u })).toHaveCount(0);
+    await onAsset.check();
     await grantDialog.getByLabel("Read").check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("button", { name: "Create right" }).click();
@@ -150,6 +153,7 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     for (const verb of ["Read", "Delete"]) {
       await grantDialog.getByLabel(verb).check();
     }
+    await onAsset.check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
@@ -229,14 +233,15 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
     await grantDialog.getByLabel("Write").check();
+    await onAsset.check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("radio", { name: /^Deny/u }).check();
     await expect(
       grantDialog.getByText("Refuses the ticked actions here, even for an administrator.")
     ).toBeVisible();
-    // Without a place to choose, the dialog's one way into the documentation is after the deny.
+    // The dialog leads into the documentation at the place it asks for and after the deny.
     const rightsPage = "https://docs.workshape.ai/catalyst/operate/how-rights-work/";
-    await expect(grantDialog.locator("a[data-docs-link]")).toHaveCount(1);
+    await expect(grantDialog.locator("a[data-docs-link]")).toHaveCount(2);
     const denyLink = grantDialog.getByRole("link", {
       name: "Learn more about how a deny is decided, opens in a new tab"
     });
