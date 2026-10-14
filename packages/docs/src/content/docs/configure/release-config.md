@@ -1149,6 +1149,18 @@ dataStores:
 - `sizeLimit` is the most one store may hold, as a whole number of `MB` or `GB`. A store's own `sizeLimit` in `store.yaml` names less and never more. At the limit no rows are added and reading keeps working. Every insert reads the size of the database before it writes and after, and is rolled back where it passed the limit: no row that is kept lies beyond it, and the files exceed it only by what the inserts of one moment wrote, under 256 MiB for rows alone. Default `5GB`.
 - `poolMaxConnections` is the most connections one process holds to one store at once, between 1 and 10. Default 5.
 
+### Build rules for data scope (SCOPE-0)
+
+Prepare stores and their readers for the later Mandant filter:
+
+- Give every per-Mandant table a `NOT NULL` column named `mandant_nr`, including findings, snapshots, open items and run history. Aggregate views group by that column.
+- A Workflow copying from Exampledata writes the Mandant number on every row. Per-Mandant work uses child runs keyed by the Mandant (EW-13); retain the key in aggregates too.
+- Every future `http_api` operation takes a named Mandant parameter (`clientId` or `clientNumber`) and returns it on every item. For Exampledata, `listClients` returns `number`, per-client paths take `{clientId}`, and the Workflow fills a table mapping DATEV client ids to Mandant numbers. The `http_api` connector is not built yet.
+- App `sql` reads use those per-Mandant tables. Do not put a structured Knowledge Base with free SQL on these stores; use named queries once DS-6a is available.
+- State the demo's audience: everyone in it may see every Mandant the service profile sees. Restrict the profile in DATEV Rechteverwaltung to the agreed Mandanten.
+
+App SQL validation refuses the parameter name `scope` with SCOPE-1/2 named, and `$viewer.scope` and `$viewer.scope_all` with SCOPE-1 named. `$viewer.groups` was dropped and is refused too. Use an ordinary parameter such as `mandant_nr` for now. The planned `scope` table metadata and config `scopes` belong to SCOPE-1; operation-declaration `scope` belongs to SCOPE-2. These build rules do not provide per-person filtering.
+
 ## Config Is Not A Secret Store
 
 Release config may reference secrets, but it must not contain secret values.
