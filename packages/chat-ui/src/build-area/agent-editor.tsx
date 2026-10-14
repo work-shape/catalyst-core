@@ -65,6 +65,7 @@ export function AgentEditor({
   initialForm,
   isDefault,
   references,
+  referencesLoading = false,
   editableAgentFields,
   canManageAgentModels,
   skillChoice,
@@ -77,6 +78,11 @@ export function AgentEditor({
   initialForm: AgentFormState;
   isDefault: boolean;
   references: ConfigAssetReferences | undefined;
+  /**
+   * The references are on their way. The Tools section waits for them, so no tool shows by its
+   * id before its package is known. Without references after that, the agent's own names show.
+   */
+  referencesLoading?: boolean;
   /** The fields the instance lets people change. The model settings follow their own right. */
   editableAgentFields: readonly string[];
   canManageAgentModels: boolean;
@@ -328,6 +334,7 @@ export function AgentEditor({
         <>
           <ToolPackagesSection
             references={references}
+            loading={referencesLoading}
             selected={form.toolNames}
             skillNames={form.skillNames}
             connectionTools={connectionTools}

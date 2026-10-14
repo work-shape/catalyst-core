@@ -271,7 +271,12 @@ describe("the Tools section of the agent page", () => {
     };
   }
 
-  function page(toolNames: string[], locale: LocaleCode = "en", canEdit = true): string {
+  function page(
+    toolNames: string[],
+    locale: LocaleCode = "en",
+    canEdit = true,
+    references: { value?: ConfigAssetReferences; loading?: boolean } = { value: described }
+  ): string {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
@@ -287,7 +292,8 @@ describe("the Tools section of the agent page", () => {
             initialPrompts: []
           }),
           isDefault: false,
-          references: described,
+          references: references.value,
+          referencesLoading: references.loading ?? false,
           editableAgentFields: canEdit ? ["toolNames"] : [],
           canManageAgentModels: false,
           skillChoice: { options: [], onSearch: noop },
@@ -327,6 +333,18 @@ describe("the Tools section of the agent page", () => {
     expect(reader).toContain('data-tool-package="package:web"');
     expect(reader).not.toContain("Add packages");
     expect(reader).not.toContain('aria-label="Remove"');
+  });
+
+  it("waits for the references before it shows a chip, and then shows the agent's own names if none came", () => {
+    // On their way: the loading layout, and no tool by its id as a chip of its own.
+    const loading = page(["show_view", "read_skill"], "en", true, { loading: true });
+    expect(loading).toContain("data-tool-loading");
+    expect(loading).not.toContain("data-tool-package");
+    expect(loading).not.toContain("Add packages");
+    // Refused: the agent's names stand by their ids, so nothing it holds is hidden.
+    const refused = page(["show_view"], "en", true, {});
+    expect(refused).not.toContain("data-tool-loading");
+    expect(refused).toContain('data-tool-package="own:show_view"');
   });
 
   it("speaks German", () => {

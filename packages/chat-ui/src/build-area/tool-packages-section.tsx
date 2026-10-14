@@ -13,6 +13,7 @@ import {
   Picker,
   PickerButton,
   RegistryIcon,
+  SkeletonChips,
   Table,
   TableBody,
   TableCell,
@@ -72,6 +73,7 @@ interface PackageFace {
  */
 export function ToolPackagesSection({
   references,
+  loading = false,
   selected,
   skillNames,
   connectionTools,
@@ -80,6 +82,8 @@ export function ToolPackagesSection({
   onChange
 }: {
   references: ConfigAssetReferences | undefined;
+  /** The references are on their way: the section shows its loading layout until they arrive. */
+  loading?: boolean;
   /** Every tool name the agent holds. */
   selected: readonly string[];
   skillNames: readonly string[];
@@ -91,6 +95,10 @@ export function ToolPackagesSection({
 }) {
   const { locale, t } = useTranslation();
   const moduleName = useModuleName();
+  if (loading) {
+    // Before the references arrive no tool's package is known, and a tool would show by its id.
+    return <SkeletonChips data-tool-loading="" />;
+  }
   const items = toolPackages({
     references,
     selected,

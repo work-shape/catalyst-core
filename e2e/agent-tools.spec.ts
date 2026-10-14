@@ -116,6 +116,8 @@ test.describe("the Tools section of an agent, as chips", () => {
     );
 
     // A chip per package in use, then the instance's own tool, by its id where it has no title.
+    // The chips stand once the references are there; until then the section is loading.
+    await expect(toolChip(tools, "package:results")).toBeVisible();
     expect(await chipKeys(page)).toEqual([
       "package:results",
       "package:skills",
@@ -217,6 +219,36 @@ test.describe("the Tools section of an agent, as chips", () => {
     expect(config.toolNames).toContain("read_skill");
     expect(config.toolNames).toContain("show_view");
     expect(config.toolNames).not.toContain("page.save");
+  });
+
+  // Taken over from the verifier's probe (TOOLS-1 verify, a43a5a15): the page asked for the
+  // references and drew each tool by its id as an own chip until they arrived.
+  test("shows no tool by its id as an own chip while the references are on their way", async ({
+    page
+  }) => {
+    await page.setViewportSize(SHOT_SIZE);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/api/v1/context/references**", async (route) => {
+      await held;
+      await route.continue();
+    });
+    try {
+      await page.goto(`/build/agents/${agentName}#tools`);
+      const tools = page.locator("#tools");
+      await expect(tools.locator("[data-tool-loading]")).toBeAttached();
+      await expect(tools.locator("[data-tool-package]")).toHaveCount(0);
+      release();
+      // Once they arrive the chips stand by package, never a platform tool by its id.
+      await expect(toolChip(tools, "package:results")).toBeVisible();
+      await expect(tools.locator("[data-tool-loading]")).toHaveCount(0);
+      expect(await chipKeys(page)).not.toContain("own:show_view");
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    }
   });
 
   for (const theme of ["light", "dark"] as const) {
