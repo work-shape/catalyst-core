@@ -268,7 +268,7 @@ describe("a test run of a Workflow draft", () => {
     const clients = steps.find((step) => step.stepId === "clients");
     expect(clients).toMatchObject({
       status: "failed",
-      error: { code: "FORBIDDEN", action: "connection.use" }
+      error: { code: "tester_missing_right", action: "connection.use" }
     });
     expect(clients?.error?.message).toMatch(
       /^You do not hold the right 'connection\.use' on 'crm'/u

@@ -342,10 +342,12 @@ export function useWorkflowWrites(): WorkflowWrites {
   }, [keys, queryClient, runs]);
 }
 
-/** What a person does to the draft of a Workflow from its page. */
+/** What a person does to the draft of a Workflow from its page and from a test run. */
 export interface WorkflowDraftWrites {
   publish(workflow: string, revision: number): Promise<void>;
   discard(workflow: string, expectedRevision: number): Promise<void>;
+  test(workflow: string, input: Readonly<Record<string, unknown>>): Promise<WorkflowRunView>;
+  runLiveOnce(workflow: string, step: string, expectedRevision: number): Promise<void>;
 }
 
 /**
@@ -361,10 +363,15 @@ export function useWorkflowDraftWrites(): WorkflowDraftWrites | undefined {
       return undefined;
     }
     const changed = () => queryClient.invalidateQueries({ queryKey: keys.assets });
+    const ran = () => queryClient.invalidateQueries({ queryKey: keys.runs });
     return {
       publish: async (workflow, revision) => drafts.publish(workflow, revision).finally(changed),
       discard: async (workflow, expectedRevision) =>
-        drafts.discard(workflow, expectedRevision).finally(changed)
+        drafts.discard(workflow, expectedRevision).finally(changed),
+      test: async (workflow, input) => drafts.test(workflow, input).finally(ran),
+      // A switch changes nothing a page reads: the next test run shows it.
+      runLiveOnce: async (workflow, step, expectedRevision) =>
+        drafts.runLiveOnce(workflow, step, expectedRevision)
     };
   }, [drafts, keys, queryClient]);
 }

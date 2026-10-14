@@ -26,7 +26,9 @@ export const WORKFLOW_TEST_RUN_ERRORS = {
   /** The person who started the test run is no active user any more. */
   testerInactive: "tester_inactive",
   /** The Workflow whose draft is tested was deleted. */
-  draftGone: "draft_gone"
+  draftGone: "draft_gone",
+  /** The person testing does not hold a right a step needs, whether the principal does or not. */
+  testerMissingRight: "tester_missing_right"
 } as const;
 
 type TestRunStores = Pick<PlatformStores, "apiAccess" | "users" | "configAssets" | "operationRuns">;

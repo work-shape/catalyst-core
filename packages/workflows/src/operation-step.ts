@@ -26,6 +26,7 @@ import { indexWorkflowSteps } from "./definition";
 import { jsonValueSchema } from "./json";
 import { WORKFLOW_STEP_JOB_MAX_ATTEMPTS } from "./limits";
 import { WorkflowStepFailure, type WorkflowStepFailureOptions } from "./step-failure";
+import { WORKFLOW_TEST_RUN_ERRORS } from "./test-run";
 
 // The call an operation step makes. It takes the one call path, so it is checked, recorded
 // and answered like every other call of the operation: the right is the run's principal's,
@@ -304,12 +305,14 @@ export async function callStepOperation(input: {
       if (result.reason.kind === "forbidden") {
         // The principal does not hold the right, or may not call from a Workflow at all. In a
         // test run the refusal names the side that lacks it: the tester or the principal.
-        throw new OperationStepFailure(
-          refusal.code,
-          refused(result.reason.action, result.reason.boundBy !== undefined),
-          trace,
-          { systemic: true, action: result.reason.action }
+        const { code, message } = refused(
+          result.reason.action,
+          result.reason.boundBy !== undefined
         );
+        throw new OperationStepFailure(code, message, trace, {
+          systemic: true,
+          action: result.reason.action
+        });
       }
       if (input.draft && isApprovalUnavailable(result.reason)) {
         throw new OperationStepFailure(
@@ -428,9 +431,10 @@ function refusalOf(
   const right = refusedRightSchema.safeParse(error.details);
   const action = right.success ? right.data.action : undefined;
   if (error.code === "FORBIDDEN") {
+    const { code, message } = refused(action, right.success && right.data.boundBy !== undefined);
     return new OperationStepFailure(
-      error.code,
-      refused(action, right.success && right.data.boundBy !== undefined),
+      code,
+      message,
       { call },
       { systemic: true, ...(action === undefined ? {} : { action }) }
     );
@@ -443,8 +447,11 @@ function refusalOf(
   );
 }
 
-/** The sentence of a refused right of one step: the right, and whether the principal lacks it. */
-type RefusedRight = (action: string | undefined, principalSide: boolean) => string;
+/** The refusal of a right of one step: the right, and whether the principal lacks it. */
+type RefusedRight = (
+  action: string | undefined,
+  principalSide: boolean
+) => { code: string; message: string };
 
 /**
  * The sentences of a refused right. The call path words its refusal for a person who made a
@@ -462,11 +469,20 @@ function refusedRight(
   return (action, principalSide) => {
     const right = action === undefined ? "the right it needs" : `the right '${action}'`;
     if (!testRun) {
-      return `The service principal '${principal}', which the Workflow runs as, does not hold ${right} to call '${operation}'. An administrator can grant it to the principal`;
+      return {
+        code: "FORBIDDEN",
+        message: `The service principal '${principal}', which the Workflow runs as, does not hold ${right} to call '${operation}'. An administrator can grant it to the principal`
+      };
     }
     return principalSide
-      ? `The principal '${principal}' does not hold ${right}${on} to call '${operation}'; publishing would fail at this step`
-      : `You do not hold ${right}${on} to call '${operation}'. A test run acts as the person testing, bounded by the principal '${principal}'`;
+      ? {
+          code: "FORBIDDEN",
+          message: `The principal '${principal}' does not hold ${right}${on} to call '${operation}'; publishing would fail at this step`
+        }
+      : {
+          code: WORKFLOW_TEST_RUN_ERRORS.testerMissingRight,
+          message: `You do not hold ${right}${on} to call '${operation}'. A test run acts as the person testing, bounded by the principal '${principal}'`
+        };
   };
 }
 

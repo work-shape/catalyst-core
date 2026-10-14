@@ -38,6 +38,8 @@ const FAILURE_REASONS: Readonly<Record<string, WorkflowFailureReason>> = {
   DECLINED: "needsApproval",
   operation_would_wait: "needsApproval",
   principal_inactive: "accountInactive",
+  run_as_disabled: "accountInactive",
+  tester_missing_right: "testerMissingRight",
   operation_not_found: "operationMissing",
   operation_input_invalid: "dataMismatch",
   reference_unresolved: "dataMismatch",
@@ -87,6 +89,8 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   id: string;
   workflow: string;
   trigger: "manual" | "schedule" | "parent";
+  /** `test` on a test run of the draft. */
+  mode?: "live" | "test";
   status: WorkflowRunStatus;
   startedBy: { id: string; label: string };
   /** On a child run: the id of the Workflow of the run that started it. */
@@ -168,6 +172,7 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     ...toFailure(run.error),
     ...toOutput(run.outputPreview),
     ...(run.definitionRevisionId === undefined ? {} : { revisionId: run.definitionRevisionId }),
+    test: run.mode === "test",
     ...(run.parentRunId === undefined || run.parentWorkflow === undefined
       ? {}
       : { parent: { runId: run.parentRunId, workflowId: run.parentWorkflow } })
@@ -210,6 +215,7 @@ export function toWorkflowStepRun(stepRun: WorkflowStepRunResource): WorkflowSte
     ...(stepRun.taken === undefined ? {} : { taken: stepRun.taken }),
     ...(stepRun.effect === undefined ? {} : { effect: stepRun.effect }),
     ...(stepRun.source === undefined ? {} : { source: stepRun.source }),
+    ...(stepRun.target === undefined ? {} : { target: stepRun.target }),
     ...(childRunId === undefined ? {} : { childRunId }),
     ...times(stepRun),
     ...toFailure(stepRun.error),
@@ -481,6 +487,8 @@ export function toWorkflow(
       : {
           draft: {
             revision: pointers.draftRevision,
+            // The steps above are the draft's where the reader is shown it, and so are its inputs.
+            testForm: startFormOf(definition.inputs),
             ...(pointers.publishedRevision === undefined
               ? {}
               : { publishedRevision: pointers.publishedRevision })

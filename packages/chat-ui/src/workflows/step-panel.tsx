@@ -6,6 +6,7 @@ import {
   DisclosureContent,
   DisclosureTrigger,
   IconTile,
+  InlineError,
   KeyValue,
   KeyValueList,
   RegistryIcon,
@@ -22,6 +23,7 @@ import {
 import { formatMoment } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { FailureBanner } from "./failure-banner";
+import type { LiveOnceControl } from "./test-run";
 import { stepOutputRows } from "./step-output";
 import { countsLine } from "./workflow-canvas-model";
 import type {
@@ -31,7 +33,7 @@ import type {
   WorkflowStepSource,
   WorkflowStepView
 } from "./workflow-views";
-import { RunStateBadge, durationText } from "./workflows-frame";
+import { RunStateBadge, StepTargetBadge, durationText } from "./workflows-frame";
 
 /** How many lines of what a step returned are shown. */
 const OUTPUT_PREVIEW_LINES = 40;
@@ -49,6 +51,8 @@ export interface StepPanelRun {
   countsEnded?: boolean;
   /** The loop that runs once for each entry of what the step returned, and how many those are. */
   passesOn?: { count: number; step: string };
+  /** In a test run, on a step that changes something: "Run live once" for the next test run. */
+  liveOnce?: LiveOnceControl;
   now: Date;
 }
 
@@ -344,6 +348,7 @@ function StepRunDetails({
       <>
         <p>{countsLine(counts, translation, run.countsEnded) || t("workflows.panel.notReached")}</p>
         <p className="text-caption text-muted-foreground">{t("workflows.panel.perEntry")}</p>
+        {run.liveOnce === undefined ? null : <LiveOnce control={run.liveOnce} />}
       </>
     );
   }
@@ -361,6 +366,11 @@ function StepRunDetails({
           </KeyValue>
         )}
         {took === undefined ? null : <KeyValue label={t("workflows.panel.took")}>{took}</KeyValue>}
+        {stepRun.target === undefined ? null : (
+          <KeyValue label={t("workflows.target.label")}>
+            <StepTargetBadge target={stepRun.target} />
+          </KeyValue>
+        )}
         {source === undefined ? null : (
           <KeyValue
             label={t(
@@ -390,6 +400,7 @@ function StepRunDetails({
         <p>{countsLine(stepRun.loop, translation, stepRun.finishedAt !== undefined)}</p>
       )}
       {stepRun.failure ? <FailureBanner failure={stepRun.failure} /> : null}
+      {run.liveOnce === undefined ? null : <LiveOnce control={run.liveOnce} />}
       {stepRun.output ? <OutputPreview output={stepRun.output} /> : null}
       {onOpenChild !== undefined && stepRun.childRunId !== undefined ? (
         <Button variant="outline" size="sm" className="justify-self-start" onClick={onOpenChild}>
@@ -397,5 +408,30 @@ function StepRunDetails({
         </Button>
       ) : null}
     </>
+  );
+}
+
+/** "Run live once" for a step of a test run: the step runs for real in the next test run. */
+function LiveOnce({ control }: { control: LiveOnceControl }) {
+  const { t } = useTranslation();
+  return (
+    <section data-live-once="" className="grid justify-items-start gap-2">
+      {control.state === "done" ? (
+        <p className="text-body">{t("workflows.liveOnce.done")}</p>
+      ) : (
+        <>
+          <p className="text-caption text-muted-foreground">{t("workflows.liveOnce.hint")}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            loading={control.state === "busy"}
+            onClick={control.switchOn}
+          >
+            {t("workflows.liveOnce.button")}
+          </Button>
+        </>
+      )}
+      {control.error === undefined ? null : <InlineError>{control.error}</InlineError>}
+    </section>
   );
 }

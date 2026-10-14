@@ -1,11 +1,19 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
-import { Badge, Button, InlineError, PageHeaderBack, Skeleton, Spinner } from "@vivd-catalyst/ui";
+import {
+  Badge,
+  Button,
+  InlineError,
+  PageHeaderBack,
+  Skeleton,
+  Spinner,
+  type BadgeTone
+} from "@vivd-catalyst/ui";
 import { opensHere } from "../apps/app-header";
 import { formatElapsed } from "../control-plane/locale-format";
 import { useTranslation, type TranslationContextValue } from "../i18n";
 import { workspaceRoutePath } from "../routes";
 import type { WorkspaceRoute } from "../workspace/workspace-route";
-import type { WorkflowRunStatus } from "./workflow-views";
+import type { WorkflowRunStatus, WorkflowStepTarget } from "./workflow-views";
 import { runStatePresentation } from "./workflow-model";
 
 /** Goes to a route of the interface. */
@@ -142,6 +150,22 @@ export function RunStateBadge({
   ) : (
     <Badge tone={state.tone} size="sm" dot>
       {t(state.label)}
+    </Badge>
+  );
+}
+
+const TARGET_TONES: Readonly<Record<WorkflowStepTarget, BadgeTone>> = {
+  live: "success",
+  test: "info",
+  dry_run: "neutral"
+};
+
+/** Where the call of a step went: Live, Test or Simulated (ADR-0031). */
+export function StepTargetBadge({ target }: { target: WorkflowStepTarget }) {
+  const { t } = useTranslation();
+  return (
+    <Badge tone={TARGET_TONES[target]} size="sm" appearance="outline" data-step-target={target}>
+      {t(`workflows.target.${target}`)}
     </Badge>
   );
 }

@@ -143,6 +143,16 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
             body: { expectedRevision }
           })
         );
+      },
+      test: async (workflow, input) =>
+        toWorkflowRun(done(await client.workflows.test({ params: { workflow }, body: { input } }))),
+      runLiveOnce: async (workflow, step, expectedRevision) => {
+        done(
+          await client.assets.run_live_once({
+            params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
+            body: { part: step, expectedRevision }
+          })
+        );
       }
     }
   };
