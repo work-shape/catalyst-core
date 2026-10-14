@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+import { RELEASE_VERSION } from "@vivd-catalyst/api-contract";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
 import type { AssetKindName } from "./command-support";
@@ -34,9 +35,10 @@ const helpText = `Usage: catalyst config <command> [options]
 Sync local config assets with a live Catalyst instance.
 
 Login:
-  login      Show a connect code, wait until you confirm it in Settings, API keys, and
-             save the personal API key it issues, readable by you alone
-  logout     Forget the saved key of an instance; revoke it in Settings
+  login      Show a connect code, wait until you confirm it on the instance at
+             /settings/you/api-keys, and save the personal API key it issues, readable by
+             you alone
+  logout     Forget the saved key of an instance; revoke it at /settings/you/api-keys
   setup      Connect a local agent: log in as 'login' does unless a working key is saved,
              then write the Catalyst skill for Claude Code, Codex or another tool. --force
              replaces a different skill file there and keeps it as SKILL.md.bak
@@ -50,7 +52,9 @@ Commands:
   show       Print a remote asset: show <agent|skill|guardrail> <name>
 
 Options:
-  --instance <name-or-url>  Manifest instance name or direct URL
+  --instance <name-or-url>  Manifest instance name or direct URL. Left out: the
+                            manifest's defaultInstance, or the one instance a key is
+                            saved for
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
   --prune                   Mirror on push, deleting the remote-only assets the last pull
                             saw
@@ -59,6 +63,7 @@ Options:
   --workspace <id>          On pull: bind the working copy to the workspace and hold
                             what it owns
   --help                    Show this help
+  --version                 Print the version of this CLI
 
 Environment:
   CATALYST_API_KEY      API key exchanged for a short-lived access token. It wins over
@@ -66,7 +71,7 @@ Environment:
   CATALYST_CONFIG_HOME  Folder of the saved keys (default: ~/.config/catalyst)
 
 A working copy that belongs to one Namespace names it beside the instance's url in
-catalyst.yaml, as 'namespace: kai-'. Its push names that Namespace, as the instance asks
+catalyst.yaml, as 'namespace: tax-'. Its push names that Namespace, as the instance asks
 of everyone but the holder of the release right; its pull, diff and list read only the
 assets the key may read, never the instance's version or default agent.
 
@@ -88,6 +93,10 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   const stderr = runtime.stderr ?? ((text: string) => process.stderr.write(text));
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
     stdout(`${assetHelpText}\n${helpText}`);
+    return 0;
+  }
+  if (argv[0] === "--version") {
+    stdout(`${RELEASE_VERSION}\n`);
     return 0;
   }
   if (argv[0] === "login" || argv[0] === "logout" || argv[0] === "setup") {

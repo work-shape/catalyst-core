@@ -9,7 +9,7 @@ import {
 } from "@vivd-catalyst/api-contract";
 import type { OperationOutcome } from "@vivd-catalyst/api-client";
 import { ConfigApiError, type ConfigApi } from "./api";
-import { readAssetSource, readDefinition } from "./asset-sources";
+import { readAssetSource } from "./asset-sources";
 import {
   formatAsset,
   formatAssetList,
@@ -27,7 +27,7 @@ import {
   resolveWorkingDir,
   type ConfigCommandOptions
 } from "./command-support";
-import { readManifestIfPresent, resolveInstance } from "./working-copy";
+import { EMPTY_MANIFEST, readManifestIfPresent, resolveInstance } from "./working-copy";
 
 // `catalyst context`, `kinds`, `references` and `catalyst <kind> <verb>`: one command per
 // operation of the instance, for every kind it registers. A command reads its arguments, sends
@@ -166,18 +166,22 @@ const VERBS: Record<string, Verb> = {
     }
   },
   validate: {
-    usage: "validate --from <file>",
-    summary: "Check a definition against the instance without writing it (assets.validate)",
+    usage: "validate --from <file-or-folder>",
+    summary:
+      "Check a definition against the instance without writing it (assets.validate); a folder of files is checked against the limits of one write",
     named: false,
     flags: ["from"],
     prepare: (values, _name, cwd) => {
-      const from = fromPath(values, cwd, "--from <file>");
+      const from = fromPath(values, cwd, "--from <file-or-folder>");
       return async (session) => {
-        const config = await readDefinition(from);
+        // What put reads, validate reads. The instance checks a definition without writing
+        // it; the files of a kind whose revision holds files it checks only as it writes them.
+        const source = await readAssetSource(from, session.kind.representation);
+        if ("files" in source) return filesRead(session, from, source.files.length);
         const result = await session.api.read((client) =>
           client.assets.validate({
             params: { kind: session.kind.kind },
-            body: { config, ...session.scope }
+            body: { config: source.config, ...session.scope }
           })
         );
         writeOut(
@@ -598,13 +602,14 @@ export async function runAssetCommand(
       throw new UsageError(`Unexpected argument '${extra[0] ?? name}'.`);
     }
     const call = verb.prepare(values, name, options.cwd);
-    const api = await openInstance(options);
+    const { api, workspace } = await openInstance(options);
     const context = await api.read((client) => client.platform.context.get());
+    const workspaceId = values.workspace ?? workspace;
     return await call({
       api,
       kind: findKind(context.kinds, noun),
       values,
-      scope: values.workspace === undefined ? {} : { workspaceId: values.workspace },
+      scope: workspaceId === undefined ? {} : { workspaceId },
       options
     });
   } catch (error) {
@@ -625,7 +630,7 @@ async function runInstanceCommand(
   values: Values,
   options: ConfigCommandOptions
 ): Promise<number> {
-  const api = await openInstance(options);
+  const { api } = await openInstance(options);
   const json = values.json;
   const out = (value: unknown, text: () => string) =>
     writeOut(options, json ? JSON.stringify(value, null, 2) : text());
@@ -641,17 +646,17 @@ async function runInstanceCommand(
 }
 
 /**
- * The client of the instance the command names: `--instance` as a URL, or as an instance of
- * the working copy's `catalyst.yaml`, or the working copy's default instance. The key is the
- * one every command signs in with (`connectApi`).
+ * The client of the instance the command names, as `resolveInstance` selects it, signed in with
+ * the key every command uses (`connectApi`), and the workspace the working copy is bound to. A
+ * bound root addresses what that workspace owns, as its `config` commands do, unless
+ * `--workspace` names another.
  */
-async function openInstance(options: ConfigCommandOptions): Promise<ConfigApi> {
+async function openInstance(
+  options: ConfigCommandOptions
+): Promise<{ api: ConfigApi; workspace: string | undefined }> {
   const manifest = await readManifestIfPresent(resolveWorkingDir(options));
-  const instance = resolveInstance(
-    manifest ?? { instances: {}, agents: [], skills: [] },
-    options.instance
-  );
-  return connectApi(instance.url, options);
+  const instance = await resolveInstance(manifest ?? EMPTY_MANIFEST, options);
+  return { api: await connectApi(instance.url, options), workspace: instance.workspace };
 }
 
 /** The kind a noun names: its id, its plural, or either with dashes for underscores. */
@@ -664,6 +669,18 @@ function findKind(kinds: readonly AssetKind[], noun: string): AssetKind {
     );
   }
   return kind;
+}
+
+/** What `validate` says of a folder of files: read, within one write, not yet checked. */
+function filesRead(session: Session, from: string, files: number): number {
+  const noun = kindNoun(session.kind);
+  const draft = session.kind.lifecycle === "draft_published" ? " as a draft" : "";
+  return print(session, { files, checkedByInstance: false }, () =>
+    [
+      `Read ${files} files from '${from}', within what one write carries.`,
+      `The instance checks the files of a ${session.kind.kind} as it writes them: 'catalyst ${noun} put <name> --from ${from} --if-revision <n|new>' writes them${draft}.`
+    ].join("\n")
+  );
 }
 
 /** Prints what a changing call answered, or that it waits and has changed nothing yet. */
@@ -749,9 +766,12 @@ ${Object.values(VERBS)
   .join("\n")}
 
 Options:
-  --instance <name-or-url>  An instance of catalyst.yaml, or its URL
+  --instance <name-or-url>  An instance of catalyst.yaml, or its URL. Left out: the
+                            defaultInstance of catalyst.yaml, or the one instance a key
+                            is saved for
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
-  --workspace <id>          Address the assets one workspace owns
+  --workspace <id>          Address the assets one workspace owns. Left out in a working
+                            copy bound to a workspace: that workspace
   --json                    Print the instance's answer as JSON
   --help                    Show this help
 

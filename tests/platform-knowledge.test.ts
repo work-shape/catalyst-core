@@ -141,7 +141,7 @@ describe("connecting a local agent, as an agent knows it", () => {
     const page = (platformDocsSkill.resources ?? []).find(
       (resource) => resource.path === "references/getting-started/local-agent.md"
     );
-    expect(page?.content).toContain("Work with a local agent");
+    expect(page?.content).toContain("Connect a local agent");
     expect(page?.content).toContain("/settings/you/connect");
     expect(page?.content).toContain("Lokalen Agenten verbinden");
     expect(page?.content).toContain("no agent can make one");

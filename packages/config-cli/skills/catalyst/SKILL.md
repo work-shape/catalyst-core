@@ -13,20 +13,20 @@ description: Work with a Workshape Catalyst instance through the catalyst comman
 2. `catalyst kinds --json`: each kind with its command word, lifecycle and rights.
 3. `catalyst --help`: the commands and options of the CLI that is installed.
 
-Trust these answers over this skill. When more than one instance is saved, pass `--instance <name-or-url>` on every command.
+Trust these answers over this skill. A command without `--instance` works on the instance a working copy names as its default, else on the one instance saved. When more than one is saved, pass `--instance <name-or-url>` on every command.
 
 ## When the CLI is not logged in
 
-A command that answers "Not logged in" or refuses the key needs the person. Stop and ask them to run `catalyst setup <tool> --instance <url>` in their own terminal and confirm the code in their browser. Never ask for a key, never print, paste or pass one, and never set `CATALYST_API_KEY` yourself. You cannot issue a key or confirm a code.
+A command that answers "Not logged in" or refuses the key needs the person. Stop and ask them to run `catalyst setup <tool> --instance <url>` in their own terminal and confirm the code in their browser. Never ask for a key, never print, paste or pass one, never read the credentials file, and never set `CATALYST_API_KEY` yourself. You cannot issue a key or confirm a code.
 
 ## Read
 
 ```sh
-catalyst agent list --prefix kai-
-catalyst agent show kai-tax
-catalyst skill show kai-guide --files
-catalyst agent show kai-tax --revision published
-catalyst agent history kai-tax
+catalyst agent list --prefix tax-
+catalyst agent show tax-advisor
+catalyst skill show tax-guide --files
+catalyst agent show tax-advisor --revision published
+catalyst agent history tax-advisor
 catalyst references --json
 ```
 
@@ -36,8 +36,8 @@ The kind is the first word: `agent`, `skill`, `guardrail`, `app`, `workflow`, `d
 
 1. Read it with `show` and note its revision.
 2. Edit the file or folder.
-3. `catalyst skill validate --from skills/kai-guide`
-4. `catalyst skill put kai-guide --from skills/kai-guide --if-revision 3`, or `--if-revision new` to create one.
+3. `catalyst skill validate --from skills/tax-guide`
+4. `catalyst skill put tax-guide --from skills/tax-guide --if-revision 3`, or `--if-revision new` to create one.
 
 A write names the revision it was made against. When the instance says the asset moved on, read it again and redo the change on the new revision; do not overwrite another person's work. Publish (`catalyst app publish offers --revision 5`) only when the person asks for it.
 
@@ -48,15 +48,15 @@ A folder with a `catalyst.yaml` is a working copy. Work in this order:
 1. `catalyst config pull` before you edit, and again before every push.
 2. Edit the files.
 3. `catalyst config validate`, then `catalyst config diff`. Show the person the diff.
-4. `catalyst config push`, or `catalyst config push --only agent:kai-tax` for one asset.
+4. `catalyst config push`, or `catalyst config push --only agent:tax-advisor` for one asset.
 
-`catalyst config list` shows each asset's sync status, and `catalyst config show agent kai-tax` prints the instance's version of one.
+`catalyst config list` shows each asset's sync status, and `catalyst config show agent tax-advisor` prints the instance's version of one.
 
 ## Guardrails
 
 ```sh
 catalyst guardrail test iban-check --text "DE89 3704 0044 0532 0130 00"
-catalyst guardrail test iban-check --asset skill:kai-guide
+catalyst guardrail test iban-check --asset skill:tax-guide
 catalyst guardrail dry-run iban-check
 catalyst guardrail publish iban-check --revision 2
 catalyst guardrail unpublish iban-check
@@ -73,7 +73,7 @@ A publish shows its dry run first. A first publish that would stop actions asks 
 
 ## What the key may do
 
-The key acts as the person and never does more than they may at the moment of each call. Its scopes narrow it further, such as `agent.write` everywhere or `agent.write:kai-` in one Namespace. A right an administrator takes away is gone on the next call. The person sees and revokes the key in Settings, API keys.
+The key acts as the person and never does more than they may at the moment of each call. Its scopes narrow it further, such as `agent.write` everywhere or `agent.write:tax-` in one Namespace. A right an administrator takes away is gone on the next call. The person sees and revokes the key on the instance at `/settings/you/api-keys`.
 
 ## Rules
 

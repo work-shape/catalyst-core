@@ -10,7 +10,7 @@ import {
 } from "./command-support";
 import { credentialOrigin, removeCredential, saveCredential } from "./credentials";
 import { readConfigCliEnv } from "./env";
-import { MANIFEST_FILENAME, readManifest, resolveInstance } from "./working-copy";
+import { EMPTY_MANIFEST, readManifestIfPresent, resolveInstance } from "./working-copy";
 
 /**
  * Logs in by a connect code: the instance gives a short code, the person confirms it in
@@ -30,7 +30,7 @@ export async function loginCommand(options: ConfigCommandOptions): Promise<numbe
       [
         `Logged in to ${credentialOrigin(url)} with the key '${key.name}' (${key.keyPrefix}…).`,
         `It may: ${key.scopes.join(", ")}, as far as your rights reach, until ${formatTime(key.expiresAt)}.`,
-        `Saved in ${key.path}. Revoke it in Settings, API keys.`
+        `Saved in ${key.path}. See and revoke it at ${apiKeysAddress(url)}.`
       ].join("\n")
     );
     return 0;
@@ -112,7 +112,7 @@ export async function logoutCommand(options: ConfigCommandOptions): Promise<numb
     writeOutput(
       options,
       removed
-        ? `Removed the saved key of ${credentialOrigin(url)}. It stays valid until you revoke it in Settings, API keys.`
+        ? `Removed the saved key of ${credentialOrigin(url)}. It stays valid until you revoke it at ${apiKeysAddress(url)}.`
         : `No key is saved for ${credentialOrigin(url)}.`
     );
     return 0;
@@ -122,22 +122,22 @@ export async function logoutCommand(options: ConfigCommandOptions): Promise<numb
   }
 }
 
-/** An address given as it is, or an instance named in the working copy's manifest. */
+/**
+ * An address given as it is, or the instance `resolveInstance` selects: one named in the working
+ * copy's manifest, its default, or the one a key is saved for.
+ */
 export async function resolveInstanceUrl(options: ConfigCommandOptions): Promise<string> {
   const requested = options.instance;
   if (requested !== undefined && /^https?:\/\//u.test(requested)) {
     return requested.replace(/\/+$/u, "");
   }
-  try {
-    return resolveInstance(await readManifest(resolveWorkingDir(options)), requested).url;
-  } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-      throw new Error(
-        `No ${MANIFEST_FILENAME} here to name the instance. Pass --instance <https-url>.`
-      );
-    }
-    throw error;
-  }
+  const manifest = await readManifestIfPresent(resolveWorkingDir(options));
+  return (await resolveInstance(manifest ?? EMPTY_MANIFEST, options)).url;
+}
+
+/** Where the person sees and revokes their keys: Settings, You, API keys of the instance. */
+export function apiKeysAddress(url: string): string {
+  return `${url}/settings/you/api-keys`;
 }
 
 async function call<Output>(request: () => Promise<Output>): Promise<Output> {

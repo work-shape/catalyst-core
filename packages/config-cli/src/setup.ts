@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { RELEASE_VERSION } from "@vivd-catalyst/api-contract";
@@ -12,8 +12,8 @@ import {
   writeOutput
 } from "./command-support";
 import { credentialOrigin, readStoredCredential, type StoredCredential } from "./credentials";
-import { readConfigCliEnv } from "./env";
-import { formatTime, loginByConnectCode, resolveInstanceUrl } from "./login";
+import { type ConfigCliEnv, readConfigCliEnv } from "./env";
+import { apiKeysAddress, formatTime, loginByConnectCode, resolveInstanceUrl } from "./login";
 
 /** The tools `catalyst setup` writes the Catalyst skill for, with where each reads skills. */
 const LOCAL_AGENT_TOOLS = {
@@ -61,21 +61,28 @@ function writtenBySetup(contents: string): boolean {
   return mark !== null && sha256(contents.slice(0, mark.index)) === mark[1];
 }
 
-/** Where the tool reads its Catalyst skill, below the person's home folder. */
-function catalystSkillPath(tool: LocalAgentTool, home: string): string {
-  return join(home, ...LOCAL_AGENT_TOOLS[tool].skillsFolder, "catalyst", "SKILL.md");
+/**
+ * Where the tool reads its Catalyst skill: below the person's home folder, or for Claude Code
+ * below `CLAUDE_CONFIG_DIR` where that is set, as Claude Code itself reads it.
+ */
+function catalystSkillPath(tool: LocalAgentTool, env: ConfigCliEnv): string {
+  const folder =
+    tool === "claude-code" && env.CLAUDE_CONFIG_DIR
+      ? join(env.CLAUDE_CONFIG_DIR, "skills")
+      : join(env.HOME || homedir(), ...LOCAL_AGENT_TOOLS[tool].skillsFolder);
+  return join(folder, "catalyst", "SKILL.md");
 }
 
 /**
  * `catalyst setup <tool> --instance <url>`: logs in by a connect code unless a working key is
  * saved for the instance, then writes the Catalyst skill where the tool reads it. A different
- * file at that path is kept unless `--force` is given, and then it is moved to `SKILL.md.bak`.
- * It changes no other configuration of the tool and never prints the key.
+ * file at that path is kept unless `--force` is given, and then it is moved to the first free
+ * name of `SKILL.md.bak`, `SKILL.md.bak.1` and so on. It changes no other configuration of the
+ * tool and never prints the key.
  */
 export async function setupCommand(options: SetupOptions): Promise<number> {
   try {
     const url = await resolveInstanceUrl(options);
-    const env = readConfigCliEnv(options.env);
     const tool = LOCAL_AGENT_TOOLS[options.tool];
     const saved = await workingSavedKey(options, url);
     let keyLine: string;
@@ -98,38 +105,89 @@ export async function setupCommand(options: SetupOptions): Promise<number> {
       keyLine = `Logged in with the key '${key.name}'${scopesOf(key.scopes)}, valid until ${formatTime(key.expiresAt)}.`;
     }
 
-    const path = catalystSkillPath(options.tool, env.HOME || homedir());
+    const path = catalystSkillPath(options.tool, readConfigCliEnv(options.env));
     const skill = await renderCatalystSkill();
-    const existing = await readIfPresent(path);
+    const existing = await readSkillFile(path);
     const lines = [`Instance: ${credentialOrigin(url)}`, keyLine];
     if (existing === skill) {
       lines.push(`The Catalyst skill at ${path} is current.`);
-    } else if (existing === undefined || writtenBySetup(existing)) {
-      await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, skill);
+    } else if (existing === undefined || (existing !== NOT_A_FILE && writtenBySetup(existing))) {
+      await replaceFile(path, skill);
       lines.push(`Wrote the Catalyst skill to ${path}.`);
     } else if (options.force) {
-      await rename(path, `${path}.bak`);
-      await writeFile(path, skill);
-      lines.push(`Wrote the Catalyst skill to ${path}; the file that was there is ${path}.bak.`);
+      const backup = await freeBackupPath(path);
+      await rename(path, backup);
+      await replaceFile(path, skill);
+      lines.push(`Wrote the Catalyst skill to ${path}; the file that was there is ${backup}.`);
     } else {
       writeOutput(options, lines.join("\n"));
       writeError(
         options,
-        `Kept ${path}: it is not the skill this CLI writes. Run the command again with --force to replace it; the file that is there is then kept as ${path}.bak.`
+        `Kept ${path}: it is not the skill this CLI writes. Run the command again with --force to replace it; the file that is there is then kept as ${await freeBackupPath(path)}.`
       );
       return 1;
     }
     if (options.tool === "other") {
       lines.push("Point your tool at that file, or copy it to where your tool reads skills.");
     }
-    lines.push("See and revoke the key in Settings, API keys.");
+    lines.push(`See and revoke the key at ${apiKeysAddress(url)}.`);
     writeOutput(options, lines.join("\n"));
     return 0;
   } catch (error) {
     writeError(options, formatCommandError(error));
     return 1;
   }
+}
+
+/** What stands at the skill's path when it is no file: a link, a folder or another entry. */
+const NOT_A_FILE = Symbol("not a file");
+
+/**
+ * The text of the file at the skill's path, nothing where the path is free, or `NOT_A_FILE`.
+ * A link is never followed: what it points to is neither read nor written.
+ */
+async function readSkillFile(path: string): Promise<string | typeof NOT_A_FILE | undefined> {
+  const entry = await lstat(path).catch((error: unknown) => {
+    if (isMissing(error)) return undefined;
+    throw error;
+  });
+  if (entry === undefined) return undefined;
+  return entry.isFile() ? readFile(path, "utf8") : NOT_A_FILE;
+}
+
+/**
+ * Writes a new file beside the path and gives it the path's name, so a link there is replaced,
+ * never written through, and a write that fails leaves what was there.
+ */
+async function replaceFile(path: string, contents: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.tmp`;
+  await writeFile(temporary, contents, { flag: "wx" });
+  try {
+    await rename(temporary, path);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+}
+
+/** The first of `SKILL.md.bak`, `SKILL.md.bak.1`, … where nothing stands, a link included. */
+async function freeBackupPath(path: string): Promise<string> {
+  for (let number = 0; ; number += 1) {
+    const candidate = number === 0 ? `${path}.bak` : `${path}.bak.${number}`;
+    const taken = await lstat(candidate).then(
+      () => true,
+      (error: unknown) => {
+        if (isMissing(error)) return false;
+        throw error;
+      }
+    );
+    if (!taken) return candidate;
+  }
+}
+
+function isMissing(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 /**
@@ -152,7 +210,8 @@ async function workingSavedKey(
     await api.read((client) => client.platform.context.get());
     return saved;
   } catch (error) {
-    if (error instanceof ApiKeyExchangeError && error.status !== undefined && error.status < 500) {
+    // Only a refused key means logging in again. Any other answer is the instance's to explain.
+    if (error instanceof ApiKeyExchangeError && (error.status === 401 || error.status === 403)) {
       return undefined;
     }
     throw error;
@@ -161,15 +220,6 @@ async function workingSavedKey(
 
 function scopesOf(scopes: readonly string[] | undefined): string {
   return scopes === undefined ? "" : ` (${scopes.join(", ")})`;
-}
-
-async function readIfPresent(path: string): Promise<string | undefined> {
-  try {
-    return await readFile(path, "utf8");
-  } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
-    throw error;
-  }
 }
 
 /**

@@ -43,6 +43,11 @@ export async function readStoredCredential(
   return (await readCredentialFile(credentialsPath(env))).instances[credentialOrigin(url)];
 }
 
+/** The origins a key is saved for, in the order they were first saved. */
+export async function savedInstanceOrigins(env: ConfigCliEnv): Promise<string[]> {
+  return Object.keys((await readCredentialFile(credentialsPath(env))).instances);
+}
+
 export async function saveCredential(
   env: ConfigCliEnv,
   url: string,

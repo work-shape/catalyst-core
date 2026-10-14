@@ -1,5 +1,5 @@
 ---
-title: Work with a local agent
+title: Connect a local agent
 description: Connect Claude Code, Codex or another AI tool on your computer in one step, from Settings, Connect a local agent at /settings/you/connect.
 ---
 
@@ -8,20 +8,21 @@ A local agent is an AI tool on your own computer, such as Claude Code or Codex. 
 ## Connect it
 
 1. Open **Settings > Connect a local agent** (German: **Einstellungen > Lokalen Agenten verbinden**), at `/settings/you/connect`. The page is there when your instance offers personal API keys.
-2. Pick your tool: **Claude Code**, **Codex** or **Other** (German: **Andere**).
+2. Pick your tool: **Claude Code**, **Codex** or **Other** (German: **Anderes**).
 3. Copy the command and run it in a terminal on your computer. It needs Node 22 or later. It looks like this:
 
    ```sh
    npm install --global @work-shape/catalyst-cli@<version> && catalyst setup claude-code --instance https://chat.example.com
    ```
 
-   The page fills in the version that matches your instance and the instance's address.
+   The page fills in the instance's address and the version of the CLI published for it. Until one is published, the page says the command is not available yet and shows none.
+
 4. Your browser opens **Settings > API keys** (German: **API-Schlüssel**) with a code. Check that it is the code your terminal shows, tick what the key may do and until when, and click **Confirm** (German: **Bestätigen**).
 5. The terminal says which key it saved and where it wrote the skill. Start your tool.
 
-The command installs the CLI, logs it in with a key of your own, and writes a skill that teaches your tool to use it: for Claude Code to `~/.claude/skills/catalyst/SKILL.md`, for Codex and other tools to `~/.agents/skills/catalyst/SKILL.md`. For another tool, point it at that file. Nothing else of your tool's settings changes.
+The command installs the CLI, logs it in with a key of your own, and writes a skill that teaches your tool to use it: for Claude Code to `~/.claude/skills/catalyst/SKILL.md` (below `$CLAUDE_CONFIG_DIR` where that is set), for Codex and other tools to `~/.agents/skills/catalyst/SKILL.md`. For another tool, point it at that file. Nothing else of your tool's settings changes.
 
-If a different file is already at that path, the command keeps it and says so. Run it again with `--force` to replace it; the old file is then kept as `SKILL.md.bak`.
+If a different file is already at that path, the command keeps it and says so. Run it again with `--force` to replace it; the old file is then kept as `SKILL.md.bak`, or as `SKILL.md.bak.1` and so on where that name is taken. The command never writes through a link at that path.
 
 ## Later
 
