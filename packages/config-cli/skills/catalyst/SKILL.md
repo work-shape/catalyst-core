@@ -60,9 +60,29 @@ catalyst guardrail test iban-check --asset skill:tax-guide
 catalyst guardrail dry-run iban-check
 catalyst guardrail publish iban-check --revision 2
 catalyst guardrail unpublish iban-check
+catalyst guardrail hits iban-check
 ```
 
 A publish shows its dry run first. A first publish that would stop actions asks for `--confirm <number>`: show the person the dry run and let them decide; never fill in the number yourself.
+
+## Workflow tests and resource checks
+
+```sh
+catalyst workflow test month-end --from test-input.json  # {"input":{"month":"2026-10"}}
+catalyst workflow runs month-end
+catalyst workflow run <run-id>
+catalyst workflow steps <run-id>
+catalyst knowledge-base check accounts
+catalyst data-store describe reporting
+catalyst data-store used-by reporting
+catalyst app actions offers
+catalyst keys list
+catalyst workspace list
+```
+
+These commands print readable YAML; add `--json` for JSON. Paginated lists read every page. `workflow test` starts a test of the saved draft, simulating changing steps; it returns the current state, so read `run` and `steps` for progress. `--from <file|->` reads the request body `{"input": {...}}`; omitted, it sends `{}`. Run a test only when asked to test, and `catalyst workflow cancel <run-id>` only when asked to cancel that run.
+
+`app actions` without a name lists published Apps' actions; with a name it reads the draft if you may write it, otherwise the published revision. `keys list` reads only your own key metadata, never secrets. `workspace list` lists Shared Workspaces for agent availability through `instance.workspaces.list`, requiring `config_assets:write` and `agent.write`; it does not list your memberships. Keep `hasMore`, hidden counts and `truncated` in mind when reading hits, dependencies and actions.
 
 ## Exit codes
 
