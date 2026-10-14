@@ -1,3 +1,4 @@
+import { PLATFORM_TOOL_NAMES } from "@vivd-catalyst/client-assembly";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -45,6 +46,8 @@ describe("a conversation about a Workflow in a shared workspace", () => {
 
   it("is its creator's alone, and stays so when it is moved", async () => {
     const instanceConfig = createTestConfig({
+      // The agent holds the platform's tools: its definition lists them.
+      toolNames: [...PLATFORM_TOOL_NAMES],
       developmentAuth: {
         enabled: true,
         defaultUserId: OWNER,

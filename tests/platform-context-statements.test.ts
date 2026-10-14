@@ -64,5 +64,8 @@ describe("platform.context.get statements", () => {
   });
 });
 
-/** What `platform.context.get` sent before it named `assetActions`. */
-const CONTEXT_STATEMENTS = 5;
+/**
+ * What `platform.context.get` sent before it named `assetActions`: the test sign-in reads the
+ * person's record in one statement, as the evaluator reads the rights from the rows (AP-4).
+ */
+const CONTEXT_STATEMENTS = 4;

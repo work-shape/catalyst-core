@@ -1,5 +1,5 @@
 {
-  "id": "eedc4e3d-502d-48f9-a81a-41e29e7df93a",
+  "id": "bb818bb5-938a-4f2d-a5d3-c8dd198bc7cb",
   "prevId": "c68d5ed1-155b-431a-a8c5-f9866bb38609",
   "version": "7",
   "dialect": "postgresql",
@@ -6656,6 +6656,25 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.legacy_permission_restores": {
+      "name": "legacy_permission_restores",
+      "schema": "",
+      "columns": {
+        "restored_at": {
+          "name": "restored_at",
+          "type": "timestamp with time zone",
+          "primaryKey": true,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.namespaces": {
       "name": "namespaces",
       "schema": "",
@@ -8246,12 +8265,6 @@
         },
         "subject_name": {
           "name": "subject_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "converted_from": {
-          "name": "converted_from",
           "type": "text",
           "primaryKey": false,
           "notNull": false

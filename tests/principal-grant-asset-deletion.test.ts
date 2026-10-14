@@ -42,7 +42,7 @@ describe("a grant write and the deletion of the asset it names", () => {
       code: "VALIDATION_FAILED",
       details: { reason: "invalid_scope" }
     });
-    expect(await s.t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
+    expect(await s.principalRows()).toEqual([]);
   });
 
   it("waits for a deletion in flight and then writes no row", async () => {
@@ -131,6 +131,6 @@ describe("an input no row can hold", () => {
       });
       expect(answer.statusCode, operation).toBeLessThan(500);
     }
-    expect(await s.t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
+    expect(await s.principalRows()).toEqual([]);
   });
 });

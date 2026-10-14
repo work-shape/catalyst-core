@@ -1,6 +1,6 @@
 import { prefixPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import { and, asc, desc, eq, inArray, like, max, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, like, max, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   AppError,
@@ -57,6 +57,15 @@ export async function getConfigAssetState(
   return mapConfigAssetState(row);
 }
 
+/** A revision whose config, for a skill, is left without its resources in the database. */
+const revisionWithoutSkillResources = {
+  ...getTableColumns(configAssetRevisions),
+  config:
+    sql`case when ${configAssets.kind} = 'skill' then ${configAssetRevisions.config} - 'resources' else ${configAssetRevisions.config} end`.mapWith(
+      configAssetRevisions.config
+    )
+};
+
 export async function listActiveConfigAssets(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listActiveConfigAssets"]>[0]
@@ -73,7 +82,10 @@ export async function listActiveConfigAssets(
     conditions.push(like(configAssets.name, prefixPattern(input.namePrefix)));
   }
   const rows = await db
-    .select({ asset: configAssets, revision: configAssetRevisions })
+    .select({
+      asset: configAssets,
+      revision: input.withoutSkillResources ? revisionWithoutSkillResources : configAssetRevisions
+    })
     .from(configAssets)
     .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
     .where(and(...conditions))

@@ -50,6 +50,7 @@ import { refusalsOf } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
 import { isConnectionToolName, type ConnectionToolChoice } from "./connection-tools";
 import { ConnectionToolsGroup } from "./connection-tools-group";
+import { PlatformInstructions } from "./platform-instructions";
 import type { SkillFacts } from "./skill-facts";
 
 /** The skills an agent can be given, as far as the instance was asked for them. */
@@ -169,6 +170,10 @@ export function AgentEditor({
       label: t("configInstructions"),
       body: (
         <>
+          <PlatformInstructions
+            instructions={references?.platformInstructions}
+            toolNames={state.baseline.toolNames}
+          />
           <Field
             label={t("configSystemPrompt")}
             hint={t("configSystemPromptHint")}

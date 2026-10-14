@@ -42,8 +42,8 @@ export const noWorkflowDefinitions: WorkflowDefinitionSource = {
 /**
  * The refusal of a definition that cannot be run, for a save, a publish and a start alike. Its
  * reason is the contract's code where an issue carries one (`block_depth`,
- * `reference_out_of_scope`, `duplicate_step_id`, `not_supported_yet`), and every issue is in
- * its details.
+ * `reference_out_of_scope`, `duplicate_step_id`, `not_supported_yet`,
+ * `operation_not_callable`), and every issue is in its details.
  */
 export function workflowDefinitionRefusal(
   workflow: string,
