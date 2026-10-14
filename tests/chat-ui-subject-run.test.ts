@@ -73,6 +73,35 @@ describe("the subject a run opens", () => {
     ).toEqual(["1", "4"]);
   });
 
+  it("is the App a Page was kept as, and a save of its Page is a saved draft of it", () => {
+    const keptAsApp: SubjectRunPart = {
+      type: "tool_call",
+      toolCallId: "5",
+      toolName: "page.save_as_app",
+      state: "output_available",
+      output: { kind: "app", name: "offer-desk", title: "Offer desk", revision: 1 }
+    };
+    const pageSave = (id: string, app: unknown): SubjectRunPart => ({
+      type: "tool_call",
+      toolCallId: id,
+      toolName: "page.save",
+      state: "output_available",
+      output: { pageId: "p1", fileSetId: `s${id}`, number: 2, ...(app ? { app } : {}) }
+    });
+
+    expect(subjectOpenedInRun([opened("1", "workflow", "intake"), keptAsApp])).toEqual({
+      subject: { kind: "app", name: "offer-desk" },
+      callId: "5"
+    });
+    expect(
+      savedDraftCalls([
+        pageSave("6", { name: "offer-desk", title: "Offer desk", saved: true, revision: 2 }),
+        pageSave("7", { name: "offer-desk", title: "Offer desk", saved: false, message: "No" }),
+        pageSave("8", undefined)
+      ])
+    ).toEqual(["6"]);
+  });
+
   it("opens the canvas of a Workflow, the draft of an App and the saved state of an agent", () => {
     const surface = (kind: string) =>
       subjectSurface({ subject: { kind, name: "x" }, workspaceId: "w1", title: "X" });
@@ -156,6 +185,22 @@ describe("the lines of the asset tools", () => {
     ).toBe("Someone saved in between: reading again");
     expect(assetToolSentence({ toolName: "platform.assets.get", isError: true }, t)).toBe(
       "The asset could not be read"
+    );
+  });
+
+  it("say that the agent kept a Page as an App, in English and German", () => {
+    const kept = { kind: "app", name: "offer-desk", title: "Offer desk", revision: 1 };
+    expect(assetToolSentence({ toolName: "page.save_as_app" }, t)).toBe(
+      "Saving the Page as an app…"
+    );
+    expect(assetToolSentence({ toolName: "page.save_as_app", result: kept }, t)).toBe(
+      "Saved the Page as the app Offer desk"
+    );
+    expect(assetToolSentence({ toolName: "page.save_as_app", result: kept }, de)).toBe(
+      "Page als App Offer desk gespeichert"
+    );
+    expect(assetToolSentence({ toolName: "page.save_as_app", isError: true }, t)).toBe(
+      "The Page could not be saved as an app"
     );
   });
 

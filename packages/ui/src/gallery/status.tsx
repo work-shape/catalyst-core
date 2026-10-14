@@ -21,7 +21,15 @@ import type { GalleryText } from "./text";
 
 const skillIconSizes: readonly SkillIconSize[] = ["sm", "md", "lg"];
 const connectionIconSizes: readonly ConnectionIconSize[] = ["sm", "md", "lg"];
-const shippedSkillIcons = ["spreadsheet", "document", "presentation", "pdf"] as const;
+// The four pages, then the line icons of platform skills that make no file, on the tile.
+const shippedSkillIcons = [
+  "spreadsheet",
+  "document",
+  "presentation",
+  "pdf",
+  "guide",
+  "workflow"
+] as const;
 
 const iconFamilies: readonly IconFamily[] = ["file", "service", "skill", "tool"];
 const fileTypeKeys = Object.keys(fileTypeIcons);

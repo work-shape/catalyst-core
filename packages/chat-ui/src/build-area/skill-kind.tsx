@@ -1,4 +1,3 @@
-import { BookOpen } from "lucide-react";
 import { Badge, SkillIcon } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { useSettingsPage } from "../settings/settings-page-context";
@@ -26,7 +25,7 @@ export const skillKind: BuildAssetKind = {
   emptyText: "build.skillsEmpty",
   emptyReadOnlyText: "build.skillsEmptyReadOnly",
   missingText: "build.skillMissing",
-  icon: BookOpen,
+  icon: "skill",
   // A row says what an agent with the skill knows how to do, and never shows the skill's id.
   row: (asset) => {
     const { icon, summary } = skillFacts(asset);

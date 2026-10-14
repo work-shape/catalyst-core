@@ -123,6 +123,11 @@ export const actionsGallery: GalleryGroup = {
               title={text.starterLetter}
               hint={text.starterLetterHint}
             />
+            <Starter
+              icon={<SkillIcon icon="guide" size="lg" />}
+              title={text.starterGuide}
+              hint={text.starterGuideHint}
+            />
             <Starter icon={<SkillIcon size="lg" />} title={text.starterPlain} />
             <Starter
               icon={<SkillIcon icon="pdf" size="lg" />}

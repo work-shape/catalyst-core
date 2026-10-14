@@ -3,7 +3,6 @@ import {
   AppError,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
-  hasAuthScope,
   isAuthenticatedServicePrincipal,
   type AccessResource,
   type ActorAccess,
@@ -16,23 +15,11 @@ import {
 } from "@vivd-catalyst/core";
 import { decide } from "../asset-access";
 import type { ModuleRoutes, RouteRegistration } from "../http/route";
+import { listedWorkflowActions, workflowOf } from "../workflow-listing";
 import type { WorkflowRunsPort } from "../workflow-runs-port";
 
 /** The module these operations belong to. */
 const WORKFLOWS_MODULE = "workflows";
-
-/** The rights an entry of the list names, each with the scope of the calls it opens. */
-const LISTED_ACTIONS = [
-  { action: WORKFLOW_ACTIONS.read, scope: apiOperations["workflows.list_runs"].scope },
-  { action: WORKFLOW_ACTIONS.use, scope: apiOperations["workflows.start"].scope }
-] as const;
-
-/** What a right on one Workflow is decided on: its name and, where it is stored, its asset. */
-const workflowOf = (name: string, assetId?: string): AccessResource => ({
-  kind: WORKFLOW_ASSET_KIND,
-  name,
-  ...(assetId === undefined ? {} : { assetId })
-});
 
 /** What a caller may do with a run, decided on the Workflow of the run or on no Workflow. */
 type RunDecision = (
@@ -126,11 +113,7 @@ function registerWorkflowRoutes(
     // through: the right on this Workflow and a credential whose scope reaches the call.
     execute: async (_input, { access, actor }) => ({
       items: (await required().listWorkflows()).flatMap(({ assetId, ...workflow }) => {
-        const resource = workflowOf(workflow.id, assetId);
-        const actions = LISTED_ACTIONS.filter(
-          ({ action, scope }) =>
-            hasAuthScope(actor, scope) && decide(access, action, resource).allowed
-        ).map(({ action }) => action);
+        const actions = listedWorkflowActions(access, actor, workflowOf(workflow.id, assetId));
         return actions.length > 0 ? [{ ...workflow, actions }] : [];
       })
     })
