@@ -159,6 +159,7 @@ describe("an App the agent writes from a Page of its conversation", () => {
       effect: "changing",
       actor: { kind: "user", id: t.admin.id, label: t.admin.displayLabel },
       origin: { kind: "user" },
+      target: "live",
       inputHash: randomUUID().replace(/-/gu, "").padEnd(64, "a"),
       correlationId,
       startedAt: new Date().toISOString()
