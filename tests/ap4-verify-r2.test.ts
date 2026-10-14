@@ -263,6 +263,6 @@ describe("AP-4 r2: the token a request carries", () => {
       correlationId: "probe"
     });
     // verify-permissions and access-legacy-migration.test.ts model the exchange's token.
-    expect(requestActor.permissions).toEqual(issued.principal.permissions);
+    expect(requestActor.permissions).toEqual(issued.identity.permissions);
   });
 });

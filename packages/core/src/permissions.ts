@@ -399,12 +399,9 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
 }
 
 /**
- * What a credential's token stands for, as it did before AP-4: on the token's request the keys
- * it carries are the principal's legacy rights, in place of the rows the principal's list
- * became. A scope carries its first key (`governance:read` carries `usage.view`) whichever key
- * of the scope the principal holds. A key the principal's rows give in full, allowed or
- * denied, is the list's; of a key whose actions differ, the allows are the list's and a deny is
- * a row of its own; a key whose actions are not all in rows is no key of the list.
+ * A token's carried keys stand in for the rows the principal's list became, as before AP-4; a
+ * scope carries its first key (`governance:read`: `usage.view`). Rows of a key given in full
+ * are the list's; of a mixed key only the allows are; a partly given key is no key of it.
  */
 function tokenRights(
   carried: readonly string[],
