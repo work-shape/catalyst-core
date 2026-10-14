@@ -26,3 +26,14 @@ section: Added
   shows the dry run first and asks `--confirm <n>` on a first publish that would block. `catalyst
   config pull|push` carries `guardrails/<name>/guardrail.yaml` with `check.md` for a judge's
   instruction.
+- **Studio > Guardrails says when each guardrail runs:** every row of the list and the page of
+  a guardrail show one line built from its event, filter, check, outcome and scope, in English
+  and German, such as "Runs before an agent saves a skill, in workspace Kai Spezis. Checks the
+  content for a text pattern. Blocks if the check fails." A guardrail of release config reads
+  "set by the operator", and no event id is shown. A workspace guardrail's page names its
+  workspace in place of "Instance".
+- **Which calls skip the published guardrails** is decided by the operation: `guardrails.*`, the
+  asset operations on the kind `guardrail`, a sync of guardrails alone and the agent's save of
+  the guardrail its conversation is about. An input that names `kind: guardrail` no longer
+  does. The dry run answers the guardrail's `outcome`, and `catalyst guardrail publish` asks
+  `--confirm` also for the actions a first blocking publish could not check.
