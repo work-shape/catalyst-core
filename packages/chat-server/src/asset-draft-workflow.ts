@@ -601,6 +601,8 @@ export class AssetDraftWorkflow {
       revision: discarded.revision,
       discardedRevision: expectedRevision
     });
+    // The switches set for the discarded draft are cleared now, in the name of who discarded it.
+    await clearLiveOnceSwitches(this.options, call, kind, name, asset.id);
     return { draftRevision: discarded.revision, publishedRevision: discarded.revision };
   }
 

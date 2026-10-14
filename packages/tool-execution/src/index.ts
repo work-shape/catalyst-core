@@ -22,7 +22,8 @@ export {
   platformAssetWriteRefusal,
   type PlatformAssetBinding,
   type PlatformAssetCalls,
-  type PlatformCallableOperation
+  type PlatformCallableOperation,
+  type PlatformOperationsAudience
 } from "./platform-asset-tools";
 export {
   PLATFORM_DISCOVERY_TOOLS,

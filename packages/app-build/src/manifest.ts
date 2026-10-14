@@ -181,7 +181,11 @@ function describeIssue(issue: z.core.$ZodIssue): string {
     const derived = issue.keys.includes("pages")
       ? " 'pages' is derived from the files under src/routes/ and is not written by hand."
       : "";
-    return `Unknown key${issue.keys.length > 1 ? "s" : ""} ${issue.keys.map((key) => `'${key}'`).join(", ")}${where}. A manifest holds id, name, description, icon, kit, entry, connections, dataStores, actions and externalHosts.${derived}`;
+    const holds =
+      issue.path[0] === "actions"
+        ? "A line under 'actions' holds name, file, effect, policy and connection. An action file 'actions/<name>.action.yaml' says itself what it calls and needs no line; a statement 'actions/<name>.sql' needs one with name, file and effect."
+        : `A manifest holds id, name, description, icon, kit, entry, connections, dataStores, actions and externalHosts.${derived}`;
+    return `Unknown key${issue.keys.length > 1 ? "s" : ""} ${issue.keys.map((key) => `'${key}'`).join(", ")}${where}. ${holds}`;
   }
   const key = issue.path.length > 0 ? `'${issue.path.join(".")}'` : "The manifest";
   return `${key}: ${issue.message}`;

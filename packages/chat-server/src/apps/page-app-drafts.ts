@@ -11,6 +11,7 @@ import {
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { guardrailDenial, type PageSaveIntoApp } from "@vivd-catalyst/tool-execution";
+import { z } from "zod";
 import type { AssetWorkflowOptions } from "../types";
 import type { PageApps } from "./page-apps";
 
@@ -138,6 +139,20 @@ export const DRAFT_CHANGED_ELSEWHERE =
 export const DRAFT_MOVED_TO_OTHER_PAGE =
   "Another Page was put into this App since this Page last wrote it, so its draft is now written from that Page and this save did not change it; the Page is saved. Tell the person: Update app on this Page puts this Page into the App again.";
 
+const issueMessagesSchema = z.object({ issues: z.array(z.object({ message: z.string() })) });
+
+/**
+ * A refusal of the App's own checks with what they found, such as an action on an operation the
+ * Connection does not accept. The message of the refusal alone names no issue.
+ */
+function validationRefusal(message: string, details: unknown): string {
+  const read = issueMessagesSchema.safeParse(details);
+  const found = read.success ? read.data.issues.map((issue) => issue.message) : [];
+  return found.length > 0
+    ? `The App's draft was not written; the Page is saved. Fix this and save the Page again: ${found.join(" ")}`
+    : message;
+}
+
 /**
  * Why a write of the App's draft after a stored Page did not happen, in words the agent may
  * pass on. A refusal of the App's own checks says what it found; whatever else failed is named
@@ -149,7 +164,7 @@ export function draftRefusal(error: unknown, logger: AssetWorkflowOptions["logge
     if (error.code === "FORBIDDEN") {
       return "The person may not write this App, so its draft was not written; the Page is saved.";
     }
-    if (error.code === "VALIDATION_FAILED") return error.message;
+    if (error.code === "VALIDATION_FAILED") return validationRefusal(error.message, error.details);
     if (error.code === "TIMEOUT") {
       return "Writing the App's draft took too long, so it was not written; the Page is saved. Save the Page again in a moment.";
     }

@@ -124,7 +124,8 @@ export function createPageSaveAsAppTool(
       "The App is made from the Page as it is now, its newest saved revision: do not build it again. It belongs to the workspace of this conversation and gets a draft, which nobody uses until a person publishes it. You never publish.",
       "The person then sees the App's draft beside the chat, and this conversation is about the App: each later page.save of the same Page writes the App's draft, so keep changing the same folder and saving it under the same Page name.",
       "Needs the person's right to write Apps in the workspace; without it the call is refused: tell the person who can grant it. A conversation shared with a workspace makes no App: ask the person to start a conversation of their own.",
-      "Answers the App's id, its title and its draft revision: tell the person the App's title."
+      "Answers the App's id, its title and its draft revision: tell the person the App's title.",
+      "To give the App live data, add named actions to the same folder and save it again with page.save: the page references/apps/build.md of the skill 'platform-docs', where you have that skill, shows how to write each kind. Tell the person that a change made through an action is carried out only once they publish the App; in the draft it answers what it would have done, and 'Run live once' on the App's Actions list carries out their next call of one action."
     ].join(" "),
     inputSchema,
     outputSchema,

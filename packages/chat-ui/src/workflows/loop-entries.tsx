@@ -6,7 +6,8 @@ import {
   ListRow,
   SegmentedControl,
   SegmentedControlItem,
-  SkeletonList
+  SkeletonList,
+  TargetBadge
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { FailureBanner } from "./failure-banner";
@@ -18,7 +19,7 @@ import type {
   WorkflowStepTarget,
   WorkflowStepView
 } from "./workflow-views";
-import { LoadError, RunStateBadge, StepTargetBadge } from "./workflows-frame";
+import { LoadError, RunStateBadge } from "./workflows-frame";
 
 type EntryFilter = "failed" | "running" | "all";
 
@@ -216,7 +217,7 @@ function LoopEntryRow({ entry, loop }: { entry: LoopEntry; loop: WorkflowStepVie
       chips={
         <>
           {(entry.targets ?? []).map((target) => (
-            <StepTargetBadge key={target} target={target} />
+            <TargetBadge key={target} target={target} />
           ))}
           {entry.publishedWouldAsk ? (
             <Badge tone="warning" size="sm" truncate data-published-asks="approval">
