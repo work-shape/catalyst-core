@@ -16,7 +16,9 @@ section: Changed
   "Go to it"; the person's press is the confirmation. It calls the new registered operation
   `conversations.subject.open` (`PUT /api/v1/conversations/:conversationId/subject`), which sets
   the subject of the person's own conversation, records an Operation Run and the audit event
-  `conversation.subject_opened` with the tool call it confirms, and then opens the page. Until
+  `conversation.subject_opened` with the tool call it confirms, and then opens the page. A
+  `toolCallId` that names no open of that asset in that conversation which waits for the person
+  is refused (`open_not_pending`), so the audit row names only a call the agent made. Until
   then a changing asset tool on it is refused. Before, such an open was refused outright.
   Once OP-3 exists, the open pauses for the confirmation in the host's prompt instead.
 - **No asset beside the chat:** the Workflow canvas, the App draft and the agent no longer open
@@ -24,4 +26,5 @@ section: Changed
   conversation in the dock. A preview the dock's conversation opens on a page, such as a file or
   a view, covers the page and leaves the dock in view.
 - **"Draft · not published":** the page of a Workflow or an App that was never published says
-  so.
+  so. On the App's page the badge stays beside the name with the dock open, the name cut first:
+  `PageHeader` of the UI library gains `keepState` for a state a page must always say.

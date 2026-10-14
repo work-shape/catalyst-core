@@ -9,6 +9,8 @@ import {
   WORKFLOW_ASSET_KIND,
   asClientInstanceId,
   asCollaborationWorkspaceId,
+  asConversationId,
+  readToolResultMetadata,
   asUserId
 } from "@vivd-catalyst/core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
@@ -468,9 +470,40 @@ describe("a conversation about a Workflow", () => {
     );
     expect(await subjectOf()).toBeUndefined();
 
+    // The confirmation names the agent's open it answers: one of this asset, in this
+    // conversation, that waits for the person. Another call, or the open of another asset, is
+    // refused and makes nothing the subject.
+    const openOf = async (name: string) => {
+      const stored = await t.app.stores.conversations.listMessages({
+        clientInstanceId: t.clientInstanceId,
+        conversationId: asConversationId(id)
+      });
+      const found = stored
+        .map((message) => readToolResultMetadata(message.metadata))
+        .find(
+          (result) =>
+            result?.toolName === "platform.assets.open" &&
+            JSON.stringify(result.result).includes(`"name":"${name}"`)
+        );
+      return String(found?.toolCallId ?? "");
+    };
+    const workflowOpen = await openOf(WORKFLOW);
+    const agentOpen = await openOf("test_agent");
+    expect(workflowOpen).not.toBe("");
+    for (const unconfirmed of [
+      await step(subject, undefined, "call_made_up"),
+      await step(subject, undefined, agentOpen)
+    ]) {
+      expect(unconfirmed.statusCode).toBe(422);
+      expect(
+        unconfirmed.json<{ error: { details?: { reason?: string } } }>().error.details
+      ).toEqual({ reason: "open_not_pending" });
+    }
+    expect(await subjectOf()).toBeUndefined();
+
     // The person goes to the Workflow: that step makes it the subject, audited as the person's
     // answer to the agent's open, and the agent's save reaches it.
-    const confirmed = await t.ok(step(subject, undefined, "call_open_workflow"));
+    const confirmed = await t.ok(step(subject, undefined, workflowOpen));
     expect(
       subjectSchema.parse(z.object({ subject: subjectSchema }).parse(confirmed.json()).subject)
     ).toEqual(subject);
@@ -487,7 +520,7 @@ describe("a conversation about a Workflow", () => {
       {
         subjectKind: WORKFLOW_ASSET_KIND,
         subjectName: WORKFLOW,
-        confirmsToolCallId: "call_open_workflow",
+        confirmsToolCallId: workflowOpen,
         operationRunId: expect.stringMatching(/^oprun_/)
       }
     ]);

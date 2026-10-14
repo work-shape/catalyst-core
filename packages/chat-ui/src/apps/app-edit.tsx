@@ -385,6 +385,8 @@ export function AppEditFrame({
                 <Badge size="sm">{t("apps.draft")}</Badge>
               )
             }
+            // A draft nobody published says so whatever the room: it runs nowhere yet.
+            keepState={known && publishedRevision === undefined}
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
             secondaryActions={

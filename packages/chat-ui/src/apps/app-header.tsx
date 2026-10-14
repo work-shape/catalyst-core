@@ -119,6 +119,7 @@ export function AppStateBadge({ state }: { state: AppState }) {
 export function AppHeader({
   name,
   state,
+  keepState = false,
   secondaryActions,
   primaryAction,
   overflow,
@@ -129,6 +130,8 @@ export function AppHeader({
   name: string;
   /** The badge after the name: the published or the draft revision. */
   state?: ReactNode;
+  /** The state stays whole and the name is cut first, as for a draft never published. */
+  keepState?: boolean;
   secondaryActions?: ReactNode;
   primaryAction?: ReactNode;
   overflow?: ReactNode;
@@ -158,6 +161,7 @@ export function AppHeader({
       }
       title={name}
       state={state}
+      keepState={keepState}
       secondaryActions={secondaryActions}
       primaryAction={primaryAction}
       overflow={overflow}
