@@ -281,12 +281,17 @@ export async function callStepOperation(input: {
     case "denied": {
       const refusal = operationDenialError(result.reason);
       if (result.reason.kind === "forbidden") {
-        // The principal does not hold the right, or may not call from a Workflow at all.
+        // The principal does not hold the right, or may not call from a Workflow at all. An
+        // operation only a person calls is refused by a rule no grant to the principal opens.
+        const { reason, message, action } = result.reason;
+        if (reason === "user_only" && message !== undefined) {
+          throw new OperationStepFailure(refusal.code, message, trace, { systemic: true });
+        }
         throw new OperationStepFailure(
           refusal.code,
-          missingRight(run.principal.name, operation, result.reason.action),
+          missingRight(run.principal.name, operation, action),
           trace,
-          { systemic: true, action: result.reason.action }
+          { systemic: true, action }
         );
       }
       // A policy is set for the operation and not for one item: the next would meet it too.
