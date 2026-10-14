@@ -322,6 +322,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function redactSecret(message: string, secret: string): string {
+export function redactSecret(message: string, secret: string): string {
   return secret ? message.split(secret).join("[redacted]") : message;
 }

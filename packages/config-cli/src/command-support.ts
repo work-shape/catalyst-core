@@ -22,6 +22,8 @@ import {
   STATE_FILENAME,
   WorkingCopyValidationError,
   readManifest,
+  readManifestIfPresent,
+  resolveInstance,
   readStateFile,
   readWorkingCopy,
   writeStateFile,
@@ -395,6 +397,16 @@ export async function connectApi(url: string, options: ConfigCommandOptions) {
     ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
     ...(options.sleep === undefined ? {} : { sleep: options.sleep })
   });
+}
+
+/** Resolves the same working-copy alias or explicit URL for every instance command. */
+export async function openInstance(options: ConfigCommandOptions): Promise<ConfigApi> {
+  const manifest = await readManifestIfPresent(resolveWorkingDir(options));
+  const instance = resolveInstance(
+    manifest ?? { instances: {}, agents: [], skills: [] },
+    options.instance
+  );
+  return connectApi(instance.url, options);
 }
 
 export function assetHash(contents: string): string {
