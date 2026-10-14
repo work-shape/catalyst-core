@@ -148,7 +148,7 @@ test("an admin gives a member reading and using on one Workflow and removes both
   await page.setViewportSize(WIDE);
   await page.goto(accessPath);
   await page.getByRole("tab", { name: /^Rights/u }).click();
-  const row = page.getByTestId("grant-row").filter({ hasText: `Workflow ${id}` });
+  const row = page.getByTestId("grant-row").filter({ hasText: "Workflow Rights walk" });
   const dialog = page.getByRole("dialog", { name: "New right" });
   try {
     // The dialog says each right of a Workflow in a sentence, and what publishing still needs.
@@ -219,7 +219,7 @@ test("an admin gives a member reading and using on one Workflow and removes both
       await row.getByRole("button", { name: `Actions for the right of ${member.label}` }).click();
       await page.getByRole("menuitem", { name: `Revoke: ${right}` }).click();
       const confirm = page.getByRole("dialog", { name: "Revoke this right?" });
-      await expect(confirm).toContainText(`Workflow ${id}`);
+      await expect(confirm).toContainText("Workflow Rights walk");
       await confirm.getByRole("button", { name: "Revoke" }).click();
       await expect(confirm).toBeHidden();
       await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);

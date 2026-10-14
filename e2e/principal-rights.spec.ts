@@ -49,6 +49,7 @@ test("a superadmin gives a service principal a Connection, is refused one that i
   });
   const crm = planted("Sample CRM");
   const ledger = planted("Sample ledger");
+  const tickets = planted("Sample tickets");
   const label = `Monthly check ${randomUUID().slice(0, 6)}`;
   let principalId: string | undefined;
 
@@ -79,6 +80,7 @@ test("a superadmin gives a service principal a Connection, is refused one that i
   try {
     await plantConnection(crm);
     await plantConnection(ledger);
+    await plantConnection(tickets);
     const created = await requestWithOrigin(
       page,
       "post",
@@ -249,7 +251,7 @@ test("a superadmin gives a service principal a Connection, is refused one that i
         }
       );
       expect(given.ok()).toBe(true);
-      // The administrator is denied the ledger, so cannot give it to the principal either.
+      // The administrator is denied the tickets, so cannot give them to the principal either.
       const denied = await requestWithOrigin(
         page,
         "post",
@@ -261,11 +263,11 @@ test("a superadmin gives a service principal a Connection, is refused one that i
             action: "connection.use",
             effect: "deny",
             scopeKind: "asset",
-            scopeId: ledger.id
+            scopeId: tickets.id
           }
         }
       );
-      expect(denied.ok()).toBe(true);
+      expect(denied.ok(), await denied.text()).toBe(true);
       await page.context().clearCookies();
       await signIn(page, admin);
       await page.goto(`/build/connections/${crm.name}`);
@@ -282,20 +284,21 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await openPrincipal();
       await rights.getByRole("button", { name: "Add right" }).click();
       await expect(dialog).toBeVisible();
-      // The principal holds the CRM already: the ledger is all there is, and it is not offered.
+      // The principal holds the CRM already, the ledger is gone: the tickets are all there is,
+      // and they are not offered.
       await expect(
         dialog.getByText(
           "You do not hold this right on any of these resources yourself, so you cannot give it."
         )
       ).toBeVisible();
       await dialog.getByRole("button", { name: /^Connection:/u }).click();
-      const ledgerOption = page.getByRole("option", { name: /Sample ledger/u });
-      await expect(ledgerOption).toHaveAttribute("aria-disabled", "true");
-      await expect(ledgerOption).toContainText(
+      const ticketsOption = page.getByRole("option", { name: /Sample tickets/u });
+      await expect(ticketsOption).toHaveAttribute("aria-disabled", "true");
+      await expect(ticketsOption).toContainText(
         "You do not hold this right here yourself, so you cannot give it."
       );
       await shoot("principal-rights-not-held", async () => {
-        await expect(ledgerOption).toBeVisible();
+        await expect(ticketsOption).toBeVisible();
       });
       await page.keyboard.press("Escape");
       await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -306,8 +309,9 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await removeServicePrincipal(principalId);
     }
     await removeGrantsOn(crm.id);
-    await removeGrantsOn(ledger.id);
+    await removeGrantsOn(tickets.id);
     await removeConnection(crm.id);
+    await removeConnection(tickets.id);
     await removeConnection(ledger.id);
   }
 });

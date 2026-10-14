@@ -113,7 +113,8 @@ export function ApiAccessPage() {
       onClearRevealedCredential={clearRevealedCredential}
     />
   );
-  return config.modules.personalApiKeys?.enabled ? (
+  // Every person's own keys are listed to a holder of `api_access.manage` alone.
+  return config.modules.personalApiKeys?.enabled && may.keys ? (
     <>
       {panel}
       <PersonalKeysOnInstance />
@@ -123,9 +124,9 @@ export function ApiAccessPage() {
   );
 }
 
-/** Every person's own API keys, revoked here by a holder of the page. */
+/** Every person's own API keys, revoked here by a holder of `api_access.manage`. */
 function PersonalKeysOnInstance() {
-  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const api = { apiBaseUrl, authScope, client };
   const keysQuery = useInstancePersonalApiKeysQuery({ ...api, enabled: true });
@@ -133,7 +134,6 @@ function PersonalKeysOnInstance() {
     ...api,
     heldMessage: t("apiAccessWaitsForApproval")
   });
-  const canRevoke = canManageApiAccess(user);
 
   return (
     <Section
@@ -152,7 +152,7 @@ function PersonalKeysOnInstance() {
           loading={keysQuery.isPending}
           showOwner
           revoking={revoke.isPending}
-          onRevoke={canRevoke ? (key) => revoke.mutateAsync(key.id) : undefined}
+          onRevoke={(key) => revoke.mutateAsync(key.id)}
         />
       )}
     </Section>

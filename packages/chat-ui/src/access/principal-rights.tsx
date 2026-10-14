@@ -28,6 +28,7 @@ import {
   type PrincipalGrantKind,
   type PrincipalGrantView
 } from "./principal-grants-model";
+import { assetKindLabelKey } from "./grant-words";
 import { actionLabel, rightVerb, verbKeys } from "./right-words";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import { formatDate } from "../control-plane/locale-format";
@@ -43,10 +44,6 @@ const CONNECTION_KIND = "connection";
 /** What a right allows, in a sentence. A right without one is named by its action. */
 const ACTION_SENTENCES: Record<string, TranslationKey> = {
   "connection.use": "apiAccessRightsMayUseConnection"
-};
-
-const KIND_NAMES: Record<string, TranslationKey> = {
-  connection: "connections.kindSingular"
 };
 
 const FAILURE_SENTENCES: Record<PrincipalGrantFailure, TranslationKey> = {
@@ -72,9 +69,10 @@ function actionSentence(action: string, t: Translate): string {
     : t("apiAccessRightsMay", { verb: t(verbKeys[verb]) });
 }
 
+/** A kind by the name the rights screens give it, and never by its id. */
 function kindName(kind: string, t: Translate): string {
-  const key = KIND_NAMES[kind];
-  return key === undefined ? kind : t(key);
+  const key = assetKindLabelKey(kind);
+  return key === undefined ? t("apiAccessRightsResource") : t(key);
 }
 
 function KindIcon({ kind }: { kind: string | undefined }) {

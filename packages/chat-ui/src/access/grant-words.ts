@@ -17,6 +17,7 @@ export const kindLabelKeys = {
   app: "access.kindApp",
   workflow: "access.kindWorkflow",
   knowledge_base: "access.kindKnowledgeBase",
+  data_store: "access.kindDataStore",
   guardrail: "access.kindGuardrail"
 } as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
 

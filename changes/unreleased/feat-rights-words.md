@@ -22,3 +22,9 @@ section: Changed
   section's heading, and saves where the agent can be chosen through the page's one save bar
   with the agent's other changes. The section's own "Save availability" button is gone. The
   library's `RadioGroup` takes `labelHidden` for a group whose heading names it already.
+- **Settings waits for the platform context** before it sends an address elsewhere: an
+  administrator who opened Instance > API access by its address, such as from a Connection's
+  page, was sent to Users while the right that shows the page was still loading.
+- **Instance > API access** lists every person's own keys only to a holder of
+  `api_access.manage`, who alone may read and revoke them; an administrator without it no
+  longer meets a refused request on the page.
