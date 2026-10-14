@@ -4,7 +4,8 @@ section: Added
 
 - **A workspace owns agents and skills (WS-OWN-1a):** an agent or skill made in a Shared
   Workspace's Studio scope, or pushed from a working copy bound with
-  `catalyst config pull --workspace <id>`, belongs to that workspace; one made with the scope
+  `catalyst config pull --workspace <id>`, belongs to that workspace (and so does a guardrail
+  such a root pushes); one made with the scope
   Instance, or from an unbound working copy, belongs to the instance. `assets.put`,
   `assets.sync` and the reads take the owner as `workspaceId`; a batch names a Namespace or a
   workspace, never both, and a workspace batch is never a release. Only an asset of the same
