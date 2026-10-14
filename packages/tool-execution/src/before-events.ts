@@ -85,8 +85,14 @@ export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectA
   return answers;
 }
 
-/** The asset operations that act on the asset of the kind their input names. */
+/**
+ * The asset operations that act on, or read, the assets of the kind their input names. Reads
+ * are among them, so no published guardrail hides the guardrails from those who change them.
+ */
 const ASSET_OPERATIONS_OF_A_KIND: ReadonlySet<string> = new Set([
+  "assets.list",
+  "assets.get",
+  "assets.revisions.list",
   "assets.put",
   "assets.delete",
   "assets.revert",
@@ -102,7 +108,7 @@ const SUBJECT_ASSET_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Whether a call writes, publishes, deletes or tests guardrails and nothing else, decided by
+ * Whether a call reads, writes, publishes, deletes or tests guardrails and nothing else, decided by
  * the operation and never by the shape of an input another operation takes: an operation of
  * `guardrails.*`; an asset operation on the kind `guardrail`; a sync of guardrails alone; the
  * agent's save or check of the guardrail its conversation is about, whose events say so. A
