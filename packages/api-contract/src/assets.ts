@@ -233,7 +233,17 @@ export const putAssetRequestSchema = z
     files: z.array(assetFileInputSchema).min(1).max(FILE_SET_MAX_FILES).optional(),
     /** The revision the caller last read, or `null` to create the asset. Required. */
     expectedRevision: expectedRevisionOrNewSchema,
-    workspaceId: workspaceIdSchema
+    workspaceId: workspaceIdSchema,
+    /**
+     * Where a new agent starts available: the shared workspace it is made in, or `all`, which
+     * needs the agent write right on the whole instance. An agent's call in a conversation is
+     * made in the conversation's workspace without naming it. A new agent made in no shared
+     * workspace is hidden until an instance admin makes it available, and the answer warns of
+     * it. Only a write that creates an agent takes it.
+     */
+    availableIn: z
+      .union([z.literal("all"), z.object({ workspaceId: z.string().min(1) })])
+      .optional()
   })
   .refine((value) => (value.config === undefined) !== (value.files === undefined), {
     message: "A write carries the config of the asset or its files, one of the two"
@@ -274,6 +284,26 @@ export const assetPointersResponseSchema = z.object({
   publishedRevision: revisionNumberSchema,
   /** The revision that was published before a publish, left out on the first one. */
   replacedRevision: revisionNumberSchema.optional()
+});
+
+/** The bound of the name of an App action or a Workflow step that "Run live once" names. */
+export const LIVE_ONCE_PART_MAX_LENGTH = 200;
+
+export const runLiveOnceRequestSchema = z.object({
+  /** The App action or the Workflow step whose next call is made live. */
+  part: z.string().min(1).max(LIVE_ONCE_PART_MAX_LENGTH),
+  /**
+   * The draft revision the caller looks at. Required: the switch covers that revision only,
+   * and a draft saved since is refused, so nobody switches live what they have not seen.
+   */
+  expectedRevision: expectedRevisionSchema,
+  workspaceId: workspaceIdSchema
+});
+
+/** "Run live once", as it is set: for one action or step of one draft revision. */
+export const runLiveOnceResponseSchema = z.object({
+  draftRevision: revisionNumberSchema,
+  part: z.string()
 });
 
 export const deleteAssetRequestSchema = z.object({
@@ -411,7 +441,7 @@ export const assetSyncAppliedItemSchema = z.discriminatedUnion("status", [
 export const syncAssetsResponseSchema = z.object({
   version: z.number().int().positive(),
   items: z.array(assetSyncAppliedItemSchema),
-  /** Agents a release wrote that are available in no workspace afterwards. */
+  /** Agents the batch wrote that are available in no workspace afterwards. */
   hiddenAgentNames: z.array(z.string()).optional(),
   warnings: z.array(assetWarningSchema)
 });

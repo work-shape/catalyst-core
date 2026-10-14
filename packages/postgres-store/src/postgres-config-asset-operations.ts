@@ -9,13 +9,16 @@ import {
   assertConfigAssetBases,
   assetScopesEqual,
   createPlatformId,
-  resolveInitialAgentAvailabilityMode,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
   type ConfigAssetStore
 } from "@vivd-catalyst/core";
 import * as repo from "./postgres-asset-repo-operations";
+import {
+  insertInitialAgentAvailability,
+  resolveBatchInitialAvailability
+} from "./postgres-initial-agent-availability";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import {
   mapAssetScope,
@@ -251,30 +254,7 @@ export async function applyConfigAssetMutations(
       rows.map((row) => row.asset.id)
     );
 
-    const deletedAgentNames = input.mutations.flatMap((mutation) =>
-      mutation.type === "delete" && mutation.kind === "agent" ? [mutation.name] : []
-    );
-    const [deletedSelectedAgent] =
-      input.initialAgentAvailability === "selected_when_replacing_selected" &&
-      deletedAgentNames.length > 0
-        ? await tx
-            .select({ assetId: configAssetAvailability.assetId })
-            .from(configAssetAvailability)
-            .innerJoin(configAssets, eq(configAssets.id, configAssetAvailability.assetId))
-            .where(
-              and(
-                eq(configAssets.clientInstanceId, input.clientInstanceId),
-                eq(configAssets.kind, "agent"),
-                inArray(configAssets.name, deletedAgentNames),
-                eq(configAssetAvailability.mode, "selected")
-              )
-            )
-            .limit(1)
-        : [];
-    const initialAgentMode = resolveInitialAgentAvailabilityMode(
-      input.initialAgentAvailability,
-      deletedSelectedAgent !== undefined
-    );
+    const initialAgentAvailability = await resolveBatchInitialAvailability(tx, input);
 
     // A batch of draft writes alone leaves the set the runtime reads as it is, so its version
     // stays: a draft is no part of the runtime snapshot.
@@ -470,15 +450,12 @@ export async function applyConfigAssetMutations(
       (asset) => asset.kind === "agent" && asset.created && asset.status === "active"
     );
     for (const chunk of chunksOf(createdAgents)) {
-      await tx.insert(configAssetAvailability).values(
-        chunk.map((asset) => ({
-          assetId: asset.id,
-          clientInstanceId: input.clientInstanceId,
-          mode: initialAgentMode,
-          personalWorkspaces: false,
-          updatedAt: now
-        }))
-      );
+      await insertInitialAgentAvailability(tx, {
+        clientInstanceId: input.clientInstanceId,
+        assetIds: chunk.map((asset) => asset.id),
+        availability: initialAgentAvailability,
+        now
+      });
     }
 
     if (defaultAgentName !== undefined) {

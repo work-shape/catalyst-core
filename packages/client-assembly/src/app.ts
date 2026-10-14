@@ -63,6 +63,7 @@ import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
+import { shippedSkillNames } from "./shipped-skills";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -153,6 +154,7 @@ export async function createClientInstanceApp(
       secrets: execution.infrastructure.secrets,
       clientInstanceId,
       userStore: store,
+      personalApiKeys: execution.modules.isEnabled("personalApiKeys"),
       allowedOrigins: input.allowedOrigins
     });
   const serverOptions: ChatServerOptions = {
@@ -368,7 +370,7 @@ export async function createClientInstanceExecutionAssembly(
     source: assetSource,
     kinds: createInstanceAssetKinds({
       agent: { config, validationRefs, validateAgents },
-      skill: { config },
+      skill: { config, shippedSkillNames },
       connections,
       modules,
       moduleKinds: moduleAssembly.assetKinds
@@ -424,7 +426,8 @@ export async function createClientInstanceExecutionAssembly(
           : undefined
       })
     : undefined;
-  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService });
+  const apps = platformTools.pageApps;
+  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService, apps });
   const tools = createToolDefinitions({
     config,
     tools: [
@@ -651,10 +654,10 @@ function createCompositeAttachmentService(
       }
       return {
         attachmentCount: deletions.reduce((count, deletion) => count + deletion.attachmentCount, 0),
-        fileObjectKeys: uniqueStrings(deletions.flatMap((deletion) => deletion.fileObjectKeys)),
-        artifactObjectKeys: uniqueStrings(
-          deletions.flatMap((deletion) => deletion.artifactObjectKeys)
-        )
+        fileObjectKeys: [...new Set(deletions.flatMap((deletion) => deletion.fileObjectKeys))],
+        artifactObjectKeys: [
+          ...new Set(deletions.flatMap((deletion) => deletion.artifactObjectKeys))
+        ]
       };
     },
     async deleteOrphanedFileObjects(input) {
@@ -662,7 +665,7 @@ function createCompositeAttachmentService(
       for (const handler of handlers) {
         removed.push(...((await handler.deleteOrphanedFileObjects?.(input)) ?? []));
       }
-      return uniqueStrings(removed);
+      return [...new Set(removed)];
     },
     async adoptLegacyAttachments(input) {
       let adopted = 0;
@@ -763,10 +766,6 @@ function fastModeModelBindingIds(config: ClientInstanceConfig): string[] {
 
 function uniqueById<T extends { id: string }>(records: T[]): T[] {
   return [...new Map(records.map((record) => [record.id, record])).values()];
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values)];
 }
 
 function uniqueManifestEntries<T extends { kind: string; attachmentId: string }>(

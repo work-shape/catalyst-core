@@ -122,6 +122,12 @@ export function toolOperation(
             origin.kind === "agent" ? tool.policyFloor?.(origin) : undefined
         }
       : {}),
+    ...(tool.beforeEvents
+      ? {
+          beforeEvents: (input, origin) =>
+            origin.kind === "agent" ? (tool.beforeEvents?.(input, origin) ?? []) : []
+        }
+      : {}),
     action: null,
     authorize(_input, context) {
       for (const permissionRef of requiredPermissionRefs) {
@@ -308,6 +314,8 @@ export function toolResultFromOperationResult(
           failed("handler_failed", result.error.message);
     case "expired":
     case "pending_confirmation":
+    // An agent's call carries no draft context yet, so it is never simulated.
+    case "dry_run":
       return internalFailure(names.correlationId);
   }
 }
@@ -334,7 +342,8 @@ const forbiddenDetailsSchema = z.object({
     "denied",
     "unknown_action",
     "holder_inactive",
-    "holder_not_administrable"
+    "holder_not_administrable",
+    "outside_key_scope"
   ])
 });
 const issuesSchema = z.object({

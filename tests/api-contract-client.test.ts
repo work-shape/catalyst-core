@@ -719,6 +719,7 @@ describe("api client for operations of the registry", () => {
     id: "oprun_1",
     operation: "testRunChange",
     effect: "changing",
+    target: "live",
     status: "pending_approval",
     actor: { kind: "user", id: "usr_1", label: "One" },
     origin: { kind: "user" },

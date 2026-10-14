@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   AppError,
   asUserId,
@@ -12,6 +13,7 @@ import {
   type JsonObject
 } from "@vivd-catalyst/core";
 import type { AssetCall } from "./asset-access";
+import type { AssetWarning } from "./asset-placement";
 import {
   buildAssetFileSet,
   copyFileSetToAsset,
@@ -19,6 +21,7 @@ import {
   removeUnnamedAssetFileSet,
   removeAssetObjects,
   sourceFileEntries,
+  storeRevisionFiles,
   type AssetFileInput
 } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
@@ -34,7 +37,7 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
-import { loadStoredAssets, requireMatchingConfigName } from "./asset-write-rules";
+import { loadStoredAssets, requireMatchingConfigName, toJsonObject } from "./asset-write-rules";
 import { assertScopeCanOwn } from "./config-asset-writer";
 import type { AssetWorkflowOptions } from "./types";
 
@@ -53,8 +56,10 @@ export interface AssetWorkflowHost {
       repository?: AssetRepoWrite;
       origin?: ConfigAssetRevisionOrigin;
       pageLink?: () => Promise<boolean>;
+      /** The files of the write as its event names them: path, hash and size, no content. */
+      auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
     }
-  ): Promise<{ version: number; revision: number; warnings: never[] }>;
+  ): Promise<{ version: number; revision: number; warnings: AssetWarning[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
 }
 
@@ -126,6 +131,60 @@ export class AssetDraftWorkflow {
       expectedRevision: input.expectedRevision
     });
     return written;
+  }
+
+  /**
+   * The write of a kind whose revision is a config with files beside it, as its whole folder:
+   * the files are read into the config, checked as every write of the config is, and kept in
+   * a file set the revision names. A refused revision leaves no file set. Its caller has
+   * asked the right, the owner and the expected revision.
+   */
+  async putFolder(
+    call: AssetCall,
+    target: AssetTarget,
+    sent: readonly AssetFileInput[],
+    expectedRevision: number | null
+  ) {
+    const { kind, name } = target;
+    const files = decodeAssetFiles(sent);
+    const read = kind.revisionFiles?.read(name, files);
+    if (!read) throw new AppError("INTERNAL", `A ${kind.kind} holds no files`);
+    requireMatchingConfigName(read.config, name);
+    // A new asset's id is made here: its files are stored under it before its row exists.
+    const assetId = target.asset?.id ?? createPlatformId("cfga");
+    const fileSet = await storeRevisionFiles(this.options, {
+      kind,
+      assetId,
+      files,
+      extras: read.extras,
+      ...(isAuthenticatedServicePrincipal(call.actor)
+        ? {}
+        : { createdByUserId: asUserId(getSubjectUserId(call.actor)) })
+    });
+    // What the event of the write says of the files: each by its path and hash, no content.
+    const entries = files
+      .map((file) => ({
+        path: file.path,
+        sha256: createHash("sha256").update(file.bytes).digest("hex"),
+        bytes: file.bytes.byteLength
+      }))
+      .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+    try {
+      // The config names the files it does not hold, from the rows of the file set.
+      const config = kind.revisionFiles?.indexed(toJsonObject(read.config), fileSet) ?? read.config;
+      const written = await this.host.upsert(call, target, config, {
+        expectedRevision,
+        audit: "config_asset.updated",
+        auditFiles: entries,
+        ...(fileSet ? { fileSet: { assetId, fileSetId: fileSet.id } } : {})
+      });
+      return { ...written, ...(fileSet ? { fileSetId: fileSet.id } : {}), files: entries };
+    } catch (error) {
+      if (fileSet) {
+        await removeUnnamedAssetFileSet(this.options, assetId, fileSet.id).catch(() => undefined);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -466,6 +525,25 @@ export class AssetDraftWorkflow {
     if (asset.revision !== expectedRevision) {
       throw await revisionConflictOf(this.options, call.access, target);
     }
+    if (kind.draftCalls) {
+      // The discard makes the published revision the draft again. A "Run live once" switch
+      // set for it before the draft changed would apply once more, so the switches the draft
+      // left behind are cleared first (ADR-0031).
+      const cleared = await this.options.stores.liveOnceSwitches.clearStale({
+        clientInstanceId: this.options.clientInstanceId,
+        assetId: asset.id
+      });
+      for (const stale of cleared) {
+        await recordAssetEvent(call, "live_once.cleared", {
+          kind: kind.kind,
+          name,
+          revisionId: stale.revisionId,
+          part: stale.part,
+          switchedBy: stale.switchedBy.id,
+          reason: "draft_changed"
+        });
+      }
+    }
     let discarded: { revision: number };
     try {
       discarded = await this.options.configAssets.store.discardConfigAssetDraft({
@@ -487,6 +565,61 @@ export class AssetDraftWorkflow {
       discardedRevision: expectedRevision
     });
     return { draftRevision: discarded.revision, publishedRevision: discarded.revision };
+  }
+
+  /**
+   * "Run live once" (ADR-0031): the next call of one action or step of the draft, as the
+   * caller sees it, is made live instead of simulated. It asks the write right on the draft,
+   * not the publish right. The switch covers that revision only: a draft saved since is
+   * refused here, and one saved later clears the switch before a call could use it.
+   */
+  async runLiveOnce(
+    call: AssetCall,
+    input: AssetAddress & { part: string; expectedRevision?: number }
+  ) {
+    const target = await this.host.target(input);
+    const { kind, name } = target;
+    call.access.require(kind.actions.write, target.resource);
+    const expectedRevision = requirePrecondition(input, input.expectedRevision);
+    if (!kind.draftCalls) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `A draft of the kind '${kind.kind}' makes no calls that could run live`
+      );
+    }
+    const asset = requireActive(target);
+    if (asset.revision !== expectedRevision) {
+      throw await revisionConflictOf(this.options, call.access, target);
+    }
+    const draft = { kind: kind.kind, id: asset.id, name };
+    const { cleared } = await this.options.stores.liveOnceSwitches.switchOn({
+      clientInstanceId: this.options.clientInstanceId,
+      switch: {
+        asset: draft,
+        revisionId: asset.activeRevisionId,
+        part: input.part,
+        switchedBy: { id: call.actor.id, label: call.actor.displayLabel },
+        switchedAt: new Date().toISOString()
+      }
+    });
+    for (const stale of cleared) {
+      await recordAssetEvent(call, "live_once.cleared", {
+        kind: kind.kind,
+        name,
+        revisionId: stale.revisionId,
+        part: stale.part,
+        switchedBy: stale.switchedBy.id,
+        reason: "draft_changed"
+      });
+    }
+    await recordAssetEvent(call, "live_once.switched_on", {
+      kind: kind.kind,
+      name,
+      revision: asset.revision,
+      revisionId: asset.activeRevisionId,
+      part: input.part
+    });
+    return { draftRevision: asset.revision, part: input.part };
   }
 
   /**

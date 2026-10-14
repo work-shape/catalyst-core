@@ -1,5 +1,6 @@
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { posix } from "node:path";
+import { isWorkspaceInspectionArtifact } from "@vivd-catalyst/tool-execution";
 import type {
   ConversationResourceListItem,
   ConversationResourceListResponse
@@ -118,11 +119,14 @@ function generatedFileResources(
 ): GeneratedFileResource[] {
   const newestByWorkspaceFile = new Map<string, ManagedArtifactRecord>();
   for (const artifact of artifacts) {
+    // Inspection rows are skipped before the newest is picked; file search in
+    // postgres-file-search-operations.ts applies the same rule of `isWorkspaceInspectionArtifact`.
     const { source, workspaceId, workspacePath } = artifact.metadata;
     if (
       source !== "execution_workspace" ||
       typeof workspaceId !== "string" ||
-      typeof workspacePath !== "string"
+      typeof workspacePath !== "string" ||
+      isWorkspaceInspectionArtifact(artifact)
     ) {
       continue;
     }

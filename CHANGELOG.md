@@ -11,6 +11,67 @@ in, and `pnpm changelog` prints the next release's section as it will read.
 
 ### Added
 
+- **Personal API keys and `catalyst login`:** the module `personalApiKeys` (off by default)
+  lets a person issue keys that act as themself, in Settings, API keys, or by confirming the
+  code `catalyst login` prints; the CLI collects the key itself and saves it in
+  `~/.config/catalyst/credentials.json` with mode 600. A key has a name, scopes
+  (`agent.write` or `agent.write:kai-`; reading, writing, deleting and publishing actions
+  only), and an expiry of at most a year. Every call acts as the key's owner with the owner's
+  rights of that moment, intersected with the key's scopes, so a removed grant or a disabled
+  owner narrows or stops the key at once; a refusal by the key reads `FORBIDDEN` with the
+  reason `outside_key_scope`. Audit names the owner and the key (`credentialId`,
+  `delegatedActor.kind: "api_key"`). Whoever holds `api_access.manage` lists and revokes
+  every person's keys. A key cannot issue keys or confirm codes. A working copy may name its
+  Namespace in `catalyst.yaml` (`namespace: kai-`); its push names it, and its pull, diff
+  and list read only the assets the key may read, without the instance overview. Operations:
+  `me.api_keys.list|create|revoke`, `me.connect_codes.get|confirm`,
+  `connect_codes.start|redeem` (public), `personal_api_keys.list|revoke`. **Operators:**
+  migrations `0075_personal_api_keys` (expand: `api_credentials.owner_user_id`, the owner
+  check and foreign key `NOT VALID`, table `api_connect_codes`),
+  `0076_personal_api_keys_validate` and `0077_personal_api_keys_indexes` (concurrent) run
+  before the new release; the previous release runs on them unchanged, as it writes only
+  service principal keys. Rolling back the release leaves personal keys stored and unusable.
+  Turn the module on with `modules.personalApiKeys.enabled: true`.
+- **Calls made by a draft (ADR-0031):** a call that carries a draft context (`OperationCall.draft`:
+  the App or Workflow, the draft revision and the action or step) is decided in
+  `runOperation()`. A reading call reads live with the caller's rights; a changing call answers
+  `dry_run` with the input it would have been made with and whether the live call would have
+  waited for a confirmation or an approval, changes nothing and holds no idempotency key. Every
+  Operation Run records `target` (`live`, `test` or `dry_run`) and the run resource returns it.
+  `assets.run_live_once` (`POST /api/v1/assets/:kind/:name/run-live-once`), for a holder of the
+  kind's write right, switches one action or step of the current draft revision live for its
+  next call; the switch is audited when set, used and cleared, and a switch whose draft changed
+  since is cleared and never applies. A call of a Workflow test run (`draft.boundBy`) is made
+  as the person testing and allowed only where the Workflow's service principal holds the right
+  too; a refusal on the principal's side names it, and such a call cannot wait for an approval.
+  Migrations `0073_draft_call_targets` (adds `operation_runs.target`, default `live`, and the
+  table `live_once_switches`) and `0074_draft_call_targets_validate` (validates the check of
+  `target`) are expand-only. **Rollback:** the previous release ignores the column and the
+  table; runs it writes during a rollback get `live`, and switches set before it stay unused
+  until a release that reads them, where a changed draft clears them.
+- **Apps, an action that starts a Workflow (App Kit 1.3.0):** an action file
+  `actions/<name>.action.yaml` with `workflow: <id>` and `input.schema`/`input.mapping` starts
+  the published Workflow as the viewer, who needs `workflow.use` on it; without it the call is
+  refused with the right named. Its effect is always `changing`. The call answers
+  `{ runId, status, result }` with the Workflow Run in `result`; the Page follows it with the
+  kit's `useWorkflowRun(result.id)` or `workflowRuns.get(result.id)`, through the new operation
+  `apps.sessions.get_workflow_run`
+  (`POST /api/v1/app-content-sessions/:pageSessionId/workflow-runs/:runId`), which reads only
+  runs of the Workflows the App's actions start and only for the viewer who started them. In a
+  draft the call starts nothing and answers `status: "dry_run"` with "Would have started the
+  Workflow '<id>' with <input>". The build refuses a Workflow action in an App on a kit before
+  1.3.0. `page.save` documents the kind. The kit's `page.css` for a plain Page leaves out the
+  flow canvas rules the library's stylesheet brings. **Operators:** the chat-server tarball
+  limit rises to 2.1 MB for the fourth kit version.
+- **Cards open as a whole:** the UI library's `CardTarget` marks a card's one link or button to
+  what the card stands for and stretches its clickable area over the card. Every other control
+  in the card keeps its own action, the keyboard meets the target once under the name of its
+  action and the card's title ("Open Trip planner"), a press dragged across the card opens
+  nothing, and the card shows the hover state and its target's focus on its edge. Text under
+  the area cannot be selected; `CardReachable` keeps content such as a time with its full date
+  as a tooltip, or an id to copy, above it. Agent cards start a chat, App cards open the App (a
+  builder's draft-only App opens its draft) and Workflow cards open the Workflow, from a click
+  anywhere on the card. A card whose reader has nowhere to go opens nothing.
 - **Guardrails replace approval checks, and Build lists them:** release config takes
   `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
   `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
@@ -32,12 +93,55 @@ in, and `pnpm changelog` prints the next release's section as it will read.
   ignores the table `guardrail_hits` and the stored guardrails, and it does not read
   `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
   no checks.
+- **Guardrails answer at every before-event:** a guardrail of release config binds to
+  `asset.before_write` (each asset `assets.put` and `assets.sync` save, an agent's save of its
+  conversation's subject, and the skill a `propose_skill_change` would write), `operation.before_call` (every call, and the operation an App's or a Page's action calls,
+  such as a Data Store's insert, with that operation's name), `app.before_publish`,
+  `workflow.before_publish` or `approval_request.before_create`. The before-events of a call go
+  through the event emitter, which runs the guardrails bound to them. A `filter` narrows by
+  what its event knows: `kind` (an asset's or a request's), `operation` (a name or a prefix
+  ending in `.*`), `origin` (`agent`, `user`, `cli`, `mcp`, `app`, `workflow`, `schedule`) and
+  `agent`. A new check kind `pattern` matches an RE2 expression (no backreferences, no
+  lookaround, linear time; `re2js`) over the fields the event declares checkable: `name` and
+  `content` of an asset, `input` of a call, `summary` and `newContent` of a request; a check may
+  name `fields`, and a pattern a `reason` it is shown with. A new outcome `require_approval`
+  holds a changing call for an approval in the Inbox and refuses a read; an outcome `allow`
+  lets the action go on and never overrides another answer. Patterns run first, and a block
+  among them skips the judges. Every guardrail that applies runs and the strictest answer wins.
+  A refusal names the guardrail, the asset and the reason, as `GUARDRAIL_BLOCKED` with
+  `details.guardrailId`, and `catalyst config push` prints it. Content longer than 2 Mi
+  characters is not read in part: a guardrail that blocks or holds answers as on a match. A
+  pattern reads less the larger its compiled program is (40 million steps a field, about half a
+  second at most on the server's one thread), so no pattern holds the server. A hit
+  now names its subject (the asset's kind, id and name, or the operation's name, never the run
+  and never a person), and Build > Guardrails links an asset's hit to its page (migration
+  `0072_guardrail_hit_subject`). A call that waited for an approval is asked again before it is
+  executed without keeping a second hit. **Operators:** release config refuses at start a
+  pattern RE2 does not compile, one longer than 2,000 characters, one whose program is too large
+  to read 64 Ki characters (such as `[a-z]{1000}`), a filter key or a field its
+  event does not have, and `require_approval` on `approval_request.before_create`.
+  **Rollback:** an earlier release ignores the two new columns, and refuses a config with a
+  guardrail it does not know: remove guardrails on the new events, of kind `pattern` or with
+  the new outcomes before rolling back.
+- **Embedding models:** a model binding of `kind: embedding` with `dimensions` turns text into
+  vectors for Knowledge Bases, and `knowledge.defaultEmbeddingBinding` names the default. The
+  gateway's `embed` is the one path for an embedding call, admitted, retried and settled like a
+  chat call, with the usage purpose `knowledge_embedding` or `knowledge_query` and no output
+  tokens. `openai-compatible` posts to `<baseUrl>/embeddings` (Azure OpenAI's v1 endpoint
+  included) and `deterministic` returns vectors from a hash of the text. Startup stops on an
+  embedding binding whose entry has a region other than `eu`, one without `dimensions` or with
+  `agentSelectable: true`, one on a provider that does not embed, a default that names no
+  embedding binding, and a guardrail or conversation title generation that names one.
+  Nothing calls `embed` yet; Knowledge Base ingestion and search follow. Existing config is
+  unchanged: a binding without `kind` is a chat binding.
 - **Skills that ship with the platform:** the guide to the platform (`platform-guide`) and, with
   Workflows on, `workflow-authoring` are stored skills of origin `release`. The API process
   writes them at start: a changed one gets a revision in History, one a release no longer ships
   is deleted, and the same release writes nothing. They are read-only: a write, delete or revert
   of one is refused with `403` and the reason `shipped_skill`, and a skill that names `origin`
-  or `icon` is refused with `422`. Studio lists them with the label "Platform" and offers "Copy
+  or `icon` is refused with `422`. A skill of the instance's own under the name of either is
+  refused with `422` whether Workflows is on or not: "The platform ships a skill named '<name>',
+  also where its module is off: choose a name of your own". Studio lists them with the label "Platform" and offers "Copy
   to edit", which creates an ordinary skill. The config CLI neither pulls, diffs nor prunes
   them. **Upgrade:** an instance that holds a skill of its own named `platform-guide` or
   `workflow-authoring` stops at start with "The platform ships the skill '<name>', and a skill
@@ -53,6 +157,23 @@ in, and `pnpm changelog` prints the next release's section as it will read.
   caller is shown them, and counts the others. `preview_rows` is unchanged. On a store's page
   in Studio a Workflow under "Used by" is a link to its page, as an App is, for a reader the
   Workflows area is open to.
+- **YAML anchors with aliases are refused** in the frontmatter of a `SKILL.md`, in `store.yaml`,
+  `workflow.yaml`, `app.yaml` and an App's action files: nested aliases in a file of a few
+  hundred bytes made a value of any size for whatever read it. A file that uses one is refused
+  with a sentence that says so; write the value out where it is used.
+- **Skills as folders of files, in the public skill convention:** a skill may carry real files
+  beside `SKILL.md` and its text resources, at any path, and a folder taken from a public skill
+  library round-trips byte for byte. `title` is optional in the frontmatter and derived from
+  the content or the name; further frontmatter keys are kept as `frontmatter`; a skill name may
+  start with a digit; a name or description outside the convention is answered with a warning. `assets.put` takes the whole folder
+  as `files` and `assets.get` with `files=true` answers it byte for byte. The config of a skill
+  is unchanged for a skill that is text alone; other files are kept in the file set of the
+  revision and named in the config's `files` index (path, hash, size, media type). A write of
+  the config alone leaves them in place, and a revert brings a revision's files back. Compiled
+  programs, Git LFS pointers, files below `scripts/` and text files that are no UTF-8, a `SKILL.md` below the
+  root and files or folders over the limits (2 MiB a file, 500 files, 8 MiB a skill) are refused
+  with their path and a reason. No database migration: a revision from before reads from its
+  config. An agent's proposal no longer creates or changes a resource below `scripts/`.
 - **Claude on Amazon Bedrock:** a model provider `aws-bedrock` beside `openai-compatible` and
   `google-vertex`. It calls Claude through the Bedrock runtime in Frankfurt
   (`eu-central-1`) with a Bedrock API key named by `credentialSecret` (default
@@ -373,8 +494,8 @@ in, and `pnpm changelog` prints the next release's section as it will read.
     roles and rows stay, and its id is not free. Nothing drops a database yet.
   - **Rollback:** the previous release ignores the table `data_stores` and the store
     databases, so rolling back loses nothing and leaves them in place. The `CONNECT` taken from
-    `PUBLIC` on the platform database stays taken. Store databases are not part of the
-    platform's backup script yet: back them up with it before relying on a restore.
+    `PUBLIC` on the platform database stays taken. The backup holds the store databases, see
+    "Backups of the whole database server" under Fixed.
 - **Asset kinds that read their own files:** a kind may bring `manifestOfFiles`, which reads the
   source files of a write into the manifest of their file set without the build of Pages, and
   `onPublish` and `onRemove`, which run in the transaction of a publish and of a delete.
@@ -417,6 +538,22 @@ in, and `pnpm changelog` prints the next release's section as it will read.
   nothing more, and there is no block without the Apps module or for a person without a
   published App. The rail reads the first page of the Apps list, so in a workspace with more
   than fifty Apps it chooses among those fifty.
+- **No empty Apps or Workflows row for members:** the rows "Apps" and "Workflows" of the main
+  rail, open and collapsed, show only while their module is on and the person is shown at least
+  one App of the open workspace or one Workflow, or may write one (`app.write` on the instance,
+  in that workspace or on one of its Apps; `workflow.write` on the instance, in a Namespace or on
+  one Workflow). A builder keeps the empty row to make the first one. The server decides both:
+  `workspaces.agents.list` answers `visibleSections` with `apps` where that row is there for the
+  caller in the workspace, by the check of `assets.list`, and `platform.context.get` with
+  `workflows`, by the check of `workflows.list`; the rail follows the two flags alone. Whoever
+  the flag names the Workflows row also reaches the Workflows page, such as a member who may
+  only start Workflows; the Apps page and its addresses are unchanged.
+- **No Agents row for one agent:** the row "Agents" of the main rail, open and collapsed, shows
+  only while the open workspace offers the person two agents or more, or the person may write
+  one (`agent.write` on the instance, in a Namespace or on one agent). With one agent New chat
+  starts it, and the composer's agent picker stays as it is. The page and its address are
+  unchanged. `workspaces.agents.list` answers `visibleSections`, which names `agents` where the
+  row is there for the caller in that workspace, counted over every page of the list.
 - **New chat from the Recent heading:** the "Recent" heading of the main rail has a small plus
   at its right end that starts a new chat as the "New chat" row does. It shows while the pointer
   is over the Recent section or the keyboard is on it, and always on a screen without hover.
@@ -955,6 +1092,31 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **New agents start in the workspace they were made in:** an agent created in a Shared
+  Workspace, in Studio or by the Build Agent in a conversation there, is available in that
+  workspace only. One created in a Personal Workspace, by `catalyst config push` without the
+  release right, or by `assets.put` without a workspace starts hidden; `assets.put` answers the
+  warning `agent_hidden` and `assets.sync` names the agents in `hiddenAgentNames`. Before, every
+  new agent was available in all workspaces. `assets.put` takes `availableIn` (`"all"` with the
+  right to write agents on the whole instance, or `{ "workspaceId" }`), and the create dialog in
+  Studio offers "All workspaces" to that holder. A release push and the first agent of an
+  instance start in all workspaces as before. **Operators:** a script that creates agents
+  through the API and expects them in every workspace passes `availableIn: "all"` or sets the
+  availability after the write.
+
+- **Skill icons:** a skill's line icon sits on one neutral tile in lists and on starters (32 px
+  tile, 18 px icon; 24 px in the picker rows), in ink for a skill that ships with the platform
+  and muted for the generic book. Inline, as in a chip, it stands bare at 16 px. The tile is
+  never tinted: colour means a file type, and the file-type pages stay as drawn.
+- **Kind icons:** each kind has one icon, read from the icon registry in Studio, on the rail,
+  over the composer and on the canvas: Agent a bot, Skill a book, Connection a plug (in place
+  of the cable), Workflow, App a grid, Data store a database and Guardrail a shield. The
+  registry's `agent` key draws the bot in place of the sparkles and gains `app`, `datastore`,
+  `guardrail` and `inbox`.
+- **Agents page:** a card shows the agent mark in place of the initials, the name, the default
+  badge, what the agent does in two lines at most, and Start chat. Its starter prompts are no
+  longer on the card; they wait in the empty chat with that agent. New agent opens its dialog
+  on the page: Cancel stays there, and Continue leads to the new agent's page in Studio.
 - **Studio:** the list of agents names each agent in the reader's language and shows what it
   does under its name, in place of its id. `assets.list` takes an optional `locale`; an agent's
   title and description answer in it where the agent holds that language, and in the
@@ -2078,6 +2240,54 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Parallel browser suites on one Postgres:** `scripts/run-chat-e2e.mjs`, `playwright.config.ts`
+  and the specs hard-coded the database `agent_chat`, so several runs on one machine erased each
+  other's data. `E2E_DATABASE_URL` now replaces that URL for the migration, the API, the worker
+  and the specs; without it nothing changes. The runner still creates and drops no database or
+  role. Use it with `E2E_EXTERNAL_POSTGRES=1` and an empty database per run.
+- **Backups of the whole database server:** `backup-postgres.sh` of the deployment kit dumped
+  only `POSTGRES_DB`, so no Data Store database and no role was in a nightly or pre-deploy
+  backup. A backup is now one tar archive, `<instance>-<database>-<timestamp>[-<label>].tar`,
+  with `globals.sql` from `pg_dumpall --globals-only` and a custom-format `pg_dump` of every
+  database the server lists, except the templates, `postgres`, invalid databases and the
+  scratch databases of `restore-postgres.sh`. `restore-postgres.sh` lists, verifies and recovers
+  both the archives and the earlier `.sql.gz` dumps; a recovery from an archive creates the
+  missing roles, replaces every database it holds and then sets the roles as in the backup, and
+  if a step fails or it is stopped, it puts every database back and leaves the roles' passwords
+  as they were. **Upgrade:** a deploy
+  of the release installs both scripts; nothing else changes. **Rollback:** the previous
+  scripts neither list nor restore a `.tar` backup; restore one with this release's
+  `restore-postgres.sh`.
+
+- **Outside hosts of an App on the viewer's own network:** `externalHosts` in `app.yaml` took a
+  name under `.localhost`, `.local`, `.internal`, `.lan` or `.home.arpa`, which reaches the
+  viewer's own machine or network. The build refuses one with "a host on the internet: a name
+  under .localhost, .local, .internal, .lan, .home.arpa reaches the viewer's own machine or
+  network", and a host listed twice with "lists the host '<host>' twice". The content policy of
+  a revision stored before leaves such a name out and names each host once. **Upgrade:** a Page
+  whose manifest lists one no longer builds until the entry is removed.
+- **A JSON request body the server does not read:** an empty body with a JSON content type, one
+  that does not parse, and one that names `__proto__` or `constructor.prototype` as a key
+  answered `500` on every operation. Each now answers `400` `BAD_REQUEST` with
+  `details.reason` `invalid_json_body`.
+- **Chat starters:** a starter of a skill that ships with the platform shows that skill's
+  icon. Every starter showed the generic book, because the agent's starters did not carry the
+  skill's `icon`. A skill of the instance's own keeps the generic book.
+- **The agent opens no asset of the instance on its own:** `platform.assets.open` moves the
+  conversation's subject onto an asset of the conversation's workspace, such as an App, as
+  before, but no longer onto an asset of the whole instance, such as a Workflow or an agent. A
+  prompt injection the agent read could have opened a shared Workflow for an administrator and
+  saved a poisoned draft on it. Such an asset becomes the subject only when the person starts
+  the conversation from its page ("Edit with the agent"). The refused open tells the agent to
+  read the asset with `platform.assets.get` or to ask the person to open its page; its call
+  ends `failed` with `not_allowed`, and the audit row names the kind and the asset, never the
+  definition. A confirmation of the agent's open in the host's prompt comes with NAV-2.
+- **Dialogs:** a dialog closed by its Cancel or close button gives the focus back to what
+  opened it, such as New agent on the Agents page. Only Escape did; the buttons left the focus
+  on the page body.
+- **Agents page:** an agent renamed or changed in Studio shows its new name and description on
+  its card and in the agent picker without a reload. A save of an agent, and a change of the
+  default agent, now also ask again for the workspaces' lists of agents.
 - **Hostile YAML and tool-call text:** every YAML file an author or an agent writes
   (`workflow.yaml`, `app.yaml`, App action files, `store.yaml`, `SKILL.md` frontmatter), the
   release config and the CLI working copy are read by one reader. It knows JSON types only:

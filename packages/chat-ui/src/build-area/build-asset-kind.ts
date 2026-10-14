@@ -1,7 +1,7 @@
-import type { LucideIcon } from "lucide-react";
 import type { ComponentType, ReactNode, Ref } from "react";
 import type { Asset, AssetSummary } from "@vivd-catalyst/api-client";
-import type { AvatarKind } from "@vivd-catalyst/ui";
+import type { AvatarKind, GenericIconKey } from "@vivd-catalyst/ui";
+import type { AvailableIn } from "../api/asset-writes";
 import type { TranslationKey } from "../i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
 
@@ -17,6 +17,8 @@ export interface BuildAssetStart {
   name: string;
   /** The name people read. */
   title: string;
+  /** Where a new asset of a kind that `startsInWorkspace` starts available. */
+  availableIn?: AvailableIn;
   /** The definition a copy starts from. A new asset without it starts empty. */
   copyOf?: Record<string, unknown>;
 }
@@ -71,7 +73,8 @@ interface BuildKindBase {
   description?: TranslationKey;
   /** The sentence of the empty list. An editable kind says it to a person who may create. */
   emptyText: TranslationKey;
-  icon: LucideIcon;
+  /** The kind's key in the icon registry: one icon per kind, the same everywhere. */
+  icon: GenericIconKey;
   /** Rows show an avatar with the name's initials. Without it they show the kind's icon. */
   avatar?: AvatarKind;
   /**
@@ -108,6 +111,11 @@ export interface BuildAssetKind extends BuildKindBase {
   /** The body of the asset page, for an existing asset and for a new one. */
   Editor: ComponentType<BuildAssetEditorProps>;
   /**
+   * A new asset is available in the shared workspace it is made in: the dialog that starts
+   * it says where, and offers every workspace to whoever may change that.
+   */
+  startsInWorkspace?: true;
+  /**
    * The name people read of an asset that ships with the platform, and nothing for one of the
    * instance's own. Nobody changes or deletes a shipped asset here, because a release replaces
    * it: a person who may create one of the kind copies it and edits the copy.
@@ -122,6 +130,8 @@ export interface BuildAssetViewProps {
   back: ReactNode;
   /** The open asset, as loaded. */
   asset: BuildAsset;
+  /** The kinds the reader sees in Build, for a page that names an asset of another kind. */
+  kinds: readonly BuildKind[];
 }
 
 /**

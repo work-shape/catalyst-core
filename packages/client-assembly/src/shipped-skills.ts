@@ -13,6 +13,14 @@ import { platformSkill } from "./platform-skill";
 // The skills that ship with the platform. The API process stores them at start as read-only
 // skills of origin `release`; a conversation is offered them by name.
 
+/**
+ * The names of every skill this build ships, whichever modules are on. A skill of the instance's
+ * own takes none of them.
+ */
+export const shippedSkillNames: readonly string[] = [platformSkill, workflowAuthoringSkill].map(
+  (skill) => skill.name
+);
+
 /** The kinds the platform ships a skill for. */
 const SHIPPED_SKILL_KINDS = [WORKFLOW_ASSET_KIND];
 

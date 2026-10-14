@@ -22,7 +22,8 @@ import type {
   OperationRunError,
   OperationRunId,
   OperationRunStatus,
-  OperationRunUsage
+  OperationRunUsage,
+  OperationTarget
 } from "@vivd-catalyst/core";
 
 /**
@@ -45,6 +46,8 @@ export const operationRuns = pgTable(
     collaborationWorkspaceId: text("collaboration_workspace_id").$type<CollaborationWorkspaceId>(),
     originKind: text("origin_kind").$type<OperationOrigin["kind"]>().notNull(),
     origin: jsonb("origin").$type<OperationOrigin>().notNull(),
+    // Where the call went (ADR-0031). A run written by a release before the column is `live`.
+    target: text("target").$type<OperationTarget>().notNull().default("live"),
     conversationId: text("conversation_id").$type<ConversationId>(),
     idempotencyKey: text("idempotency_key"),
     inputHash: text("input_hash").notNull(),
@@ -76,6 +79,7 @@ export const operationRuns = pgTable(
       "operation_runs_status_check",
       sql`${table.status} in ('running', 'pending_confirmation', 'pending_approval', 'done', 'failed', 'denied', 'expired')`
     ),
+    check("operation_runs_target_check", sql`${table.target} in ('live', 'test', 'dry_run')`),
     // An idempotency key belongs to its actor: nobody reads another's result by guessing one.
     // The kind is part of the actor, so a user and a service principal never share a key.
     uniqueIndex("operation_runs_idempotency_idx")

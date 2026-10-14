@@ -706,7 +706,8 @@ describe("config asset admin routes", () => {
       ).json().config as Record<string, unknown>;
 
     const overview = await request(fixture.server, token, "config_assets.get_overview", {});
-    // The eligible bindings are the ones an agent may use; `userSelectable` is not consulted.
+    // The eligible bindings are the ones an agent may use; `userSelectable` is not consulted,
+    // and an embedding binding is never one.
     expect(overview.json().references.modelBindingIds).toEqual(["plain", "other", "fast"]);
 
     const agent = boundAgentConfig("plain");
@@ -719,8 +720,8 @@ describe("config asset admin routes", () => {
       (await put({ ...agent, userSelectableModelBindingIds: ["other", "fast"] })).statusCode
     ).toBe(200);
 
-    // A binding agents may not use and an unknown binding are both rejected on save.
-    for (const bindingId of ["internal", "missing"]) {
+    // A binding agents may not use, an embedding binding and an unknown binding are rejected.
+    for (const bindingId of ["internal", "embedding", "missing"]) {
       for (const send of [put, push]) {
         const rejected = await send({ ...agent, userSelectableModelBindingIds: [bindingId] });
         expect(rejected.statusCode).toBe(422);
@@ -728,6 +729,9 @@ describe("config asset admin routes", () => {
           `Agent 'assistant' lists missing model binding '${bindingId}' in userSelectableModelBindingIds`
         );
       }
+    }
+    for (const send of [put, push]) {
+      expect((await send(boundAgentConfig("embedding"))).statusCode).toBe(422);
     }
     expect((await push({ ...agent, userSelectableModelBindingIds: ["other"] })).statusCode).toBe(
       200
@@ -1262,7 +1266,8 @@ async function createFixture(
             { id: "plain", providerId: "local" },
             { id: "other", providerId: "local" },
             { id: "internal", providerId: "local", agentSelectable: false },
-            { id: "fast", providerId: "local", supportsFastMode: true }
+            { id: "fast", providerId: "local", supportsFastMode: true },
+            { id: "embedding", providerId: "local", kind: "embedding", dimensions: 8 }
           ],
           usage: {
             costs: {

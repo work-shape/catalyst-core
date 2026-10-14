@@ -1,15 +1,14 @@
 import { Bot, Plus } from "lucide-react";
-import { useId } from "react";
+import { useId, useState } from "react";
 import {
   Avatar,
   Badge,
   Button,
   Card,
-  CardContent,
   CardFooter,
   CardHeader,
+  CardTarget,
   CardTitle,
-  Chip,
   EmptyState,
   InlineError,
   Page,
@@ -17,13 +16,16 @@ import {
   SkeletonList
 } from "@vivd-catalyst/ui";
 import { AreaFrame, useAreaTitleFocus } from "../area-frame";
+import { agentKind } from "../build-area/agent-kind";
+import type { BuildAssetStart } from "../build-area/build-asset-kind";
+import { BuildCreateDialog, type BuildCreateStart } from "../build-area/build-create-dialog";
 import { useTranslation } from "../i18n";
 import { RouteLink } from "../route-link";
 import type { WorkspaceRoute } from "../workspace/workspace-route";
 import {
-  agentCardPrompts,
   agentStudioRoute,
   agentsStudioRoute,
+  type AgentCreation,
   type AgentListStatus,
   type OfferedAgent
 } from "./agents-model";
@@ -35,15 +37,19 @@ export interface AgentsPageProps {
   defaultAgentName: string | undefined;
   status: AgentListStatus;
   onRetry(): void;
-  /**
-   * Opens a new conversation of the workspace with this agent selected. With `prompt`, that
-   * text stands in the composer.
-   */
-  onStartChat(agentName: string, prompt?: string): void;
+  /** Opens a new conversation of the workspace with this agent selected. */
+  onStartChat(agentName: string): void;
   /** Present for a person who may open the agents in Studio: the way to a place there. */
   onOpenStudio?(route: WorkspaceRoute): void;
-  /** Present for a person who may create an agent: starts a new one in Studio. */
-  onNewAgent?(): void;
+  /**
+   * Present for a person who may create an agent. Its dialog opens on this page, and only
+   * Continue leads to Studio, where the new agent is written.
+   */
+  newAgent?: AgentCreation & {
+    /** Where the new agent starts available: the open workspace, as one made in Studio does. */
+    startsIn: BuildCreateStart;
+    onStart(start: BuildAssetStart): void;
+  };
 }
 
 /**
@@ -57,10 +63,11 @@ export function AgentsPage({
   onRetry,
   onStartChat,
   onOpenStudio,
-  onNewAgent
+  newAgent
 }: AgentsPageProps) {
   const { t } = useTranslation();
   const areaRef = useAreaTitleFocus(true);
+  const [creating, setCreating] = useState(false);
 
   return (
     <AreaFrame ref={areaRef} label={t("agents.title")}>
@@ -69,8 +76,8 @@ export function AgentsPage({
           title={t("agents.title")}
           description={t("agents.description")}
           primaryAction={
-            onNewAgent ? (
-              <Button onClick={onNewAgent}>
+            newAgent ? (
+              <Button onClick={() => setCreating(true)}>
                 <Plus aria-hidden="true" />
                 {t("configNewAgent")}
               </Button>
@@ -119,13 +126,27 @@ export function AgentsPage({
           </ul>
         )}
       </Page>
+      {newAgent && creating ? (
+        <BuildCreateDialog
+          entry={agentKind}
+          namespaces={newAgent.namespaces}
+          mayNameFreely={newAgent.mayNameFreely}
+          startsIn={newAgent.startsIn}
+          onClose={() => setCreating(false)}
+          onStart={(start) => {
+            setCreating(false);
+            newAgent.onStart(start);
+          }}
+        />
+      ) : null}
     </AreaFrame>
   );
 }
 
 /**
- * One agent: who it is, what it is for, and the ways into a chat with it. The content holds
- * one row per thing the agent says about itself, so a further row joins the suggestions there.
+ * One agent: its mark, its name, what it does in two lines at most, and the ways into a chat
+ * with it. Its starter prompts wait in the empty chat with it, not on the card. The whole card
+ * starts the chat.
  */
 function AgentCard({
   agent,
@@ -140,14 +161,13 @@ function AgentCard({
 }) {
   const { t } = useTranslation();
   const titleId = useId();
-  const prompts = agentCardPrompts(agent);
   const description = agent.description?.trim();
 
   return (
     <Card padding="md" className="flex w-full min-w-0 flex-col">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar kind="agent" name={agent.displayName} />
+          <Avatar kind="agent" name={agent.displayName} icon={<Bot />} />
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <CardTitle id={titleId} className="min-w-0 break-words">
               {agent.displayName}
@@ -155,24 +175,16 @@ function AgentCard({
             {isDefault ? <Badge size="sm">{t("configDefaultAgent")}</Badge> : null}
           </div>
         </div>
-        {description ? <p className="text-body text-muted-foreground">{description}</p> : null}
+        {description ? (
+          <p className="line-clamp-2 text-body text-muted-foreground">{description}</p>
+        ) : null}
       </CardHeader>
-      {prompts.length > 0 ? (
-        <CardContent className="grid gap-3">
-          <ul aria-label={t("agents.suggestions")} className="flex min-w-0 flex-wrap gap-2">
-            {prompts.map((prompt, index) => (
-              // An agent may hold the same title twice.
-              <li key={index} className="flex min-w-0">
-                <Chip onClick={() => onStartChat(agent.name, prompt.prompt)}>{prompt.title}</Chip>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      ) : null}
       <CardFooter className="justify-between">
-        <Button size="sm" aria-describedby={titleId} onClick={() => onStartChat(agent.name)}>
-          {t("agents.startChat")}
-        </Button>
+        <CardTarget label={t("agents.startChatWith", { name: agent.displayName })}>
+          <Button size="sm" onClick={() => onStartChat(agent.name)}>
+            {t("agents.startChat")}
+          </Button>
+        </CardTarget>
         {onOpenStudio ? (
           <RouteLink
             route={agentStudioRoute(agent.name)}

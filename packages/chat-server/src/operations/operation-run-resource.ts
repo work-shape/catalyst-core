@@ -89,6 +89,7 @@ export function toOperationRunResource(
     status: run.status,
     actor: { kind: run.actor.kind, id: run.actor.id, label: run.actor.label },
     origin: run.origin,
+    target: run.target,
     ...(app ? { app } : {}),
     workspaceId: run.workspaceId,
     approvalRequestId: run.approvalRequestId,

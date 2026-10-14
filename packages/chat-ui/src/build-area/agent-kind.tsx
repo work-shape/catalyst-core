@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bot } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@vivd-catalyst/ui";
 import { useAgentPlacementMutations } from "../api/agent-placement-mutations";
@@ -33,12 +32,13 @@ export const agentKind: BuildAssetKind = {
   emptyText: "build.agentsEmpty",
   emptyReadOnlyText: "build.agentsEmptyReadOnly",
   missingText: "build.agentMissing",
-  icon: Bot,
+  icon: "agent",
   avatar: "agent",
   // A row says what the agent does, as its card on the Agents page does, and never its id.
   row: (asset) => ({ description: asset.description?.trim() || undefined }),
   badges: (asset, t) => (asset.isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null),
-  Editor: AgentAssetEditor
+  Editor: AgentAssetEditor,
+  startsInWorkspace: true
 };
 
 /** The agent form on the asset page, with what it reads beside the agent and the changes it can make. */

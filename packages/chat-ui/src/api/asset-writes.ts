@@ -1,5 +1,8 @@
 import type { ApiClient } from "@vivd-catalyst/api-client";
 
+/** Where a new agent starts: everywhere, or in the shared workspace it was made in. */
+export type AvailableIn = "all" | { workspaceId: string };
+
 /** One asset as a write names it. */
 interface AssetAddress {
   kind: string;
@@ -13,14 +16,25 @@ interface AssetAddress {
  */
 export function createAssetWrites(client: ApiClient) {
   return {
-    /** With `null` for the expected revision the call creates the asset. */
+    /**
+     * With `null` for the expected revision the call creates the asset. A new agent starts
+     * where `availableIn` says, and hidden without it.
+     */
     put: ({
       kind,
       name,
       config,
-      expectedRevision
-    }: AssetAddress & { config: Record<string, unknown>; expectedRevision: number | null }) =>
-      client.assets.put({ params: { kind, name }, body: { config, expectedRevision } }),
+      expectedRevision,
+      availableIn
+    }: AssetAddress & {
+      config: Record<string, unknown>;
+      expectedRevision: number | null;
+      availableIn?: AvailableIn;
+    }) =>
+      client.assets.put({
+        params: { kind, name },
+        body: { config, expectedRevision, ...(availableIn ? { availableIn } : {}) }
+      }),
     delete: ({ kind, name, expectedRevision }: AssetAddress & { expectedRevision: number }) =>
       client.assets.delete({ params: { kind, name }, body: { expectedRevision } }),
     revert: ({

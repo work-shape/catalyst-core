@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  PLATFORM_EVENT_ALLOW,
   POLICY_VALUES,
   callerCanConfirm,
   isAppError,
@@ -9,6 +10,7 @@ import {
   moduleOffError,
   operationDenialError,
   resolvePolicy,
+  strictestOutcome,
   connectionCallReasonOf,
   dataStoreRefusalOf,
   toErrorEnvelope,
@@ -22,6 +24,7 @@ import {
   type CollaborationWorkspaceId,
   type JsonObject,
   type JsonValue,
+  type LiveOnceSwitchStore,
   type Logger,
   type ModuleSnapshot,
   type NewOperationRun,
@@ -39,9 +42,10 @@ import {
   type OperationRunEnd,
   type OperationRunId,
   type OperationRunStore,
+  type PlatformEventAnswer,
+  type PlatformEventContext,
   type PlatformEventEmitter,
   type PlatformEventName,
-  type PlatformEventOutcome,
   type PolicyDefaults,
   type PolicySource,
   type PolicyInput,
@@ -51,6 +55,7 @@ import {
   type ConversationId
 } from "@vivd-catalyst/core";
 import { z } from "zod";
+import { askBeforeEvents, guardrailDenial } from "./before-events";
 import { failureLogFields } from "./tool-failure-log";
 
 /**
@@ -92,6 +97,8 @@ export interface RunOperationDeps {
   };
   /** Without it this process cannot hold a call for an approval and refuses one that needs it. */
   approvals?: OperationApprovalRequests;
+  /** "Run live once" on a draft. Without it every changing call of a draft is simulated. */
+  liveOnce?: LiveOnceSwitchStore;
   /** Which modules are on. An operation or a tool of a module that is off does not exist. */
   modules?: ModuleSnapshot;
   /**
@@ -163,12 +170,21 @@ export interface RunContext {
   unrecorded?: { start: NewOperationRun; heldAfterEvents: (() => Promise<unknown>)[] };
   /** Set once a later call took the run over: this call emits no further event of it. */
   overtaken?: boolean;
+  /**
+   * Set for a call that waited for an approval and is executed now: its before-events are
+   * asked again, and the guardrails' hits were kept when it was made.
+   */
+  repeated?: true;
   now(): Date;
   emit(
     name: PlatformEventName,
     phase: "before" | "after",
-    payload?: JsonObject
-  ): Promise<PlatformEventOutcome>;
+    payload?: JsonObject,
+    /** What a before-event's guardrails read, and the subject where it is not the call's. */
+    before?: Pick<PlatformEventContext, "checkable" | "filterBy"> & {
+      subject?: PlatformEventContext["subject"];
+    }
+  ): Promise<PlatformEventAnswer>;
 }
 
 /**
@@ -188,7 +204,10 @@ export function unrecordedRun(start: NewOperationRun): OperationRun {
 }
 
 export function createRunContext(
-  input: Pick<RunContext, "run" | "definition" | "call" | "resource" | "deps" | "runtime"> & {
+  input: Pick<
+    RunContext,
+    "run" | "definition" | "call" | "resource" | "deps" | "runtime" | "repeated"
+  > & {
     /** What the run is written from later, for a call that has left none yet. */
     unrecordedStart?: NewOperationRun;
   }
@@ -211,7 +230,7 @@ export function createRunContext(
     ...rest,
     ...(unrecordedStart ? { unrecorded: { start: unrecordedStart, heldAfterEvents: [] } } : {}),
     now: deps.now ?? (() => new Date()),
-    emit: (name, phase, payload = {}) => {
+    emit: (name, phase, payload = {}, before = {}) => {
       const send = () =>
         deps.events.emit(
           name,
@@ -228,14 +247,18 @@ export function createRunContext(
             origin: call.origin,
             workspaceId: call.workspaceId,
             correlationId: call.correlationId,
-            subject,
-            phase
+            subject: before.subject ?? subject,
+            phase,
+            ...(before.checkable ? { checkable: before.checkable } : {}),
+            ...(before.filterBy ? { filterBy: before.filterBy } : {}),
+            runtime: { deadline: input.runtime.deadline, signal: input.runtime.signal },
+            ...(input.repeated ? { repeated: true } : {})
           }
         );
-      if (context.overtaken) return Promise.resolve("allow");
+      if (context.overtaken) return Promise.resolve(PLATFORM_EVENT_ALLOW);
       if (phase === "after" && context.unrecorded) {
         context.unrecorded.heldAfterEvents.push(send);
-        return Promise.resolve("allow");
+        return Promise.resolve(PLATFORM_EVENT_ALLOW);
       }
       return send();
     }
@@ -340,10 +363,8 @@ export async function resolveGuardedPolicy(
   if (resolvePolicy(policyInput).next === "refuse") {
     return { denial: { kind: "policy", operation: definition.name } };
   }
-  const guardrailOutcome = strictestOutcome([
-    await context.emit("operation.before_call", "before"),
-    ...(definition.events?.before ? [await context.emit(definition.events.before, "before")] : [])
-  ]);
+  const answers = await askBeforeEvents(context);
+  const guardrailOutcome = strictestOutcome(answers.map((answer) => answer.outcome));
   const policy = resolvePolicy({ ...policyInput, guardrailOutcome });
   if (policy.next !== "refuse") {
     return { policy };
@@ -351,24 +372,9 @@ export async function resolveGuardedPolicy(
   return {
     denial:
       policy.source === "guardrail"
-        ? // The emitter names no guardrail yet, so the event that asked stands in for it.
-          { kind: "guardrail", guardrailId: definition.events?.before ?? "operation.before_call" }
+        ? guardrailDenial(answers, definition.events?.before ?? "operation.before_call")
         : { kind: "policy", operation: definition.name }
   };
-}
-
-const OUTCOME_ORDER: readonly PlatformEventOutcome[] = [
-  "allow",
-  "warn",
-  "require_approval",
-  "block"
-];
-
-function strictestOutcome(outcomes: readonly PlatformEventOutcome[]): PlatformEventOutcome {
-  return outcomes.reduce(
-    (left, right) => (OUTCOME_ORDER.indexOf(left) >= OUTCOME_ORDER.indexOf(right) ? left : right),
-    "allow"
-  );
 }
 
 /** Ends a run that is still `running`. The run as it was when something else ended it first. */
@@ -726,7 +732,8 @@ const forbiddenSchema = z.object({
       "denied",
       "unknown_action",
       "holder_inactive",
-      "holder_not_administrable"
+      "holder_not_administrable",
+      "outside_key_scope"
     ])
   })
 });

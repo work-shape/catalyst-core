@@ -105,6 +105,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member of the sidebar sections spec, who holds nothing on Apps or Workflows until
+      # the spec gives them a Workflow to read. No other spec uses this member.
+      - email: e2e-sidebar-sections@example.test
+        displayLabel: E2E Zz Sidebar Sections
+        passwordEnvName: E2E_SIDEBAR_SECTIONS_PASSWORD
+        developmentPassword: e2e-sidebar-sections-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The three people of the Apps spec. No other spec uses them: the admin builds and
       # publishes, the member uses what is published, and the builder is the one the spec shows
       # the draft without the publish right. No grant gives a right on Apps yet, so the builder
@@ -186,6 +196,38 @@ auth:
         displayLabel: E2E Zz App Actions View Member
         passwordEnvName: E2E_APP_ACTIONS_VIEW_MEMBER_PASSWORD
         developmentPassword: e2e-app-actions-view-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
+      # The person of the App in chat spec, used by no other spec: an App's id is taken once
+      # for the whole instance. No grant gives a right on Apps yet, so they are an admin. The
+      # label sorts after every other for the reason given above.
+      - email: e2e-app-in-chat@example.test
+        displayLabel: E2E Zz App In Chat
+        passwordEnvName: E2E_APP_IN_CHAT_PASSWORD
+        developmentPassword: e2e-app-in-chat-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      # The two people of the App Workflow action spec, used by no other spec: the builder
+      # writes the App and is given the use right on its Workflow, and the member holds no
+      # right on the Workflow. Their labels sort after every other for the reason given above.
+      - email: e2e-app-workflow@example.test
+        displayLabel: E2E Zz App Workflow
+        passwordEnvName: E2E_APP_WORKFLOW_PASSWORD
+        developmentPassword: e2e-app-workflow-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      - email: e2e-app-workflow-member@example.test
+        displayLabel: E2E Zz App Workflow Member
+        passwordEnvName: E2E_APP_WORKFLOW_MEMBER_PASSWORD
+        developmentPassword: e2e-app-workflow-member-password
         roles:
           - user
         permissionRefs:

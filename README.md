@@ -77,6 +77,15 @@ development servers are already using them:
 E2E_API_PORT=4211 E2E_UI_PORT=5274 E2E_POSTGRES_PORT=55434 pnpm test:e2e:chat-state
 ```
 
+Runs on one machine that share a Postgres server must not share its `agent_chat` database: one
+run's migration, fixtures and cleanup would erase the other's data. Give each run an empty
+database of its own and name it with `E2E_DATABASE_URL`, together with `E2E_EXTERNAL_POSTGRES=1`.
+The runner creates and drops no database or role; the specs read the same variable.
+
+```bash
+E2E_EXTERNAL_POSTGRES=1 E2E_DATABASE_URL=postgres://me:secret@127.0.0.1:5432/e2e_run1 pnpm test:e2e:chat-state
+```
+
 The hosted check runs the same `pnpm test:e2e` as its own job. It provides the database itself
 and sets `E2E_EXTERNAL_POSTGRES=1`, so the runner starts no container there.
 

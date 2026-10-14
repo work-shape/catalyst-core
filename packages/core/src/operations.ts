@@ -1,7 +1,7 @@
 import { IDEMPOTENCY_KEY_MAX_LENGTH, type OperationEffect } from "@vivd-catalyst/asset-schemas";
 import type { OperationDenial } from "./operation-denial";
 import type { ManagedArtifactRef, ToolDisplayOutput } from "./files";
-import type { AuthenticatedIdentity, RuntimeCallContext } from "./identity";
+import type { ActingServicePrincipal, AuthenticatedIdentity, RuntimeCallContext } from "./identity";
 import type {
   AgentRunId,
   CollaborationWorkspaceId,
@@ -20,8 +20,9 @@ export const POLICY_VALUES = ["allow", "confirm", "approval", "deny"] as const;
 
 export type PolicyValue = (typeof POLICY_VALUES)[number];
 
-/** What a call of a frame reached: an operation of a Connection, or a Data Store. */
-export type AppCallTarget = { connection: string; operation: string } | { dataStore: string };
+/** What a call of a frame reached: an operation of a Connection, a Data Store, or a Workflow it started. */
+export type AppCallTarget =
+  { connection: string; operation: string } | { dataStore: string } | { workflow: string };
 
 export type OperationOrigin =
   | {
@@ -53,22 +54,49 @@ export type OperationOrigin =
       pageSessionId: string;
       conversationId?: ConversationId;
       /**
-       * What the call reached, by name: the Connection and the operation of it, or the Data
-       * Store a statement read. Kept so that a run of a named action says what it touched.
+       * What the call reached, by name: the Connection and the operation of it, the Data
+       * Store a statement read, or the Workflow it started. Kept so that a run of a named action says what it touched.
        * Never an input or a result.
        */
       target?: AppCallTarget;
     }
   /**
    * A step of a Workflow Run. The `actor` of the call is the principal the run acts as
-   * (`WorkflowRunPrincipal`), whatever started the run.
+   * (`WorkflowRunPrincipal`), whatever started the run. In a test run of a draft the actor is
+   * the person testing, and `boundBy` names the principal whose rights bound theirs; the call
+   * path writes it from the call's draft context, so it says what was asked.
    */
-  | { kind: "workflow"; workflowRunId: string; stepRunId: string }
+  | {
+      kind: "workflow";
+      workflowRunId: string;
+      stepRunId: string;
+      boundBy?: { id: string; label: string };
+    }
   /**
    * A due time, with nobody present. A `schedule` trigger starts its Workflow Run from this
    * origin as the run's principal; the steps of that run then call from the origin `workflow`.
    */
   | { kind: "schedule"; scheduleId: string };
+
+/**
+ * What a call made by a draft carries (ADR-0031): the draft asset, the revision of it that
+ * made the call and the App action or Workflow step that made it. `runOperation()` decides from
+ * it where the call goes: a reading call reads live, a changing call is simulated unless "Run
+ * live once" was switched on for this action or step of this revision.
+ */
+export interface OperationDraftContext {
+  /** The App or the Workflow whose draft makes the call. */
+  asset: { kind: string; id: string; name: string };
+  /** The draft revision that made the call. A switch set for another revision does not apply. */
+  revisionId: string;
+  /** The App action or the Workflow step, by its name. */
+  part: string;
+  /**
+   * A test run of a Workflow draft: the service principal the Workflow runs as. The call is
+   * made as the person testing and allowed only where the principal holds the right too.
+   */
+  boundBy?: ActingServicePrincipal;
+}
 
 export interface OperationCall<TInput = unknown> {
   operation: string;
@@ -79,6 +107,8 @@ export interface OperationCall<TInput = unknown> {
   workspaceId?: CollaborationWorkspaceId;
   idempotencyKey?: string;
   correlationId: string;
+  /** Set where a draft makes the call. A call without it is a call of what is live. */
+  draft?: OperationDraftContext;
 }
 
 /**
@@ -130,6 +160,17 @@ export type OperationResult<TOutput = unknown> =
       expiresAt: ISODateString;
     }
   | { status: "denied"; runId: OperationRunId; reason: OperationDenial }
+  | {
+      /**
+       * A changing call of a draft that was not made. `input` is the validated input it would
+       * have been made with, absent where it holds a secret. `wouldAsk` says whether the live
+       * call would have waited for its caller's confirmation or another person's approval.
+       */
+      status: "dry_run";
+      runId: OperationRunId;
+      input?: unknown;
+      wouldAsk?: "confirmation" | "approval";
+    }
   | {
       status: "failed";
       runId: OperationRunId;

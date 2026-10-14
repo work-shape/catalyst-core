@@ -27,6 +27,20 @@ const relativeFile = z
     message: "a path inside the Page's folder"
   });
 
+/** Refuses a list that names one entry twice, by the key `keyOf` reads from each. */
+function eachOnce<Entry>(what: string, keyOf: (entry: Entry) => string) {
+  return (entries: Entry[], context: z.RefinementCtx) => {
+    const seen = new Set<string>();
+    for (const entry of entries) {
+      const key = keyOf(entry);
+      if (seen.has(key)) {
+        context.addIssue({ code: "custom", message: `lists ${what} '${key}' twice` });
+      }
+      seen.add(key);
+    }
+  };
+}
+
 const actionSchema = z.strictObject({
   name: identifier,
   file: relativeFile.optional(),
@@ -62,21 +76,14 @@ export const pageManifestSchema = z.strictObject({
   dataStores: z
     .array(dataStoreReferenceSchema)
     .max(MANIFEST_MAX_LIST_ENTRIES)
-    .superRefine((stores, context) => {
-      const seen = new Set<string>();
-      for (const { name: store } of stores) {
-        if (seen.has(store)) {
-          context.addIssue({
-            code: "custom",
-            message: `lists the Data Store '${store}' twice`
-          });
-        }
-        seen.add(store);
-      }
-    })
+    .superRefine(eachOnce("the Data Store", (store) => store.name))
     .optional(),
   actions: z.array(actionSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional(),
-  externalHosts: z.array(externalHostSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional()
+  externalHosts: z
+    .array(externalHostSchema)
+    .max(MANIFEST_MAX_LIST_ENTRIES)
+    .superRefine(eachOnce("the host", (host) => host))
+    .optional()
 });
 
 export type PageManifest = z.infer<typeof pageManifestSchema>;
@@ -96,11 +103,15 @@ export const builtPageManifestSchema = pageManifestSchema
       .max(1000)
       .optional()
   })
-  // A build is not trusted to have checked this: an action reaches what the manifest lists.
+  // A build is not trusted to have checked this: an action reaches the Connection or the Data
+  // Store the manifest lists.
   .superRefine((manifest, context) => {
     const stores = new Set((manifest.dataStores ?? []).map((store) => store.name));
     const connections = new Set(manifest.connections ?? []);
     for (const action of manifest.actions ?? []) {
+      // A Workflow is no part of the manifest: the action file names it, and each call asks
+      // whether it exists.
+      if (action.kind === "workflow") continue;
       const reached =
         action.kind === "sql"
           ? { listed: stores.has(action.dataStore), what: `Data Store '${action.dataStore}'` }
@@ -145,7 +156,7 @@ export function parsePageManifest(bytes: Uint8Array): ParsedPageManifest {
   } catch {
     return fail("The manifest is not UTF-8 text.");
   }
-  const read = readYamlData(text, PAGE_MANIFEST_FILE);
+  const read = readYamlData(text, PAGE_MANIFEST_FILE, { refuseAliases: true });
   if (!read.ok) {
     return fail(read.issue.message, read.issue.line);
   }
