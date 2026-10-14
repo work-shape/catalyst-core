@@ -19,7 +19,14 @@ import {
   type OperationRunActor
 } from "@vivd-catalyst/core";
 import {
-  authorizeActor,
+  accessOf,
+  authorizeRights,
+  decideTarget,
+  draftCallOf,
+  rightsOf,
+  simulateRun
+} from "./draft-calls";
+import {
   authorizeOrigin,
   createRunContext,
   denyRun,
@@ -53,10 +60,11 @@ const IDEMPOTENCY_CLAIM_ATTEMPTS = 3;
  * before a run exists; every call that gets further has one.
  */
 export async function runOperation(
-  call: OperationCall,
+  made: OperationCall,
   deps: RunOperationDeps,
   runtime: OperationCallRuntime = {}
 ): Promise<OperationOutcome> {
+  const call = draftCallOf(made);
   requireModuleOn(call, deps.modules);
   const registered = await deps.registry.resolve(call.operation);
   if (!registered) {
@@ -89,6 +97,35 @@ export async function runOperation(
     definition = { ...definition, secret: true };
   }
   const secretInput = withoutSecrets !== undefined;
+  if (call.draft && definition.effect !== "reading" && idempotencyKey !== undefined) {
+    // A changing call of a draft sent again under the key of a call that went live or to a
+    // test target is answered by that call's run. It never carries that run out again: a
+    // changing call of a draft goes live only through "Run live once" (ADR-0031).
+    const held = await deps.runs.findByIdempotencyKey({
+      clientInstanceId: deps.clientInstanceId,
+      actor,
+      idempotencyKey
+    });
+    if (held && !runsAgain(held, definition)) {
+      return {
+        result: replay(held, definition, actor, inputHash, secretInput),
+        run: held,
+        replayed: true
+      };
+    }
+  }
+  const target = await decideTarget({
+    call,
+    definition,
+    deps,
+    admitted: async () =>
+      surface.allowed &&
+      (await authorizeRights({ definition, call: frozen, resource }, await rightsOf(frozen, deps)))
+        .allowed
+  });
+  // A dry run holds no key: it would only ever answer a simulation again, and the same key
+  // stays free for the live call (ADR-0031).
+  const heldKey = target === "dry_run" ? undefined : idempotencyKey;
 
   for (let attempt = 0; attempt < IDEMPOTENCY_CLAIM_ATTEMPTS; attempt++) {
     const start: NewOperationRun = {
@@ -99,13 +136,14 @@ export async function runOperation(
       actor,
       workspaceId: frozen.workspaceId,
       origin: call.origin,
+      target,
       conversationId: "conversationId" in call.origin ? call.origin.conversationId : undefined,
-      idempotencyKey,
+      idempotencyKey: heldKey,
       inputHash,
       correlationId: call.correlationId,
       startedAt: now().toISOString(),
       // What carries the call out is handed its key and carries out one call per key.
-      ...(definition.repeatsUnderKey && idempotencyKey !== undefined
+      ...(definition.repeatsUnderKey && heldKey !== undefined
         ? { takesInterrupted: true as const }
         : {})
     };
@@ -127,11 +165,11 @@ export async function runOperation(
       const ending = await admitAndExecute(context, surface);
       return { ...ending, replayed: false, ...(context.unrecorded ? { unrecorded: true } : {}) };
     }
-    if (idempotencyKey === undefined) break;
+    if (heldKey === undefined) break;
     const held = await deps.runs.findByIdempotencyKey({
       clientInstanceId: deps.clientInstanceId,
       actor,
-      idempotencyKey
+      idempotencyKey: heldKey
     });
     // A run that may be run again is taken by the next `create`; a run that is gone frees the
     // key. Every other run answers again what it answered, to the actor that holds its key and
@@ -395,10 +433,10 @@ type Admission = { ending: OperationEnding } | { access: ActorAccess; decision?:
 
 async function admit(context: RunContext, surface: OperationAuthorization): Promise<Admission> {
   const { run, definition, call, deps, now } = context;
-  const access = await deps.authorizer.forActor(call.actor);
+  const rights = await rightsOf(call, deps);
   // The surface and the right are asked here for every operation, so nobody without them
   // learns what the policy says or receives an approval.
-  const right = surface.allowed ? await authorizeActor(context, access) : surface;
+  const right = surface.allowed ? await authorizeRights(context, rights) : surface;
   await context.emit("operation.authorization_checked", "after", {
     ...(definition.action === null ? {} : { action: definition.action }),
     status: right.allowed ? "success" : "denied",
@@ -410,7 +448,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
         kind: "forbidden",
         action: right.action,
         reason: right.reason,
-        ...(right.message === undefined ? {} : { message: right.message })
+        ...(right.message === undefined ? {} : { message: right.message }),
+        ...(right.boundBy ? { boundBy: right.boundBy } : {})
       })
     };
   }
@@ -420,6 +459,9 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return { ending: await denyRun(context, guarded.denial) };
   }
   const { policy } = guarded;
+  if (run.target === "dry_run") {
+    return { ending: await simulateRun(context, policy) };
+  }
   if (policy.next === "await_confirmation") {
     throw new AppError("INTERNAL", "This surface cannot hold a call for a confirmation");
   }
@@ -430,12 +472,17 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     if (definition.secret) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }
-    // The approval is asked and nothing can hold the call for it: the refusal says so.
+    // A call of a test run is held by nothing yet that could ask the principal again when it
+    // is executed. EW-5t decides how a test run waits.
     const unavailable: OperationDenial = {
       kind: "policy",
       operation: definition.name,
       reason: "approval_unavailable"
     };
+    if (call.draft?.boundBy) {
+      return { ending: await denyRun(context, unavailable) };
+    }
+    // The approval is asked and nothing can hold the call for it: the refusal says so.
     if (!deps.approvals) {
       return { ending: await denyRun(context, unavailable) };
     }
@@ -467,7 +514,7 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     };
   }
   return {
-    access,
+    access: accessOf(rights),
     decision:
       "decisionMode" in policy
         ? { mode: policy.decisionMode, reason: policy.decisionReason }

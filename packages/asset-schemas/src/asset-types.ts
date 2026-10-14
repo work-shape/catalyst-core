@@ -61,12 +61,35 @@ export interface SkillConfig {
   content: string;
   resources?: SkillResourceConfig[];
   /**
+   * The files of the skill's folder that the config does not hold itself: everything beside
+   * `SKILL.md` and the text resources, such as a script, a PDF or an image. An index and no
+   * content. The platform writes it with the files; what a caller sends here is not read.
+   */
+  files?: SkillFileEntry[];
+  /**
+   * The keys of the frontmatter of `SKILL.md` that are not fields of the skill
+   * (`SKILL_FRONTMATTER_FIELDS`), such as `license`, `metadata` and `allowed-tools` of the
+   * public skill convention, as JSON values. They are kept and returned and never read by the
+   * platform.
+   */
+  frontmatter?: Record<string, unknown>;
+  /**
    * `release` on a skill that ships with the platform. Only the release seed writes it: every
    * other write of a skill that carries it is refused, and a stored one is read-only.
    */
   origin?: "release";
   /** The key of the interface's icon registry. Only a skill that ships with the platform has one. */
   icon?: string;
+}
+
+/** One file of a skill's folder as its index names it. */
+export interface SkillFileEntry {
+  /** Relative to the folder of the skill, with `/` between segments. */
+  path: string;
+  /** Lower-case hex. */
+  sha256: string;
+  bytes: number;
+  mediaType: string;
 }
 
 /** How many starters one skill carries at most. */

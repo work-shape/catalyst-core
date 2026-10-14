@@ -251,7 +251,7 @@ function readManifest(
     issues.push({ message: `'${DATA_STORE_MANIFEST_FILE}' is not UTF-8 text`, path });
     return undefined;
   }
-  const read = readYamlData(text, DATA_STORE_MANIFEST_FILE);
+  const read = readYamlData(text, DATA_STORE_MANIFEST_FILE, { refuseAliases: true });
   if (!read.ok) {
     issues.push({ message: read.issue.message, path });
     return undefined;

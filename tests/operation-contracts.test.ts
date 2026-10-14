@@ -316,6 +316,7 @@ describe("operation contracts", () => {
             | "holder_not_administrable"
             | "user_only";
           message?: string;
+          boundBy?: { id: string; label: string };
         }
       | { kind: "policy"; operation: string; reason?: "approval_unavailable" }
       | { kind: "guardrail"; guardrailId: string; message?: string }
@@ -350,6 +351,12 @@ describe("operation contracts", () => {
           error: { code: string; message: string; details?: Record<string, unknown> };
         }
       | { status: "expired"; runId: OperationRunId }
+      | {
+          status: "dry_run";
+          runId: OperationRunId;
+          input?: unknown;
+          wouldAsk?: "confirmation" | "approval";
+        }
     >();
   });
 
@@ -357,7 +364,13 @@ describe("operation contracts", () => {
     expectTypeOf<OperationCall["actor"]>().toEqualTypeOf<AuthenticatedIdentity>();
     expectTypeOf<OperationResult["runId"]>().toEqualTypeOf<OperationRunId>();
     expectTypeOf<OperationResult["status"]>().toEqualTypeOf<
-      "done" | "pending_confirmation" | "pending_approval" | "denied" | "failed" | "expired"
+      | "done"
+      | "pending_confirmation"
+      | "pending_approval"
+      | "denied"
+      | "failed"
+      | "expired"
+      | "dry_run"
     >();
     expectTypeOf<OperationScope>().toEqualTypeOf<Exclude<FirstPartyAuthScope, "*">>();
     expectTypeOf<Authorizer["forActor"]>().parameter(0).toEqualTypeOf<AuthenticatedIdentity>();

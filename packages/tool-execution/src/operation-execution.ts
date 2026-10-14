@@ -25,6 +25,7 @@ import {
   type CollaborationWorkspaceId,
   type JsonObject,
   type JsonValue,
+  type LiveOnceSwitchStore,
   type Logger,
   type ModuleSnapshot,
   type NewOperationRun,
@@ -97,6 +98,8 @@ export interface RunOperationDeps {
   };
   /** Without it this process cannot hold a call for an approval and refuses one that needs it. */
   approvals?: OperationApprovalRequests;
+  /** "Run live once" on a draft. Without it every changing call of a draft is simulated. */
+  liveOnce?: LiveOnceSwitchStore;
   /** Which modules are on. An operation or a tool of a module that is off does not exist. */
   modules?: ModuleSnapshot;
   /**
