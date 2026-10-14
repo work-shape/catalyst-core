@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getTableName } from "drizzle-orm";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import postgres, { type ReservedSql } from "postgres";
 import {
@@ -9,6 +10,7 @@ import {
   runsOutsideTransaction,
   type MigrationStatement
 } from "./migration-statements.js";
+import { legacyPermissionRestores } from "./schema/access.js";
 
 const committedMigrationsDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -196,14 +198,16 @@ function isLegacyListMigration(migration: CommittedMigration): boolean {
   return migration.name.endsWith("_legacy_permission_grants");
 }
 
+const restoresTable = getTableName(legacyPermissionRestores);
+
 /** Whether `--restore-legacy-columns` wrote the lists back and no migration step ran since. */
 async function legacyListsRestored(sql: Queries): Promise<boolean> {
   const [table] = await sql.unsafe<{ name: string | null }[]>(
-    "select to_regclass('legacy_permission_restores')::text as name"
+    `select to_regclass('${restoresTable}')::text as name`
   );
   if (!table?.name) return false;
   const [row] = await sql.unsafe<{ restored: boolean }[]>(
-    "select exists (select 1 from legacy_permission_restores) as restored"
+    `select exists (select 1 from "${restoresTable}") as restored`
   );
   return row?.restored === true;
 }
@@ -224,7 +228,7 @@ async function moveRestoredLegacyLists(
   await session.unsafe("begin");
   try {
     for (const chunk of legacy.chunks) await session.unsafe(chunk.text);
-    await session.unsafe("delete from legacy_permission_restores");
+    await session.unsafe(`delete from "${restoresTable}"`);
     await session.unsafe("commit");
   } catch (error) {
     if (!endsSession(error)) await session.unsafe("rollback");
