@@ -8520,6 +8520,15 @@
                     "event": {
                       "type": "string"
                     },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "allow",
+                        "warn",
+                        "require_approval",
+                        "block"
+                      ]
+                    },
                     "days": {
                       "type": "integer",
                       "exclusiveMinimum": 0,
@@ -8612,6 +8621,7 @@
                   "required": [
                     "revision",
                     "event",
+                    "outcome",
                     "days",
                     "since",
                     "matched",
