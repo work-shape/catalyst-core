@@ -2272,14 +2272,6 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
-- **Release gate and the host's memory:** the release gate's resolve-only run of the workspace
-  command worker compared the memory its sandboxes need with the memory of the machine the
-  gate runs on, so a CI runner smaller than the host stopped every deploy with
-  `sandbox_memory_exceeds_host`. A resolve-only run no longer makes that check and prints
-  `host memory not checked: checked at startup on the host`; the worker still refuses to start
-  on a host that cannot hold its sandboxes. **Upgrade:** nothing to do. **Rollback:** the
-  previous release's gate refuses such a config again on a smaller CI machine.
-
 - **A service principal calls no operation that a person calls:** an operation registered with
   `auth: "user"`, such as `workspaces.create`, is refused to a service principal on the call
   path as its route refuses one, also where the call takes no route, as from a step of a
