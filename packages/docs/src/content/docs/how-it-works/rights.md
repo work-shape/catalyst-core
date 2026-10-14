@@ -7,14 +7,14 @@ This page is for the administrators of a Catalyst instance. It all comes down to
 
 ## Two questions
 
-**Who are you?** A person who signs in. A person who is a member of a workspace also gets what is shared there. A published Workflow has a technical account of its own. An agent has none: it acts with the rights of the person it works for, and a tool on an agent adds no right.
+**Who are you?** A person who signs in. A person who is a member of a workspace also gets what is shared there. A Workflow runs as a technical account that it names; a Superadmin creates that account on the API access page. An agent has none: it acts with the rights of the person it works for, and a tool on an agent adds no right.
 
 **What may you do?** A right is an action in a place, for example "use the Connection DATEV". The place is one workspace, one item, or the whole instance. A role bundles rights; the three roles User, Admin and Superadmin are fixed. A right is given to a person, to a Workflow's technical account, or comes with a role.
 
 Three rules always hold:
 
 - Nothing is allowed until it is given.
-- A deny beats every allow, even an administrator's.
+- A deny beats every allow, even an administrator's. Exporting an agent and setting the default agent are not affected.
 - Using is not editing. Whoever may open an App may not change it for that reason.
 
 <figure class="docs-diagram">
@@ -53,8 +53,8 @@ Three rules always hold:
 <rect class="box" x="26" y="228" width="160" height="132" rx="8"/>
 <text x="40" y="250" class="small-strong">Action</text>
 <text x="40" y="270" class="small">use</text>
-<text x="40" y="285" class="small">view</text>
-<text x="40" y="300" class="small">edit</text>
+<text x="40" y="285" class="small">read</text>
+<text x="40" y="300" class="small">write</text>
 <text x="40" y="315" class="small">publish</text>
 <text x="40" y="330" class="small">delete</text>
 <text x="40" y="345" class="small">approve</text>
@@ -91,7 +91,7 @@ Three rules always hold:
 
 ## Where an App gets its data, and who sees it
 
-An App shows data in two ways: live from an outside system, or from its Data Store, which a Workflow filled earlier. The two ways follow different rules. The numbers in the picture are the four decisions on the way.
+An App shows data in two ways: live from an outside system, or from its Data Store. A Data Store is filled by Workflows, by the App's own actions that add rows, and by people with the right to add rows. The two ways follow different rules. The numbers in the picture are the four decisions on the way.
 
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 680 384" role="img" aria-labelledby="rx-f2-title rx-f2-desc">
@@ -197,13 +197,13 @@ An App shows data in two ways: live from an outside system, or from its Data Sto
 
 1. **Catalyst decides who may reach the outside system.** The App calls the Connection as Anna. Anna needs the right to use the Connection herself; the App lends her none. The operation must also list Apps under **Callable by** ("Aufrufbar durch").
 2. **The outside system decides what it shows.** It answers with what the account the Connection signed in with may see there.
-3. **The Workflow runs as its technical account,** whether a person or a schedule starts it. It can do only what that account may. Whoever publishes it decides what gets copied. A test run of a draft is different: it acts as the person testing.
+3. **The Workflow runs as its technical account,** whether a person or a schedule starts it. It can do only what that account may. Whoever publishes it decides what gets copied. A test run of a draft is different: it acts as the person testing, and can do only what both that person and the Workflow's account may.
 4. **Whoever may open the App sees what its queries show.** For an App in a workspace, these are the workspace's members, and the instance's administrators.
 
 So two rules apply:
 
 - **Read live:** the rights of the person looking count.
-- **Stored:** like an exported report, the App is the gate. Whoever may open it sees what its queries show, without a right on the Connection. The person who publishes the App needs the right to read its Data Store and add rows to it.
+- **Stored:** like an exported report, the App is the gate. Whoever may open it sees what its queries show, without a right on the Connection. The person who publishes the App needs the right to read the Data Store where the App reads from it, and the right to add rows where the App adds rows.
 
 ## Workspaces
 
@@ -280,7 +280,7 @@ An agent of the whole instance can be offered in several workspaces under **Avai
 
 ## Connections
 
-A Connection is signed in with one shared account ("Ein gemeinsames Konto"). Everyone who may use it sees the same in the outside system: what that account sees. If a team should be able to do less, create a second Connection with fewer operations and give only that team the right.
+A Connection is signed in with one shared account ("Ein gemeinsames Konto"). Everyone who may use it sees the same in the outside system: what that account sees. If a team should be able to do less, create a second Connection with fewer operations and give the right to use it to each person of that team.
 
 A right on a Connection is given on that one Connection. Writing, deleting and approving Connections stay with the Admin role.
 
