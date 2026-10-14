@@ -350,7 +350,12 @@ describe("CLI parity against persisted operations", () => {
     const secret = generateTestSecret();
     const result = await run(["connection", "secret", "set", name], {
       stdin: Readable.from([`${secret}\n`]),
-      fetchImpl: apiFetch(createTestFetch(instance))
+      // This fixture uses development auth; the exchange above returns a synthetic token.
+      // The separate personal-key test below exercises the real bearer authentication path.
+      fetchImpl: apiFetch((request) => {
+        request.headers.delete("authorization");
+        return createTestFetch(instance)(request);
+      })
     });
     expect(result.code, result.err).toBe(0);
     expect(JSON.parse(result.out)).toEqual({ state: "set", version: 1 });
