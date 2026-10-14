@@ -17,6 +17,7 @@ import {
   emptyGrantForm,
   grantRequests,
   grantScopeKinds,
+  grantsNameWorkspaces,
   GrantsTab,
   grantVerbs,
   groupGrants,
@@ -695,6 +696,11 @@ describe("what the dialogs send", () => {
     expect(named).toContain("Read connections");
     // Without the workspaces the row names the workspace by its id.
     expect(render(grantsTab({ grants: [inWorkspace] }))).toContain("Workspace ws-1");
+    // No new right names a workspace, so the page loads the workspaces for a row that does:
+    // a Connection right written on a workspace before NS-0 is listed by the workspace's name.
+    expect(grantsNameWorkspaces(["connection"], [])).toBe(false);
+    expect(grantsNameWorkspaces(["connection"], [onConnection, namespaceGrant])).toBe(false);
+    expect(grantsNameWorkspaces([], [onConnection, inWorkspace])).toBe(true);
     // An instance-wide row is named in words, never by its scope kind.
     const onInstance: PermissionGrantRow = {
       ...namespaceGrant,

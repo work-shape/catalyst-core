@@ -143,6 +143,7 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
   // A seeded user is listed once the user has signed in and asked who they are: the member
   // first, then the admin.
   let memberId = "";
+  let adminId = "";
   for (const user of [member, admin]) {
     const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
       data: { ...user, rememberMe: true }
@@ -150,12 +151,12 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
     expect(signedIn.ok()).toBe(true);
     const me = await page.request.get(`${apiBaseUrl}/api/v1/me`);
     expect(me.ok()).toBe(true);
-    if (user === member) {
-      const answer: unknown = await me.json();
-      memberId =
-        idOf(answer) ?? idOf(Object.getOwnPropertyDescriptor(Object(answer), "user")?.value) ?? "";
-      expect(memberId).not.toBe("");
-    }
+    const answer: unknown = await me.json();
+    const id =
+      idOf(answer) ?? idOf(Object.getOwnPropertyDescriptor(Object(answer), "user")?.value) ?? "";
+    expect(id).not.toBe("");
+    if (user === member) memberId = id;
+    else adminId = id;
   }
   const memberContext = await browser.newContext();
   const memberPage = await memberContext.newPage();
@@ -412,6 +413,71 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       if (shotsDir) {
         await memberPage.screenshot({
           path: join(shotsDir, "connections-read-grant-light-en-1280.png")
+        });
+      }
+    });
+
+    await test.step("a Connection right written on a workspace before NS-0 is named, refused anew and revoked", async () => {
+      const workspace = { id: `cw_${randomUUID()}`, name: "Records team" };
+      const grantId = `grant_${randomUUID()}`;
+      try {
+        await withSql(async (sql) => {
+          await sql`
+            insert into collaboration_workspaces
+              (id, client_instance_id, kind, name, visibility, created_at, updated_at)
+            values
+              (${workspace.id}, ${clientInstanceId}, 'shared', ${workspace.name}, 'private',
+               now(), now())`;
+          // As the grant operation wrote it before NS-0.
+          await sql`
+            insert into permission_grants
+              (id, client_instance_id, holder_kind, holder_id, action, scope_kind, scope_id,
+               effect, granted_by)
+            values
+              (${grantId}, ${clientInstanceId}, 'user', ${memberId}, 'connection.use',
+               'workspace', ${workspace.id}, 'allow', ${adminId})`;
+        });
+        // A new one is refused: no workspace owns a Connection.
+        const refused = await requestWithOrigin(
+          page,
+          "post",
+          `${apiBaseUrl}/api/v1/instance/access/grants`,
+          {
+            data: {
+              holderKind: "user",
+              holderId: memberId,
+              action: "connection.read",
+              scopeKind: "workspace",
+              scopeId: workspace.id
+            }
+          }
+        );
+        expect(refused.status()).toBe(422);
+        expect(JSON.stringify(await refused.json())).toContain("invalid_scope");
+
+        // The row is listed under the workspace's name, though no new right offers a workspace.
+        await page.goto("/settings/instance/access");
+        await page.getByRole("tab", { name: /^Rights/u }).click();
+        const row = page
+          .getByTestId("grant-row")
+          .filter({ hasText: "E2E Connections", hasNotText: connection.name });
+        await expect(row).toContainText(`Workspace ${workspace.name}`);
+        await expect(row).not.toContainText(workspace.id);
+        await row.getByRole("button", { name: /^Actions for the right of/u }).click();
+        await page.getByRole("menuitem", { name: /^Revoke: Use connections/u }).click();
+        const revokeDialog = page.getByRole("dialog", { name: "Revoke this right?" });
+        await expect(revokeDialog).toContainText(workspace.name);
+        await expect(revokeDialog).not.toContainText(workspace.id);
+        await revokeDialog.getByRole("button", { name: "Revoke" }).click();
+        await expect(revokeDialog).toHaveCount(0);
+        await expect(row).toHaveCount(0);
+        expect(
+          await withSql((sql) => sql`select 1 from permission_grants where id = ${grantId}`)
+        ).toHaveLength(0);
+      } finally {
+        await withSql(async (sql) => {
+          await sql`delete from permission_grants where id = ${grantId}`;
+          await sql`delete from collaboration_workspaces where id = ${workspace.id}`;
         });
       }
     });

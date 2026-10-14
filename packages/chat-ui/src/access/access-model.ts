@@ -132,12 +132,20 @@ export function grantScopeKinds(kind: GrantKind): GrantScopeKind[] {
 }
 
 /**
- * Whether a grant can be written on what a Shared Workspace owns, for agents, skills or any of
- * the further kinds an instance has.
+ * Whether the page needs the names of the Shared Workspaces: a new grant can be written on what
+ * one owns, for agents, skills or any of the further kinds an instance has, or a row already
+ * given is on a workspace. Such a row stays listed and revocable after its kind lost the place,
+ * and it names the workspace by its name.
  */
-export function grantsNameWorkspaces(furtherKinds: readonly GrantKind[]): boolean {
-  return [...CONFIG_ASSET_GRANT_KINDS, ...furtherKinds].some((kind) =>
-    grantScopeKinds(kind).includes("workspace")
+export function grantsNameWorkspaces(
+  furtherKinds: readonly GrantKind[],
+  grants: readonly Pick<PermissionGrantRow, "scopeKind">[]
+): boolean {
+  return (
+    grants.some((grant) => grant.scopeKind === "workspace") ||
+    [...CONFIG_ASSET_GRANT_KINDS, ...furtherKinds].some((kind) =>
+      grantScopeKinds(kind).includes("workspace")
+    )
   );
 }
 

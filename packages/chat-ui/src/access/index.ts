@@ -13,6 +13,7 @@ export {
   GRANT_KINDS,
   grantRequests,
   grantScopeKinds,
+  grantsNameWorkspaces,
   grantVerbs,
   groupGrants,
   namespaceLockedLists,
