@@ -5,6 +5,7 @@ import {
   DATA_STORE_JOB_KINDS,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_OPERATION_PREFIX,
+  KNOWLEDGE_BASE_ASSET_KIND,
   AppError,
   StoreBackedAuditRecorder,
   defineAssetKind,
@@ -15,6 +16,7 @@ import {
   type JobRetry,
   type JobSchedule,
   type JsonObject,
+  type KnowledgeBackend,
   type Logger,
   type OperationSource,
   type PlatformStores,
@@ -30,11 +32,13 @@ import {
   readDataStoreFiles
 } from "./definition";
 import { createDataStoreJobs, publishDataStore, retireDataStore } from "./jobs";
+import { createDataStoreKnowledgeBackend } from "./knowledge/backend";
 import { listDataStores } from "./list";
 import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
 import type { DataStoreDatasetReader, DataStoreLimits, DataStoreRuntime } from "./runtime";
 
 export { sizeLimitBytes } from "./definition";
+export { createKnowledgeBases, knowledgeOperationName, type KnowledgeBases } from "./knowledge";
 export { dataStoreStateOperationName } from "./state";
 
 /**
@@ -73,11 +77,17 @@ export const dataStoresModule = defineModule({
 });
 
 /**
- * Knowledge Bases: the asset kind `knowledge_base`, ingestion, and the search and query
- * operations of each. A module of its own, because a Knowledge Base on an existing database
- * needs no Data Store. It is registered and contributes nothing yet.
+ * Knowledge Bases: the asset kind `knowledge_base` and the operations of each, and the one
+ * agent tool over an agent's. A module of its own, because a Knowledge Base on an existing
+ * database will need no Data Store. Its only backend so far is the Data Store, so it needs
+ * that module on.
  */
-export const knowledgeModule = defineModule({ name: "knowledge" });
+export const knowledgeModule = defineModule({
+  name: "knowledge",
+  requires: ["dataStores"],
+  kinds: [KNOWLEDGE_BASE_ASSET_KIND],
+  operations: ["knowledge_bases.get", "knowledge_bases.check", "knowledge_bases.query"]
+});
 
 /** What the Data Stores of one process are made of, for the assembly to put in place. */
 export interface DataStores {
@@ -109,6 +119,8 @@ export interface DataStores {
   readonly jobHandlers: readonly RegisteredJobHandler[];
   readonly schedules: readonly JobSchedule[];
   readonly jobRetries: readonly JobRetry[];
+  /** The Data Store as the backend of a Knowledge Base, on the same pools as the store's own reads. */
+  readonly knowledgeBackend: KnowledgeBackend;
   /**
    * Creates pgvector in the database of a provisioned store, as the platform's role: for a
    * store a Knowledge Base with semantic search owns, and for no other (ADR-0023). Throws with
@@ -197,6 +209,7 @@ export function createDataStores(input: {
     jobHandlers: jobs.handlers,
     schedules: jobs.schedules,
     jobRetries: jobs.retries,
+    knowledgeBackend: createDataStoreKnowledgeBackend(runtime),
     async ensureVectorExtension(storeId, signal) {
       const record = await stores.dataStores.getDataStore({ clientInstanceId, id: storeId });
       if (!record || record.status === "retired") {

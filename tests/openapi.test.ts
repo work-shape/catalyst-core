@@ -443,10 +443,14 @@ describe("the reference an instance serves", () => {
     );
     expect(approvalPaths.length).toBeGreaterThan(0);
     // Nor does this server hold the routes of a module, which only its assembly adds.
-    const moduleRoutes = `${API_VERSION_PREFIX}/data-stores`;
+    const moduleRoutes = [
+      `${API_VERSION_PREFIX}/data-stores`,
+      `${API_VERSION_PREFIX}/knowledge-bases`
+    ];
     expect(paths).toEqual(
       Object.keys(released.paths).filter(
-        (path) => !approvalPaths.includes(path) && !path.startsWith(moduleRoutes)
+        (path) =>
+          !approvalPaths.includes(path) && !moduleRoutes.some((prefix) => path.startsWith(prefix))
       )
     );
     const document = openApiDocumentSchema.parse(response.json());
