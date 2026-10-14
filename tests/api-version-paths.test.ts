@@ -100,6 +100,8 @@ describe("the operation catalog", () => {
         "captured_mail.list  GET /api/v1/dev/captured-mail",
         "config.get  GET /api/v1/instance/config",
         "config_assets.get_overview  GET /api/v1/instance/config/assets",
+        "connect_codes.redeem  POST /api/v1/auth/connect-codes/redeem",
+        "connect_codes.start  POST /api/v1/auth/connect-codes",
         "connections.get  GET /api/v1/connections/:name",
         "connections.list_tools  GET /api/v1/connection-tools",
         "connections.test  POST /api/v1/connections/:name/test",
@@ -147,6 +149,11 @@ describe("the operation catalog", () => {
         "instance.jobs.summary  GET /api/v1/instance/jobs/summary",
         "instance.modules.list  GET /api/v1/instance/modules",
         "instance.workspaces.list  GET /api/v1/instance/workspaces",
+        "me.api_keys.create  POST /api/v1/me/api-keys",
+        "me.api_keys.list  GET /api/v1/me/api-keys",
+        "me.api_keys.revoke  POST /api/v1/me/api-keys/:keyId/revoke",
+        "me.connect_codes.confirm  POST /api/v1/me/connect-codes/:userCode/confirm",
+        "me.connect_codes.get  GET /api/v1/me/connect-codes/:userCode",
         "me.delete  DELETE /api/v1/me",
         "me.get  GET /api/v1/me",
         "me.model_preference.get  GET /api/v1/me/model-preference",
@@ -171,6 +178,8 @@ describe("the operation catalog", () => {
         "permissions.grant  POST /api/v1/instance/access/grants",
         "permissions.list  GET /api/v1/instance/access/grants",
         "permissions.revoke  DELETE /api/v1/instance/access/grants/:grantId",
+        "personal_api_keys.list  GET /api/v1/instance/personal-api-keys",
+        "personal_api_keys.revoke  POST /api/v1/instance/personal-api-keys/:keyId/revoke",
         "platform.context.get  GET /api/v1/context",
         "platform.references.get  GET /api/v1/context/references",
         "ready.get  GET /ready",
@@ -403,8 +412,9 @@ describe("a running instance", () => {
     // and Namespaces came after it, then the background jobs, then a person's own Approval
     // Requests, then the list of modules, then the infrastructure and its check. The five
     // asset addresses moved once more, to `/api/v1/assets`, and the list, the check and the
-    // sync of assets came with them. Then the Pages of a conversation, and the check of a sync,
-    // and the search of the Pages and files of a workspace.
+    // sync of assets came with them. Then the Pages of a conversation, and the check of a sync.
+    // Then personal API keys and the connect code of the CLI, and the search of the Pages and
+    // files of a workspace.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -468,6 +478,15 @@ describe("a running instance", () => {
       "workflows.get_run",
       "workflows.list_step_runs",
       "workflows.cancel_run",
+      "me.api_keys.list",
+      "me.api_keys.create",
+      "me.api_keys.revoke",
+      "me.connect_codes.get",
+      "me.connect_codes.confirm",
+      "connect_codes.start",
+      "connect_codes.redeem",
+      "personal_api_keys.list",
+      "personal_api_keys.revoke",
       "workspaces.files.list"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.

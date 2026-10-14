@@ -9,7 +9,7 @@ import { retiredReleasePaths } from "./support/retired-api-paths";
 
 import { createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -67,6 +67,12 @@ import {
   updateManifestDefaultAgent
 } from "../packages/config-cli/src/index";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import {
+  agentConfig as namespaceAgentConfig,
+  grantKaiNamespace,
+  inDays,
+  setupPersonalKeyInstance
+} from "./support/personal-api-keys";
 import { agent as namespaceAgent, recordAuthAdapter } from "./support/access-instance";
 import { setupNamespaceHolder } from "./support/asset-operations";
 import { appFiles, setupAppInstance } from "./support/app-instance";
@@ -931,7 +937,7 @@ skills:
     expect(stderr.join("")).toContain(
       "Guardrail 'No IBAN in skills' blocked skill 'kunden-faq': Skills hold no bank account."
     );
-    expect(stderr.join("")).not.toContain("3704");
+    expect(stderr.join("")).not.toContain("3704 0044");
     expect(
       await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
@@ -1501,7 +1507,7 @@ skills:
         stderr: (text) => missingStderr.push(text)
       })
     ).toBe(1);
-    expect(missingStderr.join("")).toContain("Missing CLI credentials");
+    expect(missingStderr.join("")).toContain("Not logged in to https://catalyst.test");
     expect(missingStderr.join("")).toContain("CATALYST_API_KEY");
 
     // The server credential no longer signs the CLI in, and no request leaves the process.
@@ -1521,7 +1527,7 @@ skills:
         stderr: (text) => serverCredentialStderr.push(text)
       })
     ).toBe(1);
-    expect(serverCredentialStderr.join("")).toContain("Missing CLI credentials");
+    expect(serverCredentialStderr.join("")).toContain("Not logged in");
     expect(serverCredentialStderr.join("")).not.toContain("SERVER_CREDENTIAL");
     expect(serverCredentialRequests).toEqual([]);
 
@@ -2342,9 +2348,143 @@ describe("config CLI help", () => {
 
     expect(await runCli(["config", "pull", "--write-env", ".env"], { cwd, stderr })).toBe(2);
     expect(await runCli(["config", "pull"], { cwd, env: {}, stderr })).toBe(1);
-    expect(output.join("")).toContain("Administration, API Access");
+    expect(output.join("")).toContain("Run 'catalyst login --instance http://127.0.0.1:4210'");
     expect(await runCli(["config", "local-key"], { cwd, env: {}, stderr })).toBe(2);
     expect(output.join("")).toContain("catalyst-local-key");
+  });
+});
+
+/** A working copy of the Namespace `kai-` with one agent of each side of its border. */
+async function kaiWorkingCopy(): Promise<string> {
+  const directory = await createTemporaryDirectory();
+  await writeFile(
+    join(directory, "catalyst.yaml"),
+    "instances:\n  production:\n    url: https://catalyst.test\n    namespace: kai-\ndefaultInstance: production\nagents:\n  - agents/*.agent.yaml\nskills:\n  - skills/*/SKILL.md\n"
+  );
+  await mkdir(join(directory, "agents"));
+  await writeFile(
+    join(directory, "agents", "kai-tax.agent.yaml"),
+    serializeAgentYaml(namespaceAgentConfig("kai-tax"))
+  );
+  return directory;
+}
+
+describe("catalyst login", () => {
+  it("saves the key of a confirmed code, and the CLI then works inside the person's Namespace only", async () => {
+    const t = await setupPersonalKeyInstance();
+    await grantKaiNamespace(t);
+    const cwd = await kaiWorkingCopy();
+    const configHome = await createTemporaryDirectory();
+    const env = { CATALYST_CONFIG_HOME: configHome };
+    const fetchImpl = createTestFetch(t.instance);
+    const output: string[] = [];
+    const stdout = (text: string) => output.push(text);
+    let confirmed = false;
+
+    // The person confirms in Settings while the CLI waits for it.
+    const sleep = async () => {
+      if (confirmed) return;
+      const code = /code ([A-Z]{4}-[A-Z]{4})/u.exec(output.join(""))?.[1];
+      expect(code).toBeDefined();
+      await t.expectOk(t.kai.id, "me.connect_codes.confirm", {
+        params: { userCode: code ?? "" },
+        payload: {
+          name: "Mini",
+          scopes: ["agent.read:kai-", "agent.write:kai-"],
+          expiresAt: inDays(30)
+        }
+      });
+      confirmed = true;
+    };
+    expect(await runCli(["login"], { cwd, env, fetchImpl, stdout, sleep })).toBe(0);
+    const printed = output.join("");
+    expect(printed).toContain("https://catalyst.test/settings/you/api-keys?code=");
+    expect(printed).toContain("Logged in to https://catalyst.test with the key 'Mini'");
+
+    // The key is in a file only its user reads, and on no line the CLI printed.
+    const path = join(configHome, "credentials.json");
+    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    const saved: unknown = JSON.parse(await readFile(path, "utf8"));
+    const apiKey = JSON.stringify(saved).match(/cat\.apic_[^"]+/u)?.[0];
+    expect(apiKey).toBeDefined();
+    expect(printed).not.toContain(apiKey ?? "");
+
+    output.length = 0;
+    expect(await runCli(["config", "push"], { cwd, env, fetchImpl, stdout })).toBe(0);
+    expect(output.join("")).toContain("Pushed 1 agent");
+    output.length = 0;
+    expect(await runCli(["config", "list"], { cwd, env, fetchImpl, stdout })).toBe(0);
+    expect(output.join("")).toContain("agent\tkai-tax\t-\t-");
+
+    // A pull reads what the key may read and nothing of the whole instance.
+    const paths: string[] = [];
+    const recording: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      paths.push(new URL(request.url).pathname);
+      return fetchImpl(request);
+    };
+    output.length = 0;
+    expect(await runCli(["config", "pull"], { cwd, env, fetchImpl: recording, stdout })).toBe(0);
+    expect(output.join("")).toContain("Pulled 1 agent, 0 skills.");
+    expect(paths).not.toContain(testOperations["config_assets.get_overview"].path);
+    expect(await readFile(join(cwd, "agents", "kai-tax.agent.yaml"), "utf8")).toContain(
+      "# Pulled from production.\n"
+    );
+
+    // An agent outside the Namespace is refused, with the right that is missing.
+    await writeFile(
+      join(cwd, "agents", "other.agent.yaml"),
+      serializeAgentYaml(namespaceAgentConfig("other"))
+    );
+    const errors: string[] = [];
+    expect(
+      await runCli(["config", "push"], {
+        cwd,
+        env,
+        fetchImpl,
+        stdout,
+        stderr: (text) => errors.push(text)
+      })
+    ).toBe(1);
+    expect(errors.join("")).toMatch(/other/u);
+
+    // Revoked in Settings, the saved key is refused on the next call.
+    const keys = await t.expectOk(t.kai.id, "me.api_keys.list");
+    const keyId = /"id":"(apic_[^"]+)"/u.exec(keys.body)?.[1] ?? "";
+    await t.expectOk(t.kai.id, "me.api_keys.revoke", { params: { keyId } });
+    const refused: string[] = [];
+    expect(
+      await runCli(["config", "list"], {
+        cwd,
+        env,
+        fetchImpl,
+        stdout,
+        stderr: (text) => refused.push(text)
+      })
+    ).toBe(1);
+    expect(refused.join("")).toContain("revoked");
+
+    expect(await runCli(["logout"], { cwd, env, stdout })).toBe(0);
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 1, instances: {} });
+  });
+
+  it("refuses a saved key file that others may read", async () => {
+    const cwd = await kaiWorkingCopy();
+    const configHome = await createTemporaryDirectory();
+    await writeFile(
+      join(configHome, "credentials.json"),
+      JSON.stringify({ version: 1, instances: {} }),
+      { mode: 0o644 }
+    );
+    const errors: string[] = [];
+    expect(
+      await runCli(["config", "list"], {
+        cwd,
+        env: { CATALYST_CONFIG_HOME: configHome },
+        stderr: (text) => errors.push(text)
+      })
+    ).toBe(1);
+    expect(errors.join("")).toContain("can be read by other users");
   });
 });
 

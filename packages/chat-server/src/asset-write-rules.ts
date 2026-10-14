@@ -2,6 +2,7 @@ import {
   AppError,
   findNamespaceOfAssetName,
   hasAuthScope,
+  isAppError,
   isJsonObject,
   moduleOffError,
   operationDenialError,
@@ -32,7 +33,7 @@ import {
   readDefinitionName,
   type WorkflowAssetKind
 } from "./asset-kinds/shared";
-import { accessResource, decide, deleteDecision } from "./asset-access";
+import { accessResource, decide, deleteDecision, errorIssues } from "./asset-access";
 import {
   INVALID_ASSET_SET_MESSAGE,
   assetSetOf,
@@ -627,4 +628,19 @@ export function toJsonObject(value: unknown): JsonObject {
 
 export function assetKey(kind: ConfigAssetKind, name: string): string {
   return `${kind}:${name}`;
+}
+
+/** What the kind refuses a write of the stored asset for, whatever the write says. */
+export function storedWritableIssues(
+  kind: WorkflowAssetKind,
+  current: unknown
+): AssetSetIssue[] | undefined {
+  if (current === undefined) return undefined;
+  try {
+    kind.assertStoredWritable?.({ current });
+    return undefined;
+  } catch (error) {
+    if (isAppError(error)) return errorIssues(error);
+    throw error;
+  }
 }

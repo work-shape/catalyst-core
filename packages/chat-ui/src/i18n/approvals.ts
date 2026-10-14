@@ -84,6 +84,8 @@ export const approvals = defineTranslations({
     skillChangeInSection: "in the section “{heading}”",
     skillChangeNewResource: "New reference",
     skillChangeNewSkill: "New skill",
+    skillChangeRefused: "Not applied. When the change was to be applied, it was no longer allowed.",
+    skillChangeRefusedReason: "Reason: {reason}",
     skillChangeShowContent: "Show content"
   },
   de: {
@@ -171,6 +173,9 @@ export const approvals = defineTranslations({
     skillChangeInSection: "im Abschnitt „{heading}“",
     skillChangeNewResource: "Neue Referenz",
     skillChangeNewSkill: "Neuer Skill",
+    skillChangeRefused:
+      "Nicht übernommen. Als die Änderung übernommen werden sollte, war sie nicht mehr erlaubt.",
+    skillChangeRefusedReason: "Grund: {reason}",
     skillChangeShowContent: "Inhalt anzeigen"
   }
 });

@@ -33,6 +33,11 @@ const LIVE_ONCE_AUDIT = {
 // Run observations remain a separate stream from platform events and audit.
 export const EVENTS = {
   "agent_run.recovered": { ...LEGACY_AUDIT, name: "agent_run.recovered", subject: "agent_run" },
+  "api_access.connect_code_confirmed": {
+    ...LEGACY_AUDIT,
+    name: "api_access.connect_code_confirmed",
+    subject: "api_access"
+  },
   "api_access.credential_created": {
     ...LEGACY_AUDIT,
     name: "api_access.credential_created",
@@ -41,6 +46,21 @@ export const EVENTS = {
   "api_access.credential_revoked": {
     ...LEGACY_AUDIT,
     name: "api_access.credential_revoked",
+    subject: "api_access"
+  },
+  "api_access.personal_key_created": {
+    ...LEGACY_AUDIT,
+    name: "api_access.personal_key_created",
+    subject: "api_access"
+  },
+  "api_access.personal_key_revoked": {
+    ...LEGACY_AUDIT,
+    name: "api_access.personal_key_revoked",
+    subject: "api_access"
+  },
+  "api_access.personal_keys_viewed": {
+    ...LEGACY_AUDIT,
+    name: "api_access.personal_keys_viewed",
     subject: "api_access"
   },
   "api_access.service_principal_created": {
@@ -106,6 +126,11 @@ export const EVENTS = {
     phases: ["before"]
   },
   "audit.pruned": { ...LEGACY_AUDIT, name: "audit.pruned", subject: "audit" },
+  "auth.personal_access_token_issued": {
+    ...LEGACY_AUDIT,
+    name: "auth.personal_access_token_issued",
+    subject: "auth"
+  },
   "auth.service_access_token_issued": {
     ...LEGACY_AUDIT,
     name: "auth.service_access_token_issued",
@@ -266,6 +291,15 @@ export const EVENTS = {
     ...LEGACY_AUDIT,
     name: "conversation.title_generation_failed",
     subject: "conversation"
+  },
+  // Guardrails answer here before a Data Store's revision goes live, which applies its
+  // migrations. The subject is the store.
+  "data_store.before_publish": {
+    name: "data_store.before_publish",
+    subject: "config_asset",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
   },
   "data_store.migrated": {
     ...LEGACY_AUDIT,

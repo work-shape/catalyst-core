@@ -98,6 +98,11 @@ const payloadSchema = z.object({
   }),
   workspaceId: z.string().optional(),
   /**
+   * What the call's before-events read when it was held, merged into the input when it is
+   * executed: the revision of a Page an App is written from, for instance.
+   */
+  heldInput: z.record(z.string(), z.unknown()).optional(),
+  /**
    * Where the value came from that made the call wait: a setting or a default of the instance,
    * or a guardrail. A request that was filed before this was kept names nothing.
    */
@@ -435,7 +440,8 @@ async function runFrozenCall(
       workspaceId: run.workspaceId,
       idempotencyKey: run.idempotencyKey,
       correlationId: run.correlationId
-    }
+    },
+    ...(payload.heldInput ? { heldInput: toJsonObject(payload.heldInput) } : {})
   };
   return executeApprovedOperation(
     waiting,
@@ -614,7 +620,7 @@ export function createOperationApprovalFiler(
   options: OperationApprovalFilerOptions
 ): OperationApprovalRequests {
   return {
-    async request({ run, call, runtime, expiresAt, policySource }) {
+    async request({ run, call, heldInput, runtime, expiresAt, policySource }) {
       const { actor, origin } = call;
       if (isAuthenticatedServicePrincipal(actor)) {
         return undefined;
@@ -632,6 +638,7 @@ export function createOperationApprovalFiler(
         operation: run.operation,
         effect: run.effect,
         input,
+        ...(heldInput ? { heldInput } : {}),
         actor: {
           id: actor.id,
           label: actor.displayLabel,

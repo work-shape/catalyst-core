@@ -7,7 +7,9 @@ import { FIXTURE_SECRET_HANDLE } from "../tests/chat-ui-connection-fixtures";
 // fixture: an API process that starts meanwhile deletes Connections no release config names.
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
-const databaseUrl = `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
+const databaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
 const clientInstanceId = "demo-e2e";
 
 async function withSql<Result>(run: (sql: postgres.Sql) => Promise<Result>): Promise<Result> {

@@ -8,6 +8,7 @@ import {
   operationDenialError,
   recordsAllowedCalls,
   type ActorAccess,
+  type JsonObject,
   type NewOperationRun,
   type OperationAuthorization,
   type OperationCall,
@@ -33,7 +34,6 @@ import {
   endRun,
   executeAdmitted,
   failRun,
-  hashInput,
   requireModuleOn,
   resolveGuardedPolicy,
   type DirectDecision,
@@ -43,6 +43,7 @@ import {
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
+import { hashInput } from "./input-hash";
 
 /**
  * How long a call waits for another person's approval before it expires unexecuted. The
@@ -488,9 +489,14 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       return { ending: await denyRun(context, unavailable) };
     }
     const expiresAt = new Date(now().getTime() + PENDING_APPROVAL_EXPIRES_AFTER_MS).toISOString();
+    // The call the approval answers reads what the approval is asked about: what could change
+    // meanwhile, such as the newest revision of a Page, is held beside its input, in the keys
+    // the operation declares.
+    const heldInput = await heldInputOf(context);
     const filed = await deps.approvals.request({
       run,
       call,
+      ...(Object.keys(heldInput).length > 0 ? { heldInput } : {}),
       resource: context.resource,
       runtime: context.runtime,
       expiresAt,
@@ -521,4 +527,19 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
         ? { mode: policy.decisionMode, reason: policy.decisionReason }
         : undefined
   };
+}
+
+/** What the before-events of a call hold beside its input, in the keys its operation declares. */
+async function heldInputOf(context: RunContext): Promise<JsonObject> {
+  const keys = context.definition.heldInputKeys ?? [];
+  const held: JsonObject = {};
+  if (keys.length === 0) return held;
+  for (const event of context.beforeEvents ?? []) {
+    const fields = await event.heldInput?.();
+    for (const key of keys) {
+      const value = fields?.[key];
+      if (value !== undefined) held[key] = value;
+    }
+  }
+  return held;
 }

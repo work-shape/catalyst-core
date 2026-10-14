@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
@@ -29,6 +28,7 @@ import {
   type ModuleSnapshot,
   type NewOperationRun,
   type OperationAuthorization,
+  type OperationBeforeEvent,
   type OperationCall,
   type OperationCallRuntime,
   type OperationDefinition,
@@ -74,6 +74,11 @@ export interface OperationApprovalRequests {
     run: OperationRun;
     /** The call with its validated input, frozen as the request's payload. */
     call: OperationCall;
+    /**
+     * What the call's before-events read that could change while it waits, kept beside its
+     * input and merged into it when the call is executed (`WaitingOperationCall.heldInput`).
+     */
+    heldInput?: JsonObject;
     resource: OperationResource | undefined;
     /** What the live call has. An agent's call carries the hold of its run here. */
     runtime: OperationCallRuntime;
@@ -175,6 +180,13 @@ export interface RunContext {
    * asked again, and the guardrails' hits were kept when it was made.
    */
   repeated?: true;
+  /**
+   * The events of the operation's own `beforeEvents` as the guardrails were last asked them
+   * for this call, handed to its execution.
+   */
+  beforeEvents?: readonly OperationBeforeEvent[];
+  /** Keeps the events of the operation's own `beforeEvents` as they are asked. */
+  asked(events: readonly OperationBeforeEvent[]): void;
   now(): Date;
   emit(
     name: PlatformEventName,
@@ -230,6 +242,9 @@ export function createRunContext(
     ...rest,
     ...(unrecordedStart ? { unrecorded: { start: unrecordedStart, heldAfterEvents: [] } } : {}),
     now: deps.now ?? (() => new Date()),
+    asked: (events) => {
+      context.beforeEvents = events;
+    },
     emit: (name, phase, payload = {}, before = {}) => {
       const send = () =>
         deps.events.emit(
@@ -543,7 +558,8 @@ export async function executeAdmitted(
       ...(run.idempotencyKey === undefined ? {} : { idempotencyKey: run.idempotencyKey }),
       runtime: context.runtime,
       access,
-      audit: auditForRun(deps.audit, run.id, call.correlationId)
+      audit: auditForRun(deps.audit, run.id, call.correlationId),
+      ...(context.beforeEvents ? { beforeEvents: context.beforeEvents } : {})
     };
     await begin?.();
     started = true;
@@ -736,7 +752,8 @@ const forbiddenSchema = z.object({
       "denied",
       "unknown_action",
       "holder_inactive",
-      "holder_not_administrable"
+      "holder_not_administrable",
+      "outside_key_scope"
     ])
   })
 });
@@ -769,22 +786,4 @@ function auditForRun(
         metadata: { ...input.metadata, operationRunId }
       })
   };
-}
-
-/** The hash a run keeps in place of its input: SHA-256 over the input with sorted keys. */
-export function hashInput(input: unknown): string {
-  return createHash("sha256")
-    .update(canonicalJson(unknownToJsonValue(input)))
-    .digest("hex");
-}
-
-function canonicalJson(value: JsonValue): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (typeof value === "object" && value !== null) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key] ?? null)}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
 }

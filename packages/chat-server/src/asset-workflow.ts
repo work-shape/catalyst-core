@@ -62,6 +62,7 @@ import {
   requireAssetKindModuleOn,
   requireMatchingConfigName,
   setsInitialDefault,
+  storedWritableIssues,
   toJsonObject
 } from "./asset-write-rules";
 import {
@@ -167,6 +168,12 @@ export class AssetWorkflow {
         : decide(access, target.kind.actions.write, target.resource);
     if (!decision.allowed) {
       return decision;
+    }
+    // A revert restores content: who does not read the asset is refused before the guardrails
+    // read the revision, so no answer of theirs tells what it holds. A name of no asset of
+    // this scope has nothing to restore and is refused by the revert as a free name is.
+    if (input.revision !== undefined && target.asset && !readsTarget(access, target)) {
+      return decide(access, target.kind.actions.read, target.resource);
     }
     const config =
       input.config ??
@@ -781,19 +788,4 @@ function allocatedRevision(
     throw new AppError("INTERNAL", `The write of config ${kind} '${name}' has no revision`);
   }
   return revision;
-}
-
-/** What the kind refuses a write of the stored asset for, whatever the write says. */
-function storedWritableIssues(
-  kind: WorkflowAssetKind,
-  current: unknown
-): AssetSetIssue[] | undefined {
-  if (current === undefined) return undefined;
-  try {
-    kind.assertStoredWritable?.({ current });
-    return undefined;
-  } catch (error) {
-    if (isAppError(error)) return errorIssues(error);
-    throw error;
-  }
 }

@@ -54,6 +54,12 @@ export function isFileSetId(value: string): value is FileSetId {
  */
 export const FILE_SET_MAX_FILES = 500;
 export const FILE_SET_MAX_FILE_BYTES = 2 * 1024 * 1024;
+/**
+ * The input field of a write of an App from a Page that names the Page revision it copies. A
+ * call held for an approval keeps the revision its guardrails read in it (`heldInputKeys`).
+ */
+export const PAGE_FILE_SET_HELD_KEY = "fileSetId";
+
 export const FILE_SET_MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 /** The longest path of a file in a file set, in characters. */
 export const FILE_SET_MAX_PATH_CHARS = 512;

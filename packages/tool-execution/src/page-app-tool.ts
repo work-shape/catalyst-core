@@ -1,7 +1,9 @@
 import { z } from "zod";
 import {
+  PAGE_FILE_SET_HELD_KEY,
   PAGE_NAME_MAX_CHARS,
   type ConversationId,
+  type OperationBeforeEvent,
   type PolicyValue,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
@@ -40,8 +42,17 @@ export interface PageAppCalls {
    */
   saveAsApp(
     context: ToolExecutionContext,
-    input: { page: string; name: string; title: string }
+    input: { page: string; name: string; title: string; fileSetId?: string | undefined }
   ): Promise<PageAppCreated>;
+  /**
+   * `asset.before_write` of the App `saveAsApp` would write, with the files of the Page's
+   * revision it copies: the guardrails on asset writes answer the agent's App as a person's.
+   * Nothing where the conversation holds no such Page, which the save itself refuses.
+   */
+  saveAsAppBeforeEvents(
+    conversationId: ConversationId,
+    input: { page: string; name: string; title: string; fileSetId?: string | undefined }
+  ): Promise<readonly OperationBeforeEvent[]>;
   /**
    * After a save of the Page `pageId`: where the conversation is about an App whose draft is
    * this Page's, the Page's newest revision becomes the App's next draft revision. Nothing
@@ -50,7 +61,11 @@ export interface PageAppCalls {
    */
   saveIntoSubjectApp(
     context: ToolExecutionContext,
-    input: { pageId: string }
+    input: {
+      pageId: string;
+      /** The revision the save stored, which the draft is written from. The newest where absent. */
+      fileSetId?: string;
+    }
   ): Promise<PageSaveIntoApp | undefined>;
   /**
    * What an administrator set for the App write a call of this conversation makes: `create`
@@ -87,8 +102,11 @@ const outputSchema = z.object({
   revision: z.number().int()
 });
 
+/** The Page revision a held call keeps beside its input, where one was held. */
+const heldRevisionSchema = z.object({ [PAGE_FILE_SET_HELD_KEY]: z.string().optional() });
+
 export function createPageSaveAsAppTool(
-  calls: Pick<PageAppCalls, "saveAsApp" | "pageAppPolicyFloor">
+  calls: Pick<PageAppCalls, "saveAsApp" | "saveAsAppBeforeEvents" | "pageAppPolicyFloor">
 ): AnyToolDefinition {
   return defineTool({
     name: PAGE_SAVE_AS_APP_TOOL_NAME,
@@ -107,8 +125,17 @@ export function createPageSaveAsAppTool(
     permission: { mode: "allow" },
     // A setting on the operations this projects holds for the agent's call too.
     policyFloor: ({ conversationId }) => calls.pageAppPolicyFloor(conversationId, "create"),
+    // The guardrails on asset writes answer the App as they answer a person's save of a Page.
+    // Held for an approval, the call keeps the Page revision they read and writes that one.
+    beforeEvents: (input, { conversationId }) => calls.saveAsAppBeforeEvents(conversationId, input),
+    heldInputKeys: [PAGE_FILE_SET_HELD_KEY],
     async execute(input, context) {
-      const created = await calls.saveAsApp(context, input);
+      const held = heldRevisionSchema.safeParse(input);
+      const fileSetId = held.success ? held.data[PAGE_FILE_SET_HELD_KEY] : undefined;
+      const created = await calls.saveAsApp(context, {
+        ...input,
+        ...(fileSetId === undefined ? {} : { fileSetId })
+      });
       return toolSuccess(created, {
         auditSummary: {
           action: PAGE_SAVE_AS_APP_TOOL_NAME,

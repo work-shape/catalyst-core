@@ -1,5 +1,5 @@
 {
-  "id": "940d85ba-2bca-4413-b3e4-696860083e41",
+  "id": "95a913e2-3862-4e7c-a197-98228e50e497",
   "prevId": "f311a7f2-1aa3-4ec6-bb2d-0b18b505cebc",
   "version": "7",
   "dialect": "postgresql",
@@ -644,6 +644,182 @@
       },
       "isRLSEnabled": false
     },
+    "public.api_connect_codes": {
+      "name": "api_connect_codes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "client_instance_id": {
+          "name": "client_instance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_code_hash": {
+          "name": "user_code_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device_code_hash": {
+          "name": "device_code_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_label": {
+          "name": "client_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "key_name": {
+          "name": "key_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "key_scopes": {
+          "name": "key_scopes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "key_expires_at": {
+          "name": "key_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "redeemed_at": {
+          "name": "redeemed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "api_connect_codes_device_code_idx": {
+          "name": "api_connect_codes_device_code_idx",
+          "columns": [
+            {
+              "expression": "device_code_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "api_connect_codes_client_user_code_idx": {
+          "name": "api_connect_codes_client_user_code_idx",
+          "columns": [
+            {
+              "expression": "client_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_code_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "api_connect_codes_expires_idx": {
+          "name": "api_connect_codes_expires_idx",
+          "columns": [
+            {
+              "expression": "client_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "api_connect_codes_client_owner_fk": {
+          "name": "api_connect_codes_client_owner_fk",
+          "tableFrom": "api_connect_codes",
+          "tableTo": "product_users",
+          "columnsFrom": [
+            "client_instance_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "client_instance_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "api_connect_codes_approval_check": {
+          "name": "api_connect_codes_approval_check",
+          "value": "(\"api_connect_codes\".\"approved_at\" is null) = (\"api_connect_codes\".\"owner_user_id\" is null) and (\"api_connect_codes\".\"approved_at\" is null) = (\"api_connect_codes\".\"key_scopes\" is null) and (\"api_connect_codes\".\"approved_at\" is null) = (\"api_connect_codes\".\"key_expires_at\" is null) and (\"api_connect_codes\".\"approved_at\" is null) = (\"api_connect_codes\".\"key_name\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.api_credentials": {
       "name": "api_credentials",
       "schema": "",
@@ -664,7 +840,13 @@
           "name": "service_principal_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "name": {
           "name": "name",
@@ -751,6 +933,68 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "api_credentials_client_owner_created_idx": {
+          "name": "api_credentials_client_owner_created_idx",
+          "columns": [
+            {
+              "expression": "client_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"api_credentials\".\"owner_user_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "api_credentials_client_personal_created_idx": {
+          "name": "api_credentials_client_personal_created_idx",
+          "columns": [
+            {
+              "expression": "client_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"api_credentials\".\"owner_user_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -768,12 +1012,32 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "api_credentials_client_owner_fk": {
+          "name": "api_credentials_client_owner_fk",
+          "tableFrom": "api_credentials",
+          "tableTo": "product_users",
+          "columnsFrom": [
+            "client_instance_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "client_instance_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "api_credentials_one_owner_check": {
+          "name": "api_credentials_one_owner_check",
+          "value": "(\"api_credentials\".\"service_principal_id\" is null) <> (\"api_credentials\".\"owner_user_id\" is null)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.service_principals": {
@@ -7368,12 +7632,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "live_steps": {
-          "name": "live_steps",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -7589,12 +7847,6 @@
         },
         "source": {
           "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "target": {
-          "name": "target",
           "type": "text",
           "primaryKey": false,
           "notNull": false
