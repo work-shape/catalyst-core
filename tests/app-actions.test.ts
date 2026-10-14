@@ -152,33 +152,29 @@ describe("a call a frame makes through the interface", () => {
     }
   });
 
-  it("carries out no changing action in a draft or a Page: draft_safe_mode, no run and no call", async () => {
-    const frames = {
-      page: await openPage(t.admin.id),
-      draft: await openApp(t.admin.id, "draft")
-    };
-    for (const [where, frame] of Object.entries(frames)) {
-      const before = { handed: t.handed.length, runs: (await runs()).length };
+  // A draft of an App simulates a changing action instead (ADR-0031): app-draft-safe-mode.test.ts.
+  it("carries out no changing action in a Page: draft_safe_mode, no run and no call", async () => {
+    const frame = await openPage(t.admin.id);
+    const before = { handed: t.handed.length, runs: (await runs()).length };
 
-      const response = await callAction(
-        t.admin.id,
-        frame,
-        "save",
-        { note: "x" },
-        { "idempotency-key": `safe-${where}` }
-      );
+    const response = await callAction(
+      t.admin.id,
+      frame,
+      "save",
+      { note: "x" },
+      { "idempotency-key": "safe-page" }
+    );
 
-      expect(response.statusCode, where).toBe(409);
-      expect(refusal(response), where).toMatchObject({
-        code: "CONFLICT",
-        details: { reason: "draft_safe_mode" }
-      });
-      expect(response.headers["operation-run-id"], where).toBeUndefined();
-      expect({ handed: t.handed.length, runs: (await runs()).length }, where).toEqual(before);
-      // The frame is told so before it asks, and a read stays possible.
-      expect(await can(t.admin.id, frame), where).toMatchObject({ save: "deny", load: "allow" });
-      expectStatus(await callAction(t.admin.id, frame, "load", { text: "read" }), 200);
-    }
+    expect(response.statusCode).toBe(409);
+    expect(refusal(response)).toMatchObject({
+      code: "CONFLICT",
+      details: { reason: "draft_safe_mode" }
+    });
+    expect(response.headers["operation-run-id"]).toBeUndefined();
+    expect({ handed: t.handed.length, runs: (await runs()).length }).toEqual(before);
+    // The frame is told so before it asks, and a read stays possible.
+    expect(await can(t.admin.id, frame)).toMatchObject({ save: "deny", load: "allow" });
+    expectStatus(await callAction(t.admin.id, frame, "load", { text: "read" }), 200);
   });
 
   it("asks a changing action of a published App for an Idempotency-Key, and runs two calls with one key once", async () => {

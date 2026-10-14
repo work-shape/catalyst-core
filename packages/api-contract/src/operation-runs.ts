@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { timestampSchema } from "./shared";
 
+/** Where a call goes or went (ADR-0031): the called asset, its test target, or nowhere. */
+export const operationTargetSchema = z.enum(["live", "test", "dry_run"]);
+
 export const operationRunOriginSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("agent"),
@@ -77,7 +80,7 @@ export const operationRunSchema = z.object({
    * Where the call went: `live`, the asset it calls; `test`, that asset's test target; or
    * `dry_run`, nowhere, a changing call of a draft that answered what it would have done.
    */
-  target: z.enum(["live", "test", "dry_run"]),
+  target: operationTargetSchema,
   /**
    * The App a call with the origin `app` came from, as the instance holds it when the run is
    * read. Nothing of it is kept on the run. A run of a Page of a conversation has none.

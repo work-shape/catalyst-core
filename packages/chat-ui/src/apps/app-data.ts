@@ -151,6 +151,22 @@ export function useAppActions(app: string, enabled: boolean): AppActionsRead {
     : { status: "loading" };
 }
 
+/**
+ * Reads the named actions of one App again: after a test from the draft, which may have used
+ * up the reader's "Run live once".
+ */
+export function useAppActionsReload(app: string): () => void {
+  const queryClient = useQueryClient();
+  const keys = useAppKeys();
+  return useCallback(
+    () =>
+      void queryClient
+        .invalidateQueries({ queryKey: [...keys, "actions", app] })
+        .catch(() => undefined),
+    [app, keys, queryClient]
+  );
+}
+
 /** The App a Page was saved as, where the reader may write it. */
 export type AppFromPage = NonNullable<AppFromPageResponse["app"]>;
 
@@ -266,6 +282,11 @@ export interface AppWrites {
   /** Puts the draft back on the published revision. */
   discardDraft(app: string, expectedRevision: number): Promise<unknown>;
   remove(app: string, expectedRevision: number): Promise<unknown>;
+  /**
+   * Makes the reader's own next call of one action of the draft live instead of simulated,
+   * once. Refused where the draft is not at `expectedRevision` any more.
+   */
+  runLiveOnce(app: string, action: string, expectedRevision: number): Promise<unknown>;
   revisions(app: string, cursor: string | undefined): Promise<AppRevisionPage>;
 }
 
@@ -321,6 +342,13 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
       remove: (app, expectedRevision) =>
         made(
           client.assets.delete({ params: params(app), body: { expectedRevision, workspaceId } })
+        ).finally(changed),
+      runLiveOnce: (app, action, expectedRevision) =>
+        made(
+          client.assets.run_live_once({
+            params: params(app),
+            body: { part: action, expectedRevision, workspaceId }
+          })
         ).finally(changed),
       revisions: (app, cursor) =>
         client.assets.revisions.list({

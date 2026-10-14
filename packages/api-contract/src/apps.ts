@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { appActionPermissionSchema } from "./app-bridge";
+import { operationTargetSchema } from "./operation-runs";
 import { pagePreviewSchema } from "./pages";
 
 /** The kind id of an App in the asset registry. */
@@ -183,9 +184,10 @@ export const appActionCallRequestSchema = z
 /**
  * How a call of a frame went. `done` carries what the operation answered. `pending_approval`
  * carries nothing: the call waits for another person and its run says how it ends. `dry_run`
- * is the answer of a draft, which carries out nothing that changes: it says in `message` what
- * the call would have done and holds in `result` the input it would have done it with. It
- * leaves no run.
+ * is the answer of a draft, which carries out nothing that changes unless "Run live once"
+ * covers the call: it says in `message` what the call would have done and holds in `result`
+ * the input it would have done it with. A draft of an App leaves a run with the target
+ * `dry_run`, named in the header `operation-run-id`; a Page of a conversation leaves none.
  */
 export const appActionCallResultSchema = z.union([
   z.object({
@@ -237,10 +239,16 @@ const listedAppAction = {
   inputSchema: z.record(z.string(), z.unknown()),
   /**
    * What a call of the action would come to for the caller now, by the caller's rights and
-   * the policy. A draft runs in safe mode: a changing action is refused there whatever this
-   * says, which `view` tells.
+   * the policy, as it would be live. Where a draft's call goes instead, `target` says.
    */
   policy: appActionPermissionSchema,
+  /**
+   * In the draft (ADR-0031): where the caller's next call of the action goes. `live` for a
+   * reading action, and for a changing one the caller switched "Run live once" on for;
+   * `dry_run` for any other changing action, which is simulated. Missing for a published
+   * revision, every call of which is live.
+   */
+  target: operationTargetSchema.optional(),
   /** An agent that lists `toolName` carries the action as a tool now. */
   agentTool: z.boolean()
 };
