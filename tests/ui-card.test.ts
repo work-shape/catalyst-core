@@ -36,7 +36,10 @@ function card(footer: ReactElement, extra?: ReactElement): string {
 }
 
 const startChat = createElement(Button, { size: "sm" }, "Start chat");
-const target = createElement(CardTarget, { titleId: "title-1", children: startChat });
+const target = createElement(CardTarget, {
+  label: "Start chat with Support assistant",
+  children: startChat
+});
 
 /** The opening tag of the button whose text is `label`. */
 function buttonTag(markup: string, label: string): string {
@@ -67,12 +70,10 @@ describe("CardTarget", () => {
     expect(classes).not.toContain("relative");
   });
 
-  it("is named by its own text and the card's title", () => {
-    const tag = buttonTag(card(target), "Start chat");
-    const ownId = /\sid="([^"]+)"/u.exec(tag)?.[1] ?? "";
-
-    expect(ownId).not.toBe("");
-    expect(tag).toContain(`aria-labelledby="${ownId} title-1"`);
+  it("is named by the sentence it is given: its action with the card's title", () => {
+    expect(buttonTag(card(target), "Start chat")).toContain(
+      'aria-label="Start chat with Support assistant"'
+    );
   });
 
   it("shows the hover state only while the pointer is on the target's area, and its focus", () => {

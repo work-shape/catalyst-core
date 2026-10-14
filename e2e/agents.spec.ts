@@ -78,7 +78,7 @@ test("a member finds the agents of the workspace under New chat and starts a cha
   // Start chat opens a new conversation with that agent, by the keyboard as by a click.
   const start = otherCard.getByRole("button", { name: "Start chat" });
   await start.focus();
-  await expect(start).toHaveAccessibleName(`Start chat ${OTHER_AGENT}`);
+  await expect(start).toHaveAccessibleName(`Start chat with ${OTHER_AGENT}`);
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/w\/[^/]+$/u);
   await expect(startPageAgent(page)).toHaveAccessibleName(`Select agent: ${OTHER_AGENT}`);
@@ -126,7 +126,9 @@ test("the Agents page reads in German and keeps inside a phone's width", async (
   await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
   await expect(page.getByRole("heading", { level: 1, name: "Agenten" })).toBeVisible();
   const defaultCard = card(page, DEFAULT_AGENT);
-  await expect(defaultCard.getByRole("button", { name: "Chat starten" })).toBeVisible();
+  await expect(
+    defaultCard.getByRole("button", { name: `Chat mit ${DEFAULT_AGENT} starten`, exact: true })
+  ).toBeVisible();
   await expect(defaultCard).toContainText("Standardagent");
 
   // The title starts below the button that opens the drawer, and nothing reaches past the window.

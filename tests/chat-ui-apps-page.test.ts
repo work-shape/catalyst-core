@@ -135,6 +135,12 @@ describe("the Apps page", () => {
     expect(memberCards[1]).not.toContain('data-card-target=""');
 
     expect(render(appsPage([summary()], NO_APP_RIGHTS), "de")).toContain("Geändert gestern");
+    // The card's target is named as one sentence with the App's name, in either language.
+    expect(cards[0]).toContain('aria-label="Open Angebotsrechner"');
+    expect(cards[1]).toContain('aria-label="Edit Urlaubsplaner"');
+    expect(render(appsPage([summary()], NO_APP_RIGHTS), "de")).toContain(
+      'aria-label="Angebotsrechner öffnen"'
+    );
   });
 
   it("keeps the draft's news from a reader who does not write", () => {

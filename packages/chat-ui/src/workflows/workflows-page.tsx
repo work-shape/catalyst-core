@@ -215,7 +215,7 @@ function WorkflowCard({
       {/* A Workflow without a published revision has nothing a reader could open. */}
       {workflow.published ? (
         <CardFooter>
-          <CardTarget titleId={titleId}>
+          <CardTarget label={t("workflows.openNamed", { name: workflow.name })}>
             <RouteLink
               route={{ kind: "workflow", ...address }}
               variant="primary"

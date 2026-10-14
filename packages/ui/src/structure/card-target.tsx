@@ -1,12 +1,15 @@
 import { Slot } from "radix-ui";
-import { useId, useRef, type ReactElement } from "react";
+import { useRef, type ReactElement } from "react";
 
 /** How far the pointer may move between press and release for the press to still be a click. */
 const CLICK_SLOP_PX = 4;
 
 export interface CardTargetProps {
-  /** The id of the card's title. The target is named by its own text and the title. */
-  titleId: string;
+  /**
+   * The target's accessible name: its action with the card's title, written as one sentence
+   * per language by the caller, such as "Start chat with Kai" or "Trip planner öffnen".
+   */
+  label: string;
   /** The caller's link or button. It takes the props it is given and passes `className` on. */
   children: ReactElement;
 }
@@ -15,7 +18,7 @@ export interface CardTargetProps {
  * The one way into a card that opens as a whole: the caller's link or button to what the card
  * stands for, such as its main action in the footer. Its own box stays where it is and its
  * clickable area stretches over the card, so a click anywhere on the card is a click on it,
- * and the keyboard meets it once, named by its text and the card's title ("Open Trip
+ * and the keyboard meets it once, named by its action and the card's title ("Open Trip
  * planner"). A press that is dragged before its release opens nothing.
  *
  * Every other control in the card stands above that area and keeps its own action. Text under
@@ -23,13 +26,11 @@ export interface CardTargetProps {
  * a time with its full date as a tooltip or an id to copy, is wrapped in `CardReachable`.
  * A card whose reader has nowhere to go has no target and opens nothing.
  */
-export function CardTarget({ titleId, children }: CardTargetProps) {
-  const id = useId();
+export function CardTarget({ label, children }: CardTargetProps) {
   const pressedAt = useRef<{ x: number; y: number } | undefined>(undefined);
   return (
     <Slot.Root
-      id={id}
-      aria-labelledby={`${id} ${titleId}`}
+      aria-label={label}
       data-card-target=""
       // The stretched area is placed against the card, so the target itself is not positioned.
       className="static cursor-pointer after:absolute after:inset-0 after:rounded-lg after:content-['']"

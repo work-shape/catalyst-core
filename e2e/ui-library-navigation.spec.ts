@@ -603,8 +603,8 @@ test("a card opens from anywhere on it, its other control keeps its action, and 
   await expect(card.locator(":focus")).toHaveCount(0);
   await page.keyboard.press("Tab");
   await expect(start).toBeFocused();
-  // The target is named by its text and the card's title.
-  await expect(start).toHaveAccessibleName("Start chat Support assistant");
+  // The target is named as one sentence with the card's title.
+  await expect(start).toHaveAccessibleName("Start chat with Support assistant");
   expect(await style(start, "outline-style")).toBe("solid");
   await page.keyboard.press("Enter");
   await expect(done).toHaveText("The chat started.");

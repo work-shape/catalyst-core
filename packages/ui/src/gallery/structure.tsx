@@ -198,7 +198,7 @@ function OpeningCardSample({ text }: { text: GalleryText }) {
           </p>
         </CardHeader>
         <CardFooter>
-          <CardTarget titleId={titleId}>
+          <CardTarget label={text.cardActionNamed}>
             <Button size="sm" onClick={() => setDone(text.cardStarted)}>
               {text.cardAction}
             </Button>
