@@ -267,6 +267,30 @@ describe("a Page made an App from its conversation", () => {
     expect(await stored("moved-draft")).toMatchObject({ revision: 2 });
   });
 
+  // Fails without the change: the answer was "Config asset bundle is invalid", which names
+  // nothing the agent could fix.
+  it("says what the App's checks found when they refuse the draft", async () => {
+    const conversationId = await conversationOf(t.admin, "private");
+    const page = await t.storePage("first", {}, { conversationId });
+    await calls.saveAsApp(await contextOf(t.admin, conversationId), {
+      page: "Offers",
+      name: "unknown-connection",
+      title: "Unknown"
+    });
+
+    await t.storePage("second", { connections: ["no-such-connection"] }, { conversationId });
+    const saved = await calls.saveIntoSubjectApp(
+      await contextOf(t.admin, conversationId, "page.save"),
+      { pageId: page.pageId }
+    );
+
+    expect(saved).toMatchObject({
+      saved: false,
+      message: expect.stringContaining("no-such-connection")
+    });
+    expect(await stored("unknown-connection")).toMatchObject({ revision: 1 });
+  });
+
   it("says the draft moved when another Page was put into the App since (journey cell b)", async () => {
     const conversationId = await conversationOf(t.admin, "private");
     const page = await t.storePage("first", {}, { conversationId });
