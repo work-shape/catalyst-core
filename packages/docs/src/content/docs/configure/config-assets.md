@@ -118,6 +118,36 @@ Do not pass the key on the command line or put it in `catalyst.yaml` or `.cataly
 
 The exchange needs `SERVICE_ACCESS_TOKEN_SECRET` set on the server; without it the instance has no API access and the exchange answers 404. The API key is the CLI's only sign-in. A CLI without `CATALYST_API_KEY` stops before it sends a request and names Administration, API Access as the place a key comes from; `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` are not read.
 
+## A skill as a folder of files
+
+A skill follows the public Agent Skills convention, so a folder taken unchanged from a public skill library saves, reads and round-trips byte for byte: `SKILL.md` with YAML frontmatter and Markdown, and whatever lies beside it, commonly below `scripts/`, `references/` and `assets/`, and also files at the root such as `LICENSE.txt` or `reference.md`. The asset API writes and reads the whole folder: `assets.put` with `files` (each `{ path, text }` or `{ path, base64 }`, `SKILL.md` among them) and `assets.get` with `files=true`, which answers every file with its hash and its content as it was written.
+
+**Frontmatter.** `name` and `description` are required; a file without a `name` takes the name of the asset. `title` is optional: where it is absent the skill is shown under the first Markdown heading of its content, or else under its name with spaces for hyphens and a capital first letter. `summary` and `starters` are read as fields of the skill, as before. Every other key (`license`, `metadata`, `allowed-tools`, `compatibility`, anything else) is kept as it is, returned as `frontmatter` of the config, and read by nothing; a `frontmatter` of a config that holds one of the skill's own fields is refused. The file is stored as its bytes, so nothing reorders or reformats it.
+
+**Names.** Every name of the convention is accepted (lowercase letters, digits and hyphens), and so is what a skill here could always be named: letters, digits, dots, underscores and hyphens, starting with a letter or a digit. A write of a skill whose name is outside the convention or longer than 64 characters, or whose description is longer than 1,024, is answered with a warning (`skill_name_not_portable`, `skill_description_not_portable`) and is not refused.
+
+**Files.** Any normalized relative path is a file of the skill. A file whose extension says script or text (`.py`, `.js`, `.mjs`, `.ts`, `.sh`, `.rb`, `.md`, `.txt`, `.json`, `.yaml`, `.yml`, `.xml`, `.html`, `.css`, `.csv`) is UTF-8; every other file is bytes.
+
+The config of a skill stays where its text is read from: `content` from `SKILL.md`, and `resources` for every text file with a resource extension (`.md`, `.txt`, `.json`, `.yaml`, `.yml`) outside `scripts/`, at whatever path it lies. Every other file is kept in the file set of the revision, and the config names it in `files`, an index of `path`, `sha256`, `bytes` and `mediaType` without content. So a skill that is text alone has the config it always had, `read_skill` and a proposal of an agent work on it unchanged, and a write of the config alone (a release sync, the interface, an approved proposal) changes the text and leaves the other files and the further frontmatter of the skill where they are. Reverting to a revision brings its files back with it. What a caller sends as `files` in a config is not read; `frontmatter` is, and an empty one clears it.
+
+A folder is refused with the path and a reason of its own:
+
+| Reason | What is refused |
+| --- | --- |
+| `skill_manifest_missing`, `skill_manifest_invalid` | no `SKILL.md`, or one whose frontmatter does not read or lacks a description |
+| `skill_frontmatter_alias`, `skill_frontmatter_too_deep`, `skill_frontmatter_too_large` | a frontmatter that uses a YAML anchor with an alias or a merge key, nests deeper than 8 levels, or holds more than 8,192 characters beside the fields of the skill |
+| `skill_path_invalid`, `skill_path_duplicate` | a path that escapes the folder or is not normalized, is longer than 240 characters or has a segment longer than 100, a `SKILL.md` below the root; two paths that differ in case alone, a path that is the folder of another one |
+| `skill_file_not_text` | a file whose extension says script or text and whose bytes are no UTF-8 |
+| `skill_file_executable` | a compiled program by its first bytes (ELF, Mach-O, and PE by both of its headers), whatever its name |
+| `skill_file_lfs_pointer` | a Git LFS pointer in place of the file |
+| `skill_file_too_large` | a file over 2 MiB |
+| `files_too_large`, a schema issue on `files` | more than 8 MiB in all, more than 500 files: the limits of every write of files of the API, which are the skill's too |
+| `files_unavailable` | a file the config cannot hold, on an instance without a `files` object store |
+
+The two limits of a whole folder are answered by the API's general limits of a write of files, before any file is decoded and for every kind alike, so a call over one costs nothing; the skill's own `skill_too_large` and `skill_too_many_files` name the same numbers and answer a caller that reaches the rule another way. A YAML anchor with an alias is refused outright in a frontmatter, as in `store.yaml`, `workflow.yaml`, `app.yaml` and an App's action files: a reader answers an alias as the object its anchor made, so a few lines of nested aliases are a value of any size, and no file the platform reads needs one.
+
+An instance without a `files` object store holds skills as their text, as before. An agent's proposal stays with instruction text: it creates and changes no file below `scripts/` and no file that is not a text resource. The audit event of a write of a folder names each file by path, hash and size and holds no content. `read_skill` does not list the other files yet, and an agent's workspace does not hold them yet.
+
 ## Interactive editing and field ownership
 
 Agent `name` is the stable technical identifier used by config references and

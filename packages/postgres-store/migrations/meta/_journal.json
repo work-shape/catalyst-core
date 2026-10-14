@@ -512,6 +512,20 @@
       "when": 1791927116354,
       "tag": "0072_guardrail_hit_subject",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791945065665,
+      "tag": "0073_draft_call_targets",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1791945073684,
+      "tag": "0074_draft_call_targets_validate",
+      "breakpoints": true
     }
   ]
 }

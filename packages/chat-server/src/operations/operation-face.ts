@@ -260,6 +260,8 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
           );
         case "pending_confirmation":
           throw new AppError("INTERNAL", "A direct call cannot wait for a confirmation");
+        case "dry_run":
+          throw new AppError("INTERNAL", "A direct call is no call of a draft");
       }
     }
   };

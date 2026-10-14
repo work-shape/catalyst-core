@@ -111,6 +111,15 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.drafts.discardDraft(context, input)
   });
 
+  route.operation(apiOperations["assets.run_live_once"], {
+    authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "write"),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => workflow.drafts.runLiveOnce(context, input)
+  });
+
   route.operation(apiOperations["assets.delete"], {
     authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "delete"),
     resource: assetResource,

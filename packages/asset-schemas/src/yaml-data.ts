@@ -1,4 +1,5 @@
 import { JSON_SCHEMA, YAMLException, load } from "js-yaml";
+import { yamlValueIssue, yamlValueIssueSentence } from "./yaml-bounds";
 
 // The one reader of YAML that an author or an agent wrote: every file of an asset and every
 // frontmatter goes through `readYamlData`, so its limits are set here and nowhere else. Files
@@ -12,7 +13,7 @@ import { JSON_SCHEMA, YAMLException, load } from "js-yaml";
 export const YAML_DATA_MAX_VALUES = 100_000;
 
 export type YamlDataIssueCode =
-  "yaml_invalid" | "yaml_too_deep" | "yaml_too_large" | "text_invalid";
+  "yaml_invalid" | "yaml_alias" | "yaml_too_deep" | "yaml_too_large" | "text_invalid";
 
 export interface YamlDataIssue {
   code: YamlDataIssueCode;
@@ -20,6 +21,16 @@ export interface YamlDataIssue {
   message: string;
   /** The line of the file, from 1, where the reader stopped. */
   line?: number;
+  /** The column of that line, from 1. */
+  column?: number;
+}
+
+export interface YamlDataOptions {
+  /**
+   * Refuses an anchor with an alias or a merge key, before anything walks the value. The
+   * readers of an asset's own files ask for it: none of those files needs one.
+   */
+  refuseAliases?: boolean;
 }
 
 export type YamlDataResult = { ok: true; value: unknown } | { ok: false; issue: YamlDataIssue };
@@ -66,10 +77,24 @@ export function checkStorableTexts(
  * builds nothing else. A file that does not parse, nests too deep, expands too far through its
  * aliases or holds text that cannot be stored is answered as an issue, never thrown.
  */
-export function readYamlData(text: string, file: string): YamlDataResult {
-  const fail = (code: YamlDataIssueCode, message: string, line?: number): YamlDataResult => ({
+export function readYamlData(
+  text: string,
+  file: string,
+  options: YamlDataOptions = {}
+): YamlDataResult {
+  const fail = (
+    code: YamlDataIssueCode,
+    message: string,
+    line?: number,
+    column?: number
+  ): YamlDataResult => ({
     ok: false,
-    issue: { code, message, ...(line === undefined ? {} : { line }) }
+    issue: {
+      code,
+      message,
+      ...(line === undefined ? {} : { line }),
+      ...(column === undefined ? {} : { column })
+    }
   });
   let value: unknown;
   try {
@@ -79,13 +104,19 @@ export function readYamlData(text: string, file: string): YamlDataResult {
       // A file of several documents is refused without a mark, though the types say otherwise.
       const markLine: number | undefined = error.mark?.line;
       const line = markLine === undefined ? undefined : markLine + 1;
+      const markColumn: number | undefined = error.mark?.column;
+      const column = markColumn === undefined ? undefined : markColumn + 1;
       // The reader stops at its own depth limit, 100 levels, before its recursion nears the
       // end of the stack.
       return error.reason.startsWith("nesting exceeded")
         ? fail("yaml_too_deep", `'${file}' ${error.reason}.`, line)
-        : fail("yaml_invalid", `'${file}' is not valid YAML: ${error.reason}.`, line);
+        : fail("yaml_invalid", `'${file}' is not valid YAML: ${error.reason}.`, line, column);
     }
     throw error;
+  }
+  // Before anything walks it as a tree: the walk below counts a value reached twice twice.
+  if (options.refuseAliases && yamlValueIssue(value) === "alias") {
+    return fail("yaml_alias", `'${file}' is not read: ${yamlValueIssueSentence("alias")}.`);
   }
   const texts = checkStorableTexts(value, YAML_DATA_MAX_VALUES);
   if (texts === "too_large") {
