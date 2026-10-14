@@ -26098,6 +26098,9 @@
             "properties": {
               "version": {
                 "type": "string"
+              },
+              "cliVersion": {
+                "type": "string"
               }
             },
             "required": [
