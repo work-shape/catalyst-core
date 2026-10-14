@@ -153,16 +153,21 @@ for (const locale of LOCALES) {
       await expect(field("secret")).toHaveValue("");
       await shoot(page, locale, "mcp-error-key");
 
-      // The right key: the steps run while the test is slow, then the server's tools.
-      await page.route("**/api/v1/connections/*/test", async (route) => {
-        await new Promise((resolve) => setTimeout(resolve, 3_000));
-        await route.continue();
-      });
+      // The right key: the steps run while the test is slow, then the server's tools. The route
+      // holds this one test and then removes itself: an unroute while it holds the request would
+      // let Playwright continue it first, and the handler's own continue would throw.
+      await page.route(
+        "**/api/v1/connections/*/test",
+        async (route) => {
+          await new Promise((resolve) => setTimeout(resolve, 3_000));
+          await route.continue();
+        },
+        { times: 1 }
+      );
       await field("secret").fill(sampleKey);
       await connect.click();
       await expect(dialog.locator('[data-connect-step="server"]')).toBeVisible();
       await shoot(page, locale, "mcp-connecting");
-      await page.unroute("**/api/v1/connections/*/test");
 
       const tools = dialog.locator("li[data-approval-tool]");
       await expect(tools).toHaveCount(6, { timeout: DISCOVERY_TIMEOUT_MS });
