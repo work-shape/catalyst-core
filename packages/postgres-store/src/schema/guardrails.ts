@@ -21,6 +21,9 @@ export const guardrailHits = pgTable(
     // a run's id, which names the person who acted. Hits written before GR-2 have neither.
     subjectId: text("subject_id"),
     subjectName: text("subject_name"),
+    // `require_approval` where the guardrail asked for an approval the action could not wait
+    // for, and the hit is the block it was answered as. Null on every other hit.
+    convertedFrom: text("converted_from").$type<"require_approval">(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
