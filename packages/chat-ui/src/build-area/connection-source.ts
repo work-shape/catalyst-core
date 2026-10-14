@@ -74,6 +74,15 @@ export interface ConnectionSource {
   setSecret(name: string, value: string, expectedVersion: number | null): Promise<void>;
   /** Asks the instance to read the Connection's tools again. Throws `PendingApprovalError` when held. */
   discover(name: string): Promise<void>;
+  /** Reads the Connection's state now, beside the hook, as the New connection dialog waits. */
+  readDetail(name: string): Promise<ConnectionDetail>;
+  /** Tests the Connection. Throws `PendingApprovalError` when somebody approves the test first. */
+  test(name: string): Promise<ConnectionTestResult>;
+  /**
+   * Opens the chat dock beside the page with a new conversation and this request in its
+   * composer, to send or change. Absent where the page has no dock.
+   */
+  draftInChat?: (request: string) => void;
   /** A hook: the test of this page. */
   useTest(name: string): { run: ConnectionTestRun; start(): void };
   /**
@@ -90,7 +99,7 @@ export interface ConnectionSource {
  * `connections.test` runs the test.
  */
 export function useConnectionSource(): ConnectionSource {
-  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, user, startDockedChat } = useSettingsPage();
   const api = { apiBaseUrl, authScope, client };
   const calls = client.connections;
   // The rows are read by who manages users; the names of principals by who manages them.
@@ -172,6 +181,19 @@ export function useConnectionSource(): ConnectionSource {
       }
       await queryClient.invalidateQueries({ queryKey: detailKey(name) });
     },
+    readDetail: (name) => calls.get({ params: { name } }),
+    async test(name) {
+      try {
+        const outcome = await calls.test({ params: { name } });
+        if (outcome.status !== "done") {
+          throw new PendingApprovalError();
+        }
+        return outcome.output;
+      } finally {
+        await queryClient.invalidateQueries({ queryKey: detailKey(name) });
+      }
+    },
+    ...(startDockedChat ? { draftInChat: startDockedChat } : {}),
     principalHref: (principalId) =>
       principalHref(
         workspaceRoutePath({ kind: "settings", group: "instance", page: "api-access" }),

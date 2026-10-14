@@ -112,6 +112,15 @@ export function BuildFrame({
     setStart(undefined);
   }
   const creating = start !== undefined;
+  // What a kind's own dialog asked to run once the page of the asset it made is open.
+  const afterOpen = useRef<{ name: string; then(): void }>(undefined);
+  useEffect(() => {
+    const pending = afterOpen.current;
+    if (pending && location.name === pending.name) {
+      afterOpen.current = undefined;
+      pending.then();
+    }
+  }, [location.name]);
 
   // The shell hands a new `open` with every render; the address is corrected once per place.
   const openRef = useRef(open);
@@ -378,7 +387,28 @@ export function BuildFrame({
         onOpen={(asset) => open({ kindPath: entry.path, name: asset.name })}
         onNew={() => setAsking(true)}
       />
-      {asking && isEditableKind(entry) && place.kind.state.canCreate ? (
+      {asking && isEditableKind(entry) && place.kind.state.canCreate && entry.CreateDialog ? (
+        <entry.CreateDialog
+          namespaces={source.rights.creatableNamespaces(entry.kind)}
+          mayNameFreely={source.rights.instanceWrite}
+          put={(input) => source.writes.put({ ...input, kind: entry.kind })}
+          remove={(input) => source.writes.delete({ ...input, kind: entry.kind })}
+          mayDelete={(namespace) =>
+            place.kind.state.canDelete &&
+            source.rights.may("delete", {
+              kind: entry.kind,
+              ...(namespace === undefined ? {} : { namespace }),
+              ...(scope?.kind === "workspace" ? { workspaceId: scope.workspaceId } : {})
+            })
+          }
+          onClose={() => setAsking(false)}
+          onCreated={(name, then) => {
+            setAsking(false);
+            afterOpen.current = then ? { name, then } : undefined;
+            open({ kindPath: entry.path, name });
+          }}
+        />
+      ) : asking && isEditableKind(entry) && place.kind.state.canCreate ? (
         <BuildCreateDialog
           entry={entry}
           namespaces={source.rights.creatableNamespaces(entry.kind)}
