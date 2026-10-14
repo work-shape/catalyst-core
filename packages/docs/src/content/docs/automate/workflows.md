@@ -15,7 +15,7 @@ Open one to see its page:
 
 - The **Workflow** tab shows the steps as a canvas, from **Starts** ("Startet") at the top down to the last step. A step is marked **Reads data** ("Liest Daten") or **Changes data** ("Ändert Daten").
 - The **Runs** tab ("Läufe") lists every run, with what each step did.
-- The trigger says when it runs: **Started by hand only** ("Startet nur von Hand") or **On a schedule** ("Nach Zeitplan"), such as "Every day, 07:00 AM".
+- The trigger says when it runs: **Started by hand only** ("Startet nur von Hand") or the schedule, such as "Every day, 07:00 AM" ("Jeden Tag, …").
 
 ## Make or change a Workflow
 
