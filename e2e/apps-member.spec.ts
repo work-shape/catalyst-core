@@ -208,6 +208,20 @@ test("a member who uses an App is shown the App and a builder its revision", asy
     });
   }
   await expect(memberHead.getByRole("button", { name: "Copy link" })).toBeVisible();
+  // DOCK-1: a shared link never carries the conversation of the dock beside the App.
+  const docked = await requestWithOrigin(memberPage, "post", `${apiOrigin}/api/v1/conversations`, {
+    data: { title: "Beside the App" }
+  });
+  expect(docked.ok()).toBe(true);
+  const dockedId = idSchema.parse(await docked.json()).id;
+  await memberPage.goto(`${appPath}?chat=${dockedId}`);
+  await expect(memberPage.locator("[data-dock-chat]")).toHaveAttribute("data-chat-mode", "dock");
+  await memberViewReady();
+  await memberHead.getByRole("button", { name: "Copy link" }).click();
+  await expect(memberHead.getByRole("button", { name: "Link copied" })).toBeVisible();
+  expect(await memberPage.evaluate(() => navigator.clipboard.readText())).toBe(
+    `${uiOrigin}${appPath}`
+  );
   await memberContext.close();
 
   // The builder's head keeps the revision and the menu, and does not name the workspace.
