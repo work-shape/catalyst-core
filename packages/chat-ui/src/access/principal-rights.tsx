@@ -1,4 +1,4 @@
-import { Box, Cable, Plus } from "lucide-react";
+import { Box, Plus } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 import type { AssetSummary } from "@vivd-catalyst/api-client";
 import {
@@ -17,6 +17,7 @@ import {
   Picker,
   PickerButton,
   RadioGroup,
+  RegistryIcon,
   Section,
   SkeletonList
 } from "@vivd-catalyst/ui";
@@ -69,8 +70,12 @@ function kindName(kind: string, t: Translate): string {
 }
 
 function KindIcon({ kind }: { kind: string | undefined }) {
-  const Icon = kind === CONNECTION_KIND ? Cable : Box;
-  return <Icon aria-hidden="true" className="size-4 text-muted-foreground" />;
+  const className = "size-4 text-muted-foreground";
+  return kind === CONNECTION_KIND ? (
+    <RegistryIcon name="connection" className={className} />
+  ) : (
+    <Box aria-hidden="true" className={className} />
+  );
 }
 
 /** The rights of one principal, as its page read them. */
@@ -162,7 +167,7 @@ export function PrincipalRights({
       ) : read.rows.length === 0 ? (
         <EmptyState
           layout="inline"
-          icon={<Cable aria-hidden="true" />}
+          icon={<RegistryIcon name="connection" />}
           action={
             offered ? (
               <Button size="sm" onClick={() => setGiving(true)}>

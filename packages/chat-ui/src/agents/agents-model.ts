@@ -1,4 +1,4 @@
-import type { SafeConfig } from "@vivd-catalyst/api-client";
+import type { CollaborationWorkspaceAgents, SafeConfig } from "@vivd-catalyst/api-client";
 import type { BuildAssetStart } from "../build-area/build-asset-kind";
 import { requestBuildStart } from "../build-area/build-create-request";
 import type { BuildNamespace } from "../build-area/build-rights";
@@ -27,6 +27,19 @@ export type AgentListStatus = "loading" | "failed" | "ready";
  */
 export function agentListStatus(list: { loaded: boolean; failed: boolean }): AgentListStatus {
   return list.loaded ? "ready" : list.failed ? "failed" : "loading";
+}
+
+/**
+ * Whether the Agents row of the sidebar shows: the session has workspaces and the instance says
+ * the row is there for the person in the open workspace, which it does with two agents or more
+ * there or the right to write one. With one agent New chat starts it and the composer's picker
+ * stays. Unknown counts as none until the workspace's list arrived. The page keeps its address.
+ */
+export function agentsRowShown(
+  workspaces: boolean,
+  list: Pick<CollaborationWorkspaceAgents, "visibleSections"> | undefined
+): boolean {
+  return workspaces && list?.visibleSections.includes("agents") === true;
 }
 
 /** The page of an agent in Studio. */

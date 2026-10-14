@@ -22,7 +22,11 @@ export type {
   WorkspaceSourceFileReader,
   WorkspaceToolStore
 } from "./dependencies";
-export { EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE } from "./preview-images";
+export {
+  EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
+  WORKSPACE_INSPECTION_ARTIFACT_PURPOSE,
+  isWorkspaceInspectionArtifact
+} from "./preview-images";
 export { WorkspaceCommandService } from "./service";
 
 export function createWorkspaceToolDefinitions(

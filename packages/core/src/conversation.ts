@@ -27,9 +27,10 @@ export type ConversationListScope = { kind: "viewer"; userId: string } | { kind:
 /**
  * The asset a conversation is about, by its kind and its name, such as a Workflow whose draft
  * the agent edits. It is set when the conversation is created from the asset's page, and by
- * the server when the agent opens another asset in it with `platform.assets.open`: one subject
- * at a time, the last one opened wins. The tools that check and save a draft reach this asset
- * and no other, whatever a model names.
+ * the server when the agent opens another asset of the conversation's workspace in it with
+ * `platform.assets.open`: one subject at a time, the last one opened wins. An asset of the
+ * instance becomes the subject only by the person's step, never by the agent's open. The tools
+ * that check and save a draft reach this asset and no other, whatever a model names.
  */
 export interface ConversationSubject {
   kind: string;

@@ -63,11 +63,12 @@ import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
-import { agentListStatus, type AgentListStatus } from "../agents/agents-model";
-import { NO_APP_RIGHTS, resolveAppRights, type AppRights } from "../apps/app-model";
+import { agentListStatus, agentsRowShown, type AgentListStatus } from "../agents/agents-model";
+import { NO_APP_RIGHTS, appsRowShown, resolveAppRights, type AppRights } from "../apps/app-model";
 import {
   resolveWorkflowRights,
   workflowsAccess,
+  workflowsRowShown,
   type WorkflowRights,
   type WorkflowsAccess
 } from "../workflows/workflow-model";
@@ -307,11 +308,20 @@ export interface ConversationRailModel {
   canViewAdministration: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox: { toDecide: number } | undefined;
-  /** The session has workspaces: the Agents row shows. */
+  /**
+   * The session has workspaces and the instance names the Agents row for the open one: two
+   * agents or more are available there, or the person may write one.
+   */
   agents: boolean;
-  /** The Apps module is on: the Apps row shows. */
+  /**
+   * The Apps module is on and the instance names the Apps row for the open workspace: its Apps
+   * page lists the person an App, or the person may write one there.
+   */
   apps: boolean;
-  /** The Workflows area is open to the person: the Workflows row shows. */
+  /**
+   * The Workflows area is open to the person and the instance names them a Workflow or they
+   * may write one: the Workflows row shows.
+   */
   workflows: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
@@ -1116,9 +1126,9 @@ export function useWorkspaceChatModel({
       selectedConversationId,
       canViewAdministration,
       inbox,
-      agents: collaborationWorkspacesAvailable,
-      apps: appsEnabled,
-      workflows: workflowsOpen === "open",
+      agents: agentsRowShown(collaborationWorkspacesAvailable, workspaceAgentsQuery.data),
+      apps: appsRowShown(appsEnabled, workspaceAgentsQuery.data),
+      workflows: workflowsRowShown(workflowsOpen, platformContextQuery.data),
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
