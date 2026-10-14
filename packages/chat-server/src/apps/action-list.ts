@@ -236,6 +236,19 @@ export class AppActionList {
                 agentTool: revision.view === "published" && callable
               };
             }
+            if (action.kind === "workflow") {
+              // The rule of a call: the module is on. Whether the Workflow is published is asked
+              // by the start; whether the reader may start it, `policy` says.
+              const { callable } = await appActionDefinition(environment, host, action);
+              return {
+                ...listed,
+                kind: action.kind,
+                workflow: { name: action.workflow },
+                ...(callable ? {} : { unavailable: "workflows_off" as const }),
+                // No agent carries the start of a Workflow through an App yet.
+                agentTool: false
+              };
+            }
             const connection = connections.get(action.connection);
             const unavailable = unavailableOf(action, connection);
             const target = agentTools.get(

@@ -96,11 +96,15 @@ export const builtPageManifestSchema = pageManifestSchema
       .max(1000)
       .optional()
   })
-  // A build is not trusted to have checked this: an action reaches what the manifest lists.
+  // A build is not trusted to have checked this: an action reaches the Connection or the Data
+  // Store the manifest lists.
   .superRefine((manifest, context) => {
     const stores = new Set((manifest.dataStores ?? []).map((store) => store.name));
     const connections = new Set(manifest.connections ?? []);
     for (const action of manifest.actions ?? []) {
+      // A Workflow is no part of the manifest: the action file names it, and each call asks
+      // whether it exists.
+      if (action.kind === "workflow") continue;
       const reached =
         action.kind === "sql"
           ? { listed: stores.has(action.dataStore), what: `Data Store '${action.dataStore}'` }

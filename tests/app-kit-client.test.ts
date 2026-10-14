@@ -322,6 +322,77 @@ describe("the kit client", () => {
     expect(new AppCallError({ code: "failed", message: "x" }).retryable).toBe(true);
   });
 
+  it("reads a Workflow Run an action started and the answer of a draft, under the id it gave", async () => {
+    const { transport, sent, deliver } = recordingTransport();
+    const client = createAppClient(transport);
+    const asked = client.getContext();
+    deliver(hostMessage({ type: "context", session: "session-1", context }));
+    await asked;
+
+    const tried = client.actions.call("log-visit", { page: "/draft" });
+    const read = client.workflowRuns.get("wfr_1");
+    const missing = client.workflowRuns.get("wfr_2");
+    await sentCalls();
+    const [action, run, other] = sent.slice(1);
+    if (action?.type !== "action" || run?.type !== "workflow_run" || other?.type !== "workflow_run")
+      throw new Error("An action and two reads of a run were sent");
+    expect(run).toEqual({
+      type: "workflow_run",
+      session: "session-1",
+      requestId: expect.any(String),
+      runId: "wfr_1"
+    });
+    for (const message of [run, other]) {
+      expect(appBridgePageMessageSchema.safeParse(envelope(message)).success).toBe(true);
+    }
+    // A draft starts nothing and says what it would have started.
+    const dryRun = {
+      status: "dry_run",
+      message: "Would have started the Workflow 'visit-log' with {}.",
+      result: { workflow: "visit-log", input: {} }
+    } as const;
+    deliver(
+      hostMessage({
+        type: "action_result",
+        session: "session-1",
+        requestId: action.requestId,
+        ok: true,
+        result: dryRun
+      })
+    );
+    const ended = {
+      id: "wfr_1",
+      workflow: "visit-log",
+      status: "done",
+      output: { page: "/pricing" },
+      startedAt: "2026-10-13T10:00:00.000Z",
+      finishedAt: "2026-10-13T10:00:01.000Z"
+    } as const;
+    // An answer of another kind under the id of a read is no answer to it.
+    deliver(
+      hostMessage({
+        type: "action_result",
+        session: "session-1",
+        requestId: other.requestId,
+        ok: true,
+        result: { runId: "run-1", status: "done" }
+      })
+    );
+    deliver(
+      hostMessage({
+        type: "workflow_run_result",
+        session: "session-1",
+        requestId: run.requestId,
+        ok: true,
+        run: ended
+      })
+    );
+
+    expect(await tried).toEqual(dryRun);
+    expect(await read).toEqual(ended);
+    await expect(missing).rejects.toMatchObject({ name: "AppCallError" });
+  });
+
   it("ends a call nothing answers", async () => {
     const { transport, deliver } = recordingTransport();
     const client = createAppClient(transport, { callTimeoutMs: 5 });
