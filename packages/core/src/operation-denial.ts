@@ -16,6 +16,11 @@ export type OperationDenial =
        * opens. Without it the refusal names the missing right.
        */
       message?: string;
+      /**
+       * Set where the caller holds the right and the service principal that bounds a test run
+       * of a Workflow draft does not: the refusal names that principal.
+       */
+      boundBy?: { id: string; label: string };
     }
   | {
       kind: "policy";
@@ -34,10 +39,18 @@ export type OperationDenial =
 export function operationDenialError(denial: OperationDenial): AppError {
   switch (denial.kind) {
     case "forbidden":
-      return new AppError("FORBIDDEN", denial.message ?? `Missing the right '${denial.action}'`, {
-        action: denial.action,
-        reason: denial.reason
-      });
+      return new AppError(
+        "FORBIDDEN",
+        denial.message ??
+          (denial.boundBy
+            ? `The principal '${denial.boundBy.label}' does not hold '${denial.action}'; publishing would fail at this step`
+            : `Missing the right '${denial.action}'`),
+        {
+          action: denial.action,
+          reason: denial.reason,
+          ...(denial.boundBy ? { boundBy: denial.boundBy } : {})
+        }
+      );
     case "policy":
       return denial.reason === "approval_unavailable"
         ? new AppError(

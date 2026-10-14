@@ -124,6 +124,7 @@ describe("a changing call whose first attempt left no outcome", () => {
       clientInstanceId,
       operation: "connection.crm.write",
       effect: "changing",
+      target: "live",
       actor: { kind: "service_principal", id: t.principal.id, label: t.principal.displayLabel },
       workspaceId: undefined,
       origin: { kind: "workflow", workflowRunId: runId, stepRunId: stepRun.id },

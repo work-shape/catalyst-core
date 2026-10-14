@@ -7,6 +7,23 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Calls made by a draft (ADR-0031):** a call that carries a draft context (`OperationCall.draft`:
+  the App or Workflow, the draft revision and the action or step) is decided in
+  `runOperation()`. A reading call reads live with the caller's rights; a changing call answers
+  `dry_run` with the input it would have been made with and whether the live call would have
+  waited for a confirmation or an approval, changes nothing and holds no idempotency key. Every
+  Operation Run records `target` (`live`, `test` or `dry_run`) and the run resource returns it.
+  `assets.run_live_once` (`POST /api/v1/assets/:kind/:name/run-live-once`), for a holder of the
+  kind's write right, switches one action or step of the current draft revision live for its
+  next call; the switch is audited when set, used and cleared, and a switch whose draft changed
+  since is cleared and never applies. A call of a Workflow test run (`draft.boundBy`) is made
+  as the person testing and allowed only where the Workflow's service principal holds the right
+  too; a refusal on the principal's side names it, and such a call cannot wait for an approval.
+  Migrations `0073_draft_call_targets` (adds `operation_runs.target`, default `live`, and the
+  table `live_once_switches`) and `0074_draft_call_targets_validate` (validates the check of
+  `target`) are expand-only. **Rollback:** the previous release ignores the column and the
+  table; runs it writes during a rollback get `live`, and switches set before it stay unused
+  until a release that reads them, where a changed draft clears them.
 - **Apps, an action that starts a Workflow (App Kit 1.3.0):** an action file
   `actions/<name>.action.yaml` with `workflow: <id>` and `input.schema`/`input.mapping` starts
   the published Workflow as the viewer, who needs `workflow.use` on it; without it the call is

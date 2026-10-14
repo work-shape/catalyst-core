@@ -467,6 +467,25 @@ export class AssetDraftWorkflow {
     if (asset.revision !== expectedRevision) {
       throw await revisionConflictOf(this.options, call.access, target);
     }
+    if (kind.draftCalls) {
+      // The discard makes the published revision the draft again. A "Run live once" switch
+      // set for it before the draft changed would apply once more, so the switches the draft
+      // left behind are cleared first (ADR-0031).
+      const cleared = await this.options.stores.liveOnceSwitches.clearStale({
+        clientInstanceId: this.options.clientInstanceId,
+        assetId: asset.id
+      });
+      for (const stale of cleared) {
+        await recordAssetEvent(call, "live_once.cleared", {
+          kind: kind.kind,
+          name,
+          revisionId: stale.revisionId,
+          part: stale.part,
+          switchedBy: stale.switchedBy.id,
+          reason: "draft_changed"
+        });
+      }
+    }
     let discarded: { revision: number };
     try {
       discarded = await this.options.configAssets.store.discardConfigAssetDraft({
@@ -488,6 +507,61 @@ export class AssetDraftWorkflow {
       discardedRevision: expectedRevision
     });
     return { draftRevision: discarded.revision, publishedRevision: discarded.revision };
+  }
+
+  /**
+   * "Run live once" (ADR-0031): the next call of one action or step of the draft, as the
+   * caller sees it, is made live instead of simulated. It asks the write right on the draft,
+   * not the publish right. The switch covers that revision only: a draft saved since is
+   * refused here, and one saved later clears the switch before a call could use it.
+   */
+  async runLiveOnce(
+    call: AssetCall,
+    input: AssetAddress & { part: string; expectedRevision?: number }
+  ) {
+    const target = await this.host.target(input);
+    const { kind, name } = target;
+    call.access.require(kind.actions.write, target.resource);
+    const expectedRevision = requirePrecondition(input, input.expectedRevision);
+    if (!kind.draftCalls) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `A draft of the kind '${kind.kind}' makes no calls that could run live`
+      );
+    }
+    const asset = requireActive(target);
+    if (asset.revision !== expectedRevision) {
+      throw await revisionConflictOf(this.options, call.access, target);
+    }
+    const draft = { kind: kind.kind, id: asset.id, name };
+    const { cleared } = await this.options.stores.liveOnceSwitches.switchOn({
+      clientInstanceId: this.options.clientInstanceId,
+      switch: {
+        asset: draft,
+        revisionId: asset.activeRevisionId,
+        part: input.part,
+        switchedBy: { id: call.actor.id, label: call.actor.displayLabel },
+        switchedAt: new Date().toISOString()
+      }
+    });
+    for (const stale of cleared) {
+      await recordAssetEvent(call, "live_once.cleared", {
+        kind: kind.kind,
+        name,
+        revisionId: stale.revisionId,
+        part: stale.part,
+        switchedBy: stale.switchedBy.id,
+        reason: "draft_changed"
+      });
+    }
+    await recordAssetEvent(call, "live_once.switched_on", {
+      kind: kind.kind,
+      name,
+      revision: asset.revision,
+      revisionId: asset.activeRevisionId,
+      part: input.part
+    });
+    return { draftRevision: asset.revision, part: input.part };
   }
 
   /**
