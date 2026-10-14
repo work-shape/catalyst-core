@@ -38,6 +38,16 @@ export function pathPlaceholders(path: string): string[] {
   return [...path.matchAll(PLACEHOLDER_PATTERN)].map((match) => match[1] ?? "");
 }
 
+/**
+ * Whether a path segment is `.` or `..` as a URL reads it, where `%2e` in any case is a dot.
+ * A URL drops such a segment or climbs one up with it, so the request would leave the
+ * declared path, and the base path with it.
+ */
+export function isDotSegment(segment: string): boolean {
+  const decoded = segment.replace(/%2e/giu, ".");
+  return decoded === "." || decoded === "..";
+}
+
 /** A schema over a bound of the platform, named by the bound's code. */
 function schemaRefusal(
   refusal: OutsideSchemaBoundRefusal,
@@ -58,8 +68,8 @@ function pathIssue(path: string): string | undefined {
   const literal = path.replace(PLACEHOLDER_PATTERN, "x");
   if (/[{}]/u.test(literal)) return "A path writes each placeholder as {name}";
   if (literal.includes("//")) return "A path holds no empty segment ('//')";
-  if (literal.split("/").some((segment) => segment === "." || segment === "..")) {
-    return "A path holds no '.' or '..' segment";
+  if (literal.split("/").some(isDotSegment)) {
+    return "A path holds no '.' or '..' segment, also not written as %2e";
   }
   return undefined;
 }

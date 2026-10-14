@@ -95,6 +95,7 @@ describe("the Connector type http_api", () => {
     settings?: JsonObject;
     key?: string;
     path?: string;
+    operations?: JsonValue[];
   }
 
   /** A server, and a Connection to it whose key is in the Secret Store. */
@@ -122,7 +123,7 @@ describe("the Connector type http_api", () => {
             },
             authScheme,
             secretHandle: handle,
-            operations
+            operations: setup.operations ?? operations
           })
         }
       ]
@@ -227,11 +228,13 @@ describe("the Connector type http_api", () => {
       ]);
     });
 
-    it("refuses a path parameter with '/' or '..', an undeclared parameter or an address, and contacts nothing", async () => {
+    it("refuses a path parameter with '/', '.' or '..', an undeclared parameter or an address, and contacts nothing", async () => {
       const w = await connect(json({}));
       const refused: JsonObject[] = [
         { clientId: "10001/../../admin", fiscalYear: 2026 },
         { clientId: "..", fiscalYear: 2026 },
+        // A URL drops a '.' segment: the call would reach /clients/open-items.
+        { clientId: ".", fiscalYear: 2026 },
         { clientId: "", fiscalYear: 2026 },
         { clientId: "https://elsewhere.example/x", fiscalYear: 2026 },
         { clientId: "10001", fiscalYear: 2026, host: "elsewhere.example" },
@@ -242,6 +245,46 @@ describe("the Connector type http_api", () => {
         expect(await reasonOf(w.execute("open_items", input))).toBe("input_invalid");
       }
       expect(await reasonOf(w.execute("delete_everything", {}))).toBe("operation_unknown");
+      expect(w.server.requests).toEqual([]);
+    });
+
+    it("sends a path parameter with dots or an encoded dot as a segment of its own, under the declared path", async () => {
+      const w = await connect(json({}));
+      for (const clientId of ["%2e%2e", ".%2E", "a..b", ".hidden", "..."]) {
+        await w.execute("open_items", { clientId, fiscalYear: 2026 });
+      }
+      expect(
+        w.server.requests.map((request) => new URL(request.url, "http://any").pathname)
+      ).toEqual([
+        "/datevconnect/clients/%252e%252e/open-items",
+        "/datevconnect/clients/.%252E/open-items",
+        "/datevconnect/clients/a..b/open-items",
+        "/datevconnect/clients/.hidden/open-items",
+        "/datevconnect/clients/.../open-items"
+      ]);
+    });
+
+    it("refuses a declared path with a dot segment stored before the save refused it, and contacts nothing", async () => {
+      const paths = [
+        "/clients/%2e%2e/admin",
+        "/clients/.%2E/admin",
+        "/clients/%2E/admin",
+        "/../admin"
+      ];
+      const w = await connect(json({}), {
+        operations: paths.map((path, index) => ({
+          name: `climb_${index}`,
+          effect: "reading",
+          exposure: ["workflow"],
+          enabled: true,
+          method: "GET",
+          path,
+          description: "Climbs out of the base path."
+        }))
+      });
+      for (const [index] of paths.entries()) {
+        expect(await reasonOf(w.execute(`climb_${index}`, null))).toBe("input_invalid");
+      }
       expect(w.server.requests).toEqual([]);
     });
 
@@ -349,7 +392,7 @@ describe("the Connector type http_api", () => {
       );
     });
 
-    it("refuse an address with a user, a query or another scheme, a transport header and a test path with '..'", () => {
+    it("refuse an address with a user, a query or another scheme, a transport header and a test path with a dot segment", () => {
       for (const baseUrl of [
         "https://user:pass@api.example.test",
         "https://api.example.test/?key=1",
@@ -361,7 +404,9 @@ describe("the Connector type http_api", () => {
       expect(read({ ...base, headers: { Host: "elsewhere.example" } }).success).toBe(false);
       expect(read({ ...base, headers: { "x-a": "1\r\nX-Injected: 2" } }).success).toBe(false);
       expect(read({ ...base, headerName: "Host" }).success).toBe(false);
-      expect(read({ ...base, testPath: "/../admin" }).success).toBe(false);
+      for (const testPath of ["/../admin", "/%2e%2e/admin", "/.%2E/admin", "/%2E/health"]) {
+        expect(read({ ...base, testPath }).success, testPath).toBe(false);
+      }
       expect(read({ ...base, testPath: "/health?full=1" }).success).toBe(false);
       expect(read({ ...base, testPath: "/health", headerName: "X-Gateway-Key" }).success).toBe(
         true
@@ -405,7 +450,18 @@ describe("the Connector type http_api", () => {
       expect(issuesOf("http_api", { path: "/things/{other}" }).join()).toContain(
         "'pathParams' does not declare"
       );
-      expect(issuesOf("http_api", { path: "/things/../{id}" }).join()).toContain("'..'");
+      // A URL reads %2e in any case as a dot, so each of these leaves the base path or drops a segment.
+      for (const path of [
+        "/things/../{id}",
+        "/things/./{id}",
+        "/things/%2e%2e/{id}",
+        "/things/.%2E/{id}",
+        "/things/%2E./{id}",
+        "/things/%2e/{id}"
+      ]) {
+        expect(issuesOf("http_api", { path }).join(), path).toContain("'..'");
+      }
+      expect(issuesOf("http_api", { path: "/things/a..b/%252e%252e/{id}" })).toEqual([]);
       expect(issuesOf("http_api", { path: "https://elsewhere.example/{id}" }).join()).toContain(
         "starts with '/'"
       );

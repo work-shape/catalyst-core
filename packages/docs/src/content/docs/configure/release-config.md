@@ -1095,11 +1095,11 @@ connections:
 An operation of `http_api` takes, beside `name`, `effect` and `exposure`:
 
 - `method` `GET` and `effect: reading`. Nothing else is accepted yet; a GET is no proof that nothing changes, so the effect is declared as for any operation.
-- `path`, relative to `baseUrl`, with a `{name}` placeholder for each entry of `pathParams`. It holds no query, no `..` and no address.
+- `path`, relative to `baseUrl`, with a `{name}` placeholder for each entry of `pathParams`. It holds no query, no address and no segment `.` or `..`, also not written as `%2e`.
 - `pathParams` and `query`: each parameter with its JSON `schema` (a path parameter a `string`, `integer` or `number`, a query parameter also a `boolean`), an optional `description`, and for a query parameter `required`. A path parameter is always required.
 - `description`, what the operation reads and when to call it, which an agent reads, and optionally `title`, its name in words.
 
-A caller fills the declared parameters and nothing else: never the host, the method, a header or the key. A path parameter is percent-encoded and may hold no `/` and no `..`; an input with any other key is refused as `input_invalid` before anything is sent. No redirect is followed. The answer must be JSON of at most 2 MiB; a list is answered as `{ items: [...] }`, so every result is an object. An answer that is not JSON or too large fails as `output_invalid`, and one that holds the key as `output_rejected`.
+A caller fills the declared parameters and nothing else: never the host, the method, a header or the key. A path parameter is percent-encoded and may not be empty, hold a `/`, or be `.` or `..`; an input with any other key is refused as `input_invalid` before anything is sent. No redirect is followed. The answer must be JSON of at most 2 MiB; a list is answered as `{ items: [...] }`, so every result is an object. An answer that is not JSON or too large fails as `output_invalid`, and one that holds the key as `output_rejected`.
 
 An operation that reads the data of one Mandant takes the Mandant as a named parameter and returns it on every item, so that a data scope can attach to it later. The key `scope` on an operation is reserved for that and refused until it is built.
 
