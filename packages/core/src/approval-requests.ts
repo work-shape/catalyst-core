@@ -4,7 +4,7 @@ import type {
   ApprovalRequestDecision,
   ApprovalRequestStatus
 } from "./approval-request";
-import type { OperationBeforeEvent } from "./guardrails";
+import type { OperationBeforeEvent } from "./guardrail-events";
 import type { StorePage } from "./paging";
 import type { ClientInstanceId, ConversationId } from "./ids";
 import type { AgentRunWriteFence, AuthenticatedUser } from "./identity";

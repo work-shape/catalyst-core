@@ -5,6 +5,7 @@ import type {
   OperationRunId,
   ToolCallId
 } from "./ids";
+import type { OperationBeforeEvent } from "./guardrail-events";
 import type { JsonObject, JsonValue } from "./json";
 import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { StructuredResultPublication } from "./structured-result";
@@ -49,6 +50,8 @@ export interface ToolExecutionContext extends RuntimeCallContext {
    * passes both on, so the usage of that call is a row of the run and the workspace.
    */
   operationRun?: { id: OperationRunId; workspaceId?: CollaborationWorkspaceId };
+  /** See `beforeEvents` of an operation's execution context: the tool's own, as last asked. */
+  beforeEvents?: readonly OperationBeforeEvent[];
 }
 
 export type ToolRuntimeContext = ToolExecutionContext;

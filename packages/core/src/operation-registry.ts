@@ -6,7 +6,7 @@ import { DATA_STORE_OPERATION_PREFIX, KNOWLEDGE_OPERATION_PREFIX } from "./data-
 import { DATA_TOOL_PREFIXES } from "./data-tool-names";
 import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
-import type { OperationBeforeEvent } from "./guardrails";
+import type { OperationBeforeEvent } from "./guardrail-events";
 import type { AuthenticatedIdentity, OperationScope } from "./identity";
 import type { CollaborationWorkspaceId, OperationRunId } from "./ids";
 import type { JsonObject } from "./json";

@@ -1,9 +1,8 @@
 import { APP_ASSET_KIND, apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
+import { AppError, PAGE_FILE_SET_HELD_KEY, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
 import { AppActionCalls } from "../apps/action-call";
 import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-workflow";
-import { PAGE_FILE_SET_HELD_KEY } from "../apps/page-apps";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
 

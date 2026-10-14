@@ -1,8 +1,11 @@
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  PAGE_FILE_SET_HELD_KEY,
   assetScopesEqual,
   isFileSetId,
+  normalizePageName,
+  type ConversationId,
   type FileSet,
   type FileSetId,
   type OperationBeforeEvent,
@@ -28,9 +31,6 @@ const pageNotFound = () => new AppError("NOT_FOUND", "Page is not available");
  * write copies that one. Kept as long as the call holds its events.
  */
 const checkedFileSets = new WeakMap<OperationBeforeEvent, FileSetId>();
-
-/** The input field a held write from a Page keeps the revision it copies in. */
-export const PAGE_FILE_SET_HELD_KEY = "fileSetId";
 
 /**
  * The Page revision a call names, `undefined` where it names none, and `null` where what it
@@ -135,6 +135,25 @@ export class PageApps {
       revision: updated.revision,
       fileSetId: updated.fileSetId
     };
+  }
+
+  /** The Page of a conversation by the name it was saved under. Refuses a name it holds none of. */
+  async named(conversationId: ConversationId, name: string): Promise<Page> {
+    const wanted = normalizePageName(name);
+    const pages = await this.options.stores.pages.listPages({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId
+    });
+    const page = pages.find((candidate) => candidate.name === wanted);
+    if (!page) {
+      throw new AppError(
+        "NOT_FOUND",
+        `This conversation has no Page named '${wanted}'. Save it with page.save first`,
+        { reason: "page_not_found" },
+        { exposeMessage: true }
+      );
+    }
+    return page;
   }
 
   /**
