@@ -516,7 +516,9 @@ describe("an App with a draft and a published revision", () => {
     const bySession = await shapeOf("by-session", {});
     const byToken = await shapeOf("by-token", { authorization: "Bearer person-token" });
 
-    expect([bySession.origin, byToken.origin]).toEqual([["user"], ["cli"]]);
+    // A token that is no API credential is the person, as a session is: only a personal API
+    // key or a service principal's credential is the CLI.
+    expect([bySession.origin, byToken.origin]).toEqual([["user"], ["user"]]);
     expect(byToken.shape).toEqual(bySession.shape);
   });
 });

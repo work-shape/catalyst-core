@@ -27,7 +27,7 @@ async function createWorkspace(t: AccessInstance, name: string): Promise<Collabo
   return workspace.id;
 }
 
-/** What no kind lets a caller write yet: a skill a workspace owns, put there through the store. */
+/** A skill a workspace owns, put there through the store. */
 async function seedWorkspaceSkill(
   t: AccessInstance,
   workspaceId: CollaborationWorkspaceId,
@@ -132,10 +132,8 @@ describe("the scope of an asset call", () => {
     });
     expect((await overwrite(t.kai.id, workspaceId)).statusCode).toBe(403);
     expect((await overwrite(t.lena.id, workspaceId)).statusCode).toBe(403);
-    // No kind may be owned by a workspace yet, so the write is refused for the administrator too.
-    expect(
-      errorSchema.parse((await overwrite(t.admin.id, workspaceId)).json()).error
-    ).toMatchObject({ code: "VALIDATION_FAILED", details: { reason: "invalid_scope" } });
+    // Named with its workspace, the administrator writes it: a workspace owns skills (WS-OWN-1a).
+    expect((await overwrite(t.admin.id, workspaceId)).statusCode).toBe(200);
     // Kai holds no delete right on skills; the administrator finds no such asset of the instance.
     for (const [userId, status] of [
       [t.kai.id, 403],
@@ -150,14 +148,14 @@ describe("the scope of an asset call", () => {
     const batch = await t.call(t.admin.id, "assets.sync", {
       payload: {
         namespace: "kai-",
-        items: [{ type: "delete", kind: "skill", name: "kai-team-notes", expectedRevision: 1 }]
+        items: [{ type: "delete", kind: "skill", name: "kai-team-notes", expectedRevision: 2 }]
       }
     });
     expect(batch.statusCode).toBe(422);
     expect(await t.stored("skill", "kai-team-notes")).toMatchObject({
       status: "active",
-      revision: 1,
-      config: { content: "Owned." },
+      revision: 2,
+      config: { content: "Overwritten." },
       scope: { kind: "workspace", workspaceId }
     });
   });

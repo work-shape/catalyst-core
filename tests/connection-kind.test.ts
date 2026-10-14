@@ -640,6 +640,7 @@ describe("a Connection through the asset operations", () => {
       plural: "connections",
       lifecycle: "active",
       representation: "config",
+      owners: ["instance"],
       actions: {
         read: "connection.read",
         // Using a Connection is a right of its own, and the Check tab asks for it by this name.

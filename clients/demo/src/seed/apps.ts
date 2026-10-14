@@ -11,7 +11,7 @@ const APPS_MODULE = "apps";
 const APP_KIND = "app";
 
 /** The Shared Workspace of the company, with its members. Made by the person who owns it. */
-async function seedWorkspace(
+export async function seedWorkspace(
   as: (key: PersonKey) => Promise<SeedApi>,
   steps: SeedStep[]
 ): Promise<string> {
@@ -56,13 +56,14 @@ async function readSourceSet(directory: string): Promise<SeedAppFile[]> {
 }
 
 /**
- * The company's workspace and its Apps, where the instance has the module. An App is written
+ * The Apps of the company's workspace, where the instance has the module. An App is written
  * revision by revision from its source sets and published in between, so a run that stopped
  * half way is continued. An App that has all its revisions is left as it is.
  */
 export async function seedApps(
   modules: Awaited<ReturnType<SeedApi["listModules"]>>,
   as: (key: PersonKey) => Promise<SeedApi>,
+  workspaceId: string,
   assetsDir: string,
   steps: SeedStep[]
 ): Promise<void> {
@@ -73,11 +74,10 @@ export async function seedApps(
       name,
       created: 0,
       existing: 0,
-      note: "This instance has no Apps module, so no workspace and no App was seeded."
+      note: "This instance has no Apps module, so no App was seeded."
     });
     return;
   }
-  const workspaceId = await seedWorkspace(as, steps);
   let created = 0;
   const leftOut: string[] = [];
   for (const app of apps) {
