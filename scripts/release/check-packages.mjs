@@ -33,7 +33,10 @@ const MAX_TARBALL_BYTES = 300_000;
 const MAX_TARBALL_BYTES_BY_DIR = {
   "chat-ui": 1_200_000,
   ui: 500_000,
-  "chat-server": 2_100_000,
+  // Raised from 2.1 MB on 2026-10-14 for the guardrail assets of EW-6a and App Kit 1.4.0, with
+  // some room to spare. Follow-up KIT-SHARE-1: vendored App Kit versions share React and the
+  // chart engine; then lower the limit again.
+  "chat-server": 2_200_000,
   "postgres-store": 800_000
 };
 const FORBIDDEN_FILES = [
