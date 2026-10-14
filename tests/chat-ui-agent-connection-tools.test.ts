@@ -128,8 +128,8 @@ describe("tools of Connections on the agent page", () => {
     });
 
     // The instance's own tools keep their group, and the Connections are a second one.
-    expect(markup).toContain('<legend class="text-label">Instance tools</legend>');
-    expect(markup).toContain("Tools this instance provides itself.");
+    expect(markup).toContain('data-tool-group="instance"');
+    expect(markup).toContain("What this instance lets an agent do, by package.");
     expect(markup).toContain('<legend class="text-label">Connections</legend>');
     expect(markup).toContain('data-tool-group="connections"');
     expect(markup).toContain('data-connection-tools="crm"');
@@ -240,7 +240,7 @@ describe("tools of Connections on the agent page", () => {
     expect(markup).toContain("0 von 2 ausgewählt");
     expect(markup).toContain("Verbindung öffnen");
     expect(markup).toContain("Werkzeuge der Instanz");
-    expect(markup).toContain("Werkzeuge, die diese Instanz selbst bereitstellt.");
+    expect(markup).toContain("Was diese Instanz einem Agenten erlaubt, nach Paketen.");
     expect(markup).toContain("Nicht mehr verfügbar");
     expect(markup).toContain(
       "Diese Werkzeuge werden diesem Agenten nicht mehr angeboten. Der Agent behält sie, bis du sie entfernst."
