@@ -73,7 +73,7 @@ function render(asset: BuildAsset): string {
           ...frame,
           source: {
             useHits: () => ({
-              status: "ready",
+              status: "ready" as const,
               hits: { items: [], hasMore: false, counts: { last7Days: 0, last30Days: 0 } }
             })
           }
