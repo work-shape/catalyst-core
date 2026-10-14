@@ -192,11 +192,11 @@ export async function resolveInstance(
       names.length === 0 ? refusal : `${refusal} ${MANIFEST_FILENAME} names ${names.join(", ")}.`
     );
   }
-  const env = readConfigCliEnv(options.env);
-  if (env.CATALYST_API_KEY) {
+  // Read as connectApi reads it: only whether it is set matters here.
+  if (readConfigCliEnv(options.env).CATALYST_API_KEY) {
     throw new Error(`${refusal} CATALYST_API_KEY is set: name the instance it belongs to.`);
   }
-  const saved = await savedInstanceOrigins(env);
+  const saved = await savedInstanceOrigins(readConfigCliEnv(options.env));
   const [origin, ...more] = saved;
   if (origin === undefined) {
     throw new Error(
