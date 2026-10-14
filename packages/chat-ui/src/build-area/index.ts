@@ -18,6 +18,8 @@ export { BuildFrame } from "./build-frame";
 export * from "./connection-approval-model";
 export * from "./connection-connect";
 export { ConnectionCreateFlow } from "./connection-create-dialog";
+export { openConnectionDraft, readConnectionDraft, type ConnectionDraft } from "./connection-draft";
+export { ConnectionDraftCardView } from "./connection-draft-card";
 export { ConnectionEditor } from "./connection-editor";
 export * from "./connection-form-model";
 export type {

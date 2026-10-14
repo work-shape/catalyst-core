@@ -93,7 +93,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.draftText":
       "It reads the API description and proposes tools. You review them.",
     "connectionCreate.draftRequest":
-      "Draft read-only tools for the connection {title} (id {name}, base address {url}) as YAML to paste, from the OpenAPI at ",
+      "Draft read-only tools for the connection {title} (id {name}, base address {url}) as a card for me to approve, from the OpenAPI at ",
     "connectionCreate.pasteTitle": "Paste",
     "connectionCreate.pasteText": "You already have the tools as YAML.",
     "connectionCreate.pasteHeading": "Paste tools",
@@ -108,7 +108,17 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.pasteYaml": "This is no valid YAML: {message}",
     "connectionCreate.pasteYamlLine": "This is no valid YAML (line {line}): {message}",
     "connectionCreate.approveRefused": "The tools were not approved:",
-    "connectionCreate.toolsLabel": "Tools to approve"
+    "connectionCreate.toolsLabel": "Tools to approve",
+    "connectionCreate.draftedIntro": "Drafted in the chat for {title}.",
+    "connectionCreate.draftCardTitle": "Tools for {title}",
+    "connectionCreate.draftCardMeta": "Draft · {count} tools, reading",
+    "connectionCreate.draftCardMetaOne": "Draft · 1 tool, reading",
+    "connectionCreate.draftCardOpen": "Review and approve",
+    "connectionCreate.draftCardNote": "Nothing is saved before you approve.",
+    "connectionCreate.draftCardReader": "Someone who may edit connections approves these tools.",
+    "connectionCreate.draftCardNotRest":
+      "{name} is no REST API connection: these tools do not fit it.",
+    "connectionCreate.draftCardFailed": "The connection could not be read. Try again."
   },
   de: {
     "connectionCreate.title": "Neue Verbindung",
@@ -203,7 +213,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.draftText":
       "Liest die API-Beschreibung und schlägt Tools vor. Du prüfst sie.",
     "connectionCreate.draftRequest":
-      "Entwirf Lese-Tools für die Verbindung {title} (Id {name}, Basisadresse {url}) als YAML zum Einfügen, aus der OpenAPI unter ",
+      "Entwirf Lese-Tools für die Verbindung {title} (Id {name}, Basisadresse {url}) als Karte zum Freigeben, aus der OpenAPI unter ",
     "connectionCreate.pasteTitle": "Einfügen",
     "connectionCreate.pasteText": "Du hast die Tools schon als YAML.",
     "connectionCreate.pasteHeading": "Tools einfügen",
@@ -218,6 +228,17 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.pasteYaml": "Das ist kein gültiges YAML: {message}",
     "connectionCreate.pasteYamlLine": "Das ist kein gültiges YAML (Zeile {line}): {message}",
     "connectionCreate.approveRefused": "Die Tools wurden nicht freigegeben:",
-    "connectionCreate.toolsLabel": "Tools zum Freigeben"
+    "connectionCreate.toolsLabel": "Tools zum Freigeben",
+    "connectionCreate.draftedIntro": "Entwurf aus dem Chat für {title}.",
+    "connectionCreate.draftCardTitle": "Tools für {title}",
+    "connectionCreate.draftCardMeta": "Entwurf · {count} Tools, lesend",
+    "connectionCreate.draftCardMetaOne": "Entwurf · 1 Tool, lesend",
+    "connectionCreate.draftCardOpen": "Prüfen und freigeben",
+    "connectionCreate.draftCardNote": "Gespeichert wird erst mit deiner Freigabe.",
+    "connectionCreate.draftCardReader": "Freigeben kann, wer Verbindungen bearbeiten darf.",
+    "connectionCreate.draftCardNotRest":
+      "{name} ist keine REST-API-Verbindung: Diese Tools passen nicht zu ihr.",
+    "connectionCreate.draftCardFailed":
+      "Die Verbindung ließ sich nicht lesen. Versuch es noch einmal."
   }
 });

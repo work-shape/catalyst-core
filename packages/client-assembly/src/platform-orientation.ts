@@ -1,6 +1,7 @@
 import { CATALYST_INTERNAL_AGENT_PROMPT } from "@vivd-catalyst/agent-runtime";
 import type { PlatformInstructions } from "@vivd-catalyst/chat-server";
 import {
+  CONNECTION_DRAFT_TOOL_NAME,
   PAGE_SAVE_AS_APP_TOOL_NAME,
   PAGE_SAVE_TOOL_NAME,
   PLATFORM_ASSET_TOOLS,
@@ -25,7 +26,7 @@ export const PLATFORM_ORIENTATION = `You run on a platform where people build an
 - app: a Page kept as an App, with data that is kept and actions on Connections and Data Stores.
 - data_store: tables of structured data that Apps and Workflows read and write.
 - knowledge_base: documents, indexed so agents can search them.
-- connection: access to an outside system and the operations it offers. It reaches a remote MCP server; there is no connector for a plain HTTP API. A person enters its key on the Connection's page in Studio, never in this chat: never ask for a key, token or password.
+- connection: access to an outside system and the operations it offers: a remote MCP server, or a REST API whose read operations a person approves; where you hold ${CONNECTION_DRAFT_TOOL_NAME}, you draft them with it. You never save a Connection. A person enters its key on the Connection's page in Studio, never in this chat: never ask for a key, token or password.
 A Page is no asset: your HTML view in this conversation, saved with ${PAGE_SAVE_TOOL_NAME} and shown beside the chat. A quick view with data you write in is a Page; data that is kept, records people change or something to share is an App. An App starts as a Page: when the user says "save this as an app", call ${PAGE_SAVE_AS_APP_TOOL_NAME} on the Page as it is and never build it again. Before you write an App's actions, read references/apps/build.md of '${PLATFORM_DOCS_SKILL_NAME}'. Something that should run again without the user is a Workflow.
 Not every instance has every kind: ${context.name} says which kinds and modules exist here and what the user may do.
 Finding: call ${listAssets.name} before you say something does not exist. It answers names, titles and descriptions, never contents. What the user may not see is not listed: then say you know nothing of that name. ${listFiles.name} finds Pages and files of other conversations of this workspace.
@@ -41,6 +42,14 @@ export const PLATFORM_TOOL_NAMES: readonly string[] = [
   ...PLATFORM_ASSET_TOOL_NAMES
 ];
 
+/**
+ * The platform's tools of a module: the agent's draft of a REST API's tools, of `connections`.
+ * Like the asset tools no release names them, and an agent holds one only where its own
+ * definition lists it; unlike them, one is off with its module, so holding the asset tools does
+ * not bring it.
+ */
+export const PLATFORM_MODULE_TOOL_NAMES: readonly string[] = [CONNECTION_DRAFT_TOOL_NAME];
+
 /** What the platform tells its agents before their own instructions, as an agent page shows it. */
 export const PLATFORM_INSTRUCTIONS: PlatformInstructions = {
   rules: CATALYST_INTERNAL_AGENT_PROMPT,
@@ -53,5 +62,5 @@ export const PLATFORM_INSTRUCTIONS: PlatformInstructions = {
  * which no release names and which an agent holds only where its definition lists them.
  */
 export function agentListableToolNames(enabledByRelease: Iterable<string>): string[] {
-  return [...new Set([...enabledByRelease, ...PLATFORM_TOOL_NAMES])];
+  return [...new Set([...enabledByRelease, ...PLATFORM_TOOL_NAMES, ...PLATFORM_MODULE_TOOL_NAMES])];
 }

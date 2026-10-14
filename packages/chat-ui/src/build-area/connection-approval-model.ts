@@ -82,13 +82,13 @@ export type PasteIssue =
 export type PasteResult =
   { ok: true; candidates: ApprovalCandidate[] } | { ok: false; issue: PasteIssue };
 
-function recordOf(value: unknown): Record<string, unknown> | undefined {
+export function recordOf(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value))
     : undefined;
 }
 
-function textOf(value: unknown): string | undefined {
+export function textOf(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }
 
@@ -128,20 +128,32 @@ export function pastedCandidates(text: string): PasteResult {
     }
     if (seen.has(name)) return { ok: false, issue: { kind: "duplicate", name } };
     seen.add(name);
-    const declaration = Object.fromEntries(
-      Object.entries(operation).filter(([key]) => !SET_BY_APPROVAL.has(key))
-    );
-    const method = textOf(operation.method) ?? "GET";
-    const path = textOf(operation.path) ?? "";
-    const description = textOf(operation.description);
-    candidates.push({
-      name,
-      title: textOf(operation.title) ?? operationTitle(name),
-      ...(description === undefined ? {} : { description }),
-      effect: operation.effect === "changing" ? "changing" : "reading",
-      request: { method, path },
-      declaration: { ...declaration, method }
-    });
+    candidates.push(declaredCandidate(operation, name));
   }
   return { ok: true, candidates };
+}
+
+/**
+ * The row of one declared operation, pasted or drafted by the agent: its declaration as
+ * written, read as GET and `reading` where it names neither, the only method and effect of
+ * the first cut. What the row and the approval set is not taken from it.
+ */
+export function declaredCandidate(
+  operation: Record<string, unknown>,
+  name: string
+): ApprovalCandidate {
+  const declaration = Object.fromEntries(
+    Object.entries(operation).filter(([key]) => !SET_BY_APPROVAL.has(key))
+  );
+  const method = textOf(operation.method) ?? "GET";
+  const path = textOf(operation.path) ?? "";
+  const description = textOf(operation.description);
+  return {
+    name,
+    title: textOf(operation.title) ?? operationTitle(name),
+    ...(description === undefined ? {} : { description }),
+    effect: operation.effect === "changing" ? "changing" : "reading",
+    request: { method, path },
+    declaration: { ...declaration, method }
+  };
 }

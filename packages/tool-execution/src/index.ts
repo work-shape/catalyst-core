@@ -13,6 +13,7 @@ export {
   type PageSaveIntoApp
 } from "./page-app-tool";
 export * from "./read-skill-tool";
+export { CONNECTION_DRAFT_TOOL_NAME, createConnectionDraftTool } from "./connection-draft-tool";
 export {
   PLATFORM_ASSET_OPEN_NEEDS_PERSON,
   PLATFORM_ASSET_TOOLS,

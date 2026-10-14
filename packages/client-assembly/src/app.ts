@@ -388,7 +388,7 @@ export async function createClientInstanceExecutionAssembly(
     const handler = createSkillChangeApprovalHandler({ config, clientInstanceId, configAssets });
     approvalRequestHandlers.set(handler.kind, handler);
   }
-  const platformTools = createPlatformTools({ stores: store, modules });
+  const platformTools = createPlatformTools({ stores: store, modules, connections });
   const { conversationOffer } = platformTools;
   const { authorizer, operationCalls, approvalRequestCreator } = createInstanceOperationCalls({
     clientInstanceId,
