@@ -71,14 +71,14 @@ describe("a conversation about a Guardrail", () => {
         )
       ).json()
     );
-    await ok(app.call("assets.publish", { params: subject, payload: { revision: written.revision } }));
+    await ok(
+      app.call("assets.publish", { params: subject, payload: { revision: written.revision } })
+    );
 
     const created = z
       .object({ id: z.string() })
       .parse(
-        (
-          await ok(app.call("conversations.create", { payload: { title: "Edit", subject } }))
-        ).json()
+        (await ok(app.call("conversations.create", { payload: { title: "Edit", subject } }))).json()
       );
     const started = await injectStartConversationRun(
       app,

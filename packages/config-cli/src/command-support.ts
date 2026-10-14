@@ -288,9 +288,7 @@ export function selectBundle(
     return bundle;
   }
   const selectedKeys = new Set(selectors.map((selector) => selector.key));
-  const selected = bundleOf(
-    assetEntries(bundle).filter((asset) => selectedKeys.has(asset.key))
-  );
+  const selected = bundleOf(assetEntries(bundle).filter((asset) => selectedKeys.has(asset.key)));
   if (requireMatches) {
     const matched = new Set(assetEntries(selected).map((asset) => asset.key));
     const missing = selectors.filter((selector) => !matched.has(selector.key));
@@ -428,10 +426,7 @@ async function replaceFolder(
           await rename(backupDirectory, targetDirectory);
           previousMoved = false;
         } catch (restoreError) {
-          throw new AggregateError(
-            [error, restoreError],
-            `Failed to install and restore ${label}`
-          );
+          throw new AggregateError([error, restoreError], `Failed to install and restore ${label}`);
         }
       }
       throw error;

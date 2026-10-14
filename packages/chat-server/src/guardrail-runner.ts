@@ -269,7 +269,11 @@ export class GuardrailRunner {
     });
     return records.flatMap((record) => {
       const parsed = guardrailConfigSchema.safeParse(record.publishedConfig);
-      if (!parsed.success || parsed.data.origin !== "asset" || record.publishedRevision === undefined) {
+      if (
+        !parsed.success ||
+        parsed.data.origin !== "asset" ||
+        record.publishedRevision === undefined
+      ) {
         return [];
       }
       return [{ guardrail: parsed.data, scope: record.scope, revision: record.publishedRevision }];

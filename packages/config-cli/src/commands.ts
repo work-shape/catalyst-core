@@ -363,10 +363,7 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
           : { defaultAgentName: bundle.defaultAgentName })
       });
     }
-    writeOutput(
-      options,
-      `Valid: ${formatCounts({ ...bundle, guardrails: [] })}.${unchecked}`
-    );
+    writeOutput(options, `Valid: ${formatCounts({ ...bundle, guardrails: [] })}.${unchecked}`);
     return 0;
   } catch (error) {
     const refusal = error instanceof ConfigApiError ? readRefusedBatch(error) : undefined;

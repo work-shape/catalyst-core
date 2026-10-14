@@ -56,11 +56,10 @@ export async function guardrailUnderTrial(
         )?.config;
   const parsed = guardrailConfigSchema.safeParse(stored);
   if (!stored || !parsed.success) {
-    throw new AppError(
-      "NOT_FOUND",
-      `Guardrail '${asset.name}' has no revision ${number} to try`,
-      { reason: "revision_unknown", revision: number }
-    );
+    throw new AppError("NOT_FOUND", `Guardrail '${asset.name}' has no revision ${number} to try`, {
+      reason: "revision_unknown",
+      revision: number
+    });
   }
   return { guardrail: parsed.data, scope: asset.scope, revision: number };
 }
@@ -186,9 +185,10 @@ async function assetReadBy(
   const read = await options.workflow.authorizeRead(call.access, address);
   // A caller who does not read it is told what a caller is told of no asset.
   if (!read.allowed) throw missing;
-  const live = liveRevisionId(asset, kind) === asset.publishedRevisionId
-    ? asset.publishedRevision
-    : asset.revision;
+  const live =
+    liveRevisionId(asset, kind) === asset.publishedRevisionId
+      ? asset.publishedRevision
+      : asset.revision;
   if (named.revision === undefined || named.revision === live) {
     if (live === undefined) throw missing;
     return { asset, revision: live };

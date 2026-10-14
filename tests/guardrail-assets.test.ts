@@ -8,7 +8,14 @@ import {
 } from "@vivd-catalyst/core";
 import { clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import { appFiles, setupAppInstance, type AppInstance } from "./support/app-instance";
-import { IBAN, guardedEvents, ibanPattern, judgeBinding, noIban, runnerOf } from "./support/guardrails";
+import {
+  IBAN,
+  guardedEvents,
+  ibanPattern,
+  judgeBinding,
+  noIban,
+  runnerOf
+} from "./support/guardrails";
 import { withTestSql } from "./support/test-sql";
 
 // Guardrails written as assets (EW-6a): a draft that a holder of `guardrail.publish` at its
@@ -142,7 +149,10 @@ describe("a guardrail written as an asset", () => {
     const t = await instance({ floor_iban: noIban({ displayName: "Floor" }) });
     await t.enforce(
       "allow-iban",
-      guardrail("allow-iban", { check: { kind: "pattern", pattern: ibanPattern }, outcome: "allow" })
+      guardrail("allow-iban", {
+        check: { kind: "pattern", pattern: ibanPattern },
+        outcome: "allow"
+      })
     );
     const blocked = await t.putSkill(IBAN);
     expect(blocked.statusCode).toBe(403);
@@ -189,18 +199,19 @@ describe("a guardrail written as an asset", () => {
     const { revision } = writtenSchema.parse(written.json());
     expect((await t.publish(t.admin.id, "another", revision)).statusCode).toBe(200);
     expect(
-      (await t.call(t.admin.id, "guardrails.unpublish", { params: { name: "another" } }))
-        .statusCode
+      (await t.call(t.admin.id, "guardrails.unpublish", { params: { name: "another" } })).statusCode
     ).toBe(200);
     expect(
-      (await t.call(t.admin.id, "assets.delete", { params: { kind: "guardrail", name: "another" } }))
-        .statusCode
+      (
+        await t.call(t.admin.id, "assets.delete", {
+          params: { kind: "guardrail", name: "another" }
+        })
+      ).statusCode
     ).toBe(200);
     // And so is the guardrail that stops everything else: nobody locks themselves out.
     expect(
-      (
-        await t.call(t.admin.id, "guardrails.unpublish", { params: { name: "every-asset-call" } })
-      ).statusCode
+      (await t.call(t.admin.id, "guardrails.unpublish", { params: { name: "every-asset-call" } }))
+        .statusCode
     ).toBe(200);
 
     // The release floor still answers on guardrails.
@@ -290,10 +301,14 @@ describe("a workspace guardrail", () => {
     expect((await t.publish(t.kai.id, "kai-rule", 1, t.workspaceId)).statusCode).toBe(200);
 
     // Elsewhere the grant gives nothing: another workspace, and the instance.
-    expect((await t.put(t.admin.id, "support-rule", guardrail("support-rule"), other)).statusCode).toBe(200);
+    expect(
+      (await t.put(t.admin.id, "support-rule", guardrail("support-rule"), other)).statusCode
+    ).toBe(200);
     const inOther = await t.publish(t.kai.id, "support-rule", 1, other);
     expect(refusalOf(inOther).details).toMatchObject({ action: "guardrail.publish" });
-    expect((await t.put(t.admin.id, "instance-rule", guardrail("instance-rule"))).statusCode).toBe(200);
+    expect((await t.put(t.admin.id, "instance-rule", guardrail("instance-rule"))).statusCode).toBe(
+      200
+    );
     const atInstance = await t.publish(t.kai.id, "instance-rule", 1);
     expect(refusalOf(atInstance).details).toMatchObject({ action: "guardrail.publish" });
     // Nor does it take a guardrail back elsewhere.
@@ -363,14 +378,16 @@ describe("trying a guardrail before it enforces", () => {
     const t = await instance();
     const actor = (userId: string): AuditActor => ({ userId, displayLabel: userId, roles: [] });
     const write = (userId: string, name: string, content: string) =>
-      t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "skill", name }).then((asset) =>
-        t.stores.configAssets.applyConfigAssetMutations({
-          clientInstanceId,
-          actor: actor(userId),
-          baseRevisions: { [`skill:${name}`]: asset?.revision ?? null },
-          mutations: [{ type: "upsert", kind: "skill", name, config: skill(name, content) }]
-        })
-      );
+      t.stores.configAssets
+        .getConfigAsset({ clientInstanceId, kind: "skill", name })
+        .then((asset) =>
+          t.stores.configAssets.applyConfigAssetMutations({
+            clientInstanceId,
+            actor: actor(userId),
+            baseRevisions: { [`skill:${name}`]: asset?.revision ?? null },
+            mutations: [{ type: "upsert", kind: "skill", name, config: skill(name, content) }]
+          })
+        );
     await write(t.kai.id, "one", `A ${IBAN}`);
     await write(t.kai.id, "one", `B ${IBAN}`);
     await write(t.lena.id, "two", `C ${IBAN}`);
@@ -438,14 +455,20 @@ describe("the usage of a guardrail's judge", () => {
     const t = await instance();
     const workspaceId = asCollaborationWorkspaceId(t.workspaceId);
     const { runner, complete } = runnerOf(t.stores, clientInstanceId, {});
-    const judged = (scope: { kind: "instance" } | { kind: "workspace"; workspaceId: CollaborationWorkspaceId }) =>
+    const judged = (
+      scope: { kind: "instance" } | { kind: "workspace"; workspaceId: CollaborationWorkspaceId }
+    ) =>
       runner.evaluate(
         {
           guardrail: {
             name: "privacy",
             displayName: "Datenschutz",
             on: "asset.before_write",
-            check: { kind: "model_judge", modelBindingId: judgeBinding.id, instruction: "Datenschutz." },
+            check: {
+              kind: "model_judge",
+              modelBindingId: judgeBinding.id,
+              instruction: "Datenschutz."
+            },
             outcome: "warn",
             origin: "asset"
           },

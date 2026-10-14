@@ -37,7 +37,11 @@ export async function readAssetSource(
  */
 export async function readDefinition(path: string): Promise<Record<string, unknown>> {
   const folder = (await stat(path)).isDirectory();
-  const guardrailFolder = folder ? path : basename(path) === GUARDRAIL_FILE ? dirname(path) : undefined;
+  const guardrailFolder = folder
+    ? path
+    : basename(path) === GUARDRAIL_FILE
+      ? dirname(path)
+      : undefined;
   if (
     guardrailFolder !== undefined &&
     (await stat(join(guardrailFolder, GUARDRAIL_FILE)).then(

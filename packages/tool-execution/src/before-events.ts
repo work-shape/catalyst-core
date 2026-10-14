@@ -39,7 +39,9 @@ export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectA
   const { definition, call } = context;
   // Read before any is asked: whether the call is about guardrails decides who answers.
   const own = (await definition.beforeEvents?.(call.input, call.origin)) ?? [];
-  const about = aboutGuardrails(definition.name, call.input, own) ? { aboutGuardrails: true as const } : {};
+  const about = aboutGuardrails(definition.name, call.input, own)
+    ? { aboutGuardrails: true as const }
+    : {};
   const answers: SubjectAnswer[] = [
     await context.emit(
       "operation.before_call",

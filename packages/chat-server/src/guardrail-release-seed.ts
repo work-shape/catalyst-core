@@ -119,7 +119,11 @@ export async function seedReleaseGuardrails(input: {
         kind: GUARDRAIL_ASSET_KIND,
         name
       });
-      if (!asset || asset.status !== "active" || asset.publishedRevisionId === asset.activeRevisionId) {
+      if (
+        !asset ||
+        asset.status !== "active" ||
+        asset.publishedRevisionId === asset.activeRevisionId
+      ) {
         continue;
       }
       await stores.configAssets.publishConfigAssetRevision({

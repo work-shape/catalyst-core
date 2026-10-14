@@ -372,7 +372,10 @@ async function writeGuardrails(
         [asset.key]: { id: asset.id, revision: outcome.output.revision }
       });
       written = true;
-      writeOutput(options, `Deleted ${asset.key}; its delete is revision ${outcome.output.revision}.`);
+      writeOutput(
+        options,
+        `Deleted ${asset.key}; its delete is revision ${outcome.output.revision}.`
+      );
     }
     return 0;
   } catch (error) {

@@ -28,7 +28,7 @@ import { readDefinitionField, type WorkflowAssetKind } from "./shared";
 const AGENT_ASSET_KIND = "agent";
 
 /** The reason of the refusal of a workspace guardrail whose filter reaches outside its workspace. */
-export const GUARDRAIL_OUTSIDE_SCOPE_REASON = "guardrail_filter_outside_scope";
+const GUARDRAIL_OUTSIDE_SCOPE_REASON = "guardrail_filter_outside_scope";
 
 /**
  * The refusal of every change of a Guardrail of release config through the asset operations.
@@ -71,7 +71,7 @@ function assetOfOperation(operation: string): { kind: string; name: string } | u
  * instance guardrail's filter may name anything. Spec: events-workflows-and-guardrails.md,
  * Scope and publishing.
  */
-export async function guardrailReachIssues(input: {
+async function guardrailReachIssues(input: {
   clientInstanceId: ClientInstanceId;
   scope: AssetScope;
   filter: GuardrailFilter | undefined;
@@ -95,7 +95,9 @@ export async function guardrailReachIssues(input: {
         ? assetScopesEqual(agent.scope, scope)
         : await offeredIn(input, filter.agent, scope.workspaceId));
     if (!available) {
-      issues.push(`its filter names the agent '${filter.agent}', which this workspace does not offer`);
+      issues.push(
+        `its filter names the agent '${filter.agent}', which this workspace does not offer`
+      );
     }
   }
   const named = filter.operation === undefined ? undefined : assetOfOperation(filter.operation);
@@ -105,7 +107,11 @@ export async function guardrailReachIssues(input: {
       kind: named.kind,
       name: named.name
     });
-    if (asset?.status === "active" && asset.scope.kind === "workspace" && !assetScopesEqual(asset.scope, scope)) {
+    if (
+      asset?.status === "active" &&
+      asset.scope.kind === "workspace" &&
+      !assetScopesEqual(asset.scope, scope)
+    ) {
       issues.push(`its filter names the operation '${filter.operation}' of another workspace`);
     }
   }
@@ -132,7 +138,7 @@ async function offeredIn(
 }
 
 /** Refuses a workspace guardrail whose filter reaches outside its workspace. */
-export async function assertGuardrailReach(
+async function assertGuardrailReach(
   input: Parameters<typeof guardrailReachIssues>[0] & { name: string }
 ): Promise<void> {
   const issues = await guardrailReachIssues(input);

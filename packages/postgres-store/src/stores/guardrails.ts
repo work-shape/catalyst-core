@@ -112,7 +112,8 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
                 and jsonb_typeof(e.metadata->'revision') = 'number'`;
       const conditions: SQL[] = [];
       if (input.kinds) conditions.push(sql`kind in ${inList(input.kinds)}`);
-      if (input.excludeKinds?.length) conditions.push(sql`kind not in ${inList(input.excludeKinds)}`);
+      if (input.excludeKinds?.length)
+        conditions.push(sql`kind not in ${inList(input.excludeKinds)}`);
       if (input.workspaceId !== undefined) conditions.push(sql`scope_id = ${input.workspaceId}`);
       const where = conditions.length > 0 ? sql`where ${sql.join(conditions, sql` and `)}` : sql``;
       const rows = await db.execute<{
@@ -131,16 +132,14 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
         order by created_at desc
         limit ${limit}`);
       return {
-        subjects: rows.map(
-          (row): GuardrailDryRunSubject => ({
-            kind: row.kind,
-            name: row.name,
-            assetId: row.asset_id,
-            revision: row.revision,
-            ...(row.actor_key === null ? {} : { actorKey: row.actor_key }),
-            ...(row.scope_id === null ? {} : { workspaceId: row.scope_id })
-          })
-        ),
+        subjects: rows.map((row): GuardrailDryRunSubject => ({
+          kind: row.kind,
+          name: row.name,
+          assetId: row.asset_id,
+          revision: row.revision,
+          ...(row.actor_key === null ? {} : { actorKey: row.actor_key }),
+          ...(row.scope_id === null ? {} : { workspaceId: row.scope_id })
+        })),
         total: rows[0]?.total ?? 0
       };
     },

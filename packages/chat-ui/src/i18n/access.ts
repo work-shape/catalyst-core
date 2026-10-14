@@ -114,8 +114,7 @@ export const access = defineTranslations({
     "access.actionPublishGuardrailDescription":
       "Make a guardrail of this workspace enforce, or stop it. A guardrail stops other people's work in the workspace.",
     "access.scopeGuardrail": "Guardrail {name}",
-    "access.scopeInNamespaceGuardrailDescription":
-      "Guardrails are not granted by a Namespace.",
+    "access.scopeInNamespaceGuardrailDescription": "Guardrails are not granted by a Namespace.",
     "access.scopeOnGuardrail": "On one guardrail",
     "access.scopeOnGuardrailDescription": "Guardrails are granted for one workspace.",
     "access.grantGuardrail": "Guardrail",

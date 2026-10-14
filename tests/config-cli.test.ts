@@ -80,7 +80,14 @@ import {
   inDays,
   setupPersonalKeyInstance
 } from "./support/personal-api-keys";
-import { agent as namespaceAgent, recordAuthAdapter } from "./support/access-instance";
+import {
+  agent as namespaceAgent,
+  clientInstanceId as accessInstanceId,
+  recordAuthAdapter,
+  setupAccessInstance,
+  skill as accessSkill
+} from "./support/access-instance";
+import { IBAN as GUARDRAIL_IBAN, ibanPattern } from "./support/guardrails";
 import { setupNamespaceHolder } from "./support/asset-operations";
 import { appFiles, setupAppInstance } from "./support/app-instance";
 
@@ -2746,6 +2753,81 @@ describe("catalyst asset commands against an instance", () => {
     };
     return { run, requests };
   }
+
+  // `catalyst guardrail test`, `dry-run`, `publish` and `unpublish` (EW-6a). Fails without the
+  // change: the CLI had none of these, and a guardrail could not be published.
+  it("tests a guardrail's draft, shows the dry run, publishes only on a confirmed number, and unpublishes", async () => {
+    const t = await setupAccessInstance({
+      furtherKinds: [createGuardrailAssetKind()],
+      server: () => ({ authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" } })
+    });
+    const cwd = await createTemporaryDirectory();
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "skill", name: "faq" },
+      payload: { config: accessSkill("faq", `Konto ${GUARDRAIL_IBAN}`) }
+    });
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "guardrail", name: "no-iban" },
+      payload: {
+        config: {
+          name: "no-iban",
+          displayName: "No IBAN",
+          on: "asset.before_write",
+          filter: { kind: "skill" },
+          check: { kind: "pattern", pattern: ibanPattern, reason: "No bank account." },
+          outcome: "block"
+        }
+      }
+    });
+    const { run } = cliAs(t.instance, t.admin.id, cwd);
+
+    const sample = await run("guardrail", "test", "no-iban", "--text", `Konto ${GUARDRAIL_IBAN}`);
+    expect(sample.code, sample.err).toBe(0);
+    expect(sample.out).toContain(
+      "Revision 1 of guardrail 'no-iban' on 'asset.before_write': block (No bank account.)."
+    );
+    const onAsset = await run("guardrail", "test", "no-iban", "--asset", "skill:faq");
+    expect(onAsset.out).toContain(": block (No bank account.).");
+
+    const dryRun = await run("guardrail", "dry-run", "no-iban");
+    expect(dryRun.code, dryRun.err).toBe(0);
+    expect(dryRun.out).toContain("would have blocked 1 action by 1 person");
+    expect(dryRun.out).not.toContain(t.admin.id);
+
+    const unconfirmed = await run("guardrail", "publish", "no-iban", "--revision", "1");
+    expect(unconfirmed.code).toBe(1);
+    expect(unconfirmed.err).toContain("would have blocked 1 action by 1 person");
+    expect(unconfirmed.err).toContain("Publish it with --confirm 1");
+    const wrong = await run("guardrail", "publish", "no-iban", "--revision", "1", "--confirm", "2");
+    expect(wrong.code).toBe(1);
+    const published = () =>
+      t.stores.configAssets
+        .getConfigAsset({ clientInstanceId: accessInstanceId, kind: "guardrail", name: "no-iban" })
+        .then((asset) => asset?.publishedRevision);
+    expect(await published()).toBeUndefined();
+
+    const confirmed = await run(
+      "guardrail",
+      "publish",
+      "no-iban",
+      "--revision",
+      "1",
+      "--confirm",
+      "1"
+    );
+    expect(confirmed.code, confirmed.err).toBe(0);
+    expect(confirmed.out).toContain("Published revision 1 of guardrail 'no-iban'");
+    expect(await published()).toBe(1);
+
+    const unpublished = await run("guardrail", "unpublish", "no-iban");
+    expect(unpublished.code, unpublished.err).toBe(0);
+    expect(unpublished.out).toContain("Guardrail 'no-iban' no longer enforces");
+    expect(await published()).toBeUndefined();
+
+    // The commands are a guardrail's; another kind is told so before anything is sent.
+    expect((await run("skill", "test", "faq", "--text", "x")).code).toBe(2);
+    expect((await run("guardrail", "test", "no-iban")).code).toBe(2);
+  });
 
   it("builds an agent with its own skill in the holder's Namespace and is refused outside it", async () => {
     const t = await setupNamespaceHolder({

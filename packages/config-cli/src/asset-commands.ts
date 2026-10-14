@@ -285,9 +285,7 @@ const VERBS: Record<string, Verb> = {
             : await readFile(fromPath(values, cwd, "--from <file>"), "utf8");
         const body = {
           ...(revision === undefined ? {} : { revision }),
-          ...(asset
-            ? { asset }
-            : { sample: { [values.field ?? "content"]: text ?? "" } })
+          ...(asset ? { asset } : { sample: { [values.field ?? "content"]: text ?? "" } })
         };
         const answer = await session.api.read((client) =>
           client.guardrails.test({ params: { name }, body })

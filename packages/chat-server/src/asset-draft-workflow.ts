@@ -507,7 +507,10 @@ export class AssetDraftWorkflow {
     await (kind.kind === "app"
       ? recordAssetEvent(call, "app.published", metadata)
       : kind.kind === GUARDRAIL_ASSET_KIND
-        ? recordAssetEvent(call, "guardrail.published", { ...metadata, ...scopeMetadata(asset.scope) })
+        ? recordAssetEvent(call, "guardrail.published", {
+            ...metadata,
+            ...scopeMetadata(asset.scope)
+          })
         : recordAssetEvent(call, "config_asset.published", metadata));
     return {
       draftRevision: asset.revision,
