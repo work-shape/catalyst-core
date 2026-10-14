@@ -1,4 +1,5 @@
 import {
+  APP_BRIDGE_CONNECTION_CALL_REMOVED,
   APP_BRIDGE_MARK,
   APP_BRIDGE_VERSION,
   type AppBridgeContext
@@ -131,6 +132,31 @@ describe("a call a Page asks the interface to make", () => {
     made.receive(
       from(
         page,
+        message({ type: "action", session: "s-1", requestId: "r-1", name: "load", input: {} })
+      )
+    );
+    setFrame({ length: 1, 0: { postMessage() {} } });
+    await settled();
+
+    expect(posted).toEqual([]);
+  });
+
+  // Fails before the removal: the bridge made the call of a Connection operation the Page named.
+  it("refuses the retired free call of a Connection at once, names the named action as the fix, and calls nothing", async () => {
+    const ran: unknown[] = [];
+    const { made, posted, page, from, message } = bridge({
+      can: () => Promise.resolve(undefined),
+      run: (call) => {
+        ran.push(call);
+        return Promise.resolve({ ok: true, result: { runId: "run-1", status: "done" } });
+      },
+      workflowRun: () => Promise.reject(new Error("not asked"))
+    });
+
+    // What `connections.call` of kits 1.0.0 to 1.3.0 still sends.
+    made.receive(
+      from(
+        page,
         message({
           type: "connection_call",
           session: "s-1",
@@ -141,10 +167,24 @@ describe("a call a Page asks the interface to make", () => {
         })
       )
     );
-    setFrame({ length: 1, 0: { postMessage() {} } });
     await settled();
 
-    expect(posted).toEqual([]);
+    expect(ran).toEqual([]);
+    expect(posted).toEqual([
+      {
+        message: callResultMessage("s-1", "r-1", {
+          ok: false,
+          error: { ...APP_BRIDGE_CONNECTION_CALL_REMOVED }
+        }),
+        targetOrigin: "*"
+      }
+    ]);
+    expect(APP_BRIDGE_CONNECTION_CALL_REMOVED).toMatchObject({
+      code: "connection_call_removed",
+      retryable: false,
+      message: expect.stringContaining("named action")
+    });
+    expect(APP_BRIDGE_CONNECTION_CALL_REMOVED.message).toContain("actions/<name>.action.yaml");
   });
 
   // Fails without APP-6a: the bridge took no read of a Workflow Run, so a Page that started one
@@ -247,7 +287,6 @@ describe("the calls of a frame", () => {
           sessions: {
             context: () => Promise.resolve({ can: { load: "allow" as const } }),
             call_action: record("call_action"),
-            call_connection: record("call_connection"),
             get_workflow_run: (request: unknown) => {
               sent.push({ operation: "get_workflow_run", request });
               return Promise.resolve(run);
@@ -268,12 +307,6 @@ describe("the calls of a frame", () => {
         idempotencyKey: "key-1"
       })
     ).toEqual({ ok: true, result: answer });
-    await calls.run({
-      type: "connection_call",
-      connection: "crm",
-      operation: "list",
-      input: { limit: 5 }
-    });
     expect(await calls.workflowRun("wfr-1")).toEqual({ ok: true, run });
 
     const proof = { fileSetId: "set-2", token: "token-3" };
@@ -284,13 +317,6 @@ describe("the calls of a frame", () => {
           params: { pageSessionId: "session-1", name: "save" },
           body: { ...proof, input: { note: "x" } },
           idempotencyKey: "key-1"
-        }
-      },
-      {
-        operation: "call_connection",
-        request: {
-          params: { pageSessionId: "session-1", connection: "crm", operation: "list" },
-          body: { ...proof, input: { limit: 5 } }
         }
       },
       {
@@ -321,10 +347,8 @@ describe("the calls of a frame", () => {
       retryable: false
     });
     expect(
-      frameCallFailure(
-        refusal(403, "FORBIDDEN", "Not listed", { reason: "connection_not_declared" })
-      )
-    ).toEqual({ code: "connection_not_declared", message: "Not listed", retryable: false });
+      frameCallFailure(refusal(404, "NOT_FOUND", "No such action", { reason: "action_unknown" }))
+    ).toEqual({ code: "action_unknown", message: "No such action", retryable: false });
     // Fails without the change: a Page that reads a Data Store was offered to try again.
     expect(
       frameCallFailure(

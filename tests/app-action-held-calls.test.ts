@@ -25,7 +25,7 @@ import { agentOrigin } from "./support/connection-operations";
 import { getTestJobs } from "./support/test-instance";
 
 // What the first build of S3-42 left open, on real rows: which view a frame's address was
-// made for, the workspace of a direct call, a call that waited for an approval and is executed
+// made for, the workspace of a call, a call that waited for an approval and is executed
 // when its App changed meanwhile, the listing of the source, its two limits and the limit of
 // one page session. Each test says what it fails on without the fix round.
 
@@ -61,18 +61,16 @@ describe("a frame's call when the App changes around it", () => {
   };
   const approvalOnWrite = [{ operation: "connection.crm.write", value: "approval" }] as const;
   /** A changing call of `kai` that waits for an approval. Returns its run and its request. */
-  const hold = async (frame: Frame, direct: boolean, key: string) => {
+  const hold = async (frame: Frame, key: string) => {
     t.state.centralSettings = [...approvalOnWrite];
     try {
-      const response = direct
-        ? await t.callConnection(
-            t.kai.id,
-            frame,
-            { connection: "crm", operation: "write" },
-            { note: key },
-            { "idempotency-key": key }
-          )
-        : await t.callAction(t.kai.id, frame, "save", { note: key }, { "idempotency-key": key });
+      const response = await t.callAction(
+        t.kai.id,
+        frame,
+        "save",
+        { note: key },
+        { "idempotency-key": key }
+      );
       expectStatus(response, 200);
       const answer = resultSchema.parse(response.json());
       expect(answer.status).toBe("pending_approval");
@@ -113,23 +111,14 @@ describe("a frame's call when the App changes around it", () => {
       { note: "x" },
       { "idempotency-key": "fresh-draft" }
     );
-    const direct = await t.callConnection(
-      t.admin.id,
-      draft,
-      { connection: "crm", operation: "write" },
-      { note: "x" },
-      { "idempotency-key": "fresh-draft-direct" }
-    );
 
-    // The named action is simulated (ADR-0031); the direct Connection call is refused.
+    // The named action is simulated (ADR-0031).
     expectStatus(inDraft, 200);
     expect(inDraft.json()).toMatchObject({ status: "dry_run" });
     expect(await t.runOf(inDraft.headers["operation-run-id"])).toMatchObject({
       target: "dry_run",
       status: "done"
     });
-    expect(direct.statusCode).toBe(409);
-    expect(t.refusal(direct).details).toMatchObject({ reason: "draft_safe_mode" });
     expect(t.handed.length).toBe(before.handed);
     expect((await t.runs()).length - before.runs).toBe(1);
     // The published view of the same file set carries the change out.
@@ -144,29 +133,20 @@ describe("a frame's call when the App changes around it", () => {
     expect(t.handed.length - before.handed).toBe(1);
   });
 
-  // Fails without the fix: the direct call carried no workspace, the Connection has none, so
-  // a setting narrowed to the App's workspace was skipped and the call ran.
-  it("applies a setting that is narrowed to the App's workspace to a direct call as to a named action", async () => {
+  // Fails without the fix: the call carried no workspace, the Connection has none, so a
+  // setting narrowed to the App's workspace was skipped and the call ran.
+  it("applies a setting that is narrowed to the App's workspace to a named action", async () => {
     const frame = await t.openApp(t.admin.id, "published");
     const handed = t.handed.length;
     t.state.centralSettings = [
       { operation: "connection.crm.echo", value: "deny", workspaceId: t.workspaceId }
     ];
     try {
-      const direct = await t.callConnection(
-        t.admin.id,
-        frame,
-        { connection: "crm", operation: "echo" },
-        { text: "x" }
-      );
       const named = await t.callAction(t.admin.id, frame, "load", { text: "x" });
 
-      for (const response of [direct, named]) {
-        expect(response.statusCode).toBe(403);
-        expect(t.refusal(response).code).toBe("POLICY_DENIED");
-      }
-      expect(await t.runOf(direct.headers["operation-run-id"])).toMatchObject({
-        operation: "connection.crm.echo",
+      expect(named.statusCode).toBe(403);
+      expect(t.refusal(named).code).toBe("POLICY_DENIED");
+      expect(await t.runOf(named.headers["operation-run-id"])).toMatchObject({
         status: "denied",
         workspaceId: t.workspaceId
       });
@@ -179,15 +159,7 @@ describe("a frame's call when the App changes around it", () => {
       { operation: "connection.crm.echo", value: "deny", workspaceId: "cw_another" }
     ];
     try {
-      expectStatus(
-        await t.callConnection(
-          t.admin.id,
-          frame,
-          { connection: "crm", operation: "echo" },
-          { text: "x" }
-        ),
-        200
-      );
+      expectStatus(await t.callAction(t.admin.id, frame, "load", { text: "x" }), 200);
     } finally {
       t.state.centralSettings = [];
     }
@@ -200,7 +172,7 @@ describe("a frame's call when the App changes around it", () => {
     await t.withRight(t.kai.id, "connection.use", { assetId: crm }, async () => {
       const frame = await t.openApp(t.kai.id, "published", "approved");
       const handed = t.handed.length;
-      const held = await hold(frame, false, "approved-1");
+      const held = await hold(frame, "approved-1");
       expect(t.handed.length).toBe(handed);
       expect((await requestOf(held.requestId))?.payload).toMatchObject({ heldBy: "policy_floor" });
 
@@ -226,7 +198,7 @@ describe("a frame's call when the App changes around it", () => {
     await publishApp("pinned");
     await t.withRight(t.kai.id, "connection.use", { assetId: crm }, async () => {
       const frame = await t.openApp(t.kai.id, "published", "pinned");
-      const held = await hold(frame, false, "pinned-1");
+      const held = await hold(frame, "pinned-1");
       // Revision 2 maps the same action to another input, and becomes the published one.
       const changed = appSource("published", "pinned").map((file) =>
         file.path === "actions/save.action.yaml"
@@ -331,14 +303,11 @@ describe("a frame's call when the App changes around it", () => {
     });
   });
 
-  // Fails without the fix for the direct call: its run is the Connection operation's own and
-  // nothing of the App was asked when it was executed.
-  it("does not execute a held call after its caller lost the App, as an action and as a direct call", async () => {
+  it("does not execute a held call after its caller lost the App", async () => {
     await publishApp("revoked");
     await t.withRight(t.kai.id, "connection.use", { assetId: crm }, async () => {
       const frame = await t.openApp(t.kai.id, "published", "revoked");
-      const named = await hold(frame, false, "revoked-named");
-      const direct = await hold(frame, true, "revoked-direct");
+      const named = await hold(frame, "revoked-named");
       // A member uses the Apps of the workspace by being a member, so leaving it is how the
       // right goes.
       const membership = {
@@ -350,31 +319,24 @@ describe("a frame's call when the App changes around it", () => {
       const handed = t.handed.length;
       try {
         await approve(named.requestId);
-        await approve(direct.requestId);
       } finally {
         await t.stores.workspaces.addMembership({ ...membership, role: "member" });
       }
 
       expect(t.handed.length).toBe(handed);
-      for (const [held, operation] of [
-        [named, "app.revoked.save"],
-        [direct, "connection.crm.write"]
-      ] as const) {
-        expect(await t.runOf(held.runId), operation).toMatchObject({
-          operation,
-          status: "denied",
-          denial: { kind: "forbidden", action: "app.use" }
-        });
-      }
+      expect(await t.runOf(named.runId)).toMatchObject({
+        operation: "app.revoked.save",
+        status: "denied",
+        denial: { kind: "forbidden", action: "app.use" }
+      });
     });
   });
 
-  // Fails without the fix: the Connection operation was executed for an App that is gone.
-  it("does not execute a held direct call after its App was removed", async () => {
+  it("does not execute a held call after its App was removed", async () => {
     await publishApp("removed");
     await t.withRight(t.kai.id, "connection.use", { assetId: crm }, async () => {
       const frame = await t.openApp(t.kai.id, "published", "removed");
-      const held = await hold(frame, true, "removed-direct");
+      const held = await hold(frame, "removed-named");
       expectStatus(
         await t.call(t.admin.id, "assets.delete", {
           params: { kind: "app", name: "removed" },
@@ -388,9 +350,9 @@ describe("a frame's call when the App changes around it", () => {
 
       expect(t.handed.length).toBe(handed);
       expect(await t.runOf(held.runId)).toMatchObject({
-        operation: "connection.crm.write",
+        operation: "app.removed.save",
         status: "failed",
-        error: { code: "NOT_FOUND", message: expect.stringContaining("no longer exists") }
+        error: { code: "NOT_FOUND" }
       });
     });
   });
@@ -520,12 +482,7 @@ describe("a frame's call when the App changes around it", () => {
     limiter.refused.add(key);
     const responses = [
       await t.callAction(t.admin.id, frame, "load", { text: "x" }),
-      await t.callConnection(
-        t.admin.id,
-        frame,
-        { connection: "crm", operation: "echo" },
-        { text: "x" }
-      )
+      await t.callAction(t.admin.id, frame, "load", { text: "y" })
     ];
 
     for (const response of responses) {

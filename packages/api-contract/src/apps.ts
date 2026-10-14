@@ -181,14 +181,6 @@ export const appActionCallRequestSchema = z
   })
   .strict();
 
-export const appConnectionCallRequestSchema = z
-  .object({
-    ...pageSessionProof,
-    /** The input of the Connection's operation, as its accepted schema describes it. */
-    input: z.unknown().optional()
-  })
-  .strict();
-
 /**
  * How a call of a frame went. `done` carries what the operation answered. `pending_approval`
  * carries nothing: the call waits for another person and its run says how it ends. `dry_run`

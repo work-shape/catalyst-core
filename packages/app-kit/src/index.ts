@@ -4,7 +4,6 @@ export * from "@vivd-catalyst/ui";
 export {
   AppCallError,
   actions,
-  connections,
   createAppClient,
   createFrameTransport,
   getContext,

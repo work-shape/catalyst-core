@@ -34,7 +34,7 @@ A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-r
 | `id` | Lowercase letters, digits and `-`, at most 63 characters. |
 | `name` | The name people read. |
 | `description`, `icon` | Optional. |
-| `kit` | The exact kit version. Use `1.3.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
+| `kit` | The exact kit version. Use `1.4.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
 | `entry` | `index.html` for a plain HTML App. A React App leaves it out. |
 | `connections` | The Connections the App's actions call, by name. |
 | `dataStores` | The Data Store the App's `sql` actions use: `{ name, minSchema }`. One at most while the App has `sql` actions. |
@@ -163,7 +163,7 @@ A dashboard of one ExampleData client: it reads bookings from the Connection `ex
 ```yaml title="app.yaml"
 id: exampledata-dashboard
 name: ExampleData dashboard
-kit: 1.3.0
+kit: 1.4.0
 connections:
   - exampledata
 dataStores:
@@ -311,7 +311,7 @@ The same call from a plain HTML App, with one action on the Connection.
 ```yaml title="app.yaml"
 id: exampledata-bookings
 name: ExampleData bookings
-kit: 1.3.0
+kit: 1.4.0
 entry: index.html
 connections:
   - exampledata
@@ -363,6 +363,7 @@ The build answers each fault with its file and a sentence that names the fix. Th
 
 - `connection_not_declared`: the action calls a Connection that `connections` in `app.yaml` does not list.
 - `data_store_not_declared`: an `sql` action and no `dataStores` in `app.yaml`.
+- `key_reserved`: a key a later part of Apps will use, such as `rights`, `requires` or an action of `kind: code`; remove it.
 - An `sql` file without its line under `actions`: add `{ name, file, effect }`.
 - A YAML file in `actions/` without the ending `.action.yaml`: rename it.
 - A missing `connection`, `operation` or `effect` in an action file: add it.
