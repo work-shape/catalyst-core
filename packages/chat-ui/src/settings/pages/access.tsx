@@ -143,7 +143,6 @@ export function AccessPage() {
             onRetry={retry(grantsQuery)}
             users={usersQuery.data}
             usersFailed={Boolean(usersQuery.error)}
-            namespaces={namespacesQuery.data}
             assets={overview?.assets}
             assetsFailure={overviewFailure}
             kindAssets={kindAssets}

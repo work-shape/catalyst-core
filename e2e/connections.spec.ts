@@ -250,10 +250,12 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       await expect(dialog.getByLabel("Read", { exact: true })).toBeVisible();
       await expect(dialog.getByLabel("Write", { exact: true })).toHaveCount(0);
       await expect(dialog.getByLabel("Delete", { exact: true })).toHaveCount(0);
-      // The three places a Connection right is written at. The form opens on the Namespace.
-      await expect(dialog.getByRole("radio", { name: /^In a Namespace/u })).toBeChecked();
-      await expect(dialog.getByRole("radio", { name: /^In a shared workspace/u })).toBeVisible();
-      await dialog.getByRole("radio", { name: /^On one connection/u }).check();
+      // A new Connection right has one place, one Connection, so there is no place to choose:
+      // no workspace owns a Connection, and a Namespace is no longer offered.
+      await expect(dialog.getByRole("radiogroup", { name: "Where" })).toHaveCount(0);
+      await expect(dialog.getByRole("radio", { name: /shared workspace|Namespace/u })).toHaveCount(
+        0
+      );
       // Each action says what it allows.
       await expect(
         dialog.getByText("See the connection and its status in Studio. Never its credentials.", {
