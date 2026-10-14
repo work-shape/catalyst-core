@@ -77,6 +77,7 @@ import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./a
 import { createInstancePageSave, createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
 import { createPlatformTools } from "./conversation-offer";
+import { PLATFORM_INSTRUCTIONS, agentListableToolNames } from "./platform-orientation";
 import { assembleModules, endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
@@ -352,7 +353,7 @@ export async function createClientInstanceExecutionAssembly(
       }),
     fastModeModelBindingIds: fastModeModelBindingIds(config),
     reasoningEfforts: [...REASONING_EFFORTS],
-    enabledToolNames: [...getEnabledToolNames(config)]
+    enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
   };
   // A write is refused for an agent it adds or changes that names a tool of a module that is
   // off. A stored agent that still names one starts and runs without it, and does not stand in
@@ -373,7 +374,8 @@ export async function createClientInstanceExecutionAssembly(
       modules,
       moduleKinds: moduleAssembly.assetKinds
     }),
-    validationRefs
+    validationRefs,
+    platformInstructions: PLATFORM_INSTRUCTIONS
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
   const skillPolicy = config.administration.agentConfiguration.agentSkillChanges;
@@ -513,7 +515,7 @@ export async function createClientInstanceExecutionAssembly(
         .filter((binding) => binding.agentSelectable !== false)
         .map((binding) => binding.id),
       fastModeModelBindingIds: fastModeModelBindingIds(config),
-      enabledToolNames: [...getEnabledToolNames(config)]
+      enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
     }
   });
 

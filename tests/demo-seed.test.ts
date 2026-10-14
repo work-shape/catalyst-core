@@ -150,7 +150,7 @@ describe("the demo seed on the fixture instance", () => {
     const own = [
       "application_assistant",
       "research_assistant",
-      "platform-guide",
+      "platform-docs",
       "workflow-authoring"
     ];
     const assets = seeded().before.assets.filter((asset) => !own.includes(asset.name));

@@ -8,10 +8,12 @@ import {
   type ShippedSkill
 } from "@vivd-catalyst/core";
 import { workflowAuthoringSkill, workflowsModule } from "@vivd-catalyst/workflows";
-import { platformSkill } from "./platform-skill";
+import { platformDocsSkill } from "./platform-docs-skill";
 
 // The skills that ship with the platform. The API process stores them at start as read-only
-// skills of origin `release`; a conversation is offered them by name.
+// skills of origin `release`; a conversation whose agent holds the platform's tools is offered
+// them by name. A skill a release no longer ships, such as the former `platform-guide`, the
+// seed deletes.
 
 /** The kinds the platform ships a skill for. */
 const SHIPPED_SKILL_KINDS = [WORKFLOW_ASSET_KIND];
@@ -24,16 +26,16 @@ function subjectSkillsOf(kind: string, modules: ModuleSnapshot): ShippedSkill[] 
 }
 
 /**
- * The names of the shipped skills a conversation is offered: the guide to the platform in every
- * one, the skills for its subject in one about an asset, and in one about none yet those of every
- * kind, since the agent may open any.
+ * The names of the shipped skills a conversation of an agent that holds the platform's tools is
+ * offered: the platform's documentation in every one, the skills for its subject in one about an
+ * asset, and in one about none yet those of every kind, since the agent may open any.
  */
 export function offeredSkillNames(
   subject: { kind: string } | undefined,
   modules: ModuleSnapshot
 ): string[] {
   return [
-    platformSkill,
+    platformDocsSkill,
     ...(subject
       ? subjectSkillsOf(subject.kind, modules)
       : SHIPPED_SKILL_KINDS.flatMap((kind) => subjectSkillsOf(kind, modules)))
@@ -42,7 +44,10 @@ export function offeredSkillNames(
 
 /** Every skill this build ships with the modules that are on. A module that is off ships none. */
 function shippedSkillsOf(modules: ModuleSnapshot): ShippedSkill[] {
-  return [platformSkill, ...SHIPPED_SKILL_KINDS.flatMap((kind) => subjectSkillsOf(kind, modules))];
+  return [
+    platformDocsSkill,
+    ...SHIPPED_SKILL_KINDS.flatMap((kind) => subjectSkillsOf(kind, modules))
+  ];
 }
 
 /** Makes the stored shipped skills what this build ships, and logs what it changed. */

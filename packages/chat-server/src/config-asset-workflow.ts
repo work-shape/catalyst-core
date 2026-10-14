@@ -87,8 +87,18 @@ export function configAssetReferences(
   options: Pick<ChatServerOptions, "configAssets" | "modules">
 ) {
   const refs = options.configAssets.validationRefs;
+  const { platformInstructions } = options.configAssets;
   return {
     ...refs,
+    // Shown read-only on an agent's page, as the agent gets them.
+    ...(platformInstructions
+      ? {
+          platformInstructions: {
+            ...platformInstructions,
+            toolNames: [...platformInstructions.toolNames]
+          }
+        }
+      : {}),
     // A tool of a module that is off is not offered for an agent.
     enabledToolNames: refs.enabledToolNames.filter(
       (toolName) => options.modules.offModuleOf("tool", toolName) === undefined

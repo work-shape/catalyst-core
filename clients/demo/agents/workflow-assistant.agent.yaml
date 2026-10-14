@@ -76,6 +76,14 @@ toolNames:
   - workspace.preview_images
   - workspace.promote_artifact
   - page.save
+  - platform.context
+  - platform.assets.list
+  - platform.files.list
+  - platform.assets.open
+  - platform.assets.get
+  - platform.assets.validate
+  - platform.assets.put
+  - platform.assets.operations
   - demo.workflow_summary
   - demo.weather_forecast
   - connection.sample-business.list_customers

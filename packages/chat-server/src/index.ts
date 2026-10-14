@@ -304,7 +304,11 @@ export type {
 export { enqueueConnectionDiscovery } from "./connection-jobs";
 export type { WorkflowListEntry, WorkflowRunsPort } from "./workflow-runs-port";
 export { createWorkflowRoutes } from "./routes/workflow-routes";
-export type { ConfigAssetValidationRefs, WorkflowAssetKind } from "./asset-kinds/shared";
+export type {
+  ConfigAssetValidationRefs,
+  PlatformInstructions,
+  WorkflowAssetKind
+} from "./asset-kinds/shared";
 
 function adaptLogger(logger: Logger): FastifyInstance["log"] {
   return {

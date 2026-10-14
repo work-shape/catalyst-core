@@ -77,17 +77,19 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         return toolFailed("handler_failed", "read_skill requires an active agent run");
       }
 
-      // The skills the platform ships are offered to a conversation, and no agent's definition
-      // needs to list them. They are stored skills, read like any other.
+      // The skills the platform ships are offered to a conversation of an agent that holds the
+      // platform's tools, and no agent's definition needs to list them. They are stored skills,
+      // read like any other.
       const conversationId = context.toolRequest?.conversationId;
+      const assets = await options.assetSource.getSnapshot();
+      const agent = assets.agents.find((candidate) => candidate.name === agentName);
       const offer = conversationId
         ? await options.conversationOffer?.offerOf({
             clientInstanceId: context.clientInstanceId,
-            conversationId
+            conversationId,
+            agentToolNames: agent?.toolNames ?? []
           })
         : undefined;
-      const assets = await options.assetSource.getSnapshot();
-      const agent = assets.agents.find((candidate) => candidate.name === agentName);
       const allowedSkillNames = new Set([
         ...(agent?.skillNames ?? []),
         ...(offer?.skillNames ?? [])

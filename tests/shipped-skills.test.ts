@@ -7,10 +7,12 @@ import { createTestInstance, type TestInstance } from "./support/test-instance";
 
 // The skills that ship with the platform are stored skills of origin `release`, written by the
 // seed of the API process and by nothing else. Each test fails without the change: before it
-// no start stored a skill, and the platform's guide was no asset a list could show.
+// no start stored a skill, and the platform's docs were no asset a list could show.
 
 const ADMIN = "admin";
-const GUIDE = "platform-guide";
+const GUIDE = "platform-docs";
+/** The guide earlier releases shipped, which the orientation in the system prompt replaced. */
+const RETIRED_GUIDE = "platform-guide";
 const AUTHORING = "workflow-authoring";
 const clientInstanceId = asClientInstanceId("demo-local");
 
@@ -83,7 +85,7 @@ describe("the skills that ship with the platform", () => {
       origin: "release",
       icon: "workflow"
     });
-    expect((await read(app, GUIDE)).config.content).toContain("# How this platform works");
+    expect((await read(app, GUIDE)).config.content).toContain("# Workshape Catalyst documentation");
   });
 
   it("refuses every change and delete of one, and a new skill under its name", async () => {
@@ -182,7 +184,7 @@ describe("the skills that ship with the platform", () => {
       skills: [
         {
           name: GUIDE,
-          title: "How this platform works",
+          title: "Platform documentation",
           description: "The next release's guide.",
           content: "# The next release's guide",
           icon: "guide"
@@ -195,11 +197,47 @@ describe("the skills that ship with the platform", () => {
     expect(replaced.config.content).toBe("# The next release's guide");
   });
 
+  it("retires the guide an earlier release shipped and keeps the references of the docs", async () => {
+    const earlier = await start(true);
+    // What an earlier release stored: its guide beside the skill for Workflows.
+    await seedShippedSkills({
+      clientInstanceId,
+      stores: earlier.stores,
+      skills: [
+        {
+          name: RETIRED_GUIDE,
+          title: "How this platform works",
+          description: "The earlier release's guide.",
+          content: "# How this platform works",
+          icon: "guide"
+        },
+        {
+          name: AUTHORING,
+          title: "Workflow authoring",
+          description: "Writing Workflows.",
+          content: "# Workflows",
+          icon: "workflow"
+        }
+      ]
+    });
+    expect(await shippedNames(earlier)).toEqual([RETIRED_GUIDE, AUTHORING].sort());
+
+    // This release's start deletes the guide and stores the docs with their references.
+    const now = await start(true);
+    expect(await shippedNames(now)).toEqual([GUIDE, AUTHORING].sort());
+    const gone = await now.call("assets.get", { params: { kind: "skill", name: RETIRED_GUIDE } });
+    expect(gone.statusCode, gone.body).toBe(404);
+    const docs = z
+      .object({ config: z.object({ resources: z.array(z.object({ path: z.string() })) }) })
+      .parse((await now.call("assets.get", { params: { kind: "skill", name: GUIDE } })).json());
+    expect(docs.config.resources.map(({ path }) => path)).toContain("references/configure/cli.md");
+  });
+
   it("is stored once by starts that run at the same time", async () => {
     const app = await start(true);
     const next = {
       name: GUIDE,
-      title: "How this platform works",
+      title: "Platform documentation",
       description: "The next release's guide.",
       content: "# The next release's guide",
       icon: "guide"

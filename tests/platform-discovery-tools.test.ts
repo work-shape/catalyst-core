@@ -12,18 +12,20 @@ import {
   asUserId,
   createFileSetId
 } from "@vivd-catalyst/core";
+import { PLATFORM_TOOL_NAMES } from "@vivd-catalyst/client-assembly";
 import { createPlatformDiscoveryTools } from "@vivd-catalyst/tool-execution";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 import { claimAttachmentsForStoredMessage } from "./support/test-store";
 
-// Every agent, in every conversation, finds what is on the platform with two tools and reads
-// how the platform works in one shipped skill. The tools answer with the rights of the person
-// the agent acts for: an asset that person may not read is answered as one that does not
-// exist. The model is the scripted one of the tests, which makes the one tool call each
-// message names. Each test fails without the change: no agent could list the platform's
-// assets, and a conversation about nothing was offered no tool and no skill of the platform.
+// An agent that holds the platform's tools finds what is on the platform with them and reads the
+// product's documentation in one shipped skill; an agent that lists none of them gets neither.
+// The tools answer with the rights of the person the agent acts for: an asset that person may
+// not read is answered as one that does not exist. The model is the scripted one of the tests,
+// which makes the one tool call each message names. Each test fails without the change: no
+// agent could list the platform's assets, and the platform's tools and skill reached every
+// agent whatever its definition listed.
 
 const OWNER = "owner";
 const MEMBER = "member";
@@ -99,8 +101,13 @@ describe("the tools that find what is on the platform", () => {
     for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
   });
 
-  async function fixture(workflows: boolean, pages = false) {
+  async function fixture(
+    workflows: boolean,
+    pages = false,
+    toolNames: string[] = [...PLATFORM_TOOL_NAMES]
+  ) {
     const config = createTestConfig({
+      toolNames,
       // A Page is saved from an Execution Workspace, so Pages need them.
       executionWorkspaces: { enabled: pages },
       developmentAuth: {
@@ -183,10 +190,30 @@ describe("the tools that find what is on the platform", () => {
     expect(written.statusCode, written.body).toBe(200);
 
     const owner = await t.conversationOf(OWNER);
-    const skill = z
-      .object({ name: z.string(), content: z.string() })
-      .parse((await owner("read_skill", { name: "platform-guide" })).answer);
-    expect(skill.content).toContain("platform.assets.list");
+    // The documentation lists its pages, and each listed path answers that page.
+    const docs = z
+      .object({
+        name: z.string(),
+        content: z.string(),
+        resources: z.array(z.object({ path: z.string(), mediaType: z.string() }))
+      })
+      .parse((await owner("read_skill", { name: "platform-docs" })).answer);
+    expect(docs.content).toContain("`references/configure/cli.md`: The Catalyst CLI.");
+    expect(docs.resources).toContainEqual({
+      path: "references/configure/cli.md",
+      mediaType: "text/markdown"
+    });
+    const page = z.object({ resourcePath: z.string(), content: z.string() }).parse(
+      (
+        await owner("read_skill", {
+          name: "platform-docs",
+          resourcePath: "references/configure/cli.md"
+        })
+      ).answer
+    );
+    expect(page.resourcePath).toBe("references/configure/cli.md");
+    expect(page.content.startsWith("# The Catalyst CLI\n")).toBe(true);
+    expect(page.content).toContain("@work-shape/catalyst-cli");
 
     const context = contextSchema.parse((await owner("platform.context")).answer);
     expect(context.modules).toContain("workflows");
@@ -228,6 +255,21 @@ describe("the tools that find what is on the platform", () => {
     expect(hidden.answer).toEqual(missing.answer);
     const memberEveryKind = foundSchema.parse((await member("platform.assets.list", {})).answer);
     expect(memberEveryKind.assets.map(({ kind }) => kind)).not.toContain("workflow");
+  }, 120_000);
+
+  it("gives an agent that lists none of the platform's tools neither the tools nor the documentation", async () => {
+    // It reads skills, but none of the platform's tools.
+    const t = await fixture(true, false, ["read_skill"]);
+    const owner = await t.conversationOf(OWNER);
+    for (const tool of ["platform.context", "platform.assets.list", "platform.files.list"]) {
+      const { events, answer } = await owner(tool);
+      expect(answer).toBeUndefined();
+      expect(events).toContain(`Tool '${tool}' is not available to this agent`);
+    }
+    expect((await owner("read_skill", { name: "platform-docs" })).answer).toEqual({
+      code: "not_allowed",
+      message: "Agent 'test_agent' is not allowed to read skill 'platform-docs'"
+    });
   }, 120_000);
 
   it("lists no kind of a module that is off, and refuses it as a kind that does not exist", async () => {

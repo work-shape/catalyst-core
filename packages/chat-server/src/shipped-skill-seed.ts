@@ -44,8 +44,16 @@ function definitionOf(skill: ShippedSkill): JsonObject {
       `The platform ships the skill '${skill.name}', which is no valid skill: ${parsed.error.issues[0]?.message ?? ""}`
     );
   }
-  const { name, title, description, content, icon } = parsed.data;
-  return { name, title, description, content, origin: "release", ...(icon ? { icon } : {}) };
+  const { name, title, description, content, resources, icon } = parsed.data;
+  return {
+    name,
+    title,
+    description,
+    content,
+    ...(resources?.length ? { resources } : {}),
+    origin: "release",
+    ...(icon ? { icon } : {})
+  };
 }
 
 const isShipped = (asset: ConfigAssetRecord) =>

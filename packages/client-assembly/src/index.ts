@@ -44,6 +44,8 @@ export {
 } from "./modules";
 export { createInstanceConnections, type InstanceConnections } from "./connections";
 export { createPlatformTools } from "./conversation-offer";
+export { PLATFORM_TOOL_NAMES } from "./platform-orientation";
+export { platformDocsSkill } from "./platform-docs-skill";
 export {
   createInstanceWorkflows,
   type InstanceWorkflows,

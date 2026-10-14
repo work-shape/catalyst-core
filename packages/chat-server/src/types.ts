@@ -30,7 +30,11 @@ import type { AuthAdapter } from "@vivd-catalyst/auth";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import type { ConfigAssetValidationRefs, WorkflowAssetKind } from "./asset-kinds/shared";
+import type {
+  ConfigAssetValidationRefs,
+  PlatformInstructions,
+  WorkflowAssetKind
+} from "./asset-kinds/shared";
 import type { ChatAttachmentService } from "./attachments";
 import type { InfrastructureWorkflow } from "./infrastructure-workflow";
 import type { ConnectionManagementPort } from "./connection-management-port";
@@ -94,6 +98,12 @@ export interface ChatServerOptions {
     /** The registered asset kinds, assembled once with the instance. */
     kinds: AssetKindRegistry<WorkflowAssetKind>;
     validationRefs: ConfigAssetValidationRefs;
+    /**
+     * What the platform tells its agents before their own instructions, shown read-only on an
+     * agent's page: the rules every agent gets, and the orientation an agent gets whose
+     * definition lists one of `toolNames`.
+     */
+    platformInstructions?: PlatformInstructions;
   };
   agentRuntime: AgentRuntime;
   /** The instance's Connections, where the module `connections` is on. */

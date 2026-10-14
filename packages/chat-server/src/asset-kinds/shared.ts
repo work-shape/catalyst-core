@@ -20,6 +20,16 @@ export interface ConfigAssetValidationRefs {
   enabledToolNames: string[];
 }
 
+/** What the platform tells its agents before their own instructions. */
+export interface PlatformInstructions {
+  /** The rules at the head of every agent's system prompt. */
+  rules: string;
+  /** How the platform works, for an agent that holds one of `toolNames`. */
+  orientation: string;
+  /** The platform's tools: an agent whose definition lists one of them holds them. */
+  toolNames: readonly string[];
+}
+
 /**
  * A registered kind with what the config asset workflow asks of it. Everything the workflow
  * does differently for one kind is answered here, by that kind's registration.
