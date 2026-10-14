@@ -19,7 +19,7 @@ import { platformDocsSkill } from "./platform-docs-skill";
  * The names of every skill this build ships, whichever modules are on. A skill of the instance's
  * own takes none of them.
  */
-export const shippedSkillNames: readonly string[] = [platformSkill, workflowAuthoringSkill].map(
+export const shippedSkillNames: readonly string[] = [platformDocsSkill, workflowAuthoringSkill].map(
   (skill) => skill.name
 );
 
