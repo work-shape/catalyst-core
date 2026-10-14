@@ -201,30 +201,36 @@ describe("publishing needs an instance admin's approval", () => {
     });
 
     expectStatus(await switchTo(t.admin.id, false), 200);
-
-    const audit = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 500 });
-    expect(audit).toContainEqual(
-      expect.objectContaining({
-        type: "guardrail.shipped_switched",
-        actor: expect.objectContaining({ userId: t.admin.id }),
-        metadata: expect.objectContaining({ name: PUBLISH_APPROVAL_GUARDRAIL.name, enabled: false })
-      })
-    );
-    expect(
-      shippedSchema.parse((await t.expectOk(t.admin.id, "guardrails.list_shipped")).json()).items
-    ).toEqual([
-      {
-        name: PUBLISH_APPROVAL_GUARDRAIL.name,
-        enabled: false,
-        switchedBy: { id: t.admin.id, label: t.admin.displayLabel },
-        canSwitch: true
-      }
-    ]);
-    await created("specials");
-    expectStatus(await t.publish(t.kai.id, "specials", 1), 200);
-    expect((await stored("specials"))?.publishedRevision).toBe(1);
-
-    expectStatus(await switchTo(t.admin.id, true), 200);
+    try {
+      const audit = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 500 });
+      expect(audit).toContainEqual(
+        expect.objectContaining({
+          type: "guardrail.shipped_switched",
+          actor: expect.objectContaining({ userId: t.admin.id }),
+          metadata: expect.objectContaining({
+            name: PUBLISH_APPROVAL_GUARDRAIL.name,
+            enabled: false
+          })
+        })
+      );
+      expect(
+        shippedSchema.parse((await t.expectOk(t.admin.id, "guardrails.list_shipped")).json()).items
+      ).toEqual([
+        {
+          name: PUBLISH_APPROVAL_GUARDRAIL.name,
+          enabled: false,
+          switchedBy: { id: t.admin.id, label: t.admin.displayLabel },
+          canSwitch: true
+        }
+      ]);
+      await created("specials");
+      expectStatus(await t.publish(t.kai.id, "specials", 1), 200);
+      expect((await stored("specials"))?.publishedRevision).toBe(1);
+    } finally {
+      // The switch is the instance's: every fixture of this file reads it. Nothing here
+      // throws, so a failure above stays the one reported; the publish below proves it on.
+      await switchTo(t.admin.id, true);
+    }
     await created("archive");
     expectStatus(await t.publish(t.kai.id, "archive", 1), 202);
   });
