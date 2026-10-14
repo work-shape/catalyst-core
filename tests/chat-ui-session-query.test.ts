@@ -7,6 +7,8 @@ import {
 } from "@vivd-catalyst/api-client";
 import {
   getCurrentUserWithinDeadline,
+  threadQueryRetry,
+  threadRetryDelay,
   workspaceConfigQueryOptions
 } from "../packages/chat-ui/src/api/workspace-queries";
 
@@ -261,5 +263,29 @@ describe("loading the instance configuration", () => {
     expect(retry(3, unavailable)).toBe(false);
     expect(retry(0, new ApiError(401, "sign in", undefined))).toBe(false);
     expect(retry(0, new ApiError(403, "forbidden", undefined))).toBe(false);
+  });
+});
+
+describe("loading a conversation thread", () => {
+  it("never asks again for a refusal, but does for a timeout or a rate limit", () => {
+    expect(threadQueryRetry(0, new ApiError(404, "not found", undefined))).toBe(false);
+    expect(threadQueryRetry(0, new ApiError(403, "forbidden", undefined))).toBe(false);
+    expect(threadQueryRetry(0, new ApiError(408, "timeout", undefined))).toBe(true);
+    expect(threadQueryRetry(0, new ApiError(429, "slow down", undefined))).toBe(true);
+    expect(threadQueryRetry(0, new ApiError(503, "unavailable", undefined))).toBe(true);
+    expect(threadQueryRetry(3, new ApiError(429, "slow down", undefined))).toBe(false);
+  });
+
+  it("waits as long as a rate limit asks, and backs off otherwise", () => {
+    const limited = new ApiError(429, "slow down", {
+      error: {
+        code: "RATE_LIMITED",
+        message: "slow down",
+        details: { retryAfterSeconds: 7 }
+      }
+    });
+    expect(limited.retryAfterSeconds).toBe(7);
+    expect(threadRetryDelay(0, limited)).toBe(7_000);
+    expect(threadRetryDelay(1, new ApiError(429, "slow down", undefined))).toBe(2_000);
   });
 });

@@ -312,9 +312,9 @@ export function useWorkspaceThreadQuery(
         params: { conversationId: input.conversationId ?? "" }
       }),
     // A thread the instance refuses, as one the person may not read, is not asked for again:
-    // the dock that names it opens empty at once.
-    retry: (failureCount: number, error: unknown) =>
-      failureCount < THREAD_LOAD_RETRIES && !isRefusal(error),
+    // the dock that names it opens empty at once. A timeout or a rate limit passes, so it is.
+    retry: threadQueryRetry,
+    retryDelay: threadRetryDelay,
     enabled: input.enabled
   });
 }
@@ -322,8 +322,29 @@ export function useWorkspaceThreadQuery(
 /** As often as a query is tried again by default. */
 const THREAD_LOAD_RETRIES = 3;
 
+/** Statuses below 500 that pass by themselves: a request timeout and a rate limit. */
+const PASSING_CLIENT_STATUSES = new Set([408, 429]);
+
 function isRefusal(error: unknown): boolean {
-  return error instanceof ApiError && error.status >= 400 && error.status < 500;
+  return (
+    error instanceof ApiError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    !PASSING_CLIENT_STATUSES.has(error.status)
+  );
+}
+
+export function threadQueryRetry(failureCount: number, error: unknown): boolean {
+  return failureCount < THREAD_LOAD_RETRIES && !isRefusal(error);
+}
+
+/** The default backoff, or longer when a rate limit says how long to wait. */
+export function threadRetryDelay(failureCount: number, error: unknown): number {
+  const backoffMs = Math.min(1_000 * 2 ** failureCount, 30_000);
+  const retryAfterSeconds = error instanceof ApiError ? error.retryAfterSeconds : undefined;
+  return retryAfterSeconds === undefined
+    ? backoffMs
+    : Math.max(backoffMs, retryAfterSeconds * 1_000);
 }
 
 export function useConversationResourcesQuery(
