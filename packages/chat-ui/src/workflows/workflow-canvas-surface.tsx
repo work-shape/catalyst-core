@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { IconButton } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
+import { openWorkspacePageInNewTab } from "../routes";
 import { WorkflowCanvas } from "./workflow-canvas";
 import { useWorkflow } from "./workflow-data";
 import { WorkflowDraftBar, useWorkflowDraft } from "./workflow-draft";
@@ -64,7 +65,7 @@ export function WorkflowCanvasSurface({
   );
 }
 
-/** Opens the page of the Workflow from the head of its surface. */
+/** Opens the page of the Workflow in a new tab from the head of its surface. */
 export function WorkflowSurfaceActions({
   workspaceId,
   workflow
@@ -81,7 +82,11 @@ export function WorkflowSurfaceActions({
     <IconButton
       label={t("workflows.surface.openPage")}
       onClick={() =>
-        host.showRoute({ kind: "workflow", collaborationWorkspaceId: workspaceId, workflow })
+        openWorkspacePageInNewTab({
+          kind: "workflow",
+          collaborationWorkspaceId: workspaceId,
+          workflow
+        })
       }
     >
       <ExternalLink aria-hidden="true" />

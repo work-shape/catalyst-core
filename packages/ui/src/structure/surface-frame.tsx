@@ -1,7 +1,8 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "../cn";
 
-export interface SurfaceFrameProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
+/** The slots of a surface's header, in the one order every surface has. */
+export interface SurfaceHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   /** What stands before the name, such as the button that brings the conversation back. */
   leading?: ReactNode;
   /** An icon of what the surface shows, such as a file's type. It stands before the name. */
@@ -16,6 +17,57 @@ export interface SurfaceFrameProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   fullscreen?: ReactNode;
   /** The button that closes the surface, always last. */
   close?: ReactNode;
+}
+
+/**
+ * The header of a working surface, as high as every other header, so one line runs across the
+ * window. A panel that frames its content itself, such as the chat dock, takes it alone.
+ */
+export function SurfaceHeader({
+  className,
+  leading,
+  icon,
+  title,
+  subtitle,
+  actions,
+  fullscreen,
+  close,
+  ...props
+}: SurfaceHeaderProps) {
+  return (
+    <header
+      className={cn(
+        "flex h-(--layout-header) shrink-0 items-center gap-3 border-b px-4",
+        className
+      )}
+      {...props}
+    >
+      {leading === undefined ? null : (
+        <div className="flex shrink-0 items-center gap-2">{leading}</div>
+      )}
+      {icon === undefined ? null : <div className="flex shrink-0 items-center">{icon}</div>}
+      <div className="grid min-w-0 flex-1 gap-0.5">
+        <h2 className="truncate text-heading">{title}</h2>
+        {subtitle === undefined ? null : (
+          <p className="truncate text-caption text-muted-foreground">{subtitle}</p>
+        )}
+      </div>
+      {actions === undefined ? null : (
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+      )}
+      {fullscreen}
+      {close}
+    </header>
+  );
+}
+
+export interface SurfaceFrameProps
+  extends
+    Omit<HTMLAttributes<HTMLDivElement>, "title">,
+    Pick<
+      SurfaceHeaderProps,
+      "leading" | "icon" | "title" | "subtitle" | "actions" | "fullscreen" | "close"
+    > {
   /**
    * The content reaches the edges of the frame and lays out its own height, such as a preview
    * that fills the surface. Without it the content has the frame's inset and scrolls.
@@ -26,9 +78,7 @@ export interface SurfaceFrameProps extends Omit<HTMLAttributes<HTMLDivElement>, 
 }
 
 /**
- * The frame of a working surface: a header as high as every other header, so one line runs
- * across the window, and the content below it. Its slots have one order on every surface:
- * leading, icon, name, subtitle, the kind's actions, fullscreen, close.
+ * The frame of a working surface: its header and the content below it.
  */
 export function SurfaceFrame({
   className,
@@ -48,23 +98,15 @@ export function SurfaceFrame({
       className={cn("flex h-full min-h-0 min-w-0 flex-col bg-card text-card-foreground", className)}
       {...props}
     >
-      <header className="flex h-(--layout-header) shrink-0 items-center gap-3 border-b px-4">
-        {leading === undefined ? null : (
-          <div className="flex shrink-0 items-center gap-2">{leading}</div>
-        )}
-        {icon === undefined ? null : <div className="flex shrink-0 items-center">{icon}</div>}
-        <div className="grid min-w-0 flex-1 gap-0.5">
-          <h2 className="truncate text-heading">{title}</h2>
-          {subtitle === undefined ? null : (
-            <p className="truncate text-caption text-muted-foreground">{subtitle}</p>
-          )}
-        </div>
-        {actions === undefined ? null : (
-          <div className="flex shrink-0 items-center gap-2">{actions}</div>
-        )}
-        {fullscreen}
-        {close}
-      </header>
+      <SurfaceHeader
+        leading={leading}
+        icon={icon}
+        title={title}
+        subtitle={subtitle}
+        actions={actions}
+        fullscreen={fullscreen}
+        close={close}
+      />
       <div
         data-flush={flush ? "" : undefined}
         className={cn(

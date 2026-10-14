@@ -10,6 +10,6 @@ export * from "./structure";
 export { avatarGradient } from "./avatar-gradient";
 export { cn, type ClassInput } from "./cn";
 export { uiLabelsDe, uiLabelsEn, type UiLabels } from "./labels";
-export { moveFrom, restingLeft, useExit } from "./motion";
+export { moveFrom, prefersReducedMotion, restingLeft, useExit } from "./motion";
 export { scrollEdgeFadeStyle, useScrollEdgeFade } from "./scroll-edge-fade";
 export { UiRoot, useUiMode, type UiRootProps } from "./ui-root";

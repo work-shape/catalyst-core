@@ -10,6 +10,15 @@ import {
   workspaceRouteNavigation,
   workspaceRoutePath
 } from "../packages/chat-ui/src/routes";
+import {
+  addressDockConversation,
+  clampDockWidth,
+  DOCK_DEFAULT_WIDTH,
+  dockConversationOfSearch,
+  dockMotion,
+  dockPlacement,
+  searchWithDock
+} from "@vivd-catalyst/chat-ui/dock-state";
 
 type Area = (typeof areaRoutes)[number]["area"];
 
@@ -203,5 +212,57 @@ describe("standalone router", () => {
     expect(source.match(/createRoute\(/gu)).toHaveLength(1);
     expect(source).toMatch(/areaRoutePaths\(\)\s*\.map\(/u);
     expect(source).not.toMatch(/path:\s*["'`]/u);
+  });
+});
+
+describe("the dock in the address", () => {
+  const chatRoute: WorkspaceRoute = {
+    kind: "conversation",
+    collaborationWorkspaceId: "cw_1",
+    conversationId: "conv_2"
+  };
+  const appsRoute: WorkspaceRoute = { kind: "apps", collaborationWorkspaceId: "cw_1" };
+  const inboxRoute: WorkspaceRoute = { kind: "inbox" };
+
+  it("holds the conversation of `?chat=` on every route but the chat route", () => {
+    expect(addressDockConversation({ route: appsRoute, chat: "conv_2" })).toBe("conv_2");
+    expect(addressDockConversation({ route: inboxRoute, chat: "conv_2" })).toBe("conv_2");
+    expect(addressDockConversation({ route: chatRoute, chat: "conv_9" })).toBeUndefined();
+    expect(addressDockConversation({ route: appsRoute, chat: "" })).toBeUndefined();
+  });
+
+  it("reads `?chat=` from a search and writes it beside the page's own parameters", () => {
+    expect(dockConversationOfSearch({ chat: "conv_2" })).toBe("conv_2");
+    expect(dockConversationOfSearch({ chat: "" })).toBeUndefined();
+    expect(dockConversationOfSearch({ chat: 4 })).toBeUndefined();
+    expect(searchWithDock({ tab: "runs", chat: "conv_1" }, "conv_2")).toEqual({
+      tab: "runs",
+      chat: "conv_2"
+    });
+    expect(searchWithDock({ tab: "runs", chat: "conv_1" }, undefined)).toEqual({ tab: "runs" });
+    expect(searchWithDock(undefined, "conv_2")).toEqual({ chat: "conv_2" });
+  });
+
+  it("narrows the chat into the dock and widens it out again, and nothing else moves", () => {
+    expect(dockMotion({ route: chatRoute }, { route: appsRoute, chat: "conv_2" })).toBe("dock-in");
+    expect(dockMotion({ route: appsRoute, chat: "conv_2" }, { route: chatRoute })).toBe("dock-out");
+    // Another conversation, a page to a page, and the chat route to a page without a dock.
+    expect(dockMotion({ route: chatRoute }, { route: appsRoute, chat: "conv_3" })).toBeUndefined();
+    expect(
+      dockMotion({ route: appsRoute, chat: "conv_2" }, { route: inboxRoute, chat: "conv_2" })
+    ).toBeUndefined();
+    expect(dockMotion({ route: chatRoute }, { route: appsRoute })).toBeUndefined();
+  });
+
+  it("opens at 420 px and leaves the dock and the page 380 px each", () => {
+    expect(DOCK_DEFAULT_WIDTH).toBe(420);
+    expect(dockPlacement(1200, 380)).toBe("beside");
+    expect(dockPlacement(760, 380)).toBe("beside");
+    expect(dockPlacement(759, 380)).toBe("over");
+    expect(dockPlacement(undefined, 380)).toBe("beside");
+    expect(clampDockWidth(420, 1200, 380)).toBe(420);
+    expect(clampDockWidth(200, 1200, 380)).toBe(380);
+    expect(clampDockWidth(1000, 1200, 380)).toBe(820);
+    expect(clampDockWidth(420, 700, 380)).toBe(380);
   });
 });

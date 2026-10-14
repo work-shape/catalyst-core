@@ -6,6 +6,7 @@ import {
   completeRunObservationStreamInControllerState,
   controllerStateForConversation,
   createControllerStateFromSnapshot,
+  createInitialControllerState,
   resolveRunConnectionTarget,
   staleThreadReread
 } from "../packages/chat-ui/src/conversation/conversation-controller-state";
@@ -659,6 +660,9 @@ describe("chat UI conversation controller", () => {
     const selected = controllerStateForConversation(left, "conv_2");
     expect(selected).toEqual({ snapshotStatus: "loading", connectionStatus: "idle", messages: [] });
     expect(toUiMessages(selected.messages, selected.activeRun)).toEqual([]);
+    // A first conversation, before its thread answers once, is loading as well.
+    const first = controllerStateForConversation(createInitialControllerState(), "conv_2", true);
+    expect(first.snapshotStatus).toBe("loading");
   });
 
   it("opens a run connection only for the selected conversation's own run", () => {
