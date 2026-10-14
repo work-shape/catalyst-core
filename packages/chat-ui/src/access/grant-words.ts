@@ -1,19 +1,10 @@
 import type { GrantableAction } from "@vivd-catalyst/core";
 import type { TranslationKey } from "../i18n";
-import type { GrantKind, GrantScopeKind, GrantVerb } from "./access-model";
+import type { GrantKind, GrantScopeKind } from "./access-model";
 
-/**
- * The words of this page for what core lets it grant. Each table is typed by the kinds or the
- * verbs of core's grantable actions, so a kind or a verb core adds does not compile until it has
- * its words here. Nothing else on the page lists kinds or verbs.
- */
-export const verbLabelKeys: Record<GrantVerb, TranslationKey> = {
-  read: "access.actionRead",
-  use: "access.actionUse",
-  write: "access.actionWrite",
-  publish: "access.actionPublish",
-  delete: "access.actionDelete"
-};
+// The words of this page for what core lets it grant. Each table is typed by the kinds of core's
+// grantable actions, so a kind core adds does not compile until it has its words here. The verbs
+// are the rights screens' one table, in `right-words.ts`.
 
 /**
  * The name of every asset kind an instance can register, in the plural. A kind added to the
@@ -36,8 +27,6 @@ export function assetKindLabelKey(kind: string): TranslationKey | undefined {
 
 /** What the page says of one kind: in a row of the list and at each place of the dialog. */
 interface KindWords {
-  /** "{action} workflows": a right in a row of the list and in the menu that removes it. */
-  actionOnKind: TranslationKey;
   /** "Workflow {name}": one asset as the place of a row. */
   scopeAsset: TranslationKey;
   /** The choice of one asset as the place, and what it means. */
@@ -63,16 +52,13 @@ const configAssetWords = {
 export const kindWords: Record<GrantKind, KindWords> = {
   agent: {
     ...configAssetWords,
-    actionOnKind: "access.actionOnAgent",
     scopeAsset: "access.scopeAgent"
   },
   skill: {
     ...configAssetWords,
-    actionOnKind: "access.actionOnSkill",
     scopeAsset: "access.scopeSkill"
   },
   connection: {
-    actionOnKind: "access.actionOnConnection",
     scopeAsset: "access.scopeConnection",
     onAsset: "access.scopeOnConnection",
     onAssetDescription: "access.scopeOnConnectionDescription",
@@ -82,7 +68,6 @@ export const kindWords: Record<GrantKind, KindWords> = {
     assetsLoadFailed: "access.connectionsLoadFailed"
   },
   workflow: {
-    actionOnKind: "access.actionOnWorkflow",
     scopeAsset: "access.scopeWorkflow",
     onAsset: "access.scopeOnWorkflow",
     onAssetDescription: "access.scopeOnWorkflowDescription",
@@ -92,7 +77,6 @@ export const kindWords: Record<GrantKind, KindWords> = {
     assetsLoadFailed: "access.workflowsLoadFailed"
   },
   knowledge_base: {
-    actionOnKind: "access.actionOnKnowledgeBase",
     scopeAsset: "access.scopeKnowledgeBase",
     onAsset: "access.scopeOnKnowledgeBase",
     onAssetDescription: "access.scopeOnKnowledgeBaseDescription",
@@ -104,7 +88,6 @@ export const kindWords: Record<GrantKind, KindWords> = {
   // `guardrail.publish` is granted for one workspace only: the asset words name no choice
   // the dialog offers.
   guardrail: {
-    actionOnKind: "access.actionOnGuardrail",
     scopeAsset: "access.scopeGuardrail",
     onAsset: "access.scopeOnGuardrail",
     onAssetDescription: "access.scopeOnGuardrailDescription",

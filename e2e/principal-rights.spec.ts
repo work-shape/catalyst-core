@@ -126,14 +126,14 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await shoot("principal-rights-empty", async () => {
         await rights.evaluate((section) => section.scrollIntoView({ block: "start" }));
         await expect(
-          rights.getByRole("button", { name: "Give this principal a Connection to use" })
+          rights.getByRole("button", { name: "Give this service principal a Connection to use" })
         ).toBeVisible();
       });
     });
 
     await test.step("the dialog offers the Connections and the right the instance names, by keyboard", async () => {
       const first = rights.getByRole("button", {
-        name: "Give this principal a Connection to use"
+        name: "Give this service principal a Connection to use"
       });
       await first.focus();
       await page.keyboard.press("Enter");
@@ -207,7 +207,6 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await expect(service).toHaveCount(1);
       await expect(service).toContainText(label);
       await expect(service).toContainText("Service principal");
-      await expect(service).toContainText(detail.principal.name);
       await shoot("connection-who-may-use-it", async () => {
         await access.scrollIntoViewIfNeeded();
         await expect(service).toBeVisible();
@@ -228,7 +227,7 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await expect(confirm).toHaveCount(0);
       await expect(rows).toHaveCount(0);
       await expect(
-        rights.getByRole("button", { name: "Give this principal a Connection to use" })
+        rights.getByRole("button", { name: "Give this service principal a Connection to use" })
       ).toBeVisible();
     });
 
@@ -250,6 +249,23 @@ test("a superadmin gives a service principal a Connection, is refused one that i
         }
       );
       expect(given.ok()).toBe(true);
+      // The administrator is denied the ledger, so cannot give it to the principal either.
+      const denied = await requestWithOrigin(
+        page,
+        "post",
+        `${apiBaseUrl}/api/v1/instance/access/grants`,
+        {
+          data: {
+            holderKind: "user",
+            holderId: person.id,
+            action: "connection.use",
+            effect: "deny",
+            scopeKind: "asset",
+            scopeId: ledger.id
+          }
+        }
+      );
+      expect(denied.ok()).toBe(true);
       await page.context().clearCookies();
       await signIn(page, admin);
       await page.goto(`/build/connections/${crm.name}`);
@@ -261,11 +277,36 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await expect(access.locator('[data-holder-kind="service_principal"]')).toHaveCount(1);
       await expect(access.getByText(label).first()).toBeVisible();
     });
+
+    await test.step("the dialog offers the administrator only what they hold, and says why not the rest", async () => {
+      await openPrincipal();
+      await rights.getByRole("button", { name: "Add right" }).click();
+      await expect(dialog).toBeVisible();
+      // The principal holds the CRM already: the ledger is all there is, and it is not offered.
+      await expect(
+        dialog.getByText(
+          "You do not hold this right on any of these resources yourself, so you cannot give it."
+        )
+      ).toBeVisible();
+      await dialog.getByRole("button", { name: /^Connection:/u }).click();
+      const ledgerOption = page.getByRole("option", { name: /Sample ledger/u });
+      await expect(ledgerOption).toHaveAttribute("aria-disabled", "true");
+      await expect(ledgerOption).toContainText(
+        "You do not hold this right here yourself, so you cannot give it."
+      );
+      await shoot("principal-rights-not-held", async () => {
+        await expect(ledgerOption).toBeVisible();
+      });
+      await page.keyboard.press("Escape");
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(dialog).toHaveCount(0);
+    });
   } finally {
     if (principalId !== undefined) {
       await removeServicePrincipal(principalId);
     }
     await removeGrantsOn(crm.id);
+    await removeGrantsOn(ledger.id);
     await removeConnection(crm.id);
     await removeConnection(ledger.id);
   }

@@ -2,10 +2,12 @@ import type {
   AdministeredUser,
   AssetSummary,
   CreatePermissionGrantRequest,
+  EffectivePermissions,
   PermissionGrantRow,
   PlatformContext,
   ServicePrincipalDetail
 } from "@vivd-catalyst/api-client";
+import { explainAccessEntries } from "@vivd-catalyst/core";
 import { accessWriteFailure, refusalReason } from "./access-model";
 
 // The rights of a service principal on named resources, as two pages show them: the
@@ -154,6 +156,33 @@ export function grantableResources(
   return assets.filter((asset) => asset.kind === input.kind && !taken.has(asset.id));
 }
 
+/**
+ * Whether the reader holds `action` on the resource: the rule a right given to a principal is
+ * checked by, that nobody gives what they do not hold. Decided by the evaluator the server
+ * decides with, over the reader's own entries from `permissions.effective`. Nothing while
+ * those are not known, for a reader who may not read them: the dialog then offers the
+ * resource, and the instance refuses it with the right named.
+ */
+export function readerHolds(
+  effective: EffectivePermissions | undefined,
+  action: string,
+  asset: AssetSummary
+): boolean | undefined {
+  if (effective === undefined) {
+    return undefined;
+  }
+  const { scope } = asset;
+  return (
+    effective.holderActive &&
+    explainAccessEntries(effective.items, action, {
+      kind: asset.kind,
+      name: asset.name,
+      assetId: asset.id,
+      ...(scope.kind === "workspace" ? { workspaceId: scope.workspaceId } : {})
+    }).decision.allowed
+  );
+}
+
 /** Who holds a right on one resource: a person, or a service principal. */
 export interface ResourceHolder {
   grantId: string;
@@ -161,7 +190,7 @@ export interface ResourceHolder {
   id: string;
   /** Absent for a holder the reader's lists do not name. */
   name: string | undefined;
-  /** The person's address or the principal's id. */
+  /** The person's address. A principal is named by its label alone. */
   detail: string | undefined;
   /** A disabled principal holds the right and can use nothing while it is disabled. */
   disabled: boolean;
@@ -210,7 +239,7 @@ export function resourceHolders(
           kind: "service_principal",
           id: grant.holderId,
           name: principal?.displayLabel,
-          detail: principal?.name,
+          detail: undefined,
           disabled: principal?.status === "disabled"
         }
       ];

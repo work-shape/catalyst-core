@@ -68,7 +68,7 @@ export function UserPermissionsCard({
         <ul className="grid divide-y rounded-md border">
           {userPermissionStates(user).map((state) => {
             const copy = userPermissionCopy(state.permission);
-            const label = copy ? t(copy.label) : state.permission;
+            const label = t(copy.label);
             const held =
               savedChange?.permission === state.permission ? savedChange.held : state.held;
             // The server lets only superadmins hand out these two permissions.
@@ -90,9 +90,7 @@ export function UserPermissionsCard({
                       </Badge>
                     ) : null}
                   </span>
-                  {copy ? (
-                    <span className="text-xs text-muted-foreground">{t(copy.description)}</span>
-                  ) : null}
+                  <span className="text-xs text-muted-foreground">{t(copy.description)}</span>
                   {superadminOnly ? (
                     <span className="text-xs text-muted-foreground">
                       {t("userRightSuperadminOnly")}

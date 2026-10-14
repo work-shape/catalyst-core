@@ -3,11 +3,16 @@ import { useEffect, useState } from "react";
 import { listAll, type ServicePrincipalDetail } from "@vivd-catalyst/api-client";
 import { Banner, Section } from "@vivd-catalyst/ui";
 import { loadFailure } from "../../access/access-model";
-import { usePrincipalGrantMutations, usePrincipalGrantsQuery } from "../../access/access-queries";
+import {
+  useEffectivePermissionsQuery,
+  usePrincipalGrantMutations,
+  usePrincipalGrantsQuery
+} from "../../access/access-queries";
 import {
   principalGrantKinds,
   principalGrantViews,
-  principalOfSearch
+  principalOfSearch,
+  readerHolds
 } from "../../access/principal-grants-model";
 import { PrincipalRights } from "../../access/principal-rights";
 import {
@@ -183,8 +188,14 @@ function PrincipalRightsOnInstance({
   const resources = resourceQueries.flatMap((query) => query.data ?? []);
   const workspacesQuery = useAdministeredCollaborationWorkspacesQuery({ ...api, enabled: true });
   const workspaces = workspacesQuery.data ?? [];
-  // Who gave a right is named for a reader who is shown the users.
-  const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: canManageUsers(user) });
+  // Who gave a right is named for a reader who is shown the users. Such a reader is also told
+  // their own entries, and the dialog offers what they hold.
+  const readsUsers = canManageUsers(user);
+  const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: readsUsers });
+  const ownRightsQuery = useEffectivePermissionsQuery({
+    ...api,
+    holderId: readsUsers ? user.id : undefined
+  });
   const mutations = usePrincipalGrantMutations({ ...api, principalId: principal.id });
   const failure = loadFailure(grantsQuery.error);
 
@@ -214,6 +225,7 @@ function PrincipalRightsOnInstance({
         failed: resourceQueries.some((query) => Boolean(query.error))
       }}
       workspaces={workspaces}
+      holds={(action, asset) => readerHolds(ownRightsQuery.data, action, asset)}
       onGive={(right) => mutations.give.mutateAsync(right)}
       onRemove={(grantId) => mutations.remove.mutateAsync(grantId)}
     />

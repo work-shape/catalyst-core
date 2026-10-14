@@ -1,4 +1,5 @@
 import type { ApiCredentialScope, ServicePrincipalPermission } from "@vivd-catalyst/api-client";
+import type { TranslationKey } from "../i18n";
 
 export const DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS: ServicePrincipalPermission[] = [
   "config_assets.read"
@@ -11,6 +12,27 @@ export const SERVICE_PRINCIPAL_PERMISSION_OPTIONS: ReadonlyArray<{
   { permission: "config_assets.read", scope: "config_assets:read" },
   { permission: "config_assets.release", scope: "config_assets:release" }
 ];
+
+/** What a principal's key allows, in the words the page shows it with. */
+export const PERMISSION_WORDS: Record<
+  ServicePrincipalPermission,
+  { label: TranslationKey; description: TranslationKey }
+> = {
+  "config_assets.read": {
+    label: "apiAccessReadGrant",
+    description: "apiAccessReadGrantDescription"
+  },
+  "config_assets.release": {
+    label: "apiAccessReleaseGrant",
+    description: "apiAccessReleaseGrantDescription"
+  }
+};
+
+/** A key scope is named as the principal's key it carries. */
+export const SCOPE_LABELS: Record<ApiCredentialScope, TranslationKey> = {
+  "config_assets:read": PERMISSION_WORDS["config_assets.read"].label,
+  "config_assets:release": PERMISSION_WORDS["config_assets.release"].label
+};
 
 export function scopesAllowedByPermissions(
   permissions: readonly ServicePrincipalPermission[]

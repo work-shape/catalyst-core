@@ -28,6 +28,7 @@ import {
   type PrincipalGrantKind,
   type PrincipalGrantView
 } from "./principal-grants-model";
+import { actionLabel, rightVerb, verbKeys } from "./right-words";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import { formatDate } from "../control-plane/locale-format";
 
@@ -59,9 +60,16 @@ const FAILURE_SENTENCES: Record<PrincipalGrantFailure, TranslationKey> = {
   other: "apiAccessRightsGiveFailed"
 };
 
+/** "May use this Connection", else "May use", else the right by its words. */
 function actionSentence(action: string, t: Translate): string {
   const key = ACTION_SENTENCES[action];
-  return key === undefined ? t("apiAccessRightsMay", { action }) : t(key);
+  if (key !== undefined) {
+    return t(key);
+  }
+  const verb = rightVerb(action);
+  return verb === undefined
+    ? actionLabel(action, t)
+    : t("apiAccessRightsMay", { verb: t(verbKeys[verb]) });
 }
 
 function kindName(kind: string, t: Translate): string {
@@ -96,6 +104,11 @@ export interface PrincipalRightsProps {
   /** The resources the reader is shown, of those kinds. Absent while they load. */
   resources: { items: readonly AssetSummary[] | undefined; failed: boolean };
   workspaces: readonly { id: string; name: string }[];
+  /**
+   * Whether the reader holds the right on the resource themselves: nobody gives what they do
+   * not hold. Nothing where that is not known; the instance then decides.
+   */
+  holds(action: string, asset: AssetSummary): boolean | undefined;
   onGive(input: { action: string; assetId: string }): Promise<unknown>;
   onRemove(grantId: string): Promise<unknown>;
 }
@@ -112,6 +125,7 @@ export function PrincipalRights({
   kinds,
   resources,
   workspaces,
+  holds,
   onGive,
   onRemove
 }: PrincipalRightsProps) {
@@ -248,6 +262,7 @@ export function PrincipalRights({
           kinds={kinds}
           resources={resources}
           workspaces={workspaces}
+          holds={holds}
           held={rows?.map((row) => row.grant) ?? []}
           onGive={onGive}
           onClose={() => setGiving(false)}
@@ -284,17 +299,23 @@ export function PrincipalRights({
 /**
  * Gives the principal one right on one resource. The kinds and the rights are the ones the
  * instance names; the resources are the ones the reader is shown, without those the principal
- * holds the right on already. A refusal says what the instance refused and what to do next.
+ * holds the right on already. A resource the reader does not hold the right on stands disabled
+ * with the reason, and so does a right the reader holds on none of them. A refusal says what
+ * the instance refused and what to do next.
  */
 function GiveRightDialog({
   principal,
   kinds,
   resources,
   workspaces,
+  holds,
   held,
   onGive,
   onClose
-}: Pick<PrincipalRightsProps, "principal" | "kinds" | "resources" | "workspaces" | "onGive"> & {
+}: Pick<
+  PrincipalRightsProps,
+  "principal" | "kinds" | "resources" | "workspaces" | "holds" | "onGive"
+> & {
   held: readonly PrincipalGrantView["grant"][];
   onClose(): void;
 }) {
@@ -302,8 +323,19 @@ function GiveRightDialog({
   const formId = useId();
   const [kindId, setKindId] = useState(kinds[0]?.kind ?? "");
   const kind = kinds.find((candidate) => candidate.kind === kindId) ?? kinds[0];
+  const ofKind =
+    kind === undefined || resources.items === undefined
+      ? []
+      : resources.items.filter((asset) => asset.kind === kind.kind);
+  // A right is offered where the reader holds it on some resource of the kind, or where that
+  // is not known.
+  const offeredAction = (candidate: string) =>
+    ofKind.length === 0 || ofKind.some((asset) => holds(candidate, asset) !== false);
   const [chosenAction, setChosenAction] = useState<string>();
-  const action = kind?.actions.find((candidate) => candidate === chosenAction) ?? kind?.actions[0];
+  const action =
+    kind?.actions.find((candidate) => candidate === chosenAction) ??
+    kind?.actions.find(offeredAction) ??
+    kind?.actions[0];
   const [assetId, setAssetId] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -313,7 +345,8 @@ function GiveRightDialog({
     kind === undefined || resources.items === undefined
       ? []
       : grantableResources(resources.items, { kind: kind.kind, action, held });
-  const chosen = choices.find((candidate) => candidate.id === assetId);
+  const notHeld = (asset: AssetSummary) => action !== undefined && holds(action, asset) === false;
+  const chosen = choices.find((candidate) => candidate.id === assetId && !notHeld(candidate));
   const ofConnection = kind?.kind === CONNECTION_KIND;
   const resourceLabel = ofConnection ? t("connections.kindSingular") : t("apiAccessRightsResource");
   const placeOf = ({ scope }: AssetSummary) =>
@@ -386,9 +419,13 @@ function GiveRightDialog({
           required
           error={resources.failed ? t("apiAccessRightsResourcesFailed") : undefined}
           hint={
-            resources.items !== undefined && choices.length === 0
-              ? t("apiAccessRightsNoResources")
-              : undefined
+            resources.items === undefined
+              ? undefined
+              : choices.length === 0
+                ? t("apiAccessRightsNoResources")
+                : choices.every((candidate) => notHeld(candidate))
+                  ? t("apiAccessRightsNotHeldAnywhere")
+                  : undefined
           }
         >
           <Picker
@@ -396,7 +433,8 @@ function GiveRightDialog({
             options={choices.map((candidate) => ({
               value: candidate.id,
               label: candidate.title.trim() || candidate.name,
-              description: `${candidate.name} · ${placeOf(candidate)}`
+              description: placeOf(candidate),
+              ...(notHeld(candidate) ? { disabledReason: t("apiAccessRightsNotHeld") } : {})
             }))}
             value={assetId}
             onValueChange={setAssetId}
@@ -416,8 +454,12 @@ function GiveRightDialog({
           options={(kind?.actions ?? []).map((candidate) => ({
             value: candidate,
             label: actionSentence(candidate, t),
-            description:
-              candidate === "connection.use" ? t("apiAccessRightsUseConnectionHint") : undefined
+            description: offeredAction(candidate)
+              ? candidate === "connection.use"
+                ? t("apiAccessRightsUseConnectionHint")
+                : undefined
+              : t("apiAccessRightsNotHeldAnywhere"),
+            disabled: !offeredAction(candidate)
           }))}
           value={action}
           onValueChange={(next) => {

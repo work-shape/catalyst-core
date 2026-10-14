@@ -25,8 +25,8 @@ export const apiAccess = defineTranslations({
     apiAccessExpired: "Expired",
     apiAccessExpires: "Expires",
     apiAccessExpiresAt: "Expires at (optional)",
-    apiAccessGrants: "Grants",
-    apiAccessInheritsGrants: "Inherits principal grants",
+    apiAccessGrants: "Rights",
+    apiAccessInheritsGrants: "Inherits the service principal's rights",
     apiAccessKeyPrefix: "Key prefix",
     apiAccessLastUsed: "Last used",
     apiAccessName: "Name",
@@ -34,11 +34,14 @@ export const apiAccess = defineTranslations({
     apiAccessNeverExpires: "Never expires",
     apiAccessNoCredentials: "No API keys have been created for this service principal.",
     apiAccessNoDescription: "No description",
-    apiAccessNoGrants: "No grants",
-    apiAccessReadGrant: "Read configuration assets",
-    apiAccessReadGrantDescription: "Pull, inspect, and compare managed configuration assets.",
-    apiAccessReleaseGrant: "Release configuration assets",
-    apiAccessReleaseGrantDescription: "Push managed configuration assets to this instance.",
+    apiAccessNoGrants: "No rights",
+    apiAccessPrincipalsForbidden:
+      "You may not see the service principals. That takes the right to manage service principals.",
+    apiAccessReadGrant: "View configuration",
+    apiAccessReadGrantDescription:
+      "Pull, inspect and compare agents, skills and other managed configuration.",
+    apiAccessReleaseGrant: "Push configuration releases",
+    apiAccessReleaseGrantDescription: "Push managed configuration to this instance.",
     apiAccessRevoke: "Revoke",
     apiAccessRevokeCredential: "Revoke API key?",
     apiAccessRevokeDescription:
@@ -64,9 +67,9 @@ export const apiAccess = defineTranslations({
       "This service principal may not use any resource yet. A Workflow that runs as it can only call a Connection the principal was given.",
     apiAccessRightsEmptyReadOnly: "This service principal may not use any resource.",
     apiAccessRightsForbidden: "You may not see the rights of service principals.",
-    apiAccessRightsGiveConnection: "Give this principal a Connection to use",
+    apiAccessRightsGiveConnection: "Give this service principal a Connection to use",
     apiAccessRightsGiveFailed: "The right could not be given. Try again.",
-    apiAccessRightsGiveFirst: "Give this principal a right",
+    apiAccessRightsGiveFirst: "Give this service principal a right",
     apiAccessRightsGivenBy: "Given by {name} on {date}",
     apiAccessRightsGivenOn: "Given on {date}",
     apiAccessRightsHiddenResource: "A resource you cannot see",
@@ -76,12 +79,15 @@ export const apiAccess = defineTranslations({
       "This resource no longer exists or is of another kind. Close this dialog, reload the page and choose the resource again.",
     apiAccessRightsKind: "Kind of resource",
     apiAccessRightsLoadFailed: "The rights could not be loaded.",
-    apiAccessRightsMay: "May: {action}",
+    apiAccessRightsMay: "May {verb}",
     apiAccessRightsMayUseConnection: "May use this Connection",
     apiAccessRightsNoResources:
       "Nothing to choose: the service principal already holds this right on every resource you can see.",
     apiAccessRightsNoneGrantable:
       "This instance has no kind of resource a service principal can be given a right on.",
+    apiAccessRightsNotHeld: "You do not hold this right here yourself, so you cannot give it.",
+    apiAccessRightsNotHeldAnywhere:
+      "You do not hold this right on any of these resources yourself, so you cannot give it.",
     apiAccessRightsNotAdministrable:
       "You may not give rights to service principals. That takes someone who manages service principals and holds the right themselves. Ask them to add this right.",
     apiAccessRightsRemove: "Remove",
@@ -108,7 +114,8 @@ export const apiAccess = defineTranslations({
     apiAccessSecretOnce: "Copy this key now. It is shown once and cannot be retrieved later.",
     apiAccessServerUrl: "Server URL",
     apiAccessServicePrincipals: "Service principals",
-    apiAccessServicePrincipalsDescription: "Machine identities are managed separately from users.",
+    apiAccessServicePrincipalsDescription:
+      "Accounts for the CLI and automation, managed apart from users.",
     apiAccessStatus: "Status",
     apiAccessWaitsForApproval: "This change waits for an approval. Nothing has changed yet."
   },
@@ -120,7 +127,7 @@ export const apiAccess = defineTranslations({
     apiAccessCopyFailed:
       "Der Wert konnte nicht kopiert werden. Markiere ihn und kopiere ihn von Hand.",
     apiAccessCreateCredential: "API-Schlüssel erstellen",
-    apiAccessCreatePrincipal: "Service Principal erstellen",
+    apiAccessCreatePrincipal: "Technisches Konto erstellen",
     apiAccessCreatedAt: "Erstellt",
     apiAccessCredential: "Zugangsdaten",
     apiAccessCredentialNamePlaceholder: "Zum Beispiel: CI Produktion",
@@ -132,58 +139,58 @@ export const apiAccess = defineTranslations({
     apiAccessDisabled: "Deaktiviert",
     apiAccessDone: "Fertig",
     apiAccessEdit: "Bearbeiten",
-    apiAccessEditPrincipal: "Service Principal bearbeiten",
-    apiAccessEmpty: "Noch keine Service Principals",
+    apiAccessEditPrincipal: "Technisches Konto bearbeiten",
+    apiAccessEmpty: "Noch keine Technischen Konten",
     apiAccessEmptyDescription:
-      "Erstelle einen Service Principal für eng begrenzten CLI- oder Automatisierungszugriff.",
+      "Erstelle ein Technisches Konto für eng begrenzten Zugriff der CLI oder einer Automatisierung.",
     apiAccessExpired: "Abgelaufen",
     apiAccessExpires: "Gültig bis",
     apiAccessExpiresAt: "Gültig bis (optional)",
-    apiAccessGrants: "Berechtigungen",
-    apiAccessInheritsGrants: "Übernimmt Principal-Berechtigungen",
+    apiAccessGrants: "Rechte",
+    apiAccessInheritsGrants: "Übernimmt die Rechte des Technischen Kontos",
     apiAccessKeyPrefix: "Schlüsselpräfix",
     apiAccessLastUsed: "Zuletzt verwendet",
     apiAccessName: "Name",
     apiAccessNever: "Nie",
     apiAccessNeverExpires: "Läuft nie ab",
-    apiAccessNoCredentials:
-      "Für diesen Service Principal wurden noch keine API-Schlüssel erstellt.",
+    apiAccessNoCredentials: "Für dieses Technische Konto wurden noch keine API-Schlüssel erstellt.",
     apiAccessNoDescription: "Keine Beschreibung",
-    apiAccessNoGrants: "Keine Berechtigungen",
-    apiAccessReadGrant: "Konfigurations-Assets lesen",
+    apiAccessNoGrants: "Keine Rechte",
+    apiAccessPrincipalsForbidden:
+      "Du darfst die Technischen Konten nicht sehen. Dafür braucht es das Recht, Technische Konten zu verwalten.",
+    apiAccessReadGrant: "Konfiguration ansehen",
     apiAccessReadGrantDescription:
-      "Verwaltete Konfigurations-Assets abrufen, prüfen und vergleichen.",
-    apiAccessReleaseGrant: "Konfigurations-Assets veröffentlichen",
-    apiAccessReleaseGrantDescription:
-      "Verwaltete Konfigurations-Assets auf diese Instanz übertragen.",
+      "Agenten, Skills und andere verwaltete Konfiguration abrufen, prüfen und vergleichen.",
+    apiAccessReleaseGrant: "Konfiguration per Release einspielen",
+    apiAccessReleaseGrantDescription: "Verwaltete Konfiguration auf diese Instanz übertragen.",
     apiAccessRevoke: "Widerrufen",
     apiAccessRevokeCredential: "API-Schlüssel widerrufen?",
     apiAccessRevokeDescription:
       "Dieser Schlüssel funktioniert sofort nicht mehr. Dies kann nicht rückgängig gemacht werden.",
     apiAccessRevoked: "Widerrufen",
     apiAccessRightsActionNotGrantable:
-      "Die Instanz vergibt dieses Recht nicht an einen Service Principal: Er kann nur die Verwendung einer Ressource erhalten. Wähle eines der hier angebotenen Rechte. Passt keines, lade die Seite neu.",
+      "Die Instanz vergibt dieses Recht nicht an ein Technisches Konto: Es kann nur Ressourcen verwenden. Wähle eines der hier angebotenen Rechte. Passt keines, lade die Seite neu.",
     apiAccessRightsAdd: "Recht hinzufügen",
     apiAccessRightsChooseConnection: "Verbindung wählen",
     apiAccessRightsChooseResource: "Ressource wählen",
     apiAccessRightsDescription:
-      "Was dieser Service Principal verwenden darf, Ressource für Ressource. Ein Workflow, der als dieser Service Principal läuft, braucht ein Recht auf jeder Verbindung, die er aufruft.",
+      "Was dieses Technische Konto verwenden darf, Ressource für Ressource. Ein Workflow, der als dieses Konto läuft, braucht ein Recht auf jeder Verbindung, die er aufruft.",
     apiAccessRightsDialogDescription:
-      "Das Recht gilt für diese eine Ressource. Auf später angelegte Ressourcen erhält der Service Principal nichts.",
+      "Das Recht gilt für diese eine Ressource. Auf später angelegte Ressourcen erhält das Technische Konto nichts.",
     apiAccessRightsDialogTitle: "Neues Recht für {principal}",
     apiAccessRightsDisabledNote:
-      "Dieser Service Principal ist deaktiviert. Er behält seine Rechte und kann keines davon nutzen, bis er aktiviert wird.",
+      "Dieses Technische Konto ist deaktiviert. Es behält seine Rechte und kann keines davon nutzen, bis es aktiviert wird.",
     apiAccessRightsDuplicate:
-      "Der Service Principal hat dieses Recht auf dieser Ressource bereits. Es wurde nichts geändert. Schließe diesen Dialog.",
+      "Das Technische Konto hat dieses Recht auf dieser Ressource bereits. Es wurde nichts geändert. Schließe diesen Dialog.",
     apiAccessRightsEffectNotGrantable:
-      "Einem Service Principal kann kein Recht verweigert werden. Um ein Recht zu nehmen, entferne es aus der Liste.",
+      "Einem Technischen Konto kann kein Recht verweigert werden. Um ein Recht zu nehmen, entferne es aus der Liste.",
     apiAccessRightsEmpty:
-      "Dieser Service Principal darf noch keine Ressource verwenden. Ein Workflow, der als dieser Service Principal läuft, kann nur eine Verbindung aufrufen, die der Principal erhalten hat.",
-    apiAccessRightsEmptyReadOnly: "Dieser Service Principal darf keine Ressource verwenden.",
-    apiAccessRightsForbidden: "Du darfst die Rechte von Service Principals nicht sehen.",
-    apiAccessRightsGiveConnection: "Diesem Principal eine Verbindung zur Verwendung geben",
+      "Dieses Technische Konto darf noch keine Ressource verwenden. Ein Workflow, der als dieses Konto läuft, kann nur eine Verbindung aufrufen, die das Konto erhalten hat.",
+    apiAccessRightsEmptyReadOnly: "Dieses Technische Konto darf keine Ressource verwenden.",
+    apiAccessRightsForbidden: "Du darfst die Rechte von Technischen Konten nicht sehen.",
+    apiAccessRightsGiveConnection: "Diesem Konto eine Verbindung zum Verwenden geben",
     apiAccessRightsGiveFailed: "Das Recht konnte nicht vergeben werden. Versuche es erneut.",
-    apiAccessRightsGiveFirst: "Diesem Principal ein Recht geben",
+    apiAccessRightsGiveFirst: "Diesem Konto ein Recht geben",
     apiAccessRightsGivenBy: "Vergeben von {name} am {date}",
     apiAccessRightsGivenOn: "Vergeben am {date}",
     apiAccessRightsHiddenResource: "Eine Ressource, die du nicht sehen kannst",
@@ -193,17 +200,21 @@ export const apiAccess = defineTranslations({
       "Diese Ressource gibt es nicht mehr oder sie ist von anderer Art. Schließe diesen Dialog, lade die Seite neu und wähle die Ressource erneut.",
     apiAccessRightsKind: "Art der Ressource",
     apiAccessRightsLoadFailed: "Die Rechte konnten nicht geladen werden.",
-    apiAccessRightsMay: "Darf: {action}",
+    apiAccessRightsMay: "Darf {verb}",
     apiAccessRightsMayUseConnection: "Darf diese Verbindung verwenden",
     apiAccessRightsNoResources:
-      "Nichts zu wählen: Der Service Principal hat dieses Recht bereits auf jeder Ressource, die du siehst.",
+      "Nichts zu wählen: Das Technische Konto hat dieses Recht bereits auf jeder Ressource, die du siehst.",
     apiAccessRightsNoneGrantable:
-      "Diese Instanz hat keine Art von Ressource, auf der ein Service Principal ein Recht erhalten kann.",
+      "Diese Instanz hat keine Art von Ressource, auf der ein Technisches Konto ein Recht erhalten kann.",
+    apiAccessRightsNotHeld:
+      "Du hast dieses Recht hier selbst nicht und kannst es deshalb nicht weitergeben.",
+    apiAccessRightsNotHeldAnywhere:
+      "Du hast dieses Recht auf keiner dieser Ressourcen selbst und kannst es deshalb nicht weitergeben.",
     apiAccessRightsNotAdministrable:
-      "Du darfst Service Principals keine Rechte geben. Das kann nur, wer Service Principals verwaltet und das Recht selbst hat. Bitte so jemanden darum, dieses Recht hinzuzufügen.",
+      "Du darfst Technischen Konten keine Rechte geben. Das kann nur, wer Technische Konten verwaltet und das Recht selbst hat. Bitte so jemanden darum, dieses Recht hinzuzufügen.",
     apiAccessRightsRemove: "Entfernen",
     apiAccessRightsRemoveDescription:
-      "{principal} kann {resource} sofort nicht mehr verwenden. Ein Workflow, der als dieser Service Principal läuft und {resource} aufruft, schlägt von da an fehl.",
+      "{principal} kann {resource} sofort nicht mehr verwenden. Ein Workflow, der als dieses Konto läuft und {resource} aufruft, schlägt von da an fehl.",
     apiAccessRightsRemoveFailed: "Das Recht konnte nicht entfernt werden. Versuche es erneut.",
     apiAccessRightsRemoveNamed: "Recht auf {resource} entfernen",
     apiAccessRightsRemoveTitle: "Dieses Recht entfernen?",
@@ -216,19 +227,19 @@ export const apiAccess = defineTranslations({
     apiAccessRightsSubmit: "Recht vergeben",
     apiAccessRightsTitle: "Rechte auf Ressourcen",
     apiAccessRightsUnknownHolder:
-      "Diesen Service Principal gibt es nicht mehr. Schließe diesen Dialog und lade die Seite neu.",
+      "Dieses Technische Konto gibt es nicht mehr. Schließe diesen Dialog und lade die Seite neu.",
     apiAccessRightsUseConnectionHint:
-      "Aufrufe der Operationen der Verbindung durch einen Workflow, der als dieser Service Principal läuft. Die Verbindung ändern kann er nicht.",
+      "Aufrufe der Operationen der Verbindung durch einen Workflow, der als dieses Technische Konto läuft. Die Verbindung ändern kann er nicht.",
     apiAccessRightsWorkspace: "Arbeitsbereich {name}",
     apiAccessRightsWorkspaceUnnamed: "Arbeitsbereich",
     apiAccessSave: "Speichern",
-    apiAccessScopes: "Schlüsselberechtigungen",
+    apiAccessScopes: "Was der Schlüssel darf",
     apiAccessSecretOnce:
       "Kopiere diesen Schlüssel jetzt. Er wird nur einmal angezeigt und kann später nicht abgerufen werden.",
     apiAccessServerUrl: "Server-URL",
-    apiAccessServicePrincipals: "Service Principals",
+    apiAccessServicePrincipals: "Technische Konten",
     apiAccessServicePrincipalsDescription:
-      "Maschinenidentitäten werden getrennt von Benutzern verwaltet.",
+      "Konten für die CLI und Automatisierungen, getrennt von den Benutzern verwaltet.",
     apiAccessStatus: "Status",
     apiAccessWaitsForApproval:
       "Diese Änderung wartet auf eine Freigabe. Bisher wurde nichts geändert."
