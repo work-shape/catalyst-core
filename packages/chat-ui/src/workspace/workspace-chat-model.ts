@@ -64,7 +64,7 @@ import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
 import { agentListStatus, agentsRowShown, type AgentListStatus } from "../agents/agents-model";
-import { NO_APP_RIGHTS, resolveAppRights, type AppRights } from "../apps/app-model";
+import { NO_APP_RIGHTS, appsRowShown, resolveAppRights, type AppRights } from "../apps/app-model";
 import {
   resolveWorkflowRights,
   workflowsAccess,
@@ -314,8 +314,8 @@ export interface ConversationRailModel {
    */
   agents: boolean;
   /**
-   * The Apps module is on. The row shows where the person is also shown an App of the open
-   * workspace or may write one, which the frame decides with the list the rail reads.
+   * The Apps module is on and the instance names the Apps row for the open workspace: its Apps
+   * page lists the person an App, or the person may write one there.
    */
   apps: boolean;
   /**
@@ -1126,7 +1126,7 @@ export function useWorkspaceChatModel({
       canViewAdministration,
       inbox,
       agents: agentsRowShown(collaborationWorkspacesAvailable, workspaceAgentsQuery.data),
-      apps: appsEnabled,
+      apps: appsRowShown(appsEnabled, workspaceAgentsQuery.data),
       workflows: workflowsRowShown(workflowsOpen, platformContextQuery.data),
       view,
       creatingConversation: false,

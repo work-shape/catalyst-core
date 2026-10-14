@@ -2,10 +2,14 @@ import { paginate, pageScope } from "../http/paging";
 import { DEFAULT_LIST_LIMIT, apiOperations } from "@vivd-catalyst/api-contract";
 import { createSafeConfigView } from "@vivd-catalyst/config-schema";
 import { agentConnections } from "../agent-connections";
+import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
+import { accessResource } from "../asset-access";
+import { listedTo } from "../asset-read-workflow";
 import {
   AppError,
   asCollaborationWorkspaceId,
   asUserId,
+  type CollaborationWorkspaceId,
   getSubjectUserId,
   hasAuthScope,
   isAuthenticatedServicePrincipal,
@@ -30,6 +34,12 @@ import { findWorkspaceFiles } from "../workspace-files";
 const AGENT_KIND = "agent";
 const AGENT_WRITE = "agent.write";
 
+/** The scopes a credential must carry to list the assets of a kind and to write one. */
+const LIST_SCOPE = apiOperations["assets.list"].scope;
+const WRITE_SCOPE = apiOperations["assets.put"].scope;
+
+type SectionCaller = { user: AuthenticatedUser; access: ActorAccess };
+
 /**
  * Whether the Agents row of the sidebar is there for the caller in one workspace: it offers a
  * choice, two agents or more, or the caller may write an agent and so make the next one. With
@@ -37,15 +47,74 @@ const AGENT_WRITE = "agent.write";
  * agent kind registers, held on the instance, in a Namespace or on one agent, with a credential
  * whose scope reaches the write.
  */
-function agentsRowShown(available: number, user: AuthenticatedUser, access: ActorAccess): boolean {
+function agentsRowShown(available: number, { user, access }: SectionCaller): boolean {
   if (available >= 2) {
     return true;
   }
   return (
-    hasAuthScope(user, "config_assets:write") &&
+    hasAuthScope(user, WRITE_SCOPE) &&
     (access.authorize(AGENT_WRITE, { kind: AGENT_KIND }).allowed ||
       access.holdsGrantAt(AGENT_WRITE, ["namespace", "asset"]))
   );
+}
+
+/**
+ * Whether the Apps row of the sidebar is there for the caller in one workspace: the module is
+ * on, and the Apps page of the workspace lists the caller an App, by the check of
+ * `assets.list`, or the caller may write an App there, in the workspace or on one of its Apps.
+ * One read of at most one App, and none for whoever may write in the whole workspace.
+ */
+async function appsRowShown(
+  options: ChatServerOptions,
+  workspaceId: CollaborationWorkspaceId,
+  { user, access }: SectionCaller
+): Promise<boolean> {
+  const kind = options.configAssets.kinds.get(APP_ASSET_KIND);
+  if (!options.modules.isEnabled("apps") || !kind) {
+    return false;
+  }
+  const writes = hasAuthScope(user, WRITE_SCOPE);
+  if (
+    writes &&
+    access.authorize(APP_ACTIONS.write, { kind: APP_ASSET_KIND, workspaceId }).allowed
+  ) {
+    return true;
+  }
+  const lists = hasAuthScope(user, LIST_SCOPE);
+  if (!writes && !lists) {
+    return false;
+  }
+  const found = await options.configAssets.store.listConfigAssetPage({
+    clientInstanceId: options.clientInstanceId,
+    kind: APP_ASSET_KIND,
+    scope: { kind: "workspace", workspaceId },
+    limit: 1,
+    readable: (asset) =>
+      (lists && listedTo(kind, access, asset)) ||
+      (writes &&
+        access.authorize(
+          APP_ACTIONS.write,
+          accessResource(asset.kind, asset.name, asset.scope, asset.id)
+        ).allowed)
+  });
+  return found.length > 0;
+}
+
+/** The section rows of the sidebar that are there for the caller in one workspace. */
+async function workspaceSections(
+  options: ChatServerOptions,
+  workspaceId: CollaborationWorkspaceId,
+  availableAgents: number,
+  caller: SectionCaller
+): Promise<Array<"agents" | "apps">> {
+  const sections: Array<"agents" | "apps"> = [];
+  if (agentsRowShown(availableAgents, caller)) {
+    sections.push("agents");
+  }
+  if (await appsRowShown(options, workspaceId, caller)) {
+    sections.push("apps");
+  }
+  return sections;
 }
 
 /**
@@ -122,7 +191,12 @@ export function registerCollaborationWorkspaceRoutes(
       );
       return {
         defaultAgentName,
-        visibleSections: agentsRowShown(agents.length, user, access) ? ["agents" as const] : [],
+        visibleSections: await workspaceSections(
+          options,
+          collaborationWorkspaceId(params),
+          agents.length,
+          { user, access }
+        ),
         ...paginate(
           agents,
           query,

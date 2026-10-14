@@ -18,7 +18,6 @@ import { AppsArea, isAppsRoute } from "./apps/apps-area";
 import { AppsHostProvider, type AppsHost } from "./apps/apps-host";
 import { WorkflowsArea, isWorkflowsRoute } from "./workflows/workflows-area";
 import { WorkflowsHostProvider, type WorkflowsHost } from "./workflows/workflows-host";
-import { appsRowShown } from "./apps/app-model";
 import { useRailApps } from "./apps/rail-apps";
 import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
@@ -425,13 +424,9 @@ function ChatWorkspaceContent({
             canViewBuild={model.controlPlane.canViewBuild}
             inbox={rail.inbox}
             agents={rail.agents}
-            apps={appsRowShown({
-              enabled: rail.apps,
-              rights: model.apps.rights,
-              listed: railApps.listed
-            })}
+            apps={rail.apps}
             workflows={rail.workflows}
-            publishedApps={railApps.apps}
+            publishedApps={railApps}
             openAppName={appsRoute?.kind === "app" ? appsRoute.app : undefined}
             onOpenApp={(app) => {
               if (railAppsWorkspaceId) {

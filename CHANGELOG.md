@@ -426,11 +426,14 @@ contain breaking changes; a patch version does not.
   than fifty Apps it chooses among those fifty.
 - **No empty Apps or Workflows row for members:** the rows "Apps" and "Workflows" of the main
   rail, open and collapsed, show only while their module is on and the person is shown at least
-  one App of the open workspace or one Workflow, or may write one (`app.write`; `workflow.write`
-  on the instance, in a Namespace or on one Workflow). A builder keeps the empty row to make the
-  first one. The pages and their addresses are unchanged. `platform.context.get` answers
-  `visibleSections`, which names `workflows` where that row is there for the caller, decided by
-  the check of `workflows.list`.
+  one App of the open workspace or one Workflow, or may write one (`app.write` on the instance,
+  in that workspace or on one of its Apps; `workflow.write` on the instance, in a Namespace or on
+  one Workflow). A builder keeps the empty row to make the first one. The server decides both:
+  `workspaces.agents.list` answers `visibleSections` with `apps` where that row is there for the
+  caller in the workspace, by the check of `assets.list`, and `platform.context.get` with
+  `workflows`, by the check of `workflows.list`; the rail follows the two flags alone. Whoever
+  the flag names the Workflows row also reaches the Workflows page, such as a member who may
+  only start Workflows; the Apps page and its addresses are unchanged.
 - **No Agents row for one agent:** the row "Agents" of the main rail, open and collapsed, shows
   only while the open workspace offers the person two agents or more, or the person may write
   one (`agent.write` on the instance, in a Namespace or on one agent). With one agent New chat
