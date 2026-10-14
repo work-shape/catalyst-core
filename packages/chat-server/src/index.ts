@@ -309,6 +309,7 @@ export { requestConnectionDiscovery } from "./connection-jobs";
 export type { WorkflowListEntry, WorkflowRunsPort } from "./workflow-runs-port";
 export { createWorkflowRoutes } from "./routes/workflow-routes";
 export type {
+  AgentToolReference,
   ConfigAssetValidationRefs,
   PlatformInstructions,
   WorkflowAssetKind

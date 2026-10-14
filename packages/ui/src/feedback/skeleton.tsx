@@ -54,6 +54,26 @@ export function SkeletonList({ rows = 4, ...props }: SkeletonListProps) {
   );
 }
 
+export interface SkeletonChipsProps extends HTMLAttributes<HTMLDivElement> {
+  chips?: number;
+}
+
+/** The loading layout of a row of chips, such as an agent's skills or tools, with the picker below. */
+export function SkeletonChips({ chips = 3, ...props }: SkeletonChipsProps) {
+  return (
+    <LoadingLayout {...props}>
+      <div className="grid gap-3">
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: chips }, (_, chip) => (
+            <Skeleton key={chip} className="h-6 w-24 rounded-full" />
+          ))}
+        </div>
+        <Skeleton className="h-9 w-full max-w-120 rounded-md" />
+      </div>
+    </LoadingLayout>
+  );
+}
+
 export interface SkeletonPageProps extends HTMLAttributes<HTMLDivElement> {
   sections?: number;
 }

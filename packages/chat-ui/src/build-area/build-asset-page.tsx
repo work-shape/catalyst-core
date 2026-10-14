@@ -1,6 +1,7 @@
-import { Copy, History, Lock, MoreHorizontal, SearchX, Trash2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Copy, History, Lock, MoreHorizontal, SearchX, Send, Trash2 } from "lucide-react";
+import { useCallback, useState, type ReactNode } from "react";
 import {
+  Badge,
   Banner,
   Button,
   ConfirmDialog,
@@ -287,6 +288,9 @@ function LoadedAssetPage({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [unsaved, setUnsaved] = useState(false);
   const address = { kind: entry.kind, name: stored.name };
   // An asset that ships with the platform is changed by a release alone, whoever reads it.
   const shippedTitle = entry.shippedTitle?.(stored);
@@ -309,7 +313,19 @@ function LoadedAssetPage({
         ? t("build.readOnlyInstance")
         : t("build.readOnlyNamespace", { namespace: namespace?.displayName ?? stored.namespace });
   const canDelete = !shipped && state.canDelete && source.rights.may("delete", held);
+  // A kind with drafts answers its two pointers. The saved draft is ahead of what is
+  // published, or nothing is published yet.
+  const hasDraft = stored.draftRevision !== undefined;
+  const draftAhead = hasDraft && stored.revision !== stored.publishedRevision;
+  const canPublish = draftAhead && conflict === undefined && source.rights.may("publish", held);
   const Editor = entry.Editor;
+  const heardUnsaved = useCallback(
+    (next: boolean) => {
+      setUnsaved(next);
+      onUnsavedChange(next);
+    },
+    [onUnsavedChange]
+  );
 
   /** Reads what a write was refused for, and remembers a conflict for the notice. */
   const refusalOf = (error: unknown): BuildWriteOutcome => {
@@ -351,6 +367,24 @@ function LoadedAssetPage({
       setReloadFailed(true);
     }
   };
+  const publish = async () => {
+    setPublishing(true);
+    try {
+      const pointers = await source.writes.publish({ ...address, revision: stored.revision });
+      setStored({ ...stored, ...pointers });
+      setFailure(undefined);
+    } catch (error) {
+      const outcome = readBuildRefusal(error, t);
+      setFailure(
+        outcome.ok || outcome.conflict
+          ? t("build.publishFailed")
+          : outcome.refusals.map((refusal) => refusal.message).join(" ")
+      );
+    } finally {
+      setPublishing(false);
+      setPublishOpen(false);
+    }
+  };
   const remove = async () => {
     setDeleting(true);
     try {
@@ -381,9 +415,30 @@ function LoadedAssetPage({
         saveBlocked={conflict !== undefined}
         instanceWrite={source.rights.instanceWrite}
         {...(owner === undefined ? {} : { owner })}
-        onUnsavedChange={onUnsavedChange}
+        onUnsavedChange={heardUnsaved}
+        draftState={
+          draftAhead ? (
+            <Badge tone="warning" data-build-draft-state="">
+              {t(
+                stored.publishedRevision === undefined ? "build.neverPublished" : "build.draftAhead"
+              )}
+            </Badge>
+          ) : undefined
+        }
         actions={
           <>
+            {canPublish ? (
+              <Button
+                size="sm"
+                data-build-publish=""
+                disabled={unsaved}
+                title={unsaved ? t("build.publishSaveFirst") : undefined}
+                onClick={() => setPublishOpen(true)}
+              >
+                <Send aria-hidden="true" />
+                {t("build.publish")}
+              </Button>
+            ) : null}
             {shipped && state.canCreate ? (
               <Button
                 variant="outline"
@@ -478,7 +533,13 @@ function LoadedAssetPage({
               config,
               expectedRevision: stored.revision
             });
-            setStored({ ...stored, config, revision });
+            // A save of a kind with drafts moves the draft, and nothing of what is published.
+            setStored({
+              ...stored,
+              config,
+              revision,
+              ...(hasDraft ? { draftRevision: revision } : {})
+            });
             setFailure(undefined);
             onRestored(undefined);
             return { ok: true };
@@ -530,6 +591,19 @@ function LoadedAssetPage({
         onClose={() => setDeleteOpen(false)}
       >
         {t(entry.deleteDescription)}
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={publishOpen}
+        tone="primary"
+        title={t("build.publishTitle", { name: stored.name })}
+        confirmLabel={t("build.publish")}
+        loading={publishing}
+        onConfirm={() => {
+          publish().catch(() => undefined);
+        }}
+        onClose={() => setPublishOpen(false)}
+      >
+        {t("build.publishDescription")}
       </ConfirmDialog>
       <ConfirmDialog
         open={loadAsked}

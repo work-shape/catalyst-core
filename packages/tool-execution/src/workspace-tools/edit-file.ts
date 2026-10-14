@@ -20,6 +20,13 @@ import { resolveWorkspaceHandle } from "./workspace";
 export function workspaceEditFileTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.edit_file",
+    title: { en: "Edit workspace file", de: "Datei bearbeiten" },
+    summary: {
+      en: "Changes exact passages of a file in the conversation.",
+      de: "Ändert genaue Stellen einer Datei in der Unterhaltung."
+    },
+    group: "files",
+    icon: "text",
     effect: "changing",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },

@@ -7,6 +7,9 @@ import {
   isAppError,
   isAuthenticatedServicePrincipal,
   isDataToolName,
+  KNOWLEDGE_OPERATION_PREFIX,
+  KNOWLEDGE_QUERY_TOOL_NAME,
+  knowledgeToolCall,
   operationCallFromToolRequest,
   operationDenialError,
   toErrorEnvelope,
@@ -452,7 +455,15 @@ export function createToolOperationRunner(
   tools: ToolRegistry,
   dataTools?: DataToolRunnerOptions
 ): ToolOperationRunner {
-  return async (request, context, options = {}) => {
+  return async (toolRequest, context, options = {}) => {
+    const projected =
+      toolRequest.toolName === KNOWLEDGE_QUERY_TOOL_NAME
+        ? await knowledgeQueryRequest(toolRequest, deps)
+        : { request: toolRequest };
+    if ("refusal" in projected) {
+      return projected.refusal;
+    }
+    const { request } = projected;
     const called = await calledTool(request, context.correlationId, tools, dataTools, deps);
     if ("refusal" in called) {
       return called.refusal;
@@ -500,6 +511,39 @@ export function createToolOperationRunner(
 }
 
 /**
+ * A call of the one knowledge tool as the call of the operation it stands for: the query of
+ * the Knowledge Base its input names, with the rest of its input. The agent's own list is
+ * asked first, so an agent reaches no Knowledge Base it does not list, whatever its model
+ * sends. The operation then answers like any other: the person's `knowledge_base.use` is asked
+ * of each call, and each call is one run.
+ */
+async function knowledgeQueryRequest(
+  request: ToolExecutionRequest,
+  deps: RunOperationDeps
+): Promise<{ request: ToolExecutionRequest } | { refusal: ToolHandlerFailureResult }> {
+  const call = knowledgeToolCall(request.input);
+  if (!call) {
+    return {
+      refusal: failed(
+        "validation_failed",
+        'Name the Knowledge Base to read under "knowledgeBase", by one of the ids the tool lists.'
+      )
+    };
+  }
+  const listed = (await deps.agentToolNames?.(request.agentName)) ?? [];
+  if (!listed.includes(call.operation)) {
+    return {
+      refusal: failed(
+        "not_allowed",
+        `The Knowledge Base '${call.knowledgeBase}' is not assigned to this agent. Read one of the Knowledge Bases the tool lists.`,
+        { reason: "knowledge_base_not_assigned", knowledgeBase: call.knowledgeBase }
+      )
+    };
+  }
+  return { request: { ...request, toolName: call.operation, input: call.input } };
+}
+
+/**
  * The tool a call names, or what the call answers where there is none to run. A tool of the
  * release comes first and a data name is never one, as the registry refuses a release tool
  * with a data prefix.
@@ -526,6 +570,10 @@ async function calledTool(
         policyReason: tool.permission?.mode === "deny" ? tool.permission.reason : undefined
       }
     };
+  }
+  // The operation of a Knowledge Base the agent lists, as its knowledge tool projected it.
+  if (toolName.startsWith(KNOWLEDGE_OPERATION_PREFIX)) {
+    return { tool: { name: toolName, effect: "reading" } };
   }
   if (!dataTools || !isDataToolName(toolName)) {
     return { refusal: failed("not_allowed", `Tool '${toolName}' is not registered`) };

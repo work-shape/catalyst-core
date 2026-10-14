@@ -73,7 +73,9 @@ export function UserDetail({
   const managementDisabledReason = canManageUser ? undefined : t("settings.userSuperadminOnly");
 
   return (
-    <div className="grid content-start gap-4">
+    // The detail is the container its columns measure: the room the settings page gives it, not
+    // the window, which also holds the rail and the settings pages.
+    <div className="@container grid content-start gap-4">
       <div>
         <Button
           type="button"
@@ -96,8 +98,8 @@ export function UserDetail({
         <StatusBadge status={user.status} />
       </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
-        <div className="grid content-start gap-4">
+      <div className="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
+        <div className="grid min-w-0 grid-cols-1 content-start gap-4">
           <ProfileCard
             user={user}
             canManageSuperadminAccess={canManageSuperadminAccess}
@@ -120,7 +122,7 @@ export function UserDetail({
             onDeleteIdentity={onDeleteIdentity}
           />
         </div>
-        <div className="grid content-start gap-4">
+        <div className="grid min-w-0 grid-cols-1 content-start gap-4">
           <PasswordCard
             user={user}
             disabledReason={managementDisabledReason}
@@ -264,7 +266,7 @@ function IdentitiesCard({
   return (
     <Card>
       <CardHeader className="p-4 pb-2">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Link2 size={17} aria-hidden="true" />
             {t("settings.userIdentities")}
@@ -353,8 +355,11 @@ function IdentitiesCard({
         {disabledReason ? <p className="text-sm text-muted-foreground">{disabledReason}</p> : null}
 
         {formOpen ? (
-          <form className="grid gap-3 rounded-md border bg-muted/30 p-3" onSubmit={submit}>
-            <div className="grid gap-3 md:grid-cols-2">
+          <form
+            className="@container grid gap-3 rounded-md border bg-muted/30 p-3"
+            onSubmit={submit}
+          >
+            <div className="grid gap-3 @md:grid-cols-2">
               <Field label={t("settings.userIdentityAuthSource")}>
                 <Input
                   value={form.authSource}

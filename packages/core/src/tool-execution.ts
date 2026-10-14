@@ -19,6 +19,43 @@ export interface ToolPermissionPolicy {
   requiredPermissionRefs?: string[];
 }
 
+/** A text people read, in both languages of the interface. */
+export interface ToolText {
+  en: string;
+  de: string;
+}
+
+/**
+ * Where the agent page shows a tool among the instance's tools. `instance` is the instance's own
+ * tools, which its deployment registers; it is also where a tool without a group stands.
+ */
+export const TOOL_GROUPS = [
+  "documents",
+  "web",
+  "files",
+  "results",
+  "skills",
+  "platform",
+  "instance"
+] as const;
+
+export type ToolGroup = (typeof TOOL_GROUPS)[number];
+
+/**
+ * What a tool tells people, beside the description the model reads. Every field is optional:
+ * the interface shows the tool's name where the title is missing, the group `instance` where
+ * the group is, and the generic tool icon for a missing or unknown icon.
+ */
+export interface ToolPresentation {
+  /** A verb and an object, such as "Read document text". */
+  title?: ToolText;
+  /** One sentence on what the tool does for the people who use the agent. */
+  summary?: ToolText;
+  group?: ToolGroup;
+  /** A key of the icon registry of `@vivd-catalyst/ui`. */
+  icon?: string;
+}
+
 export interface ToolDescriptor {
   name: string;
   description: string;

@@ -40,8 +40,15 @@ export type {
   DataStoreValue
 } from "./data-store-source";
 export { usingPageRoute } from "./data-store-source";
+export { knowledgeBaseKindOn } from "./knowledge-base-kind";
+export type {
+  KnowledgeBaseSource,
+  KnowledgeBaseState,
+  KnowledgeRead
+} from "./knowledge-base-source";
 export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
 export { toggleToolName } from "./tool-group";
+export { setPackageTools, toolPackages, withImpliedTools } from "./instance-tools";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export {
   PendingApprovalError,

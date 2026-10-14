@@ -332,6 +332,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
   return [
     defineTool({
       name: open.name,
+      title: { en: "Open asset", de: "Asset öffnen" },
+      summary: {
+        en: "Opens a Workflow, an App or an agent beside the chat to work on it.",
+        de: "Öffnet einen Workflow, eine App oder einen Agenten neben dem Chat, um daran zu arbeiten."
+      },
+      group: "platform",
+      icon: "guide",
       effect: open.effect,
       description: [
         "Open an asset of the platform, such as a Workflow, an App or an agent: the person is taken to its page, with this chat beside it, and this conversation is then about it.",
@@ -364,6 +371,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
     }),
     defineTool({
       name: get.name,
+      title: { en: "Read asset", de: "Asset lesen" },
+      summary: {
+        en: "Reads the definition of a Workflow, an App or an agent.",
+        de: "Liest die Definition eines Workflows, einer App oder eines Agenten."
+      },
+      group: "platform",
+      icon: "guide",
       effect: get.effect,
       description: [
         "Read the definition of an asset of the platform, such as a Workflow, an App or an agent: its config and the revision it is at.",
@@ -387,6 +401,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
     }),
     defineTool({
       name: validate.name,
+      title: { en: "Check asset", de: "Asset prüfen" },
+      summary: {
+        en: "Checks a definition for problems without saving it.",
+        de: "Prüft eine Definition auf Fehler, ohne sie zu speichern."
+      },
+      group: "platform",
+      icon: "guide",
       effect: validate.effect,
       description: [
         "Check a definition without saving it. Answers what a save of it would be refused for: each issue with the path of the value, a sentence and, where the check names one, a code.",
@@ -405,6 +426,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
     }),
     defineTool({
       name: put.name,
+      title: { en: "Save asset draft", de: "Entwurf eines Assets speichern" },
+      summary: {
+        en: "Saves a draft of the opened asset; nothing changes until a person publishes it.",
+        de: "Speichert einen Entwurf des geöffneten Assets; nichts ändert sich, bis eine Person ihn veröffentlicht."
+      },
+      group: "platform",
+      icon: "guide",
       effect: put.effect,
       description: [
         "Save a definition as the draft of the asset this conversation is about, the one you opened. The person sees the change beside the chat as soon as it is saved.",
@@ -480,6 +508,13 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
     }),
     defineTool({
       name: operations.name,
+      title: { en: "List callable operations", de: "Aufrufbare Operationen auflisten" },
+      summary: {
+        en: "Lists the operations a Workflow step or an App action may call.",
+        de: "Listet die Operationen auf, die ein Workflow-Schritt oder eine App-Aktion aufrufen darf."
+      },
+      group: "platform",
+      icon: "guide",
       effect: operations.effect,
       description: [
         "List the operations a step of a Workflow may call, as far as the person you act for may see them: the name a step writes under 'operation', whether the operation reads or changes, and its input and output as JSON Schema where it has one.",
