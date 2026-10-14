@@ -35,13 +35,29 @@ export function CardTarget({ label, children }: CardTargetProps) {
       // The stretched area is placed against the card, so the target itself is not positioned.
       className="static cursor-pointer after:absolute after:inset-0 after:rounded-lg after:content-['']"
       onPointerDown={(event) => {
+        const target = event.currentTarget;
         pressedAt.current = { x: event.clientX, y: event.clientY };
+        // A release off the target makes no click on it: the press is forgotten there.
+        window.addEventListener(
+          "pointerup",
+          (release) => {
+            if (!(release.target instanceof Node) || !target.contains(release.target)) {
+              pressedAt.current = undefined;
+            }
+          },
+          { capture: true, once: true }
+        );
+      }}
+      onPointerCancel={() => {
+        pressedAt.current = undefined;
       }}
       onClickCapture={(event) => {
         const start = pressedAt.current;
         pressedAt.current = undefined;
-        // A press dragged across the card, as over its text, is no click. Enter has no press.
+        // A press dragged across the card, as over its text, is no click. A click from the
+        // keyboard (Enter, Space) has no press and no point, and always counts.
         if (
+          event.detail !== 0 &&
           start !== undefined &&
           Math.hypot(event.clientX - start.x, event.clientY - start.y) > CLICK_SLOP_PX
         ) {

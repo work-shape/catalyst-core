@@ -22,7 +22,7 @@ export const agents = defineTranslations({
     "agents.loadFailed": "Die Agenten konnten nicht geladen werden.",
     "agents.openStudio": "Studio öffnen",
     "agents.startChat": "Chat starten",
-    "agents.startChatWith": "Chat mit {name} starten",
+    "agents.startChatWith": "Chat starten mit {name}",
     "agents.title": "Agenten"
   }
 });

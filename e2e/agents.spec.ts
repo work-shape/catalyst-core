@@ -127,7 +127,7 @@ test("the Agents page reads in German and keeps inside a phone's width", async (
   await expect(page.getByRole("heading", { level: 1, name: "Agenten" })).toBeVisible();
   const defaultCard = card(page, DEFAULT_AGENT);
   await expect(
-    defaultCard.getByRole("button", { name: `Chat mit ${DEFAULT_AGENT} starten`, exact: true })
+    defaultCard.getByRole("button", { name: `Chat starten mit ${DEFAULT_AGENT}`, exact: true })
   ).toBeVisible();
   await expect(defaultCard).toContainText("Standardagent");
 

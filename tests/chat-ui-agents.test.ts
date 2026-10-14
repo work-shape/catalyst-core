@@ -289,6 +289,6 @@ describe("the Agents page", () => {
     );
     expect(page({ agents: [], onOpenStudio: noop }, "de")).toContain(">Studio öffnen</a>");
     // The card's target is named as one German sentence with the agent's name.
-    expect(page({}, "de")).toContain('aria-label="Chat mit Steuer-Assistent starten"');
+    expect(page({}, "de")).toContain('aria-label="Chat starten mit Steuer-Assistent"');
   });
 });

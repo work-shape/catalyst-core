@@ -682,7 +682,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     cardEdit: "Bearbeiten",
     cardStarted: "Der Chat hat begonnen.",
     cardEditOpened: "Der Editor ist offen.",
-    cardActionNamed: "Chat mit Support-Assistent starten",
+    cardActionNamed: "Chat starten mit Support-Assistent",
     cardChanged: "Gestern geändert",
     cardChangedAt: "13. Oktober 2026, 09:12",
     tableName: "Name",
