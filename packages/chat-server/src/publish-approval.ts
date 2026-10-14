@@ -8,7 +8,9 @@ import {
   type ClientInstanceId,
   type JsonObject,
   type OperationApproval,
+  type OperationAuthorization,
   type OperationEffect,
+  type OperationOrigin,
   type PagesStore,
   type PlatformAction
 } from "@vivd-catalyst/core";
@@ -77,6 +79,26 @@ export function publishApproval(
     action: approval.approve,
     resource: target.resource,
     subject
+  };
+}
+
+/**
+ * The refusal of a publish that is no person's click, for a kind whose publish an approver's
+ * click makes live: a revision of it goes live only on the interface's Publish or the answer
+ * to the CLI's question. Until a call of an agent or an MCP client can wait as a confirmation
+ * in the person's Inbox (OP-4), it is refused. Nothing for a person's own call.
+ */
+export function publishFromAPerson(
+  target: AssetTarget,
+  origin: OperationOrigin
+): OperationAuthorization | undefined {
+  const { publish, approve } = target.kind.actions;
+  if (approve === undefined || origin.kind === "user" || origin.kind === "cli") return undefined;
+  return {
+    allowed: false,
+    ...(publish === undefined ? {} : { action: publish }),
+    reason: "user_only",
+    message: `Publishing a ${target.kind.kind} needs a person's click: publish it in the interface, or answer the question of 'catalyst ${target.kind.kind} publish' in a terminal.`
   };
 }
 

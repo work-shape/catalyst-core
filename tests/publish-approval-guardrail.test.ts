@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { PUBLISH_APPROVAL_GUARDRAIL, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
@@ -238,12 +238,14 @@ describe("publishing needs an instance admin's approval", () => {
 
 describe("publishing a Workflow under the shipped guardrail", () => {
   let open: WorkflowFixture | undefined;
-  afterAll(async () => {
+  afterEach(async () => {
     await open?.instance.close();
+    open = undefined;
   });
 
-  it("makes an approver's own publish live, through the guardrail and the kind's approve right", async () => {
-    const t = await readyWorkflows(
+  /** An instance whose call path runs the shipped guardrails, with no Workflow yet. */
+  const guarded = () =>
+    readyWorkflows(
       (fixture) => {
         open = fixture;
       },
@@ -252,19 +254,29 @@ describe("publishing a Workflow under the shipped guardrail", () => {
         events: (stores) => guardedEvents(stores, {}, { shipped: true }).events
       }
     );
+  /**
+   * The root's own publish of a new Workflow, live on its click. Both tests share the file's
+   * database, so each names its own. Answers the response.
+   */
+  const rootPublishes = async (t: WorkflowFixture, id: string) => {
     const put = await t.expectOk(t.root.id, "assets.put", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: "notify-clients" },
+      params: { kind: WORKFLOW_ASSET_KIND, name: id },
       payload: {
-        config: { name: "notify-clients", manifest: notifyClients() },
+        config: { name: id, manifest: { ...notifyClients(), id } },
         expectedRevision: null
       }
     });
     const { revision } = z.object({ revision: z.number() }).parse(put.json());
-
-    const published = await t.expectOk(t.root.id, "assets.publish", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: "notify-clients" },
+    return t.expectOk(t.root.id, "assets.publish", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: id },
       payload: { revision }
     });
+  };
+
+  it("makes an approver's own publish live, through the guardrail and the kind's approve right", async () => {
+    const t = await guarded();
+
+    const published = await rootPublishes(t, "notify-clients");
 
     const run = await t.stores.operationRuns.get({
       clientInstanceId,
@@ -281,5 +293,64 @@ describe("publishing a Workflow under the shipped guardrail", () => {
     expect(hits).toContainEqual(
       expect.objectContaining({ event: "workflow.before_publish", subjectName: "notify-clients" })
     );
+  });
+
+  // With RIGHTS-1a a member who holds the publish right and every right of the principal may
+  // publish a Workflow: under the guardrail that publish waits for a holder of workflow.approve.
+  it("holds a member's publish as a workflow_publish request, and publishes it on approval", async () => {
+    const t = await guarded();
+    await rootPublishes(t, "notify-members");
+    const notify = await t.assetId(WORKFLOW_ASSET_KIND, "notify-members");
+    await t.grant(t.kai.id, "workflow.read", { assetId: notify });
+    await t.grant(t.kai.id, "workflow.write", { assetId: notify });
+    await t.grant(t.kai.id, "workflow.publish", { assetId: notify });
+    const put = await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: "notify-members" },
+      payload: {
+        config: {
+          name: "notify-members",
+          manifest: { ...notifyClients(), id: "notify-members", name: "Notify members" }
+        },
+        expectedRevision: 1
+      }
+    });
+    const { revision } = z.object({ revision: z.number() }).parse(put.json());
+    const publish = {
+      params: { kind: WORKFLOW_ASSET_KIND, name: "notify-members" },
+      payload: { revision }
+    };
+    // RIGHTS-1a asks the member's rights against the principal's when the request is filed: a
+    // member who could not make the revision live files nothing.
+    const refused = await t.call(t.kai.id, "assets.publish", publish);
+    expect(refused.statusCode, refused.body).toBe(403);
+    // The principal may use the Connection on the whole instance, and so may the member now.
+    await t.allow({ kind: "user", id: t.kai.id }, "connection.use");
+
+    const response = await t.call(t.kai.id, "assets.publish", publish);
+
+    expect(response.statusCode, response.body).toBe(202);
+    const held = heldSchema.parse(response.json());
+    const request = await t.stores.approvals.getApprovalRequest({
+      clientInstanceId,
+      requestId: held.approvalRequestId
+    });
+    expect(request).toMatchObject({ kind: "workflow_publish", status: "pending" });
+    const decided = await t.call(t.root.id, "approval_requests.decide", {
+      params: { requestId: held.approvalRequestId },
+      payload: { decision: "approve" }
+    });
+    expect(decided.statusCode, decided.body).toBe(200);
+    await getTestJobs(t.instance).runDue();
+    const live = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: WORKFLOW_ASSET_KIND,
+      name: "notify-members"
+    });
+    const ended = await t.stores.approvals.getApprovalRequest({
+      clientInstanceId,
+      requestId: held.approvalRequestId
+    });
+    expect(ended?.applyResult).toMatchObject({ execution: "done" });
+    expect(live?.publishedRevision).toBe(revision);
   });
 });

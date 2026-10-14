@@ -20,7 +20,10 @@ section: Added
   `workflow.approve` see and decide it; the Inbox item shows the version, the live version it
   replaces, the files that differ, the changing actions or steps that are new or changed, the
   outside hosts it adds, the Connections, the Data Stores with their level and the account a
-  Workflow runs as. Approving publishes exactly the frozen revision, as the requester. A
+  Workflow runs as. A publish is checked against its caller's rights (RIGHTS-1a's rule over
+  the principal a Workflow runs as) when it is filed, so a request that could never apply is
+  not filed, and again when the approval applies it. Approving publishes exactly the frozen
+  revision, as the requester. A
   request whose draft or live revision moved can no longer be approved: it ends `superseded`
   and its run is refused with `POLICY_DENIED`, `details.reason: approval_stale`. A newer
   request for the same asset replaces the open one.

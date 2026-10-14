@@ -93,7 +93,8 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.publish"], {
-    authorize: (input, { access, origin }) => workflow.authorizePublish(access, input, origin),
+    authorize: (input, { actor, access, origin }) =>
+      workflow.authorizePublish({ actor, access, origin }, input),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",

@@ -81,7 +81,8 @@ import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import { assertReferencesWithinOwners } from "./asset-owner-references";
-import { publishApproval } from "./publish-approval";
+import { liveRevision } from "./asset-live-revision";
+import { publishApproval, publishFromAPerson } from "./publish-approval";
 import type { AssetWorkflowOptions } from "./types";
 
 type MutationBatch = Omit<
@@ -127,29 +128,25 @@ export class AssetWorkflow {
   }
 
   /**
-   * The publish right of the kind. A kind without a published revision names none, and a call
-   * on it passes here to be refused for that by the operation itself.
+   * The publish right of the kind and the kind's own check of the revision it makes live. A
+   * kind without a published revision names none, and a call on it passes here to be refused
+   * for that by the operation itself.
    */
   async authorizePublish(
-    access: ActorAccess,
-    address: AssetAddress,
-    origin: OperationOrigin
+    caller: { actor: AuthenticatedIdentity; access: ActorAccess; origin: OperationOrigin },
+    address: AssetAddress & { revision: number }
   ): Promise<OperationAuthorization> {
+    const { access, origin } = caller;
     const target = await this.target(address);
-    const { publish, approve } = target.kind.actions;
+    const { publish } = target.kind.actions;
     if (publish === undefined) return { allowed: true };
-    // A revision that an approver's click makes live goes live only on a person's click: the
-    // interface's Publish or the answer to the CLI's prompt. Until a call of an agent or an MCP
-    // client can wait as a confirmation in the person's Inbox (OP-4), it is refused.
-    if (approve !== undefined && origin.kind !== "user" && origin.kind !== "cli") {
-      return {
-        allowed: false,
-        action: publish,
-        reason: "user_only",
-        message: `Publishing a ${target.kind.kind} needs a person's click: publish it in the interface, or answer the prompt of 'catalyst ${target.kind.kind} publish' in a terminal.`
-      };
+    const right = publishFromAPerson(target, origin) ?? decide(access, publish, target.resource);
+    // What the revision lends is asked of the caller now too: a publish that waits for an
+    // approval is filed only where its caller could make it live.
+    if (right.allowed && target.asset?.status === "active") {
+      await liveRevision(this.options, caller, target, address.revision);
     }
-    return decide(access, publish, target.resource);
+    return right;
   }
 
   /**
