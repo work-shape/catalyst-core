@@ -14,7 +14,8 @@ import {
 // The agent's draft of the tools of a REST API (CS-5c): the tool checks the declarations as a
 // save would and answers the draft the card shows, or every issue and no card. The draft never
 // carries a key, and the first cut's rules hold: GET only, the effect `reading`, no header or
-// parameter that carries a credential, no dot segment in the path.
+// parameter that carries a credential, no value of its own in a schema, no dot segment in the
+// path.
 
 /** A text that stands for a key. No answer below may repeat it. */
 const SECRET = "sk-live-4b3c2d1e0f9a";
@@ -173,15 +174,43 @@ describe("the agent's draft of REST API tools", () => {
     }
   });
 
-  it("refuses a parameter that can carry a credential, and keeps a page token", async () => {
-    for (const name of ["api_key", "access_token", "key", "token", "client-secret"]) {
-      expect(
-        await refusedPaths(
-          draft({
-            operations: [{ ...listClients, query: { [name]: { schema: { type: "string" } } } }]
-          })
-        )
-      ).toContain(`operations.0.query.${name}`);
+  it("refuses a parameter that can carry a credential by its words, and keeps a cursor", async () => {
+    const withQuery = (name: string) =>
+      draft({
+        operations: [{ ...listClients, query: { [name]: { schema: { type: "string" } } } }]
+      });
+    const refused = [
+      "api_key",
+      "access_token",
+      "key",
+      "token",
+      "client-secret",
+      "subscription-key",
+      "refresh_token",
+      "id_token",
+      "auth_key",
+      "authkey",
+      "user_key",
+      "license_key",
+      "jwt",
+      "pwd",
+      "Ocp-Apim-Subscription-Key",
+      "APIKey",
+      "sessionid",
+      "password"
+    ];
+    for (const name of refused) {
+      expect(await refusedPaths(withQuery(name)), name).toContain(`operations.0.query.${name}`);
+    }
+    for (const name of [
+      "pageToken",
+      "next_page_token",
+      "nextToken",
+      "secretary",
+      "author",
+      "sortKey"
+    ]) {
+      expect((await run(withQuery(name))).status, name).toBe("success");
     }
     expect(
       await refusedPaths(
@@ -196,6 +225,39 @@ describe("the agent's draft of REST API tools", () => {
         })
       )
     ).toContain("operations.0.pathParams.apiKey");
+  });
+
+  it("refuses a value of the draft's own in a parameter's schema: default, const, examples", async () => {
+    for (const keyword of ["default", "const", "examples", "example"]) {
+      const value = keyword === "examples" ? [SECRET] : SECRET;
+      expect(
+        await refusedPaths(
+          draft({
+            operations: [
+              {
+                ...listClients,
+                query: { pageToken: { schema: { type: "string", [keyword]: value } } }
+              }
+            ]
+          })
+        ),
+        keyword
+      ).toContain(`operations.0.query.pageToken.schema.${keyword}`);
+    }
+    expect(
+      await refusedPaths(
+        draft({
+          operations: [
+            {
+              ...fiscalYears,
+              pathParams: {
+                clientId: { schema: { anyOf: [{ type: "string", default: SECRET }] } }
+              }
+            }
+          ]
+        })
+      )
+    ).toContain("operations.0.pathParams.clientId.schema.anyOf.0.default");
   });
 
   it("refuses a '.' or '..' path segment in any spelling", async () => {
