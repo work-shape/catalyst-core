@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   callerCanConfirm,
   createOperationRegistry,
+  createPlatformId,
   operationDenialError,
   resolvePolicy,
   type OperationDefinition,
@@ -291,6 +292,92 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
     // An agent's call acts for a person, who is asked once the surface can pause.
     expect(resolve({ callerCanConfirm: false, canPause: false })).toMatchObject({
       source: "surface_cannot_pause"
+    });
+  });
+
+  // WF-AUTO-1. Fails without the change: a published run's `confirm` was an approval, which
+  // a run cannot wait for, so every changing step of a published Workflow failed.
+  it("runs the confirmation of a step of a published run: its publish was the confirmation", () => {
+    const origin = { kind: "workflow", workflowRunId: "wf", stepRunId: "step" } as const;
+    const step = { origin, callerCanConfirm: false, canPause: false, publishedRun: true };
+    expect(resolve(step)).toEqual({
+      value: "confirm",
+      next: "run",
+      decisionMode: "direct",
+      decisionReason: "workflow_publish",
+      source: "instance_default"
+    });
+    expect(
+      resolve({ ...step, centralSettings: [{ operation: "items.create", value: "confirm" }] })
+    ).toMatchObject({ next: "run", decisionReason: "workflow_publish" });
+
+    // What still stops it: a `deny`, an `approval`, a floor and a guardrail.
+    expect(
+      resolve({ ...step, centralSettings: [{ operation: "items.create", value: "deny" }] })
+    ).toMatchObject({ value: "deny", next: "refuse" });
+    expect(
+      resolve({ ...step, instanceDefaults: { reading: "allow", changing: "approval" } })
+    ).toMatchObject({ value: "approval", next: "await_approval" });
+    // A floor holds it, also one that the instance's default already met.
+    expect(resolve({ ...step, definition: { ...changing, policyFloor: "confirm" } })).toEqual({
+      value: "approval",
+      next: "await_approval",
+      source: "instance_default"
+    });
+    expect(
+      resolve({
+        ...step,
+        definition: { ...changing, policyFloor: "confirm" },
+        centralSettings: [{ operation: "items.create", value: "allow" }]
+      })
+    ).toEqual({ value: "approval", next: "await_approval", source: "policy_floor" });
+    expect(resolve({ ...step, guardrailOutcome: "require_approval" })).toEqual({
+      value: "approval",
+      next: "await_approval",
+      source: "guardrail"
+    });
+    expect(resolve({ ...step, guardrailOutcome: "block" })).toMatchObject({ next: "refuse" });
+    // Once its Workflow is deleted, the publish confirms nothing; an `allow` still runs.
+    expect(resolve({ ...step, workflowDeleted: true })).toEqual({
+      value: "deny",
+      next: "refuse",
+      source: "workflow_deleted"
+    });
+    expect(
+      resolve({
+        ...step,
+        workflowDeleted: true,
+        centralSettings: [{ operation: "items.create", value: "allow" }]
+      })
+    ).toMatchObject({ value: "allow", next: "run" });
+
+    // A step of a test run is no published run, and an agent's call is none either.
+    expect(resolve({ ...step, publishedRun: false })).toMatchObject({ next: "await_approval" });
+    const agent: OperationOrigin = {
+      kind: "agent",
+      agentRunId: createPlatformId<"AgentRunId">("run"),
+      conversationId: createPlatformId<"ConversationId">("conv"),
+      agentName: "bookkeeper",
+      toolCallId: createPlatformId<"ToolCallId">("call"),
+      toolName: "items.create"
+    };
+    expect(
+      resolve({ origin: agent, callerCanConfirm: false, canPause: true, publishedRun: true })
+    ).toEqual({ value: "confirm", next: "await_confirmation", source: "instance_default" });
+  });
+
+  it("names the guardrail that asked for an approval a call cannot wait for", () => {
+    expect(
+      operationDenialError({
+        kind: "policy",
+        operation: "items.create",
+        reason: "approval_unavailable",
+        guardrail: { id: "items-approved", label: "Items are approved" }
+      })
+    ).toMatchObject({
+      code: "POLICY_DENIED",
+      message: expect.stringMatching(/^The guardrail 'Items are approved' asks for another/u),
+      details: { operation: "items.create", guardrailId: "items-approved" }
     });
   });
 

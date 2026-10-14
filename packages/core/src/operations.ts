@@ -115,6 +115,11 @@ export interface OperationCall<TInput = unknown> {
   correlationId: string;
   /** Set where a draft makes the call. A call without it is a call of what is live. */
   draft?: OperationDraftContext;
+  /**
+   * Set on a step of a run of a published revision whose Workflow was deleted since the run
+   * started: the publish approves none of the run's calls any more.
+   */
+  workflowDeleted?: true;
 }
 
 /**
