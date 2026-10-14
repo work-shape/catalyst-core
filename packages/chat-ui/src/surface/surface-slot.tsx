@@ -5,12 +5,18 @@ import {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
-  type PointerEvent,
   type ReactNode
 } from "react";
 import { Maximize2, MessageSquare, Minimize2, X } from "lucide-react";
-import { Button, cn, EmptyState, IconButton, SurfaceFrame, useExit } from "@vivd-catalyst/ui";
+import {
+  Button,
+  cn,
+  EmptyState,
+  IconButton,
+  SplitHandle,
+  SurfaceFrame,
+  useExit
+} from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import { readStoredSurfaceWidth, writeStoredSurfaceWidth } from "../workspace-utils";
@@ -24,9 +30,6 @@ import {
 } from "./surface-layout";
 import { useSplitArea } from "./use-split-area";
 import { renderSurface, surfaceRenderers, type SurfaceRenderers } from "./surface-renderers";
-
-/** How far one arrow key moves the split, in pixels. */
-const SPLIT_KEY_STEP = 16;
 
 /**
  * How the slot shows its surface: `beside` the conversation, `covering` the main area because
@@ -91,7 +94,6 @@ export function SurfaceSlot({
   // The widths chosen since the page loaded. Before that a kind's width comes from storage.
   const [chosenWidths, setChosenWidths] = useState<Partial<Record<SurfaceKind, number>>>({});
   const [fullscreen, setFullscreen] = useState(false);
-  const [resizing, setResizing] = useState(false);
   const surface = source ? source.surface : panel.entry && panel.open ? panel.entry : undefined;
   const placement = surfacePlacement(mainWidth, splitMin);
   // An empty slot shows only where it would stand beside the main side.
@@ -152,77 +154,20 @@ export function SurfaceSlot({
   }, [closePanel, closeSource]);
 
   const chooseWidth = useCallback(
-    (nextWidth: number): number | undefined => {
-      if (kind === undefined) {
-        return undefined;
+    (nextWidth: number) => {
+      if (kind !== undefined) {
+        setChosenWidths((current) => ({ ...current, [kind]: nextWidth }));
       }
-      const clamped = clampSurfaceWidth(nextWidth, mainWidth, splitMin);
-      setChosenWidths((current) => ({ ...current, [kind]: clamped }));
-      return clamped;
     },
-    [kind, mainWidth, splitMin]
+    [kind]
   );
-
-  const onResizePointerDown = useCallback(
-    (event: PointerEvent<HTMLDivElement>) => {
-      if (kind === undefined) {
-        return;
-      }
-      event.preventDefault();
-      const startX = event.clientX;
-      const startWidth = width;
-      const target = event.currentTarget;
-      let latestWidth: number | undefined;
-      target.setPointerCapture(event.pointerId);
-      setResizing(true);
-
-      function onPointerMove(moveEvent: globalThis.PointerEvent) {
-        latestWidth = chooseWidth(startWidth + startX - moveEvent.clientX);
-      }
-
-      function onPointerUp(upEvent: globalThis.PointerEvent) {
-        if (target.hasPointerCapture(upEvent.pointerId)) {
-          target.releasePointerCapture(upEvent.pointerId);
-        }
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", onPointerUp);
-        window.removeEventListener("pointercancel", onPointerUp);
-        setResizing(false);
-        if (kind !== undefined && latestWidth !== undefined) {
-          writeStoredSurfaceWidth(kind, latestWidth);
-        }
-      }
-
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", onPointerUp);
-      window.addEventListener("pointercancel", onPointerUp);
-    },
-    [chooseWidth, kind, width]
-  );
-
-  // The separator's value is the conversation's width, so left and Home make it smaller.
-  const onResizeKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      const nextWidth =
-        event.key === "ArrowLeft"
-          ? width + SPLIT_KEY_STEP
-          : event.key === "ArrowRight"
-            ? width - SPLIT_KEY_STEP
-            : event.key === "Home"
-              ? maximumWidth
-              : event.key === "End"
-                ? splitMin
-                : undefined;
-      if (nextWidth === undefined || kind === undefined) {
-        return;
-      }
-      event.preventDefault();
-      const chosen = chooseWidth(nextWidth);
-      if (chosen !== undefined) {
+  const keepWidth = useCallback(
+    (chosen: number) => {
+      if (kind !== undefined) {
         writeStoredSurfaceWidth(kind, chosen);
       }
     },
-    [chooseWidth, kind, maximumWidth, width, splitMin]
+    [kind]
   );
 
   useEffect(() => {
@@ -300,25 +245,17 @@ export function SurfaceSlot({
       )}
       style={mode === "beside" ? { width: `${width}px` } : undefined}
     >
-      {shown && mode === "beside" && mainWidth !== undefined ? (
-        // The hairline between the two sides is the handle: 12 px wide to the pointer. It takes
-        // the ring colour only while it is dragged or holds the keyboard focus.
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={t("resizeDisplayPanel")}
-          aria-valuemin={Math.round(splitMin)}
-          aria-valuemax={Math.round(mainWidth - splitMin)}
-          aria-valuenow={Math.round(mainWidth - width)}
-          tabIndex={0}
-          data-resizing={resizing ? "" : undefined}
-          className={cn(
-            "absolute inset-y-0 left-0 z-10 w-3 -translate-x-1/2 cursor-col-resize touch-none outline-none",
-            "after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2",
-            "focus-visible:after:bg-ring data-resizing:after:bg-ring"
-          )}
-          onPointerDown={onResizePointerDown}
-          onKeyDown={onResizeKeyDown}
+      {shown && mode === "beside" && mainWidth !== undefined && kind !== undefined ? (
+        // The separator's value is the conversation's width.
+        <SplitHandle
+          label={t("resizeDisplayPanel")}
+          edge="left"
+          width={width}
+          min={splitMin}
+          max={maximumWidth}
+          value={{ now: mainWidth - width, min: splitMin, max: mainWidth - splitMin }}
+          onResize={chooseWidth}
+          onResizeEnd={keepWidth}
         />
       ) : null}
       {framedSurface ? (

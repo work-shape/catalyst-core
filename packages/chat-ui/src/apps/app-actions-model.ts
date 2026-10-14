@@ -23,22 +23,16 @@ const policyOutcomes: Record<AppAction["policy"], AppActionOutcome> = {
 
 /**
  * What a place says a call of an action would come to. The Actions side of a draft says what
- * the draft does with it: a changing action is not carried out there whatever the policy
- * says, and a reading one that would run can be tested. Everywhere else it is the policy's
- * word.
+ * the draft does with it: an action whose policy lets the call run can be tested there, a
+ * changing one as a simulation that says what it would have done (ADR-0031). Everywhere else
+ * it is the policy's word.
  */
 export function appActionOutcome(
-  action: Pick<AppAction, "effect" | "policy">,
+  action: Pick<AppAction, "policy">,
   /** The place shows the draft as its frame runs it: in safe mode. */
   safeMode: boolean
 ): AppActionOutcome {
-  if (!safeMode) {
-    return policyOutcomes[action.policy];
-  }
-  if (action.effect === "changing") {
-    return { labelKey: "apps.actionNotCarriedOutInDraft", tone: "neutral" };
-  }
-  return action.policy === "allow"
+  return safeMode && action.policy === "allow"
     ? { labelKey: "apps.actionTestableInDraft", tone: "success" }
     : policyOutcomes[action.policy];
 }
@@ -64,18 +58,30 @@ export const appActionUnavailableKeys: Record<
 };
 
 /**
- * Whether the row offers the test: a reading action of a draft, and one that starts a
- * Workflow, to whoever writes the App. The test is a real call, so the instance asks every
- * right again when it is made. A draft starts no Workflow: it answers what it would have
- * started.
+ * Whether the row offers the test: every action of a draft, to whoever writes the App. The
+ * test is a real call, so the instance asks every right again when it is made. A changing
+ * action is simulated there, unless the tester switched "Run live once" on for it.
  */
-export function appActionTestable(
-  action: Pick<AppAction, "effect" | "kind">,
+export function appActionTestable(view: AppMode, rights: Pick<AppRights, "write">): boolean {
+  return rights.write && view === "draft";
+}
+
+/**
+ * Whether the row offers "Run live once": a changing action of a draft, to whoever writes the
+ * App, where the policy lets the call run. A call that needs an approval cannot wait from a
+ * draft, and a refused one stays refused, so the switch would carry out nothing.
+ */
+export function appActionLiveOnceOffered(
+  action: Pick<AppAction, "effect" | "policy" | "unavailable">,
   view: AppMode,
   rights: Pick<AppRights, "write">
 ): boolean {
   return (
-    rights.write && view === "draft" && (action.effect === "reading" || action.kind === "workflow")
+    rights.write &&
+    view === "draft" &&
+    action.effect === "changing" &&
+    action.unavailable === undefined &&
+    (action.policy === "allow" || action.policy === "confirm")
   );
 }
 
