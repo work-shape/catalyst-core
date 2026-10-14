@@ -535,6 +535,7 @@ describe("an agent's tool calls in a chat run", () => {
       clientInstanceId: f.clientInstanceId,
       operation: "items.create",
       effect: "changing",
+      target: "live",
       actor: { kind: "user", id: "usr_1", label: "One" },
       origin: { kind: "app", appRevisionId: "rev", actionName: "save", pageSessionId: "page" },
       inputHash: "a".repeat(64),

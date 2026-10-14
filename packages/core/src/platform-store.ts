@@ -21,6 +21,7 @@ import type { FileSearchStore } from "./file-search";
 import type { PlatformFileStore } from "./files";
 import type { AccessAdministrationStore } from "./permissions";
 import type { JobsStore } from "./jobs";
+import type { LiveOnceSwitchStore } from "./draft-calls";
 import type { OperationRunStore } from "./operation-runs";
 import type { InfrastructureCheckStore } from "./infrastructure-checks";
 import type { PagesStore } from "./pages";
@@ -77,6 +78,7 @@ export interface PlatformStores {
   structuredData: StructuredDataStore;
   jobs: JobsStore;
   operationRuns: OperationRunStore;
+  liveOnceSwitches: LiveOnceSwitchStore;
   infrastructureChecks: InfrastructureCheckStore;
   pages: PagesStore;
   connections: ConnectionsStore;

@@ -12,6 +12,8 @@ import {
   publishAssetRequestSchema,
   putAssetRequestSchema,
   revertAssetRequestSchema,
+  runLiveOnceRequestSchema,
+  runLiveOnceResponseSchema,
   setAssetAvailabilityRequestSchema,
   setAssetDefaultRequestSchema,
   setAssetDefaultResponseSchema,
@@ -171,6 +173,25 @@ export const assetOperations = {
     body: discardAssetDraftRequestSchema,
     response: json(assetPointersResponseSchema),
     errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED"],
+    rateClass: "write"
+  }),
+  // ADR-0031. A changing call of a draft App or Workflow is simulated; this makes the next call
+  // of one action, or that step in the next test run, live. Only the kinds `app` and
+  // `workflow` have one.
+  "assets.run_live_once": defineRegisteredOperation({
+    id: "assets.run_live_once",
+    method: "POST",
+    path: "/api/v1/assets/:kind/:name/run-live-once",
+    summary:
+      "Make the next call of one action or step of the draft live instead of simulated, once",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    body: runLiveOnceRequestSchema,
+    response: json(runLiveOnceResponseSchema),
+    errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED", "VALIDATION_FAILED"],
     rateClass: "write"
   }),
   "assets.delete": defineRegisteredOperation({

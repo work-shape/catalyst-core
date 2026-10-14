@@ -486,6 +486,7 @@ describe("runs that never end", () => {
       // An operation this process does not know counts as interrupted after an hour.
       operation: "gone.operation",
       effect: "changing" as const,
+      target: "live" as const,
       actor: { kind: "user" as const, id: "usr_1", label: "One" },
       origin: {
         kind: "app" as const,
