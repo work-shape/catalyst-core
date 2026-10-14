@@ -585,7 +585,13 @@ async function skillFixture() {
     title: "Existing title",
     description: "Existing description",
     content: "Private old text",
-    resources: []
+    resources: [
+      {
+        path: "references/payment.md",
+        mediaType: "text/markdown" as const,
+        content: "Pay by invoice."
+      }
+    ]
   };
   const agent = {
     name: "assistant",
@@ -709,6 +715,31 @@ describe("guardrails on a skill change", () => {
     expect(fields?.content).toContain("DE89 3704 0044 0532 0130 00");
     expect(fields?.content).toContain("Existing title");
     expect(fields?.content).not.toContain("Private old text");
+  });
+
+  // Fails without the change: the runtime snapshot leaves a skill's resources out, so a change
+  // to a resource did not apply to it and the guardrails were handed the skill's name alone.
+  it("hands asset.before_write a change to a resource with the resource changed", async () => {
+    const f = await skillFixture();
+    const events =
+      (await f.tool.beforeEvents?.(
+        {
+          skillName: f.skill.name,
+          summary: "Bank details",
+          operations: [
+            {
+              type: "replace_text",
+              target: "references/payment.md",
+              oldText: "Pay by invoice.",
+              newText: "Überweise an DE89 3704 0044 0532 0130 00."
+            }
+          ]
+        },
+        { conversationId: asConversationId("conversation") }
+      )) ?? [];
+    const fields = await events[0]?.checkable();
+    expect(fields?.content).toContain("DE89 3704 0044 0532 0130 00");
+    expect(fields?.content).not.toContain("Pay by invoice.");
   });
 
   it("returns a model-readable blocked proposal failure and stores no request or asset change", async () => {
