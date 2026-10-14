@@ -17,7 +17,9 @@ import {
 
 const withResource: SkillConfig = {
   ...skill,
-  resources: [{ path: "references/payment.md", mediaType: "text/markdown", content: "Pay by invoice." }]
+  resources: [
+    { path: "references/payment.md", mediaType: "text/markdown", content: "Pay by invoice." }
+  ]
 };
 
 const noIban = {
