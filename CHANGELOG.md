@@ -2102,6 +2102,15 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   that does not parse, and one that names `__proto__` or `constructor.prototype` as a key
   answered `500` on every operation. Each now answers `400` `BAD_REQUEST` with
   `details.reason` `invalid_json_body`.
+- **The agent opens no asset of the instance on its own:** `platform.assets.open` moves the
+  conversation's subject onto an asset of the conversation's workspace, such as an App, as
+  before, but no longer onto an asset of the whole instance, such as a Workflow or an agent. A
+  prompt injection the agent read could have opened a shared Workflow for an administrator and
+  saved a poisoned draft on it. Such an asset becomes the subject only when the person starts
+  the conversation from its page ("Edit with the agent"). The refused open tells the agent to
+  read the asset with `platform.assets.get` or to ask the person to open its page; its call
+  ends `failed` with `not_allowed`, and the audit row names the kind and the asset, never the
+  definition. A confirmation of the agent's open in the host's prompt comes with NAV-2.
 - **Dialogs:** a dialog closed by its Cancel or close button gives the focus back to what
   opened it, such as New agent on the Agents page. Only Escape did; the buttons left the focus
   on the page body.
