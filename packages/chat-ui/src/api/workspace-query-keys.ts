@@ -117,6 +117,15 @@ export const workspaceQueryKeys = {
     ["superadmin-users", apiBaseUrl, authScope] as const,
   servicePrincipals: (apiBaseUrl: string, authScope: string) =>
     ["service-principals", apiBaseUrl, authScope] as const,
+  /** The signed-in person's own API keys. */
+  ownApiKeys: (apiBaseUrl: string, authScope: string) =>
+    ["own-api-keys", apiBaseUrl, authScope] as const,
+  /** Every person's API keys, as the instance's API access page lists them. */
+  personalApiKeys: (apiBaseUrl: string, authScope: string) =>
+    ["personal-api-keys", apiBaseUrl, authScope] as const,
+  /** The connect code a CLI shows, read before it is confirmed. */
+  connectCode: (apiBaseUrl: string, authScope: string, userCode: string) =>
+    ["connect-code", apiBaseUrl, authScope, userCode] as const,
   configAssetsOverview: (apiBaseUrl: string, authScope: string) =>
     ["config-assets-overview", apiBaseUrl, authScope] as const,
   /** Where the caller is and what it may do there. */

@@ -38,11 +38,11 @@ describe("service access tokens", () => {
     });
 
     const issued = await fixture.exchange.exchange(fixture.apiKey);
-    expect(issued.principal).toMatchObject({ permissions: [], scopes: [] });
+    expect(issued.identity).toMatchObject({ permissions: [], scopes: [] });
     await expect(
       fixture.adapter.authenticate(authRequest(fixture.clientInstanceId, issued.accessToken))
     ).resolves.toMatchObject({ permissions: [], scopes: [] });
-    expect(() => requireAuthScope(issued.principal, "config_assets:release")).toThrow(
+    expect(() => requireAuthScope(issued.identity, "config_assets:release")).toThrow(
       "Missing auth scope"
     );
   });
@@ -109,6 +109,56 @@ describe("service access tokens", () => {
 
     await expect(
       fixture.adapter.authenticate(authRequest(fixture.clientInstanceId, issued.accessToken))
+    ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  });
+
+  it("signs in a personal key's owner as they are now, without a second sign-in record", async () => {
+    const fixture = await createFixture();
+    const { clientInstanceId, store } = fixture;
+    const owner = await store.users.createUser({
+      clientInstanceId,
+      displayLabel: "Kai",
+      roles: ["user"]
+    });
+    const { secret: apiKey, key } = await store.personalApiKeys.createPersonalApiKey({
+      clientInstanceId,
+      ownerUserId: owner.id,
+      name: "Claude Code",
+      scopes: ["agent.write:kai-"],
+      expiresAt: new Date(Date.now() + 60_000).toISOString()
+    });
+    const options = {
+      secret,
+      clientInstanceId,
+      apiAccessStore: store.apiAccess,
+      personalApiKeys: { store: store.personalApiKeys, users: store.users }
+    };
+    const issued = await new ApiKeyAccessTokenExchange(options).exchange(apiKey);
+    const resolving = new IdentityResolvingAuthAdapter(
+      new HmacServiceAccessTokenAuthAdapter(options),
+      store.users
+    );
+    const identity = await resolving.authenticate(
+      authRequest(clientInstanceId, issued.accessToken)
+    );
+    expect(identity).toMatchObject({
+      id: owner.id,
+      keyScopes: ["agent.write:kai-"],
+      scopes: ["me:read", "config_assets:write"],
+      delegatedActor: { kind: "api_key", id: key.id, displayLabel: "Claude Code" }
+    });
+    const users = await store.users.listUsers({ clientInstanceId });
+    expect(users.map((user) => user.id)).toEqual([owner.id]);
+
+    // Without the module, the same key signs nobody in.
+    const off = { secret, clientInstanceId, apiAccessStore: store.apiAccess };
+    await expect(new ApiKeyAccessTokenExchange(off).exchange(apiKey)).rejects.toMatchObject({
+      code: "UNAUTHENTICATED"
+    });
+    await expect(
+      new HmacServiceAccessTokenAuthAdapter(off).authenticate(
+        authRequest(clientInstanceId, issued.accessToken)
+      )
     ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 

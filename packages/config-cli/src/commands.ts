@@ -32,6 +32,7 @@ import {
   mapConcurrently,
   parseOnlySelectors,
   readDefinition,
+  readInstanceOverview,
   readLocalAssetsIfValid,
   recordBaseline,
   replaceSkillPackage,
@@ -86,7 +87,7 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   const manifest = await readManifest(workingDir);
   const instance = resolveInstance(manifest, options.instance);
   const api = await connectApi(instance.url, options);
-  const overview = await api.getOverview();
+  const overview = await readInstanceOverview(api, instance);
   const listing = await listRemoteAssets(api);
   const selectors = parseOnlySelectors(options.only);
   const wanted =
@@ -125,7 +126,10 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   const absentSelectors = selectors.filter((selector) => !selectedKeys.has(selector.key));
   const agents = selected.agents.sort(byName);
   const skills = selected.skills.sort(byName);
-  const provenance = { instance: instance.key, version: overview.version };
+  const provenance = {
+    instance: instance.key,
+    ...(overview.version === undefined ? {} : { version: overview.version })
+  };
   const agentTargets = agents.map((agent) => ({
     agent,
     path: agentAssetPath(workingDir, agent.name)
@@ -166,8 +170,12 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
       force: true
     });
   }
+  // A working copy of one Namespace never names the instance's default agent.
+  const fullInstancePull = selectors.length === 0 && instance.namespace === undefined;
   if (selectors.length === 0) {
     await removeStaleManifestAssets(workingDir, manifest, desiredPaths);
+  }
+  if (fullInstancePull) {
     await updateManifestDefaultAgent(
       resolve(workingDir, MANIFEST_FILENAME),
       overview.defaultAgentName
@@ -182,16 +190,16 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   await recordBaseline(
     workingDir,
     instance.key,
-    overview.version,
+    overview.version ?? 0,
     selected,
     revisions,
     selectors.length === 0,
-    selectors.length === 0 ? (overview.defaultAgentName ?? null) : undefined,
+    fullInstancePull ? (overview.defaultAgentName ?? null) : undefined,
     await readTombstones(api, goneKeys)
   );
   writeOutput(
     options,
-    `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}, version ${overview.version}.${selectors.length === 0 ? "" : " Scoped pull; selected asset baselines updated."}`
+    `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}${overview.version === undefined ? "" : `, version ${overview.version}`}.${selectors.length === 0 ? "" : " Scoped pull; selected asset baselines updated."}`
   );
   return 0;
 }
@@ -223,7 +231,7 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
   const instance = resolveInstance(manifest, options.instance);
   const local = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
-  const overview = await api.getOverview();
+  const overview = await readInstanceOverview(api, instance);
   const remoteAssets = await listRemoteAssets(api);
   const baseline = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[
     instance.key
@@ -335,13 +343,13 @@ export async function listConfig(options: ConfigCommandOptions): Promise<number>
   const instance = resolveInstance(manifest, options.instance);
   const local = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
-  const overview = await api.getOverview();
+  const version = String((await readInstanceOverview(api, instance)).version ?? "-");
   const remote = await listRemoteAssets(api);
   const localKeys = new Set(assetEntries(local).map((asset) => asset.key));
   const rows = [
     ...[...remote.values()].map((asset) => ({
       ...asset,
-      version: String(overview.version),
+      version,
       status: localKeys.has(asset.key) ? "-" : "missing locally"
     })),
     ...assetEntries(local)

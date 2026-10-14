@@ -57,7 +57,7 @@ type FetchImpl = NonNullable<ConfigApiOptions["fetchImpl"]>;
 
 export async function createConfigApi(options: ConfigApiOptions) {
   const baseUrl = options.baseUrl.replace(/\/+$/u, "");
-  const fetchImpl = withoutRedirects(options.fetchImpl ?? fetch);
+  const fetchImpl = instanceFetch(options.fetchImpl);
   assertSafeApiKeyExchangeUrl(baseUrl);
   const accessToken = await exchangeApiKey(fetchImpl, baseUrl, options.apiKey);
   const client = createApiClient({
@@ -214,7 +214,11 @@ function isMissingAsset(error: unknown): boolean {
   );
 }
 
-function assertSafeApiKeyExchangeUrl(url: string): void {
+/**
+ * Refuses an address a key would cross the network to in plain text. `what` names the act:
+ * sending the key, or receiving it at login.
+ */
+export function assertSafeApiKeyExchangeUrl(url: string, what = "send CATALYST_API_KEY"): void {
   const parsed = new URL(url);
   if (parsed.protocol === "https:") {
     return;
@@ -224,11 +228,11 @@ function assertSafeApiKeyExchangeUrl(url: string): void {
       return;
     }
     throw new Error(
-      `Refusing to send CATALYST_API_KEY over plain HTTP to '${parsed.hostname}'. Use HTTPS; HTTP is allowed only for localhost, 127.0.0.0/8, or ::1.`
+      `Refusing to ${what} over plain HTTP to '${parsed.hostname}'. Use HTTPS; HTTP is allowed only for localhost, 127.0.0.0/8, or ::1.`
     );
   }
   throw new Error(
-    `Refusing to send CATALYST_API_KEY using unsupported URL scheme '${parsed.protocol}'. Use HTTPS; HTTP is allowed only for localhost, 127.0.0.0/8, or ::1.`
+    `Refusing to ${what} using unsupported URL scheme '${parsed.protocol}'. Use HTTPS; HTTP is allowed only for localhost, 127.0.0.0/8, or ::1.`
   );
 }
 
@@ -239,6 +243,11 @@ function assertSafeApiKeyExchangeUrl(url: string): void {
  */
 function withoutRedirects(fetchImpl: FetchImpl): FetchImpl {
   return (input, init) => fetchImpl(input, { ...init, redirect: "manual" });
+}
+
+/** The fetch of every request to an instance: the one given, or the global one, never redirected. */
+export function instanceFetch(fetchImpl?: FetchImpl): FetchImpl {
+  return withoutRedirects(fetchImpl ?? fetch);
 }
 
 function isLoopbackHostname(hostname: string): boolean {
@@ -267,7 +276,7 @@ async function exchangeApiKey(
   }
 }
 
-function toConfigApiError(error: unknown): unknown {
+export function toConfigApiError(error: unknown): unknown {
   if (!(error instanceof ApiError)) {
     return error;
   }

@@ -348,7 +348,8 @@ describe("the snapshot in a running instance", () => {
       // And the seed brings a Workflow.
       workflows: { enabled: true },
       dataStores: { enabled: false },
-      knowledge: { enabled: false }
+      knowledge: { enabled: false },
+      personalApiKeys: { enabled: true }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },
@@ -398,7 +399,8 @@ describe("the snapshot in a running instance", () => {
         connections: { enabled: false },
         workflows: { enabled: false },
         dataStores: { enabled: false },
-        knowledge: { enabled: false }
+        knowledge: { enabled: false },
+        personalApiKeys: { enabled: false }
       });
       expect(answer.features.resources).toEqual({ enabled: false });
     } finally {
