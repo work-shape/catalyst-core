@@ -212,10 +212,12 @@ export interface AccessInstance {
     scope: { namespace: string } | { assetId: string } | { workspaceId: string },
     effect?: "allow" | "deny"
   ): Promise<string>;
+  /** A new agent starts hidden unless `availableIn` says where. */
   putAgent(
     userId: string,
     name: string,
-    overrides?: Record<string, unknown>
+    overrides?: Record<string, unknown>,
+    availableIn?: "all" | { workspaceId: string }
   ): Promise<AccessResponse>;
   assetId(kind: string, name: string): Promise<string>;
   /** A Shared Workspace the administrator created. Returns its id. */
@@ -373,10 +375,15 @@ export async function setupAccessInstance(
     });
     return grantSchema.parse(response.json()).id;
   };
-  const putAgent = (userId: string, name: string, overrides: Record<string, unknown> = {}) =>
+  const putAgent = (
+    userId: string,
+    name: string,
+    overrides: Record<string, unknown> = {},
+    availableIn?: "all" | { workspaceId: string }
+  ) =>
     call(userId, "assets.put", {
       params: { kind: "agent", name },
-      payload: { config: agent(name, overrides) }
+      payload: { config: agent(name, overrides), ...(availableIn ? { availableIn } : {}) }
     });
   const assetId = async (kind: string, name: string) => {
     const asset = await stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });

@@ -188,7 +188,13 @@ describe("the Agents page", () => {
 
   it("offers New agent in the page head to a person who may create one, and to nobody else", () => {
     const button = /<button[^>]*>(?:<svg.*?<\/svg>)?New agent<\/button>/u;
-    const newAgent = { namespaces: [], mayNameFreely: true, onStart: noop };
+    const newAgent = {
+      namespaces: [],
+      mayNameFreely: true,
+      mayChooseAll: true,
+      startsIn: { workspace: { id: "cws_1", name: "Steuer" }, mayChooseAll: true },
+      onStart: noop
+    };
 
     expect(page({ onOpenStudio: noop, newAgent })).toMatch(button);
     expect(page({ agents: [], onOpenStudio: noop, newAgent })).toMatch(button);
