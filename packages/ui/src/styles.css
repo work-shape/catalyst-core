@@ -323,6 +323,20 @@
   }
 }
 
+/* A card that opens as a whole (`CardTarget`): its target's clickable area lies over the card, and
+   every other control in it, and what `CardReachable` marks, stands above that area, so each
+   keeps its own action, its tooltip and its selectable text. In the components layer, a
+   control's own position utility still wins. */
+@layer components {
+  [data-card]:has([data-card-target])
+    :is(a, button, input, select, textarea, [tabindex], [data-card-reachable]):not(
+      [data-card-target]
+    ) {
+    position: relative;
+    z-index: 1;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--border);

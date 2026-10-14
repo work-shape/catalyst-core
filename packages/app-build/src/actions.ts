@@ -407,7 +407,7 @@ function compileActionFile(
   } catch {
     return fail("The action file is not UTF-8 text.");
   }
-  const read = readYamlData(text, file.path);
+  const read = readYamlData(text, file.path, { refuseAliases: true });
   if (!read.ok) {
     return fail(read.issue.message, "action_invalid", read.issue.line);
   }

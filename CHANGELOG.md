@@ -35,6 +35,23 @@ contain breaking changes; a patch version does not.
   push the config to each environment, or that agent loses them. Agents may list them without
   the release config naming them. An instance skill named `platform-docs` stops startup; rename
   it before the upgrade.
+- **Calls made by a draft (ADR-0031):** a call that carries a draft context (`OperationCall.draft`:
+  the App or Workflow, the draft revision and the action or step) is decided in
+  `runOperation()`. A reading call reads live with the caller's rights; a changing call answers
+  `dry_run` with the input it would have been made with and whether the live call would have
+  waited for a confirmation or an approval, changes nothing and holds no idempotency key. Every
+  Operation Run records `target` (`live`, `test` or `dry_run`) and the run resource returns it.
+  `assets.run_live_once` (`POST /api/v1/assets/:kind/:name/run-live-once`), for a holder of the
+  kind's write right, switches one action or step of the current draft revision live for its
+  next call; the switch is audited when set, used and cleared, and a switch whose draft changed
+  since is cleared and never applies. A call of a Workflow test run (`draft.boundBy`) is made
+  as the person testing and allowed only where the Workflow's service principal holds the right
+  too; a refusal on the principal's side names it, and such a call cannot wait for an approval.
+  Migrations `0073_draft_call_targets` (adds `operation_runs.target`, default `live`, and the
+  table `live_once_switches`) and `0074_draft_call_targets_validate` (validates the check of
+  `target`) are expand-only. **Rollback:** the previous release ignores the column and the
+  table; runs it writes during a rollback get `live`, and switches set before it stay unused
+  until a release that reads them, where a changed draft clears them.
 - **Apps, an action that starts a Workflow (App Kit 1.3.0):** an action file
   `actions/<name>.action.yaml` with `workflow: <id>` and `input.schema`/`input.mapping` starts
   the published Workflow as the viewer, who needs `workflow.use` on it; without it the call is
@@ -49,6 +66,15 @@ contain breaking changes; a patch version does not.
   1.3.0. `page.save` documents the kind. The kit's `page.css` for a plain Page leaves out the
   flow canvas rules the library's stylesheet brings. **Operators:** the chat-server tarball
   limit rises to 2.1 MB for the fourth kit version.
+- **Cards open as a whole:** the UI library's `CardTarget` marks a card's one link or button to
+  what the card stands for and stretches its clickable area over the card. Every other control
+  in the card keeps its own action, the keyboard meets the target once under the name of its
+  action and the card's title ("Open Trip planner"), a press dragged across the card opens
+  nothing, and the card shows the hover state and its target's focus on its edge. Text under
+  the area cannot be selected; `CardReachable` keeps content such as a time with its full date
+  as a tooltip, or an id to copy, above it. Agent cards start a chat, App cards open the App (a
+  builder's draft-only App opens its draft) and Workflow cards open the Workflow, from a click
+  anywhere on the card. A card whose reader has nowhere to go opens nothing.
 - **Guardrails replace approval checks, and Build lists them:** release config takes
   `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
   `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
@@ -134,6 +160,23 @@ contain breaking changes; a patch version does not.
   caller is shown them, and counts the others. `preview_rows` is unchanged. On a store's page
   in Studio a Workflow under "Used by" is a link to its page, as an App is, for a reader the
   Workflows area is open to.
+- **YAML anchors with aliases are refused** in the frontmatter of a `SKILL.md`, in `store.yaml`,
+  `workflow.yaml`, `app.yaml` and an App's action files: nested aliases in a file of a few
+  hundred bytes made a value of any size for whatever read it. A file that uses one is refused
+  with a sentence that says so; write the value out where it is used.
+- **Skills as folders of files, in the public skill convention:** a skill may carry real files
+  beside `SKILL.md` and its text resources, at any path, and a folder taken from a public skill
+  library round-trips byte for byte. `title` is optional in the frontmatter and derived from
+  the content or the name; further frontmatter keys are kept as `frontmatter`; a skill name may
+  start with a digit; a name or description outside the convention is answered with a warning. `assets.put` takes the whole folder
+  as `files` and `assets.get` with `files=true` answers it byte for byte. The config of a skill
+  is unchanged for a skill that is text alone; other files are kept in the file set of the
+  revision and named in the config's `files` index (path, hash, size, media type). A write of
+  the config alone leaves them in place, and a revert brings a revision's files back. Compiled
+  programs, Git LFS pointers, files below `scripts/` and text files that are no UTF-8, a `SKILL.md` below the
+  root and files or folders over the limits (2 MiB a file, 500 files, 8 MiB a skill) are refused
+  with their path and a reason. No database migration: a revision from before reads from its
+  config. An agent's proposal no longer creates or changes a resource below `scripts/`.
 - **Claude on Amazon Bedrock:** a model provider `aws-bedrock` beside `openai-compatible` and
   `google-vertex`. It calls Claude through the Bedrock runtime in Frankfurt
   (`eu-central-1`) with a Bedrock API key named by `credentialSecret` (default
@@ -454,8 +497,8 @@ contain breaking changes; a patch version does not.
     roles and rows stay, and its id is not free. Nothing drops a database yet.
   - **Rollback:** the previous release ignores the table `data_stores` and the store
     databases, so rolling back loses nothing and leaves them in place. The `CONNECT` taken from
-    `PUBLIC` on the platform database stays taken. Store databases are not part of the
-    platform's backup script yet: back them up with it before relying on a restore.
+    `PUBLIC` on the platform database stays taken. The backup holds the store databases, see
+    "Backups of the whole database server" under Fixed.
 - **Asset kinds that read their own files:** a kind may bring `manifestOfFiles`, which reads the
   source files of a write into the manifest of their file set without the build of Pages, and
   `onPublish` and `onRemove`, which run in the transaction of a publish and of a delete.
@@ -2199,6 +2242,20 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   the number of an item's count on its icon.
 
 ### Fixed
+
+- **Backups of the whole database server:** `backup-postgres.sh` of the deployment kit dumped
+  only `POSTGRES_DB`, so no Data Store database and no role was in a nightly or pre-deploy
+  backup. A backup is now one tar archive, `<instance>-<database>-<timestamp>[-<label>].tar`,
+  with `globals.sql` from `pg_dumpall --globals-only` and a custom-format `pg_dump` of every
+  database the server lists, except the templates, `postgres`, invalid databases and the
+  scratch databases of `restore-postgres.sh`. `restore-postgres.sh` lists, verifies and recovers
+  both the archives and the earlier `.sql.gz` dumps; a recovery from an archive creates the
+  missing roles, replaces every database it holds and then sets the roles as in the backup, and
+  if a step fails or it is stopped, it puts every database back and leaves the roles' passwords
+  as they were. **Upgrade:** a deploy
+  of the release installs both scripts; nothing else changes. **Rollback:** the previous
+  scripts neither list nor restore a `.tar` backup; restore one with this release's
+  `restore-postgres.sh`.
 
 - **Outside hosts of an App on the viewer's own network:** `externalHosts` in `app.yaml` took a
   name under `.localhost`, `.local`, `.internal`, `.lan` or `.home.arpa`, which reaches the

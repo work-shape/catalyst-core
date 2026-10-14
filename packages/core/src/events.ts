@@ -23,6 +23,13 @@ const OPERATION_AUDIT = {
   phases: ["after"]
 } as const;
 
+const LIVE_ONCE_AUDIT = {
+  subject: "config_asset",
+  legacy: false,
+  audited: true,
+  phases: ["after"]
+} as const;
+
 // Run observations remain a separate stream from platform events and audit.
 export const EVENTS = {
   "agent_run.recovered": { ...LEGACY_AUDIT, name: "agent_run.recovered", subject: "agent_run" },
@@ -321,6 +328,11 @@ export const EVENTS = {
     subject: "instance"
   },
   "job.retried": { ...LEGACY_AUDIT, name: "job.retried", subject: "job" },
+  // "Run live once" on an action or a step of a draft (ADR-0031). The subject is the App or
+  // the Workflow; the metadata names its draft revision, the action or step and who set it.
+  "live_once.cleared": { ...LIVE_ONCE_AUDIT, name: "live_once.cleared" },
+  "live_once.switched_on": { ...LIVE_ONCE_AUDIT, name: "live_once.switched_on" },
+  "live_once.used": { ...LIVE_ONCE_AUDIT, name: "live_once.used" },
   "message.cancelled": { ...LEGACY_AUDIT, name: "message.cancelled", subject: "message" },
   "message.completed": { ...LEGACY_AUDIT, name: "message.completed", subject: "message" },
   "message.created": { ...LEGACY_AUDIT, name: "message.created", subject: "message" },
@@ -343,6 +355,8 @@ export const EVENTS = {
   "operation.completed": { ...OPERATION_AUDIT, name: "operation.completed" },
   "operation.denied": { ...OPERATION_AUDIT, name: "operation.denied" },
   "operation.failed": { ...OPERATION_AUDIT, name: "operation.failed" },
+  // A changing call of a draft that was not made and answered what it would have done.
+  "operation.simulated": { ...OPERATION_AUDIT, name: "operation.simulated" },
   "operation.started": { ...OPERATION_AUDIT, name: "operation.started" },
   "permission.granted": {
     ...LEGACY_AUDIT,

@@ -81,8 +81,9 @@ export async function applyValidatedConfigAssetMutations(
       clientInstanceId: options.clientInstanceId
     })
   ]);
+  const mutations = withRevisionFiles(options, input.mutations, assets);
   const validate = (stored: { state: ConfigAssetState; assets: ConfigAssetRecord[] }) =>
-    validateMutations(kinds.kinds, input.mutations, stored);
+    validateMutations(kinds.kinds, mutations, stored);
   validate({ state, assets });
   const read = new Set(assets.map((asset) => asset.activeRevisionId));
   // The `files` store, which holds the bundle of a write that adds a commit to a repository.
@@ -90,6 +91,7 @@ export async function applyValidatedConfigAssetMutations(
   const { underLock, ...batch } = input;
   return options.configAssets.store.applyConfigAssetMutations({
     ...batch,
+    mutations,
     ...(objects
       ? {
           repositoryObjectSize: (key: string) =>
@@ -113,6 +115,40 @@ export async function applyValidatedConfigAssetMutations(
       }
       await underLock?.();
     }
+  });
+}
+
+/**
+ * The writes as they are stored, for a kind whose revision is a config with files beside it
+ * (`revisionFiles`). A write that names a file set was made by the server from a folder or
+ * from the revision a revert restores, and its config carries the index of that file set. A
+ * write that names none keeps the file set and the index of the asset's revision: whoever
+ * writes the config alone, such as a release or an approved proposal, changes the text and
+ * leaves the other files. A revert to a revision without a file set names none. What a caller
+ * sent as the index is never stored.
+ */
+function withRevisionFiles(
+  options: ConfigAssetWriterOptions,
+  mutations: MutationInput["mutations"],
+  assets: readonly ConfigAssetRecord[]
+): MutationInput["mutations"] {
+  return mutations.map((mutation) => {
+    if (mutation.type !== "upsert" || mutation.fileSetId !== undefined) return mutation;
+    const hook = options.configAssets.kinds.require(mutation.kind).revisionFiles;
+    if (!hook) return mutation;
+    const current =
+      mutation.operation === "revert"
+        ? undefined
+        : assets.find((asset) => asset.kind === mutation.kind && asset.name === mutation.name);
+    const config = hook.carried(mutation.config, current?.config, current?.fileSetId !== undefined);
+    // A file set is carried along for the files the config does not hold, and for nothing else.
+    return {
+      ...mutation,
+      config,
+      ...(current?.fileSetId !== undefined && "files" in config
+        ? { fileSetId: current.fileSetId }
+        : {})
+    };
   });
 }
 
