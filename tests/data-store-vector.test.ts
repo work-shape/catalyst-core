@@ -81,9 +81,9 @@ describe("pgvector in a Data Store", () => {
     expect(await vectorIn(database)).toEqual([]);
   });
 
-  it("stops with a reason when the platform's role may not create it", async () => {
-    const [offered] = await db.sql<{ trusted: boolean }[]>`
-      select v.trusted from pg_available_extensions e
+  it("stops with a reason when the platform's role may not create it, and finds what the operator made", async () => {
+    const [offered] = await db.sql<{ version: string; trusted: boolean }[]>`
+      select v.version, v.trusted from pg_available_extensions e
       join pg_available_extension_versions v on v.name = e.name and v.version = e.default_version
       where e.name = 'vector'`;
     // On the instance's image it is not trusted, so only a superuser creates it.
@@ -107,6 +107,12 @@ describe("pgvector in a Data Store", () => {
       message: expect.stringContaining("only a superuser creates it")
     });
     expect(await vectorIn(record.location.database)).toEqual([]);
+
+    // The operator follows the reason, as a superuser in the store's database, and the next
+    // attempt finds the extension there.
+    await connect(record.location.database)`create extension vector with schema public`;
+    await expect(world.dataStores.ensureVectorExtension(id, signal)).resolves.toBeUndefined();
+    expect(await vectorIn(record.location.database)).toEqual([offered?.version]);
   });
 
   it("is refused for a store that does not exist", async () => {

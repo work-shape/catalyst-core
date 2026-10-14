@@ -213,16 +213,23 @@ export async function provisionDataStore(
   );
 }
 
-/** What the server offers of pgvector: the version `create extension` installs, and whether it is trusted. */
+/**
+ * What the server offers of pgvector: the version `create extension` installs, whether it is
+ * trusted, and whether the database already has it.
+ */
 const VECTOR_EXTENSION = `
-  select v.version, v.trusted
+  select v.version, v.trusted, e.installed_version is not null as installed
   from pg_catalog.pg_available_extensions e
   join pg_catalog.pg_available_extension_versions v
     on v.name operator(pg_catalog.=) e.name and v.version operator(pg_catalog.=) e.default_version
   where e.name operator(pg_catalog.=) 'vector'
 `;
 
-const vectorExtensionRow = z.object({ version: z.string(), trusted: z.boolean() });
+const vectorExtensionRow = z.object({
+  version: z.string(),
+  trusted: z.boolean(),
+  installed: z.boolean()
+});
 
 /**
  * Creates pgvector in the database of a store, as the platform's role: only for a store a
@@ -252,6 +259,8 @@ export async function ensureVectorExtension(
       `The Postgres server ${where} has no pgvector, which a Knowledge Base with semantic search stores its embeddings with. Run the instance's own Postgres image, or install pgvector on that server; publishing the Knowledge Base again then provisions its store.`
     );
   }
+  // Created before, by this function or by an operator as the refusal below tells them to.
+  if (row.installed) return;
   if (!row.trusted && !(await platformIsSuperuser(server, signal))) {
     throw new DataStoreProvisioningError(
       "vector_extension_not_permitted",
