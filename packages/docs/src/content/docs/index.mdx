@@ -1,6 +1,6 @@
 ---
-title: Workshape Catalyst documentation
-description: Configure, extend, and operate a dedicated AI agent chat instance.
+title: Workshape Catalyst
+description: Help for working with Catalyst - chat with agents, build Apps, automate work and connect your systems.
 tableOfContents: false
 head:
   - tag: title
@@ -11,34 +11,61 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 export const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-Workshape Catalyst is a platform for running a dedicated AI agent chat instance for one organization, assembled from reusable platform packages, release config, and a thin layer of your own code.
+With Catalyst you work with AI agents in a chat, keep what they build as Apps for your team, let routine work run by itself, and connect the systems you already use.
 
 <CardGrid>
   <LinkCard
     title="Get started"
-    description="What the platform provides, who operates an instance, and how to run the demo locally."
+    description="Your first conversation, workspaces, and the chat beside every page."
+    href={`${base}/start/first-conversation/`}
+  />
+  <LinkCard
+    title="Build agents and Apps"
+    description="Set up agents and skills in Studio, and turn what an agent builds into an App."
+    href={`${base}/automate/apps/`}
+  />
+  <LinkCard
+    title="Automate"
+    description="Workflows that do work by themselves, on a schedule or when you start them."
+    href={`${base}/automate/workflows/`}
+  />
+  <LinkCard
+    title="Connect systems"
+    description="Connect your CRM, ticket tool or other system so agents can work in it."
+    href={`${base}/connect/connect-a-system/`}
+  />
+  <LinkCard
+    title="Manage"
+    description="For admins: rights, guardrails, users and the Inbox."
+    href={`${base}/operate/how-rights-work/`}
+  />
+</CardGrid>
+
+## For operators and developers
+
+Running an instance, configuring it, or extending it with code:
+
+<CardGrid>
+  <LinkCard
+    title="Set up an instance"
+    description="What the platform provides, who operates it, deployment, sign-in and limits."
     href={`${base}/getting-started/overview/`}
   />
   <LinkCard
     title="Configure"
-    description="Client assembly, release config, modules, agents and skills, Connections, and the CLI."
-    href={`${base}/configure/client-assembly/`}
+    description="Release config, modules, config assets and the Catalyst CLI."
+    href={`${base}/configure/release-config/`}
   />
   <LinkCard
-    title="Automate"
-    description="Apps and Workflows: ask an agent for an App, try it, publish it; let a Workflow do work on a schedule."
-    href={`${base}/automate/apps/`}
-  />
-  <LinkCard
-    title="Extend"
-    description="Write custom code tools that let the agent act in your systems."
+    title="Extend with code"
+    description="Write code tools for agents, and use the App bridge."
     href={`${base}/extend/custom-tools/`}
   />
   <LinkCard
-    title="Operate"
-    description="The instance brief, deployment, sign-in and embedding, governance, and rights."
-    href={`${base}/operate/instance-brief/`}
+    title="Run locally"
+    description="Start the reference client as a local test instance."
+    href={`${base}/getting-started/local-demo/`}
   />
 </CardGrid>
 
-Workshape Catalyst is an early product. [Current Status](/reference/current-status/) lists what the current release contains and what it does not contain yet. The chat API is described in the [API reference](/reference/api/).
+[What the release contains](/reference/current-status/) lists what works today and what does not yet. The [glossary](/reference/glossary/) explains the terms.

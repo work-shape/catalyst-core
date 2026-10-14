@@ -20,7 +20,7 @@ The package installs from that one file. It depends on two third-party packages,
 
 ## What it does today
 
-The `config` commands synchronize agents and skills between a folder and an instance. [Config Assets](/configure/config-assets/) describes the working copy, the commands and what a push does.
+The `config` commands synchronize agents and skills between a folder and an instance. [Config assets](/configure/config-assets/) describes the working copy, the commands and what a push does.
 
 ```sh
 catalyst config pull

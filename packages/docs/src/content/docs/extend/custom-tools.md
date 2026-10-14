@@ -1,5 +1,5 @@
 ---
-title: Custom Code Tools
+title: Write a code tool
 description: Write source-controlled tools that run inside a client instance.
 ---
 

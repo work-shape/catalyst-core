@@ -39,7 +39,7 @@ description: Who may do what in Workshape Catalyst, explained from the start. Ro
 <figcaption>An action passes these layers from top to bottom, and any layer can stop it. Layers 4 and 5 exist for the actions on the full path, which the section on the path lists.</figcaption>
 </figure>
 
-This page explains the rights system to a reader who has never seen it. It says what exists today. The last section lists what does not exist yet. For the exact rules of the Access page, see [Rights and Namespaces](/operate/rights-and-namespaces/).
+This page explains the rights system to a reader who has never seen it. It says what exists today. The last section lists what does not exist yet. For the exact rules of the Access page, see [Rights for one person or asset](/operate/rights-and-namespaces/).
 
 Three words come up on every screen, so here they are once.
 
@@ -269,7 +269,7 @@ A role and a single right always apply to the whole instance. A grant is for eve
 
 So the answer to "can rights only be given to single people" is yes, today. A grant names one person. There are no groups, and a role cannot hold a grant.
 
-**Deny wins.** A deny on an asset beats every allow, including the one from the Admin role. Use it for the one agent that even administrators should not change by accident. A deny has limits of its own, which [Rights and Namespaces](/operate/rights-and-namespaces/#grants) lists.
+**Deny wins.** A deny on an asset beats every allow, including the one from the Admin role. Use it for the one agent that even administrators should not change by accident. A deny has limits of its own, which [Rights for one person or asset](/operate/rights-and-namespaces/#grants) lists.
 
 **Read and write are separate.** A person who should edit agents needs both. With write alone they cannot open the agent they are meant to change.
 
@@ -342,7 +342,7 @@ A company has a tax team. Its agents are named `tax-vat-helper` and `tax-year-en
 
 ### A Namespace can also limit tools and models
 
-A Namespace can carry a list of allowed tools and a list of allowed models. An agent in the Namespace is saved only with tools from the tool list and with model bindings from the model list. One way around the model list is left: a person with "Manage agent model settings" can save an agent that names no model binding, and it then runs on the model the instance uses by default. The lists are checked when an agent is saved. They bind every writer, an administrator and the release push included. They are not rights. They are limits on what an agent in this family may be given. The details are in [Rights and Namespaces](/operate/rights-and-namespaces/#namespaces).
+A Namespace can carry a list of allowed tools and a list of allowed models. An agent in the Namespace is saved only with tools from the tool list and with model bindings from the model list. One way around the model list is left: a person with "Manage agent model settings" can save an agent that names no model binding, and it then runs on the model the instance uses by default. The lists are checked when an agent is saved. They bind every writer, an administrator and the release push included. They are not rights. They are limits on what an agent in this family may be given. The details are in [Rights for one person or asset](/operate/rights-and-namespaces/#namespaces).
 
 ### A Namespace is not a workspace
 
@@ -531,7 +531,7 @@ Every changing action on the full path leaves an **Operation Run**. That is one 
 
 **Settings > Instance > Operations** lists them. The origin says where a call came from: User, CLI or Agent. A call that was refused has the status "Denied" and names what refused it. You need "View audit log" to open the page.
 
-Beside the run, the instance writes Audit Events, for example `permission.granted` when somebody writes a grant. The events the product writes hold names, ids and codes, and no content of an agent or a conversation. A tool written for one customer adds its own details to its events and has to keep to the same rule. See [Governance](/operate/governance/#audit).
+Beside the run, the instance writes Audit Events, for example `permission.granted` when somebody writes a grant. The events the product writes hold names, ids and codes, and no content of an agent or a conversation. A tool written for one customer adds its own details to its events and has to keep to the same rule. See [Retention, audit and deletion](/operate/governance/#audit).
 
 ## A worked example
 
