@@ -14,7 +14,8 @@ import {
   guardrailFieldOf,
   guardrailStringsOf
 } from "@vivd-catalyst/config-schema";
-import { readSourceFiles, type AssetFileInput } from "./asset-files";
+import type { AssetFileInput } from "./asset-files";
+import { readFileSetFile } from "./page-file-sets";
 import { readDefinitionName } from "./asset-kinds/shared";
 import { scopeOf } from "./asset-read-workflow";
 import type { AssetWorkflowOptions } from "./types";
@@ -45,7 +46,7 @@ export function assetWriteEvent(input: {
       content: filesField(
         input.config === undefined ? [] : guardrailStringsOf(input.config),
         (input.files ?? []).map((file) =>
-          "text" in file ? { text: file.text } : contentOf(Buffer.from(file.base64, "base64"))
+          "text" in file ? { text: file.text } : readOf(Buffer.from(file.base64, "base64"))
         )
       )
     })
@@ -221,59 +222,88 @@ async function revisionText(
 }
 
 /**
- * The texts given and the source files of a set, or `null` where the files are more than a
- * guardrail reads.
+ * The texts given and the source files of a set, or `null` where their text is more than a
+ * guardrail reads. Files are read one at a time, a file that is no text reduced to its
+ * printable runs as it is read, so only text counts toward the limit: a Page of photos is read
+ * whole.
  */
 async function fileSetText(
   options: Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "pages">,
   texts: readonly string[],
   fileSet: FileSet
 ): Promise<GuardrailFields[string]> {
-  // A character is at least one byte: a set this large cannot be read whole.
-  const bytes = fileSet.sourceFiles.reduce((sum, file) => sum + file.bytes, 0);
-  if (bytes > GUARDRAIL_CHECKED_FIELD_MAX_CHARS * 4) {
-    return null;
+  let chars = texts.reduce((sum, text) => sum + text.length, 0);
+  const files: FileRead[] = [];
+  for (const file of fileSet.sourceFiles) {
+    const read = readOf(await readFileSetFile(options, fileSet, "src", file));
+    chars += "text" in read ? read.text.length : 0;
+    // A field longer than a check reads is not read in part: the rest need not be read.
+    if (chars > GUARDRAIL_CHECKED_FIELD_MAX_CHARS) return null;
+    files.push(read);
   }
-  const { files, filesOmitted } = await readSourceFiles(options, fileSet);
-  if (filesOmitted) {
-    return null;
-  }
-  return filesField(
-    texts,
-    files.map((file) =>
-      file.text !== undefined
-        ? { text: file.text }
-        : contentOf(Buffer.from(file.base64 ?? "", "base64"))
-    )
-  );
+  return filesField(texts, files);
 }
 
-/** One file as a guardrail reads it: its text, or its bytes where it is no text. */
-type FileContent = { text: string } | { bytes: Uint8Array };
+/**
+ * One file as a guardrail reads it: its text, or, where it is no text, its printable runs for
+ * a pattern and, of an image or a font, the long ones for a judge.
+ */
+type FileRead = { text: string } | { runs: string[]; judgeRuns?: string[] };
 
 const utf16 = {
   le: new TextDecoder("utf-16le", { fatal: true }),
   be: new TextDecoder("utf-16be", { fatal: true })
 };
 
+/** The bytes UTF-16 without a byte order mark is told by, at the start of a file. */
+const UTF16_SNIFF_BYTES = 1024;
+
 /**
- * A file's text where it is UTF-8 without a NUL, as a read answers it, or UTF-16 with its byte
- * order mark, as exports of Windows tools often are; else its bytes.
+ * A file's text where it is UTF-8 without a NUL, as a read answers it, or UTF-16, as exports
+ * of Windows tools and some APIs are: with its byte order mark, or without one where every
+ * other byte of its start is NUL; else its printable runs.
  */
-function contentOf(bytes: Uint8Array): FileContent {
+function readOf(bytes: Uint8Array): FileRead {
   const decoder =
     bytes[0] === 0xff && bytes[1] === 0xfe
       ? utf16.le
       : bytes[0] === 0xfe && bytes[1] === 0xff
         ? utf16.be
-        : undefined;
+        : utf16WithoutMark(bytes);
   try {
     if (decoder) return { text: decoder.decode(bytes) };
     if (!bytes.includes(0)) return { text: utf8.decode(bytes) };
   } catch {
     // Not the text it starts like: read as bytes.
   }
-  return { bytes };
+  return {
+    runs: printableRuns(bytes, PATTERN_RUN_MIN_CHARS),
+    ...(isImageOrFont(bytes) ? { judgeRuns: printableRuns(bytes, JUDGE_RUN_MIN_CHARS) } : {})
+  };
+}
+
+/**
+ * The decoder of UTF-16 without a byte order mark: text of Latin letters has a NUL in every
+ * other byte, the second of each pair in little-endian order and the first in big-endian. Only
+ * where one parity of the start is all NUL and the other is not.
+ */
+function utf16WithoutMark(bytes: Uint8Array): TextDecoder | undefined {
+  const length = Math.min(bytes.length, UTF16_SNIFF_BYTES);
+  if (length < 4 || length % 2 !== 0) return undefined;
+  const nulAt = (parity: 0 | 1) => {
+    let all = true;
+    let none = true;
+    for (let index = parity; index < length; index += 2) {
+      if (bytes[index] === 0) none = false;
+      else all = false;
+    }
+    return { all, none };
+  };
+  const even = nulAt(0);
+  const odd = nulAt(1);
+  if (odd.all && even.none) return utf16.le;
+  if (even.all && odd.none) return utf16.be;
+  return undefined;
 }
 
 /** The shortest printable run of a file that is no text a pattern reads, as `strings` does. */
@@ -289,37 +319,33 @@ const JUDGE_RUN_MIN_CHARS = 16;
  * its printable runs and a judge the long ones of an image or a font; a file that is no text
  * and neither leaves a judge nothing it can be told the content of.
  */
-function filesField(
-  texts: readonly string[],
-  files: readonly FileContent[]
-): GuardrailFields[string] {
+function filesField(texts: readonly string[], files: readonly FileRead[]): GuardrailFields[string] {
   const read = [...texts, ...files.flatMap((file) => ("text" in file ? [file.text] : []))];
-  const binaries = files.flatMap((file) => ("bytes" in file ? [file.bytes] : []));
+  const binaries = files.flatMap((file) => ("runs" in file ? [file] : []));
   if (binaries.length === 0) {
     return guardrailFieldOf(read);
   }
-  const judgeable = binaries.every(isImageOrFont);
+  const judgeable = binaries.every((file) => file.judgeRuns !== undefined);
   return {
-    pattern: guardrailFieldOf([
-      ...read,
-      ...binaries.flatMap((bytes) => printableRuns(bytes, PATTERN_RUN_MIN_CHARS))
-    ]),
+    pattern: guardrailFieldOf([...read, ...binaries.flatMap((file) => file.runs)]),
     judge: guardrailFieldOf([
       ...read,
-      ...(judgeable ? binaries.flatMap((bytes) => printableRuns(bytes, JUDGE_RUN_MIN_CHARS)) : [])
+      ...(judgeable ? binaries.flatMap((file) => file.judgeRuns ?? []) : [])
     ]),
     ...(judgeable ? {} : { notJudgeable: true as const })
   };
 }
 
-/** The runs of printable ASCII, tab included, of at least `min` characters. */
+/** The runs of printable ASCII, tab and line ends included, of at least `min` characters. */
 function printableRuns(bytes: Uint8Array, min: number): string[] {
   const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const runs: string[] = [];
   let start = 0;
   for (let index = 0; index <= buffer.length; index += 1) {
     const byte = buffer[index];
-    const printable = byte !== undefined && ((byte >= 0x20 && byte <= 0x7e) || byte === 0x09);
+    const printable =
+      byte !== undefined &&
+      ((byte >= 0x20 && byte <= 0x7e) || byte === 0x09 || byte === 0x0a || byte === 0x0d);
     if (printable) continue;
     if (index - start >= min) runs.push(buffer.toString("latin1", start, index));
     start = index + 1;
