@@ -43,6 +43,10 @@ A key acts as you, narrowed to its scopes. A scope is a right such as `agent.wri
 
 `catalyst logout --instance <address>` removes the saved key from this machine. It stays valid until you revoke it under **Settings > You > API keys**.
 
+`catalyst setup <claude-code|codex|other> --instance <address>` logs in the same way where no working key is saved, then writes the Catalyst skill for an AI tool on your computer. [Connect a local agent](/getting-started/local-agent/) describes it.
+
+A command without `--instance` works on the `defaultInstance` of the working copy's `catalyst.yaml`; one without a default is refused with the instances it names, and a saved key never chooses among them. Outside a working copy it works on the one instance a key is saved for, unless `CATALYST_API_KEY` is set. With none or several saved it names the saved ones and asks for `--instance`. `catalyst --version` prints the version of the tool.
+
 A working copy that belongs to one Namespace names it beside the instance:
 
 ```yaml
@@ -121,4 +125,12 @@ The tool takes its key from the variable `CATALYST_API_KEY` when it is set, whic
 
 `pnpm release:check` packs the tool and reads every file of the tarball. It fails when the tarball depends on a workspace package, holds source of a private package, holds what looks like a credential or a file that stores credentials, or has no licence file. `pnpm release:check:public` runs the same check alone and then installs the tarball with npm in an empty directory.
 
-The workflow `Publish public CLI` publishes the tarball to npm. It is switched off until the repository variable `PUBLISH_PUBLIC_CLI` is `true`.
+The workflow `Publish public CLI` publishes the tarball to npm. It is switched off until the repository variable `PUBLISH_PUBLIC_CLI` is `true`. It refuses a commit whose version is on npm already, so each version is published once, from the commit that carries it.
+
+Settings, Connect a local agent installs the CLI version that `PUBLISHED_CLI_VERSION` in `packages/api-contract/src/public-cli.ts` names, and only one that is on npm. While it is unset the page says the command is not available yet. A release that offers the command goes in this order:
+
+1. Bump the version all packages share, in a commit of its own.
+2. Run `Publish public CLI` on that commit.
+3. Set `PUBLISHED_CLI_VERSION` to that version and commit it.
+4. Deploy that commit.
+5. Only then switch on the module `personalApiKeys` on the instance.

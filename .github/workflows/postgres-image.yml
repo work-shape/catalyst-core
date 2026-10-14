@@ -1,0 +1,104 @@
+name: Postgres image
+# The Postgres image of an instance, docker/postgres/Dockerfile, pinned by digest in
+# docker/postgres/pinned-image. The checks, the demo Compose and the deployments start that
+# digest.
+#
+# A run asks whether the pinned image was built from the Dockerfile as it is now: the image
+# carries the SHA-256 of the Dockerfile it was built from as a label. If so, it checks the
+# pinned image with docker/postgres/check-image.sh and is done. If not, it builds the image,
+# checks it, and fails with the line to pin. On a push to a branch of this repository it also
+# pushes the image for amd64 and arm64 first, so that line names an image the registry holds;
+# commit it and the next run checks what was pinned. A pull request from a fork pushes nothing.
+on:
+  push:
+    paths:
+      - docker/postgres/**
+      - .github/workflows/postgres-image.yml
+  pull_request:
+    paths:
+      - docker/postgres/**
+      - .github/workflows/postgres-image.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  REPOSITORY: ghcr.io/vivd-solutions/catalyst-postgres
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Sign in to the registry
+        env:
+          TOKEN: ${{ github.token }}
+        run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
+      - name: Is the pinned image built from this Dockerfile
+        id: pinned
+        run: |
+          pinned=$(grep -v '^#' docker/postgres/pinned-image | grep . | head -n 1)
+          dockerfile=$(sha256sum docker/postgres/Dockerfile | cut -d ' ' -f 1)
+          echo "dockerfile=$dockerfile" >> "$GITHUB_OUTPUT"
+          echo "image=$pinned" >> "$GITHUB_OUTPUT"
+          built_from=""
+          if docker pull --quiet "$pinned" >/dev/null 2>&1; then
+            built_from=$(docker image inspect --format \
+              '{{ index .Config.Labels "dev.workshape.catalyst.postgres.dockerfile-sha256" }}' "$pinned")
+          fi
+          if [[ $built_from == "$dockerfile" ]]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+            echo "The pinned image $pinned was built from this Dockerfile."
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "The pinned image $pinned was not built from this Dockerfile (${built_from:-not pulled})."
+          fi
+      - name: Check the pinned image
+        if: steps.pinned.outputs.current == 'true'
+        run: bash docker/postgres/check-image.sh "${{ steps.pinned.outputs.image }}"
+      # arm64 is built under emulation, for the demo Compose on an arm64 machine.
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+        if: steps.pinned.outputs.current != 'true'
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        if: steps.pinned.outputs.current != 'true'
+      - name: Build and check
+        if: steps.pinned.outputs.current != 'true'
+        env:
+          DOCKERFILE_SHA256: ${{ steps.pinned.outputs.dockerfile }}
+        run: |
+          docker buildx build --platform linux/amd64 --load \
+            --build-arg "DOCKERFILE_SHA256=$DOCKERFILE_SHA256" \
+            --tag catalyst-postgres:under-test docker/postgres
+          bash docker/postgres/check-image.sh catalyst-postgres:under-test
+      - name: Push for amd64 and arm64
+        id: push
+        # A push event exists only for a branch of this repository, never for a fork.
+        if: steps.pinned.outputs.current != 'true' && github.event_name != 'pull_request'
+        env:
+          DOCKERFILE_SHA256: ${{ steps.pinned.outputs.dockerfile }}
+        run: |
+          docker buildx build --platform linux/amd64,linux/arm64 --push \
+            --build-arg "DOCKERFILE_SHA256=$DOCKERFILE_SHA256" \
+            --tag "$REPOSITORY:sha-${GITHUB_SHA::12}" \
+            --metadata-file metadata.json docker/postgres
+          digest=$(jq -r '."containerimage.digest"' metadata.json)
+          [[ $digest == sha256:* ]] || { echo "no digest in the build's metadata" >&2; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: The pin is not this Dockerfile's
+        if: steps.pinned.outputs.current != 'true'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          if [[ -n $DIGEST ]]; then
+            line="$REPOSITORY@$DIGEST"
+            echo "::error title=Postgres image::Pin the image built from this Dockerfile: write '$line' into docker/postgres/pinned-image, the demo Compose files and the capabilities' and deployments' workflows."
+            echo "Pin: \`$line\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error title=Postgres image::docker/postgres/pinned-image does not name an image built from this Dockerfile. A push to a branch of this repository builds and pushes one and names the line to pin."
+          fi
+          exit 1

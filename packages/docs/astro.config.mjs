@@ -65,7 +65,12 @@ export default defineConfig({
       sidebar: [
         {
           label: "Get started",
-          items: ["start/first-conversation", "start/workspaces", "reference/glossary"]
+          items: [
+            "start/first-conversation",
+            "start/workspaces",
+            "getting-started/local-agent",
+            "reference/glossary"
+          ]
         },
         {
           label: "Build agents and Apps",

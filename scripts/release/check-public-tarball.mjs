@@ -38,7 +38,7 @@ export const BUNDLED_SOURCE_DIRS = ["asset-schemas", "api-contract", "api-client
 /** Package scopes of this workspace. No file of the tarball may import from one. */
 const WORKSPACE_SCOPES = ["@vivd-catalyst/", "@work-shape/"];
 /** What the tarball may hold besides package.json. */
-const ALLOWED_FILES = /^(?:dist\/.+|LICENSE|README\.md)$/u;
+const ALLOWED_FILES = /^(?:dist\/.+|skills\/[a-z0-9-]+\/SKILL\.md|LICENSE|README\.md)$/u;
 const TEXT_FILES = /\.(?:[cm]?js|d\.[cm]?ts|json|md)$|^LICENSE$/u;
 
 /** A secret would have one of these shapes. Each is a name and a pattern. */
@@ -133,7 +133,7 @@ export function inspectPublicPackage(root) {
       continue;
     }
     if (!ALLOWED_FILES.test(file)) {
-      problems.push(`${file}: only dist/, LICENSE and README.md are published`);
+      problems.push(`${file}: only dist/, skills/, LICENSE and README.md are published`);
       continue;
     }
     if (!TEXT_FILES.test(file)) {
