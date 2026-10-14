@@ -216,6 +216,8 @@ export interface GalleryText
   today: string;
   yesterday: string;
   stateDraft: string;
+  /** What a switched-on `RunLiveOnce` says it covers. */
+  liveOnceOn: string;
   stateRunning: string;
   statePublished: string;
   stateNeedsReconnect: string;
@@ -461,6 +463,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     today: "Today",
     yesterday: "Yesterday",
     stateDraft: "Draft",
+    liveOnceOn: "Your next call runs live.",
     stateRunning: "Running",
     statePublished: "Published",
     stateNeedsReconnect: "Needs reconnect",
@@ -705,6 +708,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     today: "Heute",
     yesterday: "Gestern",
     stateDraft: "Entwurf",
+    liveOnceOn: "Dein nächster Aufruf läuft live.",
     stateRunning: "Läuft",
     statePublished: "Veröffentlicht",
     stateNeedsReconnect: "Neu verbinden",
