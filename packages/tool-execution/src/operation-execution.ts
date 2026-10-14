@@ -732,7 +732,8 @@ const forbiddenSchema = z.object({
       "denied",
       "unknown_action",
       "holder_inactive",
-      "holder_not_administrable"
+      "holder_not_administrable",
+      "outside_key_scope"
     ])
   })
 });

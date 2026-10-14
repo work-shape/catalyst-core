@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, rename, rm, rmdir, writeFile } from "node:fs/
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import yaml from "js-yaml";
 import {
+  NAMESPACE_PREFIX_PATTERN,
   agentConfigSchema,
   loadYamlData,
   parseSkillMarkdown,
@@ -16,17 +17,25 @@ import {
 export const MANIFEST_FILENAME = "catalyst.yaml";
 export const STATE_FILENAME = ".catalyst-state.json";
 
+export interface ManifestInstance {
+  url: string;
+  /**
+   * The one Namespace this working copy writes in, such as `kai-`. A push names it, and leaves
+   * the instance's default agent alone, which only a release names.
+   */
+  namespace?: string;
+}
+
 export interface CatalystManifest {
-  instances: Record<string, { url: string }>;
+  instances: Record<string, ManifestInstance>;
   defaultInstance?: string;
   defaultAgentName?: string;
   agents: string[];
   skills: string[];
 }
 
-export interface ResolvedInstance {
+export interface ResolvedInstance extends ManifestInstance {
   key: string;
-  url: string;
 }
 
 export interface AssetBaseline {
@@ -92,12 +101,21 @@ export function parseManifest(contents: string, source = MANIFEST_FILENAME): Cat
   if (!isRecord(instancesInput)) {
     throw new Error(`${source} must define an instances mapping`);
   }
-  const instances: Record<string, { url: string }> = {};
+  const instances: Record<string, ManifestInstance> = {};
   for (const [name, value] of Object.entries(instancesInput)) {
     if (!isRecord(value) || typeof value.url !== "string" || value.url.length === 0) {
       throw new Error(`${source} instance '${name}' must define a url`);
     }
-    instances[name] = { url: normalizeUrl(value.url, `${source} instance '${name}'`) };
+    const namespace = readOptionalString(value, "namespace", `${source} instance '${name}'`);
+    if (namespace !== undefined && !NAMESPACE_PREFIX_PATTERN.test(namespace)) {
+      throw new Error(
+        `${source} instance '${name}' names no Namespace prefix: '${namespace}'. A prefix is lowercase words joined by '-' and ends in '-', such as 'kai-'.`
+      );
+    }
+    instances[name] = {
+      url: normalizeUrl(value.url, `${source} instance '${name}'`),
+      ...(namespace === undefined ? {} : { namespace })
+    };
   }
 
   const defaultInstance = readOptionalString(input, "defaultInstance", source);
@@ -140,7 +158,7 @@ export function resolveInstance(
   }
   const configured = manifest.instances[key];
   if (configured) {
-    return { key, url: configured.url };
+    return { key, ...configured };
   }
   return { key, url: normalizeUrl(key, `Instance '${key}'`) };
 }

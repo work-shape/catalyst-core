@@ -5,7 +5,8 @@ import { baselineRises } from "./baseline.mjs";
 // Fails a pull request that raises a count in quality-baseline.json or adds an entry to it,
 // compared with the commit where the pull request left its base branch. Both sides are read
 // from their commits: on a hosted runner the working tree is the merge with the base branch
-// and carries entries the pull request never touched.
+// and carries entries the pull request never touched. A rise to exactly the count that the
+// head's `acceptedRaises` records for that key passes; see the package README.
 // Usage: catalyst-quality-baseline-guard <base commit> [<head commit>]
 
 const file = "quality-baseline.json";

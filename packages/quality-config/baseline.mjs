@@ -1,7 +1,8 @@
 /**
  * @typedef {{ target: string, rule: string, scope: string, file?: string }} Finding
  * @typedef {Finding & { count: number, owner: string }} BaselineEntry
- * @typedef {{ version: number, entries: BaselineEntry[] }} Baseline
+ * @typedef {{ key: string, to: number, reason: string, acceptedBy: string, date: string }} AcceptedRaise
+ * @typedef {{ version: number, entries: BaselineEntry[], acceptedRaises?: AcceptedRaise[] }} Baseline
  */
 
 /** @param {Finding} finding */
@@ -69,17 +70,57 @@ function filesOf(findings) {
 }
 
 /**
+ * The raises the current baseline accepts that the earlier one did not record, by key. A raise
+ * is accepted for one key and to one count only, with the reason, who accepted it and when.
+ * An entry the earlier baseline already holds was accepted for an earlier change and excuses
+ * no rise after it.
+ * @param {Baseline} earlier
+ * @param {Baseline} current
+ * @returns {Map<string, number>}
+ */
+function newAcceptedRaises(earlier, current) {
+  /** @param {AcceptedRaise} raise */
+  const identity = (raise) =>
+    JSON.stringify([raise.key, raise.to, raise.reason, raise.acceptedBy, raise.date]);
+  const recorded = new Set((earlier.acceptedRaises ?? []).map(identity));
+  /** @type {Map<string, number>} */
+  const accepted = new Map();
+  for (const raise of current.acceptedRaises ?? []) {
+    if (
+      typeof raise.key !== "string" ||
+      raise.key.split("|").length !== 3 ||
+      !Number.isSafeInteger(raise.to) ||
+      raise.to < 1 ||
+      typeof raise.reason !== "string" ||
+      !raise.reason.trim() ||
+      typeof raise.acceptedBy !== "string" ||
+      !raise.acceptedBy.trim() ||
+      typeof raise.date !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/u.test(raise.date)
+    )
+      throw new Error(`Invalid accepted raise: ${JSON.stringify(raise)}`);
+    if (accepted.has(raise.key)) throw new Error(`Duplicate accepted raise: ${raise.key}`);
+    if (!recorded.has(identity(raise))) accepted.set(raise.key, raise.to);
+  }
+  return accepted;
+}
+
+/**
  * The entries of a baseline that are new or whose count is higher than in an earlier baseline.
  * Entries are only added when a rule is introduced, with its measurement, so on a pull
- * request both are a baseline raised to admit a new violation.
+ * request both are a baseline raised to admit a new violation. A rise to exactly the count
+ * that an `acceptedRaises` entry added since the earlier baseline records for that key is not
+ * one; a rise past it, on another key, or under an entry the earlier baseline held still is.
  * @param {Baseline} earlier
  * @param {Baseline} current
  * @returns {string[]} One line per raised or added entry.
  */
 export function baselineRises(earlier, current) {
   const before = new Map(earlier.entries.map((entry) => [keyOf(entry), entry.count]));
+  const accepted = newAcceptedRaises(earlier, current);
   return current.entries
     .filter((entry) => entry.count > (before.get(keyOf(entry)) ?? 0))
+    .filter((entry) => accepted.get(keyOf(entry)) !== entry.count)
     .map((entry) =>
       before.has(keyOf(entry))
         ? `${keyOf(entry)}: count raised from ${before.get(keyOf(entry))} to ${entry.count}`
