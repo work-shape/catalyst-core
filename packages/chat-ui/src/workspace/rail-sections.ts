@@ -1,4 +1,4 @@
-import { Bot, Inbox, LayoutGrid, Workflow, type LucideIcon } from "lucide-react";
+import type { GenericIconKey } from "@vivd-catalyst/ui";
 import type { TranslationKey } from "../i18n";
 import type { WorkspaceRouteView } from "./workspace-route";
 
@@ -24,7 +24,8 @@ export interface RailSectionsGiven {
 export interface RailSection {
   id: string;
   label: TranslationKey;
-  icon: LucideIcon;
+  /** The section's key in the icon registry: a kind's section shows the kind's icon. */
+  icon: GenericIconKey;
   /** The view the row opens, and the one it is highlighted on. */
   view: WorkspaceRouteView;
   /** Whether the row shows for this person. A row without it shows for everyone. */
@@ -44,28 +45,28 @@ export const railSections: readonly RailSection[] = [
   {
     id: "agents",
     label: "nav.agents",
-    icon: Bot,
+    icon: "agent",
     view: "agents",
     shown: (given) => given.agents === true
   },
   {
     id: "apps",
     label: "nav.apps",
-    icon: LayoutGrid,
+    icon: "app",
     view: "apps",
     shown: (given) => given.apps === true
   },
   {
     id: "workflows",
     label: "nav.workflows",
-    icon: Workflow,
+    icon: "workflow",
     view: "workflows",
     shown: (given) => given.workflows === true
   },
   {
     id: "inbox",
     label: "nav.inbox",
-    icon: Inbox,
+    icon: "inbox",
     view: "inbox",
     shown: (given) => given.inbox !== undefined,
     count: (given) => given.inbox?.toDecide ?? 0,

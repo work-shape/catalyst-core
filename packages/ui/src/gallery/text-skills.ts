@@ -27,11 +27,14 @@ export interface SkillsGalleryText {
   starterPlain: string;
   starterPdf: string;
   starterPdfHint: string;
+  starterGuide: string;
+  starterGuideHint: string;
 }
 
 export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
   en: {
-    skillIconSizes: "A shipped skill's page and the generic book, in the three sizes",
+    skillIconSizes:
+      "A shipped skill's page or line icon on the neutral tile, and the generic book, in the three sizes",
     skillIconInChip: "In a chip",
     skillKnowsHowTo: "The line on a card",
     skillKnowsHowToLabel: "Knows how to",
@@ -58,11 +61,13 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterLetterHint: "As a document",
     starterPlain: "Simplify a text",
     starterPdf: "Pull figures out of a PDF",
-    starterPdfHint: "Into a table"
+    starterPdfHint: "Into a table",
+    starterGuide: "Ask how this platform works",
+    starterGuideHint: "Agents, skills and Connections"
   },
   de: {
     skillIconSizes:
-      "Die Seite eines mitgelieferten Skills und das allgemeine Buch, in den drei Größen",
+      "Die Seite oder das Liniensymbol auf der neutralen Kachel eines mitgelieferten Skills und das allgemeine Buch, in den drei Größen",
     skillIconInChip: "In einem Chip",
     skillKnowsHowTo: "Die Zeile auf einer Karte",
     skillKnowsHowToLabel: "Weiß, wie man",
@@ -93,6 +98,8 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterLetterHint: "Als Dokument",
     starterPlain: "Einen Text vereinfachen",
     starterPdf: "Zahlen aus einem PDF ziehen",
-    starterPdfHint: "In eine Tabelle"
+    starterPdfHint: "In eine Tabelle",
+    starterGuide: "Fragen, wie die Plattform funktioniert",
+    starterGuideHint: "Agenten, Skills und Connections"
   }
 };

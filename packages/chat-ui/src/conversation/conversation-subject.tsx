@@ -1,7 +1,7 @@
-import { AppWindow, Bot, FileText, Workflow } from "lucide-react";
+import { FileText } from "lucide-react";
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
-import { Banner, Button, TextLink } from "@vivd-catalyst/ui";
+import { Banner, Button, RegistryIcon, TextLink, type GenericIconKey } from "@vivd-catalyst/ui";
 import { AGENT_ASSET_KIND } from "../build-area/build-rights";
 import { AGENTS_BUILD_PATH } from "../build-area/build-route";
 import { useTranslation, type TranslationKey } from "../i18n";
@@ -39,14 +39,16 @@ const SUBJECT_LEADS: Readonly<Record<string, TranslationKey>> = {
   [AGENT_ASSET_KIND]: "conversationSubjectAgent"
 };
 
+const SUBJECT_ICONS: Readonly<Record<string, GenericIconKey>> = {
+  [WORKFLOW_ASSET_KIND]: "workflow",
+  [APP_ASSET_KIND]: "app",
+  [AGENT_ASSET_KIND]: "agent"
+};
+
+/** The kind's icon from the registry, the same as on the rail and in Studio. */
 function SubjectIcon({ kind }: { kind: string }) {
-  if (kind === WORKFLOW_ASSET_KIND) {
-    return <Workflow aria-hidden="true" />;
-  }
-  if (kind === APP_ASSET_KIND) {
-    return <AppWindow aria-hidden="true" />;
-  }
-  return kind === AGENT_ASSET_KIND ? <Bot aria-hidden="true" /> : <FileText aria-hidden="true" />;
+  const icon = SUBJECT_ICONS[kind];
+  return icon === undefined ? <FileText aria-hidden="true" /> : <RegistryIcon name={icon} />;
 }
 
 /**

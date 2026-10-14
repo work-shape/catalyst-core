@@ -1,4 +1,3 @@
-import { ShieldCheck } from "lucide-react";
 import { Badge } from "@vivd-catalyst/ui";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
 import { GUARDRAIL_OUTCOME_VIEWS } from "./guardrail-model";
@@ -25,7 +24,7 @@ export const guardrailKind: BuildListedKind = {
   description: "guardrails.description",
   searchLabel: "guardrails.search",
   emptyText: "guardrails.empty",
-  icon: ShieldCheck,
+  icon: "guardrail",
   view: { Page: GuardrailAssetPage, missingText: "guardrails.missing" },
   rowText: (asset) => asset.description,
   // Only what a hit does: every Guardrail is checked by a model so far, and its page says so.

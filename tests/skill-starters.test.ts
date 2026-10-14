@@ -13,13 +13,14 @@ const starter = (title: string, extra: Record<string, unknown> = {}) => ({
   ...extra
 });
 
-const skill = (name: string, starters?: unknown[]) =>
+const skill = (name: string, starters?: unknown[], extra: Record<string, unknown> = {}) =>
   skillConfigSchema.parse({
     name,
     title: name,
     description: "When to use it.",
     content: "# Text",
-    ...(starters === undefined ? {} : { starters })
+    ...(starters === undefined ? {} : { starters }),
+    ...extra
   });
 
 function startersOf(input: {
@@ -104,6 +105,28 @@ describe("skill starters", () => {
     expect(
       startersOf({ skillNames: ["a", "b", "c"], skills })?.map((entry) => entry.title)
     ).toEqual(["A1", "A2", "B1", "B2"]);
+  });
+
+  it("carries the skill's icon for a platform skill only", () => {
+    const skills = [
+      skill("platform.spreadsheets", [starter("Build a sheet")], {
+        origin: "release",
+        icon: "spreadsheet"
+      }),
+      // A skill of the instance's own keeps the generic icon, whatever it declares.
+      skill("pdf", [starter("Read a PDF")], { icon: "pdf" })
+    ];
+
+    expect(
+      startersOf({ skillNames: ["platform.spreadsheets", "pdf"], skills })?.map((entry) => ({
+        title: entry.title,
+        icon: entry.icon
+      }))
+    ).toEqual([
+      { title: "Build a sheet", icon: "spreadsheet" },
+      { title: "Read a PDF", icon: undefined }
+    ]);
+    expect(startersOf({ skillNames: ["pdf"], skills })?.[0]).not.toHaveProperty("icon");
   });
 
   it("offers none for an agent without the skill, and for skills that carry none", () => {

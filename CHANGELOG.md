@@ -978,6 +978,15 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Skill icons:** a skill's line icon sits on one neutral tile in lists and on starters (32 px
+  tile, 18 px icon; 24 px in the picker rows), in ink for a skill that ships with the platform
+  and muted for the generic book. Inline, as in a chip, it stands bare at 16 px. The tile is
+  never tinted: colour means a file type, and the file-type pages stay as drawn.
+- **Kind icons:** each kind has one icon, read from the icon registry in Studio, on the rail,
+  over the composer and on the canvas: Agent a bot, Skill a book, Connection a plug (in place
+  of the cable), Workflow, App a grid, Data store a database and Guardrail a shield. The
+  registry's `agent` key draws the bot in place of the sparkles and gains `app`, `datastore`,
+  `guardrail` and `inbox`.
 - **Agents page:** a card shows the agent mark in place of the initials, the name, the default
   badge, what the agent does in two lines at most, and Start chat. Its starter prompts are no
   longer on the card; they wait in the empty chat with that agent. New agent opens its dialog
@@ -2105,6 +2114,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Chat starters:** a starter of a skill that ships with the platform shows that skill's
+  icon. Every starter showed the generic book, because the agent's starters did not carry the
+  skill's `icon`. A skill of the instance's own keeps the generic book.
 - **The agent opens no asset of the instance on its own:** `platform.assets.open` moves the
   conversation's subject onto an asset of the conversation's workspace, such as an App, as
   before, but no longer onto an asset of the whole instance, such as a Workflow or an agent. A
