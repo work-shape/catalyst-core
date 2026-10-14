@@ -41,7 +41,9 @@ async function deleteAsset(page: Page, path: string): Promise<void> {
   }
 }
 
-async function putAgent(page: Page): Promise<void> {
+/** The probe agent; with its skill it also holds read_skill, as a save from the page leaves it. */
+async function putAgent(page: Page, withSkill = false): Promise<void> {
+  const toolNames = ["show_view", "propose_skill_change", "demo.workflow_summary"];
   const answer = await requestWithOrigin(page, "put", agentPath, {
     data: {
       expectedRevision: await assetBaseRevision(page, agentPath),
@@ -50,7 +52,8 @@ async function putAgent(page: Page): Promise<void> {
         displayName: "Tools probe",
         modelProviderId: "local",
         instructions: "A probe of the grouped tools.",
-        toolNames: ["show_view", "propose_skill_change", "demo.workflow_summary"]
+        toolNames: withSkill ? [...toolNames, "read_skill"] : toolNames,
+        ...(withSkill ? { skillNames: [skillName] } : {})
       }
     }
   });
@@ -217,27 +220,40 @@ test.describe("the grouped Tools section of an agent", () => {
           },
           [theme, locale] as const
         );
+        await putAgent(page, true);
         await page.setViewportSize(SHOT_SIZE);
         await page.goto(`/build/agents/${agentName}#tools`);
         const tools = page.locator("#tools");
         const own = tools.locator('[data-tool-group="instance"]');
         await expect(own.locator("[data-instance-tool-group]")).toHaveCount(5);
         await unfold(own, "results");
+        await unfold(own, "skills");
         await unfold(own, "instance");
-        await tools.evaluate((section) => {
-          section.style.scrollMarginTop = "6rem";
-          section.scrollIntoView({ block: "start" });
-        });
+        await expect(own.locator('[data-included-tool="read_skill"]')).toBeVisible();
+        await own.locator("[data-tool-technical-details] button[aria-expanded]").click();
+        await expect(own.getByRole("table")).toBeVisible();
         if (shotsDir) {
           await mkdir(shotsDir, { recursive: true });
-          await page.screenshot({
-            path: join(shotsDir, `agent-tools-${locale}-${theme}-1280.png`),
-            animations: "disabled"
-          });
-          await own.screenshot({
-            path: join(shotsDir, `agent-tools-section-${locale}-${theme}-1280.png`),
-            animations: "disabled"
-          });
+          // The head of the section, then its end with the technical details.
+          for (const [part, element] of [
+            ["top", tools.getByRole("heading", { name: /^(Tools|Werkzeuge)$/u })],
+            ["end", own.getByRole("table")]
+          ] as const) {
+            await element.evaluate((target, block) => {
+              // The box that scrolls the page, as the page itself scrolls to a section.
+              let scroller = target.closest("section#tools")?.parentElement ?? null;
+              while (scroller && !/auto|scroll/u.test(getComputedStyle(scroller).overflowY)) {
+                scroller = scroller.parentElement;
+              }
+              const box = target.getBoundingClientRect();
+              const top = block === "top" ? box.top - 96 : box.bottom - window.innerHeight + 48;
+              scroller?.scrollBy({ top, behavior: "instant" });
+            }, part);
+            await page.screenshot({
+              path: join(shotsDir, `agent-tools-${locale}-${theme}-1280-${part}.png`),
+              animations: "disabled"
+            });
+          }
         }
       });
     }
