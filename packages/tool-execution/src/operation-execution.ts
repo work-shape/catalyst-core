@@ -249,7 +249,7 @@ export function createRunContext(
     asked: (events) => {
       context.beforeEvents = events;
     },
-    emit: (name, phase, payload = {}, before = {}) => {
+    emit: (name, phase, payload = {}, { subject: about, ...asked } = {}) => {
       const send = () =>
         deps.events.emit(
           name,
@@ -266,11 +266,10 @@ export function createRunContext(
             origin: call.origin,
             workspaceId: call.workspaceId,
             correlationId: call.correlationId,
-            subject: before.subject ?? subject,
+            subject: about ?? subject,
             phase,
-            ...(before.checkable ? { checkable: before.checkable } : {}),
-            ...(before.filterBy ? { filterBy: before.filterBy } : {}),
-            ...(before.aboutGuardrails ? { aboutGuardrails: true } : {}),
+            // What a before-event's guardrails read and narrow by, as its caller handed it.
+            ...asked,
             runtime: { deadline: input.runtime.deadline, signal: input.runtime.signal },
             ...(input.repeated ? { repeated: true } : {})
           }
