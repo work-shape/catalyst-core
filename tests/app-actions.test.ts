@@ -13,6 +13,7 @@ import {
   type AppActionsInstance
 } from "./support/app-actions";
 import { agentOrigin, operationOf } from "./support/connection-operations";
+import { removedFrameConnectionCallPath } from "./support/retired-api-paths";
 import { callTestPath } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 
@@ -238,7 +239,7 @@ describe("a call a frame makes through the interface", () => {
     const direct = await callTestPath(
       t.instance,
       "POST",
-      `/api/v1/app-content-sessions/${frame.pageSessionId}/connections/crm/operations/echo`,
+      removedFrameConnectionCallPath(frame.pageSessionId),
       { "x-dev-user-id": t.admin.id }
     );
     // No route answers, so the refusal is not the page session's own.
