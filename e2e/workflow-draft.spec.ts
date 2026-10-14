@@ -217,6 +217,18 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(surface.getByTestId("workflow-canvas")).toBeVisible();
     await expect(surface.locator("[data-workflow-draft]")).toHaveCount(0);
 
+    // "Open page" in the head of the panel opens the Workflow's page in a new tab, with no
+    // conversation in its address; the conversation stays where it is.
+    const conversationUrl = page.url();
+    const [opened] = await Promise.all([
+      page.context().waitForEvent("page"),
+      page.getByRole("button", { name: "Open the workflow's page", exact: true }).click()
+    ]);
+    await opened.waitForURL((url) => url.pathname === workflowPath);
+    expect(new URL(opened.url()).searchParams.has("chat")).toBe(false);
+    await opened.close();
+    expect(page.url()).toBe(conversationUrl);
+
     // The agent saves a draft: the canvas beside the chat is drawn again with the bar of the
     // draft, and the call reads as what it did.
     await sendToolCall(page, "platform.assets.put", {
