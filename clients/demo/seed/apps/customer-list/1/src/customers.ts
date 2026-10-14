@@ -33,8 +33,12 @@ function readCustomer(value: unknown): Customer | undefined {
     : undefined;
 }
 
-/** The page of customers in `value`, or nothing when it is no such answer. */
-export function readCustomerPage(value: unknown): CustomerPage | undefined {
+/**
+ * The page of customers in the result of the action, or nothing when it is no such answer. An
+ * MCP Connection answers `{ content, structuredContent }`; the page is the `structuredContent`.
+ */
+export function readCustomerPage(result: unknown): CustomerPage | undefined {
+  const value = isRecord(result) ? result.structuredContent : undefined;
   if (!isRecord(value) || !Array.isArray(value.rows) || typeof value.total !== "number") {
     return undefined;
   }
