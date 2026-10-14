@@ -285,6 +285,52 @@ describe("a guardrail on a file that is no text", () => {
     }
   });
 
+  // Fails without the change: UTF-16 without a byte order mark was read as text only where
+  // every other byte of its start was NUL, so one letter outside Latin-1 ('Ł' is 0x41 0x01 in
+  // UTF-16LE) left it printable runs of one character, and the IBAN passed.
+  it("reads UTF-16 without a byte order mark as text, also with a letter outside Latin-1", async () => {
+    const t = await setupAppInstance({
+      server: (stores) => ({
+        operations: {
+          events: guardedEvents(stores, {
+            no_iban: noIban({ displayName: "No IBAN in assets", filter: undefined })
+          }).events
+        }
+      })
+    });
+    try {
+      const text = `name;iban\nŁukasz;${IBAN}\n`;
+      const littleEndian = bytes("accounts.csv", new Uint8Array(Buffer.from(text, "utf16le")));
+      const bigEndian = bytes(
+        "accounts.csv",
+        new Uint8Array(Buffer.from(text, "utf16le").swap16())
+      );
+      for (const [name, file] of [
+        ["offers", littleEndian],
+        ["archive", bigEndian]
+      ] as const) {
+        const put = await t.putApp(t.admin.id, name, [...appFiles("Angebot"), file]);
+        expect(put.statusCode, put.body).toBe(403);
+      }
+
+      // An image's NUL bytes sit at even and odd offsets alike: it stays a file of printable
+      // runs, which hold no IBAN.
+      const dark = new Uint8Array(4096);
+      dark.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44]);
+      // Rows of a mostly black image: a filter byte, then zero pixels, with sparse colour.
+      for (let index = 16; index < dark.length; index += 2) {
+        dark[index + 1] = index % 64 === 0 ? 7 : 0;
+      }
+      const put = await t.putApp(t.admin.id, "photos", [
+        ...appFiles("Angebot"),
+        bytes("dark.png", dark)
+      ]);
+      expect(put.statusCode, put.body).toBe(200);
+    } finally {
+      await t.close();
+    }
+  });
+
   // Fails without the change: a judge was handed the text alone, as if an unknown binary file
   // were not there.
   it("lets a judge pass an image and refuses to publish a file it cannot judge", async () => {

@@ -54,6 +54,7 @@ export const guardrails = defineTranslations({
     "guardrails.hitWarned": "Warned",
     "guardrails.hitHeld": "Held for approval",
     "guardrails.hitBlocked": "Blocked",
+    "guardrails.hitBlockedApprovalCouldNotWait": "Blocked: approval could not wait",
     "guardrails.hitUnevaluated": "The check could not be run.",
     "guardrails.subjectOperation": "Call of {name}"
   },
@@ -113,6 +114,7 @@ export const guardrails = defineTranslations({
     "guardrails.hitWarned": "Gewarnt",
     "guardrails.hitHeld": "Zur Freigabe angehalten",
     "guardrails.hitBlocked": "Blockiert",
+    "guardrails.hitBlockedApprovalCouldNotWait": "Blockiert: konnte nicht auf Freigabe warten",
     "guardrails.hitUnevaluated": "Die Prüfung konnte nicht ausgeführt werden.",
     "guardrails.subjectOperation": "Aufruf von {name}"
   }

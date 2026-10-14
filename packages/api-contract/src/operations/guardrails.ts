@@ -26,6 +26,11 @@ export const guardrailHitSchema = z.object({
   subjectId: z.string().optional(),
   /** The asset's name, or the operation's for a call. Absent on hits before they were named. */
   subjectName: z.string().optional(),
+  /**
+   * `require_approval` on a `block` where the guardrail asked for an approval the action could
+   * not wait for, such as the App draft an agent's save of a Page writes.
+   */
+  convertedFrom: z.literal("require_approval").optional(),
   createdAt: timestampSchema
 });
 

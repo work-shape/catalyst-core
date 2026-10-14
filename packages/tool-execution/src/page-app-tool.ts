@@ -27,7 +27,14 @@ export interface PageAppCreated {
 
 /** What a save of a Page did to the App the conversation is about. */
 export type PageSaveIntoApp =
-  | { name: string; title: string; saved: true; revision: number }
+  | {
+      name: string;
+      title: string;
+      saved: true;
+      revision: number;
+      /** What guardrails that warn said about the draft, for the person. */
+      warnings?: string[];
+    }
   | { name: string; title: string; saved: false; message: string };
 
 /**
