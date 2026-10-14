@@ -29,7 +29,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** The migrations a definition names, in the order they are applied. */
-export function draftMigrationsOf(config: Record<string, unknown>): DraftMigration[] {
+function draftMigrationsOf(config: Record<string, unknown>): DraftMigration[] {
   const listed = Array.isArray(config.migrations) ? config.migrations : [];
   return listed.flatMap((migration) =>
     isRecord(migration) &&
@@ -38,6 +38,11 @@ export function draftMigrationsOf(config: Record<string, unknown>): DraftMigrati
       ? [{ number: migration.number, name: migration.name }]
       : []
   );
+}
+
+/** The file a migration was saved as, as the agent wrote it: `0001_init.sql`. */
+function migrationFileName(migration: DraftMigration): string {
+  return `${migrationNumber(migration.number)}_${migration.name}.sql`;
 }
 
 /** Whether the page shows the store as a draft: it has a draft and nothing was published. */
@@ -106,7 +111,9 @@ export function DataStoreDraftPage({
                 size="sm"
                 data-data-store-publish=""
                 loading={publishing}
-                onClick={() => void onPublish()}
+                onClick={() => {
+                  onPublish().catch(() => undefined);
+                }}
               >
                 <Send aria-hidden="true" />
                 {t("build.publish")}
@@ -135,9 +142,7 @@ export function DataStoreDraftPage({
                   key={migration.number}
                   data-data-store-draft-migration=""
                   title={
-                    <code className="font-mono text-code">
-                      {migrationNumber(migration.number)}_{migration.name}.sql
-                    </code>
+                    <code className="font-mono text-code">{migrationFileName(migration)}</code>
                   }
                 />
               ))}
