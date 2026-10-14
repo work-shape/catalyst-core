@@ -326,6 +326,19 @@ export class AssetWorkflow {
     if (kind.representation === "files") {
       return this.drafts.putFiles(call, target, { ...input, expectedRevision });
     }
+    if (kind.revisionFiles && input.files !== undefined) {
+      if (input.config !== undefined) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `A ${kind.kind} is written as its config or as its files, with '${kind.revisionFiles.manifestFile}' among them, and not as both at once`,
+          { reason: "config_and_files" }
+        );
+      }
+      requireOwnScope(target, call.access);
+      await requireExpectedRevision(this.options, call, target, expectedRevision);
+      assertStoredWritable(target, "always");
+      return this.drafts.putFolder(call, target, input.files, expectedRevision);
+    }
     if (input.config === undefined || input.files !== undefined) {
       throw new AppError(
         "VALIDATION_FAILED",
@@ -384,7 +397,11 @@ export class AssetWorkflow {
     return this.upsert(call, target, restored.config, {
       expectedRevision,
       operation: "revert",
-      audit: "config_asset.reverted"
+      audit: "config_asset.reverted",
+      // The files of the restored revision come back with it. They were never removed.
+      ...(target.kind.revisionFiles && restored.fileSetId && target.asset
+        ? { fileSet: { assetId: target.asset.id, fileSetId: restored.fileSetId } }
+        : {})
     });
   }
 
@@ -536,6 +553,8 @@ export class AssetWorkflow {
        * Page its origin names. It refuses the write by throwing.
        */
       pageLink?: () => Promise<boolean>;
+      /** The files of the write as its event names them: path, hash and size, no content. */
+      auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
     }
   ) {
     const { kind, name } = target;
@@ -625,10 +644,15 @@ export class AssetWorkflow {
           version: result.version,
           // A revision that copies a Page names it: the trail says where the content came from.
           ...(write.origin?.kind === "page" ? { pageId: write.origin.pageId } : {}),
-          ...(pageLinked ? { pageLinked: true } : {})
+          ...(pageLinked ? { pageLinked: true } : {}),
+          ...(write.auditFiles ? { files: write.auditFiles.map((file) => ({ ...file })) } : {})
         })
     ]);
-    return { version: result.version, revision, warnings };
+    return {
+      version: result.version,
+      revision,
+      warnings: [...warnings, ...(kind.writeWarnings?.(next) ?? [])]
+    };
   }
 
   /**

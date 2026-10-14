@@ -260,7 +260,7 @@ export function namespaceOfName(
  * The shape the server asks of a skill's name (`skillNameSchema` of the config schema, which
  * does not load in a browser). An agent's name only has to be one word.
  */
-const SKILL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
+const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/u;
 const AGENT_NAME_PATTERN = /^\S+$/u;
 
 /**

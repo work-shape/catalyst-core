@@ -12,6 +12,9 @@ import {
   skillResourceMediaTypeForPath
 } from "./schemas";
 
+/** The folder of a skill that holds what it runs. No proposal of an agent writes below it. */
+const SKILL_SCRIPTS_FOLDER = "scripts";
+
 export const SKILL_CHANGE_MAX_OPERATION_TEXT = 20_000;
 export const SKILL_CHANGE_MAX_CONTENT = 60_000;
 export const SKILL_CHANGE_MAX_RESOURCES = 30;
@@ -134,6 +137,20 @@ function evaluate(
     );
   }
   const operations = parsed.data;
+  // A proposal of an agent is instruction text. What a skill runs is written by a person.
+  for (const op of operations) {
+    const path =
+      op.type === "create_resource"
+        ? op.resourcePath
+        : op.type === "create_skill" || op.target === "root"
+          ? undefined
+          : op.target;
+    if (path?.toLowerCase().startsWith(`${SKILL_SCRIPTS_FOLDER}/`)) {
+      fail(
+        `An agent's proposal changes instruction text only: '${path}' is below '${SKILL_SCRIPTS_FOLDER}/', which a person writes`
+      );
+    }
+  }
   const creation = operations[0];
   let skill: SkillConfig;
   if (creation?.type === "create_skill") {

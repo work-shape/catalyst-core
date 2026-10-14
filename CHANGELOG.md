@@ -123,6 +123,23 @@ contain breaking changes; a patch version does not.
   caller is shown them, and counts the others. `preview_rows` is unchanged. On a store's page
   in Studio a Workflow under "Used by" is a link to its page, as an App is, for a reader the
   Workflows area is open to.
+- **YAML anchors with aliases are refused** in the frontmatter of a `SKILL.md`, in `store.yaml`,
+  `workflow.yaml`, `app.yaml` and an App's action files: nested aliases in a file of a few
+  hundred bytes made a value of any size for whatever read it. A file that uses one is refused
+  with a sentence that says so; write the value out where it is used.
+- **Skills as folders of files, in the public skill convention:** a skill may carry real files
+  beside `SKILL.md` and its text resources, at any path, and a folder taken from a public skill
+  library round-trips byte for byte. `title` is optional in the frontmatter and derived from
+  the content or the name; further frontmatter keys are kept as `frontmatter`; a skill name may
+  start with a digit; a name or description outside the convention is answered with a warning. `assets.put` takes the whole folder
+  as `files` and `assets.get` with `files=true` answers it byte for byte. The config of a skill
+  is unchanged for a skill that is text alone; other files are kept in the file set of the
+  revision and named in the config's `files` index (path, hash, size, media type). A write of
+  the config alone leaves them in place, and a revert brings a revision's files back. Compiled
+  programs, Git LFS pointers, files below `scripts/` and text files that are no UTF-8, a `SKILL.md` below the
+  root and files or folders over the limits (2 MiB a file, 500 files, 8 MiB a skill) are refused
+  with their path and a reason. No database migration: a revision from before reads from its
+  config. An agent's proposal no longer creates or changes a resource below `scripts/`.
 - **Claude on Amazon Bedrock:** a model provider `aws-bedrock` beside `openai-compatible` and
   `google-vertex`. It calls Claude through the Bedrock runtime in Frankfurt
   (`eu-central-1`) with a Bedrock API key named by `credentialSecret` (default
