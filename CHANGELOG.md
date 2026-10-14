@@ -64,7 +64,9 @@ contain breaking changes; a patch version does not.
   writes them at start: a changed one gets a revision in History, one a release no longer ships
   is deleted, and the same release writes nothing. They are read-only: a write, delete or revert
   of one is refused with `403` and the reason `shipped_skill`, and a skill that names `origin`
-  or `icon` is refused with `422`. Studio lists them with the label "Platform" and offers "Copy
+  or `icon` is refused with `422`. A skill of the instance's own under the name of either is
+  refused with `422` whether Workflows is on or not: "The platform ships a skill named '<name>',
+  also where its module is off: choose a name of your own". Studio lists them with the label "Platform" and offers "Copy
   to edit", which creates an ordinary skill. The config CLI neither pulls, diffs nor prunes
   them. **Upgrade:** an instance that holds a skill of its own named `platform-guide` or
   `workflow-authoring` stops at start with "The platform ships the skill '<name>', and a skill
@@ -2146,6 +2148,17 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Outside hosts of an App on the viewer's own network:** `externalHosts` in `app.yaml` took a
+  name under `.localhost`, `.local`, `.internal`, `.lan` or `.home.arpa`, which reaches the
+  viewer's own machine or network. The build refuses one with "a host on the internet: a name
+  under .localhost, .local, .internal, .lan, .home.arpa reaches the viewer's own machine or
+  network", and a host listed twice with "lists the host '<host>' twice". The content policy of
+  a revision stored before leaves such a name out and names each host once. **Upgrade:** a Page
+  whose manifest lists one no longer builds until the entry is removed.
+- **A JSON request body the server does not read:** an empty body with a JSON content type, one
+  that does not parse, and one that names `__proto__` or `constructor.prototype` as a key
+  answered `500` on every operation. Each now answers `400` `BAD_REQUEST` with
+  `details.reason` `invalid_json_body`.
 - **Chat starters:** a starter of a skill that ships with the platform shows that skill's
   icon. Every starter showed the generic book, because the agent's starters did not carry the
   skill's `icon`. A skill of the instance's own keeps the generic book.

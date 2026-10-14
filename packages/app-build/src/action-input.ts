@@ -197,26 +197,44 @@ export function declaredDataStoresOf(manifest: unknown): DataStoreReference[] {
   return read.success ? read.data.dataStores : [];
 }
 
-/** A host name and nothing else: no scheme, no port, no path and no wildcard. */
+/**
+ * The names under which a host is the viewer's own machine or a device on the viewer's network,
+ * never the internet. A frame that connects to one reads what only that network answers.
+ */
+const LOCAL_NETWORK_DOMAINS = ["localhost", "local", "internal", "lan", "home.arpa"];
+
+/**
+ * A host name on the internet and nothing else: no scheme, no port, no path, no wildcard and
+ * no IP address. The last label starts with a letter, so no IPv4 address is a name here.
+ */
 export const externalHostSchema = z
   .string()
   .max(253)
   .regex(
     /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/u,
     "an https host name such as 'api.example.com', without scheme, port, path or wildcard"
+  )
+  .refine(
+    // `home.arpa` itself too. A name of one label, `localhost` among them, the pattern refuses.
+    (host) =>
+      !host.includes(".") ||
+      !LOCAL_NETWORK_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`)),
+    `a host on the internet: a name under ${LOCAL_NETWORK_DOMAINS.map((domain) => `.${domain}`).join(", ")} reaches the viewer's own machine or network`
   );
 
 /**
- * The outside hosts a stored manifest lists. Each entry is read against the build's rule again,
- * because a content policy is written from them: an entry that is no host name is left out.
+ * The outside hosts a stored manifest lists, each once. Each entry is read against the build's
+ * rule again, because a content policy is written from them: an entry that is no host name is
+ * left out.
  */
 export function declaredExternalHostsOf(manifest: unknown): string[] {
   const read = z.object({ externalHosts: z.array(z.unknown()) }).safeParse(manifest);
   if (!read.success) return [];
-  return read.data.externalHosts.flatMap((entry) => {
+  const hosts = read.data.externalHosts.flatMap((entry) => {
     const host = externalHostSchema.safeParse(entry);
     return host.success ? [host.data] : [];
   });
+  return [...new Set(hosts)];
 }
 
 /** The Connections a stored manifest lists. */

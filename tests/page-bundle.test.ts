@@ -597,12 +597,28 @@ externalHosts: [api.example.com]
       "'*.example.com'",
       "https://example.com",
       "example.com:8443",
-      "example.com/path"
+      "example.com/path",
+      // An address is no host name, and these names reach the viewer's own machine or network.
+      "127.0.0.1",
+      "'[::1]'",
+      "localhost",
+      "api.localhost",
+      "printer.local",
+      "db.corp.internal",
+      "nas.lan",
+      "router.home.arpa",
+      "home.arpa"
     ]) {
-      expect(manifestErrors(`id: a\nname: A\nkit: 1.0.0\nexternalHosts: [${host}]\n`)).toHaveLength(
-        1
-      );
+      expect(
+        manifestErrors(`id: a\nname: A\nkit: 1.0.0\nexternalHosts: [${host}]\n`),
+        host
+      ).toHaveLength(1);
     }
+    expect(
+      manifestErrors(
+        "id: a\nname: A\nkit: 1.0.0\nexternalHosts: [api.example.com, api.example.com]\n"
+      )
+    ).toEqual([expect.stringContaining("lists the host 'api.example.com' twice")]);
     expect(manifestErrors("id: a\nname: [unclosed\n")).toEqual([
       expect.stringContaining("not valid YAML")
     ]);
