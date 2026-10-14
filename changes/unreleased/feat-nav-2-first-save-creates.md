@@ -9,7 +9,8 @@ section: Added
   conversation shows "Opened <name>". It calls the same write as `assets.put` on the API and
   the CLI, with the same rights check (`assets.put` for the kind, in the conversation's
   workspace) and the same validation; nothing else writes. A Workflow and a Data Store start as
-  a draft that runs nothing until a person publishes it. A Data Store is saved as files, its
+  a draft that runs nothing until a person publishes it; the Workflows list shows a Workflow
+  never published as "Draft · not published" to who may write Workflows, and to nobody else. A Data Store is saved as files, its
   `store.yaml` and its first migration, through the files write the CLI uses. The person of the
   conversation is recorded as its creator. An agent created so is offered nowhere: no workspace
   and no person's agent list gains it until a person places it. A conversation that already has
