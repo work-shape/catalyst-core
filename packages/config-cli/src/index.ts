@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
+import type { AssetKindName } from "./command-support";
 import { loginCommand, logoutCommand } from "./login";
 
 export * from "./api";
@@ -38,14 +39,14 @@ Commands:
   diff       Show local changes, remote newer assets, and conflicts
   validate   Validate local assets and remote references
   list       List local and remote config assets and their sync status
-  show       Print a remote asset: show <agent|skill> <name>
+  show       Print a remote asset: show <agent|skill|guardrail> <name>
 
 Options:
   --instance <name-or-url>  Manifest instance name or direct URL
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
   --prune                   Mirror on push, deleting the remote-only assets the last pull
                             saw
-  --only <agent:name|skill:name>
+  --only <agent:name|skill:name|guardrail:name>
                             Sync selected assets; repeatable on push/pull
   --help                    Show this help
 
@@ -58,6 +59,12 @@ A working copy that belongs to one Namespace names it beside the instance's url 
 catalyst.yaml, as 'namespace: kai-'. Its push names that Namespace, as the instance asks
 of everyone but the holder of the release right; its pull, diff and list read only the
 assets the key may read, never the instance's version or default agent.
+
+Guardrails join the working copy where catalyst.yaml lists their globs under 'guardrails',
+such as 'guardrails/*/guardrail.yaml'. Each is a folder with its guardrail.yaml and, for a
+model_judge check, its instruction in check.md. Guardrails are no part of a release: a push
+writes each as its draft with assets.put after the batch, which needs the config_assets:write
+scope. Publishing is a step of its own.
 `;
 
 export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): Promise<number> {
@@ -130,11 +137,8 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       return 2;
     }
     if (command === "show") {
-      if (
-        parsed.positionals.length !== 2 ||
-        (parsed.positionals[0] !== "agent" && parsed.positionals[0] !== "skill")
-      ) {
-        stderr("Usage: catalyst config show <agent|skill> <name>\n");
+      if (parsed.positionals.length !== 2 || !isShownKind(parsed.positionals[0])) {
+        stderr("Usage: catalyst config show <agent|skill|guardrail> <name>\n");
         return 2;
       }
     } else if (parsed.positionals.length > 0) {
@@ -148,11 +152,8 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       ...(parsed.values.force ? { force: true } : {}),
       ...(parsed.values.prune ? { prune: true } : {}),
       ...(parsed.values.only === undefined ? {} : { only: parsed.values.only }),
-      ...(command === "show"
-        ? {
-            assetKind: parsed.positionals[0] as "agent" | "skill",
-            assetName: parsed.positionals[1]!
-          }
+      ...(command === "show" && isShownKind(parsed.positionals[0])
+        ? { assetKind: parsed.positionals[0], assetName: parsed.positionals[1]! }
         : {}),
       ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
       ...(runtime.env === undefined ? {} : { env: runtime.env }),
@@ -203,6 +204,10 @@ async function runLoginCommand(
     stderr
   };
   return command === "login" ? loginCommand(options) : logoutCommand(options);
+}
+
+function isShownKind(value: string | undefined): value is AssetKindName {
+  return value === "agent" || value === "skill" || value === "guardrail";
 }
 
 function isConfigCommand(value: string): value is ConfigCommandName {

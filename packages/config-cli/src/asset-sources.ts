@@ -1,11 +1,12 @@
 import { readFile, stat } from "node:fs/promises";
-import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import {
   ASSET_PUT_FILES_MAX_BYTES,
   ASSET_SYNC_ITEM_MAX_BYTES,
   FILE_SET_MAX_FILES
 } from "@vivd-catalyst/api-contract";
 import { loadYamlData, parseSkillMarkdown } from "@vivd-catalyst/asset-schemas";
+import { GUARDRAIL_FILE, readGuardrailFolder } from "./guardrail-files";
 import { readSkillResources, walkFiles } from "./working-copy";
 
 // What `--from` names, read as a write of one asset carries it: the definition of a kind whose
@@ -30,11 +31,31 @@ export async function readAssetSource(
 }
 
 /**
- * A definition from a YAML or JSON file, or from a `SKILL.md` with the files of its folder as
- * the skill's resources. A folder that holds a `SKILL.md` is read as that file.
+ * A definition from a YAML or JSON file, from a `SKILL.md` with the files of its folder as
+ * the skill's resources, or from the folder of a guardrail, its `guardrail.yaml` with the
+ * `check.md` beside it. A folder that holds a `SKILL.md` is read as that file.
  */
 export async function readDefinition(path: string): Promise<Record<string, unknown>> {
-  const file = (await stat(path)).isDirectory() ? join(path, SKILL_FILE) : path;
+  const folder = (await stat(path)).isDirectory();
+  const guardrailFolder = folder
+    ? path
+    : basename(path) === GUARDRAIL_FILE
+      ? dirname(path)
+      : undefined;
+  if (
+    guardrailFolder !== undefined &&
+    (await stat(join(guardrailFolder, GUARDRAIL_FILE)).then(
+      (found) => found.isFile(),
+      () => false
+    ))
+  ) {
+    return readGuardrailFolder(guardrailFolder).catch((error: unknown) => {
+      throw new Error(
+        `'${path}' cannot be read: ${error instanceof Error ? error.message : String(error)}`
+      );
+    });
+  }
+  const file = folder ? join(path, SKILL_FILE) : path;
   const { size } = await stat(file).catch(() => {
     throw new Error(
       `'${path}' is a folder without a ${SKILL_FILE}. Name the YAML or JSON file of the definition.`

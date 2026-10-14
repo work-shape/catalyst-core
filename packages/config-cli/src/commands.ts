@@ -2,16 +2,19 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { ConfigApiError } from "./api";
 import { createUnifiedDiff } from "./diff";
+import { serializeGuardrailFiles } from "./guardrail-files";
 import { serializeAgentYaml, serializeSkillPackageForDisplay } from "./serialization";
 import {
   MANIFEST_FILENAME,
   STATE_FILENAME,
   agentAssetPath,
+  guardrailAssetPath,
   matchesManifestPath,
   readManifest,
   readStateFile,
   readWorkingCopy,
   removeStaleManifestAssets,
+  type CatalystManifest,
   resolveInstance,
   skillAssetPath,
   updateManifestDefaultAgent
@@ -28,6 +31,7 @@ import {
   fetchRemoteAsset,
   formatCommandError,
   formatCount,
+  formatCounts,
   listRemoteAssets,
   mapConcurrently,
   parseOnlySelectors,
@@ -35,8 +39,12 @@ import {
   readInstanceOverview,
   readLocalAssetsIfValid,
   recordBaseline,
+  replaceGuardrailFolder,
   replaceSkillPackage,
   resolveWorkingDir,
+  workingCopyKinds,
+  type AssetKindName,
+  type FetchedAsset,
   writeError,
   writeOutput
 } from "./command-support";
@@ -88,7 +96,7 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   const instance = resolveInstance(manifest, options.instance);
   const api = await connectApi(instance.url, options);
   const overview = await readInstanceOverview(api, instance);
-  const listing = await listRemoteAssets(api);
+  const listing = await listRemoteAssets(api, workingCopyKinds(manifest));
   const selectors = parseOnlySelectors(options.only);
   const wanted =
     selectors.length === 0
@@ -126,6 +134,7 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   const absentSelectors = selectors.filter((selector) => !selectedKeys.has(selector.key));
   const agents = selected.agents.sort(byName);
   const skills = selected.skills.sort(byName);
+  const guardrails = selected.guardrails.sort(byName);
   const provenance = {
     instance: instance.key,
     ...(overview.version === undefined ? {} : { version: overview.version })
@@ -138,10 +147,19 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     skill,
     path: skillAssetPath(workingDir, skill.name)
   }));
-  assertPullTargetsMatchManifest(workingDir, manifest, agentTargets, skillTargets);
+  const guardrailTargets = guardrails.map((guardrail) => ({
+    guardrail,
+    path: guardrailAssetPath(workingDir, guardrail.name)
+  }));
+  assertPullTargetsMatchManifest(workingDir, manifest, [
+    ...agentTargets.map((target) => ({ kind: "agent" as const, path: target.path })),
+    ...skillTargets.map((target) => ({ kind: "skill" as const, path: target.path })),
+    ...guardrailTargets.map((target) => ({ kind: "guardrail" as const, path: target.path }))
+  ]);
   const desiredPaths = new Set([
     ...agentTargets.map((target) => target.path),
-    ...skillTargets.map((target) => target.path)
+    ...skillTargets.map((target) => target.path),
+    ...guardrailTargets.map((target) => target.path)
   ]);
 
   for (const { agent, path } of agentTargets) {
@@ -151,22 +169,17 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   for (const { skill, path } of skillTargets) {
     await replaceSkillPackage(path, skill, provenance);
   }
+  for (const { guardrail, path } of guardrailTargets) {
+    await replaceGuardrailFolder(path, guardrail);
+  }
   for (const selector of absentSelectors) {
-    const path =
-      selector.kind === "agent"
-        ? agentAssetPath(workingDir, selector.name)
-        : skillAssetPath(workingDir, selector.name);
-    if (
-      !matchesManifestPath(
-        workingDir,
-        path,
-        selector.kind === "agent" ? manifest.agents : manifest.skills
-      )
-    ) {
+    const path = assetPath(workingDir, selector.kind, selector.name);
+    if (!matchesManifestPath(workingDir, path, manifestGlobs(manifest, selector.kind))) {
       throw new Error(`Selected asset path is not matched by catalyst.yaml: ${selector.key}`);
     }
+    // An agent is one file; a skill and a guardrail are each a folder.
     await rm(selector.kind === "agent" ? path : dirname(path), {
-      recursive: selector.kind === "skill",
+      recursive: selector.kind !== "agent",
       force: true
     });
   }
@@ -199,28 +212,45 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   );
   writeOutput(
     options,
-    `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}${overview.version === undefined ? "" : `, version ${overview.version}`}.${selectors.length === 0 ? "" : " Scoped pull; selected asset baselines updated."}`
+    `Pulled ${formatCounts(selected)}${overview.version === undefined ? "" : `, version ${overview.version}`}.${selectors.length === 0 ? "" : " Scoped pull; selected asset baselines updated."}`
   );
   return 0;
 }
 
+/** Where a pull writes an asset of the kind: the canonical layout. */
+function assetPath(workingDir: string, kind: AssetKindName, name: string): string {
+  switch (kind) {
+    case "agent":
+      return agentAssetPath(workingDir, name);
+    case "skill":
+      return skillAssetPath(workingDir, name);
+    case "guardrail":
+      return guardrailAssetPath(workingDir, name);
+  }
+}
+
+function manifestGlobs(manifest: CatalystManifest, kind: AssetKindName): string[] {
+  switch (kind) {
+    case "agent":
+      return manifest.agents;
+    case "skill":
+      return manifest.skills;
+    case "guardrail":
+      return manifest.guardrails ?? [];
+  }
+}
+
 function assertPullTargetsMatchManifest(
   workingDir: string,
-  manifest: Awaited<ReturnType<typeof readManifest>>,
-  agentTargets: Array<{ path: string }>,
-  skillTargets: Array<{ path: string }>
+  manifest: CatalystManifest,
+  targets: Array<{ kind: AssetKindName; path: string }>
 ): void {
-  const unmatched = [
-    ...agentTargets.filter(
-      (target) => !matchesManifestPath(workingDir, target.path, manifest.agents)
-    ),
-    ...skillTargets.filter(
-      (target) => !matchesManifestPath(workingDir, target.path, manifest.skills)
-    )
-  ];
+  const unmatched = targets.filter(
+    (target) => !matchesManifestPath(workingDir, target.path, manifestGlobs(manifest, target.kind))
+  );
   if (unmatched.length > 0) {
     throw new Error(
-      "Pulled assets use the canonical layout (agents/*.agent.yaml and skills/*/SKILL.md), but one or more target paths are not matched by catalyst.yaml. Use the canonical layout or adjust the manifest globs before pulling."
+      "Pulled assets use the canonical layout (agents/*.agent.yaml, skills/*/SKILL.md and guardrails/*/guardrail.yaml), but one or more target paths are not matched by catalyst.yaml. Use the canonical layout or adjust the manifest globs before pulling."
     );
   }
 }
@@ -232,7 +262,7 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
   const local = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
   const overview = await readInstanceOverview(api, instance);
-  const remoteAssets = await listRemoteAssets(api);
+  const remoteAssets = await listRemoteAssets(api, workingCopyKinds(manifest));
   const baseline = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[
     instance.key
   ];
@@ -303,29 +333,37 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
   const instance = resolveInstance(manifest, options.instance);
   const bundle = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
-  const listing = await listRemoteAssets(api);
+  const listing = await listRemoteAssets(api, workingCopyKinds(manifest));
   const deleted = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[instance.key]
     ?.deleted;
+  // The whole working copy, each asset against the revision the instance holds now: the
+  // check says whether a push of everything would be accepted, whatever was pulled last. An
+  // asset the instance does not list is a creation, made against the delete this working copy
+  // saw of it where there was one. Guardrails are no part of the batch: a push writes each
+  // alone, and the instance checks it then.
+  const items = assetEntries(bundle)
+    .filter((asset) => asset.kind !== "guardrail")
+    .map((asset) => ({
+      type: "put" as const,
+      kind: asset.kind,
+      config: { ...asset.config },
+      expectedRevision: listing.get(asset.key)?.revision ?? deleted?.[asset.key]?.revision ?? null
+    }));
+  const guardrails = bundle.guardrails.length;
+  const unchecked =
+    guardrails === 0
+      ? ""
+      : ` ${formatCount(guardrails, "guardrail")} ${guardrails === 1 ? "is" : "are"} checked by the instance when a push writes ${guardrails === 1 ? "it" : "them"}.`;
   try {
-    // The whole working copy, each asset against the revision the instance holds now: the
-    // check says whether a push of everything would be accepted, whatever was pulled last.
-    // An asset the instance does not list is a creation, made against the delete this
-    // working copy saw of it where there was one.
-    await checkSyncOnThisRelease(api, {
-      items: assetEntries(bundle).map((asset) => ({
-        type: "put" as const,
-        kind: asset.kind,
-        config: { ...asset.config },
-        expectedRevision: listing.get(asset.key)?.revision ?? deleted?.[asset.key]?.revision ?? null
-      })),
-      ...(bundle.defaultAgentName === undefined
-        ? {}
-        : { defaultAgentName: bundle.defaultAgentName })
-    });
-    writeOutput(
-      options,
-      `Valid: ${formatCount(bundle.agents.length, "agent")}, ${formatCount(bundle.skills.length, "skill")}.`
-    );
+    if (items.length > 0 || bundle.defaultAgentName !== undefined) {
+      await checkSyncOnThisRelease(api, {
+        items,
+        ...(bundle.defaultAgentName === undefined
+          ? {}
+          : { defaultAgentName: bundle.defaultAgentName })
+      });
+    }
+    writeOutput(options, `Valid: ${formatCounts({ ...bundle, guardrails: [] })}.${unchecked}`);
     return 0;
   } catch (error) {
     const refusal = error instanceof ConfigApiError ? readRefusedBatch(error) : undefined;
@@ -344,7 +382,7 @@ export async function listConfig(options: ConfigCommandOptions): Promise<number>
   const local = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
   const version = String((await readInstanceOverview(api, instance)).version ?? "-");
-  const remote = await listRemoteAssets(api);
+  const remote = await listRemoteAssets(api, workingCopyKinds(manifest));
   const localKeys = new Set(assetEntries(local).map((asset) => asset.key));
   const rows = [
     ...[...remote.values()].map((asset) => ({
@@ -368,7 +406,7 @@ export async function listConfig(options: ConfigCommandOptions): Promise<number>
 
 export async function showConfig(options: ConfigCommandOptions): Promise<number> {
   if (!options.assetKind || !options.assetName) {
-    throw new Error("Usage: catalyst config show <agent|skill> <name>");
+    throw new Error("Usage: catalyst config show <agent|skill|guardrail> <name>");
   }
   const workingDir = resolveWorkingDir(options);
   const manifest = await readManifest(workingDir);
@@ -378,12 +416,22 @@ export async function showConfig(options: ConfigCommandOptions): Promise<number>
   if (!remote) {
     throw new Error(`Remote ${options.assetKind} '${options.assetName}' was not found.`);
   }
-  writeOutput(
-    options,
-    (remote.kind === "agent"
-      ? serializeAgentYaml(remote.config)
-      : serializeSkillPackageForDisplay(remote.config)
-    ).trimEnd()
-  );
+  writeOutput(options, displayedAsset(remote).trimEnd());
   return 0;
+}
+
+function displayedAsset(asset: FetchedAsset): string {
+  switch (asset.kind) {
+    case "agent":
+      return serializeAgentYaml(asset.config);
+    case "skill":
+      return serializeSkillPackageForDisplay(asset.config);
+    case "guardrail": {
+      // Shown as the skill package is: the root file, then the file beside it under its name.
+      const files = serializeGuardrailFiles(asset.config);
+      return files.checkMd === undefined
+        ? files.yaml
+        : `${files.yaml.trimEnd()}\n\n===== check.md =====\n\n${files.checkMd}`;
+    }
+  }
 }

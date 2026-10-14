@@ -13,6 +13,7 @@ import {
   type SkillConfig,
   type SkillResourceConfig
 } from "@vivd-catalyst/asset-schemas";
+import { GUARDRAIL_FILE, readGuardrailFolder, type GuardrailDefinition } from "./guardrail-files";
 
 export const MANIFEST_FILENAME = "catalyst.yaml";
 export const STATE_FILENAME = ".catalyst-state.json";
@@ -32,6 +33,8 @@ export interface CatalystManifest {
   defaultAgentName?: string;
   agents: string[];
   skills: string[];
+  /** The globs of `guardrail.yaml` files. Left out, the working copy holds no guardrails. */
+  guardrails?: string[];
 }
 
 export interface ResolvedInstance extends ManifestInstance {
@@ -74,6 +77,7 @@ export interface WorkingCopyBundle {
   defaultAgentName?: string;
   agents: AgentConfig[];
   skills: SkillConfig[];
+  guardrails: GuardrailDefinition[];
 }
 
 export interface WorkingCopyIssue {
@@ -125,7 +129,10 @@ export function parseManifest(contents: string, source = MANIFEST_FILENAME): Cat
     ...(defaultInstance === undefined ? {} : { defaultInstance }),
     ...(defaultAgentName === undefined ? {} : { defaultAgentName }),
     agents: readStringArray(input, "agents", source),
-    skills: readStringArray(input, "skills", source)
+    skills: readStringArray(input, "skills", source),
+    ...(input.guardrails === undefined
+      ? {}
+      : { guardrails: readStringArray(input, "guardrails", source) })
   };
 }
 
@@ -163,6 +170,9 @@ export function resolveInstance(
   return { key, url: normalizeUrl(key, `Instance '${key}'`) };
 }
 
+/** The key of an asset in the state file: its kind and its name. */
+const ASSET_KEY_PATTERN = /^(agent|skill|guardrail):.+$/u;
+
 export async function readStateFile(path: string): Promise<CatalystState> {
   let contents: string;
   try {
@@ -195,7 +205,7 @@ export async function readStateFile(path: string): Promise<CatalystState> {
       baseline.assets = {};
       for (const [key, asset] of Object.entries(value.assets)) {
         if (
-          !/^(agent|skill):.+$/u.test(key) ||
+          !ASSET_KEY_PATTERN.test(key) ||
           !isRecord(asset) ||
           typeof asset.revision !== "number" ||
           !Number.isInteger(asset.revision) ||
@@ -222,7 +232,7 @@ export async function readStateFile(path: string): Promise<CatalystState> {
         // A number alone is the entry of an earlier CLI, which kept no id.
         const deleted = typeof entry === "number" ? { revision: entry } : entry;
         if (
-          !/^(agent|skill):.+$/u.test(key) ||
+          !ASSET_KEY_PATTERN.test(key) ||
           !isRecord(deleted) ||
           typeof deleted.revision !== "number" ||
           !Number.isInteger(deleted.revision) ||
@@ -259,12 +269,14 @@ export async function readWorkingCopy(
   workingDir: string,
   manifest: CatalystManifest
 ): Promise<WorkingCopyBundle> {
-  const [agentFiles, skillFiles] = await Promise.all([
+  const [agentFiles, skillFiles, guardrailFiles] = await Promise.all([
     matchManifestFiles(workingDir, manifest.agents),
-    matchManifestFiles(workingDir, manifest.skills)
+    matchManifestFiles(workingDir, manifest.skills),
+    matchManifestFiles(workingDir, manifest.guardrails ?? [])
   ]);
   const agents: AgentConfig[] = [];
   const skills: SkillConfig[] = [];
+  const guardrails: GuardrailDefinition[] = [];
   const issues: WorkingCopyIssue[] = [];
 
   for (const path of agentFiles) {
@@ -304,6 +316,17 @@ export async function readWorkingCopy(
     }
   }
 
+  // A guardrail is read as its files say and checked by the instance, which knows its events.
+  for (const path of guardrailFiles) {
+    const file = toRelativePath(workingDir, path);
+    try {
+      guardrails.push(await readGuardrailFolder(dirname(path)));
+    } catch (error) {
+      const extracted = extractErrorIssues(file, error);
+      issues.push(...(extracted.length > 0 ? extracted : [{ file, message: errorMessage(error) }]));
+    }
+  }
+
   if (issues.length > 0) {
     throw new WorkingCopyValidationError(issues);
   }
@@ -312,7 +335,8 @@ export async function readWorkingCopy(
       ? {}
       : { defaultAgentName: manifest.defaultAgentName }),
     agents,
-    skills
+    skills,
+    guardrails
   };
 }
 
@@ -352,6 +376,11 @@ export function skillAssetPath(workingDir: string, name: string): string {
   return resolve(workingDir, "skills", name, "SKILL.md");
 }
 
+export function guardrailAssetPath(workingDir: string, name: string): string {
+  assertSafeAssetName(name);
+  return resolve(workingDir, "guardrails", name, GUARDRAIL_FILE);
+}
+
 export async function readSkillResources(skillFilePath: string): Promise<SkillResourceConfig[]> {
   const skillDirectory = dirname(skillFilePath);
   const files: string[] = [];
@@ -388,12 +417,16 @@ export async function removeStaleManifestAssets(
   manifest: CatalystManifest,
   desiredPaths: Set<string>
 ): Promise<void> {
-  const existing = await matchManifestFiles(workingDir, [...manifest.agents, ...manifest.skills]);
+  const existing = await matchManifestFiles(workingDir, [
+    ...manifest.agents,
+    ...manifest.skills,
+    ...(manifest.guardrails ?? [])
+  ]);
   for (const path of existing) {
     if (desiredPaths.has(path)) {
       continue;
     }
-    if (path.endsWith("/SKILL.md")) {
+    if (path.endsWith("/SKILL.md") || path.endsWith(`/${GUARDRAIL_FILE}`)) {
       await rm(dirname(path), { recursive: true, force: true });
       continue;
     }

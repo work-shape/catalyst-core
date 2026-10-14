@@ -41,9 +41,11 @@ export function createAuditingEventEmitter(
             match: {
               ...context.filterBy,
               origin: origin.kind,
-              ...(origin.kind === "agent" ? { agent: origin.agentName } : {})
+              ...(origin.kind === "agent" ? { agent: origin.agentName } : {}),
+              ...(context.workspaceId ? { workspace: context.workspaceId } : {})
             },
-            fields: async () => (await context.checkable?.()) ?? {}
+            fields: async () => (await context.checkable?.()) ?? {},
+            ...(context.aboutGuardrails ? { aboutGuardrails: true } : {})
           },
           guardrailCallContext(payload, context)
         );
