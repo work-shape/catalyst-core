@@ -3423,9 +3423,7 @@ test("superadmin manages config assets with validation and conflict protection",
     form().getByRole("textbox", { name: new RegExp(`^${label}`, "u") });
   /** Chooses the test's skill for the open agent, or takes it away again. */
   const toggleSkill = async () => {
-    await form()
-      .getByRole("button", { name: /^Skills/u })
-      .click();
+    await form().getByRole("button", { name: "Skills: Choose skills", exact: true }).click();
     await page.getByRole("option", { name: /Config E2E skill/u }).click();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("listbox")).toHaveCount(0);
