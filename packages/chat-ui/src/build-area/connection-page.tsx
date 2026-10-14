@@ -207,7 +207,7 @@ export function ConnectionPage({
   notice,
   source,
   editing
-}: BuildAssetViewProps & {
+}: Omit<BuildAssetViewProps, "kinds"> & {
   /** The frame's actions for the head: History, and Delete where the reader may delete. */
   actions?: ReactNode;
   /** What the frame says above the content, such as a conflict. */
