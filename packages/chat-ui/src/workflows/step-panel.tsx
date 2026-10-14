@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import {
+  Banner,
   Button,
   CodeBlock,
   Disclosure,
   DisclosureContent,
   DisclosureTrigger,
   IconTile,
+  InlineError,
   KeyValue,
   KeyValueList,
   RegistryIcon,
@@ -22,7 +24,8 @@ import {
 import { formatMoment } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { FailureBanner } from "./failure-banner";
-import { stepOutputRows } from "./step-output";
+import type { LiveOnceControl } from "./test-run";
+import { simulatedCall, stepOutputRows } from "./step-output";
 import { countsLine } from "./workflow-canvas-model";
 import type {
   WorkflowLoopCounts,
@@ -31,7 +34,7 @@ import type {
   WorkflowStepSource,
   WorkflowStepView
 } from "./workflow-views";
-import { RunStateBadge, durationText } from "./workflows-frame";
+import { RunStateBadge, StepTargetBadge, durationText } from "./workflows-frame";
 
 /** How many lines of what a step returned are shown. */
 const OUTPUT_PREVIEW_LINES = 40;
@@ -49,6 +52,8 @@ export interface StepPanelRun {
   countsEnded?: boolean;
   /** The loop that runs once for each entry of what the step returned, and how many those are. */
   passesOn?: { count: number; step: string };
+  /** In a test run, on a step that changes something: "Run live once" for the next test run. */
+  liveOnce?: LiveOnceControl;
   now: Date;
 }
 
@@ -339,11 +344,13 @@ function StepRunDetails({
   const { locale, t } = translation;
   const { stepRun, counts } = run;
   if (stepRun === undefined) {
-    // A step of a loop: one step run per entry, so the panel says how they stand together.
+    // A step of a loop: one step run per entry, so the panel says how they stand together. Its
+    // entries say where each call went and what a published run would ask.
     return counts === undefined ? null : (
       <>
         <p>{countsLine(counts, translation, run.countsEnded) || t("workflows.panel.notReached")}</p>
         <p className="text-caption text-muted-foreground">{t("workflows.panel.perEntry")}</p>
+        {run.liveOnce === undefined ? null : <LiveOnce control={run.liveOnce} />}
       </>
     );
   }
@@ -361,6 +368,11 @@ function StepRunDetails({
           </KeyValue>
         )}
         {took === undefined ? null : <KeyValue label={t("workflows.panel.took")}>{took}</KeyValue>}
+        {stepRun.target === undefined ? null : (
+          <KeyValue label={t("workflows.target.label")}>
+            <StepTargetBadge target={stepRun.target} />
+          </KeyValue>
+        )}
         {source === undefined ? null : (
           <KeyValue
             label={t(
@@ -390,12 +402,96 @@ function StepRunDetails({
         <p>{countsLine(stepRun.loop, translation, stepRun.finishedAt !== undefined)}</p>
       )}
       {stepRun.failure ? <FailureBanner failure={stepRun.failure} /> : null}
-      {stepRun.output ? <OutputPreview output={stepRun.output} /> : null}
+      {stepRun.publishedWouldAsk === "approval" ? <PublishedAsksApproval /> : null}
+      {run.liveOnce === undefined ? null : <LiveOnce control={run.liveOnce} />}
+      {stepRun.target === "dry_run" ? (
+        <SimulatedOutput output={stepRun.output} />
+      ) : stepRun.output ? (
+        <OutputPreview output={stepRun.output} />
+      ) : null}
       {onOpenChild !== undefined && stepRun.childRunId !== undefined ? (
         <Button variant="outline" size="sm" className="justify-self-start" onClick={onOpenChild}>
           {t("workflows.panel.openRun")}
         </Button>
       ) : null}
     </>
+  );
+}
+
+/**
+ * Says that the test passed where a run of the published revision would stop and ask for an
+ * approval: the tester's own start was the confirmation, and a published run has nobody there.
+ */
+function PublishedAsksApproval() {
+  const { t } = useTranslation();
+  return (
+    <Banner tone="warning" layout="inline" data-published-asks="approval">
+      {t("workflows.run.publishedAsksApproval")}
+    </Banner>
+  );
+}
+
+/** What a simulated step would have done, in sentences: nothing of it was changed. */
+function SimulatedOutput({ output }: { output: WorkflowOutputPreview | undefined }) {
+  const { t } = useTranslation();
+  const call = simulatedCall(output);
+  return (
+    <section data-simulated="" className="grid min-w-0 gap-2">
+      <p>
+        {call === undefined
+          ? t("workflows.simulated.nothing")
+          : t("workflows.simulated.would", { operation: call.operation })}
+      </p>
+      {call?.wouldAsk === undefined ? null : (
+        <p className="text-caption text-muted-foreground">
+          {t(
+            call.wouldAsk === "approval"
+              ? "workflows.simulated.wouldAskApproval"
+              : "workflows.simulated.wouldAskConfirmation"
+          )}
+        </p>
+      )}
+      {call === undefined || call.values.length === 0 ? null : (
+        <KeyValueList>
+          {call.values.map(([name, value]) => (
+            <KeyValue key={name} label={name}>
+              {value}
+            </KeyValue>
+          ))}
+        </KeyValueList>
+      )}
+    </section>
+  );
+}
+
+/** "Run live once" for a step of a test run: the step runs for real in the reader's next one. */
+function LiveOnce({ control }: { control: LiveOnceControl }) {
+  const { locale, t } = useTranslation();
+  const offered = control.state === "off" || control.state === "busy" || control.state === "used";
+  return (
+    <section data-live-once={control.state} className="grid justify-items-start gap-2">
+      {control.state === "set" ? <p className="text-body">{t("workflows.liveOnce.done")}</p> : null}
+      {control.used === undefined ? null : (
+        <p className="text-body">
+          {t("workflows.liveOnce.used", { time: formatMoment(control.used.at, locale) })}
+        </p>
+      )}
+      {offered ? (
+        <>
+          <p className="text-caption text-muted-foreground">{t("workflows.liveOnce.hint")}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            loading={control.state === "busy"}
+            onClick={control.switchOn}
+          >
+            {t(
+              control.used === undefined ? "workflows.liveOnce.button" : "workflows.liveOnce.again"
+            )}
+          </Button>
+        </>
+      ) : null}
+      {control.error === undefined ? null : <InlineError>{control.error}</InlineError>}
+    </section>
   );
 }

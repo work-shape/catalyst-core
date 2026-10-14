@@ -18,6 +18,7 @@ import type {
   OperationEffect,
   OperationRunActor,
   OperationRunId,
+  OperationTarget,
   ServicePrincipalId,
   UserId,
   WorkflowManifest,
@@ -133,6 +134,12 @@ export const workflowStepRuns = pgTable(
     // Of an operation step: what its operation does and the name of what it belongs to.
     effect: text("effect").$type<OperationEffect>(),
     source: text("source"),
+    // Where its call went (ADR-0031): `live`, `test`, or `dry_run` for a simulated step of a
+    // test run. Missing on a step run a release before EW-5t wrote.
+    target: text("target").$type<OperationTarget>(),
+    // Of a step of a test run: what a run of the published revision would ask for here, where
+    // the tester's start satisfied a `confirm` (EW-5t). Only `approval`.
+    publishedWouldAsk: text("published_would_ask").$type<"approval">(),
     // Of a code step: what its container is given while it waits for the sandbox, how its
     // script ended before the engine has read that, and what the script wrote beside its result.
     staged: jsonb("staged").$type<WorkflowStagedCode>(),
@@ -147,6 +154,14 @@ export const workflowStepRuns = pgTable(
     check(
       "workflow_step_runs_status_check",
       sql`${table.status} in ('queued', 'running', 'waiting', 'done', 'failed', 'cancelled')`
+    ),
+    check(
+      "workflow_step_runs_target_check",
+      sql`${table.target} is null or ${table.target} in ('live', 'test', 'dry_run')`
+    ),
+    check(
+      "workflow_step_runs_published_would_ask_check",
+      sql`${table.publishedWouldAsk} is null or ${table.publishedWouldAsk} = 'approval'`
     ),
     check(
       "workflow_step_runs_iteration_check",

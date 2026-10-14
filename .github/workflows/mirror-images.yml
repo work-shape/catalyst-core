@@ -23,13 +23,15 @@ jobs:
   mirror:
     # A fork has no registry of this organisation to write to.
     if: github.repository == 'vivd-solutions/vivd-catalyst'
-    # The script needs skopeo, which this runner image has.
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      # GitHub's Ubuntu 24.04 image carries skopeo; Blacksmith's is not documented to.
+      - name: Skopeo
+        run: command -v skopeo || { sudo apt-get update -qq && sudo apt-get install -y -qq skopeo; }
       - name: Sign in to the registry
         env:
           TOKEN: ${{ github.token }}

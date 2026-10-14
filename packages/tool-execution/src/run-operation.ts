@@ -164,7 +164,12 @@ export async function runOperation(
         runtime
       });
       const ending = await admitAndExecute(context, surface);
-      return { ...ending, replayed: false, ...(context.unrecorded ? { unrecorded: true } : {}) };
+      return {
+        ...ending,
+        replayed: false,
+        ...(context.unrecorded ? { unrecorded: true } : {}),
+        ...(context.publishedWouldAsk ? { publishedWouldAsk: context.publishedWouldAsk } : {})
+      };
     }
     if (heldKey === undefined) break;
     const held = await deps.runs.findByIdempotencyKey({
@@ -460,6 +465,11 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return { ending: await denyRun(context, guarded.denial) };
   }
   const { policy } = guarded;
+  // A call of a test run resolves `confirm` as its tester's own call when their start was the
+  // confirmation. A run of the published revision has nobody to ask, and asks for an approval.
+  if (call.draft?.boundBy !== undefined && policy.value === "confirm") {
+    context.publishedWouldAsk = "approval";
+  }
   if (run.target === "dry_run") {
     return { ending: await simulateRun(context, policy) };
   }
@@ -473,8 +483,9 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     if (definition.secret) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }
-    // A call of a test run is held by nothing yet that could ask the principal again when it
-    // is executed. EW-5t decides how a test run waits.
+    // A call of a test run does not wait (EW-5t): nothing takes a run up again when somebody
+    // decides, and nothing could ask the principal again when the call is executed. The step
+    // is refused with the reason, so the approval gates it.
     const unavailable: OperationDenial = {
       kind: "policy",
       operation: definition.name,

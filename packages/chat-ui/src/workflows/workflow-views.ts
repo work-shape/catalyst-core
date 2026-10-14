@@ -121,7 +121,19 @@ interface WorkflowDraftView {
   revision: number;
   /** Absent before the first publish. */
   publishedRevision?: number;
+  /** What a test run of the draft asks for: the fields of the draft's inputs. */
+  testForm: StartForm;
 }
+
+/** One "Run live once" switch of the reader's, by step, and the test run that used it. */
+export interface LiveOnceSwitchView {
+  step: string;
+  switchedAt: string;
+  used?: { runId: string; at: string };
+}
+
+/** Where the call of a step went: the live asset, its test target, or nowhere (simulated). */
+export type WorkflowStepTarget = "live" | "test" | "dry_run";
 
 /** One thing the instance refuses a start for: its code and its own sentence. */
 export interface WorkflowStartIssue {
@@ -141,6 +153,8 @@ type WorkflowStepRunStatus = Exclude<WorkflowRunStatus, "limit_reached">;
  */
 export type WorkflowFailureReason =
   | "missingRight"
+  /** In a test run: the person testing lacks a right a step needs. */
+  | "testerMissingRight"
   | "policy"
   | "guardrail"
   | "needsApproval"
@@ -189,6 +203,11 @@ export interface WorkflowRunView {
   output?: WorkflowOutputPreview;
   /** The id of the revision of the definition the run started on. */
   revisionId?: string;
+  /**
+   * A test run of the draft: it acts as the person who started it, bounded by the Workflow's
+   * account, and simulates the steps that change something.
+   */
+  test: boolean;
   /** The run whose step started this one, where it is a child run. */
   parent?: { runId: string; workflowId: string };
 }
@@ -224,6 +243,13 @@ export interface WorkflowStepRunView {
   /** On the step run of an operation step: what the call does and what it belongs to. */
   effect?: "reading" | "changing";
   source?: string;
+  /** On the step run of an operation step: where its call went. */
+  target?: WorkflowStepTarget;
+  /**
+   * In a test run: the tester's start let the step run without asking, and a run of the
+   * published revision asks for an approval here.
+   */
+  publishedWouldAsk?: "approval";
   /** On the step run of a `workflow` step: the child run it started or was answered. */
   childRunId?: string;
   failure?: WorkflowFailure;

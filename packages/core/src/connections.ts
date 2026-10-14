@@ -187,6 +187,21 @@ export function egressOriginOf(target: EgressTarget): string {
 }
 
 /**
+ * The release config setting that lets a target no entry names through, as the sentence a
+ * refusal ends with: an entry under `egress.allow`, and for `https` on port 443 also
+ * `egress.allowPublicHttps`. Plain `http` needs a `private` entry.
+ */
+export function egressSettingFor(target: EgressTarget): string {
+  if (target.protocol === "https" && target.port === 443) {
+    return "An operator adds it under 'egress.allow' in release config, or allows every public HTTPS host on port 443 with 'egress.allowPublicHttps: true'";
+  }
+  if (target.protocol === "http") {
+    return "An operator adds it under 'egress.allow' in release config, with 'network: private' and its 'cidrs'";
+  }
+  return "An operator adds it under 'egress.allow' in release config";
+}
+
+/**
  * A target that passed the egress check, with the address that was checked. The connector
  * connects to `address` and nowhere else, and keeps `host` as the TLS and `Host` name.
  */

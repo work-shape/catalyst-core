@@ -97,3 +97,40 @@ export function stepOutputRows(output: WorkflowOutputPreview): StepOutputRows | 
     total: output.truncated || whole === undefined ? undefined : records.length
   };
 }
+
+/** What a simulated step of a test run would have done, as the panel says it in sentences. */
+export interface SimulatedCall {
+  operation: string;
+  /** The values it would have sent, by the operation's own field names, as text. */
+  values: readonly (readonly [string, string])[];
+  /** Whether the live call would have waited for a confirmation or for an approval. */
+  wouldAsk?: "confirmation" | "approval";
+}
+
+/**
+ * The call a simulated step would have made, read from its output: the engine answers it as
+ * `{ wouldHaveDone: { operation, input?, wouldAsk? } }`. Nothing where the preview was cut
+ * before it could be read whole, or where the output is of another shape.
+ */
+export function simulatedCall(
+  output: WorkflowOutputPreview | undefined
+): SimulatedCall | undefined {
+  if (output === undefined || output.truncated) {
+    return undefined;
+  }
+  const value = parsed(output.text);
+  const done = isRecord(value) ? value.wouldHaveDone : undefined;
+  if (!isRecord(done) || typeof done.operation !== "string") {
+    return undefined;
+  }
+  const input = isRecord(done.input) ? done.input : {};
+  const wouldAsk =
+    done.wouldAsk === "approval" || done.wouldAsk === "confirmation" ? done.wouldAsk : undefined;
+  return {
+    operation: done.operation,
+    values: Object.entries(input).map(
+      ([name, item]) => [name, typeof item === "string" ? item : JSON.stringify(item)] as const
+    ),
+    ...(wouldAsk === undefined ? {} : { wouldAsk })
+  };
+}

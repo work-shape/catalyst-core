@@ -4,9 +4,11 @@ import {
   operationDenialError,
   workflowDatasetReferenceSchema,
   workflowStepIdempotencyKey,
+  type AuthenticatedIdentity,
   type ClientInstanceId,
   type JsonObject,
   type JsonValue,
+  type OperationDraftContext,
   type OperationRunId,
   type PlatformStores,
   type WorkflowCodeOutcome,
@@ -49,6 +51,7 @@ import {
 import { resolveInput, resolveReference } from "./references";
 import { workflowRunActor } from "./run-identity";
 import { WorkflowStepFailure } from "./step-failure";
+import { testRunCall } from "./test-run";
 
 // The work of one step, without anything of it written: the engine writes how it went and
 // what follows it in one transaction of its own.
@@ -207,6 +210,26 @@ export function createStepExecutor(options: StepExecutorOptions) {
     }
   }
 
+  /**
+   * Who an operation step calls as. A run of the published revision acts as its principal; a
+   * test run of a draft acts as the person testing, bounded by the principal.
+   */
+  async function callerOf(
+    run: WorkflowRun,
+    stepRun: WorkflowStepRun
+  ): Promise<{ actor: AuthenticatedIdentity; draft?: OperationDraftContext }> {
+    if (run.mode === "test") return testRunCall(stores, run, stepRun);
+    const actor = await workflowRunActor(stores.apiAccess, run);
+    if (!actor) {
+      throw new WorkflowStepFailure(
+        "principal_inactive",
+        "The service principal the run acts as no longer exists or is disabled",
+        { systemic: true }
+      );
+    }
+    return { actor };
+  }
+
   /** Does the work of one step and writes nothing of it but the id of its Operation Run. */
   async function execute(attempt: StepAttempt): Promise<StepEnd> {
     const { run, stepRun, index, signal } = attempt;
@@ -234,21 +257,14 @@ export function createStepExecutor(options: StepExecutorOptions) {
           }
           const input = await resolveInput(scope, step.input);
           withinStepData(input, "The input of the step");
-          const actor = await workflowRunActor(stores.apiAccess, run);
-          if (!actor) {
-            throw new WorkflowStepFailure(
-              "principal_inactive",
-              "The service principal the run acts as no longer exists or is disabled",
-              { systemic: true }
-            );
-          }
+          const caller = await callerOf(run, stepRun);
           const result = await callStepOperation({
             calls: operationCalls,
             run,
             stepRun,
             operation: step.operation,
             input,
-            actor,
+            ...caller,
             signal,
             wait: {
               waitMs: limits.operationOutcomeWaitMs,
@@ -344,11 +360,19 @@ export function createStepExecutor(options: StepExecutorOptions) {
     if (stepRun.stepType !== "operation") return undefined;
     const first = await tx.operationRuns.findByIdempotencyKey({
       clientInstanceId,
-      actor: { kind: "service_principal", id: run.principal.id },
+      // A step of a test run called as the person who started it.
+      actor:
+        run.mode === "test"
+          ? { kind: run.startedBy.kind, id: run.startedBy.id }
+          : { kind: "service_principal", id: run.principal.id },
       idempotencyKey: workflowStepIdempotencyKey(stepRun.id)
     });
     if (!first) return undefined;
-    const kept = { finishedAt, operationRunId: first.id, call: { effect: first.effect } };
+    const kept = {
+      finishedAt,
+      operationRunId: first.id,
+      call: { effect: first.effect, target: first.target }
+    };
     switch (first.status) {
       case "done":
         return { ...kept, status: "done", ...(first.output ? { output: first.output.value } : {}) };
