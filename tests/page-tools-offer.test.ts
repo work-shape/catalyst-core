@@ -44,7 +44,9 @@ async function offered(input: { apps: boolean; release: string[]; registered?: s
   platform.registry([...registered.map(stand), ...platform.tools], new Set(input.release));
   const offer = await platform.conversationOffer.offerOf({
     clientInstanceId: harness.clientInstanceId,
-    conversationId: harness.conversation.id
+    conversationId: harness.conversation.id,
+    // An agent that lists none of the platform's tools: the Page tools are no part of that gate.
+    agentToolNames: []
   });
   return offer?.toolNames ?? [];
 }

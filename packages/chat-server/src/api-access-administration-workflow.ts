@@ -146,7 +146,8 @@ export class ApiAccessAdministrationWorkflow {
       displayLabel: command.displayLabel,
       description: command.description,
       status: command.status,
-      permissions: command.permissions
+      permissions: command.permissions,
+      grantedBy: asUserId(context.actor.id)
     });
     await this.recordPrincipalMutation(context, "api_access.service_principal_updated", principal);
     return this.detail(principal);

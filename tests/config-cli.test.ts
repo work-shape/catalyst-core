@@ -671,10 +671,10 @@ skills:
         {
           type: "upsert",
           kind: "skill",
-          name: "platform-guide",
+          name: "platform-docs",
           config: {
-            name: "platform-guide",
-            title: "How this platform works",
+            name: "platform-docs",
+            title: "Platform documentation",
             description: "Shipped.",
             content: "Shipped.",
             origin: "release",
@@ -747,10 +747,10 @@ skills:
       ]
     });
     expect(pruneStdout.join("")).not.toContain("crm");
-    expect(mergeStdout.join("") + pruneStdout.join("")).not.toContain("platform-guide");
+    expect(mergeStdout.join("") + pruneStdout.join("")).not.toContain("platform-docs");
     for (const [kind, name] of [
       ["connection", "crm"],
-      ["skill", "platform-guide"]
+      ["skill", "platform-docs"]
     ] as const) {
       expect(
         await fixture.store.configAssets.getConfigAsset({
@@ -2527,8 +2527,8 @@ describe("catalyst asset commands against an instance", () => {
     const t = await setupNamespaceHolder({
       furtherToolNames: ["read_skill"],
       // The CLI sends its token: the sign-in takes it beside the test header.
-      server: (stores) => ({
-        authAdapter: { ...recordAuthAdapter(stores), credentialMode: "explicit" }
+      server: () => ({
+        authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" }
       })
     });
     const cwd = await createTemporaryDirectory();

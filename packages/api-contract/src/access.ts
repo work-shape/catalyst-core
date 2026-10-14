@@ -94,9 +94,10 @@ export const effectivePermissionsSchema = z.object({
       namespace: z.string().optional(),
       /**
        * `membership`: held by being a member of the workspace the entry names, such as opening
-       * the published Apps of that workspace.
+       * the published Apps of that workspace. A legacy permission list is grant rows since AP-4
+       * and reads as `grant`.
        */
-      source: z.enum(["role", "legacy", "legacy_ref", "grant", "membership"])
+      source: z.enum(["role", "legacy_ref", "grant", "membership"])
     })
   )
 });

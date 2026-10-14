@@ -56,8 +56,8 @@ export function createProposeSkillChangeTool(options: {
         name: "asset.before_write",
         subject: { kind: "skill", name: input.skillName },
         checkable: async () => {
-          const snapshot = await options.assetSource.getSnapshot();
-          const current = snapshot.skills.find((candidate) => candidate.name === input.skillName);
+          // The skill whole: the snapshot leaves its resources out, and the guardrails read them.
+          const current = await options.assetSource.getSkill(input.skillName);
           let skill: SkillConfig;
           try {
             skill = applySkillChange(current, input.operations);
@@ -84,7 +84,8 @@ export function createProposeSkillChangeTool(options: {
           skillName: parsed.skillName,
           operations: parsed.operations
         });
-        const skill = snapshot.skills.find((candidate) => candidate.name === parsed.skillName);
+        // Whole, with its resources: the change and its base version are made from them.
+        const skill = await options.assetSource.getSkill(parsed.skillName);
         const preview = createSkillChangePreview(skill, parsed.operations);
         const payload = unknownToJsonValue({
           agentName: run.agentName,
