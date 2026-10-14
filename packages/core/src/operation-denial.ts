@@ -3,7 +3,11 @@ import { AppError } from "./errors";
 export type OperationDenial =
   | {
       kind: "forbidden";
-      action: string;
+      /**
+       * The right the caller lacks. Missing where no right opens the call: `user_only` of an
+       * operation that names no single right.
+       */
+      action?: string;
       /**
        * `holder_not_administrable`: the caller may not write a grant row for this holder,
        * whatever right it holds. A service principal writes none, and a service principal's
@@ -41,10 +45,17 @@ export type OperationDenial =
 export function operationDenialError(denial: OperationDenial): AppError {
   switch (denial.kind) {
     case "forbidden":
-      return new AppError("FORBIDDEN", denial.message ?? `Missing the right '${denial.action}'`, {
-        action: denial.action,
-        reason: denial.reason
-      });
+      return new AppError(
+        "FORBIDDEN",
+        denial.message ??
+          (denial.action === undefined
+            ? "The call is not allowed"
+            : `Missing the right '${denial.action}'`),
+        {
+          ...(denial.action === undefined ? {} : { action: denial.action }),
+          reason: denial.reason
+        }
+      );
     case "policy":
       return denial.reason === "approval_unavailable"
         ? new AppError(

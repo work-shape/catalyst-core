@@ -2176,7 +2176,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `auth: "user"`, such as `workspaces.create`, is refused to a service principal on the call
   path as its route refuses one, also where the call takes no route, as from a step of a
   Workflow. The call is denied before the operation runs, with an Operation Run that is
-  `denied` and the reason `user_only`, and the step says that only a person may call it.
+  `denied` and the reason `user_only`, and the step says that only a person may call it. Such
+  a refusal names no right where the operation names none: `action` of a forbidden denial is
+  optional, and is left out where no right opens the call.
   Before, the step's call ran into the operation and failed there.
 - **Outside hosts of an App on the viewer's own network:** `externalHosts` in `app.yaml` took a
   name under `.localhost`, `.local`, `.internal`, `.lan` or `.home.arpa`, which reaches the

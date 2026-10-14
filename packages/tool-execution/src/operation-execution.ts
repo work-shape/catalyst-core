@@ -289,7 +289,7 @@ export async function authorizeOrigin(
   if (definition.auth === "user" && isAuthenticatedServicePrincipal(call.actor)) {
     return {
       allowed: false,
-      action: definition.action ?? definition.name,
+      ...(definition.action === null ? {} : { action: definition.action }),
       reason: "user_only",
       message: `Only a person may call '${definition.name}', and a service principal is none`
     };
@@ -734,7 +734,7 @@ const forbiddenSchema = z.object({
   code: z.literal("FORBIDDEN"),
   message: z.string(),
   details: z.object({
-    action: z.string(),
+    action: z.string().optional(),
     reason: z.enum([
       "no_grant",
       "denied",

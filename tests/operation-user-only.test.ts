@@ -40,13 +40,12 @@ describe("an operation a person calls, called by a service principal", () => {
       },
       { definitions: definitions.source }
     );
-    // The policy lets the call through, and the principal holds the operation's right: it is
-    // still no person.
+    // The policy lets the call through. The operation names no right of its own: every person
+    // may call it, and the principal is still none.
     t.state.centralSettings = [
       ...t.state.centralSettings,
       { operation: "workspaces.create", value: "allow" }
     ];
-    await t.allow({ kind: "service_principal", id: t.principal.id }, "workspaces.create");
 
     const run = await t.finish((await start(t)).id);
     expect(run.status).toBe("failed");
@@ -62,8 +61,11 @@ describe("an operation a person calls, called by a service principal", () => {
     expect(calls[0]).toMatchObject({
       status: "denied",
       actor: { kind: "service_principal", id: t.principal.id },
-      error: { code: "FORBIDDEN" }
+      error: { code: "FORBIDDEN" },
+      denial: { kind: "forbidden", reason: "user_only" }
     });
+    // No right opens it, so the refusal names none.
+    expect(calls[0]?.denial).not.toHaveProperty("action");
     const workspaces = await t.call(t.root.id, "workspaces.list");
     expect(JSON.stringify(workspaces.json())).not.toContain("Made by a Workflow");
   });

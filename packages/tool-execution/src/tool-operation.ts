@@ -320,10 +320,10 @@ export function toolResultFromOperationResult(
 
 function denialText(denial: OperationDenial, names: ToolCallNames): string {
   if (denial.kind === "forbidden") {
-    if (denial.action.startsWith(AGENT_TOOL_ACTION_PREFIX)) {
+    if (denial.action?.startsWith(AGENT_TOOL_ACTION_PREFIX)) {
       return `Agent '${names.agentName}' is not allowed to use '${names.toolName}'`;
     }
-    if (denial.action.startsWith(PERMISSION_REF_ACTION_PREFIX)) {
+    if (denial.action?.startsWith(PERMISSION_REF_ACTION_PREFIX)) {
       return `User is missing permission '${denial.action.slice(PERMISSION_REF_ACTION_PREFIX.length)}'`;
     }
   }
@@ -334,7 +334,7 @@ function denialText(denial: OperationDenial, names: ToolCallNames): string {
 }
 
 const forbiddenDetailsSchema = z.object({
-  action: z.string(),
+  action: z.string().optional(),
   reason: z.enum([
     "no_grant",
     "denied",
