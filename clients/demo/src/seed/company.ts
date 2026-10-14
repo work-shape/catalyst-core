@@ -373,23 +373,26 @@ export const builder: {
       "You help Kai Berger sort his notes. Answer briefly and in the language of the question.\n",
     toolNames: ["read_skill"]
   },
-  workflow: "kai-skill-inventory"
+  workflow: "kai-client-years"
 };
 
 /**
  * The service principal the seeded Workflows run as. A run acts with its rights and with
- * nobody else's: it reads agents and skills and nothing more. `name` is what a definition
- * names under `runAs`.
+ * nobody else's: it uses the Connection `WORKFLOW_CONNECTION` and nothing more, by the one
+ * grant the seed writes for it. `name` is what a definition names under `runAs`.
  */
 export const workflowPrincipal = {
   name: "workflow-demo",
   displayLabel: "Workflow demo",
-  description: "The Workflows of the demo run as this principal. It reads agents and skills.",
-  permissions: ["config_assets.read"] as const
+  description: "The Workflows of the demo run as this principal. It reads the sample accounting.",
+  permissions: [] as const
 };
 
+/** The Connection of the demo's release config that the seeded Workflows read. */
+export const WORKFLOW_CONNECTION = "sample-accounting";
+
 /** The Workflows of the demo, each a folder under `seed/workflows` with its `workflow.yaml`. */
-export const workflows = ["agent-inventory"] as const;
+export const workflows = ["accounting-clients"] as const;
 
 /** The service principal of the config CLI, the one `catalyst-local-key` creates too. */
 export const cliPrincipal = {

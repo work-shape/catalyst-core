@@ -680,6 +680,7 @@ export class AssetDraftWorkflow {
             const gone = await remove(stores.configAssets);
             const published = target.asset?.publishedConfig;
             await onRemove({
+              clientInstanceId: this.options.clientInstanceId,
               assetId: gone.assetId,
               ...(published === undefined ? {} : { published }),
               stores

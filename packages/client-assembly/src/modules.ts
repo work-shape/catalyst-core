@@ -95,7 +95,13 @@ const appsModule = defineModule({
  */
 const connectionsModule = defineModule({
   name: "connections",
-  operations: ["connections.get", "connections.test", "connections.list_tools"],
+  operations: [
+    "connections.get",
+    "connections.test",
+    "connections.set_secret",
+    "connections.discover",
+    "connections.list_tools"
+  ],
   kinds: ["connection"],
   jobKinds: ["connection.discover"],
   ui: ["build.connections"]
@@ -203,6 +209,11 @@ export function resolveInstanceModules(
 /** What a resolve-only run prints before it ends. The release gate looks for this line. */
 const RESOLVE_ONLY_MARKER = "resolve-only: this process starts with this config";
 
+/** Whether the release gate started this process with `--resolve-only`. */
+export function isResolveOnlyRun(): boolean {
+  return process.argv.includes("--resolve-only");
+}
+
 /**
  * Ends a resolve-only run. The release gate starts every built process entry point of a
  * deployment with the argument `--resolve-only`, once per release config. The process loads
@@ -212,7 +223,7 @@ const RESOLVE_ONLY_MARKER = "resolve-only: this process starts with this config"
  * the last of those checks.
  */
 export function endResolveOnlyRun(): void {
-  if (process.argv.includes("--resolve-only")) {
+  if (isResolveOnlyRun()) {
     process.stdout.write(`${RESOLVE_ONLY_MARKER}\n`);
     process.exit(0);
   }

@@ -176,7 +176,8 @@ export const listWorkflowStepRunsQuerySchema = listQuerySchema.extend({
 /**
  * One thing a start by hand of a Workflow is refused for, under the code the refusal of the
  * start carries as its `reason`: a code of the definition (`not_supported_yet`,
- * `block_depth`, `reference_out_of_scope`, `duplicate_step_id`, `definition_invalid`) or of
+ * `block_depth`, `reference_out_of_scope`, `duplicate_step_id`, `operation_not_callable`,
+ * `definition_invalid`) or of
  * the start (`no_manual_trigger`, `inputs_unreadable`, `operation_secret`,
  * `principal_inactive`). A later engine may name further codes.
  */
