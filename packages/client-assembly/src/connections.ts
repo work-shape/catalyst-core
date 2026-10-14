@@ -184,8 +184,16 @@ async function buildInstanceConnections(
       "The address of the Platform Store could not be read as host and port, so no Connection can be told apart from it. Every 'postgres' egress target is refused on this instance. Give the database address as postgres://host:port/database"
     );
   }
+  if (config.egress.allowPublicHttps === true) {
+    // Said once, at start: the list is no longer the whole of where a Connection may go.
+    logger.warn(
+      { module: "connections" },
+      "egress.allowPublicHttps is on: a Connection may reach any https host on port 443 whose addresses are all public"
+    );
+  }
   const egress = createEgressChecker({
     allow: config.egress.allow,
+    allowPublicHttps: config.egress.allowPublicHttps === true,
     platformStore: platformStore ?? [],
     platformStoreUnknown: platformStore === undefined
   });

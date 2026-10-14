@@ -16,6 +16,7 @@ export function checkerOf(
   allow: Array<Partial<EgressAllowEntry> & { host: string }>,
   dns: Dns = {},
   further: {
+    allowPublicHttps?: boolean;
     platformStore?: { host: string; port: number }[];
     platformStoreUnknown?: boolean;
     now?: () => number;

@@ -1079,7 +1079,7 @@ Nothing returns a stored secret: no operation, route, CLI command, export, log l
 
 ### Egress
 
-`egress.allow` is the list of outside targets a Connection may reach. It is empty unless set, and an empty list refuses every target.
+`egress.allow` is the list of outside targets a Connection may reach. It is empty unless set, and an empty list refuses every target. `egress.allowPublicHttps` opens every public HTTPS host beside the list; it is off unless set.
 
 | Key        | Meaning                                                                   |
 | ---------- | ------------------------------------------------------------------------- |
@@ -1111,7 +1111,30 @@ egress:
       cidrs: ["172.28.0.0/16"]
 ```
 
-A refusal answers `egress_denied` with the host and the port, and nothing else of the address. A target outside the list is refused before its name is looked up. A host that is on the list and whose name gives no address, as with a stopped service or a resolver that is down, is refused as well and nothing is contacted, but it is not `egress_denied`: a call answers `connection_unavailable` and says that the host did not resolve, and a test of the Connection answers `unavailable`. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. A refusal that came from the resolver (a timeout, a failed lookup, no answer) is held for 5 seconds. The list is read at start: a change needs a restart.
+#### Every public HTTPS host
+
+`egress.allowPublicHttps: true` lets a Connection reach a host that no entry names, over `https` on port 443, for an instance whose administrators connect outside services themselves. The operator accepts that any administrator of the instance may then send a Connection, and its credential, to any public HTTPS service.
+
+```yaml
+egress:
+  allowPublicHttps: true
+  allow:
+    - protocol: http
+      host: mcp-internal
+      port: 8080
+      network: private
+      cidrs: ["172.28.0.0/16"]
+```
+
+- Such a target is judged as a `public` entry: every address the host answers must be public. Loopback, link-local, cloud metadata addresses, private ranges and their IPv4-mapped IPv6 forms are refused as above.
+- The instance's database host is refused on every port, by name and by address.
+- Redirects and returned download addresses are checked as new targets, and the credential still goes only to the origin it was configured for.
+- Another port, plain `http` and `postgres` still need an entry under `egress.allow`. The entries keep working beside the setting, and a private host is reached only through a `private` entry.
+- A start with the setting on logs a warning once.
+
+#### Refusals
+
+A refusal answers `egress_denied` with the host and the port, and nothing else of the address. Its message ends with the setting that would let the target through: an entry under `egress.allow`, `egress.allowPublicHttps` for `https` on port 443, a `private` entry for a host that resolves to a private address, or that no setting does, as for a link-local address or the database host. A target outside the list is refused before its name is looked up. A host that is on the list and whose name gives no address, as with a stopped service or a resolver that is down, is refused as well and nothing is contacted, but it is not `egress_denied`: a call answers `connection_unavailable` and says that the host did not resolve, and a test of the Connection answers `unavailable`. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. A refusal that came from the resolver (a timeout, a failed lookup, no answer) is held for 5 seconds. The list and `allowPublicHttps` are read at start: a change needs a restart.
 
 ## Data Stores
 
