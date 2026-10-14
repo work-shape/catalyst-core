@@ -153,6 +153,7 @@ function emittedNames(sources: readonly string[]): Set<string> {
       if (callee.name.text === "appendAuditEvent") return [{ index: 0, path: ["type"] }];
       if (callee.name.text === "check" && receiverName === "guardrails")
         return [{ index: 0, path: ["event"] }];
+      if (callee.name.text === "emit" && receiverName === "events") return [{ index: 0, path: [] }];
     }
     if (ts.isIdentifier(callee) && callee.text === "appendAuditEvent")
       return [{ index: 0, path: ["type"] }];
@@ -377,8 +378,9 @@ describe("event registry", () => {
       expect(definition.audited).toBe(true);
       expect(definition.phases).toEqual(["after"]);
     }
-    // The events added since: those of an operation's call and the questions the guardrails
-    // answer before something happens. The before-events are no audit row.
+    // The events added since: those of an operation's call, those of a draft's live-once switch,
+    // and the questions the guardrails answer before something happens. The before-events are
+    // no audit row.
     expect(
       definitions
         .filter(([, definition]) => !definition.legacy)
@@ -387,11 +389,15 @@ describe("event registry", () => {
       ["app.before_publish", false, "before"],
       ["approval_request.before_create", false, "before"],
       ["asset.before_write", false, "before"],
+      ["live_once.cleared", true, "after"],
+      ["live_once.switched_on", true, "after"],
+      ["live_once.used", true, "after"],
       ["operation.authorization_checked", true, "after"],
       ["operation.before_call", false, "before"],
       ["operation.completed", true, "after"],
       ["operation.denied", true, "after"],
       ["operation.failed", true, "after"],
+      ["operation.simulated", true, "after"],
       ["operation.started", true, "after"],
       ["workflow.before_publish", false, "before"]
     ]);

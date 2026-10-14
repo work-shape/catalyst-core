@@ -137,6 +137,7 @@ export function createWorkflowAssetKind(
         use: WORKFLOW_ACTIONS.use
       },
       lifecycle: "draft_published",
+      draftCalls: true,
       validate: () => [],
       // Asked of the Workflows a write adds or changes only, and of the revision a publish
       // names: a stored definition an earlier engine accepted never stands in the way of a

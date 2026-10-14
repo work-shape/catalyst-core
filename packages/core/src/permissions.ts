@@ -514,6 +514,34 @@ export function createActorAccess(
 }
 
 /**
+ * The rights of a call in a test run of a Workflow draft (ADR-0031): the person testing,
+ * bounded by the service principal the Workflow runs as. An action is allowed only where both
+ * hold it, so a test lends nobody the principal's grants and does not pass where the live run
+ * would fail. A refusal on the principal's side names the principal.
+ */
+export function boundedActorAccess(
+  tester: ActorAccess,
+  principal: ActorAccess,
+  boundBy: { id: string; label: string }
+): ActorAccess {
+  return {
+    authorize(action, resource) {
+      const own = tester.authorize(action, resource);
+      return own.allowed ? principal.authorize(action, resource) : own;
+    },
+    require(action, resource) {
+      tester.require(action, resource);
+      const bound = principal.authorize(action, resource);
+      if (!bound.allowed) {
+        throw operationDenialError({ kind: "forbidden", action, reason: bound.reason, boundBy });
+      }
+    },
+    holdsGrantAt: (action, scopeKinds) =>
+      tester.holdsGrantAt(action, scopeKinds) && principal.holdsGrantAt(action, scopeKinds)
+  };
+}
+
+/**
  * Loads the persisted state once per call of `forActor` and keeps nothing beyond it. Without a
  * store the holder's own record is the only source: no grant row applies and nothing reports
  * the holder inactive.

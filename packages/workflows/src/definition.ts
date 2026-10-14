@@ -429,7 +429,7 @@ export function readWorkflowManifest(text: string): WorkflowDefinitionResult {
       ]
     };
   }
-  const read = readYamlData(text, "workflow.yaml");
+  const read = readYamlData(text, "workflow.yaml", { refuseAliases: true });
   return read.ok
     ? parseWorkflowManifest(read.value)
     : { ok: false, issues: [{ path: "", message: read.issue.message }] };

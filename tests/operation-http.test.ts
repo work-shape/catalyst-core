@@ -717,6 +717,7 @@ describe("operation runs: who may read them", () => {
       clientInstanceId: asClientInstanceId("another-instance"),
       operation: "testRunChange",
       effect: "changing",
+      target: "live",
       actor: { kind: "user", id: "usr_test", label: "Test user" },
       origin: { kind: "user" },
       inputHash: "0".repeat(64),
