@@ -20,6 +20,10 @@ process.env.E2E_SECRET_STORE_KEY = e2eSecretStoreKey;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Tests are spread one by one, not file by file: the hosted check splits the suite into
+  // shards, and two files hold more than half of its time. A file whose tests depend on each
+  // other says so with `test.describe.configure({ mode: "serial" })`.
+  fullyParallel: true,
   timeout: 30_000,
   expect: {
     timeout: 10_000
