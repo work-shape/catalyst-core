@@ -680,13 +680,14 @@ describe("client instance app vertical slice", () => {
           });
         const granted = await updatePermissions([restrictedEntry, "agent_skills.approve"]);
         expect(granted.statusCode).toBe(200);
+        // The list comes back in the order of the keys: it is read from the rows (AP-4).
         expect(granted.json()).toMatchObject({
-          permissions: [restrictedEntry, "agent_skills.approve"]
+          permissions: ["agent_skills.approve", restrictedEntry]
         });
         const revoked = await updatePermissions([restrictedEntry, "!agent_skills.approve"]);
         expect(revoked.statusCode).toBe(200);
         expect(revoked.json()).toMatchObject({
-          permissions: [restrictedEntry, "!agent_skills.approve"]
+          permissions: ["!agent_skills.approve", restrictedEntry]
         });
         // Removing an existing restricted grant or denial is also a protected change.
         expect((await updatePermissions(["!agent_skills.approve"])).statusCode).toBe(403);
@@ -703,6 +704,16 @@ describe("client instance app vertical slice", () => {
           payload: { displayLabel: "New user", roles: ["user"], permissions: [permission] }
         });
         expect(newGrant.statusCode).toBe(403);
+      }
+      // An entry that is no key held no right and has no row to become (AP-4).
+      for (const entry of ["nonsense", "!agent.write", "*"]) {
+        const refused = await app.call("users.create", {
+          payload: { displayLabel: "New user", roles: ["user"], permissions: ["usage.view", entry] }
+        });
+        expect(refused.statusCode, entry).toBe(422);
+        expect(refused.json(), entry).toMatchObject({
+          error: { code: "VALIDATION_FAILED", message: `'${entry}' is not a permission` }
+        });
       }
     } finally {
       await app.close();

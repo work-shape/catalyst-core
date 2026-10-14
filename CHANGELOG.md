@@ -962,6 +962,32 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **A person's or a service principal's own rights are grant rows (AP-4):** the nine legacy
+  permission keys in the lists of users and service principals become instance-wide rows of
+  `permission_grants`, one per action a key stands for (`config_assets.write` is `agent.write`,
+  `agent.delete`, `skill.write` and `skill.delete`), an allow for `key` and a deny for `!key`.
+  Migration `0072_legacy_permission_grants` writes them with `grantedBy`
+  `legacy_permission_list`; a user whose deletion was requested gets none, an entry that is no
+  key gives none, and a row the holder already had keeps who wrote it (a `!key` still makes it a
+  deny). The evaluator no longer reads the columns `permissions`, and nothing writes them. The
+  Users and API access screens show and save the same lists, now as rows: a saved list rewrites
+  only the keys it changes, and the new rows name who saved them. A list entry that is no key is
+  refused with `422` "'…' is not a permission". **Instance > Access** no longer lists the
+  instance-wide rows of a user or a service principal, and revoking one there is refused with
+  `invalid_scope` "An instance-wide right is changed on the page of the user or the service
+  principal". `permissions.effective` names such an entry with the source `grant`; the source
+  `legacy` is gone from the contract, and the Check tab calls such a right "Given right". An API
+  key created without scopes is stored with `["*"]`; the migration gives `["*"]` to every key
+  without a list, keeps an empty list empty (it still gives nothing) and takes `*` out of a
+  list that held it (it gave nothing before and would give everything now). No user, service
+  principal or API key gains or loses a right. **Operators:** after the migration and before
+  anyone changes a right, run `node --experimental-strip-types scripts/verify-permissions.ts`
+  with `DATABASE_URL` set: it compares every holder's rights from the rows with what the columns
+  answered and exits `1` on a difference. Do not change rights while a release before this one
+  still runs beside it: that release writes the column only, and the change is not seen.
+  **Rollback:** the columns are kept for one release. Stop this release, run the script with
+  `--restore-legacy-columns`, which writes each holder's rows back into its column and `["*"]`
+  back to null, then start the earlier release. A later release drops the columns.
 - **Agents page:** a card shows the agent mark in place of the initials, the name, the default
   badge, what the agent does in two lines at most, and Start chat. Its starter prompts are no
   longer on the card; they wait in the empty chat with that agent. New agent opens its dialog

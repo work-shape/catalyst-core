@@ -21062,7 +21062,6 @@
                   "type": "string",
                   "enum": [
                     "role",
-                    "legacy",
                     "legacy_ref",
                     "grant",
                     "membership"

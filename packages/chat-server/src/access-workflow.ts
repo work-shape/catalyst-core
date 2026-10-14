@@ -314,6 +314,12 @@ export class AccessWorkflow {
       }
       requireAuthorized(authorizePrincipalHolderWrite(actor, context.access, REVOKE_OPERATION));
     }
+    if (existing.scopeKind === "instance") {
+      throw refused(
+        "invalid_scope",
+        "An instance-wide right is changed on the page of the user or the service principal"
+      );
+    }
     const revoked = await this.options.stores.access.deleteGrant({
       clientInstanceId: this.options.clientInstanceId,
       grantId
@@ -352,7 +358,10 @@ export class AccessWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       ...filter,
       excludeSuperadminHolders: !isSuperadmin(actor),
-      excludeServicePrincipalHolders: !seesPrincipals(actor, access)
+      excludeServicePrincipalHolders: !seesPrincipals(actor, access),
+      // An instance-wide right is shown and changed as the legacy list on the Users and API
+      // access screens, under their rules, until the User page shows rows one by one.
+      excludeInstanceScope: true
     });
   }
 
@@ -542,7 +551,6 @@ export class AccessWorkflow {
         id: user.id,
         clientInstanceId: user.clientInstanceId,
         roles: user.roles,
-        permissions: user.permissions,
         permissionRefs: user.permissionRefs
       };
     }
@@ -561,7 +569,6 @@ export class AccessWorkflow {
       id: principal.id,
       clientInstanceId: principal.clientInstanceId,
       roles: [],
-      permissions: principal.permissions,
       permissionRefs: principal.permissionRefs
     };
   }

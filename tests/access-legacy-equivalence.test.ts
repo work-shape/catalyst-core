@@ -1,35 +1,42 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
 import postgres from "postgres";
+import { z } from "zod";
 import { describe, expect, inject, it } from "vitest";
 import { ApiKeyAccessTokenExchange, HmacServiceAccessTokenAuthAdapter } from "@vivd-catalyst/auth";
 import {
+  LEGACY_LIST_GRANTOR,
   PERMISSIONS,
   accessHolderFromIdentity,
   asApiCredentialId,
   asClientInstanceId,
   asServicePrincipalId,
   asUserId,
+  authScopeForPermission,
   createAuthorizer,
   evaluateAccess,
   hasPermission,
-  type AuthenticatedServicePrincipal
+  legacyGrantRows,
+  type AuthenticatedServicePrincipal,
+  type PermissionGrant
 } from "@vivd-catalyst/core";
 import { migrateDatabase } from "@vivd-catalyst/postgres-store";
 import {
   LEGACY_KEYS,
   frozenCredentialPermissions,
-  frozenHasPermission,
-  frozenLegacyFunctions,
-  runVerifyPermissions
+  frozenHasPermission
 } from "../scripts/verify-permissions";
+import { migrationsUntil } from "./support/migrations-until";
 import { PostgresFixtures } from "./support/postgres-fixtures";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance } from "./support/test-instance";
+import {
+  clientInstanceId as accessClientInstanceId,
+  setupAccessInstance
+} from "./support/access-instance";
 
-// The rule of this slice: no holder gains or loses a right. The frozen copy in
-// `scripts/verify-permissions.ts` is what decided rights before the evaluator.
+// The rule of the evaluator and of AP-4: no holder gains or loses a right. The frozen copy in
+// `scripts/verify-permissions.ts` is what decided rights before the evaluator. Since AP-4 a
+// legacy list is the holder's instance-wide grant rows; `access-legacy-migration.test.ts`
+// proves the migration and the verification script over a database.
 
 const secret = "a-test-service-access-token-secret-with-enough-length";
 const clientInstanceId = asClientInstanceId("legacy-equivalence-test");
@@ -49,8 +56,18 @@ const credentialStates: Record<string, string[] | undefined> = {
   both: ["config_assets:read", "config_assets:release"],
   "the permission-name form": ["config_assets.read", "config_assets.release"],
   "a scope no principal can hold": ["config_assets:write"],
+  // Before AP-4 `*` gave nothing; the migration took it out of every list and gave `["*"]` to
+  // each credential without one, so from AP-4 it means no restriction.
   "the wildcard": ["*"]
 };
+
+/** The keys a credential's token carried before AP-4, for a list as it is written today. */
+function credentialKeysBefore(principalPermissions: string[], scopes: string[] | undefined) {
+  return frozenCredentialPermissions({
+    principalPermissions,
+    credentialScopes: scopes?.includes("*") ? undefined : scopes
+  });
+}
 
 describe("legacy equivalence: service tokens", () => {
   it("keeps the frozen key list equal to the product's", () => {
@@ -85,22 +102,26 @@ describe("legacy equivalence: service tokens", () => {
           clientInstanceId,
           correlationId: "corr_legacy_equivalence"
         });
-        const expectedKeys = frozenCredentialPermissions({
-          principalPermissions,
-          credentialScopes: scopes
-        });
+        const expectedKeys = credentialKeysBefore(principalPermissions, scopes);
         // The actor at the exchange and the actor a later request presents hold the same keys.
         expect(issued.principal.permissions, credentialState).toEqual(expectedKeys);
         expect(verified.permissions, credentialState).toEqual(expectedKeys);
 
         for (const actor of [issued.principal, verified]) {
+          // The evaluator answers the principal's rows; the credential's scopes are the gate in
+          // front of it, as a route checks them.
           const access = await authorizer.forActor(actor);
           for (const key of LEGACY_KEYS) {
             const before = frozenHasPermission({ permissions: actor.permissions }, key);
             expect(hasPermission(actor, key), `${credentialState} ${key} product copy`).toBe(
               before
             );
-            expect(access.authorize(key).allowed, `${credentialState} ${key}`).toBe(before);
+            const scope = authScopeForPermission(key);
+            const gate = scope !== undefined && actor.scopes.includes(scope);
+            expect(gate && access.authorize(key).allowed, `${credentialState} ${key}`).toBe(before);
+            expect(access.authorize(key).allowed, `${principalState} ${key} principal`).toBe(
+              frozenHasPermission({ permissions: principalPermissions }, key)
+            );
             // A credential can only narrow what its principal holds.
             if (before) expect(principalPermissions).toContain(key);
           }
@@ -152,7 +173,7 @@ describe("legacy equivalence: users", () => {
     PERMISSIONS.map((permission) => `!${permission}`)
   ];
 
-  it("answers every legacy key as before for every role set and column", () => {
+  it("answers every legacy key as before for every role set and column, from the rows the column became", () => {
     for (const roles of roleSets) {
       for (const permissions of columns) {
         const holder = accessHolderFromIdentity({
@@ -160,15 +181,25 @@ describe("legacy equivalence: users", () => {
           externalUserId: "equivalence",
           displayLabel: "Equivalence",
           roles,
-          permissions,
           permissionRefs: [],
           clientInstanceId,
           authSource: "test"
         });
+        const grants: PermissionGrant[] = legacyGrantRows(permissions).map((row, index) => ({
+          id: `grant_${index}`,
+          clientInstanceId,
+          holderKind: "user",
+          holderId: "usr_equivalence",
+          action: row.action,
+          effect: row.effect,
+          scopeKind: "instance",
+          grantedBy: asUserId(LEGACY_LIST_GRANTOR),
+          createdAt: "2026-10-14T00:00:00.000Z"
+        }));
         for (const key of LEGACY_KEYS) {
           const decision = evaluateAccess({
             holder,
-            persisted: { holderActive: true, grants: [] },
+            persisted: { holderActive: true, grants },
             action: key
           });
           expect(decision.allowed, `${roles.join("+")} [${permissions.join(",")}] ${key}`).toBe(
@@ -178,208 +209,235 @@ describe("legacy equivalence: users", () => {
       }
     }
   });
-
-  it("answers a user without the legacy column as one with an empty column", () => {
-    const holder = accessHolderFromIdentity({
-      id: "usr_equivalence",
-      externalUserId: "equivalence",
-      displayLabel: "Equivalence",
-      roles: ["user", "admin"],
-      permissionRefs: [],
-      clientInstanceId,
-      authSource: "test"
-    });
-    expect(holder.permissions).toEqual([]);
-  });
 });
 
-describe("legacy equivalence: the verification script", () => {
-  async function seedHolders() {
+describe("legacy equivalence: the lists the Users and API access screens write", () => {
+  async function rowsOf(holderId: string) {
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+    try {
+      return await sql<
+        { id: string; action: string; effect: string; scope_kind: string; granted_by: string }[]
+      >`
+        select id, action, effect, scope_kind, granted_by from permission_grants
+        where holder_id = ${holderId} order by action`;
+    } finally {
+      await sql.end();
+    }
+  }
+
+  async function columnOf(table: "product_users" | "service_principals", id: string) {
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+    try {
+      const [row] = await sql<{ permissions: string[] }[]>`
+        select permissions from ${sql(table)} where id = ${id}`;
+      return row?.permissions;
+    } finally {
+      await sql.end();
+    }
+  }
+
+  it("writes a user's list as rows, reads it back from them and leaves the column alone", async () => {
     const { stores } = await createTestInstance();
-    const admin = await stores.users.createUser({
+    const created = await stores.users.createUser({
       clientInstanceId,
-      displayLabel: "Admin",
-      roles: ["user", "admin"],
-      permissions: ["!usage.view", "config_assets.release"],
-      permissionRefs: ["demo-tools"]
-    });
-    const plain = await stores.users.createUser({
-      clientInstanceId,
-      displayLabel: "Plain",
+      displayLabel: "Listed",
       roles: ["user"],
+      permissions: ["!usage.view", "nonsense", "config_assets.release"],
+      permissionRefs: [],
+      grantedBy: asUserId("usr_boss")
+    });
+    // The rows in the order of the keys; an entry that is no key is no right.
+    expect(created.permissions).toEqual(["config_assets.release", "!usage.view"]);
+    expect(await rowsOf(created.id)).toEqual([
+      expect.objectContaining({
+        action: "assets.release",
+        effect: "allow",
+        granted_by: "usr_boss"
+      }),
+      expect.objectContaining({ action: "usage.view", effect: "deny", granted_by: "usr_boss" })
+    ]);
+    expect(await columnOf("product_users", created.id)).toEqual([]);
+    const [kept] = await rowsOf(created.id);
+
+    const updated = await stores.users.updateUser({
+      clientInstanceId,
+      userId: created.id,
+      permissions: ["config_assets.release", "audit.view"],
+      grantedBy: asUserId("usr_other")
+    });
+    expect(updated.permissions).toEqual(["config_assets.release", "audit.view"]);
+    // An unchanged key keeps its row, and who wrote it.
+    expect(await rowsOf(created.id)).toEqual([
+      kept,
+      expect.objectContaining({ action: "audit.view", effect: "allow", granted_by: "usr_other" })
+    ]);
+    expect(
+      (await stores.users.getUser({ clientInstanceId, userId: created.id }))?.permissions
+    ).toEqual(["config_assets.release", "audit.view"]);
+    expect(
+      (await stores.users.listUsers({ clientInstanceId })).find((user) => user.id === created.id)
+        ?.permissions
+    ).toEqual(["config_assets.release", "audit.view"]);
+
+    // Without a grantor the rows say they came from a list.
+    const seeded = await stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Seeded",
+      roles: ["user"],
+      permissions: ["usage.view"],
+      permissionRefs: []
+    });
+    expect(await rowsOf(seeded.id)).toEqual([
+      expect.objectContaining({ action: "usage.view", granted_by: LEGACY_LIST_GRANTOR })
+    ]);
+  });
+
+  it("keeps a row the list cannot show until the list names its key", async () => {
+    const { stores } = await createTestInstance();
+    const user = await stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Narrowed",
+      roles: ["user", "admin"],
       permissions: [],
       permissionRefs: []
     });
-    const disabled = await stores.users.createUser({
+    await stores.access.createGrant({
       clientInstanceId,
-      displayLabel: "Disabled",
-      roles: ["user", "admin", "superadmin"],
-      permissions: [],
-      permissionRefs: ["demo-tools"]
+      holderKind: "user",
+      holderId: user.id,
+      action: "skill.write",
+      effect: "deny",
+      scopeKind: "instance",
+      grantedBy: asUserId("usr_boss")
     });
-    await stores.users.updateUser({ clientInstanceId, userId: disabled.id, status: "disabled" });
-    const principal = await stores.apiAccess.createServicePrincipal({
-      clientInstanceId,
-      displayLabel: "CLI",
-      permissions: ["config_assets.read", "config_assets.release"]
-    });
-    const scoped = await stores.apiAccess.createApiCredential({
-      clientInstanceId,
-      servicePrincipalId: principal.id,
-      name: "scoped",
-      scopes: ["config_assets:read"]
-    });
-    const unscoped = await stores.apiAccess.createApiCredential({
-      clientInstanceId,
-      servicePrincipalId: principal.id,
-      name: "unscoped"
-    });
-    const revoked = await stores.apiAccess.createApiCredential({
-      clientInstanceId,
-      servicePrincipalId: principal.id,
-      name: "revoked"
-    });
-    await stores.apiAccess.revokeApiCredential({
-      clientInstanceId,
-      credentialId: revoked.credential.id
-    });
-    return { stores, admin, plain, disabled, principal, scoped, unscoped, revoked };
-  }
-
-  it("prints one line per holder and exits 0 when every right is unchanged", async () => {
-    const seeded = await seedHolders();
-    const lines: string[] = [];
-    const exitCode = await runVerifyPermissions({
-      databaseUrl: await fileTestDatabaseUrl(),
-      write: (line) => lines.push(line)
-    });
-
-    expect(exitCode).toBe(0);
-    expect(lines.at(-1)).toBe("6 holders, every right unchanged");
-    const holderLines = lines.slice(0, -1);
-    expect(holderLines).toHaveLength(6);
-    expect(holderLines.every((line) => line.startsWith("same "))).toBe(true);
-    expect(holderLines.find((line) => line.includes(`user ${seeded.admin.id} `))).toContain(
-      "keys=[agent_skills.approve,config_assets.read,config_assets.write,config_assets.release,users.manage,audit.view] refs=[demo-tools]"
-    );
-    expect(holderLines.find((line) => line.includes(`user ${seeded.plain.id} `))).toContain(
-      "keys=[] refs=[]"
-    );
-    expect(holderLines.find((line) => line.includes(`user ${seeded.disabled.id} `))).toContain(
-      "(disabled) keys=[] refs=[]"
-    );
     expect(
-      holderLines.find((line) => line.includes(`service_principal ${seeded.principal.id} `))
-    ).toContain("keys=[config_assets.read,config_assets.release]");
-    expect(
-      holderLines.find((line) => line.includes(`credential ${seeded.scoped.credential.id} `))
-    ).toContain("keys=[config_assets.read] ");
-    expect(
-      holderLines.find((line) => line.includes(`credential ${seeded.unscoped.credential.id} `))
-    ).toContain("keys=[config_assets.read,config_assets.release]");
-    expect(lines.join("\n")).not.toContain(seeded.revoked.credential.id);
-    // Nothing a line prints is a secret.
-    for (const created of [seeded.scoped, seeded.unscoped, seeded.revoked]) {
-      expect(lines.join("\n")).not.toContain(created.secret);
-    }
-  });
-
-  it("exits 1 and names the holder and the key when the frozen copy is tampered with", async () => {
-    const seeded = await seedHolders();
-    const lines: string[] = [];
-    const exitCode = await runVerifyPermissions({
-      databaseUrl: await fileTestDatabaseUrl(),
-      write: (line) => lines.push(line),
-      legacy: {
-        ...frozenLegacyFunctions,
-        hasPermission: (subject, key) =>
-          key === "audit.view" ? false : frozenHasPermission(subject, key)
-      }
+      (await stores.users.getUser({ clientInstanceId, userId: user.id }))?.permissions
+    ).toEqual([]);
+    await stores.users.updateUser({
+      clientInstanceId,
+      userId: user.id,
+      permissions: ["usage.view"],
+      grantedBy: asUserId("usr_other")
     });
-
-    expect(exitCode).toBe(1);
-    expect(lines.at(-1)).toBe("1 of 6 holders differ");
-    expect(lines.filter((line) => line.startsWith("DIFFERENT"))).toEqual([
-      expect.stringContaining(
-        `user ${seeded.admin.id} (active) keys=[agent_skills.approve,config_assets.read,config_assets.write,config_assets.release,users.manage,audit.view] refs=[demo-tools] :: audit.view: legacy false, evaluator true`
-      )
+    expect((await rowsOf(user.id)).map((row) => [row.action, row.effect])).toEqual([
+      ["skill.write", "deny"],
+      ["usage.view", "allow"]
+    ]);
+    await stores.users.updateUser({
+      clientInstanceId,
+      userId: user.id,
+      permissions: ["usage.view", "!config_assets.write"],
+      grantedBy: asUserId("usr_other")
+    });
+    expect((await rowsOf(user.id)).map((row) => [row.action, row.effect, row.granted_by])).toEqual([
+      ["agent.delete", "deny", "usr_other"],
+      ["agent.write", "deny", "usr_other"],
+      ["skill.delete", "deny", "usr_other"],
+      ["skill.write", "deny", "usr_other"],
+      ["usage.view", "allow", "usr_other"]
     ]);
   });
 
-  it("exits 1 when a tampered reference check or credential derivation disagrees", async () => {
-    await seedHolders();
-    const databaseUrl = await fileTestDatabaseUrl();
-    const refLines: string[] = [];
-    expect(
-      await runVerifyPermissions({
-        databaseUrl,
-        write: (line) => refLines.push(line),
-        legacy: { ...frozenLegacyFunctions, hasPermissionRef: () => false }
-      })
-    ).toBe(1);
-    expect(refLines.join("\n")).toContain("ref:demo-tools: legacy false, evaluator true");
-
-    // The admin, the principal and its unrestricted credential hold the release key.
-    const credentialLines: string[] = [];
-    expect(
-      await runVerifyPermissions({
-        databaseUrl,
-        write: (line) => credentialLines.push(line),
-        legacy: {
-          ...frozenLegacyFunctions,
-          hasPermission: (subject, key) =>
-            key === "config_assets.release" ? false : frozenHasPermission(subject, key)
-        }
-      })
-    ).toBe(1);
-    expect(credentialLines.at(-1)).toBe("3 of 6 holders differ");
+  it("writes a service principal's list as rows granted by whoever created or changed it", async () => {
+    const { stores } = await createTestInstance();
+    const creator = await stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Creator",
+      roles: ["user", "admin", "superadmin"],
+      permissions: [],
+      permissionRefs: []
+    });
+    const principal = await stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      displayLabel: "Release bot",
+      permissions: ["config_assets.read"],
+      createdByUserId: creator.id
+    });
+    expect(principal.permissions).toEqual(["config_assets.read"]);
+    expect((await rowsOf(principal.id)).map((row) => [row.action, row.granted_by])).toEqual([
+      ["agent.read", creator.id],
+      ["skill.read", creator.id]
+    ]);
+    const updated = await stores.apiAccess.updateServicePrincipal({
+      clientInstanceId,
+      servicePrincipalId: principal.id,
+      permissions: ["config_assets.read", "config_assets.release"],
+      grantedBy: asUserId("usr_other")
+    });
+    expect(updated.permissions).toEqual(["config_assets.read", "config_assets.release"]);
+    expect((await rowsOf(principal.id)).map((row) => [row.action, row.granted_by])).toEqual([
+      ["agent.read", creator.id],
+      ["assets.release", "usr_other"],
+      ["skill.read", creator.id]
+    ]);
+    expect(await columnOf("service_principals", principal.id)).toEqual([]);
   });
 
-  it("exits 1 once a deny row narrows a right the legacy column still grants", async () => {
-    const seeded = await seedHolders();
-    await seeded.stores.access.createGrant({
+  it('stores `["*"]` for a credential created without a list and reads it as no restriction', async () => {
+    const { stores } = await createTestInstance();
+    const principal = await stores.apiAccess.createServicePrincipal({
       clientInstanceId,
-      holderKind: "user",
-      holderId: seeded.admin.id,
-      action: "agent.write",
-      effect: "deny",
-      scopeKind: "instance",
-      grantedBy: asUserId(seeded.admin.id)
+      displayLabel: "Unrestricted",
+      permissions: ["config_assets.read"]
     });
-    const lines: string[] = [];
-    const exitCode = await runVerifyPermissions({
-      databaseUrl: await fileTestDatabaseUrl(),
-      write: (line) => lines.push(line)
+    const created = await stores.apiAccess.createApiCredential({
+      clientInstanceId,
+      servicePrincipalId: principal.id,
+      name: "unrestricted"
     });
-    expect(exitCode).toBe(1);
-    expect(lines.filter((line) => line.startsWith("DIFFERENT"))).toEqual([
-      expect.stringContaining("config_assets.write: legacy true, evaluator false")
+    expect(created.credential.scopes).toBeUndefined();
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+    try {
+      expect(
+        await sql`select scopes from api_credentials where id = ${created.credential.id}`
+      ).toEqual([{ scopes: ["*"] }]);
+    } finally {
+      await sql.end();
+    }
+  });
+});
+
+describe("legacy equivalence: the Access page leaves a legacy list alone", () => {
+  it("leaves out an instance-wide row of a legacy list and refuses to revoke it", async () => {
+    const t = await setupAccessInstance();
+    await t.stores.users.updateUser({
+      clientInstanceId: accessClientInstanceId,
+      userId: t.kai.id,
+      permissions: ["usage.view"]
+    });
+    const [row] = await t.stores.access.listGrants({
+      clientInstanceId: accessClientInstanceId,
+      holderId: t.kai.id
+    });
+    expect(row).toMatchObject({ action: "usage.view", scopeKind: "instance" });
+    const listed = z
+      .object({ items: z.array(z.object({ id: z.string() }).loose()) })
+      .parse((await t.expectOk(t.root.id, "permissions.list")).json());
+    expect(listed.items).toEqual([]);
+    const refusal = await t.expectRefused(
+      t.root.id,
+      "permissions.revoke",
+      { params: { grantId: row?.id ?? "" } },
+      { status: 422, code: "VALIDATION_FAILED", details: { reason: "invalid_scope" } }
+    );
+    expect(refusal.message).toBe(
+      "An instance-wide right is changed on the page of the user or the service principal"
+    );
+    expect(await t.stores.access.listGrants({ clientInstanceId: accessClientInstanceId })).toEqual([
+      row
     ]);
   });
 });
 
-describe("legacy equivalence: the migration", () => {
-  const migrationsDirectory = resolve("packages/postgres-store/migrations");
-  const journal: { entries: { tag: string }[] } = JSON.parse(
-    readFileSync(join(migrationsDirectory, "meta/_journal.json"), "utf8")
-  );
-  const accessMigration = journal.entries.findIndex((entry) =>
-    entry.tag.endsWith("_access_grants_namespaces")
-  );
-
+describe("legacy equivalence: the AP-1 migration", () => {
   it("leaves every user, service principal and credential row as it was", async () => {
-    expect(accessMigration).toBeGreaterThan(0);
     const fixtures = new PostgresFixtures(inject("postgresFixturePrefix"));
     const databaseUrl = await fixtures.database("legacy-equivalence:migration", false);
-    const before = mkdtempSync(join(tmpdir(), "catalyst-access-migration-"));
-    cpSync(migrationsDirectory, before, { recursive: true });
-    writeFileSync(
-      join(before, "meta/_journal.json"),
-      JSON.stringify({ ...journal, entries: journal.entries.slice(0, accessMigration) })
-    );
+    const before = migrationsUntil({ name: "access_grants_namespaces", including: false });
+    const through = migrationsUntil({ name: "access_grants_namespaces", including: true });
     const sql = postgres(databaseUrl, { max: 1, onnotice() {} });
     try {
-      await migrateDatabase({ databaseUrl, migrationsDirectory: before });
+      await migrateDatabase({ databaseUrl, migrationsDirectory: before.directory });
       await sql`
         insert into product_users (id, client_instance_id, display_label, roles, permission_refs, permissions, status, created_at, updated_at)
         values
@@ -411,8 +469,12 @@ describe("legacy equivalence: the migration", () => {
         { id: "cred_unscoped", scopes: null }
       ]);
 
-      const applied = await migrateDatabase({ databaseUrl });
-      expect(applied).toContain(journal.entries[accessMigration]?.tag);
+      // Up to and with the access migration: AP-4 later turns the lists into rows.
+      const applied = await migrateDatabase({
+        databaseUrl,
+        migrationsDirectory: through.directory
+      });
+      expect(applied).toEqual([before.tag]);
       expect(await read()).toEqual(rowsBefore);
 
       // The migration writes no row: nobody holds a grant or a Namespace through it.
@@ -423,7 +485,8 @@ describe("legacy equivalence: the migration", () => {
     } finally {
       await sql.end();
       await fixtures.drop(databaseUrl);
-      rmSync(before, { recursive: true, force: true });
+      before.remove();
+      through.remove();
     }
   });
 });

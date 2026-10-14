@@ -9,7 +9,7 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { ApiCredentialRecord, ServicePrincipalRecord } from "@vivd-catalyst/core";
+import type { ServicePrincipalRecord } from "@vivd-catalyst/core";
 import { productUsers } from "./users";
 
 export const servicePrincipals = pgTable(
@@ -60,7 +60,9 @@ export const apiCredentials = pgTable(
     name: text("name").notNull(),
     keyPrefix: text("key_prefix").notNull(),
     secretHash: text("secret_hash").notNull(),
-    scopes: jsonb("scopes").$type<ApiCredentialRecord["scopes"]>(),
+    // `["*"]` for every scope of the principal. Null only in a row a release before AP-4 wrote;
+    // the column becomes required once no supported release writes null.
+    scopes: jsonb("scopes").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),

@@ -5,6 +5,7 @@ import {
   AppError,
   isSuperadmin,
   asUserId,
+  unknownLegacyEntries,
   auditActorFromIdentity,
   auditActorFromUser,
   isAuthenticatedServicePrincipal,
@@ -120,6 +121,7 @@ export class UserAdministrationWorkflow {
       roles: command.roles,
       permissionRefs: command.permissionRefs,
       permissions: command.permissions,
+      grantedBy: asUserId(actor.id),
       status: command.status
     });
     await this.recordUserMutation(context, "user.created", created);
@@ -153,6 +155,7 @@ export class UserAdministrationWorkflow {
       roles: command.roles,
       permissionRefs: command.permissionRefs,
       permissions: command.permissions,
+      grantedBy: asUserId(actor.id),
       status: command.status
     });
     await this.recordUserMutation(context, "user.updated", updated);
@@ -493,6 +496,12 @@ export class UserAdministrationWorkflow {
     permissions: readonly string[] | undefined,
     existingPermissions: readonly string[] = []
   ): void {
+    // A list entry is a key or its revocation. Anything else held no right before and has no
+    // row to be written as.
+    const [unknown] = unknownLegacyEntries(permissions ?? []);
+    if (unknown !== undefined) {
+      throw new AppError("VALIDATION_FAILED", `'${unknown}' is not a permission`);
+    }
     if (
       changedPermissionEntries(permissions, existingPermissions).includes("config_assets.release")
     ) {

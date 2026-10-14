@@ -55,6 +55,95 @@ export function legacyPermissionFor(action: PlatformAction): Permission {
   throw new AppError("VALIDATION_FAILED", `No legacy permission for action '${action}'`);
 }
 
+/**
+ * Who wrote a grant row that a legacy permission list stands for when no person did: the
+ * migration of the lists, a first sign-in whose claims bring a list, a seed.
+ */
+export const LEGACY_LIST_GRANTOR = "legacy_permission_list";
+
+/** One instance-wide row that a key of a legacy list stands for. */
+export interface LegacyGrantRow {
+  action: PlatformAction;
+  effect: PermissionGrant["effect"];
+}
+
+/** What a holder's instance-wide rows, or a legacy list, say about one key. */
+type LegacyKeyState = PermissionGrant["effect"] | "none" | "partial";
+
+type LegacyRowView = Pick<PermissionGrant, "action" | "effect" | "scopeKind">;
+
+function keyStateOfRows(rows: readonly LegacyRowView[], key: Permission): LegacyKeyState {
+  const effects = LEGACY_PERMISSION_ACTIONS[key].map(
+    (action) =>
+      rows.find((row) => row.scopeKind === "instance" && row.action === action)?.effect ?? "none"
+  );
+  const [first] = effects;
+  return first !== undefined && effects.every((effect) => effect === first) ? first : "partial";
+}
+
+/** A revocation wins over an entry of the same key, as it did in the list. */
+function keyStateOfList(entries: readonly string[], key: Permission): LegacyKeyState {
+  if (entries.includes(`!${key}`)) return "deny";
+  return entries.includes(key) ? "allow" : "none";
+}
+
+/**
+ * The legacy list a holder's instance-wide rows add up to: a key whose actions are all
+ * allowed, `!key` for one whose actions are all denied. A key whose actions differ is in
+ * neither form. The Users and API access screens read and write this list until the User
+ * page shows rows one by one.
+ */
+export function legacyPermissionList(rows: readonly LegacyRowView[]): string[] {
+  return PERMISSIONS.flatMap((key) => {
+    const state = keyStateOfRows(rows, key);
+    return state === "allow" ? [key] : state === "deny" ? [`!${key}`] : [];
+  });
+}
+
+/** The instance-wide rows a legacy list stands for, and nothing for an entry it does not know. */
+export function legacyGrantRows(entries: readonly string[]): LegacyGrantRow[] {
+  return PERMISSIONS.flatMap((key) => {
+    const state = keyStateOfList(entries, key);
+    return state === "allow" || state === "deny"
+      ? LEGACY_PERMISSION_ACTIONS[key].map((action) => ({ action, effect: state }))
+      : [];
+  });
+}
+
+/** The rows to remove and to write so that a holder's rows say what a submitted list says. */
+export interface LegacyGrantChange {
+  remove: PlatformAction[];
+  add: LegacyGrantRow[];
+}
+
+/**
+ * Changes only the keys whose state the list changes, so a row keeps who wrote it and when.
+ * A key the list does not name keeps rows whose actions differ: the list cannot show them.
+ */
+export function legacyGrantChange(
+  rows: readonly LegacyRowView[],
+  entries: readonly string[]
+): LegacyGrantChange {
+  const change: LegacyGrantChange = { remove: [], add: [] };
+  for (const key of PERMISSIONS) {
+    const before = keyStateOfRows(rows, key);
+    const after = keyStateOfList(entries, key);
+    if (before === after || (before === "partial" && after === "none")) continue;
+    change.remove.push(...LEGACY_PERMISSION_ACTIONS[key]);
+    if (after === "allow" || after === "deny") {
+      change.add.push(
+        ...LEGACY_PERMISSION_ACTIONS[key].map((action) => ({ action, effect: after }))
+      );
+    }
+  }
+  return change;
+}
+
+/** The entries of a submitted list that are neither a key nor the revocation of one. */
+export function unknownLegacyEntries(entries: readonly string[]): string[] {
+  return entries.filter((entry) => !isPermission(entry.startsWith("!") ? entry.slice(1) : entry));
+}
+
 export const ROLE_DEFAULT_ACTIONS: Record<
   "user" | "admin" | "superadmin",
   readonly PlatformAction[]
@@ -121,7 +210,7 @@ export interface AccessResource {
  */
 export const WORKSPACE_MEMBER_ACTIONS = ["app.use"] as const satisfies readonly PlatformAction[];
 
-export type AccessSource = "role" | "legacy" | "legacy_ref" | "grant" | "membership";
+export type AccessSource = "role" | "legacy_ref" | "grant" | "membership";
 
 export type AccessDecision =
   | { allowed: true; source: AccessSource }
@@ -168,8 +257,9 @@ export { NAMESPACE_PREFIX_MAX_LENGTH, NAMESPACE_PREFIX_MIN_LENGTH, NAMESPACE_PRE
 
 /**
  * The actions a grant row can be written for, each with the scope kinds it can be written at,
- * until the slice that brings each further check. No row is written at instance scope: the
- * whole instance is a role's.
+ * until the slice that brings each further check. No grant is written at instance scope: an
+ * instance-wide row is a key of a user's or a service principal's legacy list (AP-4), written
+ * on the Users and API access screens.
  */
 export const GRANTABLE_ACTION_SCOPES = {
   "agent.read": ["namespace", "asset"],
@@ -243,14 +333,16 @@ export function isSuperadmin(subject: { roles: readonly string[] }): boolean {
   return subject.roles.includes("superadmin");
 }
 
-/** Whoever holds rights, with the three sources the holder's own record carries. */
+/**
+ * Whoever holds rights, with the two sources the holder's own record carries. A right held
+ * one by one, also one of the nine legacy keys, is a grant row: the legacy permission lists
+ * were moved into rows (AP-4) and are no source any more.
+ */
 export interface AccessHolder {
   kind: "user" | "service_principal";
   id: string;
   clientInstanceId: ClientInstanceId;
   roles: readonly string[];
-  /** The legacy column: keys, and `!key` revocations. */
-  permissions: readonly string[];
   permissionRefs: readonly string[];
 }
 
@@ -272,7 +364,6 @@ export function accessHolderFromIdentity(actor: AuthenticatedIdentity): AccessHo
       id: actor.id,
       clientInstanceId: actor.clientInstanceId,
       roles: [],
-      permissions: actor.permissions,
       permissionRefs: actor.permissionRefs
     };
   }
@@ -284,14 +375,13 @@ export function accessHolderFromIdentity(actor: AuthenticatedIdentity): AccessHo
     id: actor.id,
     clientInstanceId: actor.clientInstanceId,
     roles: actor.roles,
-    permissions: actor.permissions ?? [],
     permissionRefs: actor.permissionRefs
   };
 }
 
 /**
- * Everything the four sources say about one holder, in the order role defaults, legacy column,
- * references, grant rows. The evaluator and the effective-rights list both read this.
+ * Everything the four sources say about one holder, in the order role defaults, references,
+ * memberships, grant rows. The evaluator and the effective-rights list both read this.
  */
 export function listAccessEntries(holder: AccessHolder, persisted: PersistedAccess): AccessEntry[] {
   const entries: AccessEntry[] = [];
@@ -300,21 +390,6 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
       for (const action of ROLE_DEFAULT_ACTIONS[role]) {
         entries.push({ action, effect: "allow", scopeKind: "instance", source: "role" });
       }
-    }
-  }
-  for (const entry of holder.permissions) {
-    const revoked = entry.startsWith("!");
-    const permission = revoked ? entry.slice(1) : entry;
-    if (!isPermission(permission)) {
-      continue;
-    }
-    for (const action of LEGACY_PERMISSION_ACTIONS[permission]) {
-      entries.push({
-        action,
-        effect: revoked ? "deny" : "allow",
-        scopeKind: "instance",
-        source: "legacy"
-      });
     }
   }
   for (const permissionRef of holder.permissionRefs) {
@@ -560,6 +635,8 @@ export interface AccessAdministrationStore extends AccessStore {
     excludeSuperadminHolders?: boolean;
     /** Leaves out the rows whose holder is a service principal. */
     excludeServicePrincipalHolders?: boolean;
+    /** Leaves out the instance-wide rows, which the legacy permission lists show. */
+    excludeInstanceScope?: boolean;
     page?: StorePage;
   }): Promise<PermissionGrant[]>;
   /** Throws CONFLICT `namespace_overlap` naming the registered prefix it meets. */

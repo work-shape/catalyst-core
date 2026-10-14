@@ -561,9 +561,14 @@ export function mapUserIdentity(row: UserIdentityRow | undefined): UserIdentity 
   };
 }
 
+/**
+ * `permissions` is the user's legacy list as their instance-wide grant rows say it
+ * (`legacy-permission-lists.ts`); the column of that name is no longer read.
+ */
 export function mapUserRecord(
   row: ProductUserRow | undefined,
-  identities: UserIdentity[] = []
+  identities: UserIdentity[],
+  permissions: string[]
 ): UserRecord {
   if (!row) {
     throw new AppError("INTERNAL", "Expected user row");
@@ -575,7 +580,7 @@ export function mapUserRecord(
     email: row.email ?? undefined,
     roles: row.roles,
     permissionRefs: row.permissionRefs,
-    permissions: row.permissions,
+    permissions,
     status: row.deletionRequestedAt ? "deleting" : row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -584,7 +589,11 @@ export function mapUserRecord(
   };
 }
 
-export function mapServicePrincipal(row: ServicePrincipalRow | undefined): ServicePrincipalRecord {
+/** `permissions` is the principal's legacy list as its instance-wide grant rows say it. */
+export function mapServicePrincipal(
+  row: ServicePrincipalRow | undefined,
+  permissions: string[]
+): ServicePrincipalRecord {
   if (!row) {
     throw new AppError("INTERNAL", "Expected service principal row");
   }
@@ -596,7 +605,7 @@ export function mapServicePrincipal(row: ServicePrincipalRow | undefined): Servi
     description: row.description ?? undefined,
     status: row.status,
     permissionRefs: row.permissionRefs,
-    permissions: row.permissions,
+    permissions,
     createdByUserId: row.createdByUserId ? asUserId(row.createdByUserId) : undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -614,7 +623,9 @@ export function mapApiCredential(row: ApiCredentialRow | undefined): ApiCredenti
     servicePrincipalId: asServicePrincipalId(row.servicePrincipalId),
     name: row.name,
     keyPrefix: row.keyPrefix,
-    scopes: row.scopes ?? undefined,
+    // `*` is every scope the principal has, which a record says by leaving the list out. A
+    // list written before `*` meant that had it stripped by the migration that backfilled it.
+    scopes: row.scopes === null || row.scopes.includes("*") ? undefined : row.scopes,
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt?.toISOString(),
     revokedAt: row.revokedAt?.toISOString(),

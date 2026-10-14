@@ -17,6 +17,7 @@ import {
   type UserIdentity,
   type UserRecord,
   authenticatedUserFromRecord,
+  LEGACY_LIST_GRANTOR,
   createPlatformId,
   createUserId,
   requireUsableUser,
@@ -24,6 +25,11 @@ import {
 } from "@vivd-catalyst/core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
+import {
+  legacyPermissionListOf,
+  legacyPermissionLists,
+  writeLegacyPermissionList
+} from "./legacy-permission-lists";
 import { permissionGrants, productUsers, userIdentities } from "./schema";
 import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
 
@@ -73,7 +79,7 @@ export async function resolveUserIdentity(
       if (!user) {
         throw new AppError("INTERNAL", "User identity mapping points to a missing user");
       }
-      requireUsableUser(mapUserRecord(user).status);
+      requireUsableUser(mapUserRecord(user, [], []).status);
 
       const [updatedIdentity] = await tx
         .update(userIdentities)
@@ -134,7 +140,7 @@ export async function resolveUserIdentity(
     }
 
     // A user the session names or a verified email leads to: closed is closed on this way too.
-    if (user) requireUsableUser(mapUserRecord(user).status);
+    if (user) requireUsableUser(mapUserRecord(user, [], []).status);
 
     if (!user) {
       const [createdUser] = await tx
@@ -146,7 +152,6 @@ export async function resolveUserIdentity(
           email: input.email ?? null,
           roles: input.roles,
           permissionRefs: input.permissionRefs,
-          permissions: input.permissions,
           status: "active",
           createdAt: now,
           updatedAt: now,
@@ -154,6 +159,16 @@ export async function resolveUserIdentity(
         })
         .returning();
       user = createdUser;
+      if (createdUser) {
+        // The list the sign-in brings becomes the new user's rows; nobody granted them.
+        await writeLegacyPermissionList(tx, {
+          clientInstanceId: input.clientInstanceId,
+          holderKind: "user",
+          holderId: createdUser.id,
+          entries: input.permissions,
+          grantedBy: LEGACY_LIST_GRANTOR
+        });
+      }
     } else {
       const [updatedUser] = await tx
         .update(productUsers)
@@ -283,7 +298,14 @@ export async function listUsers(
         )
       )
     );
-  return rows.map((row) => mapUserRecord(row, identitiesForUser(row, identityRows)));
+  const lists = await legacyPermissionLists(db, {
+    clientInstanceId: input.clientInstanceId,
+    holderKind: "user",
+    holderIds: rows.map((row) => row.id)
+  });
+  return rows.map((row) =>
+    mapUserRecord(row, identitiesForUser(row, identityRows), lists.get(row.id) ?? [])
+  );
 }
 
 export async function createUser(
@@ -301,7 +323,6 @@ export async function createUser(
         email: input.email ?? null,
         roles: input.roles ?? ["user"],
         permissionRefs: input.permissionRefs ?? [],
-        permissions: input.permissions ?? [],
         status: input.status ?? "active",
         createdAt: now,
         updatedAt: now
@@ -312,7 +333,22 @@ export async function createUser(
       clientInstanceId: input.clientInstanceId,
       userId: row.id as UserRecord["id"]
     });
-    return mapUserRecord(row, []);
+    await writeLegacyPermissionList(tx, {
+      clientInstanceId: input.clientInstanceId,
+      holderKind: "user",
+      holderId: row.id,
+      entries: input.permissions ?? [],
+      grantedBy: input.grantedBy ?? LEGACY_LIST_GRANTOR
+    });
+    return mapUserRecord(
+      row,
+      [],
+      await legacyPermissionListOf(tx, {
+        clientInstanceId: input.clientInstanceId,
+        holderKind: "user",
+        holderId: row.id
+      })
+    );
   });
 }
 
@@ -370,25 +406,35 @@ export async function updateUser(
   if (input.permissionRefs !== undefined) {
     set.permissionRefs = input.permissionRefs;
   }
-  if (input.permissions !== undefined) {
-    set.permissions = input.permissions;
-  }
   if (input.status !== undefined) {
     set.status = input.status;
   }
 
-  const [row] = await db
-    .update(productUsers)
-    .set(set)
-    .where(
-      and(
-        eq(productUsers.clientInstanceId, input.clientInstanceId),
-        eq(productUsers.id, input.userId),
-        // In the statement, so a deletion requested since the caller read the user refuses too.
-        isNull(productUsers.deletionRequestedAt)
+  const row = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(productUsers)
+      .set(set)
+      .where(
+        and(
+          eq(productUsers.clientInstanceId, input.clientInstanceId),
+          eq(productUsers.id, input.userId),
+          // In the statement, so a deletion requested since the caller read the user refuses
+          // too. The row stays locked until the grant rows are written.
+          isNull(productUsers.deletionRequestedAt)
+        )
       )
-    )
-    .returning();
+      .returning();
+    if (updated && input.permissions !== undefined) {
+      await writeLegacyPermissionList(tx, {
+        clientInstanceId: input.clientInstanceId,
+        holderKind: "user",
+        holderId: updated.id,
+        entries: input.permissions,
+        grantedBy: input.grantedBy ?? LEGACY_LIST_GRANTOR
+      });
+    }
+    return updated;
+  });
   if (!row) {
     // No row matched: the user is gone, or the deletion was requested.
     await requireUserRecord(db, input.clientInstanceId, input.userId);
@@ -589,7 +635,11 @@ export async function getUserRecord(
     .where(
       and(eq(userIdentities.clientInstanceId, clientInstanceId), eq(userIdentities.userId, userId))
     );
-  return mapUserRecord(row, identityRows.map(mapUserIdentity));
+  return mapUserRecord(
+    row,
+    identityRows.map(mapUserIdentity),
+    await legacyPermissionListOf(db, { clientInstanceId, holderKind: "user", holderId: userId })
+  );
 }
 
 export async function requireUserRecord(

@@ -42,7 +42,7 @@ export interface ServiceAccessTokenOptions {
   apiAccessStore: ApiAccessStore;
 }
 
-interface EffectiveServiceGrants {
+export interface EffectiveServiceGrants {
   scopes: AuthScope[];
   permissions: string[];
 }
@@ -161,7 +161,14 @@ export function extractApiKey(headers: AuthRequestHeaders): string | undefined {
   return extractBearerToken(headers);
 }
 
-function deriveEffectiveServiceGrants(resolved: ResolvedApiCredential): EffectiveServiceGrants {
+/**
+ * The scopes a credential's token carries: those of its list that its principal's legacy keys
+ * name, or all of them for a credential without a list. The rights behind them are decided by
+ * the evaluator; this decides the credential's gate.
+ */
+export function deriveEffectiveServiceGrants(
+  resolved: ResolvedApiCredential
+): EffectiveServiceGrants {
   const principalScopes = new Map<string, string>();
   for (const permission of resolveEffectivePermissions(resolved.servicePrincipal)) {
     const scope = authScopeForPermission(permission);
