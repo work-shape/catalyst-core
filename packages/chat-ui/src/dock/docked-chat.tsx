@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
+import { PanelRight } from "lucide-react";
 import { PageHeaderShellAction, SplitHandle } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
+import { SurfaceSlot } from "../surface/surface-slot";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
 import type { WorkspaceRoute } from "../workspace/workspace-route";
 import { ChatColumn, DockHead, DockPage, DockPageAction, type ChatColumnMode } from "./chat-dock";
@@ -131,7 +133,22 @@ export function DockedPage({
         onArrived={view.arrived}
       >
         {children}
+        <DockedPageSurface />
       </DockPage>
     </PageHeaderShellAction>
+  );
+}
+
+/**
+ * What the dock's conversation opens to look at, such as a file's preview, covers the page
+ * beside the dock and leaves the conversation in view; closing it shows the page as it was.
+ */
+function DockedPageSurface() {
+  const { t } = useTranslation();
+  return (
+    <SurfaceSlot
+      covers
+      under={{ label: t("dock.showPage"), icon: <PanelRight aria-hidden="true" /> }}
+    />
   );
 }
