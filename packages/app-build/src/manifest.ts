@@ -89,13 +89,13 @@ export const pageManifestSchema = z.strictObject({
 export type PageManifest = z.infer<typeof pageManifestSchema>;
 
 // Keys that a coming part of Apps will give a meaning. Each is refused with what brings it, so
-// a manifest or an action file that names one never builds and then half works. Rights inside an
-// App are not decided yet; the `code` action, a script on the sandbox with declared reads and at
-// most one declared write, waits for its slice in the build plan.
+// a manifest or an action file that names one never builds and then half works: `rights` at the
+// top and `requires` at the top or on an action wait on rights inside Apps, which are not
+// decided yet; the `code` action with its `reads` and `writes` is APP-12 of the build plan.
 const RESERVED_RIGHTS =
-  "Rights inside an App are not decided yet and come with a later slice. An App runs with the rights of whoever looks at it.";
+  "Rights inside Apps are not yet decided, so no slice brings this key yet. An App runs with the rights of whoever looks at it.";
 const RESERVED_CODE_ACTION =
-  "A code action, with its 'reads' and 'writes', comes with a later slice. Reach a Connection through a connection action, a Data Store through an sql action, and start a Workflow through a workflow action.";
+  "A code action, with its 'reads' and 'writes', arrives with APP-12. Reach a Connection through a connection action, a Data Store through an sql action, and start a Workflow through a workflow action.";
 
 /** The keys at the top of `app.yaml` that are reserved, with why each is refused. */
 const RESERVED_MANIFEST_KEYS: Readonly<Record<string, string>> = {
@@ -104,25 +104,32 @@ const RESERVED_MANIFEST_KEYS: Readonly<Record<string, string>> = {
 };
 
 /** The keys of an action that are reserved for the `code` action. */
-const RESERVED_ACTION_KEYS = ["reads", "writes"] as const;
+const RESERVED_CODE_ACTION_KEYS = ["reads", "writes"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** One sentence that names reserved keys, and why. */
+function reservedSentence(named: readonly string[], why: string): string {
+  return `${named.join(", ")} ${named.length === 1 ? "is" : "are"} reserved. ${why}`;
+}
+
 /**
- * Why an action, as a line of the manifest or as its action file, names what only the `code`
- * action will have: the kind `code`, or `reads` or `writes`. Nothing for any other action.
+ * Why an action, as a line of the manifest or as its action file, names a reserved key: the
+ * kind `code` or its `reads` or `writes`, or `requires`. Nothing for any other action.
  */
 export function reservedActionKeyMessage(action: unknown): string | undefined {
   if (!isRecord(action)) return undefined;
-  const named = [
+  const code = [
     ...(action.kind === "code" ? ["kind: code"] : []),
-    ...RESERVED_ACTION_KEYS.filter((key) => key in action).map((key) => `'${key}'`)
+    ...RESERVED_CODE_ACTION_KEYS.filter((key) => key in action).map((key) => `'${key}'`)
   ];
-  return named.length === 0
-    ? undefined
-    : `${named.join(", ")} ${named.length === 1 ? "is" : "are"} reserved. ${RESERVED_CODE_ACTION}`;
+  const sentences = [
+    ...(code.length > 0 ? [reservedSentence(code, RESERVED_CODE_ACTION)] : []),
+    ...("requires" in action ? [reservedSentence(["'requires'"], RESERVED_RIGHTS)] : [])
+  ];
+  return sentences.length === 0 ? undefined : sentences.join(" ");
 }
 
 /** The refusals of the reserved keys a manifest names, each with what brings the key. */
@@ -134,7 +141,7 @@ function reservedManifestKeyErrors(manifest: unknown): PageBuildError[] {
           {
             file: PAGE_MANIFEST_FILE,
             code: "key_reserved" as const,
-            message: `'${key}' is reserved. ${why}`
+            message: reservedSentence([`'${key}'`], why)
           }
         ]
       : []

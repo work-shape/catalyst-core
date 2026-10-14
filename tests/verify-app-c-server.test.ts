@@ -28,7 +28,11 @@ describe("PR 69 on an instance", () => {
     return asset.publishedRevisionId;
   };
 
-  /** A direct call of the Connection as the removed route made it, held for an approval. */
+  /**
+   * A direct call of the Connection as the removed route made it, held for an approval. It is
+   * made on the registry without the App origin guard, as the release before the removal let it
+   * wait; the guard ends such a call now, when it is made and when it is executed.
+   */
   const holdLegacyDirectCall = async (app: string, revisionId: string, key: string) => {
     const kai = t.kai;
     const calls = await getTestOperationCalls(t.instance);
@@ -62,7 +66,7 @@ describe("PR 69 on an instance", () => {
           idempotencyKey: key,
           correlationId: `corr_${key}`
         },
-        calls.deps
+        { ...calls.deps, registry: calls.registry }
       );
       expect(outcome.result.status).toBe("pending_approval");
       const run = await t.runOf(outcome.run.id);
@@ -84,8 +88,7 @@ describe("PR 69 on an instance", () => {
   };
 
   // Check 46: "no Operation Run reaches the Connection" for a call of `connections.call`. A
-  // call held before the removal still reaches it when it is approved after. Decision owed:
-  // end such a call at execution, or let it go as it was asked before the removal.
+  // call held before the removal is ended when it is executed after it (manager, F1).
   it("does not carry out a held connections.call approved after the removal", async () => {
     const revision = await publishApp("legacy-held");
     await t.withRight(t.kai.id, "connection.use", { assetId: t.crm }, async () => {
@@ -93,6 +96,14 @@ describe("PR 69 on an instance", () => {
       const handed = t.handed.length;
       await approve(held.requestId);
       expect(t.handed.length, "the Connection was reached").toBe(handed);
+      expect(await t.runOf(held.runId)).toMatchObject({
+        operation: "connection.crm.write",
+        status: "failed",
+        error: {
+          code: "CONFLICT",
+          message: expect.stringContaining("connections.call was removed")
+        }
+      });
     });
   });
 

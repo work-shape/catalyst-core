@@ -9,7 +9,9 @@ An App, and a Page of a conversation, runs in a sandboxed frame without an origi
 
 The bridge protocol is version 1. Every message of either side carries `catalystBridge: 1`, and the interface drops a message without it. What this page lists is the contract an App can build on:
 
+- Version 1 is the set of messages and calls listed on this page. Further calls of the platform's bridge design, such as `storage` or `files.open`, arrive additively within version 1.
 - Changes to version 1 are additive only: a new message type, a new call of the kit, or a new optional field. An App written against version 1 keeps working.
+- A new call needs a named App that cannot be built without it. It is added as a new member, never by renaming one.
 - A breaking change, such as removing or renaming a message, a field or a call, or changing what one means, is version 2. Version 2 runs beside version 1, and the interface keeps answering version 1.
 - A kit version is frozen too. An App names the exact kit version it was built with (`kit` in `app.yaml`) and keeps loading those files.
 
@@ -21,7 +23,7 @@ The bridge protocol is version 1. Every message of either side carries `catalyst
 | `onThemeChange(callback)` | Calls back with `{ theme, mode }` whenever the colours or the mode of the interface change. Answers the function that stops it. |
 | `navigate(path)` | Tells the interface the route the App shows. |
 | `resize(height)` | Tells the interface the height of the App's content, in pixels. |
-| `actions.call(name, input?, { idempotencyKey? })` | Calls a named action of the manifest with the viewer's rights. Answers the result below, or rejects with an `AppCallError`. |
+| `actions.call(name, input?, { idempotencyKey? })` | Kit 1.1.0 and later. Calls a named action of the manifest with the viewer's rights. Answers the result below, or rejects with an `AppCallError`. |
 | `workflowRuns.get(runId)` | Reads a Workflow Run that a `workflow` action of the App started, as the viewer who started it. Kit 1.3.0 and later. |
 | `useWorkflowRun(runId)` | A React hook that reads the run every second until it ended. Kit 1.3.0 and later. |
 | `mountApp({ routeTree, element? })` | Renders a React App with its routes and the look of the interface. |
@@ -42,7 +44,7 @@ Every message after `ready` names the session the interface gave in `context`. A
 
 ### Retired: `connection_call`
 
-Kits 1.0.0 to 1.3.0 have `connections.call(connection, operation, input)`, which sends `connection_call`. The free call of a Connection from the browser was removed before version 1 was frozen. The interface answers it at once with an `action_result` whose error is `connection_call_removed`, not retryable, and whose message names the fix: an action file `actions/<name>.action.yaml` with `connection`, `operation` and `effect`, called with `actions.call('<name>', input)`. The kit source no longer has `connections.call`.
+Kits 1.1.0 to 1.3.0 have `connections.call(connection, operation, input)`, which sends `connection_call`; kit 1.0.0 had no call of a Connection, and kit 1.4.0 has none. The free call of a Connection from the browser was removed before version 1 was frozen. The interface answers it at once with an `action_result` whose error is `connection_call_removed`, not retryable, and whose message names the fix: an action file `actions/<name>.action.yaml` with `connection`, `operation` and `effect`, called with `actions.call('<name>', input)`. A call of it that waited for an approval when it was removed is ended when it is approved: it never reaches the Connection, and its run fails with the same message.
 
 ## Messages the interface sends
 

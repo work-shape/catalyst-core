@@ -56,7 +56,7 @@ export const appBridgePageMessageSchema = z.discriminatedUnion("type", [
     input: z.record(z.string(), z.unknown()),
     idempotencyKey
   }),
-  // Retired: the free call of a Connection operation that kits 1.0.0 to 1.3.0 send for
+  // Retired: the free call of a Connection operation that kits 1.1.0 to 1.3.0 send for
   // `connections.call`. It is read only to be answered with `APP_BRIDGE_CONNECTION_CALL_REMOVED`,
   // so a Page built against those kits is told the fix and does not wait for an answer.
   z.strictObject({

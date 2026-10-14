@@ -39,13 +39,13 @@ describe("the reserved keys of an App", () => {
         file: "app.yaml",
         code: "key_reserved",
         message: expect.stringMatching(
-          /^'rights' is reserved\. Rights inside an App are not decided yet and come with a later slice\./u
+          /^'rights' is reserved\. Rights inside Apps are not yet decided, so no slice brings this key yet\./u
         )
       },
       {
         file: "app.yaml",
         code: "key_reserved",
-        message: expect.stringMatching(/^'requires' is reserved\. Rights inside an App/u)
+        message: expect.stringMatching(/^'requires' is reserved\. Rights inside Apps are not yet decided/u)
       }
     ]);
     // An empty value is refused all the same: the key is what is reserved.
@@ -62,7 +62,7 @@ describe("the reserved keys of an App", () => {
         file: "actions/check.action.yaml",
         code: "key_reserved",
         message: expect.stringMatching(
-          /^kind: code, 'reads', 'writes' are reserved\. A code action, with its 'reads' and 'writes', comes with a later slice\./u
+          /^kind: code, 'reads', 'writes' are reserved\. A code action, with its 'reads' and 'writes', arrives with APP-12\./u
         )
       }
     ]);
@@ -98,6 +98,32 @@ describe("the reserved keys of an App", () => {
         message: expect.stringMatching(
           /^The action 'check': kind: code, 'writes' are reserved\. A code action/u
         )
+      }
+    ]);
+  });
+
+  it("refuses 'requires' on an action, in its file and under 'actions', as rights inside Apps", async () => {
+    const why = /'requires' is reserved\. Rights inside Apps are not yet decided/u;
+    expect(
+      await errorsOf(
+        page(
+          { connections: ["crm"] },
+          {
+            "actions/load.action.yaml":
+              "connection: crm\noperation: list\neffect: reading\nrequires: [orders.read]\n"
+          }
+        )
+      )
+    ).toEqual([
+      { file: "actions/load.action.yaml", code: "key_reserved", message: expect.stringMatching(why) }
+    ]);
+    expect(
+      await errorsOf(page({ actions: [{ name: "load", effect: "reading", requires: [] }] }))
+    ).toEqual([
+      {
+        file: "app.yaml",
+        code: "key_reserved",
+        message: expect.stringMatching(/^The action 'load': 'requires' is reserved\./u)
       }
     ]);
   });

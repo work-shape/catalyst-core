@@ -1,4 +1,4 @@
-import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
+import { APP_ASSET_KIND, APP_BRIDGE_CONNECTION_CALL_REMOVED } from "@vivd-catalyst/api-contract";
 import {
   AppError,
   CONNECTION_OPERATION_PREFIX,
@@ -14,13 +14,20 @@ import { decide } from "../asset-access";
 import { appResourceOf, authorizePublishedApp, requirePublishedRevision } from "./action-source";
 import { APP_ACTIONS } from "./app-kind";
 
-// A Connection operation whose run names an App as its origin: one a frame of an App called
-// directly before the kit's `connections.call` was removed, which may still wait for an
-// approval. The run is the Connection operation's own, so nothing of the App is in its
-// definition. The App is asked here instead, for every call whose origin names one, when a
-// call that waited for an approval is executed, where nothing of the frame is left. So an
-// App that was removed, a right on it that was taken away and a revision that was replaced
-// all end such a call before the Connection is reached.
+// A Connection operation whose run names an App as its origin. The run is the Connection
+// operation's own, so nothing of the App is in its definition. The App is asked here instead,
+// for every call whose origin names one, also when a call that waited for an approval is
+// executed, where nothing of the frame is left. So an App that was removed, a right on it that
+// was taken away and a revision that was replaced all end such a call before the Connection
+// is reached.
+//
+// A frame called a Connection operation directly through the kit's `connections.call` until
+// it was removed. A call of it that waited for an approval across the removal is ended here
+// when it is executed: it never reaches the Connection, and its run fails with the reason
+// `connection_call_removed`.
+
+/** The action name the runs of the removed `connections.call` carry in their origin. */
+const REMOVED_CONNECTION_CALL_ACTION_NAME = "connections.call";
 
 export interface AppOriginGuardDeps {
   clientInstanceId: ClientInstanceId;
@@ -56,6 +63,14 @@ async function authorizeAppOfOrigin(
       "NOT_FOUND",
       "The App this call came from no longer exists, so the call was not carried out.",
       { reason: "app_gone" },
+      { exposeMessage: true }
+    );
+  }
+  if (origin.actionName === REMOVED_CONNECTION_CALL_ACTION_NAME) {
+    throw new AppError(
+      "CONFLICT",
+      APP_BRIDGE_CONNECTION_CALL_REMOVED.message,
+      { reason: APP_BRIDGE_CONNECTION_CALL_REMOVED.code },
       { exposeMessage: true }
     );
   }
