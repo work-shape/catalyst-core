@@ -9,6 +9,15 @@ An App is a Page that is kept. An agent writes the Page's files in its execution
 
 A quick Page may show data the agent wrote into it. Live data comes through named actions: one file per action in the folder `actions/`, which the build compiles into the manifest. The browser calls an action by its name and nothing else: it never calls a Connection, a Data Store or a Workflow directly, and it never holds a key.
 
+## Preparing data scope (SCOPE-0)
+
+- Give every per-Mandant table a `NOT NULL` Mandant column, named consistently across the store (for example `mandant_nr`). A Workflow copying source data writes it on every row. Keep the key in aggregates and run history.
+- Design per-Mandant work as child runs keyed by the Mandant (EW-13). Child runs are not available yet; do not replace them with an unkeyed cross-Mandant run.
+- Every `http_api` operation for Mandant data takes the Mandant as a named parameter and returns it on every item. Keep a mapping table when source ids and Mandant numbers differ.
+- App SQL reads use the per-Mandant tables; aggregate views group by the Mandant column. Do not expose these stores through a free-SQL Knowledge Base. Named queries wait for DS-6a.
+- Reserved at save: table `scope` in `store.yaml` and config `scopes` (SCOPE-1), operation declaration `scope` (SCOPE-2), and SQL `$viewer.scope` and `$viewer.scope_all` (SCOPE-1). `$viewer.groups` is dropped and refused; the SQL parameter name `scope` is reserved too. These names grant no data access today.
+- State the demo's audience explicitly. Until data scope is enforced, every person in that audience must be allowed to see every Mandant the shared source credential can read.
+
 ## The folder
 
 ```text

@@ -88,6 +88,43 @@ describe("a Data Store on an assembled instance", () => {
     retries: world.execution.modulesStarted.jobRetries.map((retry) => retry.kind.kind)
   });
 
+  it("refuses store.yaml table scope at save with SCOPE-1 and keeps ownership scope working", async () => {
+    const world = await start(true);
+    for (const scope of ["mandant", { mandant: "mandant_nr" }, null, false]) {
+      const response = await put(world, [
+        {
+          path: "store.yaml",
+          text: `id: findings\ntables:\n  - name: findings\n    scope: ${JSON.stringify(scope)}\n`
+        }
+      ]);
+      expect(response.statusCode, response.body).toBe(422);
+      expect(response.json()).toMatchObject({
+        error: {
+          code: "VALIDATION_FAILED",
+          details: {
+            issues: expect.arrayContaining([
+              expect.objectContaining({
+                message: expect.stringMatching(/table.*scope.*SCOPE-1/u),
+                path: ["store.yaml", "tables"]
+              })
+            ])
+          }
+        }
+      });
+    }
+    expect(
+      await world.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "data_store",
+        name: "findings"
+      })
+    ).toBeUndefined();
+    expect(
+      (await put(world, [{ path: "store.yaml", text: "id: findings\nscope: instance\n" }]))
+        .statusCode
+    ).toBe(200);
+  });
+
   it("has the size ceiling and the pool cap of a store in release config, with the spec's defaults", () => {
     expect(parseClientInstanceConfig(createTestConfig()).dataStores).toEqual({
       sizeLimit: "5GB",
