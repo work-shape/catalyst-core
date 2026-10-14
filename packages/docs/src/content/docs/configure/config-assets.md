@@ -1,5 +1,5 @@
 ---
-title: Config Assets
+title: Config assets
 description: Agents, skills, Apps and guardrails live in the database; edit them in Studio, write them through the asset API, or synchronize them with the Catalyst CLI.
 ---
 
