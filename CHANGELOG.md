@@ -353,7 +353,7 @@ contain breaking changes; a patch version does not.
   1,000 rows and 1 MiB per call, `onConflict: fail | skip`, answers `inserted` and `skipped`)
   needs `data_store.insert`. `load` takes a dataset of a Workflow Run into one table in one
   transaction (at most 100,000 rows and 64 MiB per call; `key` with `onConflict: fail | skip |
-update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
+  update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
   reader never sees the table half replaced); it needs `data_store.insert`, and
   `data_store.execute` as well for `update` and `replace`. Until the datasets of Workflow Runs
   exist it answers `not_supported_yet`. `data_stores.get` (`GET /api/v1/data-stores/:store`,
@@ -1044,9 +1044,8 @@ id from config_assets where status = 'deleted')`.
   list that held it (it gave nothing before and would give everything now). An API key's
   scopes still cap its service principal: a key holds a principal's instance-wide right only
   when one of its scopes carries the legacy key behind it, one key per scope as a request read
-  it before (`governance:read` is `usage.view`). No user,
-  service principal or API key gains or loses a right. **Operators:** after the migration and before
-  anyone changes a right, run `node --experimental-strip-types scripts/verify-permissions.ts`
+  it before (`governance:read` is `usage.view`). No user, service principal or API key gains or
+  loses a right. **Operators:** after the migration and before anyone changes a right, run `node --experimental-strip-types scripts/verify-permissions.ts`
   with `DATABASE_URL` set: it compares every holder's rights from the rows with what the columns
   answered and exits `1` on a difference. Do not change rights while a release before this one
   still runs beside it: that release writes the column only, and the change is not seen.
@@ -2242,9 +2241,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   release config or an agent file now reads as plain text or is refused, as `workflow.yaml` and
   `app.yaml` already were. A file whose aliases expand past 100,000 values is refused
   (`'<file>' holds more than 100000 values once its aliases are followed
-(YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
+  (YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
   character or half of a surrogate pair is refused (`'<file>' holds a NUL character or half of a
-surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
+  surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
   to the model as the tool error `invalid_text` and stored with an empty input; before, it ended
   the whole run with `INTERNAL`. Rollback: none needed, nothing is stored differently.
 
@@ -2306,7 +2305,7 @@ surrogate pair, which cannot be stored.`). A tool call whose arguments hold eith
   `docker/vivd-client.Dockerfile`, the one `pnpm dev` starts) builds the packages that `core`,
   `config-schema` and `ui` depend on. Before, it built `core` without `asset-schemas`, the
   image built, and the UI container stopped at start with `Cannot find module
-.../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
+  .../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
   a package is missing, and `pnpm check:images` builds this image too.
 
 - **Model providers and redirects:** no model adapter follows a redirect any more. A provider
