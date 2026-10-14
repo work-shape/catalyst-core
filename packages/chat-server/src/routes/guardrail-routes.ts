@@ -8,12 +8,20 @@ import {
   type OperationResource
 } from "@vivd-catalyst/core";
 import { accessResource, decide } from "../asset-access";
+import { AssetWorkflow } from "../asset-workflow";
+import { GuardrailRunner } from "../guardrail-runner";
+import { dryRunGuardrail, guardrailUnderTrial, testGuardrail } from "../guardrail-trial";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
+/** The module whose switch turns changing assets through the asset operations on and off. */
+const ASSET_WRITE_MODULE = "assetManagement";
+
 /**
- * What a Guardrail's page reads beyond the asset: its hits. The right is the Guardrail's own
- * read right, decided on the Guardrail the call names. `name` is the one field the route reads.
+ * What a Guardrail's page does beyond the asset operations: read its hits, test a revision,
+ * count what it would have answered recently, and stop it enforcing. Each right is the
+ * Guardrail's own, decided on the Guardrail the call names: `read` for the hits, `write` for a
+ * test and a dry run, `publish` at its scope to stop it.
  */
 export function registerGuardrailRoutes(route: Route, options: ChatServerOptions): void {
   const { clientInstanceId } = options;
@@ -29,13 +37,74 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
   }
 
   /** Decided on the stored Guardrail, or on the name alone where none carries it. */
-  async function authorizeOn(access: ActorAccess, name: string): Promise<OperationAuthorization> {
+  async function authorizeOn(
+    access: ActorAccess,
+    name: string,
+    action: string = GUARDRAIL_ACTIONS.read
+  ): Promise<OperationAuthorization> {
     const asset = await stored(name);
     const resource = asset
       ? accessResource(GUARDRAIL_ASSET_KIND, name, asset.scope, asset.id)
       : { kind: GUARDRAIL_ASSET_KIND, name };
-    return decide(access, GUARDRAIL_ACTIONS.read, resource);
+    return decide(access, action, resource);
   }
+
+  async function storedOrMissing(name: string) {
+    const asset = await stored(name);
+    if (!asset) throw new AppError("NOT_FOUND", `There is no Guardrail '${name}'`);
+    return asset;
+  }
+
+  const workflow = new AssetWorkflow(options);
+  // Trials keep no hit: the runner here is never asked an event.
+  const runner = new GuardrailRunner({
+    clientInstanceId,
+    config: options.config,
+    modelGateway: options.modelGateway,
+    hits: { recordHits: () => Promise.resolve() }
+  });
+  const trialOptions = { ...options, workflow, runner };
+
+  route.operation(apiOperations["guardrails.test"], {
+    authorize: (input, { access }) => authorizeOn(access, input.name, GUARDRAIL_ACTIONS.write),
+    resource: guardrailResource,
+    async execute(input, context) {
+      const asset = await storedOrMissing(input.name);
+      const trial = await guardrailUnderTrial(options, asset, input.revision);
+      return testGuardrail(trialOptions, context, trial, input);
+    }
+  });
+
+  route.operation(apiOperations["guardrails.dry_run"], {
+    authorize: (input, { access }) => authorizeOn(access, input.name, GUARDRAIL_ACTIONS.write),
+    resource: guardrailResource,
+    async execute(input, context) {
+      const asset = await storedOrMissing(input.name);
+      const trial = await guardrailUnderTrial(options, asset, input.revision);
+      return dryRunGuardrail(
+        trialOptions,
+        context,
+        trial,
+        asset.publishedRevisionId !== undefined,
+        options.operations?.now?.() ?? new Date()
+      );
+    }
+  });
+
+  route.operation(apiOperations["guardrails.unpublish"], {
+    authorize: (input, { access }) => authorizeOn(access, input.name, GUARDRAIL_ACTIONS.publish),
+    resource: guardrailResource,
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    async execute(input, context) {
+      const asset = await storedOrMissing(input.name);
+      return workflow.drafts.unpublish(context, {
+        kind: GUARDRAIL_ASSET_KIND,
+        name: input.name,
+        ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+      });
+    }
+  });
 
   route.operation(apiOperations["guardrails.list_hits"], {
     authorize: (input, { access }) => authorizeOn(access, input.name),

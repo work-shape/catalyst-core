@@ -25,6 +25,7 @@ export type {
 } from "./connection-source";
 export { dataStoreKindOn } from "./data-store-kind";
 export { GuardrailPage } from "./guardrail-page";
+export { guardrailRunSentence, type GuardrailRunFacts } from "./guardrail-sentence";
 export type { GuardrailSource } from "./guardrail-source";
 export { dataStoreStateView, formatDataStoreSize } from "./data-store-model";
 export { DataStoreValueDialog } from "./data-store-rows";

@@ -41,6 +41,11 @@ const SettingsPageContext = createContext<SettingsPageContextValue | undefined>(
 
 export const SettingsPageProvider = SettingsPageContext.Provider;
 
+/** The settings page's context, or nothing outside one, as in a rendering of a page alone. */
+export function useOptionalSettingsPage(): SettingsPageContextValue | undefined {
+  return useContext(SettingsPageContext);
+}
+
 export function useSettingsPage(): SettingsPageContextValue {
   const value = useContext(SettingsPageContext);
   if (!value) {

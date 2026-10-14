@@ -585,6 +585,18 @@ export interface ConfigAssetStore {
     fileSetId?: FileSetId;
   }>;
   /**
+   * Takes the published pointer away: nothing of the asset is served until a revision is
+   * published again, and the draft stays as it is. Refuses with `nothing_published` where
+   * nothing is published. Answers the revision that was published.
+   */
+  unpublishConfigAsset(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name: string;
+    /** The asset whose right was checked, as in `publishConfigAssetRevision`. */
+    assetId: string;
+  }): Promise<{ revision: number }>;
+  /**
    * Moves the draft pointer back to the published revision. Refuses with `CONFLICT` when the
    * draft is not at `expectedRevision`, and with `nothing_published` before the first publish.
    */

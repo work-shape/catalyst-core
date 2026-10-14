@@ -379,7 +379,7 @@ describe("event registry", () => {
       expect(definition.phases).toEqual(["after"]);
     }
     // The events added since: those of an operation's call, those of a draft's live-once switch,
-    // and the questions the guardrails answer before something happens. The before-events are
+    // a guardrail's publish and unpublish, and the questions the guardrails answer before something happens. The before-events are
     // no audit row.
     expect(
       definitions
@@ -390,6 +390,8 @@ describe("event registry", () => {
       ["approval_request.before_create", false, "before"],
       ["asset.before_write", false, "before"],
       ["data_store.before_publish", false, "before"],
+      ["guardrail.published", true, "after"],
+      ["guardrail.unpublished", true, "after"],
       ["live_once.cleared", true, "after"],
       ["live_once.switched_on", true, "after"],
       ["live_once.used", true, "after"],

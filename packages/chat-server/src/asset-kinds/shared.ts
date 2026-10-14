@@ -129,6 +129,18 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     /** The config of that revision. */
     config: unknown;
   }): void | Promise<void>;
+  /**
+   * Throws where a write of the validated definition reaches beyond the scope that owns the
+   * asset, which only the stores can tell: a workspace guardrail whose filter names another
+   * workspace. Asked of every write through an asset operation, before it is stored.
+   */
+  assertScopedWrite?(input: {
+    clientInstanceId: ClientInstanceId;
+    scope: AssetScope;
+    name: string;
+    definition: unknown;
+    stores: PlatformStores;
+  }): Promise<void>;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
   assertInteractiveDeleteAllowed(input: { surface: AssetWriteSurface }): void;
   /**

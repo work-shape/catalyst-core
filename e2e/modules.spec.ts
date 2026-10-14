@@ -78,7 +78,7 @@ test("an operator reads the modules of the instance, in English and in German", 
   await expect(resources).toContainText("Operations: 1");
   await expect(resources).toContainText("modules.resources.enabled");
   await expect(moduleRow(page, "assetManagement")).toContainText("On");
-  await expect(moduleRow(page, "assetManagement")).toContainText("Operations: 9");
+  await expect(moduleRow(page, "assetManagement")).toContainText("Operations: 10");
   // The open platform ships no code for documents, so it cannot be on here.
   const documents = moduleRow(page, "documents");
   await expect(documents).toContainText("Off");

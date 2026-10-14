@@ -539,14 +539,19 @@ function BuildList({
                 const namespace = namespaceName(asset.namespace) ?? asset.namespace;
                 const own = entry.row?.(asset);
                 const rowText = entry.rowText?.(asset)?.trim();
+                const RowLine = entry.RowLine;
                 return (
                   <ListRow
                     key={asset.name}
                     leading={own?.leading ?? <RowMark entry={entry} title={title} />}
                     title={title}
+                    // A kind's own line is a sentence, read whole.
+                    descriptionWraps={!own && RowLine !== undefined ? "always" : false}
                     description={
                       own ? (
                         own.description
+                      ) : RowLine ? (
+                        <RowLine asset={asset} />
                       ) : (
                         <>
                           <code className="font-mono">{asset.name}</code>

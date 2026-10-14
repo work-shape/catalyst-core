@@ -8,12 +8,15 @@ import {
   removeConnection as removeReleaseAsset,
   removeGuardrailHits
 } from "./connection-fixtures";
+import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// Build > Guardrails on the instance's own answers: the list, and the page of one Guardrail
-// with its newest hits. The Guardrails are planted in the store as the release seed writes
-// them; the suite's release config names none, so nothing else checks with them.
+// Studio > Guardrails on the instance's own answers: the list, which says of each Guardrail in
+// one line when it runs, and the page of one Guardrail with its newest hits. Two Guardrails
+// are planted in the store as the release seed writes them; the suite's release config names
+// none, so nothing else checks with them. A third is written and published as an asset whose
+// filter narrows it to one workspace, which its line names.
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
@@ -65,7 +68,7 @@ function guardrail(name: string, displayName: string, outcome: "warn" | "block",
 
 // The Guardrails are of origin `release` and no release config names them, so an API process
 // that starts meanwhile deletes them: the test takes the turn of the specs that start one.
-test("Build lists the Guardrails read-only, and a Guardrail's page shows its newest hits", async ({
+test("Studio lists the Guardrails with when each runs, and a Guardrail's page shows its newest hits", async ({
   page,
   releaseConnections: _releaseConnections
 }) => {
@@ -85,6 +88,9 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
   expect(signedIn.ok()).toBe(true);
   await page.setViewportSize({ width: 1280, height: 800 });
   const main = page.getByRole("region", { name: "Studio" });
+  const workspaceName = `Kai Spezis ${suffix}`;
+  const assetGuardrail = `e2e_kai_iban_${suffix}`;
+  let assetGuardrailId: string | undefined;
 
   const shoot = async (name: string, ready: () => Promise<void>) => {
     if (!shotsDir) return;
@@ -92,6 +98,7 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
     for (const [width, height, locale, theme] of [
       [1280, 800, "en", "light"],
       [1280, 800, "en", "dark"],
+      [1280, 800, "de", "light"],
       [390, 844, "de", "light"],
       [390, 844, "de", "dark"]
     ] as const) {
@@ -110,6 +117,34 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
   try {
     await plantReleaseAsset(privacy);
     await plantReleaseAsset(tone);
+    // A guardrail written and published as an asset, narrowed to one workspace.
+    const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+      data: { name: workspaceName }
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    const workspaceId = z.object({ id: z.string() }).parse(await created.json()).id;
+    const guardrailUrl = `${apiBaseUrl}/api/v1/assets/guardrail/${assetGuardrail}`;
+    const written = await requestWithOrigin(page, "put", guardrailUrl, {
+      data: {
+        expectedRevision: null,
+        config: {
+          name: assetGuardrail,
+          displayName: "No IBAN in Kai Spezis",
+          on: "asset.before_write",
+          filter: { kind: "skill", origin: "agent", workspace: workspaceId },
+          check: { kind: "pattern", pattern: "DE\\d{20}", reason: "Skills hold no IBAN." },
+          outcome: "block"
+        }
+      }
+    });
+    expect(written.status(), await written.text()).toBe(200);
+    const published = await requestWithOrigin(page, "post", `${guardrailUrl}/publish`, {
+      data: { revision: 1 }
+    });
+    expect(published.status(), await published.text()).toBe(200);
+    assetGuardrailId = z
+      .object({ id: z.string() })
+      .parse(await (await page.request.get(guardrailUrl)).json()).id;
     await plantGuardrailHits(privacy.name, [
       {
         outcome: "block",
@@ -136,6 +171,14 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
       const toneRow = main.locator(`a[href="/build/guardrails/${tone.name}"]`);
       await expect(privacyRow).toContainText("No personal data in skills");
       await expect(privacyRow).toContainText("Blocks");
+      // Each row says when the guardrail runs, in words.
+      await expect(privacyRow).toContainText(
+        "Runs before anyone asks for an approval of the kind Skill change, instance-wide, set by the operator."
+      );
+      const assetRow = main.locator(`a[href="/build/guardrails/${assetGuardrail}"]`);
+      await expect(assetRow).toContainText(
+        `Runs before an agent saves a skill, in workspace ${workspaceName}. Checks the content for a text pattern. Blocks if the check fails.`
+      );
       await expect(toneRow).toContainText("Warns");
       await expect(main.getByRole("button", { name: /^New /u })).toHaveCount(0);
       await shoot("guardrails-list", async () => {
@@ -148,7 +191,12 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
       await expect(
         page.getByRole("heading", { name: "No personal data in skills", level: 1 })
       ).toBeVisible();
-      await expect(main.getByText("Before a request for approval is filed")).toBeVisible();
+      await expect(
+        main.getByText(
+          "Runs before anyone asks for an approval of the kind Skill change, instance-wide, set by the operator.",
+          { exact: false }
+        )
+      ).toBeVisible();
       const hits = main.locator("[data-guardrail-hit]");
       await expect(hits).toHaveCount(3);
       await expect(hits.first()).toContainText("The text names a customer and a file number.");
@@ -175,6 +223,7 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
       });
     });
   } finally {
+    if (assetGuardrailId) await removeReleaseAsset(assetGuardrailId);
     await removeGuardrailHits(privacy.name);
     await removeReleaseAsset(privacy.id);
     await removeReleaseAsset(tone.id);

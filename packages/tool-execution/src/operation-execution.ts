@@ -197,7 +197,7 @@ export interface RunContext {
     phase: "before" | "after",
     payload?: JsonObject,
     /** What a before-event's guardrails read, and the subject where it is not the call's. */
-    before?: Pick<PlatformEventContext, "checkable" | "filterBy"> & {
+    before?: Pick<PlatformEventContext, "checkable" | "filterBy" | "aboutGuardrails"> & {
       subject?: PlatformEventContext["subject"];
     }
   ): Promise<PlatformEventAnswer>;
@@ -249,7 +249,7 @@ export function createRunContext(
     asked: (events) => {
       context.beforeEvents = events;
     },
-    emit: (name, phase, payload = {}, before = {}) => {
+    emit: (name, phase, payload = {}, { subject: about, ...asked } = {}) => {
       const send = () =>
         deps.events.emit(
           name,
@@ -266,10 +266,10 @@ export function createRunContext(
             origin: call.origin,
             workspaceId: call.workspaceId,
             correlationId: call.correlationId,
-            subject: before.subject ?? subject,
+            subject: about ?? subject,
             phase,
-            ...(before.checkable ? { checkable: before.checkable } : {}),
-            ...(before.filterBy ? { filterBy: before.filterBy } : {}),
+            // What a before-event's guardrails read and narrow by, as its caller handed it.
+            ...asked,
             runtime: { deadline: input.runtime.deadline, signal: input.runtime.signal },
             ...(input.repeated ? { repeated: true } : {})
           }

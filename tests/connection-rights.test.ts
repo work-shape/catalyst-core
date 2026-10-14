@@ -123,7 +123,9 @@ describe("the vocabulary of Connection rights", () => {
       "connection.use"
     ]);
     // No workspace owns a Connection, so no right on Connections is written at workspace scope.
-    for (const action of GRANTABLE_ACTIONS) {
+    // A guardrail's publish is granted for one workspace alone.
+    expect(GRANTABLE_ACTION_SCOPES["guardrail.publish"]).toEqual(["workspace"]);
+    for (const action of GRANTABLE_ACTIONS.filter((name) => name !== "guardrail.publish")) {
       expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(["namespace", "asset"]);
     }
   });

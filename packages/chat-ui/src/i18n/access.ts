@@ -110,6 +110,16 @@ export const access = defineTranslations({
     "access.actionPublishWorkflowNote":
       "Not enough on its own today: publishing a Workflow also needs the superadmin role and the right to manage API access. For anyone else this right changes nothing yet.",
     "access.scopeWorkflow": "Workflow {name}",
+    "access.actionOnGuardrail": "{action} guardrails",
+    "access.actionPublishGuardrailDescription":
+      "Make a guardrail of this workspace enforce, or stop it. A guardrail stops other people's work in the workspace.",
+    "access.scopeGuardrail": "Guardrail {name}",
+    "access.scopeOnGuardrail": "On one guardrail",
+    "access.scopeOnGuardrailDescription": "Guardrails are granted for one workspace.",
+    "access.grantGuardrail": "Guardrail",
+    "access.chooseGuardrail": "Choose a guardrail",
+    "access.noGuardrails": "This instance has no guardrail yet.",
+    "access.guardrailsLoadFailed": "The guardrails could not be loaded.",
     "access.scopeOnWorkflow": "On one Workflow",
     "access.scopeOnWorkflowDescription": "One existing Workflow.",
     "access.grantWorkflow": "Workflow",
@@ -371,6 +381,16 @@ export const access = defineTranslations({
     "access.actionPublishWorkflowNote":
       "Reicht heute allein nicht: Einen Workflow zu veröffentlichen braucht zusätzlich die Superadmin-Rolle und das Recht, den API-Zugriff zu verwalten. Für alle anderen ändert dieses Recht noch nichts.",
     "access.scopeWorkflow": "Workflow {name}",
+    "access.actionOnGuardrail": "Leitplanken: {action}",
+    "access.actionPublishGuardrailDescription":
+      "Eine Leitplanke dieses Workspaces in Kraft setzen oder anhalten. Eine Leitplanke hält die Arbeit anderer im Workspace auf.",
+    "access.scopeGuardrail": "Leitplanke {name}",
+    "access.scopeOnGuardrail": "An einer Leitplanke",
+    "access.scopeOnGuardrailDescription": "Leitplanken werden für einen Workspace vergeben.",
+    "access.grantGuardrail": "Leitplanke",
+    "access.chooseGuardrail": "Leitplanke wählen",
+    "access.noGuardrails": "Auf dieser Instanz gibt es noch keine Leitplanke.",
+    "access.guardrailsLoadFailed": "Die Leitplanken konnten nicht geladen werden.",
     "access.scopeOnWorkflow": "An einem Workflow",
     "access.scopeOnWorkflowDescription": "Ein vorhandener Workflow.",
     "access.grantWorkflow": "Workflow",
