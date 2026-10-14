@@ -30,6 +30,11 @@ export interface AgentOpens {
   pageOf(open: AssetOpen): WorkspaceRoute | undefined;
   /** Notes a run this tab started: only such a run takes the person anywhere. */
   sent(runId: string): void;
+  /**
+   * Notes the list page whose "New" started a conversation: an open of it takes the person on
+   * from there, as from its chat route.
+   */
+  startedFrom(conversationId: string, path: string): void;
 }
 
 /**
@@ -76,6 +81,7 @@ export function useAgentOpens(input: {
   const handledOpens = useRef(new Set<string>());
   const movedRuns = useRef(new Set<string>());
   const movedTo = useRef(new Map<string, Set<string>>());
+  const startedFromPages = useRef(new Map<string, string>());
   const routeRef = useRef(route);
   useLayoutEffect(() => {
     routeRef.current = route;
@@ -93,6 +99,10 @@ export function useAgentOpens(input: {
   const sent = useCallback((runId: string) => {
     sentRuns.current.add(runId);
     liveRuns.current.add(runId);
+  }, []);
+
+  const startedFrom = useCallback((startedConversation: string, path: string) => {
+    startedFromPages.current.set(startedConversation, path);
   }, []);
 
   const pageOf = useCallback(
@@ -115,6 +125,7 @@ export function useAgentOpens(input: {
       liveRuns.current.add(runId);
     }
     const conversationMoves = movedTo.current.get(conversationId) ?? new Set<string>();
+    const newFrom = startedFromPages.current.get(conversationId);
     const plan = planOpenMoves({
       runId,
       opens: opensInRun(parts),
@@ -126,6 +137,7 @@ export function useAgentOpens(input: {
       here: routeRef.current,
       conversationId,
       movedTo: conversationMoves,
+      ...(newFrom === undefined ? {} : { startedFrom: newFrom }),
       movedInRun: movedRuns.current.has(runId)
     });
     for (const key of plan.handled) {
@@ -178,5 +190,5 @@ export function useAgentOpens(input: {
       ? undefined
       : pendingOpen({ opens: opensInRun(lastParts), storedSubject, workspaceId, here: route });
 
-  return { pending, goTo, pageOf, sent };
+  return { pending, goTo, pageOf, sent, startedFrom };
 }

@@ -1,7 +1,7 @@
 import { createContext, useContext, type MouseEvent } from "react";
 import { ArrowRight, FileText } from "lucide-react";
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
-import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import { DATA_STORE_ASSET_KIND, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { Banner, Button, RegistryIcon, TextLink, type GenericIconKey } from "@vivd-catalyst/ui";
 import { opensHere } from "../apps/app-header";
 import { AGENT_ASSET_KIND } from "../build-area/build-rights";
@@ -21,6 +21,7 @@ const SUBJECT_ICONS: Readonly<Record<string, GenericIconKey>> = {
   [WORKFLOW_ASSET_KIND]: "workflow",
   [APP_ASSET_KIND]: "app",
   [AGENT_ASSET_KIND]: "agent",
+  [DATA_STORE_ASSET_KIND]: "datastore",
   skill: "skill"
 };
 

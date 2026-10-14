@@ -1,4 +1,4 @@
-import { Play, Workflow } from "lucide-react";
+import { Play, Plus, Workflow } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import {
   Avatar,
@@ -53,6 +53,7 @@ export function WorkflowsPage() {
         now={now}
         runsAvailable={runsAvailable}
         onOpenRoute={host.showRoute}
+        {...(host.startNew ? { onNew: host.startNew } : {})}
         onStart={(workflow) => {
           setStarting(workflow);
           start.open();
@@ -70,6 +71,7 @@ export function WorkflowsPageView({
   now,
   runsAvailable,
   onOpenRoute,
+  onNew,
   onStart
 }: {
   workspaceId: string;
@@ -78,14 +80,29 @@ export function WorkflowsPageView({
   /** The instance runs Workflows: a card offers a start where the reader may make one. */
   runsAvailable: boolean;
   onOpenRoute: OpenRoute;
+  /**
+   * "New workflow": the dock opens with a conversation whose first save creates the Workflow,
+   * this text in its composer. Absent where nobody here builds one with an agent.
+   */
+  onNew?(prompt: string): void;
   onStart(workflow: WorkflowListItem): void;
 }) {
   const { t } = useTranslation();
   const rows = list.rows;
+  const newButton = onNew ? (
+    <Button onClick={() => onNew(t("workflows.newPrompt"))}>
+      <Plus aria-hidden="true" />
+      {t("workflows.new")}
+    </Button>
+  ) : undefined;
   return (
     <WorkflowsFrame label={t("workflows.title")} testId="workflows-area">
       <Page>
-        <PageHeader title={t("workflows.title")} description={t("workflows.description")} />
+        <PageHeader
+          title={t("workflows.title")}
+          description={t("workflows.description")}
+          primaryAction={newButton}
+        />
         {list.failed ? (
           <div className="mb-4">
             <LoadError onRetry={list.retry}>{t("workflows.listFailed")}</LoadError>
@@ -96,8 +113,8 @@ export function WorkflowsPageView({
             <SkeletonList rows={4} />
           )
         ) : rows.length === 0 ? (
-          <EmptyState icon={<Workflow aria-hidden="true" />}>
-            {t("workflows.emptyReadOnly")}
+          <EmptyState icon={<Workflow aria-hidden="true" />} action={newButton}>
+            {t(newButton ? "workflows.empty" : "workflows.emptyReadOnly")}
           </EmptyState>
         ) : (
           <div className="grid min-w-0 gap-4">

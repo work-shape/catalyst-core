@@ -146,6 +146,13 @@ export interface BuildSource {
   chooseScope?(scope: BuildScope): void;
   /** Whether the kind's assets are listed, read and written in the scope. */
   scoped?(kind: string): boolean;
+  /**
+   * Opens the dock with a new conversation with an agent that builds assets, `prompt` in its
+   * composer: "New" of a kind it creates goes there instead of its dialog. Its first save makes
+   * the asset owned by the conversation's workspace, the open one: absent where no such agent is
+   * offered, and where the scope is another owner, whose New keeps its dialog (WS-OWN-1a).
+   */
+  buildWithAgent?(prompt: string): void;
 }
 
 /**
@@ -154,7 +161,8 @@ export interface BuildSource {
  * asset. Nothing here reads the whole set of assets.
  */
 export function useBuildSource(): BuildSource {
-  const { apiBaseUrl, authScope, client, user, config, activeWorkspace } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, user, config, activeWorkspace, buildWithAgent } =
+    useSettingsPage();
   const { locale, t } = useTranslation();
   const queryClient = useQueryClient();
   const contextQuery = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
@@ -231,6 +239,11 @@ export function useBuildSource(): BuildSource {
       setChosenScope(buildScopeValue(next));
     },
     scoped: (kind) => scopedKinds.has(kind),
+    ...(buildWithAgent !== undefined &&
+    scope.kind === "workspace" &&
+    scope.workspaceId === activeWorkspace?.id
+      ? { buildWithAgent }
+      : {}),
     useList(kind, filter) {
       const text = filter.text.trim();
       const owner = inScope(kind);

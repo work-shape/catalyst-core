@@ -35,6 +35,12 @@ export interface SettingsPageContextValue {
   /** The person left the workspace they were changing. */
   onWorkspaceLeft(): void;
   onWorkspaceDeleted(collaborationWorkspaceId: string): void;
+  /**
+   * Opens the dock on this page with a new conversation with an agent that holds the platform's
+   * asset tools, `prompt` in its composer: a New button's way where such an agent is offered.
+   * Absent where none is: the New buttons keep their dialogs.
+   */
+  buildWithAgent?(prompt: string): void;
 }
 
 const SettingsPageContext = createContext<SettingsPageContextValue | undefined>(undefined);

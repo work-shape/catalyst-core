@@ -81,6 +81,17 @@ describe("the moves of a run's opens", () => {
     });
   });
 
+  it("moves from the list page a New button started the conversation on (NAV-2)", () => {
+    const list: WorkspaceRoute = { kind: "workflows", collaborationWorkspaceId: WS };
+    const opens = [open("workflow", "new-close", "o1")];
+    expect(plan(opens, { here: list, startedFrom: "/w/w1/workflows" })).toEqual({
+      handled: ["o1"],
+      moves: [{ page: workflowPage("new-close"), replace: false }]
+    });
+    // Without that start the list is a page the person chose.
+    expect(plan(opens, { here: list })).toEqual({ handled: ["o1"], moves: [] });
+  });
+
   it("moves nothing in a second tab, on a replayed run, or from a page the person chose", () => {
     const opens = [open("workflow", "intake", "o1")];
     for (const elsewhere of [{ sentHere: false }, { live: false }, { here: settings }]) {

@@ -111,6 +111,10 @@ export const workflows = defineTranslations({
     "workflows.edit.refused": "This workflow is not available to you for editing with the agent.",
     "workflows.edit.withAgent": "Edit with the agent",
     "workflows.emptyReadOnly": "No workflows yet. A builder of this workspace can add one.",
+    "workflows.empty":
+      "No workflows yet. Describe one to the agent, and its first save creates it.",
+    "workflows.new": "New workflow",
+    "workflows.newPrompt": "Build a new workflow that ",
     "workflows.failed": "The workflow could not be loaded.",
     "workflows.lastRun": "Last run",
     "workflows.listFailed": "The workflows could not be loaded.",
@@ -405,6 +409,10 @@ export const workflows = defineTranslations({
     "workflows.edit.withAgent": "Mit dem Agenten bearbeiten",
     "workflows.emptyReadOnly":
       "Noch keine Workflows. Wer in diesem Arbeitsbereich bauen darf, kann einen hinzufügen.",
+    "workflows.empty":
+      "Noch keine Workflows. Beschreib dem Agenten einen, und sein erstes Speichern legt ihn an.",
+    "workflows.new": "Neuer Workflow",
+    "workflows.newPrompt": "Bau einen neuen Workflow, der ",
     "workflows.failed": "Der Workflow konnte nicht geladen werden.",
     "workflows.lastRun": "Letzter Lauf",
     "workflows.listFailed": "Die Workflows konnten nicht geladen werden.",

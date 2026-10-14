@@ -32,6 +32,8 @@ export const dataStores = defineTranslations({
     "dataStores.missing": "There is no data store with the id {name}.",
     "dataStores.nearLimit":
       "This store is at 80 percent of its size limit or above. Over the limit it refuses new rows and still answers reads.",
+    "dataStores.new": "New data store",
+    "dataStores.newPrompt": "Build a new data store that holds ",
     "dataStores.nextMigration": "Next migration",
     "dataStores.notReachable": "The tables show once the store is ready.",
     "dataStores.refused": "You may not read this store.",
@@ -145,6 +147,8 @@ export const dataStores = defineTranslations({
     "dataStores.missing": "Es gibt keinen Datenspeicher mit der Kennung {name}.",
     "dataStores.nearLimit":
       "Dieser Speicher hat 80 Prozent seiner Größengrenze erreicht oder überschritten. Über der Grenze nimmt er keine neuen Zeilen an und beantwortet weiterhin Lesezugriffe.",
+    "dataStores.new": "Neuer Datenspeicher",
+    "dataStores.newPrompt": "Bau einen neuen Datenspeicher, der ",
     "dataStores.nextMigration": "Nächste Migration",
     "dataStores.notReachable": "Die Tabellen erscheinen, sobald der Speicher bereit ist.",
     "dataStores.refused": "Du darfst diesen Speicher nicht lesen.",

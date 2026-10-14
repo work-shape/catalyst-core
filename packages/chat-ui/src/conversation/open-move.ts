@@ -86,6 +86,8 @@ export function planOpenMoves(input: {
   here: WorkspaceRoute;
   conversationId: string;
   movedTo: ReadonlySet<string>;
+  /** The list page whose "New" started this conversation, by its path. */
+  startedFrom?: string;
   /** An open of this run moved the tab already. */
   movedInRun: boolean;
 }): OpenMovePlan {
@@ -115,7 +117,8 @@ export function planOpenMoves(input: {
           here,
           conversationId: input.conversationId,
           subjectPage: before === undefined ? undefined : assetPageRoute(before, input.workspaceId),
-          movedTo
+          movedTo,
+          ...(input.startedFrom === undefined ? {} : { startedFrom: input.startedFrom })
         }
       });
     // A person already on the asset's page stays where they are, without a step in the history.

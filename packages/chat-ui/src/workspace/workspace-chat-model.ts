@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   APP_ASSET_KIND,
   type AgentRunProjection,
@@ -66,7 +66,12 @@ import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
-import { agentListStatus, agentsRowShown, type AgentListStatus } from "../agents/agents-model";
+import {
+  agentListStatus,
+  agentsRowShown,
+  buildingAgentNameFor,
+  type AgentListStatus
+} from "../agents/agents-model";
 import { NO_APP_RIGHTS, appsRowShown, resolveAppRights, type AppRights } from "../apps/app-model";
 import {
   resolveWorkflowRights,
@@ -77,6 +82,7 @@ import {
 } from "../workflows/workflow-model";
 import { inboxRailEntry } from "../inbox/inbox-model";
 import type { WorkspaceRoute } from "./workspace-route";
+import { workspaceRoutePath } from "../routes";
 import { apiErrorStatus, applyFavicon, createEnvironmentDocumentTitle } from "../workspace-utils";
 import {
   agentModelSelection,
@@ -210,6 +216,12 @@ interface WorkflowsModel {
    * where the instance refuses the conversation.
    */
   editWithAgent(workflow: string): Promise<void>;
+  /**
+   * Opens the dock on the list with a new conversation with an agent that builds assets and
+   * `prompt` in its composer: its first save creates the Workflow. Absent where no agent here
+   * builds them, or the person may write no Workflow.
+   */
+  startNew?(prompt: string): void;
 }
 
 /** What the workspace knows for the Agents page. The agents themselves are the picker's. */
@@ -807,6 +819,39 @@ export function useWorkspaceChatModel({
   const { resolvedThemeMode, theme, toggleTheme, themePreference, selectThemePreference } =
     useWorkspaceTheme(config?.ui);
   const activeAgentName = activeAgentNameFor(config, selectedAgentName);
+  // A first save creates only in a conversation of the person's own: where the open workspace
+  // starts conversations its members read, no New button opens the dock.
+  const openWorkspace = collaborationWorkspace.activeCollaborationWorkspace;
+  const ownConversations =
+    openWorkspace !== undefined &&
+    (openWorkspace.kind === "personal" ||
+      openWorkspace.defaultConversationVisibility === "private");
+  const buildingAgentName = ownConversations
+    ? buildingAgentNameFor(config?.agents ?? [], activeAgentName)
+    : undefined;
+  // The list page a New button opened the dock on, until the dock's first message is sent.
+  const newStartedFrom = useRef<string | undefined>(undefined);
+
+  /**
+   * "New" on a list (NAV-2): the dock opens on the page with a new conversation with an agent
+   * that builds assets and this text in its composer. Nothing is created: the agent's first save
+   * creates the asset and takes the person to its page.
+   */
+  function startBuilding(prompt: string) {
+    if (buildingAgentName === undefined) {
+      return;
+    }
+    setSelectedAgentName(buildingAgentName);
+    draftController.setDraft(
+      { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
+      prompt
+    );
+    newStartedFrom.current = workspaceRoutePath(route);
+    dock.show(undefined);
+    setNotice(undefined);
+    chrome.requestComposerFocus();
+  }
+  const buildWithAgent = buildingAgentName === undefined ? undefined : startBuilding;
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
 
   function resetAuthenticatedWorkspaceState() {
@@ -845,7 +890,8 @@ export function useWorkspaceChatModel({
     goToDefaultChat: goToActiveCollaborationWorkspaceChat,
     showRoute: routeState.showRoute,
     onAccountDeleted: resetAuthenticatedWorkspaceState,
-    onCollaborationWorkspaceDeleted: collaborationWorkspace.collaborationWorkspaceDeleted
+    onCollaborationWorkspaceDeleted: collaborationWorkspace.collaborationWorkspaceDeleted,
+    ...(buildWithAgent === undefined ? {} : { buildWithAgent })
   });
   const canViewAdministration = controlPlane.canViewAdministration;
   const approvalPendingCountQuery = useApprovalPendingCountQuery({
@@ -1064,6 +1110,12 @@ export function useWorkspaceChatModel({
 
   function runStarted(response: StartConversationRunResponse) {
     agentOpens.sent(response.run.id);
+    // The first message of a dock a New button opened: the list stays where its opens move on.
+    const startedFrom = newStartedFrom.current;
+    if (startedFrom !== undefined && selectedConversationId === undefined) {
+      agentOpens.startedFrom(response.conversation.id, startedFrom);
+    }
+    newStartedFrom.current = undefined;
     workspaceCache.cacheRunStarted(response);
     showCreatedConversation(response.conversation, {
       replace: route.kind === "new-conversation"
@@ -1265,7 +1317,8 @@ export function useWorkspaceChatModel({
       access: workflowsOpen,
       rights: workflowRights,
       editWithAgent: (workflow) =>
-        startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow })
+        startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow }),
+      ...(buildWithAgent !== undefined && workflowRights.write ? { startNew: buildWithAgent } : {})
     },
     selectedChat: {
       client,

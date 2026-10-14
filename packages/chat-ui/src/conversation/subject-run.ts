@@ -1,5 +1,9 @@
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
-import { SUBJECT_TOOL_PREFIX, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import {
+  DATA_STORE_ASSET_KIND,
+  SUBJECT_TOOL_PREFIX,
+  WORKFLOW_ASSET_KIND
+} from "@vivd-catalyst/core";
 import { AGENT_ASSET_KIND } from "../build-area/build-rights";
 import { AGENTS_BUILD_PATH } from "../build-area/build-route";
 import { PAGE_SAVE_TOOL_NAME } from "../pages/page-save";
@@ -54,7 +58,10 @@ function answered(part: SubjectRunPart, toolName: string): Record<string, unknow
     : undefined;
 }
 
-/** One open of an asset that stood: an answer of `platform.assets.open` or of `page.save_as_app`. */
+/**
+ * One open of an asset that stood: an answer of `platform.assets.open`, of `page.save_as_app`,
+ * or of the first `platform.assets.put` of a conversation, which creates the asset it opens.
+ */
 export interface AssetOpen {
   subject: SubjectAsset;
   /** The name people read for the asset, as the answer says it. */
@@ -83,9 +90,14 @@ function assetOpenOfAnswer(
   };
 }
 
+/** The answer of a save that created the asset: the first save of a conversation opens it. */
+function createdBy(answer: Record<string, unknown> | undefined) {
+  return answer?.created === true ? answer : undefined;
+}
+
 /**
- * The open a call of `platform.assets.open` made, once it stood. The thread shows it as a line
- * of its own that leads to the asset's page.
+ * The open a call of `platform.assets.open` made, or the first save that created an asset, once
+ * it stood. The thread shows it as a line of its own that leads to the asset's page.
  */
 export function standingAssetOpen(call: {
   toolName: string;
@@ -93,16 +105,24 @@ export function standingAssetOpen(call: {
   result?: unknown;
   isError?: boolean;
 }): AssetOpen | undefined {
-  return call.toolName !== ASSET_OPEN_TOOL_NAME || call.isError === true
-    ? undefined
-    : assetOpenOfAnswer(toolAnswer(call.result), call.toolCallId);
+  if (call.isError === true) return undefined;
+  const answer = toolAnswer(call.result);
+  if (call.toolName === ASSET_OPEN_TOOL_NAME) return assetOpenOfAnswer(answer, call.toolCallId);
+  return call.toolName === ASSET_PUT_TOOL_NAME
+    ? assetOpenOfAnswer(createdBy(answer), call.toolCallId)
+    : undefined;
 }
 
-/** Every open of the run that stood, in order. A Page kept as an App opens the App. */
+/**
+ * Every open of the run that stood, in order. A Page kept as an App opens the App, and a first
+ * save opens the asset it created.
+ */
 export function opensInRun(parts: readonly SubjectRunPart[]): AssetOpen[] {
   return parts.flatMap((part) => {
     const open = assetOpenOfAnswer(
-      answered(part, ASSET_OPEN_TOOL_NAME) ?? answered(part, PAGE_SAVE_AS_APP_TOOL_NAME),
+      answered(part, ASSET_OPEN_TOOL_NAME) ??
+        answered(part, PAGE_SAVE_AS_APP_TOOL_NAME) ??
+        createdBy(answered(part, ASSET_PUT_TOOL_NAME)),
       part.toolCallId
     );
     return open === undefined ? [] : [open];
@@ -126,13 +146,15 @@ export function sameAsset(a: SubjectAsset | undefined, b: SubjectAsset | undefin
   return a !== undefined && b !== undefined && a.kind === b.kind && a.name === b.name;
 }
 
-/** The path segment of skills in Build. */
+/** The path segments of skills and Data Stores in Build. */
 const SKILLS_BUILD_PATH = "skills";
+const DATA_STORES_BUILD_PATH = "data-stores";
 const SKILL_ASSET_KIND = "skill";
 
 /**
- * The page of an asset, where its kind has one: an agent or a skill in Build, a Workflow on its
- * canvas, an App on its draft page. A Workflow and an App have their pages in a workspace.
+ * The page of an asset, where its kind has one: an agent, a skill or a Data Store in Build, a
+ * Workflow on its canvas, an App on its draft page. A Workflow and an App have their pages in a
+ * workspace.
  */
 export function assetPageRoute(
   subject: SubjectAsset,
@@ -143,6 +165,9 @@ export function assetPageRoute(
   }
   if (subject.kind === SKILL_ASSET_KIND) {
     return { kind: "build-asset", assetKind: SKILLS_BUILD_PATH, name: subject.name };
+  }
+  if (subject.kind === DATA_STORE_ASSET_KIND) {
+    return { kind: "build-asset", assetKind: DATA_STORES_BUILD_PATH, name: subject.name };
   }
   if (workspaceId === undefined) {
     return undefined;
