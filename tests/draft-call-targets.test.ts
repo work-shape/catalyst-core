@@ -112,7 +112,11 @@ describe("a call made by a draft", () => {
         input: operation === "write" ? { client: "client-anna", note: NOTE } : { text: NOTE },
         actor: identityOf(tester),
         // Each call stands for a step of a test run of its own: a switch covers one run.
-        origin: { ...workflowOrigin, workflowRunId: createPlatformId<"WorkflowRunId">("wfr") },
+        origin: {
+          kind: "workflow",
+          workflowRunId: createPlatformId<"WorkflowRunId">("wfr"),
+          stepRunId: "wfstep_test"
+        },
         correlationId: "corr_draft",
         ...(operation === "write" ? { idempotencyKey: call.key ?? crypto.randomUUID() } : {}),
         ...(call.live
