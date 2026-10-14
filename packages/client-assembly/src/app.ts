@@ -17,6 +17,7 @@ import {
   createChatServerJobs
 } from "@vivd-catalyst/chat-server";
 import type {
+  AgentToolReference,
   ChatAttachmentService,
   ChatServerOptions,
   ConfigAssetValidationRefs
@@ -82,6 +83,7 @@ import { PLATFORM_INSTRUCTIONS, agentListableToolNames } from "./platform-orient
 import { assembleModules, endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
+import { agentToolReferences } from "./tool-references";
 import { createToolDefinitions } from "./tools";
 import {
   createExecutionWorkspaceManagedObjectReader,
@@ -366,6 +368,8 @@ export async function createClientInstanceExecutionAssembly(
       modelGateway.capabilities(binding)
     )
   ];
+  // Filled once the tools below are registered, which needs what is built from here on.
+  let toolReferences: AgentToolReference[] = [];
   const configAssets: Parameters<typeof createChatServer>[0]["configAssets"] = {
     store: store.configAssets,
     source: assetSource,
@@ -377,6 +381,7 @@ export async function createClientInstanceExecutionAssembly(
       moduleKinds: moduleAssembly.assetKinds
     }),
     validationRefs,
+    tools: () => toolReferences,
     platformInstructions: PLATFORM_INSTRUCTIONS
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
@@ -460,6 +465,7 @@ export async function createClientInstanceExecutionAssembly(
     ]
   });
   assertClientAssemblyValid({ config, tools, approvalRequestHandlers: handlers, modules });
+  toolReferences = agentToolReferences(validationRefs.enabledToolNames, tools);
   const toolRegistry = platformTools.registry(tools, getEnabledToolNames(config));
   const modulesStarted = await moduleAssembly.start({
     operationCalls,

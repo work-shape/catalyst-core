@@ -183,14 +183,17 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
 
     // A tool outside the Namespace's list is refused, and the refusal stands at the tools.
     const tools = page.locator("#tools");
-    await tools.getByLabel("demo.weather_forecast", { exact: true }).check();
+    // The instance's tools stand folded under their package, each by its title.
+    await tools.locator('[data-instance-tool-group="instance"] button[aria-expanded]').click();
+    await tools.locator('[data-instance-tool-group="results"] button[aria-expanded]').click();
+    await tools.getByLabel("Weather forecast", { exact: true }).check();
     await page.getByRole("button", { name: "Create agent", exact: true }).click();
     await expect(tools.locator("[data-field-refusal]")).toHaveText(
       "The tool demo.weather_forecast is not allowed in Namespace kai-."
     );
     await expect(instructions(page)).toHaveValue("You help Kai.");
-    await tools.getByLabel("demo.weather_forecast", { exact: true }).uncheck();
-    await tools.getByLabel("show_view", { exact: true }).check();
+    await tools.getByLabel("Weather forecast", { exact: true }).uncheck();
+    await tools.getByLabel("Show inline widget", { exact: true }).check();
     await page.getByRole("button", { name: "Create agent", exact: true }).click();
     await expect(page).toHaveURL(/\/build\/agents\/kai-helper$/u);
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);

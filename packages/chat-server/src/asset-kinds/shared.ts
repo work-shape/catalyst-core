@@ -8,8 +8,10 @@ import type {
   FileSet,
   JsonObject,
   Namespace,
+  OperationEffect,
   PlatformStores,
-  RegisteredAssetKind
+  RegisteredAssetKind,
+  ToolPresentation
 } from "@vivd-catalyst/core";
 
 /** What an agent or skill definition may refer to on this instance. */
@@ -20,6 +22,15 @@ export interface ConfigAssetValidationRefs {
   fastModeModelBindingIds: string[];
   reasoningEfforts: string[];
   enabledToolNames: string[];
+}
+
+/**
+ * One tool an agent of the instance can be given, with what it tells people. `effect` is missing
+ * only for a tool the instance enables and no code registers.
+ */
+export interface AgentToolReference extends ToolPresentation {
+  name: string;
+  effect?: OperationEffect;
 }
 
 /** What the platform tells its agents before their own instructions. */

@@ -107,7 +107,7 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
       "These tools are no longer offered to this agent. The agent keeps each one until you remove it."
     );
     await expect(tools.getByRole("group", { name: "Instance tools", exact: true })).toContainText(
-      "Tools this instance provides itself."
+      "What this instance lets an agent do, by package."
     );
 
     await box.click();

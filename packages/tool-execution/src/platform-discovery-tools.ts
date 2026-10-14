@@ -130,6 +130,13 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
   return [
     defineTool({
       name: context.name,
+      title: { en: "Read platform context", de: "Plattform-Kontext lesen" },
+      summary: {
+        en: "Reads which modules are on and what the user may do on this instance.",
+        de: "Liest, welche Module an sind und was die Person auf dieser Instanz darf."
+      },
+      group: "platform",
+      icon: "guide",
       effect: context.effect,
       description: [
         "Read what this instance can do and what the user may do on it: the modules that are on, the kinds of asset that exist (agent, skill, workflow, app, data_store, knowledge_base, connection, as far as they are on), and the user's rights.",
@@ -150,6 +157,13 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
     }),
     defineTool({
       name: listAssets.name,
+      title: { en: "Find assets", de: "Assets finden" },
+      summary: {
+        en: "Finds the agents, skills, Workflows, Apps and other assets the user may see.",
+        de: "Findet die Agenten, Skills, Workflows, Apps und anderen Assets, die die Person sehen darf."
+      },
+      group: "platform",
+      icon: "guide",
       effect: listAssets.effect,
       description: [
         "Find the assets the user may see on this platform: agents, skills, Workflows, Apps, Data Stores, Knowledge Bases and Connections.",
@@ -186,6 +200,13 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
     }),
     defineTool({
       name: listFiles.name,
+      title: { en: "Find pages and files", de: "Pages und Dateien finden" },
+      summary: {
+        en: "Finds the Pages and files in this workspace's conversations that the user may see.",
+        de: "Findet die Pages und Dateien in den Unterhaltungen dieses Arbeitsbereichs, die die Person sehen darf."
+      },
+      group: "platform",
+      icon: "files",
       effect: listFiles.effect,
       description: [
         "Find the Pages and files in the conversations of this workspace that the user may see: Pages saved with page.save ('page'), files people uploaded ('upload') and files an agent made in a workspace ('generated_file'). Newest first.",

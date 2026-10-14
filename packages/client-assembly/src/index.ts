@@ -83,6 +83,7 @@ export {
 } from "./infrastructure";
 // For a worker of a capability that calls a model, such as the document worker.
 export { createWorkerCapabilityModels } from "./capability-models";
+export { agentToolReferences } from "./tool-references";
 export { createToolDefinitions } from "./tools";
 export {
   applyWorkspaceRunnerImageEnvOverride,

@@ -315,6 +315,7 @@ export const formsGallery: GalleryGroup = {
           <Switch aria-label={text.enabled} defaultChecked />
           <Switch aria-label={text.disabled} disabled />
           <Switch aria-label={text.disabled} defaultChecked disabled />
+          <Switch aria-label={text.switchMixed} mixed />
         </Samples>
       )
     },

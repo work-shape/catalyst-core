@@ -3465,10 +3465,13 @@ test("superadmin manages config assets with validation and conflict protection",
     await clickAgent();
     // Nothing was changed yet, so there is nothing to save.
     await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    // The instance's tools stand by package, folded.
     await expect(
-      fieldset("Instance tools").getByLabel("read_skill", { exact: true })
-    ).toBeVisible();
-    await expect(fieldset("Instance tools").getByLabel("show_view", { exact: true })).toBeVisible();
+      fieldset("Instance tools").locator('[data-instance-tool-group="skills"]')
+    ).toContainText("Skills");
+    await expect(
+      fieldset("Instance tools").locator('[data-instance-tool-group="results"]')
+    ).toContainText("Results");
     const firstPromptText = fieldset("Prompt 1").getByRole("textbox", { name: /^Prompt/u });
     // The agent's models: the one that runs it, with its reasoning effort, and the ones people
     // may choose instead.
@@ -3513,16 +3516,13 @@ test("superadmin manages config assets with validation and conflict protection",
     await clickAgent();
     await toggleSkill();
     await expect(form().getByRole("list", { name: "Skills" })).toContainText("Config E2E skill");
-    await form().getByRole("button", { name: "Save changes", exact: true }).click();
+    // read_skill comes with the skill: it is included, and the save carries it.
+    await fieldset("Instance tools")
+      .locator('[data-instance-tool-group="skills"] button[aria-expanded]')
+      .click();
     await expect(
-      page.getByText(
-        "Agent 'research_assistant' references skills but does not allow 'read_skill'",
-        { exact: true }
-      )
-    ).toBeVisible();
-    await expectUnchanged(researchAgentUrl, agentRevision);
-
-    await fieldset("Instance tools").getByLabel("read_skill", { exact: true }).check();
+      fieldset("Instance tools").locator('[data-included-tool="read_skill"]')
+    ).toContainText("Included");
     const updatedPrompt = `Keep this saved prompt ${Date.now()}.`;
     await firstPromptText.fill(updatedPrompt);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();

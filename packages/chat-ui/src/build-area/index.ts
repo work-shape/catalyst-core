@@ -41,6 +41,7 @@ export type {
 export { usingPageRoute } from "./data-store-source";
 export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
 export { toggleToolName } from "./tool-group";
+export { instanceToolGroups, switchToolGroup, withImpliedTools } from "./instance-tools";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export {
   PendingApprovalError,
