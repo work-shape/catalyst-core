@@ -28,16 +28,9 @@ import {
   withDefaultAgentName,
   withDefinition,
   withoutDefinition,
-  type AssetSet,
-  type AssetSetIssue
+  type AssetSet
 } from "./asset-set";
-import {
-  accessResource,
-  decide,
-  deleteDecision,
-  errorIssues,
-  type AssetCall
-} from "./asset-access";
+import { accessResource, decide, deleteDecision, type AssetCall } from "./asset-access";
 import {
   assetSyncPolicyTargets,
   authorizeAssetSync,
@@ -52,7 +45,6 @@ import {
   assetKey,
   authorizeInteractiveWrite,
   clearsLastDefault,
-  findChangedAgentRefusals,
   findIssuesOfChange,
   isReleaseSync,
   loadReferableAssets,
@@ -60,12 +52,15 @@ import {
   missingUpsertRightOf,
   type StoredAssets,
   requireInstanceDefaultChange,
+  requireInstanceFirstForDefault,
   requireAssetKindModuleOn,
   requireMatchingConfigName,
   setsInitialDefault,
   storedWritableIssues,
+  requireOwnerWorkspace,
   toJsonObject,
-  withPublishedConfigs
+  withPublishedConfigs,
+  writeIssuesOf
 } from "./asset-write-rules";
 import {
   assertStoredWritable,
@@ -83,6 +78,7 @@ import { initialAgentPlacement, type AvailableIn } from "./asset-placement";
 import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
+import { assertReferencesWithinOwners } from "./asset-owner-references";
 import type { AssetWorkflowOptions } from "./types";
 
 type MutationBatch = Omit<
@@ -227,7 +223,7 @@ export class AssetWorkflow {
     const changesDefault =
       right === "delete"
         ? target.asset?.status === "active" && clearsLastDefault(stored.set, kind, name)
-        : setsInitialDefault(stored.set, kind);
+        : setsInitialDefault(stored.set, kind, target.scope);
     return changesDefault
       ? { allowed: false, action: kind.actions.write, reason: instanceWrite.reason }
       : { allowed: true };
@@ -506,7 +502,13 @@ export class AssetWorkflow {
     const readOnly = storedWritableIssues(kind, current);
     const issues =
       readOnly ??
-      (ofDefinition.length > 0 ? ofDefinition : await this.writeIssues(call, view.set, found));
+      (ofDefinition.length > 0
+        ? ofDefinition
+        : await writeIssuesOf(this.options, call.access, view.set, found, () => {
+            const { scope } = target;
+            const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
+            assertReferencesWithinOwners(kinds, [{ ...write, config: prepared }], stored.assets);
+          }));
     return {
       valid: issues.length === 0,
       issues: issues.map(({ message, path, code }) => ({
@@ -524,30 +526,6 @@ export class AssetWorkflow {
   /** What `sync` would refuse the batch for, asked without writing anything. */
   checkSync(call: AssetCall, input: AssetSyncInput) {
     return checkAssetSync(this.options, call, input);
-  }
-
-  /** The instance's own rules, asked once the definitions themselves hold. */
-  private async writeIssues(
-    call: AssetCall,
-    stored: AssetSet,
-    found: ReturnType<typeof findAssetSetIssues>
-  ): Promise<AssetSetIssue[]> {
-    try {
-      const issues = found.validateWrite(stored);
-      if (issues.length > 0) return issues;
-      const { refusals } = await findChangedAgentRefusals(
-        this.options,
-        call.access,
-        stored,
-        found.accepted
-      );
-      return refusals.flatMap(({ error }) => errorIssues(error));
-    } catch (error) {
-      if (isAppError(error) && error.code === "VALIDATION_FAILED") {
-        return errorIssues(error);
-      }
-      throw error;
-    }
   }
 
   private async upsert(
@@ -578,10 +556,12 @@ export class AssetWorkflow {
     const { kind, name } = target;
     const surface = write.operation === "revert" ? "revert" : "put";
     const kinds = this.options.configAssets.kinds.kinds;
+    await requireOwnerWorkspace(this.options, target.address.workspaceId);
     const stored = await loadStoredAssets(this.options);
     const current = findDefinition(stored.set, kind.kind, name);
     kind.assertStoredWritable?.({ current });
-    const setsDefault = setsInitialDefault(stored.set, kind);
+    requireInstanceFirstForDefault(stored.set, kind, target.scope);
+    const setsDefault = setsInitialDefault(stored.set, kind, target.scope);
     requireInstanceDefaultChange(call.access, kind, setsDefault);
     // A revert restores what was stored: only what the kind's server decides is kept as it is.
     const principalId = call.actor.id;
@@ -638,7 +618,8 @@ export class AssetWorkflow {
       name,
       creates: target.asset?.status !== "active",
       setsDefault,
-      ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn })
+      ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn }),
+      ...(target.address.workspaceId === undefined ? {} : { madeIn: target.address.workspaceId })
     });
     let pageLinked = false;
     const { pageLink } = write;

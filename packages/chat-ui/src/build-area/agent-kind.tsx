@@ -45,7 +45,7 @@ export const agentKind: BuildAssetKind = {
 function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const { apiBaseUrl, authScope, client, user, config } = useSettingsPage();
   const { locale, t } = useTranslation();
-  const { asset, start, instanceWrite } = frame;
+  const { asset, start, instanceWrite, owner } = frame;
   const management = config.features.configAssets;
   const api = { apiBaseUrl, authScope, client };
   const placement = useAgentPlacementMutations({
@@ -62,14 +62,33 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const connectionTools = useConnectionToolChoice();
   const appTools = useAppToolsRead();
   const [skillSearch, setSkillSearch] = useState("");
+  // An agent names skills of its own owner and of the instance: a workspace's agent is offered
+  // that workspace's skills first, then the instance's own.
   const skillsQuery = useQuery({
-    queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", "skill", skillSearch],
-    queryFn: ({ signal }) =>
-      client.assets.list({
-        params: { kind: "skill" },
-        query: { limit: SKILL_CHOICE_PAGE_SIZE, ...(skillSearch ? { text: skillSearch } : {}) },
-        signal
-      }),
+    queryKey: [
+      ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
+      "choice",
+      "skill",
+      owner ?? "",
+      skillSearch
+    ],
+    queryFn: async ({ signal }) => {
+      const query = {
+        limit: SKILL_CHOICE_PAGE_SIZE,
+        ...(skillSearch ? { text: skillSearch } : {})
+      };
+      const [own, instance] = await Promise.all([
+        owner === undefined
+          ? undefined
+          : client.assets.list({
+              params: { kind: "skill" },
+              query: { ...query, workspaceId: owner },
+              signal
+            }),
+        client.assets.list({ params: { kind: "skill" }, query, signal })
+      ]);
+      return { items: [...(own?.items ?? []), ...instance.items] };
+    },
     placeholderData: (previous) => previous
   });
   const administeredWorkspacesQuery = useAdministeredCollaborationWorkspacesQuery({

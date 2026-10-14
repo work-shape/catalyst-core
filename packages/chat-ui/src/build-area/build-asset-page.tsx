@@ -63,6 +63,9 @@ export function NewAssetPage({
       start={start}
       canWrite
       instanceWrite={source.rights.instanceWrite}
+      {...(source.scoped?.(entry.kind) && source.scope?.kind === "workspace"
+        ? { owner: source.scope.workspaceId }
+        : {})}
       onUnsavedChange={page.onUnsavedChange}
       save={async (config) => {
         const create = (expectedRevision: number | null) =>
@@ -287,16 +290,22 @@ function LoadedAssetPage({
   // An asset that ships with the platform is changed by a release alone, whoever reads it.
   const shippedTitle = entry.shippedTitle?.(stored);
   const shipped = shippedTitle !== undefined;
-  const canWrite = !shipped && source.rights.may("write", stored);
+  const owner = stored.scope.kind === "workspace" ? stored.scope.workspaceId : undefined;
+  const held = { kind: stored.kind, namespace: stored.namespace, workspaceId: owner };
+  const canWrite = !shipped && source.rights.may("write", held);
   const namespace = source.rights.namespaces.find(
     (candidate) => candidate.prefix === stored.namespace
   );
+  const workspaceName =
+    source.rights.workspaces.find((candidate) => candidate.id === owner)?.name ?? owner;
   const readOnlyReason = shipped
     ? t("build.readOnlyPlatform")
-    : stored.namespace === undefined
-      ? t("build.readOnlyInstance")
-      : t("build.readOnlyNamespace", { namespace: namespace?.displayName ?? stored.namespace });
-  const canDelete = !shipped && state.canDelete && source.rights.may("delete", stored);
+    : workspaceName !== undefined
+      ? t("build.readOnlyWorkspace", { workspace: workspaceName })
+      : stored.namespace === undefined
+        ? t("build.readOnlyInstance")
+        : t("build.readOnlyNamespace", { namespace: namespace?.displayName ?? stored.namespace });
+  const canDelete = !shipped && state.canDelete && source.rights.may("delete", held);
   const Editor = entry.Editor;
 
   /** Reads what a write was refused for, and remembers a conflict for the notice. */
@@ -368,6 +377,7 @@ function LoadedAssetPage({
         readOnlyReason={canWrite ? undefined : readOnlyReason}
         saveBlocked={conflict !== undefined}
         instanceWrite={source.rights.instanceWrite}
+        {...(owner === undefined ? {} : { owner })}
         onUnsavedChange={onUnsavedChange}
         actions={
           <>

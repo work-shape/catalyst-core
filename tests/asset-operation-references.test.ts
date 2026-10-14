@@ -68,10 +68,17 @@ describe("a reference to an asset the caller may not read", () => {
         issues: [missing("kai-intake", hidden)]
       });
     }
-    // The administrator reads all of them, and is answered as before.
-    for (const readable of ["kai-guide", "lena-guide", "handbook", "team-notes"]) {
+    // The administrator reads all of them, and is answered as before. The workspace's skill
+    // he reads too, and an agent of the instance may not name it (WS-OWN-1a).
+    for (const readable of ["kai-guide", "lena-guide", "handbook"]) {
       expect(await check(t.admin.id, readable), readable).toEqual(valid);
     }
+    expect(await check(t.admin.id, "team-notes")).toEqual({
+      valid: false,
+      issues: [
+        "Config agent 'kai-intake' names the skill 'team-notes', which a workspace owns: only an asset of that workspace may name it"
+      ]
+    });
     expect(await check(t.admin.id, "nowhere")).toEqual({
       valid: false,
       issues: [missing("kai-intake", "nowhere")]
@@ -323,9 +330,28 @@ describe("an issue of an asset the caller may not read", () => {
 });
 
 describe("a name another owner holds", () => {
-  it("is refused for a workspace as a free name is, whoever holds it", async () => {
+  it("is refused as taken without saying where, whoever holds it", async () => {
     const { t, workspaceId } = await setup();
-    // Lena may write the skills of the workspace and reads nothing of the instance.
+    const other = await t.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Other team",
+      creatorUserId: t.admin.id
+    });
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "other-notes",
+          config: skill("other-notes"),
+          scope: { kind: "workspace", workspaceId: other.id }
+        }
+      ]
+    });
+    // Lena may write the skills of the workspace and reads nothing of the instance or of the
+    // other workspace.
     await t.stores.access.createGrant({
       clientInstanceId,
       holderKind: "user",
@@ -336,35 +362,33 @@ describe("a name another owner holds", () => {
       scopeId: workspaceId,
       grantedBy: t.admin.id
     });
-    const refusal = async (
-      name: string,
-      payload: Record<string, unknown>,
-      operation: "assets.put" | "assets.revert"
-    ) => {
-      const response = await t.call(t.lena.id, operation, {
+    const create = async (name: string) => {
+      const response = await t.call(t.lena.id, "assets.put", {
         params: { kind: "skill", name },
-        payload: { ...payload, workspaceId }
+        payload: { config: skill(name), expectedRevision: null, workspaceId }
       });
+      if (response.statusCode === 200) return { status: 200 };
       return { status: response.statusCode, ...errorSchema.parse(response.json()).error };
     };
-    const cannotOwn = {
-      status: 422,
-      code: "VALIDATION_FAILED",
-      message: "A skill cannot be owned by a workspace",
-      details: { reason: "invalid_scope" }
-    };
+    const taken = (name: string) => ({
+      status: 412,
+      code: "REVISION_CONFLICT",
+      message: `Config skill '${name}' is not at the revision the call names`,
+      details: { reason: "revision_conflict", conflicts: [{ kind: "skill", name }] }
+    });
 
-    // `kai-guide` is a skill of the instance, `free-name` is nobody's.
-    for (const name of ["kai-guide", "free-name"]) {
-      expect(await refusal(name, { config: skill(name) }, "assets.put"), name).toEqual(cannotOwn);
-      expect(
-        await refusal(name, { revision: 1, expectedRevision: 1 }, "assets.revert"),
-        name
-      ).toEqual(cannotOwn);
+    // A skill of the instance and one of another workspace: both answered alike, by name only.
+    for (const name of ["kai-guide", "other-notes"]) {
+      expect(await create(name), name).toEqual(taken(name));
     }
     expect(await t.stored("skill", "kai-guide")).toMatchObject({
       revision: 1,
       scope: { kind: "instance" }
+    });
+    // A free name becomes the workspace's.
+    expect(await create("free-name")).toEqual({ status: 200 });
+    expect(await t.stored("skill", "free-name")).toMatchObject({
+      scope: { kind: "workspace", workspaceId }
     });
   });
 });

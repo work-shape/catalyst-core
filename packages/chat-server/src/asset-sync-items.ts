@@ -1,4 +1,4 @@
-import { AppError, INSTANCE_ASSET_SCOPE, type ActorAccess } from "@vivd-catalyst/core";
+import { AppError, assetScopesEqual, type ActorAccess } from "@vivd-catalyst/core";
 import { ASSET_SYNC_ITEM_MAX_BYTES } from "@vivd-catalyst/api-contract";
 import { z } from "zod";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
@@ -16,7 +16,7 @@ import {
   preparedUpsert,
   requireAssetKindModuleOn,
   requireAssetManagementOn,
-  requireNamespaceOrRelease,
+  requireBatchScope,
   requireReleaseSync
 } from "./asset-write-rules";
 import {
@@ -27,6 +27,7 @@ import {
   type PlannedItem,
   type ReadyItem
 } from "./asset-sync-refusals";
+import { scopeOf } from "./asset-read-workflow";
 import type { AssetWorkflowOptions } from "./types";
 
 // The items of a batch before anything is written: what each is by its own input, the row it
@@ -46,7 +47,7 @@ export async function authorizeItems(
   // The module's switch is asked here because the release holder passes it: the operation
   // itself belongs to no module, so the route does not refuse it before the caller is known.
   requireAssetManagementOn(options, access, "sync");
-  requireNamespaceOrRelease(access, input.namespace);
+  requireBatchScope(access, input);
   if (input.defaultAgentName !== undefined || input.expectedDefaultAgentName !== undefined) {
     requireReleaseSync(access, "sync");
   }
@@ -77,8 +78,8 @@ export async function authorizeItems(
       continue;
     }
     const row = rows.get(assetKey(entry.kind.kind, entry.name));
-    const own = row?.scope.kind === "instance" ? row : undefined;
-    const resource = accessResource(entry.kind.kind, entry.name, INSTANCE_ASSET_SCOPE, own?.id);
+    const own = row && assetScopesEqual(row.scope, entry.scope) ? row : undefined;
+    const resource = accessResource(entry.kind.kind, entry.name, entry.scope, own?.id);
     const right = itemWriteDecision(
       access,
       "sync",
@@ -94,8 +95,8 @@ export async function authorizeItems(
     } else if (own) {
       entry.asset = own;
     } else if (row) {
-      // A Namespace is a prefix among the instance's own assets. What the item is told of a
-      // name a workspace asset carries is decided with the revisions, after every right.
+      // The name is another owner's. What the item is told of it is decided with the
+      // revisions, after every right.
       entry.other = { id: row.id, scope: row.scope };
     }
   }
@@ -244,7 +245,8 @@ function planItems(options: AssetWorkflowOptions, input: AssetSyncInput): Planne
     requireAssetKindModuleOn(options.modules, item.kind);
     const kind = options.configAssets.kinds.get(item.kind);
     const name = item.type === "put" ? readDefinitionName(item.config) : item.name;
-    const base = { index, item, ...(name === undefined ? {} : { name }) };
+    const scope = scopeOf(input.workspaceId);
+    const base = { index, item, scope, ...(name === undefined ? {} : { name }) };
     const refuse = (message: string): PlannedItem => ({
       ...base,
       ...(kind ? { kind } : {}),
@@ -261,6 +263,13 @@ function planItems(options: AssetWorkflowOptions, input: AssetSyncInput): Planne
     }
     if (name === undefined) {
       return refuse("Config asset must have a name");
+    }
+    if (!kind.owners.includes(scope.kind)) {
+      return refuse(
+        scope.kind === "workspace"
+          ? `A ${kind.kind} cannot be owned by a workspace`
+          : `A ${kind.kind} belongs to one workspace. Name it as 'workspaceId'`
+      );
     }
     if (
       item.type === "put" &&

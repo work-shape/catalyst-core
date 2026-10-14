@@ -105,6 +105,21 @@ describe("retiring a shipped skill", () => {
     const guided = await putAgent(earlier, "guide_user", ["platform-guide"]);
     const both = await putAgent(earlier, "both_user", ["our-guide", "platform-guide"]);
     const own = await putAgent(earlier, "own_user", ["our-guide"]);
+    // A workspace's agent lists it too. Fails without the change of WS-OWN-1a: the start wrote
+    // the agent's new revision as the instance's and was refused as another owner's.
+    const team = z
+      .object({ id: z.string() })
+      .parse((await earlier.call("workspaces.create", { payload: { name: "Team" } })).json());
+    const base = await readAgent(earlier, "test_agent");
+    const teamPut = await earlier.call("assets.put", {
+      params: { kind: "agent", name: "team_user" },
+      payload: {
+        config: { ...base.config, name: "team_user", skillNames: ["platform-guide"] },
+        expectedRevision: null,
+        workspaceId: team.id
+      }
+    });
+    expect(teamPut.statusCode, teamPut.body).toBe(200);
 
     // The upgrade: this release's start retires platform-guide.
     const now = await start();
@@ -121,6 +136,24 @@ describe("retiring a shipped skill", () => {
     const bothNow = await readAgent(now, "both_user");
     expect(bothNow.config.skillNames).toEqual(["our-guide"]);
     expect(bothNow.revision).toBe(both.revision + 1);
+    const teamNow = agentSchema.parse(
+      (
+        await now.call("assets.get", {
+          params: { kind: "agent", name: "team_user" },
+          query: { workspaceId: team.id }
+        })
+      ).json()
+    );
+    expect(teamNow).toMatchObject({ revision: 2, config: { skillNames: [] } });
+    expect(
+      (
+        await now.stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "agent",
+          name: "team_user"
+        })
+      )?.scope
+    ).toEqual({ kind: "workspace", workspaceId: team.id });
     // An agent that listed only the copy is not written.
     expect((await readAgent(now, "own_user")).revision).toBe(own.revision);
 
@@ -131,7 +164,8 @@ describe("retiring a shipped skill", () => {
       .sort();
     expect(events).toEqual([
       ["both_user", "platform-guide", both.revision + 1],
-      ["guide_user", "platform-guide", guided.revision + 1]
+      ["guide_user", "platform-guide", guided.revision + 1],
+      ["team_user", "platform-guide", 2]
     ]);
 
     // An unrelated write of the instance is accepted.

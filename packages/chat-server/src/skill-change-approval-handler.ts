@@ -1,12 +1,14 @@
 import { z } from "zod";
 import {
   AppError,
+  INSTANCE_ASSET_SCOPE,
   auditActorFromUser,
   isJsonObject,
   unknownToJsonValue,
   type ApprovalRequest,
   type ApprovalRequestContext,
   type ApprovalRequestHandler,
+  type AssetScope,
   type AuthenticatedUser,
   type ConfigAssetMutation,
   type ConfigAssetRevisionRecord,
@@ -211,7 +213,13 @@ export function createSkillChangeApprovalHandler(
       });
       const skill = applySkillChange(snapshot.skill, data.operations);
       const mutations: ConfigAssetMutation[] = [
-        { type: "upsert", kind: "skill", name: skill.name, config: toJsonObject(skill) }
+        {
+          type: "upsert",
+          kind: "skill",
+          name: skill.name,
+          scope: snapshot.scopeOf("skill"),
+          config: toJsonObject(skill)
+        }
       ];
       // An approved request is the review a deleted name needs: it names the tombstone.
       const baseRevisions = { [`skill:${skill.name}`]: snapshot.revisionOf("skill", skill.name) };
@@ -221,6 +229,7 @@ export function createSkillChangeApprovalHandler(
           type: "upsert",
           kind: "agent",
           name: agent.name,
+          scope: snapshot.scopeOf("agent"),
           config: toJsonObject({
             ...agent,
             skillNames: [...new Set([...agent.skillNames, skill.name])]
@@ -276,6 +285,7 @@ export function createSkillChangeApprovalHandler(
             type: "upsert",
             kind: "agent",
             name: agent.name,
+            scope: snapshot.scopeOf("agent"),
             operation: "revert",
             config: toJsonObject({
               ...agent,
@@ -283,7 +293,12 @@ export function createSkillChangeApprovalHandler(
             })
           });
         }
-        mutations.push({ type: "delete", kind: "skill", name: data.skillName });
+        mutations.push({
+          type: "delete",
+          kind: "skill",
+          name: data.skillName,
+          scope: snapshot.scopeOf("skill")
+        });
       } else {
         const before = history.find((revision) => revision.revision === applied.revision - 1);
         if (!before?.config) {
@@ -293,6 +308,7 @@ export function createSkillChangeApprovalHandler(
           type: "upsert",
           kind: "skill",
           name: data.skillName,
+          scope: snapshot.scopeOf("skill"),
           operation: "revert",
           config: before.config
         });
@@ -349,7 +365,14 @@ export function createSkillChangeApprovalHandler(
       skill: skill?.status === "active" ? skillConfigSchema.parse(skill.config) : undefined,
       /** The last revision of the asset, a deleted one's included, or `null` for none. */
       revisionOf: (kind: "skill" | "agent", name: string) =>
-        revisions.get(`${kind}:${name}`) ?? null
+        revisions.get(`${kind}:${name}`) ?? null,
+      /**
+       * Who owns what the change writes. A skill keeps its owner, a deleted one's included; a
+       * skill the change creates is owned by the owner of the agent that proposed it, so the
+       * agent names a skill of its own owner.
+       */
+      scopeOf: (kind: "skill" | "agent"): AssetScope =>
+        (kind === "skill" ? skill?.scope : undefined) ?? agent?.scope ?? INSTANCE_ASSET_SCOPE
     };
   }
 }
