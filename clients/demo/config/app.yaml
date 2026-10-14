@@ -56,7 +56,7 @@ modules:
   connections:
     enabled: true
   # Workflows: definitions stored as assets, started by hand and run on the job executor. The
-  # seed brings one, `agent-inventory` (seed/workflows).
+  # seed brings one, `accounting-clients` (seed/workflows), which reads `sample-accounting`.
   workflows:
     enabled: true
 # The file area per conversation and the commands an agent runs in it. The commands run in the

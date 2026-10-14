@@ -1,8 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { readWorkflowManifest } from "@vivd-catalyst/client-assembly";
-import { WORKFLOWS_MODULE, WORKFLOW_KIND, type SeedApi } from "./api";
-import { workflowPrincipal, workflows } from "./company";
+import {
+  CONNECTION_KIND,
+  WORKFLOWS_MODULE,
+  WORKFLOW_KIND,
+  hasConnection,
+  type SeedApi
+} from "./api";
+import { WORKFLOW_CONNECTION, workflowPrincipal, workflows } from "./company";
 
 /** The definition of `seed/workflows/<name>/workflow.yaml`, as the engine reads it. */
 export async function readWorkflowFile(
@@ -19,7 +25,8 @@ export async function readWorkflowFile(
 
 /**
  * The Workflows of the demo, on an instance with the module: the service principal they run
- * as, and each definition written from its `workflow.yaml` and published. The superadmin
+ * as, its right to use the Connection they read where the instance has it, and each definition
+ * written from its `workflow.yaml` and published. The superadmin
  * publishes, because a publish lends the principal's rights to whoever may start the
  * Workflow. A Workflow the instance holds is left as it is, whatever was written since; one
  * an earlier run left unpublished is published. Answers nothing on an instance without the
@@ -33,12 +40,15 @@ export async function seedWorkflows(
   const module = modules.find((candidate) => candidate.name === WORKFLOWS_MODULE);
   if (module?.enabled !== true || !module.kinds.includes(WORKFLOW_KIND)) return undefined;
   const principals = await root.listServicePrincipals();
-  if (!principals.some(({ principal }) => principal.name === workflowPrincipal.name)) {
-    await root.createServicePrincipal({
-      ...workflowPrincipal,
-      permissions: [...workflowPrincipal.permissions]
-    });
-  }
+  const principal =
+    principals.find((detail) => detail.principal.name === workflowPrincipal.name)?.principal ??
+    (
+      await root.createServicePrincipal({
+        ...workflowPrincipal,
+        permissions: [...workflowPrincipal.permissions]
+      })
+    ).principal;
+  await grantConnectionUse(root, modules, principal.id);
   let created = 0;
   for (const name of workflows) {
     let stored = await root.getAsset(WORKFLOW_KIND, name);
@@ -56,4 +66,37 @@ export async function seedWorkflows(
     }
   }
   return { name: "workflows", created, existing: workflows.length - created };
+}
+
+/**
+ * Lets the principal use the Connection the Workflows read, by one grant on that Connection, as
+ * the superadmin writes one for a principal. Nothing where the instance has no such Connection:
+ * the Workflows are stored all the same, and the list says their operations are missing.
+ */
+async function grantConnectionUse(
+  root: SeedApi,
+  modules: Awaited<ReturnType<SeedApi["listModules"]>>,
+  principalId: string
+): Promise<void> {
+  if (!(await hasConnection(root, modules, WORKFLOW_CONNECTION))) return;
+  const connection = await root.getAsset(CONNECTION_KIND, WORKFLOW_CONNECTION);
+  if (!connection) return;
+  const grant: Parameters<SeedApi["grant"]>[0] = {
+    holderKind: "service_principal",
+    holderId: principalId,
+    action: `${CONNECTION_KIND}.use`,
+    effect: "allow",
+    scopeKind: "asset",
+    scopeId: connection.id
+  };
+  const there = (await root.listGrants()).some(
+    (row) =>
+      row.holderKind === grant.holderKind &&
+      row.holderId === grant.holderId &&
+      row.action === grant.action &&
+      row.effect === grant.effect &&
+      row.scopeKind === grant.scopeKind &&
+      row.scopeId === grant.scopeId
+  );
+  if (!there) await root.grant(grant);
 }

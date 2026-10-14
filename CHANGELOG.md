@@ -2121,7 +2121,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `config_assets.read` or `config_assets.release` could read every agent's and skill's
   definition through a step or reach `assets.sync`. A definition stored before this release is
   listed as not runnable with the same reason, and a run that reaches such a step fails it
-  before anything is called.
+  before anything is called. The demo's seeded Workflows, which read agents and skills, now
+  read the Connection `sample-accounting`: `accounting-clients` (was `agent-inventory`) and
+  Kai Berger's draft `kai-client-years` (was `kai-skill-inventory`). Their principal
+  `workflow-demo` holds no permission and one grant, `connection.use` on that Connection.
 - **Chat starters:** a starter of a skill that ships with the platform shows that skill's
   icon. Every starter showed the generic book, because the agent's starters did not carry the
   skill's `icon`. A skill of the instance's own keeps the generic book.
