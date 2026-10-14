@@ -30,7 +30,7 @@ import {
   type WebFetchHttpRequest,
   isBlockedIpAddress,
   validateWebFetchUrl
-} from "../packages/web-access/src/index";
+} from "@vivd-catalyst/web-access";
 
 describe("web access direct fetch", () => {
   it("extracts bounded text and source metadata from allowed HTML pages", async () => {

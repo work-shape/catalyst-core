@@ -126,7 +126,7 @@ const personalApiKeysModule = defineModule({
     "personal_api_keys.list",
     "personal_api_keys.revoke"
   ],
-  ui: ["settings.you.api-keys", "settings.api-access.personal-keys"]
+  ui: ["settings.you.api-keys", "settings.you.connect", "settings.api-access.personal-keys"]
 });
 
 /** The modules whose code ships with the platform. A capability declares its own. */
@@ -142,7 +142,10 @@ export const platformModules = [
   personalApiKeysModule
 ];
 
-/** The seams of the modules that are assembled through one. A new one is one more entry. */
+/**
+ * The seams of the modules that are assembled through one. A new one is one more entry. A seam
+ * comes after the seams whose offers it takes: Knowledge Bases after Data Stores.
+ */
 const moduleSeams = [assembleWorkflows, assembleDataStores, assembleKnowledge];
 
 /**
@@ -152,7 +155,7 @@ const moduleSeams = [assembleWorkflows, assembleDataStores, assembleKnowledge];
 export async function assembleModules(parts: ModuleAssemblyParts): Promise<AssembledModules> {
   const assemblies: ModuleAssembly[] = [];
   for (const seam of moduleSeams) {
-    assemblies.push((await seam(parts)) ?? {});
+    assemblies.push((await seam(parts, [...assemblies])) ?? {});
   }
   return {
     assetKinds: assemblies.flatMap((assembly) => assembly.assetKinds ?? []),
