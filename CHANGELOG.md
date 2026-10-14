@@ -3,6 +3,10 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+The entries of the next release are files in `changes/unreleased/`, one per change; a change
+adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
+in, and `pnpm changelog` prints the next release's section as it will read.
+
 ## Unreleased
 
 ### Added
@@ -18,6 +22,33 @@ contain breaking changes; a patch version does not.
   its answer runs. Going into or out of the dock plays a 250 ms view transition
   (`--duration-dock`), at once under reduced motion. The UI library gains `SplitHandle`,
   `SurfaceHeader` and `PageHeaderShellAction`.
+- **Connections made on the instance (CS-4, first slice):** Build > Connections has "New
+  connection" for a remote MCP server: name, address and authentication (`none`, `bearer`, or a
+  key in a named header). The asset operations now create, change, revert and delete a
+  Connection of origin `runtime`; the server writes its origin, its owner (the writer) and its
+  secret handle, whatever the caller sent. A Connection of release config stays read-only
+  (`read_only_origin`), and a batch of `assets.sync` holding a Connection is refused with
+  `connection_batch_unavailable`. A save whose address the operator's `egress.allow` does not
+  name is refused with `egress_denied` before anything is stored; the list is asked without a
+  DNS lookup. `connections.set_secret` (`PUT /api/v1/connections/:name/secret`) takes the key
+  once, as the next version after the `expectedVersion` the writer read (`secret_write_conflict`
+  otherwise), answers only the state and the version, and keeps a mark instead of the value in
+  its Operation Run. `connections.discover` (`POST /api/v1/connections/:name/discover`) queues a
+  discovery; every save and every new key queue one too. `connections.get` answers the tools
+  the last discovery read that the Connection does not accept (`discovered`), and the page
+  accepts one with its effect, for agents or not, pinned to the fingerprint it showed. A delete
+  is refused with `409 connection_in_use` while an agent carries a tool of the Connection or an
+  App names it, in its draft or in its published revision, and removes its key and its runtime
+  state. Both operations need `connection.write`. A key is bound to the origin of the
+  Connection's target (protocol, host and port) it was entered for: a save that moves the
+  target to another origin removes it, a new path on the same origin or another Connector type
+  with the same target keeps it, and a key is never handed to a test, discovery or call of
+  another origin (`connection_not_configured`), also where its removal failed. Migration
+  `0078_secret_origin` adds `secrets.origin`. **Upgrade:** an instance whose release config
+  names `secretStore.keys` now needs the first key at start even where release config defines
+  no Connection, and stops naming its variable without it. A secret of release config is bound
+  to its origin by the seed at the next start. Shared OAuth, the CLI and the platform MCP tools for Connections are not
+  part of this slice.
 - **Personal API keys and `catalyst login`:** the module `personalApiKeys` (off by default)
   lets a person issue keys that act as themself, in Settings, API keys, or by confirming the
   code `catalyst login` prints; the CLI collects the key itself and saves it in
@@ -130,6 +161,38 @@ contain breaking changes; a patch version does not.
   **Rollback:** an earlier release ignores the two new columns, and refuses a config with a
   guardrail it does not know: remove guardrails on the new events, of kind `pattern` or with
   the new outcomes before rolling back.
+- **Guardrails read every way content reaches an asset or goes live:** `asset.before_write` now
+  also answers `apps.create_from_page` and `apps.update_from_page` (the App's definition and
+  the Page revision the write copies: the write copies the revision the guardrails read; a call
+  held for an approval, by a guardrail or by a policy, keeps the revision there was beside its
+  input (`heldInput` of the request, only in the fields the operation declares), so the call
+  the approval answers is checked again and writes exactly that revision; the new optional `fileSetId` names a revision to copy, and a
+  revision that is gone is refused with `CONFLICT`), the agent's `page.save_as_app` (held for an approval, it too keeps the revision its guardrails
+  read) and the App draft a `page.save` writes (the revision the save stored; a block or a hold
+  leaves the draft unwritten and says why, as the Page is saved already), `assets.revert` (the
+  earlier revision it writes again, also one written before the
+  guardrail existed), an approved skill change before it is applied (the skill as the approval
+  writes it) and the undo of an approved skill change (`approval_requests.revert`, the revision
+  it writes back). A block at the approval leaves the skill unchanged and ends the request as
+  not applied (`superseded`, `applyResult.execution` `refused`, `GUARDRAIL_BLOCKED` with the
+  reason), which the Inbox item shows; a block at the undo refuses it and the request stays
+  approved. A new before-event `data_store.before_publish` answers the publish of a Data
+  Store, with the revision's definition and migration files. A UTF-16 text file, with its byte
+  order mark or with a NUL in every other byte of its start, is read as text. Any other file that is no UTF-8 text is no longer skipped: a
+  `pattern` reads its printable runs (line ends included) of at least 4 characters, so a photo
+  passes whatever its size, and only text counts toward the limit of what a check reads and text hidden beside a NUL byte is found; a `model_judge` reads the printable runs of
+  at least 16 characters of an image or a font and answers any other such file as unread. A refusal for content that is
+  too large or cannot be judged no longer says to try again. A block found when a held call
+  or an approved change is asked again is kept as a hit. A revert and a publish read no
+  revision of an asset of another scope than the call's: the call is refused as before, with
+  no guardrail asked. **Access:** `apps.create_from_page` and `apps.update_from_page` ask
+  whether the caller reads the Page before the guardrails read it, so a Page the caller
+  cannot read answers 404 before any check; `assets.revert` now needs the read right on the
+  asset beside the write right, as a revert restores content its guardrails would answer
+  about. **Operators:** a rule that should keep content out of live Apps needs an entry on
+  `app.before_publish` beside the one on `asset.before_write`; the demo's IBAN rule has both.
+  **Rollback:** an earlier release refuses a guardrail on `data_store.before_publish`: remove
+  it before rolling back.
 - **Embedding models:** a model binding of `kind: embedding` with `dimensions` turns text into
   vectors for Knowledge Bases, and `knowledge.defaultEmbeddingBinding` names the default. The
   gateway's `embed` is the one path for an embedding call, admitted, retried and settled like a
@@ -428,7 +491,7 @@ contain breaking changes; a patch version does not.
   1,000 rows and 1 MiB per call, `onConflict: fail | skip`, answers `inserted` and `skipped`)
   needs `data_store.insert`. `load` takes a dataset of a Workflow Run into one table in one
   transaction (at most 100,000 rows and 64 MiB per call; `key` with `onConflict: fail | skip |
-  update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
+update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
   reader never sees the table half replaced); it needs `data_store.insert`, and
   `data_store.execute` as well for `update` and `replace`. Until the datasets of Workflow Runs
   exist it answers `not_supported_yet`. `data_stores.get` (`GET /api/v1/data-stores/:store`,
@@ -2247,6 +2310,14 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **A service principal calls no operation that a person calls:** an operation registered with
+  `auth: "user"`, such as `workspaces.create`, is refused to a service principal on the call
+  path as its route refuses one, also where the call takes no route, as from a step of a
+  Workflow. The call is denied before the operation runs, with an Operation Run that is
+  `denied` and the reason `user_only`, and the step says that only a person may call it. Such
+  a refusal names no right where the operation names none: `action` of a forbidden denial is
+  optional, and is left out where no right opens the call.
+  Before, the step's call ran into the operation and failed there.
 - **Parallel browser suites on one Postgres:** `scripts/run-chat-e2e.mjs`, `playwright.config.ts`
   and the specs hard-coded the database `agent_chat`, so several runs on one machine erased each
   other's data. `E2E_DATABASE_URL` now replaces that URL for the migration, the API, the worker
@@ -2302,9 +2373,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   release config or an agent file now reads as plain text or is refused, as `workflow.yaml` and
   `app.yaml` already were. A file whose aliases expand past 100,000 values is refused
   (`'<file>' holds more than 100000 values once its aliases are followed
-  (YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
+(YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
   character or half of a surrogate pair is refused (`'<file>' holds a NUL character or half of a
-  surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
+surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
   to the model as the tool error `invalid_text` and stored with an empty input; before, it ended
   the whole run with `INTERNAL`. Rollback: none needed, nothing is stored differently.
 
@@ -2366,7 +2437,7 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `docker/vivd-client.Dockerfile`, the one `pnpm dev` starts) builds the packages that `core`,
   `config-schema` and `ui` depend on. Before, it built `core` without `asset-schemas`, the
   image built, and the UI container stopped at start with `Cannot find module
-  .../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
+.../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
   a package is missing, and `pnpm check:images` builds this image too.
 
 - **Model providers and redirects:** no model adapter follows a redirect any more. A provider

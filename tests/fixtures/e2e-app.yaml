@@ -285,11 +285,18 @@ modules:
   # needs a Workflow stores and publishes its own.
   workflows:
     enabled: true
-# The one address a Connection of the suite may reach. Nothing listens there and the `test`
+# The addresses a Connection of the suite may reach. Nothing listens on the first and the `test`
 # connector type contacts nothing: the entry is what lets a test of a Connection answer ready.
+# The second is the sample MCP server `e2e/connection-editor.spec.ts` starts; the runner moves
+# its port with E2E_SAMPLE_MCP_PORT.
 egress:
   allow:
     - { protocol: https, host: 127.0.0.1, port: 8443, network: private, cidrs: [127.0.0.0/8] }
+    - { protocol: http, host: 127.0.0.1, port: 4219, network: private, cidrs: [127.0.0.0/8] }
+# The key of the secrets of Connections made in the suite. The runner makes a new one per run.
+secretStore:
+  keys:
+    - { id: e2e, ref: E2E_SECRET_STORE_KEY }
 executionWorkspaces:
   enabled: true
 infrastructure:

@@ -307,13 +307,14 @@ describe("operation contracts", () => {
     expectTypeOf<OperationDenial>().toEqualTypeOf<
       | {
           kind: "forbidden";
-          action: string;
+          action?: string;
           reason:
             | "no_grant"
             | "denied"
             | "unknown_action"
             | "holder_inactive"
             | "holder_not_administrable"
+            | "user_only"
             | "outside_key_scope";
           message?: string;
           boundBy?: { id: string; label: string };

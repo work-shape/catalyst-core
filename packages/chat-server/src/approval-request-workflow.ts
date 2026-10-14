@@ -2,7 +2,9 @@ import type { StorePage } from "@vivd-catalyst/core";
 import {
   AppError,
   auditActorFromUser,
+  getSubjectUserId,
   hasAuthScope,
+  operationDenialError,
   type ActorAccess,
   type ApprovalPreviewViewer,
   type ApprovalRequest,
@@ -18,10 +20,11 @@ import {
   type AuthenticatedUser,
   type ClientInstanceId,
   type JsonObject,
+  type OperationBeforeEvent,
   type ApprovalTransactionStores,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-
+import { guardrailDenial } from "@vivd-catalyst/tool-execution";
 import type { GuardrailRunner } from "./guardrail-runner";
 
 /** Scopes the approval routes require; the view flags use the same ones. */
@@ -243,6 +246,25 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
             ...this.endedPayload(pending)
           };
         }
+        const refusal = await this.guardrailRefusal(
+          (await handler.applyEvents?.(payload, handlerContext)) ?? [],
+          pending,
+          user,
+          context,
+          "approval"
+        );
+        if (refusal) {
+          // Approved, and not applied: the item keeps why, as a held call's refusal does.
+          return {
+            status: "superseded",
+            decision,
+            applyResult: {
+              execution: "refused",
+              error: { code: refusal.code, message: refusal.message }
+            },
+            ...this.endedPayload(pending)
+          };
+        }
         const applyResult = await handler.apply(payload, user, handlerContext);
         return { status: "approved", decision, applyResult };
       }
@@ -299,7 +321,17 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       clientInstanceId: this.options.clientInstanceId,
       requestId,
       resolve: async (approved) => {
-        await revert(approved, user, this.handlerContext(approved, context));
+        const handlerContext = this.handlerContext(approved, context);
+        // The revision a revert writes back may predate a guardrail: it is read like a write.
+        const refusal = await this.guardrailRefusal(
+          (await handler.revertEvents?.(approved, handlerContext)) ?? [],
+          approved,
+          user,
+          context,
+          "revert"
+        );
+        if (refusal) throw refusal;
+        await revert(approved, user, handlerContext);
         return {
           status: "reverted",
           decision: approved.decision,
@@ -315,6 +347,64 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     await this.record(user, context, "approval_request.reverted", updated);
     await this.options.onDecided?.(updated);
     return updated;
+  }
+
+  /**
+   * The refusal of a change a guardrail blocks, asked about the change as the request would
+   * write it: an approved change before `apply`, or a revert before `revert`. A hold is
+   * answered by the person who decides, who holds the right to approve the kind.
+   */
+  private async guardrailRefusal(
+    events: readonly OperationBeforeEvent[],
+    request: ApprovalRequest,
+    user: AuthenticatedUser,
+    context: CallContext,
+    asked: "approval" | "revert"
+  ): Promise<AppError | undefined> {
+    const { guardrails } = this.options;
+    if (!guardrails) return undefined;
+    const { origin } = request;
+    for (const event of events) {
+      const answers = await guardrails.answer(
+        {
+          event: event.name,
+          subject: event.subject,
+          match:
+            event.name === "operation.before_call"
+              ? { operation: event.subject.name }
+              : {
+                  kind: event.subject.kind,
+                  // An approved change is the agent's that proposed it, as when it was
+                  // proposed; a revert is the person's who makes it.
+                  ...(asked === "revert"
+                    ? { origin: "user" }
+                    : origin
+                      ? { origin: "agent", agent: origin.agentName }
+                      : {})
+                },
+          fields: event.checkable
+        },
+        {
+          correlationId: context.correlationId,
+          userId: getSubjectUserId(user),
+          ...(origin ? { conversationId: origin.conversationId } : {}),
+          ...(context.deadline ? { deadline: context.deadline } : {}),
+          ...(context.signal ? { signal: context.signal } : {}),
+          // At the approval the change is asked again: its other answers were kept when the
+          // request was filed. A revert is a new write, whose answers are all kept.
+          ...(asked === "approval" ? { repeated: true } : {})
+        }
+      );
+      if (answers.some((answer) => answer.outcome === "block")) {
+        return operationDenialError(
+          guardrailDenial(
+            [{ outcome: "block", guardrails: answers, subject: event.subject }],
+            event.name
+          )
+        );
+      }
+    }
+    return undefined;
   }
 
   /**

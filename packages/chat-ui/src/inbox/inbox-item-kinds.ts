@@ -4,6 +4,7 @@ import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { OperationCallBody } from "../approvals/operation-call-body";
 import {
   SKILL_ASSET_KIND,
+  operationCallOutcome,
   parseOperationCallPreview,
   type OperationCallAsset
 } from "../approvals/operation-call-preview";
@@ -74,7 +75,14 @@ const skillChange: InboxItemKind = {
       ? `${t("skillChangeNewSkill")}: ${change.skillTitle}`
       : t("skillChangeConcerns", { skill: change.skillTitle });
   },
-  Body: ({ item }) => createElement(SkillChangeBody, { preview: item.preview })
+  Body: ({ item }) => {
+    // An approved change that a guardrail blocked when it was to be applied says why.
+    const outcome = operationCallOutcome(item);
+    return createElement(SkillChangeBody, {
+      preview: item.preview,
+      ...(outcome?.outcome === "refused" ? { refusal: outcome.reason ?? "" } : {})
+    });
+  }
 };
 
 /** The skill a held call saves, where it saves one. */
