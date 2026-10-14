@@ -30,7 +30,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     changeClass: "reversible",
     module: APPS_MODULE,
     beforeEvents: (input) => [workflow.writeEventFromPage({ ...input, app: input.name })],
-    execute: (input, context) => workflow.createFromPage(context, input)
+    execute: (input, context) => workflow.createFromPage(context, input, context.beforeEvents)
   });
 
   route.operation(apiOperations["apps.actions.list"], {
@@ -54,7 +54,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     changeClass: "reversible",
     module: APPS_MODULE,
     beforeEvents: (input) => [workflow.writeEventFromPage(input)],
-    execute: (input, context) => workflow.updateFromPage(context, input)
+    execute: (input, context) => workflow.updateFromPage(context, input, context.beforeEvents)
   });
 
   // Asked by the surface of a Page each time it opens. What it tells of an App is decided by

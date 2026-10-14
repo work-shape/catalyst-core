@@ -28,6 +28,7 @@ import {
   type ModuleSnapshot,
   type NewOperationRun,
   type OperationAuthorization,
+  type OperationBeforeEvent,
   type OperationCall,
   type OperationCallRuntime,
   type OperationDefinition,
@@ -172,6 +173,13 @@ export interface RunContext {
    * asked again, and the guardrails' hits were kept when it was made.
    */
   repeated?: true;
+  /**
+   * The events of the operation's own `beforeEvents` as the guardrails were last asked them
+   * for this call, handed to its execution.
+   */
+  beforeEvents?: readonly OperationBeforeEvent[];
+  /** Keeps the events of the operation's own `beforeEvents` as they are asked. */
+  asked(events: readonly OperationBeforeEvent[]): void;
   now(): Date;
   emit(
     name: PlatformEventName,
@@ -227,6 +235,9 @@ export function createRunContext(
     ...rest,
     ...(unrecordedStart ? { unrecorded: { start: unrecordedStart, heldAfterEvents: [] } } : {}),
     now: deps.now ?? (() => new Date()),
+    asked: (events) => {
+      context.beforeEvents = events;
+    },
     emit: (name, phase, payload = {}, before = {}) => {
       const send = () =>
         deps.events.emit(
@@ -536,7 +547,8 @@ export async function executeAdmitted(
       ...(run.idempotencyKey === undefined ? {} : { idempotencyKey: run.idempotencyKey }),
       runtime: context.runtime,
       access,
-      audit: auditForRun(deps.audit, run.id, call.correlationId)
+      audit: auditForRun(deps.audit, run.id, call.correlationId),
+      ...(context.beforeEvents ? { beforeEvents: context.beforeEvents } : {})
     };
     await begin?.();
     started = true;

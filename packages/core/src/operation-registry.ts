@@ -53,6 +53,13 @@ export interface OperationExecutionContext {
   access: ActorAccess;
   /** Writes audit rows that carry the run's id and correlation id. */
   audit: AuditRecorder;
+  /**
+   * The events of the operation's own `beforeEvents` as they were asked for this call, just
+   * before it executes: a call that waited for an approval is asked again first. An operation
+   * whose subject can change between the check and the write, such as the newest revision of
+   * a Page, writes what their guardrails read.
+   */
+  beforeEvents?: readonly OperationBeforeEvent[];
 }
 
 /** What an operation's own check of the caller's right answers. A refusal names the right. */
