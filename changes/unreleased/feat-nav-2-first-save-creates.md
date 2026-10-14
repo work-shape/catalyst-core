@@ -51,3 +51,6 @@ section: Added
   does not have it, the page looks in the other owners Studio offers and sets Studio to the
   one that has it. A Data Store never published says "Draft · not published" in the list
   instead of asking for a state it does not have yet.
+- **A list row keeps its title:** chips that do not fit beside a row's title go to the line
+  below it instead of pushing the title out, so a Data Store's draft badge leaves its name
+  readable on a phone and beside the dock.

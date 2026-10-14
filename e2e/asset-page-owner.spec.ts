@@ -3,6 +3,7 @@ import { type Page } from "@playwright/test";
 import { z } from "zod";
 import { sendToolCall } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
+import { shootThemes } from "./surface-shots";
 import { expect, test } from "./test";
 
 // The page of an asset a workspace owns reads it where it is, whatever owner Studio was set to
@@ -75,6 +76,24 @@ test("a workspace's Data Store opens from the Working on line and by its address
   await page.goto("/build/data-stores");
   await expect(page.getByRole("button", { name: `Scope: ${label}` })).toBeVisible();
   await expect(page.locator("[data-data-store-row-draft]")).toBeVisible();
+  // The row's title is read whole beside or above its badges, on a phone and with the dock.
+  const row = page
+    .getByRole("listitem")
+    .filter({ has: page.locator("[data-data-store-row-draft]") });
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const title = row.locator("span.truncate").first();
+    await expect(title).toBeVisible();
+    expect(
+      await title.evaluate(
+        (element) => element.clientWidth > 0 && element.scrollWidth <= element.clientWidth
+      )
+    ).toBe(true);
+    await shootThemes(page, `nav-2-draft-row-${width}`, async () => {
+      await expect(page.locator("[data-data-store-row-draft]")).toBeVisible();
+    });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // By its address, with Studio set to the instance again.
   await page.getByRole("button", { name: /^Scope: / }).click();
