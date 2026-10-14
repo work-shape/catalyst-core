@@ -1,6 +1,5 @@
 import {
   AppError,
-  authorizeHeldRights,
   userInDeletionError,
   asUserId,
   auditActorFromUser,
@@ -40,8 +39,13 @@ import {
   requireManageableHolder,
   seesPrincipals
 } from "./grant-holder-rules";
+import { authorizeHeldRightsWithin } from "./held-rights-within";
 import { rightAtScope, scopeAssets } from "./person-rights";
-import { assetRight, authorizeGivingToPrincipal } from "./principal-rights";
+import {
+  assetRight,
+  authorizeGivingToPrincipal,
+  type PrincipalRightsOptions
+} from "./principal-rights";
 import type { ChatServerOptions } from "./types";
 
 type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
@@ -217,7 +221,9 @@ export class AccessWorkflow {
     // The rule of no escalation, for an allow and a deny alike: a deny is written only by a
     // holder of what it refuses, as an allow is given only by one.
     requireAuthorized(
-      authorizeHeldRights(context.access, [right], { gives: { label: holder.displayLabel } })
+      await authorizeHeldRightsWithin(this.rightsOptions(), context.access, [right], {
+        gives: { label: holder.displayLabel }
+      })
     );
     // The store refuses the same for a deletion requested after this read.
     if (holder.status === "deleting") throw userInDeletionError();
@@ -287,9 +293,12 @@ export class AccessWorkflow {
       });
     }
     requireAuthorized(
-      authorizeGivingToPrincipal({ actor, access: context.access }, principal, [
-        assetRight(action, asset)
-      ])
+      await authorizeGivingToPrincipal(
+        this.rightsOptions(),
+        { actor, access: context.access },
+        principal,
+        [assetRight(action, asset)]
+      )
     );
     // The store refuses the same for a principal deleted after this read.
     const grant = await this.options.stores.access.createGrant({
@@ -533,14 +542,16 @@ export class AccessWorkflow {
     holder: UserRecord
   ): Promise<void> {
     if (holder.id === actor.id) requireAuthorized(ownRowRefusal(REVOKE_OPERATION));
-    const assets = await scopeAssets(
-      { clientInstanceId: this.options.clientInstanceId, access: this.options.stores.access },
-      [row]
-    );
+    const assets = await scopeAssets(this.rightsOptions(), [row]);
     requireAuthorized(
-      authorizeHeldRights(context.access, [rightAtScope(row, assets)], {
-        gives: { label: holder.displayLabel }
-      })
+      await authorizeHeldRightsWithin(
+        this.rightsOptions(),
+        context.access,
+        [rightAtScope(row, assets)],
+        {
+          gives: { label: holder.displayLabel }
+        }
+      )
     );
   }
 
@@ -662,6 +673,10 @@ export class AccessWorkflow {
       })
     ]);
     return { hiddenUserIds, scopeAssets: new Map(assets.map((asset) => [asset.id, asset])) };
+  }
+
+  private rightsOptions(): PrincipalRightsOptions {
+    return { clientInstanceId: this.options.clientInstanceId, access: this.options.stores.access };
   }
 
   private async findUser(userId: string): Promise<UserRecord | undefined> {

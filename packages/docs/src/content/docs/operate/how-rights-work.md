@@ -249,7 +249,9 @@ Some things are reserved for a Superadmin. Only a Superadmin gives somebody the 
 
 "Manage users" does not let you hand out more than you hold. Giving a person a level, a switch or a grant asks whether you hold every right it carries, at the place it is given. Writing a deny, and taking one away, ask the same of the right the deny names. Nobody gives a right to themselves, and nobody writes or lifts a grant of their own, even one they already hold.
 
-Changing a person's account asks whether you hold every right the person holds: their level, their switches, their grants and the Shared Workspaces they are a member of. Their own Personal Workspace does not count. This covers the name and email, the password, a sign-in, the status, the level and the switches, and it holds for a person who is switched off as well, since switching them on is a change too. So a person with "Manage users" and nothing else can change only people who hold nothing beyond their Personal Workspace. Where a personal API key makes the call, its scopes count too. A refusal names the first right that is missing.
+A deny of yours counts wherever it lies. If you are denied a right on one agent, you cannot give that right for a whole Namespace, a workspace or the instance that contains the agent, and you cannot give a level that carries it: the person would hold what you are refused. Give it on single assets outside the deny instead, or ask someone without the deny. The refusal names the asset only if you may read it.
+
+Changing a person's account asks whether you hold every right the person holds: their level, their switches, their grants and the Shared Workspaces they are a member of. Their own Personal Workspace does not count. This covers the name and email, the password, a sign-in, the status, the level, the switches and the permission refs, and it holds for a person who is switched off as well, since switching them on is a change too. The check runs again as the change is written, so a level or a grant the person was given in the meantime counts. So a person with "Manage users" and nothing else can change only people who hold nothing beyond their Personal Workspace. Where a personal API key makes the call, its scopes count too. A refusal names the first right that is missing.
 
 "Approve skill changes" also lets a person decide an action that waits for an approval.
 
@@ -259,7 +261,7 @@ Managing Service Principals, `service_principals.manage`, is on no switch either
 
 Chatting is not on this list. Which conversations you see depends on the Collaboration Workspaces you are a member of and on whether a conversation is private, and not on one of these rights. The one exception is a Superadmin, who can enter every Shared Workspace.
 
-The Users page has one more field, **Permission refs**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field.
+The Users page has one more field, **Permission refs**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field. A reference follows the same rule as a right: you give it only if you hold it yourself, never to yourself, and the references a person holds count when you change their account.
 
 ## Grants
 

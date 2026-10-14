@@ -109,14 +109,19 @@ export class ApiAccessAdministrationWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
 
   /** Creating a principal: the right over principals, and every legacy key it is given. */
-  authorizeCreatePrincipal(
+  async authorizeCreatePrincipal(
     operationId: string,
     caller: Caller,
     command: Pick<CreateServicePrincipalCommand, "displayLabel" | "permissions">
-  ): OperationAuthorization {
+  ): Promise<OperationAuthorization> {
     const administration = authorizePrincipalAdministration(caller, operationId);
     if (!administration.allowed) return administration;
-    return authorizeGivingToPrincipal(caller, command, keyRights(command.permissions ?? []));
+    return authorizeGivingToPrincipal(
+      this.rightsOptions(),
+      caller,
+      command,
+      keyRights(command.permissions ?? [])
+    );
   }
 
   /**
@@ -141,10 +146,13 @@ export class ApiAccessAdministrationWorkflow {
       const others = held.filter(
         (right) => right.resource !== undefined || !isPermission(right.action)
       );
-      return authorizeGivingToPrincipal(caller, principal, [...keyRights(keys), ...others]);
+      return authorizeGivingToPrincipal(this.rightsOptions(), caller, principal, [
+        ...keyRights(keys),
+        ...others
+      ]);
     }
     const added = keys.filter((key) => !principal.permissions.includes(key));
-    return authorizeGivingToPrincipal(caller, principal, keyRights(added));
+    return authorizeGivingToPrincipal(this.rightsOptions(), caller, principal, keyRights(added));
   }
 
   /**
@@ -162,6 +170,7 @@ export class ApiAccessAdministrationWorkflow {
     const principal = await this.findPrincipal(command.servicePrincipalId);
     if (!principal) return { allowed: true };
     return authorizeGivingToPrincipal(
+      this.rightsOptions(),
       caller,
       principal,
       await principalRights(this.rightsOptions(), principal.id)

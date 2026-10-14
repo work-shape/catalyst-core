@@ -1,7 +1,7 @@
 import {
+  PERMISSION_REF_ACTION_PREFIX,
   ROLE_DEFAULT_ACTIONS,
   asUserId,
-  authorizeHeldRights,
   isAuthenticatedServicePrincipal,
   isPermission,
   isSuperadmin,
@@ -13,6 +13,7 @@ import {
   type UserRecord,
   type UserRole
 } from "@vivd-catalyst/core";
+import { authorizeHeldRightsWithin } from "./held-rights-within";
 import { personRights } from "./person-rights";
 import { RELEASE_KEY } from "./principal-rights";
 import type { ChatServerOptions } from "./types";
@@ -32,6 +33,8 @@ const SUPERADMIN_ASSIGNED_PERMISSIONS: ReadonlySet<string> = new Set([
 /** What a call changes about a user's roles and directly held rights, as far as it names them. */
 interface UserRightsChange {
   roles?: readonly UserRole[];
+  /** The references of tools the user may use, each checked as the action `ref:<reference>`. */
+  permissionRefs?: readonly string[];
   permissions?: readonly string[];
 }
 
@@ -133,7 +136,7 @@ export async function requireMayAdministerUser(
 
 /**
  * The rules of user administration, in order. The superadmin rules, which no right opens.
- * Nobody gives themselves a right. Whoever changes an account holds every right the account
+ * Nobody gives themselves a right, a reference of a tool included. Whoever changes an account holds every right the account
  * holds, since changing its password, sign-in, status or roles hands the account to them or
  * takes it from its owner. And whoever gives a role or a legacy key holds each action given.
  * `target` is the user as they are now, or nobody for a call that creates one.
@@ -156,36 +159,36 @@ async function userAdministrationRule(
       message: "Nobody gives themselves a role or a right: another holder of it gives it"
     };
   }
+  const rights = { clientInstanceId: options.clientInstanceId, access: options.stores.access };
   if (target !== undefined) {
-    const account = authorizeHeldRights(
+    const account = await authorizeHeldRightsWithin(
+      rights,
       caller.access,
-      await personRights(
-        {
-          clientInstanceId: options.clientInstanceId,
-          access: options.stores.access,
-          workspaces: options.stores.workspaces
-        },
-        target
-      ),
+      await personRights({ ...rights, workspaces: options.stores.workspaces }, target),
       { changes: { label: target.displayLabel } }
     );
     if (!account.allowed) return account;
   }
-  return authorizeHeldRights(caller.access, given, {
+  return authorizeHeldRightsWithin(rights, caller.access, given, {
     gives: { label: target?.displayLabel ?? call.displayLabel ?? "the new user" }
   });
 }
 
 /**
  * What a call gives: each role it adds, as the actions the role holds by default on the whole
- * instance, and each legacy key it adds or whose revocation it removes. Removing a role, a key
- * or adding a revocation takes away and gives nothing. An entry that is no key, and the release
- * key, which a person never carries, are left to the operation, which refuses them by name.
+ * instance; each legacy key it adds or whose revocation it removes; and each reference of a
+ * tool it adds, as the action `ref:<reference>`, which only a holder of the reference holds.
+ * Removing a role, a key or a reference, or adding a revocation, takes away and gives nothing.
+ * An entry that is no key, and the release key, which a person never carries, are left to the
+ * operation, which refuses them by name.
  */
 function rightsGiven(
-  target: Pick<UserRecord, "roles" | "permissions"> | undefined,
+  target: Pick<UserRecord, "roles" | "permissions" | "permissionRefs"> | undefined,
   call: UserRightsChange
 ): HeldRight[] {
+  const refs = (call.permissionRefs ?? [])
+    .filter((ref) => !target?.permissionRefs.includes(ref))
+    .map((ref) => `${PERMISSION_REF_ACTION_PREFIX}${ref}`);
   const roles = (call.roles ?? []).filter((role) => !target?.roles.includes(role));
   const roleActions = roles.flatMap((role): readonly string[] =>
     role === "user" || role === "admin" || role === "superadmin" ? ROLE_DEFAULT_ACTIONS[role] : []
@@ -198,7 +201,7 @@ function rightsGiven(
       return existing.includes(entry) ? [entry.slice(1)] : [];
     })
     .filter((key) => isPermission(key) && key !== RELEASE_KEY);
-  return [...new Set([...roleActions, ...keys])].map((action) => ({ action }));
+  return [...new Set([...roleActions, ...keys, ...refs])].map((action) => ({ action }));
 }
 
 /**

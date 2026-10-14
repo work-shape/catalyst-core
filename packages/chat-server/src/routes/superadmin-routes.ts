@@ -50,6 +50,7 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
       authorizeUserAdministration(options, create.id, context, {
         displayLabel: input.displayLabel,
         roles: input.roles,
+        permissionRefs: input.permissionRefs,
         permissions: input.permissions
       }),
     inputWithoutSecrets: (input) =>
@@ -74,6 +75,7 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
       authorizeUserAdministration(options, update.id, context, {
         userId: input.userId,
         roles: input.roles,
+        permissionRefs: input.permissionRefs,
         permissions: input.permissions
       }),
     resource: ({ userId }) => ({ kind: "user", id: userId }),

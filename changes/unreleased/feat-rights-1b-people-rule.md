@@ -16,6 +16,19 @@ section: Changed
   gives or lends it". Existing rows and accounts are not re-checked and nothing is migrated. A
   holder of `users.manage` without the admin role can therefore change only people who hold
   nothing beyond their Personal Workspace, until RIGHTS-1c lets an admin give them more.
+- **A deny counts wherever it lies:** a right given over a Namespace, a workspace or the whole
+  instance (a role, a legacy key, a key of a Service Principal, a Workflow's principal) is
+  refused while the giver holds a deny of it on anything inside that place, rather than
+  narrowed: "'agent.read' on an asset this call may not read is denied to this call, and the
+  right in the Namespace 'kai-' reaches it". The asset is named only to a giver who may read
+  it. The same holds for changing an account whose rights reach the deny.
+- **Permission refs follow the rule:** a reference of a tool is given only by a person who
+  holds it, never to oneself, and a person's references count when their account is changed.
+  A superadmin who does not hold a reference no longer gives it on the Users page.
+- **The account checked is the account written:** a change of a user, a sign-in added or
+  removed, and a password set ask the rule again inside the write, under a lock of the user
+  that keeps a concurrent change of their level, a grant written for them and a deletion
+  request waiting. A user promoted after the first check is refused, not written.
 - **Effect on an operated instance:** an admin keeps every change they made before, except
   changing the account of a person who holds `api_access.manage` or `agent_models.manage`,
   which now only a superadmin does, and writing a grant for themselves, which another admin

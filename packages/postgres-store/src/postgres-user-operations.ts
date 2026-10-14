@@ -9,6 +9,7 @@ import {
   type CreateUserInput,
   type DeleteUserInput,
   type DeleteUserIdentityInput,
+  type HeldUserChangeInput,
   type ResolveUserIdentityInput,
   type UpdateUserInput,
   type UpsertUserIdentityInput,
@@ -411,6 +412,8 @@ export async function updateUser(
   }
 
   const row = await db.transaction(async (tx) => {
+    // Without a check, the statement below refuses a user in deletion itself.
+    if (input.check) await lockAndCheckUser(tx, input);
     const [updated] = await tx
       .update(productUsers)
       .set(set)
@@ -449,7 +452,8 @@ export async function updateUser(
  */
 async function lockUserNotInDeletion(
   tx: PostgresTransaction,
-  input: { clientInstanceId: ClientInstanceId; userId: string }
+  input: { clientInstanceId: ClientInstanceId; userId: string },
+  strength: "share" | "update" = "share"
 ): Promise<void> {
   const [user] = await tx
     .select({ deletionRequestedAt: productUsers.deletionRequestedAt })
@@ -460,9 +464,42 @@ async function lockUserNotInDeletion(
         eq(productUsers.id, input.userId)
       )
     )
-    .for("share");
+    .for(strength);
   if (!user) throw new AppError("NOT_FOUND", "User is not available");
   if (user.deletionRequestedAt !== null) throw userInDeletionError();
+}
+
+/**
+ * Locks the user for a write that a `check` guards and asks the check with the user as the
+ * transaction reads them. The update lock keeps waiting every other change of the user: an
+ * update of their roles, a grant row written for them (which holds the user to share) and a
+ * deletion request, so what the check read stays true until the write commits.
+ */
+async function lockAndCheckUser(
+  tx: PostgresTransaction,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    userId: string;
+    check?: (user: UserRecord) => Promise<void>;
+  }
+): Promise<void> {
+  if (!input.check) {
+    await lockUserNotInDeletion(tx, input);
+    return;
+  }
+  await lockUserNotInDeletion(tx, input, "update");
+  await input.check(await requireUserRecord(tx, input.clientInstanceId, input.userId));
+}
+
+export async function whileUserHeld<T>(
+  connection: PostgresConnection,
+  input: HeldUserChangeInput,
+  change: () => Promise<T>
+): Promise<T> {
+  return connection.transaction(async (tx) => {
+    await lockAndCheckUser(tx, input);
+    return change();
+  });
 }
 
 export async function markUserDeletionRequested(
@@ -527,7 +564,7 @@ export async function upsertUserIdentity(
   input: UpsertUserIdentityInput
 ): Promise<UserRecord> {
   return connection.transaction(async (db) => {
-    await lockUserNotInDeletion(db, input);
+    await lockAndCheckUser(db, input);
     return upsertLockedUserIdentity(db, input);
   });
 }
@@ -581,7 +618,7 @@ export async function deleteUserIdentity(
   input: DeleteUserIdentityInput
 ): Promise<UserRecord> {
   return connection.transaction(async (db) => {
-    await lockUserNotInDeletion(db, input);
+    await lockAndCheckUser(db, input);
     return deleteLockedUserIdentity(db, input);
   });
 }

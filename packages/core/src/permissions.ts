@@ -187,6 +187,8 @@ export interface ActorAccess {
    * holder and decides no call: a covering deny is not read.
    */
   holdsGrantAt(action: string, scopeKinds: readonly PermissionGrant["scopeKind"][]): boolean;
+  /** The holder's denies of the action (of a legacy key, of its actions), wherever they lie. */
+  denials(action: string): readonly AccessEntry[];
 }
 
 export interface Authorizer {
@@ -569,7 +571,15 @@ export function createActorAccess(
           grant.action === action &&
           grant.effect === "allow" &&
           scopeKinds.includes(grant.scopeKind)
-      )
+      ),
+    denials(action) {
+      const actions: readonly string[] = isPermission(action)
+        ? LEGACY_PERMISSION_ACTIONS[action]
+        : [action];
+      return listAccessEntries(holder, persisted).filter(
+        (entry) => entry.effect === "deny" && actions.includes(entry.action)
+      );
+    }
   };
 }
 
@@ -597,7 +607,8 @@ export function boundedActorAccess(
       }
     },
     holdsGrantAt: (action, scopeKinds) =>
-      tester.holdsGrantAt(action, scopeKinds) && principal.holdsGrantAt(action, scopeKinds)
+      tester.holdsGrantAt(action, scopeKinds) && principal.holdsGrantAt(action, scopeKinds),
+    denials: (action) => [...tester.denials(action), ...principal.denials(action)]
   };
 }
 

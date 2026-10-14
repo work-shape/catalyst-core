@@ -22,9 +22,9 @@ type ScopedRight = Pick<AccessEntry, "action" | "scopeKind" | "scopeId" | "names
 /**
  * Every right a person holds, as whoever changes the person's account must hold it: each role
  * default and instance-wide row as its action, each row in a workspace, a Namespace or on one
- * asset on that resource, and each membership of a Shared Workspace as the rights it carries
- * there. A right a deny of the person takes away is left out, and so is a reference of a tool,
- * which no role or row names. The person's own Personal Workspace is the account itself, which
+ * asset on that resource, each membership of a Shared Workspace as the rights it carries
+ * there, and each reference of a tool as the action `ref:<reference>`. A right a deny of the
+ * person takes away is left out. The person's own Personal Workspace is the account itself, which
  * every account has and nobody gives, so its membership is not asked.
  *
  * The person counts as active: a disabled account holds its rights again once enabled, and
@@ -32,7 +32,7 @@ type ScopedRight = Pick<AccessEntry, "action" | "scopeKind" | "scopeId" | "names
  */
 export async function personRights(
   options: PersonRightsOptions,
-  person: Pick<UserRecord, "id" | "clientInstanceId" | "roles">
+  person: Pick<UserRecord, "id" | "clientInstanceId" | "roles" | "permissionRefs">
 ): Promise<HeldRight[]> {
   const [loaded, workspaces] = await Promise.all([
     options.access.loadPersistedAccess({
@@ -57,11 +57,9 @@ export async function personRights(
     id: person.id,
     clientInstanceId: person.clientInstanceId,
     roles: person.roles,
-    permissionRefs: []
+    permissionRefs: person.permissionRefs
   };
-  const allows = listAccessEntries(holder, persisted).filter(
-    (entry) => entry.effect === "allow" && entry.source !== "legacy_ref"
-  );
+  const allows = listAccessEntries(holder, persisted).filter((entry) => entry.effect === "allow");
   const assets = await scopeAssets(options, allows);
   const held = createActorAccess(holder, persisted);
   const rights = new Map<string, HeldRight>();

@@ -111,6 +111,7 @@ export class UserAdministrationWorkflow {
     await requireMayAdministerUser(this.options, operationId, context, undefined, {
       displayLabel: command.displayLabel,
       roles: command.roles,
+      permissionRefs: command.permissionRefs,
       permissions: command.permissions
     });
     this.requireAssignablePermissions(command.permissions);
@@ -145,13 +146,16 @@ export class UserAdministrationWorkflow {
   ): Promise<UserRecord> {
     const actor = personOf(context.actor);
     const existing = await this.getUserOrThrow(command.userId);
-    await requireMayAdministerUser(this.options, operationId, context, existing, {
+    const change = {
       roles: command.roles,
+      permissionRefs: command.permissionRefs,
       permissions: command.permissions
-    });
+    };
+    await requireMayAdministerUser(this.options, operationId, context, existing, change);
     requireNotInDeletion(existing);
     this.requireAssignablePermissions(command.permissions, existing.permissions);
     const updated = await this.options.stores.users.updateUser({
+      check: this.stillAdministrable(operationId, context, change),
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
       displayLabel: command.displayLabel,
@@ -201,6 +205,7 @@ export class UserAdministrationWorkflow {
     await requireMayAdministerUser(this.options, operationId, context, existing);
     requireNotInDeletion(existing);
     const updated = await this.options.stores.users.upsertUserIdentity({
+      check: this.stillAdministrable(operationId, context),
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
       authSource: command.authSource,
@@ -235,6 +240,7 @@ export class UserAdministrationWorkflow {
     await requireMayAdministerUser(this.options, operationId, context, existing);
     requireNotInDeletion(existing);
     const updated = await this.options.stores.users.deleteUserIdentity({
+      check: this.stillAdministrable(operationId, context),
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
       authSource: command.authSource,
@@ -280,17 +286,20 @@ export class UserAdministrationWorkflow {
     const identity = user.identities.find(
       (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
     );
+    const check = this.stillAdministrable(operationId, context);
     if (!identity) {
       await this.setOrCreatePasswordSignIn(context, user, {
         password: command.password,
-        auditType: "user.password_sign_in_created"
+        auditType: "user.password_sign_in_created",
+        check
       });
       return { ok: true };
     }
-    await setPassword({
-      externalUserId: identity.externalUserId,
-      password: command.password
-    });
+    // Set under the lock of the user, asked again: the user may have been given a role since.
+    await this.options.stores.users.whileUserHeld(
+      { clientInstanceId: this.options.clientInstanceId, userId: user.id, check },
+      () => setPassword({ externalUserId: identity.externalUserId, password: command.password })
+    );
     const { audit: auditRecorder } = context;
     await auditRecorder.record({
       type: "user.password_reset",
@@ -331,7 +340,8 @@ export class UserAdministrationWorkflow {
     if (!user.identities.some((identity) => identity.authSource === STANDALONE_AUTH_SOURCE)) {
       user = await this.setOrCreatePasswordSignIn(context, user, {
         password: randomBytes(32).toString("base64url"),
-        auditType: "user.password_sign_in_created"
+        auditType: "user.password_sign_in_created",
+        check: this.stillAdministrable(operationId, context)
       });
     }
     const identity = user.identities.find(
@@ -390,6 +400,8 @@ export class UserAdministrationWorkflow {
     input: {
       password: string;
       auditType: "user.password_sign_in_created" | "user.password_reset";
+      /** Asked again where the sign-in is attached to the user, under the user's lock. */
+      check?: (user: UserRecord) => Promise<void>;
     }
   ): Promise<UserRecord> {
     const setOrCreatePasswordSignIn = this.options.standaloneAuth?.setOrCreatePasswordSignIn;
@@ -414,6 +426,7 @@ export class UserAdministrationWorkflow {
     });
     await this.requireAvailablePasswordIdentity(user, signIn.externalUserId);
     const updated = await this.options.stores.users.upsertUserIdentity({
+      ...(input.check === undefined ? {} : { check: input.check }),
       clientInstanceId: this.options.clientInstanceId,
       userId: user.id,
       authSource: STANDALONE_AUTH_SOURCE,
@@ -434,6 +447,19 @@ export class UserAdministrationWorkflow {
       }
     });
     return updated;
+  }
+
+  /**
+   * The rules of user administration as the store asks them inside its write, under the lock
+   * of the user, with the user as they are then (`requireMayAdministerUser`): a request that
+   * gave the user a role or a right after the first check is waited for and counts.
+   */
+  private stillAdministrable(
+    operationId: string,
+    context: ChangeContext,
+    change: Parameters<typeof requireMayAdministerUser>[4] = {}
+  ): (user: UserRecord) => Promise<void> {
+    return (user) => requireMayAdministerUser(this.options, operationId, context, user, change);
   }
 
   private async requireAvailablePasswordEmail(user: UserRecord): Promise<void> {
