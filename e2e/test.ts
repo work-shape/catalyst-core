@@ -415,8 +415,11 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "Chromium's own log line: the address names a conversation of another person in the " +
       "dock, the instance refuses its thread, and the dock opens empty, which the test asserts.",
     matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(404).source}`, "u"),
-    path: /^\/api\/v1\/conversations\/[^/]+\/(?:thread|draft-attachments|resources)$/u,
-    tests: ["a person who may not read the dock's conversation gets an empty dock and no error"]
+    path: /^\/api\/v1\/conversations\/[^/]+\/(?:thread|draft-attachments|resources|runs)$/u,
+    tests: [
+      "a person who may not read the dock's conversation gets an empty dock and no error",
+      "a link to a conversation the person may not read opens the empty dock at once, and a message typed meanwhile raises no error"
+    ]
   },
   {
     // C-95: resize observer loop of the top-anchored thread.
