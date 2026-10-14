@@ -1,5 +1,5 @@
 ---
-title: Client Assembly
+title: Client assembly
 description: Keep customer-specific code thin and source-controlled.
 ---
 

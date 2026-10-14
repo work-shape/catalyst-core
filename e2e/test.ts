@@ -161,14 +161,12 @@ const allowedPageErrors: readonly AllowedPageError[] = [
   {
     name: "grant-already-there",
     reason:
-      "Chromium's own log line: the test asks for three grants of which two exist, the " +
-      "instance answers 409 for each of the two, and the page says that it left them alone, " +
-      "which the test asserts.",
+      "Chromium's own log line: the test asks for two grants of which one exists, the " +
+      "instance answers 409 for that one, and the page says that it left it alone, which the " +
+      "test asserts.",
     matches: requestAnswered(409),
     path: /^\/api\/v1\/instance\/access\/grants$/u,
-    tests: [
-      "an administrator registers a Namespace, grants in it, checks, denies, revokes and deletes"
-    ]
+    tests: ["an administrator registers a Namespace, grants, checks, denies, revokes and deletes"]
   },
   {
     name: "planted-policy-refusal",
@@ -408,6 +406,28 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "for whoever operates the instance. The test serves such a configuration on purpose.",
     matches: /^The instance configuration does not fit this interface at: /u,
     tests: ["a configuration the interface cannot read shows an error that a retry recovers from"]
+  },
+  {
+    name: "dock-conversation-not-readable",
+    reason:
+      "Chromium's own log line: the address names a conversation of another person in the " +
+      "dock, the instance refuses its thread, and the dock opens empty, which the test asserts.",
+    matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(404).source}`, "u"),
+    path: /^\/api\/v1\/conversations\/[^/]+\/(?:thread|draft-attachments|resources|runs)$/u,
+    tests: [
+      "a person who may not read the dock's conversation gets an empty dock and no error",
+      "a link to a conversation the person may not read opens the empty dock at once, and a message typed meanwhile raises no error",
+      "on a slow connection, a message typed into the dock of a refused link is not sent"
+    ]
+  },
+  {
+    name: "dock-thread-rate-limited",
+    reason:
+      "Chromium's own log line: the test answers the dock's thread once with 429 and asserts " +
+      "that it is asked for again.",
+    matches: requestAnswered(429),
+    path: /^\/api\/v1\/conversations\/[^/]+\/thread$/u,
+    tests: ["a thread answered once with 429 is tried again and shows in the dock"]
   },
   {
     // C-95: resize observer loop of the top-anchored thread.

@@ -1,12 +1,15 @@
 import { compileJsonSchema } from "@vivd-catalyst/connections";
 import {
   WORKFLOW_DATASET_KEY,
+  isAppError,
   operationDenialError,
   workflowDatasetReferenceSchema,
   workflowStepIdempotencyKey,
+  type AuthenticatedIdentity,
   type ClientInstanceId,
   type JsonObject,
   type JsonValue,
+  type OperationDraftContext,
   type OperationRunId,
   type PlatformStores,
   type WorkflowCodeOutcome,
@@ -29,6 +32,7 @@ import {
   type WorkflowStepFiles
 } from "./code-step";
 import type { WorkflowStepIndex } from "./definition";
+import type { WorkflowDefinitionSource } from "./definition-source";
 import {
   holdsBrokenDatasetReference,
   holdsDatasetReference,
@@ -49,6 +53,7 @@ import {
 import { resolveInput, resolveReference } from "./references";
 import { workflowRunActor } from "./run-identity";
 import { WorkflowStepFailure } from "./step-failure";
+import { testRunCall } from "./test-run";
 
 // The work of one step, without anything of it written: the engine writes how it went and
 // what follows it in one transaction of its own.
@@ -79,6 +84,8 @@ export interface StepExecutorOptions {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   operationCalls: WorkflowOperationCalls;
+  /** Where a step of a published run reads whether its Workflow is still published. */
+  definitions: Pick<WorkflowDefinitionSource, "read">;
   limits: WorkflowRunLimits;
   now(): Date;
   /** Where the script of a code step is read. */
@@ -97,7 +104,7 @@ export interface StepAttempt {
 }
 
 export function createStepExecutor(options: StepExecutorOptions) {
-  const { clientInstanceId, stores, operationCalls, limits, now } = options;
+  const { clientInstanceId, stores, operationCalls, definitions, limits, now } = options;
 
   /** Fails a step whose value does not fit a schema its definition declares. */
   function fitsSchema(schema: JsonObject, value: JsonValue, code: string, what: string): void {
@@ -207,6 +214,42 @@ export function createStepExecutor(options: StepExecutorOptions) {
     }
   }
 
+  /**
+   * Who an operation step calls as. A run of the published revision acts as its principal; a
+   * test run of a draft acts as the person testing, bounded by the principal. A run goes on
+   * after its Workflow is deleted, and its calls then say so: the publish confirms none.
+   */
+  async function callerOf(
+    run: WorkflowRun,
+    stepRun: WorkflowStepRun
+  ): Promise<{
+    actor: AuthenticatedIdentity;
+    draft?: OperationDraftContext;
+    workflowDeleted?: true;
+  }> {
+    if (run.mode === "test") return testRunCall(stores, run, stepRun);
+    const actor = await workflowRunActor(stores.apiAccess, run);
+    if (!actor) {
+      throw new WorkflowStepFailure(
+        "principal_inactive",
+        "The service principal the run acts as no longer exists or is disabled",
+        { systemic: true }
+      );
+    }
+    return { actor, ...((await workflowDeleted(run)) ? { workflowDeleted: true as const } : {}) };
+  }
+
+  /** Whether the Workflow of a run of what is published is published no more. */
+  async function workflowDeleted(run: WorkflowRun): Promise<boolean> {
+    try {
+      return (await definitions.read(run.workflow)) === undefined;
+    } catch (error) {
+      // A published revision this engine refuses to run is published all the same.
+      if (isAppError(error)) return false;
+      throw error;
+    }
+  }
+
   /** Does the work of one step and writes nothing of it but the id of its Operation Run. */
   async function execute(attempt: StepAttempt): Promise<StepEnd> {
     const { run, stepRun, index, signal } = attempt;
@@ -234,21 +277,14 @@ export function createStepExecutor(options: StepExecutorOptions) {
           }
           const input = await resolveInput(scope, step.input);
           withinStepData(input, "The input of the step");
-          const actor = await workflowRunActor(stores.apiAccess, run);
-          if (!actor) {
-            throw new WorkflowStepFailure(
-              "principal_inactive",
-              "The service principal the run acts as no longer exists or is disabled",
-              { systemic: true }
-            );
-          }
+          const caller = await callerOf(run, stepRun);
           const result = await callStepOperation({
             calls: operationCalls,
             run,
             stepRun,
             operation: step.operation,
             input,
-            actor,
+            ...caller,
             signal,
             wait: {
               waitMs: limits.operationOutcomeWaitMs,
@@ -344,11 +380,19 @@ export function createStepExecutor(options: StepExecutorOptions) {
     if (stepRun.stepType !== "operation") return undefined;
     const first = await tx.operationRuns.findByIdempotencyKey({
       clientInstanceId,
-      actor: { kind: "service_principal", id: run.principal.id },
+      // A step of a test run called as the person who started it.
+      actor:
+        run.mode === "test"
+          ? { kind: run.startedBy.kind, id: run.startedBy.id }
+          : { kind: "service_principal", id: run.principal.id },
       idempotencyKey: workflowStepIdempotencyKey(stepRun.id)
     });
     if (!first) return undefined;
-    const kept = { finishedAt, operationRunId: first.id, call: { effect: first.effect } };
+    const kept = {
+      finishedAt,
+      operationRunId: first.id,
+      call: { effect: first.effect, target: first.target }
+    };
     switch (first.status) {
       case "done":
         return { ...kept, status: "done", ...(first.output ? { output: first.output.value } : {}) };

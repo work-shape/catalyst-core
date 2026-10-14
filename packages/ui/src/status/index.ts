@@ -12,7 +12,14 @@ export {
   type BadgeSize,
   type BadgeTone
 } from "./badge";
-export { Chip, ScopeChip, type ChipProps, type ChipSize, type ScopeChipProps } from "./chip";
+export {
+  Chip,
+  ScopeChip,
+  type ChipPopover,
+  type ChipProps,
+  type ChipSize,
+  type ScopeChipProps
+} from "./chip";
 export {
   ConnectionIcon,
   type ConnectionIconProps,
@@ -38,3 +45,4 @@ export {
   type SkillIconProps,
   type SkillIconSize
 } from "./skill-icon";
+export { TargetBadge, type CallTarget, type TargetBadgeProps } from "./target-badge";

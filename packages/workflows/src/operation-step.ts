@@ -1,6 +1,7 @@
 import {
   AppError,
   isAppError,
+  isAuthenticatedServicePrincipal,
   operationDenialError,
   WORKFLOW_ERROR_CODES,
   workflowStepIdempotencyKey,
@@ -9,8 +10,11 @@ import {
   type JsonValue,
   type OperationCall,
   type OperationDefinition,
+  type OperationDenial,
+  type OperationDraftContext,
   type OperationRegistry,
   type OperationRunId,
+  type OperationTarget,
   type WorkflowManifest,
   type WorkflowRun,
   type WorkflowStepRun,
@@ -22,10 +26,13 @@ import { indexWorkflowSteps, stepOperationRefusal } from "./definition";
 import { jsonValueSchema } from "./json";
 import { WORKFLOW_STEP_JOB_MAX_ATTEMPTS } from "./limits";
 import { WorkflowStepFailure, type WorkflowStepFailureOptions } from "./step-failure";
+import { WORKFLOW_TEST_RUN_ERRORS } from "./test-run";
 
 // The call an operation step makes. It takes the one call path, so it is checked, recorded
 // and answered like every other call of the operation: the right is the run's principal's,
-// the policy is asked for the origin `workflow`, and the call leaves an Operation Run.
+// the policy is asked for the origin `workflow`, and the call leaves an Operation Run. A step
+// of a test run calls as the person testing, bounded by the principal, with the draft context
+// that lets `runOperation()` decide where the call goes (ADR-0031).
 
 /** The call path of the instance, as the engine uses it. */
 export interface WorkflowOperationCalls {
@@ -62,8 +69,18 @@ export class OperationStepFailure extends WorkflowStepFailure {
 
 const traceOf = (
   call: WorkflowStepRunCall,
-  operationRunId: OperationRunId | undefined
-): OperationStepTrace => ({ call, ...(operationRunId ? { operationRunId } : {}) });
+  operationRunId: OperationRunId | undefined,
+  target?: OperationTarget
+): OperationStepTrace => ({
+  call: target === undefined ? call : { ...call, target },
+  ...(operationRunId ? { operationRunId } : {})
+});
+
+/** Who holds the key of a step's call: the run's principal, or in a test run the tester. */
+const keyHolder = (actor: AuthenticatedIdentity) => ({
+  kind: isAuthenticatedServicePrincipal(actor) ? ("service_principal" as const) : ("user" as const),
+  id: actor.id
+});
 
 /**
  * The step failure of a first call that was cut off where nothing rules out that a second one
@@ -94,7 +111,10 @@ function secretOperationRefusal(
 
 const interruptedSchema = z.object({ interrupted: z.literal(true) });
 const failureReasonSchema = z.object({ reason: z.string().regex(/^[a-z_]{1,64}$/u) });
-const refusedRightSchema = z.object({ action: z.string() });
+const refusedRightSchema = z.object({
+  action: z.string(),
+  boundBy: z.object({ id: z.string(), label: z.string() }).optional()
+});
 const heldRunSchema = z.object({
   operationRunId: z.custom<OperationRunId>((value) => typeof value === "string" && value !== "")
 });
@@ -160,7 +180,7 @@ async function awaitFirstCall(input: {
   for (;;) {
     const first = await runs.findByIdempotencyKey({
       clientInstanceId,
-      actor: { kind: "service_principal", id: input.actor.id },
+      actor: keyHolder(input.actor),
       idempotencyKey: input.idempotencyKey
     });
     if (first?.status !== "running") return;
@@ -193,6 +213,10 @@ async function awaitFirstCall(input: {
  *
  * A call that the policy would hold for an approval is refused instead of filed. Nothing in
  * this release takes a run up again when somebody decides, so a held call would never run.
+ *
+ * A step of a test run carries `draft`: its actor is the tester and the principal bounds it.
+ * A changing call that was simulated ends the step as done, with what it would have done as
+ * its output, so the steps after it run on.
  */
 export async function callStepOperation(input: {
   calls: WorkflowOperationCalls;
@@ -201,6 +225,10 @@ export async function callStepOperation(input: {
   operation: string;
   input: JsonObject;
   actor: AuthenticatedIdentity;
+  /** Set on a step of a test run: the draft, the step and the principal that bounds it. */
+  draft?: OperationDraftContext;
+  /** Set on a step of a published run whose Workflow was deleted since the run started. */
+  workflowDeleted?: true;
   signal: AbortSignal;
   wait: OperationOutcomeWait;
   /** Keeps the id of the Operation Run of the step's call on its step run. */
@@ -252,8 +280,11 @@ export async function callStepOperation(input: {
     actor: input.actor,
     origin: { kind: "workflow", workflowRunId: run.id, stepRunId: stepRun.id },
     correlationId: run.correlationId,
-    ...(changing ? { idempotencyKey } : {})
+    ...(changing ? { idempotencyKey } : {}),
+    ...(input.draft ? { draft: input.draft } : {}),
+    ...(input.workflowDeleted ? { workflowDeleted: input.workflowDeleted } : {})
   };
+  const refused = refusedRight(run.principal.name, operation, source, input.draft !== undefined);
   if (changing) {
     await awaitFirstCall({ ...input, definition, idempotencyKey, made });
   }
@@ -262,10 +293,14 @@ export async function callStepOperation(input: {
   try {
     outcome = await runOperation(call, deps, changing ? {} : { signal: input.signal });
   } catch (error) {
-    throw refusalOf(error, operation, made, run.principal.name) ?? error;
+    throw refusalOf(error, operation, made, refused) ?? error;
   }
   const { result } = outcome;
-  const trace = traceOf(made, outcome.unrecorded ? undefined : result.runId);
+  const trace = traceOf(
+    outcome.publishedWouldAsk ? { ...made, publishedWouldAsk: outcome.publishedWouldAsk } : made,
+    outcome.unrecorded ? undefined : result.runId,
+    outcome.run.target
+  );
   switch (result.status) {
     case "done": {
       const output = jsonValueSchema.safeParse(result.output ?? null);
@@ -283,15 +318,20 @@ export async function callStepOperation(input: {
       if (result.reason.kind === "forbidden") {
         // The principal does not hold the right, or may not call from a Workflow at all. An
         // operation only a person calls is refused by a rule no grant to the principal opens.
-        const { reason, message, action } = result.reason;
-        if (reason === "user_only" && message !== undefined) {
-          throw new OperationStepFailure(refusal.code, message, trace, { systemic: true });
+        // In a test run the refusal names the side that lacks the right: tester or principal.
+        const { reason, message: ruled, action } = result.reason;
+        if (reason === "user_only" && ruled !== undefined) {
+          throw new OperationStepFailure(refusal.code, ruled, trace, { systemic: true });
         }
+        const { code, message } = refused(action, result.reason.boundBy !== undefined);
+        throw new OperationStepFailure(code, message, trace, { systemic: true, action });
+      }
+      if (input.draft && isApprovalUnavailable(result.reason)) {
         throw new OperationStepFailure(
           refusal.code,
-          missingRight(run.principal.name, operation, action),
+          `The policy asks for another person's approval before '${operation}' runs live, and a test run cannot wait for one yet. Without "Run live once" the step is simulated`,
           trace,
-          { systemic: true, action }
+          { systemic: true }
         );
       }
       // A policy is set for the operation and not for one item: the next would meet it too.
@@ -325,14 +365,28 @@ export async function callStepOperation(input: {
         trace
       );
     }
-    // A run of a published revision is no call of a draft. The test run of a draft (EW-5t)
-    // answers a simulated step.
-    case "dry_run":
-      throw new OperationStepFailure(
-        "operation_simulated",
-        `The operation '${operation}' was simulated, which only a test run of a draft does`,
-        trace
-      );
+    // A run of a published revision is no call of a draft and is never simulated. A step of a
+    // test run that was simulated is done: its output says what it would have done.
+    case "dry_run": {
+      if (!input.draft) {
+        throw new OperationStepFailure(
+          "operation_simulated",
+          `The operation '${operation}' was simulated, which only a test run of a draft does`,
+          trace
+        );
+      }
+      const wouldHaveDone = jsonValueSchema.safeParse(result.input ?? null);
+      const output: JsonObject = {
+        wouldHaveDone: {
+          operation,
+          ...(wouldHaveDone.success && result.input !== undefined
+            ? { input: wouldHaveDone.data }
+            : {}),
+          ...(result.wouldAsk ? { wouldAsk: result.wouldAsk } : {})
+        }
+      };
+      return { output, ...trace };
+    }
     case "expired":
     case "pending_approval":
     case "pending_confirmation":
@@ -352,7 +406,7 @@ function refusalOf(
   error: unknown,
   operation: string,
   call: WorkflowStepRunCall,
-  principal: string
+  refused: RefusedRight
 ): OperationStepFailure | undefined {
   if (!isAppError(error)) return undefined;
   const held = heldRunSchema.safeParse(error.details);
@@ -389,9 +443,10 @@ function refusalOf(
   const right = refusedRightSchema.safeParse(error.details);
   const action = right.success ? right.data.action : undefined;
   if (error.code === "FORBIDDEN") {
+    const { code, message } = refused(action, right.success && right.data.boundBy !== undefined);
     return new OperationStepFailure(
-      error.code,
-      missingRight(principal, operation, action),
+      code,
+      message,
       { call },
       { systemic: true, ...(action === undefined ? {} : { action }) }
     );
@@ -404,14 +459,47 @@ function refusalOf(
   );
 }
 
+/** The refusal of a right of one step: the right, and whether the principal lacks it. */
+type RefusedRight = (
+  action: string | undefined,
+  principalSide: boolean
+) => { code: string; message: string };
+
 /**
- * The sentence of a refused right. The call path words its refusal for a person who made a
+ * The sentences of a refused right. The call path words its refusal for a person who made a
  * request; the caller of a step is the service principal of the run, and whoever reads the
- * run needs to know which principal lacks which right.
+ * run needs to know which principal lacks which right. In a test run the caller is the person
+ * testing, bounded by the principal, and the sentence names the side that lacks the right.
  */
-function missingRight(principal: string, operation: string, action: string | undefined): string {
-  const right = action === undefined ? "the right it needs" : `the right '${action}'`;
-  return `The service principal '${principal}', which the Workflow runs as, does not hold ${right} to call '${operation}'. An administrator can grant it to the principal`;
+function refusedRight(
+  principal: string,
+  operation: string,
+  source: string | undefined,
+  testRun: boolean
+): RefusedRight {
+  const on = source === undefined ? "" : ` on '${source}'`;
+  return (action, principalSide) => {
+    const right = action === undefined ? "the right it needs" : `the right '${action}'`;
+    if (!testRun) {
+      return {
+        code: "FORBIDDEN",
+        message: `The service principal '${principal}', which the Workflow runs as, does not hold ${right} to call '${operation}'. An administrator can grant it to the principal`
+      };
+    }
+    return principalSide
+      ? {
+          code: "FORBIDDEN",
+          message: `The principal '${principal}' does not hold ${right}${on} to call '${operation}'; publishing would fail at this step`
+        }
+      : {
+          code: WORKFLOW_TEST_RUN_ERRORS.testerMissingRight,
+          message: `You do not hold ${right}${on} to call '${operation}'. A test run acts as the person testing, bounded by the principal '${principal}'`
+        };
+  };
+}
+
+function isApprovalUnavailable(denial: OperationDenial): boolean {
+  return denial.kind === "policy" && denial.reason === "approval_unavailable";
 }
 
 /**

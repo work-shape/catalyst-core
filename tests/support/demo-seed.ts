@@ -346,6 +346,7 @@ const NOTHING_CREATED = {
   "connection grant rows": 0,
   workspaces: 0,
   "workspace members": 0,
+  "workspace assets": 0,
   apps: 0
 };
 

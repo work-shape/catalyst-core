@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { PersonalApiKey, PlatformContext } from "@vivd-catalyst/api-client";
@@ -7,7 +8,6 @@ import {
   buildPersonalKeyScopes,
   connectCodeOfSearch,
   formatConnectCode,
-  heldKeyActions,
   initialPersonalKeyDraft,
   instanceUrl,
   isCompleteConnectCode,
@@ -19,7 +19,14 @@ import {
 } from "../packages/chat-ui/src/control-plane/personal-api-keys-model";
 import { settingsCatalog, visibleSettingsPages } from "../packages/chat-ui/src/settings/catalog";
 import { ConnectCodeConfirm } from "../packages/chat-ui/src/settings/pages/api-keys";
-import { platformContext, taxNamespace } from "./chat-ui-build-fixtures";
+import {
+  ConnectLocalAgentView,
+  LOCAL_AGENT_TOOLS,
+  localAgentCommand,
+  type LocalAgentCommandState,
+  type LocalAgentTool
+} from "../packages/chat-ui/src/settings/pages/connect-local-agent";
+import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { personalWorkspace, settingsUser } from "./chat-ui-settings-fixtures";
 
@@ -49,6 +56,7 @@ function withPublishingKind(context: PlatformContext): PlatformContext {
         plural: "apps",
         lifecycle: "draft_published",
         representation: "files",
+        owners: ["workspace"],
         actions: {
           read: "app.read",
           write: "app.write",
@@ -77,15 +85,14 @@ describe("personal API key model", () => {
     expect(new Set(offer).size).toBe(offer.length);
   });
 
-  it("checks at first the actions the person holds on the instance or in a Namespace", () => {
-    const context = platformContext([taxNamespace], ["skill.write"]);
-    expect(heldKeyActions(personalKeyActionOffer(context), context)).toEqual([
-      "agent.read",
-      "agent.write",
-      "agent.delete",
-      "skill.read",
-      "skill.write"
-    ]);
+  it("starts a new key with no scope ticked, so it gets only what the person ticks", () => {
+    expect(initialPersonalKeyDraft().actions).toEqual([]);
+    expect(initialPersonalKeyDraft("catalyst CLI")).toMatchObject({
+      name: "catalyst CLI",
+      actions: []
+    });
+    // Nothing is sent until a scope is ticked.
+    expect(personalKeyDraftProblem(initialPersonalKeyDraft("laptop"))).toBe("scopes");
   });
 
   it("limits every chosen action to the Namespace where one is given", () => {
@@ -97,7 +104,7 @@ describe("personal API key model", () => {
   });
 
   it("sends a draft once it has a name, a scope and a well-formed Namespace", () => {
-    const draft = initialPersonalKeyDraft(["agent.write"], "laptop");
+    const draft = { ...initialPersonalKeyDraft("laptop"), actions: ["agent.write"] };
     expect(draft.expiryDays).toBe(90);
     expect(personalKeyDraftProblem({ ...draft, name: " " })).toBe("name");
     expect(personalKeyDraftProblem({ ...draft, actions: [] })).toBe("scopes");
@@ -114,7 +121,7 @@ describe("personal API key model", () => {
     expect(personalKeyExpiryOf("365")).toBe(365);
     expect(personalKeyExpiryOf("400")).toBeUndefined();
     const longest = personalKeyRequest(
-      { ...initialPersonalKeyDraft(["agent.read"], "x"), expiryDays: 365 },
+      { ...initialPersonalKeyDraft("x"), actions: ["agent.read"], expiryDays: 365 },
       now
     );
     expect(longest?.expiresAt).toBe("2027-10-13T12:00:00.000Z");
@@ -173,7 +180,7 @@ describe("You > API keys", () => {
               createdAt: "2026-10-13T11:58:00.000Z",
               expiresAt: "2026-10-13T12:13:00.000Z"
             },
-            offer: { actions: ["agent.read", "agent.write"], held: ["agent.read"], namespaces: [] },
+            offer: { actions: ["agent.read", "agent.write"], namespaces: [] },
             pending: false,
             onConfirm: async () => undefined
           })
@@ -209,5 +216,102 @@ describe("You > API keys", () => {
     expect(markup).toContain("Revoked");
     // Only the active key offers Revoke.
     expect(markup.match(/>Revoke</gu)?.length).toBe(1);
+  });
+});
+
+// You > Connect a local agent: one command per tool that installs the CLI version the instance
+// names, one on npm, and runs `catalyst setup` against the instance. Platform Access acceptance
+// check 52 (CONNECT-1a). Fails without the change: the page did not exist.
+
+const URL_OF_INSTANCE = "https://chat.example.com";
+
+function renderConnect(
+  tool: LocalAgentTool,
+  locale: "en" | "de",
+  state: LocalAgentCommandState
+): string {
+  return renderToStaticMarkup(
+    createElement(
+      TranslationProvider,
+      { children: null, locale },
+      createElement(ConnectLocalAgentView, { tool, onToolChange: () => undefined, state })
+    )
+  );
+}
+
+const ready = (command: string): LocalAgentCommandState => ({ status: "ready", command });
+
+describe("You > Connect a local agent", () => {
+  const catalog = settingsCatalog(administration);
+  const ids = (modules?: Record<string, { enabled: boolean }>) =>
+    visibleSettingsPages(catalog, {
+      user: settingsUser(),
+      workspaces: [personalWorkspace()],
+      modules
+    }).map((page) => `${page.group}/${page.id}`);
+
+  it("is shown under You beside API keys while personal API keys are on", () => {
+    expect(ids()).not.toContain("you/connect");
+    expect(ids({ personalApiKeys: { enabled: false } })).not.toContain("you/connect");
+    const shown = ids({ personalApiKeys: { enabled: true } });
+    expect(shown.indexOf("you/connect")).toBe(shown.indexOf("you/api-keys") + 1);
+  });
+
+  it("gives each tool one command with the instance's CLI version and address", () => {
+    expect(LOCAL_AGENT_TOOLS).toEqual(["claude-code", "codex", "other"]);
+    expect(localAgentCommand("claude-code", "1.4.0", URL_OF_INSTANCE)).toBe(
+      "npm install --global @work-shape/catalyst-cli@1.4.0 && catalyst setup claude-code --instance https://chat.example.com"
+    );
+    expect(localAgentCommand("codex", "1.4.0", URL_OF_INSTANCE)).toContain(
+      "catalyst setup codex --instance"
+    );
+    expect(localAgentCommand("other", "1.4.0", URL_OF_INSTANCE)).toContain(
+      "catalyst setup other --instance"
+    );
+  });
+
+  it("shows the command of the chosen tool with a copy button, in English and German", () => {
+    for (const tool of LOCAL_AGENT_TOOLS) {
+      const command = localAgentCommand(tool, "1.4.0", URL_OF_INSTANCE);
+      const english = renderConnect(tool, "en", ready(command));
+      expect(english).toContain("Connect a local agent");
+      expect(english).toContain(command.replaceAll("&", "&amp;"));
+      expect(english).toContain('aria-label="Copy"');
+      expect(english).toContain("Node 22");
+      expect(english).toContain('href="/settings/you/api-keys"');
+      const german = renderConnect(tool, "de", ready(command));
+      expect(german).toContain("Lokalen Agenten verbinden");
+      expect(german).toContain("Node 22");
+    }
+    expect(renderConnect("codex", "en", ready("x"))).toContain("Command for Codex");
+    expect(renderConnect("other", "de", ready("x"))).toContain("dein Werkzeug bekommt einen Skill");
+    const german = renderConnect("other", "de", ready("x"));
+    expect(german).toContain("in deinem Namen");
+    expect(german).toContain(">Anderes<");
+    expect(german).toContain("Braucht Node 22 oder neuer.");
+  });
+
+  it("shows no command while the context is read, and says so while no CLI is published for the instance", () => {
+    expect(renderConnect("codex", "en", { status: "loading" })).not.toContain("catalyst setup");
+    const unavailable = renderConnect("codex", "en", { status: "unavailable" });
+    expect(unavailable).toContain("The command is not available yet");
+    expect(unavailable).not.toContain("npm install");
+    expect(unavailable).not.toContain('aria-label="Copy"');
+    expect(renderConnect("codex", "de", { status: "unavailable" })).toContain(
+      "Der Befehl ist noch nicht verfügbar"
+    );
+  });
+
+  it("reads the instance's context and nothing else: opening or copying issues no key and no code", async () => {
+    const source = await readFile(
+      new URL("../packages/chat-ui/src/settings/pages/connect-local-agent.tsx", import.meta.url),
+      "utf8"
+    );
+    const apiImports = [...source.matchAll(/import \{([^}]*)\} from "\.\.\/\.\.\/api\/[^"]+"/gu)]
+      .flatMap((match) => (match[1] ?? "").split(","))
+      .map((name) => name.trim())
+      .filter((name) => name !== "");
+    expect(apiImports).toEqual(["usePlatformContextQuery"]);
+    expect(source).not.toMatch(/client\.|useMutation|connect_codes|api_keys|fetch\(/u);
   });
 });

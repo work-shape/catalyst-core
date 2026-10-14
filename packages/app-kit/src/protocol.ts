@@ -118,15 +118,6 @@ export type PageMessage =
       input: Record<string, unknown>;
       idempotencyKey?: string;
     }
-  | {
-      type: "connection_call";
-      session: string;
-      requestId: string;
-      connection: string;
-      operation: string;
-      input: unknown;
-      idempotencyKey?: string;
-    }
   | { type: "workflow_run"; session: string; requestId: string; runId: string };
 
 /** What the interface sends. */

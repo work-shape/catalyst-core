@@ -121,7 +121,8 @@ export function AssetEditorShell({
   control,
   outcome,
   saving,
-  saveLabel
+  saveLabel,
+  saveHint
 }: {
   /** What the frame handed the kind's page. */
   frame: BuildAssetEditorProps;
@@ -137,6 +138,8 @@ export function AssetEditorShell({
   outcome: BuildWriteOutcome | undefined;
   saving: boolean;
   saveLabel: string;
+  /** What a save does, beside the save button. Without it a save applies at once. */
+  saveHint?: string;
 }) {
   const { locale, t } = useTranslation();
   const { page, back, actions, notice, canWrite, asset, start, onUnsavedChange } = frame;
@@ -187,7 +190,16 @@ export function AssetEditorShell({
           variant="detail"
           back={back}
           title={title}
-          state={badges}
+          state={
+            frame.draftState ? (
+              <>
+                {frame.draftState}
+                {badges}
+              </>
+            ) : (
+              badges
+            )
+          }
           secondaryActions={
             <>
               {headActions}
@@ -308,7 +320,7 @@ export function AssetEditorShell({
                 }
                 discardLabel={isNew ? undefined : t("build.discard")}
                 onDiscard={isNew ? undefined : control.discard}
-                hint={t("configAppliesImmediately")}
+                hint={saveHint ?? t("configAppliesImmediately")}
               />
             ) : null}
           </PageFooter>

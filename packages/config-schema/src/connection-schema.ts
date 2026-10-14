@@ -12,6 +12,7 @@ import {
   CONNECTOR_TYPE_PATTERN,
   EGRESS_PROTOCOLS,
   WORKFLOW_ERROR_CODES,
+  connectionExposureRefusal,
   operationLimitsSchema,
   operationPagingSchema,
   secretRef,
@@ -294,6 +295,16 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
           message: "An exposure is listed once"
         });
       }
+      for (const exposure of operation.exposure) {
+        const refusal = connectionExposureRefusal(connection.credentialMode, exposure);
+        if (refusal) {
+          context.addIssue({
+            code: "custom",
+            path: ["operations", index, "exposure"],
+            message: refusal
+          });
+        }
+      }
       // A policy only tightens. A reading operation runs or is denied; only a changing one
       // can wait for an approval.
       if (operation.policy === "approval" && operation.effect !== "changing") {
@@ -445,9 +456,14 @@ const egressAllowEntrySchema = z
 
 /**
  * Where Connections may connect. Deny by default: an empty list refuses every target. Each
- * entry is one protocol, host and port.
+ * entry is one protocol, host and port. `allowPublicHttps` is the operator opening every
+ * `https` target on port 443 whose addresses are all public, for an instance whose admins
+ * connect services themselves. Off unless set.
  */
 export const egressConfigSchema = z
-  .object({ allow: z.array(egressAllowEntrySchema).default([]) })
+  .object({
+    allow: z.array(egressAllowEntrySchema).default([]),
+    allowPublicHttps: z.boolean().optional()
+  })
   .strict()
   .prefault({});

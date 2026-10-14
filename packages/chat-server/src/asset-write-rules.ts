@@ -1,5 +1,6 @@
 import {
   AppError,
+  asCollaborationWorkspaceId,
   findNamespaceOfAssetName,
   hasAuthScope,
   isAppError,
@@ -10,6 +11,7 @@ import {
   type AccessResource,
   type ActorAccess,
   type AgentConfig,
+  type AssetScope,
   type AuditRecorder,
   type AuthenticatedIdentity,
   type ConfigAssetKind,
@@ -219,7 +221,10 @@ const RELEASE_ACTION = "assets.release";
  * 4. The default agent. The holder names the instance default with the batch, which no
  *    other caller of the operation may. (`requireReleaseSync`)
  * 5. The Namespace. A release names none and reaches any asset of the instance; every other
- *    batch names the one Namespace it stays in. (`requireNamespaceOrRelease`)
+ *    batch names the one Namespace or the one workspace it stays in. (`requireBatchScope`)
+ *
+ * A batch that names a workspace is never a release, whatever key it came with: what a
+ * workspace owns is written by the rights on that workspace. (`accessOfSyncCredential`)
  *
  * And a release is handled in six ways no other write is:
  *
@@ -255,12 +260,14 @@ const RELEASE_SCOPE = "config_assets:release";
  * the principal and the release scope on the credential of this call. With a credential that
  * carries no release scope the principal holds no release right here, so the batch is an
  * ordinary writer's: it names its Namespace and is bound by everything `isReleaseSync` lists.
+ * A batch that names a workspace is an ordinary writer's with any credential.
  */
 export function accessOfSyncCredential(
   actor: AuthenticatedIdentity,
-  access: ActorAccess
+  access: ActorAccess,
+  batch: { workspaceId?: string }
 ): ActorAccess {
-  if (hasAuthScope(actor, RELEASE_SCOPE)) return access;
+  if (batch.workspaceId === undefined && hasAuthScope(actor, RELEASE_SCOPE)) return access;
   const authorize: ActorAccess["authorize"] = (action, resource) =>
     action === RELEASE_ACTION
       ? { allowed: false, reason: "no_grant" }
@@ -285,13 +292,50 @@ export function requireReleaseSync(access: ActorAccess, surface: AssetWriteSurfa
   }
 }
 
-/** Refuses a batch that names no Namespace, unless it is a release. */
-export function requireNamespaceOrRelease(
+/**
+ * Refuses a batch that names neither a Namespace nor a workspace, unless it is a release, and
+ * one that names both.
+ */
+export function requireBatchScope(
   access: ActorAccess,
-  namespace: string | undefined
+  batch: { namespace?: string; workspaceId?: string }
 ): void {
-  if (namespace === undefined && !isReleaseSync(access, "sync")) {
-    throw new AppError("VALIDATION_FAILED", "A batch names the Namespace it belongs to");
+  if (batch.namespace !== undefined && batch.workspaceId !== undefined) {
+    throw new AppError("VALIDATION_FAILED", "A batch names a Namespace or a workspace, not both", {
+      reason: "invalid_scope"
+    });
+  }
+  if (
+    batch.namespace === undefined &&
+    batch.workspaceId === undefined &&
+    !isReleaseSync(access, "sync")
+  ) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "A batch names the Namespace or the workspace it belongs to"
+    );
+  }
+}
+
+/**
+ * Refuses an owner that is no workspace of this instance, before the store is asked to write
+ * an asset for it. Whether the caller may write there is the right's, decided before.
+ */
+export async function requireOwnerWorkspace(
+  options: AssetWorkflowOptions,
+  workspaceId: string | undefined
+): Promise<void> {
+  if (workspaceId === undefined) return;
+  const workspace = await options.stores.workspaces.getWorkspace(
+    options.clientInstanceId,
+    asCollaborationWorkspaceId(workspaceId)
+  );
+  if (!workspace) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'${workspaceId}' is no workspace of this client instance`,
+      { reason: "workspace_not_found" }
+    );
   }
 }
 
@@ -477,7 +521,38 @@ export function requireInstanceDefaultChange(
   }
 }
 
-export function setsInitialDefault(set: AssetSet, kind: WorkflowAssetKind): boolean {
+/**
+ * Whether a write of the first asset of a kind with an instance default makes it the default.
+ * Only an asset the instance owns becomes it: a workspace's agent is never the default.
+ */
+export function setsInitialDefault(
+  set: AssetSet,
+  kind: WorkflowAssetKind,
+  scope: AssetScope
+): boolean {
+  return scope.kind === "instance" && isFirstOfDefaultKind(set, kind);
+}
+
+/**
+ * Refuses a workspace's asset as the first of a kind with an instance default. An instance
+ * that holds such an asset has a default, which only an asset of the instance can be, so the
+ * first one is made for the whole instance.
+ */
+export function requireInstanceFirstForDefault(
+  set: AssetSet,
+  kind: WorkflowAssetKind,
+  scope: AssetScope
+): void {
+  if (scope.kind === "workspace" && isFirstOfDefaultKind(set, kind)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `The instance has no ${kind.kind} yet. Its first ${kind.kind} becomes its default, which only a ${kind.kind} of the whole instance can be`,
+      { reason: "default_owned_by_workspace" }
+    );
+  }
+}
+
+function isFirstOfDefaultKind(set: AssetSet, kind: WorkflowAssetKind): boolean {
   return (
     kind.holdsInstanceDefault &&
     definitionsOf(set, kind.kind).length === 0 &&
@@ -669,6 +744,32 @@ export function storedWritableIssues(
     return undefined;
   } catch (error) {
     if (isAppError(error)) return errorIssues(error);
+    throw error;
+  }
+}
+
+/**
+ * What a write of a definition would be refused for by the instance's own rules, asked once
+ * the definitions themselves hold. `withinOwners` is the writer's rule on what the definition
+ * names across owners.
+ */
+export async function writeIssuesOf(
+  options: AssetWorkflowOptions,
+  access: ActorAccess,
+  stored: AssetSet,
+  found: ReturnType<typeof findAssetSetIssues>,
+  withinOwners: () => void
+): Promise<AssetSetIssue[]> {
+  try {
+    const issues = found.validateWrite(stored);
+    if (issues.length > 0) return issues;
+    withinOwners();
+    const { refusals } = await findChangedAgentRefusals(options, access, stored, found.accepted);
+    return refusals.flatMap(({ error }) => errorIssues(error));
+  } catch (error) {
+    if (isAppError(error) && error.code === "VALIDATION_FAILED") {
+      return errorIssues(error);
+    }
     throw error;
   }
 }

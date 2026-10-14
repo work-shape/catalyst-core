@@ -89,7 +89,7 @@ export async function runOperationCommand(argv: readonly string[], base: Options
         file === undefined
           ? undefined
           : new File([await readFile(resolve(base.cwd, file))], basename(file));
-      const api = await openInstance(options);
+      const { api } = await openInstance(options);
       return await printCall(
         options,
         operation,
@@ -109,7 +109,7 @@ export async function runOperationCommand(argv: readonly string[], base: Options
         );
       }
       const connectionName = positionals[2];
-      const api = await openInstance(options);
+      const { api } = await openInstance(options);
       const detail = await api.read((client) =>
         client.connections.get({ params: { name: connectionName } })
       );
@@ -143,7 +143,7 @@ export async function runOperationCommand(argv: readonly string[], base: Options
         "Usage: catalyst connection test|discover <name>, or catalyst connection tools"
       );
     }
-    const api = await openInstance(options);
+    const { api } = await openInstance(options);
     return await printCall(
       options,
       operation,

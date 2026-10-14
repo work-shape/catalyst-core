@@ -160,6 +160,34 @@ export async function publishEvents(
   ];
 }
 
+/**
+ * The fields of one stored revision as its write is read at `asset.before_write` or its
+ * publish at the publish event: its name and its text. Nothing where the revision is gone or
+ * belongs to another asset than the one named. For a test and a dry run, which keep nothing.
+ */
+export async function storedRevisionFields(
+  options: RevisionOptions,
+  input: { kind: string; name: string; revision: number; assetId?: string }
+): Promise<GuardrailFields | undefined> {
+  const revision = await options.configAssets.store.getConfigAssetRevision({
+    clientInstanceId: options.clientInstanceId,
+    kind: input.kind,
+    name: input.name,
+    revision: input.revision
+  });
+  if (
+    !revision ||
+    revision.config === null ||
+    (input.assetId !== undefined && revision.assetId !== input.assetId)
+  ) {
+    return undefined;
+  }
+  return {
+    name: input.name,
+    content: await revisionText(options, { ...revision, config: revision.config })
+  };
+}
+
 type RevisionOptions = Pick<
   AssetWorkflowOptions,
   "clientInstanceId" | "configAssets" | "stores" | "pages"

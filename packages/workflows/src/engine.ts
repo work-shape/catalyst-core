@@ -12,7 +12,6 @@ import {
   type JobControl,
   type JobSchedule,
   type JsonValue,
-  type OperationRunId,
   type PlatformStores,
   type RegisteredJobHandler,
   type StorePage,
@@ -29,12 +28,7 @@ import {
   type WorkflowStepRunRef,
   type WorkflowStepRunView
 } from "@vivd-catalyst/core";
-import {
-  codeStepIssues,
-  noWorkflowStepFiles,
-  workflowStepFilesRefusal,
-  type WorkflowStepFiles
-} from "./code-step";
+import { noWorkflowStepFiles, type WorkflowStepFiles } from "./code-step";
 import {
   WORKFLOW_STEP_DATA_DAYS,
   createWorkflowDataPruning,
@@ -49,10 +43,15 @@ import { itemLabelOf } from "./references";
 import { principalActor } from "./run-identity";
 import { loopConcurrencyOf, withEveryBodyStep } from "./run-view";
 import { createBlockEnds } from "./run-blocks";
-import { createStartCheck, type PreparedStart } from "./run-start";
+import {
+  createRunOpening,
+  type StartWorkflowRunInput,
+  type TestWorkflowRunInput
+} from "./run-open";
+import { createStartCheck } from "./run-start";
 import { createScheduleTrigger } from "./schedule-trigger";
 import { workflowCodeJobKind, workflowStepJobKind } from "./step-job";
-import { createScheduledStart, type RunOrigin } from "./scheduled-start";
+import { createScheduledStart } from "./scheduled-start";
 import { createStepExecutor, type StepEnd, type WorkflowCodeRunner } from "./step-execution";
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
@@ -90,19 +89,17 @@ export interface WorkflowEngineOptions {
   pruneBatch?: WorkflowDataPruningOptions["batch"];
 }
 
-export interface StartWorkflowRunInput {
-  workflow: string;
-  input: unknown;
-  /** Who starts the run. Its right opened the start; the run acts as its own principal. */
-  startedBy: AuthenticatedIdentity;
-  /** The Operation Run of the call that starts the run. */
-  operationRunId?: OperationRunId;
-  correlationId: string;
-}
+export type { StartWorkflowRunInput, TestWorkflowRunInput } from "./run-open";
 
 export interface WorkflowEngine {
   /** Starts a run of the published definition from its manual trigger. */
   start(input: StartWorkflowRunInput): Promise<WorkflowRunView>;
+  /**
+   * Starts a test run of a draft in mode `test`, whatever its triggers. Its steps act as the
+   * person who starts it, bounded by the Workflow's principal: a reading step reads live and
+   * a changing step is simulated unless "Run live once" covers it.
+   */
+  test(input: TestWorkflowRunInput): Promise<WorkflowRunView>;
   /**
    * Ends a run as `cancelled`. No further step starts. A call a step is making finishes and
    * is recorded on its step run. A run that has ended is answered as it is.
@@ -156,6 +153,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     clientInstanceId,
     stores,
     operationCalls,
+    definitions,
     limits,
     now,
     stepFiles,
@@ -608,52 +606,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
   const prepareStart = createStartCheck({ clientInstanceId, stores, operationCalls, limits });
 
-  /**
-   * Writes a run with the step run of its trigger and the audit of its start. Answers
-   * nothing where the run names a due time of a schedule that has its run.
-   */
-  async function openRun(
-    tx: PlatformStores,
-    prepared: PreparedStart,
-    started: RunOrigin
-  ): Promise<WorkflowRun | undefined> {
-    const { published, trigger, input, principal } = prepared;
-    const { actor, ...origin } = started;
-    const createdAt = now();
-    const run = await tx.workflowRuns.createRun({
-      id: createPlatformId<"WorkflowRunId">("wfr"),
-      clientInstanceId,
-      workflow: published.manifest.id,
-      // The run keeps this revision to its end, whatever is published after it started.
-      definitionRevisionId: published.revisionId,
-      mode: "live",
-      definition: published.manifest,
-      input,
-      principal,
-      deadlineAt: new Date(createdAt.getTime() + limits.maxDurationMs).toISOString(),
-      createdAt: createdAt.toISOString(),
-      ...origin
-    });
-    if (!run) return undefined;
-    await beginStep(tx, run, trigger, { key: trigger.id });
-    await tx.audit.appendAuditEvent({
-      clientInstanceId,
-      type: "workflow_run.started",
-      status: "success",
-      actor,
-      subject: run.id,
-      correlationId: run.correlationId,
-      metadata: {
-        workflow: run.workflow,
-        definitionRevisionId: run.definitionRevisionId,
-        trigger: run.trigger,
-        mode: run.mode,
-        principalId: run.principal.id,
-        ...(run.scheduledFor === undefined ? {} : { scheduledFor: run.scheduledFor })
-      }
-    });
-    return run;
-  }
+  const { openRun, startByHand } = createRunOpening({
+    clientInstanceId,
+    stores,
+    limits,
+    now,
+    stepFiles,
+    prepareStart,
+    beginTrigger: (tx, run, trigger) => beginStep(tx, run, trigger, { key: trigger.id })
+  });
 
   const schedule = createScheduleTrigger({
     clientInstanceId,
@@ -692,29 +653,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           { reason: "no_manual_trigger" }
         );
       }
-      const prepared = await prepareStart(published, input.input);
-      const scripts = await codeStepIssues(published, stepFiles);
-      if (scripts.length > 0) throw workflowStepFilesRefusal(published.manifest.id, scripts);
-      const { startedBy } = input;
-      const run = await stores.transaction((tx) =>
-        openRun(tx, prepared, {
-          trigger: "manual",
-          startedBy: {
-            kind: isAuthenticatedServicePrincipal(startedBy) ? "service_principal" : "user",
-            id: startedBy.id,
-            label: startedBy.displayLabel
-          },
-          ...(input.operationRunId ? { operationRunId: input.operationRunId } : {}),
-          actor: auditActorFromIdentity(startedBy),
-          correlationId: input.correlationId
-        })
-      );
-      const view = run
-        ? await stores.workflowRuns.readRun({ clientInstanceId, id: run.id })
-        : undefined;
-      if (!view) throw new AppError("INTERNAL", "The started Workflow Run cannot be read");
-      return view;
+      return startByHand(published, input, "live");
     },
+
+    // A test run starts from the trigger whatever its kinds: only a person starts one.
+    test: ({ draft, ...input }) => startByHand(draft, input, "test"),
 
     async cancel(input) {
       const cancelled = await stores.transaction(async (tx) => {

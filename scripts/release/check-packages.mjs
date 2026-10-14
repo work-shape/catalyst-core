@@ -24,17 +24,25 @@ const MAX_TARBALL_BYTES = 300_000;
 // chat-ui and ui ship src/ next to dist/ for Tailwind scanning. chat-server ships the pinned
 // view runtime it serves, about 230 kB packed, its own code, about 150 kB packed, and every
 // released App Kit version, about 385 kB packed each, most of it the chart engine; 1.3.0 is about
-// 450 kB, because the library it bundles gained the flow canvas. Four versions are released, and
-// the limit has room for none more. A version repeats the chart engine and
+// 450 kB, because the library it bundles gained the flow canvas, and 1.4.0, which drops the
+// kit's `connections.call`, about 485 kB. Five versions are released; the limit moved for the
+// fifth and has room for none more. A version repeats the chart engine and
 // React byte for byte, about 258 kB packed, so sharing those between versions is the way to
 // stop the growth before the limit moves again. postgres-store ships its migrations with one
-// schema snapshot each, about 9 kB packed per migration; 69 migrations are 620 kB. chat-ui grew
-// past 1 MB with the Workflow, Data Store, Agents and rights pages.
+// schema snapshot each, about 9 kB packed per migration; 69 migrations are 620 kB, 82 are 814 kB
+// (2026-10-14, the Knowledge Base migration). chat-ui grew
+// past 1 MB with the Workflow, Data Store, Agents and rights pages, and past 1.2 MB with the
+// guardrail pages of EW-6a, the Studio scope filter and workspace owners of WS-OWN-1a, Connect a
+// local agent of CONNECT-1a and the tool chips of TOOLS-1 (2026-10-14); src/ and dist/ both count
+// each line.
 const MAX_TARBALL_BYTES_BY_DIR = {
-  "chat-ui": 1_200_000,
+  "chat-ui": 1_250_000,
   ui: 500_000,
-  "chat-server": 2_100_000,
-  "postgres-store": 800_000
+  // Raised on 2026-10-14 for App Kit 1.4.0 and the guardrail assets of EW-6a. Follow-up
+  // KIT-SHARE-1: vendored App Kit versions share React and the chart engine; then lower the
+  // limit again.
+  "chat-server": 2_700_000,
+  "postgres-store": 850_000
 };
 const FORBIDDEN_FILES = [
   [/\.map$/u, "source map"],

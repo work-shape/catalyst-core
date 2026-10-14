@@ -25,6 +25,7 @@ export const kindLabelKeys = {
   connection: "access.kindConnection",
   app: "access.kindApp",
   workflow: "access.kindWorkflow",
+  knowledge_base: "access.kindKnowledgeBase",
   guardrail: "access.kindGuardrail"
 } as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
 
@@ -39,8 +40,6 @@ interface KindWords {
   actionOnKind: TranslationKey;
   /** "Workflow {name}": one asset as the place of a row. */
   scopeAsset: TranslationKey;
-  /** What a right in a Namespace covers. */
-  inNamespaceDescription: TranslationKey;
   /** The choice of one asset as the place, and what it means. */
   onAsset: TranslationKey;
   onAssetDescription: TranslationKey;
@@ -53,7 +52,6 @@ interface KindWords {
 }
 
 const configAssetWords = {
-  inNamespaceDescription: "access.scopeInNamespaceDescription",
   onAsset: "access.scopeOnAsset",
   onAssetDescription: "access.scopeOnAssetDescription",
   assetField: "access.grantAsset",
@@ -76,7 +74,6 @@ export const kindWords: Record<GrantKind, KindWords> = {
   connection: {
     actionOnKind: "access.actionOnConnection",
     scopeAsset: "access.scopeConnection",
-    inNamespaceDescription: "access.scopeInNamespaceConnectionDescription",
     onAsset: "access.scopeOnConnection",
     onAssetDescription: "access.scopeOnConnectionDescription",
     assetField: "access.grantConnection",
@@ -87,13 +84,34 @@ export const kindWords: Record<GrantKind, KindWords> = {
   workflow: {
     actionOnKind: "access.actionOnWorkflow",
     scopeAsset: "access.scopeWorkflow",
-    inNamespaceDescription: "access.scopeInNamespaceWorkflowDescription",
     onAsset: "access.scopeOnWorkflow",
     onAssetDescription: "access.scopeOnWorkflowDescription",
     assetField: "access.grantWorkflow",
     chooseAsset: "access.chooseWorkflow",
     noAssets: "access.noWorkflows",
     assetsLoadFailed: "access.workflowsLoadFailed"
+  },
+  knowledge_base: {
+    actionOnKind: "access.actionOnKnowledgeBase",
+    scopeAsset: "access.scopeKnowledgeBase",
+    onAsset: "access.scopeOnKnowledgeBase",
+    onAssetDescription: "access.scopeOnKnowledgeBaseDescription",
+    assetField: "access.grantKnowledgeBase",
+    chooseAsset: "access.chooseKnowledgeBase",
+    noAssets: "access.noKnowledgeBases",
+    assetsLoadFailed: "access.knowledgeBasesLoadFailed"
+  },
+  // `guardrail.publish` is granted for one workspace only: the asset words name no choice
+  // the dialog offers.
+  guardrail: {
+    actionOnKind: "access.actionOnGuardrail",
+    scopeAsset: "access.scopeGuardrail",
+    onAsset: "access.scopeOnGuardrail",
+    onAssetDescription: "access.scopeOnGuardrailDescription",
+    assetField: "access.grantGuardrail",
+    chooseAsset: "access.chooseGuardrail",
+    noAssets: "access.noGuardrails",
+    assetsLoadFailed: "access.guardrailsLoadFailed"
   }
 };
 
@@ -112,7 +130,12 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
   "workflow.read": "access.actionReadWorkflowDescription",
   "workflow.use": "access.actionUseWorkflowDescription",
   "workflow.write": "access.actionWriteWorkflowDescription",
-  "workflow.publish": "access.actionPublishWorkflowDescription"
+  "workflow.publish": "access.actionPublishWorkflowDescription",
+  "knowledge_base.read": "access.actionReadKnowledgeBaseDescription",
+  "knowledge_base.use": "access.actionUseKnowledgeBaseDescription",
+  "knowledge_base.write": "access.actionWriteKnowledgeBaseDescription",
+  "knowledge_base.publish": "access.actionPublishKnowledgeBaseDescription",
+  "guardrail.publish": "access.actionPublishGuardrailDescription"
 };
 
 /**
@@ -131,14 +154,17 @@ export function scopeChoice(
 ): { label: TranslationKey; description: TranslationKey } {
   const words = kindWords[kind];
   switch (scopeKind) {
-    case "namespace":
-      return { label: "access.scopeInNamespace", description: words.inNamespaceDescription };
-    case "asset":
-      return { label: words.onAsset, description: words.onAssetDescription };
     case "workspace":
       return {
         label: "access.scopeInWorkspace",
         description: "access.scopeInWorkspaceDescription"
+      };
+    case "asset":
+      return { label: words.onAsset, description: words.onAssetDescription };
+    case "instance":
+      return {
+        label: "access.scopeWholeInstance",
+        description: "access.scopeWholeInstanceDescription"
       };
   }
 }

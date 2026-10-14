@@ -31,6 +31,12 @@ export interface UiLabels {
   stateLimitReached: string;
   /** A part of a graph that was not reached or lies on a path that was not taken. */
   stateSkipped: string;
+  /** What a `TargetBadge` says of a call: made for real, made against a test target, simulated. */
+  targetLive: string;
+  targetTest: string;
+  targetSimulated: string;
+  /** The button of `RunLiveOnce`. */
+  runLiveOnce: string;
   /** The controls of a `FlowCanvas`. */
   flowZoomIn: string;
   flowZoomOut: string;
@@ -80,6 +86,10 @@ export const uiLabelsEn: UiLabels = {
   stateCancelled: "Cancelled",
   stateLimitReached: "Limit reached",
   stateSkipped: "Skipped",
+  targetLive: "Live",
+  targetTest: "Test",
+  targetSimulated: "Simulated",
+  runLiveOnce: "Run live once",
   flowZoomIn: "Zoom in",
   flowZoomOut: "Zoom out",
   flowFit: "Show everything",
@@ -120,6 +130,10 @@ export const uiLabelsDe: UiLabels = {
   stateCancelled: "Abgebrochen",
   stateLimitReached: "Limit erreicht",
   stateSkipped: "Übersprungen",
+  targetLive: "Live",
+  targetTest: "Test",
+  targetSimulated: "Simuliert",
+  runLiveOnce: "Einmal live ausführen",
   flowZoomIn: "Vergrößern",
   flowZoomOut: "Verkleinern",
   flowFit: "Alles zeigen",

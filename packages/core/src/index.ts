@@ -31,6 +31,7 @@ export * from "./workflows";
 export * from "./workflow-runs";
 export * from "./data-stores";
 export * from "./data-store-records";
+export * from "./knowledge";
 
 export { LOG_REDACTION } from "./logger";
 export type { Logger } from "./logger";

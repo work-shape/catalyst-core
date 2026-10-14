@@ -15,7 +15,9 @@ const SQLSTATE_SENTENCES: Readonly<Record<string, string>> = {
   "42501": "needs a privilege its role does not hold",
   "42601": "has a syntax error",
   "42703": "names a column that does not exist",
-  "42P01": "names a table or view that does not exist"
+  "42P01": "names a table or view that does not exist",
+  "53400":
+    "went past a limit the database sets on one session, such as the room for temporary files: narrow or aggregate it"
 };
 
 const SQLSTATE_CLASS_SENTENCES: Readonly<Record<string, string>> = {

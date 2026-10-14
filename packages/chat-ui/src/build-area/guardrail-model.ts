@@ -1,8 +1,8 @@
 import type { BadgeTone } from "@vivd-catalyst/ui";
 import type { TranslationKey } from "../i18n";
+import type { GuardrailOutcomeName, GuardrailRunFacts } from "./guardrail-sentence";
 
-/** What a guardrail does on a hit. */
-export type GuardrailOutcomeName = "allow" | "warn" | "require_approval" | "block";
+export type { GuardrailOutcomeName };
 
 /** What a hit does, in words: the badge of the list and the page, and its sentence. */
 export const GUARDRAIL_OUTCOME_VIEWS: Record<
@@ -59,6 +59,10 @@ export interface GuardrailView {
   origin?: string;
   /** The agent whose calls it applies to. */
   agent?: string;
+  /** The workspace whose events it applies to. */
+  workspace?: string;
+  /** Release config sets it: the operator's floor. */
+  setByOperator: boolean;
   outcome: GuardrailOutcomeName;
   checkKind: "pattern" | "model_judge";
   pattern?: string;
@@ -88,6 +92,7 @@ export function readGuardrail(config: Record<string, unknown>): GuardrailView {
   const operation = text(filter.operation);
   const origin = text(filter.origin);
   const agent = text(filter.agent);
+  const workspace = text(filter.workspace);
   const pattern = text(check.pattern);
   const instruction = text(check.instruction) ?? text(check.reason);
   const fields = Array.isArray(check.fields)
@@ -101,10 +106,66 @@ export function readGuardrail(config: Record<string, unknown>): GuardrailView {
     ...(operation === undefined ? {} : { operation }),
     ...(origin === undefined ? {} : { origin }),
     ...(agent === undefined ? {} : { agent }),
+    ...(workspace === undefined ? {} : { workspace }),
+    setByOperator: config.origin === "release",
     outcome: readOutcome(config.outcome),
     checkKind: check.kind === "pattern" ? "pattern" : "model_judge",
     ...(pattern === undefined ? {} : { pattern }),
     ...(fields.length > 0 ? { fields } : {}),
     ...(instruction === undefined ? {} : { instruction })
+  };
+}
+
+/** Who a guardrail belongs to, as an asset names its owner. */
+export type GuardrailScope = GuardrailRunFacts["scope"];
+
+/** What the sentence of when it runs is built from, read from a guardrail's definition. */
+export function guardrailFactsOfView(
+  view: GuardrailView,
+  scope: GuardrailScope
+): GuardrailRunFacts {
+  return {
+    event: view.event,
+    outcome: view.outcome,
+    checkKind: view.checkKind,
+    ...(view.appliesTo === undefined ? {} : { kind: view.appliesTo }),
+    ...(view.operation === undefined ? {} : { operation: view.operation }),
+    ...(view.origin === undefined ? {} : { callOrigin: view.origin }),
+    ...(view.agent === undefined ? {} : { agent: view.agent }),
+    ...(view.workspace === undefined ? {} : { workspace: view.workspace }),
+    scope,
+    setByOperator: view.setByOperator
+  };
+}
+
+/**
+ * The same, read from what a list row knows of a guardrail: the attributes its summary names.
+ * A row without an event, from a server before them, names none.
+ */
+export function guardrailFactsOfRow(
+  attributes: Readonly<Record<string, string | boolean>> | undefined,
+  scope: GuardrailScope
+): GuardrailRunFacts {
+  const read = (key: string) => {
+    const value = attributes?.[key];
+    return typeof value === "string" && value !== "" ? value : undefined;
+  };
+  const kind = read("appliesTo");
+  const operation = read("operation");
+  const callOrigin = read("callOrigin");
+  const agent = read("agent");
+  const workspace = read("workspace");
+  const checkKind = read("checkKind");
+  return {
+    event: read("event") ?? "",
+    outcome: readOutcome(read("outcome")),
+    ...(checkKind === "pattern" || checkKind === "model_judge" ? { checkKind } : {}),
+    ...(kind === undefined ? {} : { kind }),
+    ...(operation === undefined ? {} : { operation }),
+    ...(callOrigin === undefined ? {} : { callOrigin }),
+    ...(agent === undefined ? {} : { agent }),
+    ...(workspace === undefined ? {} : { workspace }),
+    scope,
+    setByOperator: read("origin") === "release"
   };
 }

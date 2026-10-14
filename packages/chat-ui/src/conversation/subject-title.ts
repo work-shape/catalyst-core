@@ -1,0 +1,62 @@
+import { useQuery } from "@tanstack/react-query";
+import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
+import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import { useWorkspaceApiClient } from "../api/workspace-api-client";
+import { workspaceQueryKeys } from "../api/workspace-query-keys";
+import { useApp } from "../apps/app-data";
+import { appTitle } from "../apps/app-model";
+import { agentConfigToForm, type AgentFormState } from "../build-area/asset-form-model";
+import { AGENT_ASSET_KIND } from "../build-area/build-rights";
+import { useTranslation } from "../i18n";
+import { retryUnlessGone } from "../pages/page-address";
+import { useWorkflowNames } from "../workflows/workflow-data";
+import type { SubjectAsset } from "./subject-run";
+
+/**
+ * The saved state of an agent, under the key of every asset read: each save of the agent of
+ * the conversation drops it, and what shows the agent shows it as it is now.
+ */
+function useAgentAsset(agent: string, enabled: boolean) {
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  return useQuery({
+    queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, "standalone"), AGENT_ASSET_KIND, agent],
+    queryFn: ({ signal }) =>
+      client.assets.get({ params: { kind: AGENT_ASSET_KIND, name: agent }, signal }),
+    enabled,
+    retry: retryUnlessGone,
+    refetchOnMount: "always"
+  });
+}
+
+/** The name people read for an agent, in the reader's language, or its id. */
+function agentTitle(form: AgentFormState, locale: string, fallback: string): string {
+  const pair = form.displayName;
+  const title = (locale === "de" ? pair.de : pair.en) || pair.en || pair.de;
+  return title.trim() === "" ? fallback : title;
+}
+
+/** The name people read for the asset a conversation is about, once its record arrived. */
+export function useSubjectTitle(
+  subject: SubjectAsset | undefined,
+  workspaceId: string | undefined
+): string {
+  const { locale } = useTranslation();
+  const kind = subject?.kind;
+  const name = subject?.name ?? "";
+  const [workflowTitle] = useWorkflowNames(
+    kind === WORKFLOW_ASSET_KIND ? workspaceId : undefined,
+    kind === WORKFLOW_ASSET_KIND ? [name] : []
+  );
+  const app = useApp(workspaceId ?? "", name, kind === APP_ASSET_KIND && workspaceId !== undefined);
+  const agent = useAgentAsset(name, kind === AGENT_ASSET_KIND);
+  if (kind === WORKFLOW_ASSET_KIND) {
+    return workflowTitle ?? name;
+  }
+  if (kind === APP_ASSET_KIND) {
+    return appTitle(app.app, name);
+  }
+  if (kind === AGENT_ASSET_KIND && agent.data) {
+    return agentTitle(agentConfigToForm(agent.data.config), locale, name);
+  }
+  return name;
+}

@@ -62,7 +62,6 @@ function rights(props: Partial<ComponentProps<typeof GrantsTab>>, locale: "en" |
         onRetry: () => undefined,
         users: [member],
         usersFailed: false,
-        namespaces: [],
         assets: [],
         assetsFailure: undefined,
         onGrant: async () => ({ added: 0, existing: 0 }),
@@ -125,13 +124,13 @@ describe("what the Access page offers", () => {
 });
 
 describe("rights on a Workflow", () => {
-  it("are reading, using, writing and publishing, in a Namespace or on one Workflow", () => {
+  it("are reading, using, writing and publishing, on one Workflow", () => {
     expect(grantVerbs("workflow")).toEqual(["read", "use", "write", "publish"]);
-    expect(grantScopeKinds("workflow")).toEqual(["namespace", "asset"]);
+    expect(grantScopeKinds("workflow")).toEqual(["asset"]);
   });
 
   it("writes one row per ticked right on the chosen Workflow", () => {
-    // A Connection's workspace is no place of a Workflow: the first place it has is taken.
+    // A workspace is no place of a Workflow: the first place it has is taken.
     const form = withGrantKind(
       {
         ...emptyGrantForm,
@@ -143,9 +142,9 @@ describe("rights on a Workflow", () => {
       },
       "workflow"
     );
-    expect(form).toMatchObject({ kind: "workflow", scopeKind: "namespace", assetId: undefined });
-    expect(grantRequests({ ...form, scopeKind: "asset" })).toBeUndefined();
-    expect(grantRequests({ ...form, scopeKind: "asset", assetId: "asset-wf" })).toEqual(
+    expect(form).toMatchObject({ kind: "workflow", scopeKind: "asset", assetId: undefined });
+    expect(grantRequests(form)).toBeUndefined();
+    expect(grantRequests({ ...form, assetId: "asset-wf" })).toEqual(
       ["workflow.read", "workflow.use"].map((action) => ({
         holderKind: "user",
         holderId: member.id,

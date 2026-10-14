@@ -1,5 +1,5 @@
 ---
-title: Auth And Embedding
+title: Sign-in and embedding
 description: Connect Workshape Catalyst to users in an existing customer application.
 ---
 
@@ -80,7 +80,14 @@ Standalone chat and control-plane routes may need their own login path.
 
 The platform default is to keep that behind the same product-owned auth contract and use a self-hosted auth implementation internally. Do not expose auth-library user or session types across platform public boundaries.
 
-## Machine API Access
+## API Keys
+
+An instance has two kinds of API keys. Both are exchanged at `POST /api/v1/auth/access-token` for a short-lived access token, and both need `SERVICE_ACCESS_TOKEN_SECRET` (below).
+
+- **A personal key** acts as the person who issued it, narrowed to the scopes ticked when it was made, and never does more than that person may at the moment of a call. A person issues one under **Settings > You > API keys** (German: **Einstellungen › Du › API-Schlüssel**) or with `catalyst login`, which saves it for the CLI. A key lives at most a year, and no key issues another key. This needs the module `personalApiKeys`. See [Log in](/configure/cli/#log-in).
+- **A service principal's key** is for automation such as CI or another system. It acts as the service principal and never as a person.
+
+### Service Principals
 
 Non-human clients are service principals, not product users. A service principal owns permissions and may have multiple independently revocable API keys. An API key is exchanged at `POST /api/v1/auth/access-token` for a short-lived service access token; normal API calls use that access token and do not create a product-user record.
 

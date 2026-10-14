@@ -1,11 +1,13 @@
 ---
-title: Rights and Namespaces
-description: Give one person rights on agents and skills in a Namespace or on one asset, and check what a person may do.
+title: Rights for one person or asset
+description: Give one person rights on one asset, and check what a person may do.
 ---
 
 Instance roles and the rights set on the Users page apply to the whole instance. The page **Instance > Access** is for everything narrower: one person, one kind of asset, one place. It is shown to users who hold `users.manage` and has three tabs.
 
 ## Namespaces
+
+Namespaces are being retired, and a new right is no longer given in one. The Namespaces already registered keep their lists, and the rights that name them keep applying, until a later release removes them. This section describes them for that time.
 
 A Namespace is a registered name prefix such as `sales-`. Every agent and skill whose name starts with the prefix belongs to it. Two Namespaces never overlap: while `sales-` is registered, `sales-x-` is refused, and so is `sa-` for a registered `sa-team-`. The form checks this as you type. A prefix cannot be changed later.
 
@@ -24,11 +26,13 @@ A Namespace is deleted only when no grant names it. Until then its row says how 
 
 ## Grants
 
-A grant gives one person one action on one scope. The form takes a person, a kind (agents or skills), the actions read, write and delete, the scope, and the effect. It writes one row per action. The scope is a Namespace or one existing asset.
+A grant gives one person one action in one place. A Service Principal's grants are written on **Settings > Instance > API access**, not here. The **New right** form takes a person, a kind, the actions, the place and the effect, and writes one row per action. For agents and skills the actions are read, write and delete. The places are a shared workspace, one existing asset and the whole instance, in this order, and the form offers only the places where every action of the kind can be written. Today, for agents and skills, that is **In a shared workspace** ("In einem geteilten Arbeitsbereich"), which covers everything of the kind the workspace owns, also what is made later, and gives no access to its conversations; and **On one asset** ("An einem Asset"). For Connections and Workflows it is one existing item, so the form asks for no place and goes straight to the item. No action is offered for the whole instance.
 
-On an instance with the module `connections` on, the form also offers the kind Connections, with the actions read and use. Using a Connection is a right of its own: a person who may read a Connection may not use it, and a person who may use it is shown nothing of it. The scope is a Namespace, which covers the Connections whose names start with its prefix, one existing Connection, or a shared workspace, which covers the Connections that workspace owns. Writing, deleting and approving a Connection belong to the administrator role and are not granted. A Connection that release config no longer names, or names differently, is removed at the next start together with the allow rows written on it; grants on a renamed Connection have to be written again.
+The form offers no Namespace. Rows written in a Namespace before stay in the list, keep applying and are revoked like any other row until the Namespace is retired.
 
-On an instance with the module `workflows` on, a grant can also name a Workflow, with the actions read, use, write and publish. Reading shows the Workflow in the list and its runs, using starts it, writing edits its draft, and publishing makes a revision live. The scope is a Namespace, which covers the Workflows whose names start with its prefix, or one existing Workflow; the instance owns every Workflow, so no grant on a workspace covers one. Publishing a Workflow that runs as a service principal needs the right to manage API access and the Superadmin role beside the publish right. Deleting a Workflow and reading the rows of a run's datasets belong to the administrator role and are not granted. The form does not offer Workflows yet: these grants are written through `POST /api/v1/instance/access/grants` and appear in the list under the action's name, where they are revoked like any other row.
+On an instance with the module `connections` on, the form also offers the kind Connections, with the actions read and use. Using a Connection is a right of its own: a person who may read a Connection may not use it, and a person who may use it is shown nothing of it. The place is one existing Connection. The instance owns every Connection, so a right on a workspace would cover nothing: a grant of `connection.read` or `connection.use` on a workspace is refused with `422` and the reason `invalid_scope`. Rows written on a workspace before keep applying until they are revoked. Writing, deleting and approving a Connection belong to the administrator role and are not granted. A Connection that release config no longer names, or names differently, is removed at the next start together with the allow rows written on it; grants on a renamed Connection have to be written again.
+
+On an instance with the module `workflows` on, a grant can also name a Workflow, with the actions read, use, write and publish. Reading shows the Workflow in the list and its runs, using starts it, writing edits its draft, and publishing makes a revision live. The place is one existing Workflow; the instance owns every Workflow, so no grant on a workspace covers one. Publishing a Workflow that runs as a service principal needs the right to manage API access and the Superadmin role beside the publish right. Deleting a Workflow and reading the rows of a run's datasets belong to the administrator role and are not granted.
 
 A row the person already has is left as it is, so the same form can be sent again after it stopped half way: it adds what is missing and says how many rows it added and how many were there already.
 

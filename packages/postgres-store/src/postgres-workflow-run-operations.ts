@@ -133,6 +133,8 @@ function mapStepRun(
     ...(row.operationRunId === null ? {} : { operationRunId: row.operationRunId }),
     ...(row.effect === null ? {} : { effect: row.effect }),
     ...(row.source === null ? {} : { source: row.source }),
+    ...(row.target === null ? {} : { target: row.target }),
+    ...(row.publishedWouldAsk === null ? {} : { publishedWouldAsk: row.publishedWouldAsk }),
     ...(row.error === null ? {} : { error: row.error }),
     createdAt: row.createdAt.toISOString(),
     ...(row.startedAt === null ? {} : { startedAt: row.startedAt.toISOString() }),
@@ -388,6 +390,10 @@ export async function endWorkflowStepRun(
       ...(ref.operationRunId === undefined ? {} : { operationRunId: ref.operationRunId }),
       ...(ref.call?.effect === undefined ? {} : { effect: ref.call.effect }),
       ...(ref.call?.source === undefined ? {} : { source: ref.call.source }),
+      ...(ref.call?.target === undefined ? {} : { target: ref.call.target }),
+      ...(ref.call?.publishedWouldAsk === undefined
+        ? {}
+        : { publishedWouldAsk: ref.call.publishedWouldAsk }),
       error: ref.error ?? null
     })
     .where(and(stepRunIs(ref), notEnded(workflowStepRuns.status)))

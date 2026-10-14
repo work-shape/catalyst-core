@@ -17,7 +17,6 @@ import {
   DATA_STORE_SCALAR_TYPES,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
-  KNOWLEDGE_BASE_MANIFEST_FILE,
   KNOWLEDGE_OPERATION_PREFIX,
   KNOWLEDGE_QUERY_TOOL_NAME,
   MODULE_NAMES,
@@ -401,7 +400,6 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
     expect(DATA_STORE_ASSET_KIND).toBe("data_store");
     expect(DATA_STORE_MANIFEST_FILE).toBe("store.yaml");
     expect(KNOWLEDGE_BASE_ASSET_KIND).toBe("knowledge_base");
-    expect(KNOWLEDGE_BASE_MANIFEST_FILE).toBe("kb.yaml");
 
     const kinds = [
       [WORKFLOW_ASSET_KIND, "workflows"],
@@ -593,7 +591,7 @@ describe("the modules workflows and dataStores", () => {
     expect(on.isEnabled("dataStores")).toBe(true);
   });
 
-  it("contribute what is built: nothing for Knowledge yet, the runs and the job of Workflows, the kind and the jobs of Data Stores", () => {
+  it("contribute what is built: the kind and the operations of Knowledge Bases on Data Stores, the runs and the job of Workflows, the kind and the jobs of Data Stores", () => {
     const nothing = {
       requires: [],
       kinds: [],
@@ -604,7 +602,14 @@ describe("the modules workflows and dataStores", () => {
       tools: [],
       ui: []
     };
-    expect(knowledgeModule).toEqual({ ...nothing, name: "knowledge" });
+    // A Knowledge Base reads a Data Store, its only backend so far.
+    expect(knowledgeModule).toEqual({
+      ...nothing,
+      name: "knowledge",
+      requires: ["dataStores"],
+      kinds: [KNOWLEDGE_BASE_ASSET_KIND],
+      operations: ["knowledge_bases.get", "knowledge_bases.check", "knowledge_bases.query"]
+    });
     // The kind of a Workflow, its runs and the job that executes their steps.
     expect(workflowsModule).toEqual({
       ...nothing,
@@ -613,6 +618,7 @@ describe("the modules workflows and dataStores", () => {
       operations: [
         "workflows.list",
         "workflows.start",
+        "workflows.test",
         "workflows.get_run",
         "workflows.list_runs",
         "workflows.list_step_runs",
@@ -646,12 +652,10 @@ describe("the modules workflows and dataStores", () => {
       jobKinds: Object.values(DATA_STORE_JOB_KINDS)
     });
     const off = createModuleRegistry(platformModules).snapshot({});
-    for (const [contribution, name] of [
-      ["kind", KNOWLEDGE_BASE_ASSET_KIND],
-      ["tool", KNOWLEDGE_QUERY_TOOL_NAME]
-    ] as const) {
-      expect(off.offModuleOf(contribution, name), name).toBeUndefined();
-    }
+    expect(off.offModuleOf("kind", KNOWLEDGE_BASE_ASSET_KIND)).toBe("knowledge");
+    expect(off.offModuleOf("operation", "knowledge_bases.query")).toBe("knowledge");
+    // The one knowledge tool is no name an agent lists: it comes with the Knowledge Bases.
+    expect(off.offModuleOf("tool", KNOWLEDGE_QUERY_TOOL_NAME)).toBeUndefined();
     expect(off.offModuleOf("kind", WORKFLOW_ASSET_KIND)).toBe("workflows");
     expect(off.offModuleOf("jobKind", WORKFLOW_RUN_JOB_KINDS.executeStep)).toBe("workflows");
     expect(off.offModuleOf("operation", "workflows.start")).toBe("workflows");

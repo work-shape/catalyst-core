@@ -1,6 +1,6 @@
 {
   "name": "@work-shape/catalyst-cli",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -12,7 +12,8 @@
     "node": ">=22"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

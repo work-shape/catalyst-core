@@ -3,6 +3,7 @@ import { FlowCanvas, type FlowGraph } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { LoopEntries } from "./loop-entries";
 import { StepPanel, stepPanelTabs, type StepPanelRun, type StepPanelTab } from "./step-panel";
+import type { LiveOnceControl } from "./test-run";
 import { placedSteps, workflowGraph } from "./workflow-canvas-model";
 import type {
   WorkflowRunView,
@@ -17,6 +18,11 @@ export interface WorkflowCanvasRun {
   /** The step runs outside every entry of a loop. Absent until they arrived. */
   stepRuns: readonly WorkflowStepRunView[] | undefined;
   now: Date;
+  /** In a test run: "Run live once" for a step that changes something, where it is offered. */
+  liveOnce?: (
+    step: WorkflowStepView,
+    stepRun: WorkflowStepRunView | undefined
+  ) => LiveOnceControl | undefined;
 }
 
 /** The same graph object for as long as nothing of it changed, so the canvas lays out once. */
@@ -88,11 +94,14 @@ export function WorkflowCanvas({
           (other) => other.step.itemsFrom === id && frame.get(other.step.id)?.loop !== undefined
         );
     const passed = taker === undefined ? undefined : frame.get(taker.step.id)?.loop?.total;
+    const stepRun = place.repeated ? undefined : frame.get(id);
+    const liveOnce = run.liveOnce?.(place.step, stepRun);
     return {
       ...(taker === undefined || passed === undefined
         ? {}
         : { passesOn: { count: passed, step: taker.step.name } }),
-      stepRun: place.repeated ? undefined : frame.get(id),
+      stepRun,
+      ...(liveOnce === undefined ? {} : { liveOnce }),
       counts: block?.bodyCounts?.[id],
       countsEnded: block?.finishedAt !== undefined,
       now: run.now

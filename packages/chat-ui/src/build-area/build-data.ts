@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
 import { invalidateOfferedAgents } from "../api/agent-placement-mutations";
 import { createAssetWrites, type AvailableIn } from "../api/asset-writes";
@@ -10,7 +10,16 @@ import { useSettingsPage } from "../settings/settings-page-context";
 import { apiErrorCode } from "../workspace-utils";
 import type { BuildAsset, BuildAssetRow } from "./build-asset-kind";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
-import { AGENT_ASSET_KIND, resolveBuildRights, type BuildRights } from "./build-rights";
+import {
+  AGENT_ASSET_KIND,
+  buildScopeValue,
+  readLastBuildScope,
+  resolveBuildRights,
+  resolveBuildScope,
+  storeLastBuildScope,
+  type BuildRights,
+  type BuildScope
+} from "./build-rights";
 
 /**
  * How many assets one read of a list asks for. The instance searches, filters and cuts the
@@ -96,6 +105,12 @@ interface BuildWrites {
     availableIn?: AvailableIn;
   }): Promise<{ revision: number }>;
   delete(input: { kind: string; name: string; expectedRevision: number }): Promise<unknown>;
+  /** Makes a saved revision of a kind with drafts the one its users get. */
+  publish(input: {
+    kind: string;
+    name: string;
+    revision: number;
+  }): Promise<{ draftRevision: number; publishedRevision: number }>;
   revert(input: {
     kind: string;
     name: string;
@@ -128,6 +143,15 @@ export interface BuildSource {
    */
   exists(kind: string, name: string): Promise<boolean | undefined>;
   writes: BuildWrites;
+  /**
+   * The owner Studio works in for a kind a workspace can own: lists, reads and writes of such
+   * a kind name it, so what is made here is owned by it. Absent where the source has one owner.
+   */
+  scope?: BuildScope;
+  /** Works in another owner. */
+  chooseScope?(scope: BuildScope): void;
+  /** Whether the kind's assets are listed, read and written in the scope. */
+  scoped?(kind: string): boolean;
 }
 
 /**
@@ -136,7 +160,7 @@ export interface BuildSource {
  * asset. Nothing here reads the whole set of assets.
  */
 export function useBuildSource(): BuildSource {
-  const { apiBaseUrl, authScope, client, user, config } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, user, config, activeWorkspace } = useSettingsPage();
   const { locale, t } = useTranslation();
   const queryClient = useQueryClient();
   const contextQuery = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
@@ -144,6 +168,20 @@ export function useBuildSource(): BuildSource {
   const rights = useMemo(() => resolveBuildRights(user, context), [context, user]);
   const management = config.features.configAssets;
   const assetsKey = workspaceQueryKeys.assets(apiBaseUrl, authScope);
+  const [chosenScope, setChosenScope] = useState(readLastBuildScope);
+  const scope = resolveBuildScope(rights, chosenScope, activeWorkspace?.id);
+  const scopedKinds = new Set(
+    (context?.kinds ?? [])
+      .filter((kind) => kind.owners.includes("workspace") && kind.owners.includes("instance"))
+      .map((kind) => kind.kind)
+  );
+  /** The workspace a call about an asset of the kind names: the scope's, for a scoped kind. */
+  const workspaceOf = (kind: string): string | undefined =>
+    scopedKinds.has(kind) && scope.kind === "workspace" ? scope.workspaceId : undefined;
+  const inScope = (kind: string): { workspaceId?: string } => {
+    const workspaceId = workspaceOf(kind);
+    return workspaceId === undefined ? {} : { workspaceId };
+  };
 
   const kinds = useMemo<BuildKindState[]>(() => {
     // The instance's own switches for the two kinds it has always had. A kind that brings no
@@ -156,7 +194,14 @@ export function useBuildSource(): BuildSource {
       .filter((kind) => rights.reads(kind.kind))
       .map((kind) => ({
         kind: kind.kind,
-        canCreate: (switches[kind.kind]?.create ?? true) && rights.mayCreate(kind.kind),
+        canCreate:
+          (switches[kind.kind]?.create ?? true) &&
+          rights.mayCreate(
+            kind.kind,
+            kind.owners.includes("workspace") && scope.kind === "workspace"
+              ? scope.workspaceId
+              : undefined
+          ),
         canDelete: switches[kind.kind]?.delete ?? true
       }));
   }, [
@@ -164,7 +209,8 @@ export function useBuildSource(): BuildSource {
     management.allowAgentCreation,
     management.allowAgentDeletion,
     management.allowSkillEditing,
-    rights
+    rights,
+    scope
   ]);
 
   const writes = createAssetWrites(client);
@@ -185,10 +231,19 @@ export function useBuildSource(): BuildSource {
       ? (instanceSentence(contextQuery.error) ?? t("build.loadFailed"))
       : undefined,
     reload: () => contextQuery.refetch(),
+    scope,
+    chooseScope: (next) => {
+      storeLastBuildScope(buildScopeValue(next));
+      setChosenScope(buildScopeValue(next));
+    },
+    scoped: (kind) => scopedKinds.has(kind),
     useList(kind, filter) {
       const text = filter.text.trim();
+      const owner = inScope(kind);
+      // A Namespace is a prefix among the instance's own assets alone.
+      const prefix = owner.workspaceId === undefined ? filter.namespace : undefined;
       const query = useInfiniteQuery({
-        queryKey: [...assetsKey, "list", kind, text, filter.namespace ?? "", locale],
+        queryKey: [...assetsKey, "list", kind, owner.workspaceId ?? "", text, prefix ?? "", locale],
         queryFn: ({ pageParam, signal }) =>
           client.assets.list({
             params: { kind },
@@ -196,8 +251,9 @@ export function useBuildSource(): BuildSource {
               limit: BUILD_LIST_PAGE_SIZE,
               cursor: pageParam,
               locale,
+              ...owner,
               ...(text ? { text } : {}),
-              ...(filter.namespace ? { prefix: filter.namespace } : {})
+              ...(prefix ? { prefix } : {})
             },
             signal
           }),
@@ -218,9 +274,11 @@ export function useBuildSource(): BuildSource {
       // The page writes against the revision it loaded. The read is therefore the page's
       // own: it is not kept when the page closes, and nothing reads it again behind the
       // page's back.
+      const owner = inScope(kind);
       const query = useQuery({
-        queryKey: ["asset", apiBaseUrl, authScope, kind, name],
-        queryFn: ({ signal }) => client.assets.get({ params: { kind, name }, signal }),
+        queryKey: ["asset", apiBaseUrl, authScope, kind, owner.workspaceId ?? "", name],
+        queryFn: ({ signal }) =>
+          client.assets.get({ params: { kind, name }, query: owner, signal }),
         gcTime: 0,
         staleTime: Infinity,
         refetchOnWindowFocus: false,
@@ -260,18 +318,27 @@ export function useBuildSource(): BuildSource {
       return { status: "loading" };
     },
     exists: (kind, name) =>
-      client.assets.get({ params: { kind, name } }).then(
+      client.assets.get({ params: { kind, name }, query: inScope(kind) }).then(
         () => true,
         (error: unknown) => (apiErrorCode(error) === "NOT_FOUND" ? false : undefined)
       ),
     writes: {
-      put: (input) => made(writes.put(input)).finally(changed(input.kind)),
-      delete: (input) => made(writes.delete(input)).finally(changed(input.kind)),
-      revert: (input) => made(writes.revert(input)).finally(changed(input.kind)),
+      put: (input) =>
+        made(writes.put({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
+      delete: (input) =>
+        made(writes.delete({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
+      publish: (input) =>
+        made(writes.publish({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
+      revert: (input) =>
+        made(writes.revert({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
       revisions: ({ kind, name, cursor }) =>
         client.assets.revisions.list({
           params: { kind, name },
-          query: { limit: BUILD_HISTORY_PAGE_SIZE, ...(cursor ? { cursor } : {}) }
+          query: {
+            limit: BUILD_HISTORY_PAGE_SIZE,
+            ...inScope(kind),
+            ...(cursor ? { cursor } : {})
+          }
         })
     }
   };

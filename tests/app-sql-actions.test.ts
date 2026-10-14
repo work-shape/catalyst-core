@@ -237,13 +237,16 @@ describe("a statement of an App on a Data Store", () => {
     expect((await t.findingRows()).filter((row) => row.client_id === "client-new")).toMatchObject([
       { run_id: "run-7", severity: "error", amount: "12.50", revision: 2 }
     ]);
-    // A draft runs in safe mode: the change is not carried out, whoever asks.
+    // A draft runs in safe mode: the change is simulated and not carried out, whoever asks.
     const draft = await t.openApp(t.admin.id, "draft", "findings");
     const inDraft = await t.callAction(t.admin.id, draft, "add_finding", input, {
       "idempotency-key": "b3-insert-draft"
     });
-    expect(inDraft.statusCode).toBe(409);
-    expect(t.refusal(inDraft).details).toMatchObject({ reason: "draft_safe_mode" });
+    expectStatus(inDraft, 200);
+    expect(inDraft.json()).toMatchObject({ status: "dry_run" });
+    expect(await t.runOf(inDraft.headers["operation-run-id"])).toMatchObject({
+      target: "dry_run"
+    });
     expect((await t.findingRows()).filter((row) => row.client_id === "client-new")).toHaveLength(1);
   });
 

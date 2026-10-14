@@ -31,6 +31,7 @@ export {
   workflowsRowShown
 } from "./workflow-model";
 export { StartDialog } from "./start-run";
+export type { LiveOnceControl } from "./test-run";
 export { checkStartForm, startFormOf, startRefusalByField } from "./start-form";
 export { DraftChangeDialog } from "./workflow-draft";
 export { WorkflowPageView } from "./workflow-page";

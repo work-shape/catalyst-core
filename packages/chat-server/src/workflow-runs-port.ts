@@ -1,5 +1,6 @@
 import type {
   AuthenticatedIdentity,
+  AuthenticatedUser,
   JsonObject,
   OperationRunId,
   StorePage,
@@ -19,6 +20,18 @@ export interface WorkflowRunsPort {
     workflow: string;
     input: unknown;
     startedBy: AuthenticatedIdentity;
+    operationRunId?: OperationRunId;
+    correlationId: string;
+  }): Promise<WorkflowRunView>;
+  /**
+   * Starts a test run of the Workflow's draft, as the person who starts it bounded by the
+   * principal the draft names (ADR-0031). Refuses a Workflow without a draft, a draft that
+   * cannot be run and a principal that is missing or disabled.
+   */
+  test(input: {
+    workflow: string;
+    input: unknown;
+    startedBy: AuthenticatedUser;
     operationRunId?: OperationRunId;
     correlationId: string;
   }): Promise<WorkflowRunView>;

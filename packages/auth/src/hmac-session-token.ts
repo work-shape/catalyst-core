@@ -13,6 +13,13 @@ import {
 } from "@vivd-catalyst/core";
 import type { AuthAdapter, AuthRequest, AuthRequestHeaders } from "./types";
 
+/**
+ * The one delegated actor a session token names: the backend of an embedding host. A personal
+ * API key acts through its own exchange. A token naming one would pass as the CLI and skip
+ * resolving its user, so the issuer refuses it and so does the verifier.
+ */
+type SessionTokenDelegatedActor = Extract<DelegatedActor, { kind: "service_principal" }>;
+
 export interface SessionTokenInput {
   externalUserId: string;
   displayLabel: string;
@@ -23,7 +30,7 @@ export interface SessionTokenInput {
   permissions?: string[];
   correlationId?: string;
   scopes?: AuthScope[];
-  delegatedActor?: DelegatedActor;
+  delegatedActor?: SessionTokenDelegatedActor;
 }
 
 interface SessionTokenClaims {
@@ -66,6 +73,12 @@ export class HmacSessionTokenIssuer {
   }
 
   issue(input: SessionTokenInput): { chatSessionToken: string; expiresAt: ISODateString } {
+    if (!isSessionTokenDelegatedActor(input.delegatedActor)) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "A session token names only a service principal as its delegated actor"
+      );
+    }
     const issuedAt = Math.floor(Date.now() / 1000);
     const expiresAt = issuedAt + this.options.ttlSeconds;
     const claims: SessionTokenClaims = {
@@ -119,9 +132,16 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
       throw new AppError("UNAUTHENTICATED", "Chat session token is expired");
     }
 
+    const delegatedActor = claims.delegatedActor;
+    if (!isSessionTokenDelegatedActor(delegatedActor)) {
+      throw new AppError(
+        "UNAUTHENTICATED",
+        "Chat session token names a delegated actor other than a service principal"
+      );
+    }
+
     const clientInstanceId = asClientInstanceId(claims.clientInstanceId);
     const id = `${claims.clientInstanceId}:${claims.sub}`;
-    const delegatedActor = claims.delegatedActor;
     return {
       id,
       externalUserId: claims.sub,
@@ -155,6 +175,19 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
       scopes: normalizeSessionTokenScopes(claims.scopes, delegatedActor)
     };
   }
+}
+
+/** Reads what a signed token claims as well as what a caller passes, so it trusts no shape. */
+function isSessionTokenDelegatedActor(
+  actor: unknown
+): actor is SessionTokenDelegatedActor | undefined {
+  return (
+    actor === undefined ||
+    (typeof actor === "object" &&
+      actor !== null &&
+      "kind" in actor &&
+      actor.kind === "service_principal")
+  );
 }
 
 function normalizeSessionTokenScopes(

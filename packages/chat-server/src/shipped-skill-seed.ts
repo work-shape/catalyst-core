@@ -50,11 +50,12 @@ function definitionOf(skill: ShippedSkill): JsonObject {
       `The platform ships the skill '${skill.name}', which is no valid skill: ${parsed.error.issues[0]?.message ?? ""}`
     );
   }
-  const { name, title, description, content, resources, icon } = parsed.data;
+  const { name, title, description, summary, content, resources, icon } = parsed.data;
   return {
     name,
     title,
     description,
+    ...(summary === undefined ? {} : { summary }),
     content,
     ...(resources?.length ? { resources } : {}),
     origin: "release",
@@ -100,10 +101,12 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
   for (const [name, config] of shipped) {
     const asset = stored.get(name);
     if (asset && !isShipped(asset)) {
-      // A skill of the instance's own is never touched. The name is the platform's.
+      // A skill of the instance's own is never touched, not even deleted: it may hold what
+      // the instance's people wrote. The name is the platform's, so the start stops.
       throw new AppError(
         "VALIDATION_FAILED",
-        `The platform ships the skill '${name}', and a skill of that name was created on the instance. Rename that skill: the name is reserved for the platform`
+        `The platform ships the skill '${name}', and the instance holds a skill of its own named '${name}'. Remove the instance copy with 'catalyst config push' after pulling, with the previous release still running: pull, delete skills/${name}, take '${name}' out of the agents' skillNames, push with --prune. Then start this release`,
+        { skillName: name }
       );
     }
     if (asset && configValuesEqual(asset.config, config)) continue;
@@ -134,10 +137,12 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
       const dropped = skillNames.filter(listsRemoved);
       if (dropped.length === 0) continue;
       // Only the reference goes; a copy of the skill under a name of the instance's own stays.
+      // The agent stays with its owner: a workspace's agent is written in that workspace.
       mutations.push({
         type: "upsert",
         kind: AGENT_KIND,
         name: agent.name,
+        scope: agent.scope,
         config: { ...config, skillNames: skillNames.filter((name) => !listsRemoved(name)) }
       });
       baseRevisions[`${AGENT_KIND}:${agent.name}`] = agent.revision;

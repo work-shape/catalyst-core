@@ -56,7 +56,9 @@ export const appBridgePageMessageSchema = z.discriminatedUnion("type", [
     input: z.record(z.string(), z.unknown()),
     idempotencyKey
   }),
-  // A call of one operation of a Connection the manifest lists.
+  // Retired: the free call of a Connection operation that kits 1.1.0 to 1.3.0 send for
+  // `connections.call`. It is read only to be answered with `APP_BRIDGE_CONNECTION_CALL_REMOVED`,
+  // so a Page built against those kits is told the fix and does not wait for an answer.
   z.strictObject({
     ...mark,
     type: z.literal("connection_call"),
@@ -78,6 +80,17 @@ export const appBridgePageMessageSchema = z.discriminatedUnion("type", [
 ]);
 
 export type AppBridgePageMessage = z.infer<typeof appBridgePageMessageSchema>;
+
+/**
+ * The answer to a retired `connection_call`. An App reaches a Connection only through a named
+ * `connection` action in its folder; the free call from the browser was removed.
+ */
+export const APP_BRIDGE_CONNECTION_CALL_REMOVED = {
+  code: "connection_call_removed",
+  message:
+    "connections.call was removed: an App reaches a Connection only through a named action. Add actions/<name>.action.yaml with connection, operation and effect, and call it with actions.call('<name>', input).",
+  retryable: false
+} as const;
 
 /** The seven colours of a theme, as an instance sets them per mode. */
 export const appBridgeThemeSchema = z.strictObject({
@@ -161,7 +174,8 @@ export const appBridgeHostMessageSchema = z.discriminatedUnion("type", [
     theme: appBridgeThemeSchema,
     mode: appBridgeModeSchema
   }),
-  // The answer to one `action` or `connection_call`, named by the id the Page gave it.
+  // The answer to one `action`, named by the id the Page gave it. A retired `connection_call`
+  // is answered the same way, with `APP_BRIDGE_CONNECTION_CALL_REMOVED` as its error.
   z.strictObject({
     ...mark,
     type: z.literal("action_result"),

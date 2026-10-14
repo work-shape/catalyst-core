@@ -1,16 +1,20 @@
 import { realpathSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+import { RELEASE_VERSION } from "@vivd-catalyst/api-contract";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
 import { operationHelpText, runOperationCommand } from "./operation-commands";
 import type { CommandInput } from "./input";
+import type { AssetKindName } from "./command-support";
 import { loginCommand, logoutCommand } from "./login";
+import { isLocalAgentTool, SETUP_USAGE, setupCommand } from "./setup";
 
 export * from "./api";
 export * from "./commands";
 export * from "./diff";
 export * from "./serialization";
+export { renderCatalystSkill } from "./setup";
 export * from "./working-copy";
 
 export interface CliRuntimeOptions {
@@ -22,18 +26,25 @@ export interface CliRuntimeOptions {
   stderr?: (text: string) => void;
   /** Waits between tries. Tests pass one that does not wait. */
   sleep?: (milliseconds: number) => Promise<void>;
+  /** Opens an address in a browser, as `setup` does. Tests pass one that opens nothing. */
+  openUrl?: (address: string) => void;
 }
 
 const helpText = `Usage: catalyst config <command> [options]
        catalyst login --instance <name-or-url>
        catalyst logout --instance <name-or-url>
+       catalyst setup <claude-code|codex|other> --instance <url> [--force]
 
 Sync local config assets with a live Catalyst instance.
 
 Login:
-  login      Show a connect code, wait until you confirm it in Settings, API keys, and
-             save the personal API key it issues, readable by you alone
-  logout     Forget the saved key of an instance; revoke it in Settings
+  login      Show a connect code, wait until you confirm it on the instance at
+             /settings/you/api-keys, and save the personal API key it issues, readable by
+             you alone
+  logout     Forget the saved key of an instance; revoke it at /settings/you/api-keys
+  setup      Connect a local agent: log in as 'login' does unless a working key is saved,
+             then write the Catalyst skill for Claude Code, Codex or another tool. --force
+             replaces a different skill file there and keeps it as SKILL.md.bak
 
 Commands:
   pull       Sync remote config assets into the local working copy
@@ -41,16 +52,21 @@ Commands:
   diff       Show local changes, remote newer assets, and conflicts
   validate   Validate local assets and remote references
   list       List local and remote config assets and their sync status
-  show       Print a remote asset: show <agent|skill> <name>
+  show       Print a remote asset: show <agent|skill|guardrail> <name>
 
 Options:
-  --instance <name-or-url>  Manifest instance name or direct URL
+  --instance <name-or-url>  Manifest instance name or direct URL. Left out: the
+                            manifest's defaultInstance; outside a working copy, the
+                            one instance a key is saved for
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
   --prune                   Mirror on push, deleting the remote-only assets the last pull
                             saw
-  --only <agent:name|skill:name>
+  --only <agent:name|skill:name|guardrail:name>
                             Sync selected assets; repeatable on push/pull
+  --workspace <id>          On pull: bind the working copy to the workspace and hold
+                            what it owns
   --help                    Show this help
+  --version                 Print the version of this CLI
 
 Environment:
   CATALYST_API_KEY      API key exchanged for a short-lived access token. It wins over
@@ -58,9 +74,21 @@ Environment:
   CATALYST_CONFIG_HOME  Folder of the saved keys (default: ~/.config/catalyst)
 
 A working copy that belongs to one Namespace names it beside the instance's url in
-catalyst.yaml, as 'namespace: kai-'. Its push names that Namespace, as the instance asks
+catalyst.yaml, as 'namespace: tax-'. Its push names that Namespace, as the instance asks
 of everyone but the holder of the release right; its pull, diff and list read only the
 assets the key may read, never the instance's version or default agent.
+
+A working copy bound to a workspace names it the same way, as 'workspace: <id>', which the
+first 'catalyst config pull --workspace <id>' writes. It holds what that workspace owns, and
+everything its push creates is owned by that workspace, guardrails included. Its push is never
+a release: a new agent starts hidden until an instance admin offers it. A working copy without
+either holds the instance's own assets.
+
+Guardrails join the working copy where catalyst.yaml lists their globs under 'guardrails',
+such as 'guardrails/*/guardrail.yaml'. Each is a folder with its guardrail.yaml and, for a
+model_judge check, its instruction in check.md. Guardrails are no part of a release: a push
+writes each as its draft with assets.put after the batch, which needs the config_assets:write
+scope. Publishing is a step of its own.
 `;
 
 export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): Promise<number> {
@@ -70,7 +98,11 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
     stdout(`${assetHelpText}\n${operationHelpText}\n${helpText}`);
     return 0;
   }
-  if (argv[0] === "login" || argv[0] === "logout") {
+  if (argv[0] === "--version") {
+    stdout(`${RELEASE_VERSION}\n`);
+    return 0;
+  }
+  if (argv[0] === "login" || argv[0] === "logout" || argv[0] === "setup") {
     return runLoginCommand(argv[0], argv.slice(1), runtime, stdout, stderr);
   }
   if (
@@ -118,6 +150,7 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
         force: { type: "boolean", default: false },
         prune: { type: "boolean", default: false },
         only: { type: "string", multiple: true },
+        workspace: { type: "string" },
         help: { type: "boolean", short: "h", default: false }
       },
       allowPositionals: true,
@@ -139,16 +172,19 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       stderr("--only is only valid with 'catalyst config push' or 'catalyst config pull'.\n");
       return 2;
     }
+    if (parsed.values.workspace !== undefined && command !== "pull") {
+      stderr(
+        "--workspace is only valid with 'catalyst config pull', which binds the working copy.\n"
+      );
+      return 2;
+    }
     if (parsed.values.prune && parsed.values.only) {
       stderr("--prune cannot be combined with --only.\n");
       return 2;
     }
     if (command === "show") {
-      if (
-        parsed.positionals.length !== 2 ||
-        (parsed.positionals[0] !== "agent" && parsed.positionals[0] !== "skill")
-      ) {
-        stderr("Usage: catalyst config show <agent|skill> <name>\n");
+      if (parsed.positionals.length !== 2 || !isShownKind(parsed.positionals[0])) {
+        stderr("Usage: catalyst config show <agent|skill|guardrail> <name>\n");
         return 2;
       }
     } else if (parsed.positionals.length > 0) {
@@ -162,11 +198,9 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       ...(parsed.values.force ? { force: true } : {}),
       ...(parsed.values.prune ? { prune: true } : {}),
       ...(parsed.values.only === undefined ? {} : { only: parsed.values.only }),
-      ...(command === "show"
-        ? {
-            assetKind: parsed.positionals[0] as "agent" | "skill",
-            assetName: parsed.positionals[1]!
-          }
+      ...(parsed.values.workspace === undefined ? {} : { workspace: parsed.values.workspace }),
+      ...(command === "show" && isShownKind(parsed.positionals[0])
+        ? { assetKind: parsed.positionals[0], assetName: parsed.positionals[1]! }
         : {}),
       ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
       ...(runtime.env === undefined ? {} : { env: runtime.env }),
@@ -181,7 +215,7 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
 }
 
 async function runLoginCommand(
-  command: "login" | "logout",
+  command: "login" | "logout" | "setup",
   args: string[],
   runtime: CliRuntimeOptions,
   stdout: (text: string) => void,
@@ -194,8 +228,10 @@ async function runLoginCommand(
       options: {
         instance: { type: "string" },
         dir: { type: "string" },
+        force: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false }
       },
+      allowPositionals: command === "setup",
       strict: true
     });
   } catch (error) {
@@ -205,6 +241,10 @@ async function runLoginCommand(
   if (parsed.values.help) {
     stdout(helpText);
     return 0;
+  }
+  if (parsed.values.force && command !== "setup") {
+    stderr(`--force is not an option of 'catalyst ${command}'.\n`);
+    return 2;
   }
   const options: ConfigCommandOptions = {
     cwd: runtime.cwd ?? process.cwd(),
@@ -216,7 +256,24 @@ async function runLoginCommand(
     stdout,
     stderr
   };
+  if (command === "setup") {
+    const [tool, ...extra] = parsed.positionals;
+    if (!isLocalAgentTool(tool) || extra.length > 0 || parsed.values.instance === undefined) {
+      stderr(`${SETUP_USAGE}\n`);
+      return 2;
+    }
+    return setupCommand({
+      ...options,
+      tool,
+      ...(parsed.values.force ? { force: true } : {}),
+      ...(runtime.openUrl === undefined ? {} : { openUrl: runtime.openUrl })
+    });
+  }
   return command === "login" ? loginCommand(options) : logoutCommand(options);
+}
+
+function isShownKind(value: string | undefined): value is AssetKindName {
+  return value === "agent" || value === "skill" || value === "guardrail";
 }
 
 function isConfigCommand(value: string): value is ConfigCommandName {

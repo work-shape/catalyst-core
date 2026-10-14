@@ -47,10 +47,20 @@ export interface BuildAssetEditorProps {
   saveBlocked?: boolean;
   /** The reader may change what belongs to the instance: its default and where an agent shows. */
   instanceWrite: boolean;
+  /**
+   * The workspace that owns the asset, or that a new one is made for, by its id. Absent for
+   * the instance's own. What the asset may name is read from it and from the instance.
+   */
+  owner?: string;
   /** The way back to the kind's list, for the start of the page head. */
   back: ReactNode;
   /** The page's own actions, for the end of the page head: History and the menu with Delete. */
   actions: ReactNode;
+  /**
+   * What the frame says beside the name of an asset whose kind has a draft and a published
+   * revision: that the saved draft is ahead of what is published, or that nothing is.
+   */
+  draftState?: ReactNode;
   /** What the frame says above the save bar: a conflict with the way to the newer version. */
   notice: ReactNode;
   /** Hears whether the page holds changes that are not saved: the frame asks before it is left. */
@@ -85,6 +95,12 @@ interface BuildKindBase {
   row?(asset: BuildAssetRow): { leading?: ReactNode; description?: string };
   /** What a row says after the asset's id, on the same line: such as the asset's description. */
   rowText?(asset: BuildAssetRow): string | undefined;
+  /**
+   * The line under a row's title in the kind's own words, in place of the asset's id and
+   * `rowText`, shown whole: a component, so it may read what the page knows, such as
+   * workspace names.
+   */
+  RowLine?: ComponentType<{ asset: BuildAssetRow }>;
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
 }

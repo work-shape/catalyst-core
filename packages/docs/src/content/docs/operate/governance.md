@@ -1,5 +1,5 @@
 ---
-title: Governance
+title: Retention, audit and deletion
 description: Run sensitive chat workflows with retention, audit, usage, and deletion controls.
 ---
 

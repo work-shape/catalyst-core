@@ -35,21 +35,22 @@ export const apps = defineTranslations({
     "apps.actionPolicyApproval": "Needs an approval",
     "apps.actionPolicyConfirm": "Runs once you confirm",
     "apps.actionPolicyDeny": "Refused",
-    "apps.actionNotCarriedOutInDraft": "Not carried out in a draft",
     "apps.actionResultOf": "Result of {name}",
     "apps.actionResultTruncated": "Shortened: the first {shown} of {total} characters.",
     "apps.actionTest": "Test",
     "apps.actionTestBody": "A real call from the draft, made in your name.",
-    "apps.actionTestBodyWorkflow":
-      "A test from the draft, in your name. It checks your rights and the input and starts no run.",
+    "apps.actionTestBodyChanging":
+      "A call from the draft, made in your name. It is simulated and changes nothing: the answer says what it would have done. With “Run live once” on, your next call is carried out.",
     "apps.actionTestFailed": "The call could not be made.",
     "apps.actionTestListed": "It is listed under Operations.",
     "apps.actionTestOf": "Test {name}",
     "apps.actionTestOpenRun": "Open the run in Operations",
     "apps.actionTestPending": "The call waits for an approval. Its run shows how it ends.",
     "apps.actionTestDryRun": "Not carried out in the draft",
+    "apps.actionTestDryRunCall":
+      "Would have called {name} with the input below. The draft of an app runs in safe mode and changes nothing. Publish the app, or switch on “Run live once” for this action, to carry it out.",
     "apps.actionTestDryRunWorkflow":
-      "Would have started the Workflow '{workflow}' with the input below. The draft of an App runs in safe mode and changes nothing. Publish the App to carry it out.",
+      "Would have started the Workflow '{workflow}' with the input below. The draft of an app runs in safe mode and changes nothing. Publish the app, or switch on “Run live once” for this action, to carry it out.",
     "apps.actionTestRunning": "Waiting for the answer. This can take up to half a minute.",
     "apps.actionTestTitle": "Test “{name}”",
     "apps.actionTestableInDraft": "Can be tested",
@@ -58,7 +59,7 @@ export const apps = defineTranslations({
       "This app has no actions yet. An action lets the app read from a connection or write to it.",
     "apps.actionsFailed": "The actions could not be loaded.",
     "apps.actionsIntro":
-      "What this app can read or change in other systems. Nothing is changed from a draft: an action that changes something runs only in the published app.",
+      "What this app can read or change in other systems. A draft changes nothing: an action that changes something is simulated and says what it would have done. “Run live once” carries out your next call of it.",
     "apps.toolsCut":
       "Not every app is listed: this instance has more published apps than one list holds. Actions of the apps left out cannot be chosen here.",
     "apps.toolsHeld": "Actions of apps this agent holds",
@@ -71,6 +72,11 @@ export const apps = defineTranslations({
     "apps.toolsUnknown": "The apps could not be checked. The agent keeps these actions.",
     "apps.actionsOf": "Actions for {name}",
     "apps.backToList": "Back to Apps",
+    "apps.liveOnceFailed": "“Run live once” could not be switched on.",
+    "apps.liveOnceOf": "Run {name} live once",
+    "apps.liveOnceOn": "Your next call runs live.",
+    "apps.liveOnceStale":
+      "The draft changed since this list was loaded. Look at it again and switch it on there.",
     "apps.buildInChat": "Build an app in chat",
     "apps.changed": "Changed {when}",
     "apps.copyLink": "Copy link",
@@ -99,6 +105,7 @@ export const apps = defineTranslations({
     "apps.draftArea": "Draft of {name}",
     "apps.draftOnly": "Draft only",
     "apps.draftRevision": "Draft · revision {number}",
+    "apps.draftNotPublished": "Draft · not published",
     "apps.draftUnavailable": "The draft of this app is not available to you.",
     "apps.edit": "Edit",
     "apps.editNamed": "Edit {name}",
@@ -141,7 +148,6 @@ export const apps = defineTranslations({
     "apps.openNamed": "Open {name}",
     "apps.openDraft": "Open the draft",
     "apps.previewOf": "App {name}",
-    "apps.surface.openPage": "Open the app's draft page",
     "apps.promptStart": "Build a page for this workspace: ",
     "apps.publish": "Publish",
     "apps.publishBody": "Everyone in {workspace} gets revision {number} when they open the app.",
@@ -230,21 +236,22 @@ export const apps = defineTranslations({
     "apps.actionPolicyApproval": "Braucht eine Freigabe",
     "apps.actionPolicyConfirm": "Läuft, sobald du bestätigst",
     "apps.actionPolicyDeny": "Abgelehnt",
-    "apps.actionNotCarriedOutInDraft": "Im Entwurf nicht ausgeführt",
     "apps.actionResultOf": "Ergebnis von {name}",
     "apps.actionResultTruncated": "Gekürzt: die ersten {shown} von {total} Zeichen.",
     "apps.actionTest": "Testen",
     "apps.actionTestBody": "Ein echter Aufruf aus dem Entwurf in deinem Namen.",
-    "apps.actionTestBodyWorkflow":
-      "Ein Test aus dem Entwurf in deinem Namen. Er prüft deine Rechte und die Eingabe und startet keinen Lauf.",
+    "apps.actionTestBodyChanging":
+      "Ein Aufruf aus dem Entwurf in deinem Namen. Er wird simuliert und ändert nichts: Die Antwort sagt, was er getan hätte. Mit „Einmal live ausführen“ wird dein nächster Aufruf ausgeführt.",
     "apps.actionTestFailed": "Der Aufruf konnte nicht ausgeführt werden.",
     "apps.actionTestListed": "Er steht unter Operationen.",
     "apps.actionTestOf": "{name} testen",
     "apps.actionTestOpenRun": "Lauf in Operationen öffnen",
     "apps.actionTestPending": "Der Aufruf wartet auf eine Freigabe. Sein Lauf zeigt, wie er endet.",
     "apps.actionTestDryRun": "Im Entwurf nicht ausgeführt",
+    "apps.actionTestDryRunCall":
+      "Hätte {name} mit der Eingabe unten aufgerufen. Der Entwurf einer App läuft im sicheren Modus und ändert nichts. Veröffentliche die App oder schalte „Einmal live ausführen“ für diese Aktion ein, um sie auszuführen.",
     "apps.actionTestDryRunWorkflow":
-      "Hätte den Workflow „{workflow}“ mit der Eingabe unten gestartet. Der Entwurf einer App läuft im sicheren Modus und ändert nichts. Veröffentliche die App, um ihn auszuführen.",
+      "Hätte den Workflow „{workflow}“ mit der Eingabe unten gestartet. Der Entwurf einer App läuft im sicheren Modus und ändert nichts. Veröffentliche die App oder schalte „Einmal live ausführen“ für diese Aktion ein, um ihn auszuführen.",
     "apps.actionTestRunning":
       "Die Antwort steht noch aus. Das kann bis zu einer halben Minute dauern.",
     "apps.actionTestTitle": "„{name}“ testen",
@@ -254,7 +261,7 @@ export const apps = defineTranslations({
       "Diese App hat noch keine Aktionen. Mit einer Aktion liest die App über eine Verbindung oder schreibt über sie.",
     "apps.actionsFailed": "Die Aktionen konnten nicht geladen werden.",
     "apps.actionsIntro":
-      "Was diese App in anderen Systemen lesen oder ändern kann. Aus einem Entwurf wird nichts geändert: Eine Aktion, die etwas ändert, läuft erst in der veröffentlichten App.",
+      "Was diese App in anderen Systemen lesen oder ändern kann. Ein Entwurf ändert nichts: Eine Aktion, die etwas ändert, wird simuliert und sagt, was sie getan hätte. „Einmal live ausführen“ führt deinen nächsten Aufruf aus.",
     "apps.toolsCut":
       "Nicht jede App ist aufgeführt: Diese Instanz hat mehr veröffentlichte Apps, als eine Liste fasst. Aktionen der ausgelassenen Apps lassen sich hier nicht auswählen.",
     "apps.toolsHeld": "Aktionen von Apps, die dieser Agent führt",
@@ -267,6 +274,11 @@ export const apps = defineTranslations({
     "apps.toolsUnknown": "Die Apps konnten nicht geprüft werden. Der Agent behält diese Aktionen.",
     "apps.actionsOf": "Aktionen für {name}",
     "apps.backToList": "Zurück zu Apps",
+    "apps.liveOnceFailed": "„Einmal live ausführen“ konnte nicht eingeschaltet werden.",
+    "apps.liveOnceOf": "{name} einmal live ausführen",
+    "apps.liveOnceOn": "Dein nächster Aufruf läuft live.",
+    "apps.liveOnceStale":
+      "Der Entwurf hat sich geändert, seit diese Liste geladen wurde. Sieh ihn dir erneut an und schalte es dort ein.",
     "apps.buildInChat": "App im Chat bauen",
     "apps.changed": "Geändert {when}",
     "apps.copyLink": "Link kopieren",
@@ -296,6 +308,7 @@ export const apps = defineTranslations({
     "apps.draftArea": "Entwurf von {name}",
     "apps.draftOnly": "Nur Entwurf",
     "apps.draftRevision": "Entwurf · Revision {number}",
+    "apps.draftNotPublished": "Entwurf · nicht veröffentlicht",
     "apps.draftUnavailable": "Der Entwurf dieser App ist für dich nicht verfügbar.",
     "apps.edit": "Bearbeiten",
     "apps.editNamed": "{name} bearbeiten",
@@ -341,7 +354,6 @@ export const apps = defineTranslations({
     "apps.openNamed": "{name} öffnen",
     "apps.openDraft": "Entwurf öffnen",
     "apps.previewOf": "App {name}",
-    "apps.surface.openPage": "Entwurfsseite der App öffnen",
     "apps.promptStart": "Baue eine Page für diesen Arbeitsbereich: ",
     "apps.publish": "Veröffentlichen",
     "apps.publishBody": "Alle in {workspace} bekommen Revision {number}, wenn sie die App öffnen.",

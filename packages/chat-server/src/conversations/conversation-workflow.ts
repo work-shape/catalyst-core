@@ -1,4 +1,4 @@
-import type { StorePage } from "@vivd-catalyst/core";
+import type { AuditRecorder, StorePage } from "@vivd-catalyst/core";
 import { auditActorFromUser } from "@vivd-catalyst/core";
 import {
   AppError,
@@ -18,8 +18,11 @@ import {
   addDays,
   asUserId,
   getSubjectUserId,
-  isAppError
+  isAppError,
+  readToolResultMetadata
 } from "@vivd-catalyst/core";
+import { PLATFORM_ASSET_TOOLS } from "@vivd-catalyst/tool-execution";
+import { z } from "zod";
 import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-schema";
 import { CollaborationWorkspaceWorkflow } from "../collaboration-workspace-workflow";
 import { attemptConversationDataCleanup } from "../conversation-cleanup";
@@ -32,9 +35,17 @@ import {
   normalizeGeneratedConversationTitle,
   temporaryAttachmentTitles
 } from "../conversation-title";
-import { requireReadableSubject } from "../platform-asset-calls";
+import { requireOwnTranscript, requireReadableSubject } from "../platform-asset-calls";
 import { modelBindingRefOf, reasoningEffortTheModelTakes } from "../system-model-call";
 import type { ChatServerOptions } from "../types";
+
+/** The answer of an agent's open that waited for the person, as stored or wrapped. */
+const waitingAnswerSchema = z.object({
+  kind: z.string(),
+  name: z.string(),
+  awaitsPerson: z.literal(true)
+});
+const waitingOpenSchema = z.union([waitingAnswerSchema, z.object({ output: waitingAnswerSchema })]);
 
 export interface CreateConversationCommand {
   title?: string;
@@ -161,6 +172,84 @@ export class ConversationWorkflow {
       }
     });
     return updated;
+  }
+
+  /**
+   * The person makes an asset what their own conversation is about: the person's step that an
+   * asset of the instance needs, such as going to the page of an asset the agent opened. The
+   * conversation is the person's, in a transcript nobody else reads, and the asset one they may
+   * read; another person's conversation and an asset they may not read are refused as missing.
+   */
+  async openSubject(
+    conversationId: ConversationId,
+    user: AuthenticatedUser,
+    context: { correlationId: string; audit: AuditRecorder },
+    command: ConversationSubject & { toolCallId?: string }
+  ): Promise<Conversation> {
+    const conversation = await this.requireConversationAccess(conversationId, user);
+    if (conversation.createdByUserId !== getSubjectUserId(user)) {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+    const subject = { kind: command.kind, name: command.name };
+    await requireReadableSubject(this.options, user, subject);
+    await requireOwnTranscript(this.options, conversation);
+    if (command.toolCallId !== undefined) {
+      await this.requirePendingOpen(conversationId, command.toolCallId, subject);
+    }
+    const updated = await this.options.stores.conversations.setConversationSubject({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      subject
+    });
+    // Deleted meanwhile.
+    if (!updated) throw new AppError("NOT_FOUND", "Conversation is not available");
+    await context.audit.record({
+      type: "conversation.subject_opened",
+      status: "success",
+      actor: auditActorFromUser(user),
+      subject: conversationId,
+      correlationId: context.correlationId,
+      metadata: {
+        subjectKind: subject.kind,
+        subjectName: subject.name,
+        ...(command.toolCallId === undefined ? {} : { confirmsToolCallId: command.toolCallId })
+      }
+    });
+    return updated;
+  }
+
+  /**
+   * Refuses a confirmation that names no open waiting for the person: the tool call must be an
+   * open of this asset in this conversation whose answer waited for the person. The audit row
+   * names only a call the agent made.
+   */
+  private async requirePendingOpen(
+    conversationId: ConversationId,
+    toolCallId: string,
+    subject: ConversationSubject
+  ): Promise<void> {
+    const messages = await this.options.stores.conversations.listMessages({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId
+    });
+    const pending = messages.some((message) => {
+      const result = readToolResultMetadata(message.metadata);
+      if (result?.toolCallId !== toolCallId || result.toolName !== PLATFORM_ASSET_TOOLS.open.name) {
+        return false;
+      }
+      const answer = waitingOpenSchema.safeParse(result.result);
+      if (!answer.success) return false;
+      const opened = "output" in answer.data ? answer.data.output : answer.data;
+      return opened.kind === subject.kind && opened.name === subject.name;
+    });
+    if (!pending) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "The confirmation names no open of this asset that waits for the person in this conversation",
+        { reason: "open_not_pending" },
+        { exposeMessage: true }
+      );
+    }
   }
 
   async moveConversation(

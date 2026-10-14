@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { timestampSchema } from "./shared";
 
+/** Where a call goes or went (ADR-0031): the called asset, its test target, or nowhere. */
+export const operationTargetSchema = z.enum(["live", "test", "dry_run"]);
+
 export const operationRunOriginSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("agent"),
@@ -77,7 +80,7 @@ export const operationRunSchema = z.object({
    * Where the call went: `live`, the asset it calls; `test`, that asset's test target; or
    * `dry_run`, nowhere, a changing call of a draft that answered what it would have done.
    */
-  target: z.enum(["live", "test", "dry_run"]),
+  target: operationTargetSchema,
   /**
    * The App a call with the origin `app` came from, as the instance holds it when the run is
    * read. Nothing of it is kept on the run. A run of a Page of a conversation has none.
@@ -102,8 +105,10 @@ export const operationRunSchema = z.object({
       /**
        * `inherited_approval_not_applied`: the instance default asked for an approval and the
        * call ran on its caller's word, because its answer is a secret that is shown once.
+       * `workflow_publish`: a step of a run of a published Workflow revision made a call whose
+       * policy asks for a confirmation, and publishing the Workflow was that confirmation.
        */
-      reason: z.enum(["inherited_approval_not_applied"]).optional(),
+      reason: z.enum(["inherited_approval_not_applied", "workflow_publish"]).optional(),
       by: z.string(),
       /** The name of who decided, where the decision was another person's. */
       byLabel: z.string().optional(),

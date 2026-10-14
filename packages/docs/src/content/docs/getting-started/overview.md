@@ -1,5 +1,5 @@
 ---
-title: Overview
+title: What the platform provides
 description: How Workshape Catalyst is meant to be used by teams configuring their own agent chat.
 ---
 
@@ -19,13 +19,14 @@ The platform provides the reusable pieces:
 
 The customer-specific layer provides the narrow pieces:
 
-- agent instructions
-- enabled tools
+- enabled tools and modules
 - custom code tools
 - branding and chat copy
 - retention and usage policy
 - auth integration settings
 - deployment wiring
+
+What people build on a running instance is not part of that layer. Agents, skills, Apps, Workflows, Connections and guardrails live in the instance's database and change at runtime, in Studio, through an agent or with the [CLI](/configure/cli/), without a deployment.
 
 ## Who This Is For
 
@@ -54,7 +55,7 @@ Before writing tools or deploying anything, decide:
 - what should be retained, audited, deleted, and backed up
 - which model provider and region are acceptable
 
-Start with [Operating Models](/getting-started/operating-models/) and then write the [Instance Brief](/operate/instance-brief/).
+Start with [Ways to run an instance](/getting-started/operating-models/) and then write the [instance brief](/operate/instance-brief/).
 
 ## How Work Flows
 
@@ -67,4 +68,4 @@ instance brief
   -> governed chat use
 ```
 
-This keeps behavior explainable: a running instance can be traced back to source-controlled config, tool code, and platform package versions.
+This keeps the instance explainable: what it runs can be traced back to source-controlled config, tool code and platform package versions, and every change to an agent, skill, App, Workflow, Connection or guardrail is a revision with its author.

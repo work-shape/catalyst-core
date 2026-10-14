@@ -8,6 +8,7 @@ import {
   GUARDRAIL_NAME_MAX_LENGTH,
   GUARDRAIL_NAME_PATTERN,
   GUARDRAIL_NAME_RULE,
+  GUARDRAIL_ORIGINS,
   GUARDRAIL_OUTCOMES,
   type GuardrailConfig,
   type GuardrailEvent
@@ -70,7 +71,8 @@ const guardrailFields = {
       kind: z.string().trim().min(1).optional(),
       operation: z.string().trim().min(1).optional(),
       origin: z.enum(GUARDRAIL_FILTER_ORIGINS).optional(),
-      agent: z.string().trim().min(1).optional()
+      agent: z.string().trim().min(1).optional(),
+      workspace: z.string().trim().min(1).optional()
     })
     .strict()
     .optional(),
@@ -141,13 +143,17 @@ export const releaseGuardrailsConfigSchema = z
 
 export type ReleaseGuardrailConfig = z.infer<typeof releaseGuardrailConfigSchema>;
 
-/** A Guardrail as a revision holds it. */
+/**
+ * A Guardrail as a revision holds it. A definition written as an asset may leave `origin`
+ * out: it is an `asset` one. Only the release seed writes `release`, and the kind refuses it
+ * from every other writer.
+ */
 export const guardrailConfigSchema = z
   .object({
     name: guardrailNameSchema,
     displayName: z.string().trim().min(1).max(120),
     ...guardrailFields,
-    origin: z.literal("release")
+    origin: z.enum(GUARDRAIL_ORIGINS).default("asset")
   })
   .strict()
   .superRefine(refineGuardrail) satisfies z.ZodType<GuardrailConfig>;

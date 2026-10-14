@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Workshape Catalyst API",
-    "version": "0.6.3",
-    "description": "Every operation under `/api/v1` of release 0.6.3, and the unversioned readiness probe `/ready`. Every error answers with the envelope `ApiErrorResponse`; its `code` is the stable part, its `correlationId` names the request in the instance's log."
+    "version": "0.7.0",
+    "description": "Every operation under `/api/v1` of release 0.7.0, and the unversioned readiness probe `/ready`. Every error answers with the envelope `ApiErrorResponse`; its `code` is the stable part, its `correlationId` names the request in the instance's log."
   },
   "servers": [
     {
@@ -62,6 +62,9 @@
     },
     {
       "name": "Jobs"
+    },
+    {
+      "name": "Knowledge Bases"
     },
     {
       "name": "Operations"
@@ -216,123 +219,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AppActionCallRequestInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AppActionCallResult"
-                }
-              }
-            },
-            "headers": {
-              "Operation-Run-Id": {
-                "$ref": "#/components/headers/OperationRunId"
-              },
-              "Idempotent-Replayed": {
-                "$ref": "#/components/headers/IdempotentReplayed"
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationFailed"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/Internal"
-          },
-          "504": {
-            "$ref": "#/components/responses/Timeout"
-          }
-        },
-        "x-catalyst-effect": "changing",
-        "x-catalyst-rate-class": "write"
-      }
-    },
-    "/api/v1/app-content-sessions/{pageSessionId}/connections/{connection}/operations/{operation}": {
-      "post": {
-        "operationId": "apps.sessions.call_connection",
-        "summary": "Call an operation of a Connection the manifest of the shown Page or App lists, with the caller's rights",
-        "tags": [
-          "Apps"
-        ],
-        "security": [
-          {
-            "sessionCookie": [
-              "conversation:write"
-            ]
-          },
-          {
-            "sessionToken": [
-              "conversation:write"
-            ]
-          }
-        ],
-        "parameters": [
-          {
-            "name": "pageSessionId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "connection",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "operation",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 255
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AppConnectionCallRequest"
               }
             }
           }
@@ -1444,7 +1330,7 @@
     "/api/v1/assets/sync": {
       "post": {
         "operationId": "assets.sync",
-        "summary": "Apply puts and deletes in one Namespace, all of them or none",
+        "summary": "Apply puts and deletes in one Namespace or workspace, all of them or none",
         "tags": [
           "Assets"
         ],
@@ -3047,9 +2933,100 @@
       }
     },
     "/api/v1/assets/{kind}/{name}/run-live-once": {
+      "get": {
+        "operationId": "assets.list_live_once",
+        "summary": "List the caller's own Run live once switches on the draft, and the test run that used each",
+        "tags": [
+          "Assets"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveOnceList"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      },
       "post": {
         "operationId": "assets.run_live_once",
-        "summary": "Make the next call of one action or step of the draft live instead of simulated, once",
+        "summary": "Make your own next call of one action or step of the draft live instead of simulated, once",
         "tags": [
           "Assets"
         ],
@@ -3571,7 +3548,8 @@
                               "enum": [
                                 "agent",
                                 "bridge",
-                                "workflow"
+                                "workflow",
+                                "outside"
                               ]
                             }
                           },
@@ -6608,6 +6586,125 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/conversations/{conversationId}/subject": {
+      "put": {
+        "operationId": "conversations.subject.open",
+        "summary": "Make an asset what the person's own conversation is about",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenConversationSubjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/conversations/{conversationId}/thread": {
       "get": {
         "operationId": "conversations.thread.get",
@@ -8361,6 +8458,221 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/guardrails/{name}/dry-run": {
+      "post": {
+        "operationId": "guardrails.dry_run",
+        "summary": "Count what a revision of one Guardrail, its draft unless named, would have answered in the last 14 days, without names and without keeping a hit",
+        "tags": [
+          "Guardrails"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "allow",
+                        "warn",
+                        "require_approval",
+                        "block"
+                      ]
+                    },
+                    "days": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "since": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "matched": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "evaluated": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "notEvaluable": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "limitedTo": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "wouldBlock": {
+                      "type": "object",
+                      "properties": {
+                        "actions": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "people": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "actions",
+                        "people"
+                      ]
+                    },
+                    "wouldRequireApproval": {
+                      "type": "object",
+                      "properties": {
+                        "actions": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "people": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "actions",
+                        "people"
+                      ]
+                    },
+                    "wouldWarn": {
+                      "type": "object",
+                      "properties": {
+                        "actions": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "people": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "actions",
+                        "people"
+                      ]
+                    },
+                    "published": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "revision",
+                    "event",
+                    "outcome",
+                    "days",
+                    "since",
+                    "matched",
+                    "evaluated",
+                    "notEvaluable",
+                    "wouldBlock",
+                    "wouldRequireApproval",
+                    "wouldWarn",
+                    "published"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/guardrails/{name}/hits": {
       "get": {
         "operationId": "guardrails.list_hits",
@@ -8513,6 +8825,294 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/guardrails/{name}/test": {
+      "post": {
+        "operationId": "guardrails.test",
+        "summary": "Check a revision of one Guardrail, its draft unless named, on sample content or on an asset, and keep no hit",
+        "tags": [
+          "Guardrails"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "sample": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 2097152
+                    }
+                  },
+                  "asset": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "allow",
+                        "warn",
+                        "require_approval",
+                        "block"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "appliesToAsset": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "revision",
+                    "event",
+                    "outcome",
+                    "reason"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/guardrails/{name}/unpublish": {
+      "post": {
+        "operationId": "guardrails.unpublish",
+        "summary": "Stop one published Guardrail from enforcing. Its draft stays",
+        "tags": [
+          "Guardrails"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:publish"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:publish"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:publish"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "draftRevision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "unpublishedRevision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "draftRevision",
+                    "unpublishedRevision"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
       }
     },
     "/api/v1/instance/access/effective": {
@@ -12028,6 +12628,580 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/knowledge-bases/{knowledgeBase}": {
+      "get": {
+        "operationId": "knowledge_bases.get",
+        "summary": "Read the state of one published Knowledge Base: whether its last check could read every table it describes",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "unchecked",
+                        "ok",
+                        "needs_attention"
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "checkedAt": {
+                      "type": "string"
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "readable": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "readable"
+                        ]
+                      }
+                    },
+                    "problem": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "tables"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/knowledge-bases/{knowledgeBase}/check": {
+      "post": {
+        "operationId": "knowledge_bases.check",
+        "summary": "Check one published Knowledge Base now: whether every table it describes can be read. It reads no row",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "unchecked",
+                        "ok",
+                        "needs_attention"
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "checkedAt": {
+                      "type": "string"
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "readable": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "readable"
+                        ]
+                      }
+                    },
+                    "problem": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "tables"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/knowledge-bases/{knowledgeBase}/query": {
+      "post": {
+        "operationId": "knowledge_bases.query",
+        "summary": "Read rows of one published Knowledge Base with one read-only statement and bound parameters",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sql": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "parameters": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "text",
+                                "text[]",
+                                "integer",
+                                "integer[]",
+                                "number",
+                                "number[]",
+                                "boolean",
+                                "boolean[]",
+                                "date",
+                                "date[]",
+                                "timestamp",
+                                "timestamp[]"
+                              ]
+                            },
+                            "value": {
+                              "anyOf": [
+                                {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "sql"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "nativeType": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "nativeType"
+                        ]
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "knowledgeBase": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "tables": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "knowledgeBase",
+                        "title",
+                        "tables"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "columns",
+                    "rows",
+                    "truncated",
+                    "source"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "me.get",
@@ -14032,6 +15206,20 @@
                           "source": {
                             "type": "string"
                           },
+                          "target": {
+                            "type": "string",
+                            "enum": [
+                              "live",
+                              "test",
+                              "dry_run"
+                            ]
+                          },
+                          "publishedWouldAsk": {
+                            "type": "string",
+                            "enum": [
+                              "approval"
+                            ]
+                          },
                           "log": {
                             "type": "object",
                             "properties": {
@@ -14606,6 +15794,301 @@
       "post": {
         "operationId": "workflows.start",
         "summary": "Start a run of one published Workflow by hand; it acts as the Workflow's principal",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "input": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "workflow": {
+                      "type": "string"
+                    },
+                    "definitionRevisionId": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "live",
+                        "test"
+                      ]
+                    },
+                    "trigger": {
+                      "type": "string",
+                      "enum": [
+                        "manual",
+                        "schedule",
+                        "parent"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "waiting",
+                        "done",
+                        "failed",
+                        "cancelled",
+                        "limit_reached"
+                      ]
+                    },
+                    "principal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "displayLabel": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "displayLabel"
+                      ]
+                    },
+                    "startedBy": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "service_principal"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "label"
+                      ]
+                    },
+                    "scheduledFor": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "operationRunId": {
+                      "type": "string"
+                    },
+                    "stepRunCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "deadlineAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "stepRunId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "outputPreview": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "maxLength": 2000
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "truncated"
+                      ]
+                    },
+                    "createdAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "startedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "finishedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "cancelledBy": {
+                      "type": "string"
+                    },
+                    "cancelledAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "dataPrunedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "workflow",
+                    "definitionRevisionId",
+                    "mode",
+                    "trigger",
+                    "status",
+                    "principal",
+                    "startedBy",
+                    "stepRunCount",
+                    "deadlineAt",
+                    "createdAt"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/workflows/{workflow}/test-runs": {
+      "post": {
+        "operationId": "workflows.test",
+        "summary": "Start a test run of a Workflow's draft; it acts as the person testing, bounded by the Workflow's principal, and simulates changing steps",
         "tags": [
           "Workflows"
         ],
@@ -17130,7 +18613,7 @@
         }
       },
       "ForbiddenOrPolicyDeniedOrGuardrailBlocked": {
-        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `details.reason` is `approval_unavailable` where the policy asks for another person's approval and the call cannot wait for one. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it.",
+        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `details.reason` is `approval_unavailable` where the policy asks for another person's approval and the call cannot wait for one; `details.guardrailId` then names the guardrail that asked for it, where one did. It is `workflow_deleted` where a step of a run of a published Workflow needs the confirmation its publish gave, and the Workflow was deleted since. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it.",
         "content": {
           "application/json": {
             "schema": {
@@ -17150,7 +18633,7 @@
         }
       },
       "ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined": {
-        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `details.reason` is `approval_unavailable` where the policy asks for another person's approval and the call cannot wait for one. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it. `DECLINED`: The person asked to approve the call declined it. `details.by` names them, `details.comment` holds their reason where they gave one.",
+        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `details.reason` is `approval_unavailable` where the policy asks for another person's approval and the call cannot wait for one; `details.guardrailId` then names the guardrail that asked for it, where one did. It is `workflow_deleted` where a step of a run of a published Workflow needs the confirmation its publish gave, and the Workflow was deleted since. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it. `DECLINED`: The person asked to approve the call declined it. `details.by` names them, `details.comment` holds their reason where they gave one.",
         "content": {
           "application/json": {
             "schema": {
@@ -17448,6 +18931,7 @@
           "maxSteps",
           "toolNames",
           "skillNames",
+          "knowledgeBases",
           "initialPrompts"
         ]
       },
@@ -18202,6 +19686,63 @@
           }
         ]
       },
+      "AgentToolReference": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "object",
+            "properties": {
+              "en": {
+                "type": "string"
+              },
+              "de": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "en",
+              "de"
+            ]
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "en": {
+                "type": "string"
+              },
+              "de": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "en",
+              "de"
+            ]
+          },
+          "group": {
+            "$ref": "#/components/schemas/ToolGroup"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "changing"
+            ]
+          },
+          "module": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "ApiCredential": {
         "type": "object",
         "properties": {
@@ -18390,6 +19931,9 @@
                   "deny"
                 ]
               },
+              "target": {
+                "$ref": "#/components/schemas/OperationTarget"
+              },
               "agentTool": {
                 "type": "boolean"
               },
@@ -18465,6 +20009,9 @@
                   "deny"
                 ]
               },
+              "target": {
+                "$ref": "#/components/schemas/OperationTarget"
+              },
               "agentTool": {
                 "type": "boolean"
               },
@@ -18535,6 +20082,9 @@
                   "approval",
                   "deny"
                 ]
+              },
+              "target": {
+                "$ref": "#/components/schemas/OperationTarget"
               },
               "agentTool": {
                 "type": "boolean"
@@ -18696,26 +20246,6 @@
         "required": [
           "apps",
           "truncated"
-        ]
-      },
-      "AppConnectionCallRequest": {
-        "type": "object",
-        "properties": {
-          "fileSetId": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
-          },
-          "token": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 512
-          },
-          "input": {}
-        },
-        "required": [
-          "fileSetId",
-          "token"
         ]
       },
       "AppErrorCode": {
@@ -21096,6 +22626,12 @@
               "type": "string"
             }
           },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentToolReference"
+            }
+          },
           "moduleOffTools": {
             "type": "array",
             "items": {
@@ -23158,6 +24694,38 @@
         "type": "string",
         "pattern": "^(?:queued|running|succeeded|failed|dead|cancelled)(?:,(?:queued|running|succeeded|failed|dead|cancelled))*$"
       },
+      "LiveOnceList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "part": {
+                  "type": "string"
+                },
+                "switchedAt": {
+                  "$ref": "#/components/schemas/Timestamp"
+                },
+                "usedByRunId": {
+                  "type": "string"
+                },
+                "usedAt": {
+                  "$ref": "#/components/schemas/Timestamp"
+                }
+              },
+              "required": [
+                "part",
+                "switchedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
       "LocaleCode": {
         "type": "string",
         "enum": [
@@ -24309,6 +25877,30 @@
           "components"
         ]
       },
+      "OpenConversationSubjectRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "toolCallId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ]
+      },
       "OperationRun": {
         "type": "object",
         "properties": {
@@ -24355,12 +25947,7 @@
             "$ref": "#/components/schemas/OperationRunOrigin"
           },
           "target": {
-            "type": "string",
-            "enum": [
-              "live",
-              "test",
-              "dry_run"
-            ]
+            "$ref": "#/components/schemas/OperationTarget"
           },
           "app": {
             "type": "object",
@@ -24410,7 +25997,8 @@
               "reason": {
                 "type": "string",
                 "enum": [
-                  "inherited_approval_not_applied"
+                  "inherited_approval_not_applied",
+                  "workflow_publish"
                 ]
               },
               "by": {
@@ -24725,6 +26313,14 @@
           "failed",
           "denied",
           "expired"
+        ]
+      },
+      "OperationTarget": {
+        "type": "string",
+        "enum": [
+          "live",
+          "test",
+          "dry_run"
         ]
       },
       "Page": {
@@ -25110,6 +26706,16 @@
               "files"
             ]
           },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "instance",
+                "workspace"
+              ]
+            }
+          },
           "actions": {
             "type": "object",
             "properties": {
@@ -25187,6 +26793,7 @@
           "plural",
           "lifecycle",
           "representation",
+          "owners",
           "actions"
         ]
       },
@@ -25212,6 +26819,9 @@
             "type": "object",
             "properties": {
               "version": {
+                "type": "string"
+              },
+              "cliVersion": {
                 "type": "string"
               }
             },
@@ -25243,6 +26853,12 @@
               "$ref": "#/components/schemas/PlatformContextNamespace"
             }
           },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformContextWorkspace"
+            }
+          },
           "visibleSections": {
             "type": "array",
             "items": {
@@ -25260,6 +26876,7 @@
           "actions",
           "assetActions",
           "namespaces",
+          "workspaces",
           "visibleSections"
         ]
       },
@@ -25282,6 +26899,40 @@
         "required": [
           "prefix",
           "displayName",
+          "actions"
+        ]
+      },
+      "PlatformContextWorkspace": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "shared"
+            ]
+          },
+          "member": {
+            "type": "boolean"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "member",
           "actions"
         ]
       },
@@ -26718,6 +28369,10 @@
             "type": "string",
             "minLength": 1
           },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1
+          },
           "items": {
             "maxItems": 2000,
             "type": "array",
@@ -26789,6 +28444,18 @@
         "type": "string",
         "format": "date-time",
         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+      },
+      "ToolGroup": {
+        "type": "string",
+        "enum": [
+          "documents",
+          "web",
+          "files",
+          "results",
+          "skills",
+          "platform",
+          "instance"
+        ]
       },
       "ToolResultMessageMetadata": {
         "type": "object",

@@ -29,6 +29,7 @@ import {
 } from "../postgres-agent-availability";
 import {
   discardConfigAssetDraft as discardPostgresConfigAssetDraft,
+  unpublishConfigAsset as unpublishPostgresConfigAsset,
   publishConfigAssetRevision as publishPostgresConfigAssetRevision,
   removeConfigAsset as removePostgresConfigAsset
 } from "../postgres-config-asset-pointers";
@@ -96,6 +97,7 @@ export function createPostgresConfigAssetsStore(
     applyConfigAssetMutations: (input) => applyPostgresConfigAssetMutations(db, input),
     publishConfigAssetRevision: (input) => publishPostgresConfigAssetRevision(db, input),
     discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),
+    unpublishConfigAsset: (input) => unpublishPostgresConfigAsset(db, input),
     removeConfigAsset: (input) => removePostgresConfigAsset(db, input),
     listAssetRepoBundles: (input) => listAssetRepoBundles(db, input),
     beginAssetRepoSave: (input) => beginAssetRepoSave(own(), input),

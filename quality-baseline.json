@@ -47,7 +47,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-non-null-assertion",
       "scope": "packages/config-cli",
-      "count": 20,
+      "count": 19,
       "owner": "PA-1b"
     },
     {
@@ -133,13 +133,6 @@
       "scope": "packages/client-assembly",
       "count": 2,
       "owner": "CB-10a"
-    },
-    {
-      "target": "lint",
-      "rule": "@typescript-eslint/no-unsafe-type-assertion",
-      "scope": "packages/config-cli",
-      "count": 2,
-      "owner": "PA-1b"
     },
     {
       "target": "lint",

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { configAssetReferencesSchema, platformContextSchema } from "@vivd-catalyst/api-contract";
+import {
+  PUBLISHED_CLI_VERSION,
+  RELEASE_VERSION,
+  configAssetReferencesSchema,
+  platformContextSchema
+} from "@vivd-catalyst/api-contract";
 import {
   SCOPES_HEADER,
   SERVICE_HEADER,
@@ -17,6 +22,7 @@ const kinds = [
     plural: "agents",
     lifecycle: "active",
     representation: "config",
+    owners: ["instance", "workspace"],
     actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
   },
   {
@@ -24,6 +30,7 @@ const kinds = [
     plural: "skills",
     lifecycle: "active",
     representation: "config",
+    owners: ["instance", "workspace"],
     actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" }
   }
 ];
@@ -41,6 +48,12 @@ describe("platform.context.get", () => {
 
     expect(context.instance).toEqual({ id: "demo-local", name: "Access test" });
     expect(context.release.version).toMatch(/^\d+\.\d+\.\d+/u);
+    // The CLI version Connect a local agent installs is the one on npm this commit names, and
+    // none while it names none (CONNECT-1a, check 52); never merely the release's own version.
+    expect(context.release).toEqual({
+      version: RELEASE_VERSION,
+      ...(PUBLISHED_CLI_VERSION === undefined ? {} : { cliVersion: PUBLISHED_CLI_VERSION })
+    });
     expect(context.kinds).toEqual(kinds);
     expect(context.namespaces).toEqual([
       { prefix: "kai-", displayName: "kai-", actions: ["agent.write"] }
@@ -55,7 +68,8 @@ describe("platform.context.get", () => {
       "kinds",
       "namespaces",
       "release",
-      "visibleSections"
+      "visibleSections",
+      "workspaces"
     ]);
     // The Workflows module is off here: no section row is named.
     expect(context.visibleSections).toEqual([]);
@@ -87,6 +101,71 @@ describe("platform.context.get", () => {
     // On the instance's assets as a whole the role holds every action: the deny names one
     // Namespace.
     expect(admin.actions).toEqual([
+      "agent.read",
+      "agent.write",
+      "agent.delete",
+      "skill.read",
+      "skill.write",
+      "skill.delete"
+    ]);
+  });
+
+  it("names per workspace the actions the caller holds on what it owns, and no workspace where it holds none", async () => {
+    const t = await setup();
+    const team = await t.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Team",
+      creatorUserId: t.admin.id
+    });
+    await t.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Other team",
+      creatorUserId: t.admin.id
+    });
+    // Kai holds two rights in the one workspace and is no member of it.
+    for (const action of ["agent.write", "skill.read"]) {
+      await t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: t.kai.id,
+        action,
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: team.id,
+        grantedBy: t.admin.id
+      });
+    }
+    const workspacesOf = async (userId: string) =>
+      platformContextSchema.parse((await t.expectOk(userId, "platform.context.get")).json())
+        .workspaces;
+
+    expect(await workspacesOf(t.kai.id)).toEqual([
+      {
+        id: team.id,
+        name: "Team",
+        kind: "shared",
+        member: false,
+        actions: ["agent.write", "skill.read"]
+      }
+    ]);
+    // A right in a workspace is no right on the instance's own assets.
+    expect(
+      platformContextSchema.parse((await t.expectOk(t.kai.id, "platform.context.get")).json())
+        .actions
+    ).toEqual([]);
+    expect(await workspacesOf(t.lena.id)).toEqual([]);
+    // The administrator holds every action of the kinds in every Shared Workspace and in his
+    // own personal one; another person's personal workspace is never named.
+    const admin = await workspacesOf(t.admin.id);
+    expect(admin.map((workspace) => `${workspace.name} (${workspace.kind})`).sort()).toEqual([
+      "Other team (shared)",
+      "Personal workspace (personal)",
+      "Team (shared)"
+    ]);
+    expect(admin.find((workspace) => workspace.id === team.id)?.member).toBe(true);
+    expect(admin.find((workspace) => workspace.id === team.id)?.actions).toEqual([
       "agent.read",
       "agent.write",
       "agent.delete",
@@ -187,6 +266,8 @@ describe("platform.references.get", () => {
     fastModeModelBindingIds: [],
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
     enabledToolNames: ["known.tool", "second.tool"],
+    // No code of this instance registers them, so they are listed by their names alone.
+    tools: [{ name: "known.tool" }, { name: "second.tool" }],
     moduleOffTools: []
   };
   const refused = { status: 403, code: "FORBIDDEN" };

@@ -12,6 +12,7 @@ import {
   createConnectionSecretHandle,
   defineAssetKind,
   egressOriginOf,
+  egressSettingFor,
   findConnectorTypeIssues,
   parseConnectionOperationName,
   type AssetValidationIssue,
@@ -113,8 +114,11 @@ function egressIssue(
   const target = targetOf(options, connection);
   if (target && options.egress.admits(target)) return undefined;
   const place = target ? ` ${target.host}:${target.port}` : "";
+  const setting = target
+    ? egressSettingFor(target)
+    : "An operator adds it under 'egress.allow' in release config";
   return {
-    message: `${EGRESS_DENIED}: the address${place} is not on this instance's egress list. An operator adds it under 'egress.allow' in release config`,
+    message: `${EGRESS_DENIED}: the address${place} is not on this instance's egress list. ${setting}`,
     path: ["settings"],
     code: EGRESS_DENIED
   };

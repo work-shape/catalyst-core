@@ -287,6 +287,11 @@ export const EVENTS = {
     name: "conversation.retention_expired",
     subject: "conversation"
   },
+  "conversation.subject_opened": {
+    ...LEGACY_AUDIT,
+    name: "conversation.subject_opened",
+    subject: "conversation"
+  },
   "conversation.title_generated": {
     ...LEGACY_AUDIT,
     name: "conversation.title_generated",
@@ -364,6 +369,9 @@ export const EVENTS = {
   "job.retried": { ...LEGACY_AUDIT, name: "job.retried", subject: "job" },
   // "Run live once" on an action or a step of a draft (ADR-0031). The subject is the App or
   // the Workflow; the metadata names its draft revision, the action or step and who set it.
+  // A guardrail made to enforce at its scope, or taken back: who, which revision and where.
+  "guardrail.published": { ...LIVE_ONCE_AUDIT, name: "guardrail.published" },
+  "guardrail.unpublished": { ...LIVE_ONCE_AUDIT, name: "guardrail.unpublished" },
   "live_once.cleared": { ...LIVE_ONCE_AUDIT, name: "live_once.cleared" },
   "live_once.switched_on": { ...LIVE_ONCE_AUDIT, name: "live_once.switched_on" },
   "live_once.used": { ...LIVE_ONCE_AUDIT, name: "live_once.used" },
@@ -518,6 +526,11 @@ export interface PlatformEventContext extends Pick<
   checkable?(): GuardrailFields | Promise<GuardrailFields>;
   /** What a filter narrows by beside the origin: the asset kind or the operation's name. */
   filterBy?: { kind?: string; operation?: string };
+  /**
+   * Set where the action writes, publishes, deletes or tests guardrails: only the release floor
+   * answers its before-events, so no published guardrail stops the change of guardrails.
+   */
+  aboutGuardrails?: true;
   /** For the deadline and the stop of a guardrail's model call, where the caller has them. */
   runtime?: { deadline?: Date; signal?: AbortSignal };
   /**

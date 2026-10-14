@@ -5,7 +5,10 @@ import {
   appBridgePageMessageSchema,
   type AppBridgeContext
 } from "@vivd-catalyst/api-contract";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { RELEASED_KIT_VERSIONS } from "@vivd-catalyst/app-build";
+import * as kitClient from "@vivd-catalyst/app-kit/client";
 import {
   AppCallError,
   createAppClient,
@@ -98,7 +101,7 @@ describe("the two halves of the bridge", () => {
     client.navigate("/zahlen/2026?monat=3");
     client.resize(812.5);
     void client.actions.call("load", { limit: 20 }, { idempotencyKey: "key-1" }).catch(() => 0);
-    void client.connections.call("crm", "list_customers", { limit: 20 }).catch(() => 0);
+    void client.workflowRuns.get("wfr-1").catch(() => 0);
     await sentCalls();
 
     expect(sent.map((message) => message.type)).toEqual([
@@ -106,11 +109,36 @@ describe("the two halves of the bridge", () => {
       "navigate",
       "resize",
       "action",
-      "connection_call"
+      "workflow_run"
     ]);
     for (const message of sent) {
       expect(appBridgePageMessageSchema.safeParse(envelope(message)).success).toBe(true);
     }
+  });
+
+  // Fails before the removal: the kit offered `connections.call`, a free call of a Connection.
+  it("offer no free call of a Connection: a Page reaches one through a named action", () => {
+    const client = createAppClient(recordingTransport().transport);
+    expect(Object.keys(client).sort()).toEqual([
+      "actions",
+      "getContext",
+      "navigate",
+      "onThemeChange",
+      "resize",
+      "workflowRuns"
+    ]);
+    expect("connections" in kitClient).toBe(false);
+  });
+
+  // Fails before kit 1.4.0: every released kit offered `connections.call` to a new Page.
+  it("ship the newest kit, 1.4.0, without a call of a Connection", () => {
+    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.4.0");
+    const kit = readFileSync(
+      new URL("../packages/chat-server/vendor/app-kit/1.4.0/kit.js", import.meta.url),
+      "utf8"
+    );
+    expect(kit).not.toMatch(/connection/u);
+    expect(kit).toMatch(/\bas actions\b/u);
   });
 
   it("agree on what the interface sends: the client reads what the schema allows", () => {
@@ -400,7 +428,7 @@ describe("the kit client", () => {
     deliver(hostMessage({ type: "context", session: "session-1", context }));
     await asked;
 
-    await expect(client.connections.call("crm", "list", {})).rejects.toMatchObject({
+    await expect(client.actions.call("load", {})).rejects.toMatchObject({
       name: "AppCallError",
       code: "timeout"
     });

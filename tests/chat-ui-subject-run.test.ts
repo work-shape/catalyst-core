@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import { assetToolSentence } from "@vivd-catalyst/chat-ui/asset-tool-lines";
 import {
+  assetPageRoute,
+  opensInRun,
   savedDraftCalls,
+  standingAssetOpen,
   subjectOpenedInRun,
-  subjectSurface,
   type SubjectRunPart
 } from "@vivd-catalyst/chat-ui/subject-run";
 
@@ -102,21 +104,67 @@ describe("the subject a run opens", () => {
     ).toEqual(["6"]);
   });
 
-  it("opens the canvas of a Workflow, the draft of an App and the saved state of an agent", () => {
-    const surface = (kind: string) =>
-      subjectSurface({ subject: { kind, name: "x" }, workspaceId: "w1", title: "X" });
+  it("leaves an open that waits for the person out of the subject, and keeps it among the opens", () => {
+    const waiting: SubjectRunPart = {
+      type: "tool_call",
+      toolCallId: "2",
+      toolName: "platform.assets.open",
+      state: "output_available",
+      output: { kind: "agent", name: "helper", title: "Helper", awaitsPerson: true }
+    };
+    const parts = [opened("1", "workflow", "intake"), waiting];
 
-    expect(surface("workflow")).toMatchObject({
-      kind: "workflow_canvas",
-      key: "subject:workflow:x",
-      workspaceId: "w1",
+    expect(subjectOpenedInRun(parts)).toEqual({
+      subject: { kind: "workflow", name: "intake" },
+      callId: "1"
+    });
+    expect(opensInRun(parts)).toEqual([
+      {
+        subject: { kind: "workflow", name: "intake" },
+        title: "intake",
+        callId: "1",
+        awaitsPerson: false
+      },
+      {
+        subject: { kind: "agent", name: "helper" },
+        title: "Helper",
+        callId: "2",
+        awaitsPerson: true
+      }
+    ]);
+  });
+
+  it("takes an open that stood as the line the thread shows, and nothing else", () => {
+    const answer = { kind: "app", name: "calculator", title: "Calculator" };
+    expect(
+      standingAssetOpen({ toolName: "platform.assets.open", toolCallId: "c1", result: answer })
+    ).toEqual({
+      subject: { kind: "app", name: "calculator" },
+      title: "Calculator",
+      callId: "c1",
+      awaitsPerson: false
+    });
+    expect(
+      standingAssetOpen({ toolName: "platform.assets.open", result: answer, isError: true })
+    ).toBeUndefined();
+    expect(standingAssetOpen({ toolName: "platform.assets.open" })).toBeUndefined();
+    expect(standingAssetOpen({ toolName: "platform.assets.get", result: answer })).toBeUndefined();
+  });
+
+  it("leads a Workflow, an App, an agent and a skill to their own pages", () => {
+    const page = (kind: string) => assetPageRoute({ kind, name: "x" }, "w1");
+
+    expect(page("workflow")).toEqual({
+      kind: "workflow",
+      collaborationWorkspaceId: "w1",
       workflow: "x"
     });
-    expect(surface("app")).toMatchObject({ kind: "app_edit", app: "x", workspaceId: "w1" });
-    expect(surface("agent")).toMatchObject({ kind: "agent", agent: "x", title: "X" });
-    // A Page opens through its own card; a kind without a surface opens nothing.
-    expect(surface("page")).toBeUndefined();
-    expect(surface("skill")).toBeUndefined();
+    expect(page("app")).toEqual({ kind: "app-edit", collaborationWorkspaceId: "w1", app: "x" });
+    expect(page("agent")).toEqual({ kind: "build-asset", assetKind: "agents", name: "x" });
+    expect(page("skill")).toEqual({ kind: "build-asset", assetKind: "skills", name: "x" });
+    // A kind without a page of its own leads nowhere; a workspace's page needs the workspace.
+    expect(page("page")).toBeUndefined();
+    expect(assetPageRoute({ kind: "workflow", name: "x" }, undefined)).toBeUndefined();
   });
 });
 

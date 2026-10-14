@@ -25,6 +25,10 @@ export function formatContext(context: PlatformContext): string {
     ...context.namespaces.map(
       (namespace) => `  ${namespace.prefix}  ${namespace.displayName}: ${list(namespace.actions)}`
     ),
+    context.workspaces.length === 0 ? "Workspaces: none" : "Workspaces:",
+    ...context.workspaces.map(
+      (workspace) => `  ${workspace.id}  ${workspace.name}: ${list(workspace.actions)}`
+    ),
     `Kinds: ${context.kinds.map((kind) => kind.kind).join(", ")}`
   ].join("\n");
 }

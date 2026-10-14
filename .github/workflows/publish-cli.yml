@@ -10,6 +10,7 @@ on:
 jobs:
   publish:
     if: ${{ vars.PUBLISH_PUBLIC_CLI == 'true' }}
+    # npm signs provenance only from GitHub-hosted runners, so this job stays off Blacksmith.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -25,6 +26,19 @@ jobs:
           node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
+      # Each version is published once, from the commit that carries it. A commit whose version
+      # is on npm already is refused before anything is built.
+      - name: The version is not on npm yet
+        run: |
+          version=$(node -p "require('./packages/config-cli/package.json').version")
+          if answer=$(npm view "@work-shape/catalyst-cli@$version" version 2>&1); then
+            echo "::error::@work-shape/catalyst-cli@$version is on npm already. Bump the version all packages share and publish from that commit."
+            exit 1
+          fi
+          case "$answer" in
+            *E404*) echo "@work-shape/catalyst-cli@$version is not on npm yet." ;;
+            *) echo "::error::npm did not say whether $version is published: $answer"; exit 1 ;;
+          esac
       - run: pnpm install --frozen-lockfile
       # Builds the tool, packs it, reads every file of the tarball and installs it with npm
       # in an empty directory. A tarball that fails is not published.

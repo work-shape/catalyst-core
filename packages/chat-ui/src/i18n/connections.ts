@@ -114,9 +114,13 @@ export const connections = defineTranslations({
     "connections.effectChanging": "Changing",
     "connections.effectReading": "Reading",
     "connections.enabled": "Enabled",
+    "connections.exposeOutside": "Outside clients (CLI, MCP)",
+    "connections.exposeOutsideHint":
+      "What a call returns is copied to the computer that holds the key.",
     "connections.exposureAgent": "Agents",
     "connections.exposureBridge": "Apps",
     "connections.exposureNone": "Nobody can call it",
+    "connections.exposureOutside": "Outside clients",
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Network denied",
     "connections.healthNetworkDeniedText":
@@ -178,10 +182,7 @@ export const connections = defineTranslations({
     "connections.testNotAllowed":
       "You can read this connection. Testing it needs the right to change connections on the instance.",
     "connections.testRefused": "You may not test this connection. You can read it.",
-    "connections.toolsEmpty": "No connection you may read offers an operation to agents.",
     "connections.toolsHeld": "Tools of connections this agent holds",
-    "connections.toolsHint":
-      "What a connection lets agents do in an outside system. You see the connections you may read.",
     "connections.toolsLoading": "The connections are being checked.",
     "connections.toolsOpenConnection": "Open connection",
     "connections.toolsSelected": "{selected} of {count} selected",
@@ -310,9 +311,13 @@ export const connections = defineTranslations({
     "connections.empty":
       "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System.",
     "connections.enabled": "Aktiv",
+    "connections.exposeOutside": "Externe Clients (CLI, MCP)",
+    "connections.exposeOutsideHint":
+      "Was ein Aufruf zurückgibt, wird auf den Rechner kopiert, der den Schlüssel hat.",
     "connections.exposureAgent": "Agenten",
     "connections.exposureBridge": "Apps",
     "connections.exposureNone": "Niemand kann sie aufrufen",
+    "connections.exposureOutside": "Externe Clients",
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Netzwerk gesperrt",
     "connections.healthNetworkDeniedText":
@@ -375,11 +380,7 @@ export const connections = defineTranslations({
     "connections.testNotAllowed":
       "Du kannst diese Verbindung lesen. Zum Testen brauchst du das Recht, Verbindungen der Instanz zu ändern.",
     "connections.testRefused": "Du darfst diese Verbindung nicht testen. Lesen kannst du sie.",
-    "connections.toolsEmpty":
-      "Keine Verbindung, die du lesen darfst, bietet Agenten eine Operation an.",
     "connections.toolsHeld": "Werkzeuge von Verbindungen, die dieser Agent führt",
-    "connections.toolsHint":
-      "Was eine Verbindung Agenten in einem externen System erlaubt. Du siehst die Verbindungen, die du lesen darfst.",
     "connections.toolsLoading": "Die Verbindungen werden geprüft.",
     "connections.toolsOpenConnection": "Verbindung öffnen",
     "connections.toolsSelected": "{selected} von {count} ausgewählt",

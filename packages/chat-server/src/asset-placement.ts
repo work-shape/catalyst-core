@@ -3,7 +3,6 @@ import {
   INSTANCE_ASSET_SCOPE,
   asCollaborationWorkspaceId,
   asUserId,
-  assetScopesEqual,
   auditActorFromIdentity,
   isAuthenticatedServicePrincipal,
   type AccessResource,
@@ -183,16 +182,25 @@ export interface AssetWarning {
 
 /**
  * Where an agent that a put or a revert creates starts. It is available in the shared
- * workspace it is made in and nowhere else. Made in no shared workspace, such as a personal
+ * workspace it is made in and nowhere else: the one the write names, else the workspace that
+ * owns it, else the conversation's. Made in no shared workspace, such as a personal
  * one or by the CLI, it is hidden, and the caller is warned. Wider is an instance admin's
- * step: `all` here, or the availability later. The instance's first agent becomes its
- * default, which every workspace offers.
+ * step: `all` here, a workspace other than the one that owns the agent, or the availability
+ * later. The instance's first agent becomes its default, which every workspace offers; a
+ * workspace's agent never does.
  */
 export async function initialAgentPlacement(
   options: AssetWorkflowOptions,
   call: AssetCall,
   kind: WorkflowAssetKind,
-  input: { name: string; creates: boolean; setsDefault: boolean; availableIn?: AvailableIn }
+  input: {
+    name: string;
+    creates: boolean;
+    setsDefault: boolean;
+    availableIn?: AvailableIn;
+    /** The workspace that owns the agent, which it is made in unless the write names one. */
+    madeIn?: string;
+  }
 ): Promise<{ initialAgentAvailability?: InitialAgentAvailability; warnings: AssetWarning[] }> {
   if (!kind.hasWorkspaceAvailability || !input.creates) {
     if (input.availableIn !== undefined) {
@@ -215,7 +223,13 @@ export async function initialAgentPlacement(
     return { initialAgentAvailability: "all", warnings: [] };
   }
   const named = input.availableIn?.workspaceId;
-  const workspace = await memberWorkspace(options, call, named ?? call.workspaceId);
+  if (named !== undefined && input.madeIn !== undefined && named !== input.madeIn) {
+    // A workspace's agent starts in its own workspace. Offering it in another is an instance
+    // admin's step, as widening it later is: asked without a resource, so only an entry at
+    // instance scope answers.
+    call.access.require(kind.actions.write);
+  }
+  const workspace = await memberWorkspace(options, call, named ?? input.madeIn ?? call.workspaceId);
   if (named !== undefined && !workspace) {
     throw new AppError(
       "VALIDATION_FAILED",
@@ -301,8 +315,10 @@ async function requirePlacementRight(
 }
 
 /**
- * The asset a call names, as a deny on it is found. Only an asset of the instance has a
- * default or an availability: the id of a row another owner holds is no part of it.
+ * The asset a call names, as a deny on it is found: with its owner and its id, so a deny on
+ * the asset or on the workspace that owns it refuses. The default and the availability are
+ * the instance's whoever owns the asset, so the right is still the kind's write right on the
+ * whole instance.
  */
 async function namedResource(
   options: AssetWorkflowOptions,
@@ -315,8 +331,7 @@ async function namedResource(
     kind: kind.kind,
     name
   });
-  const assetId = row && assetScopesEqual(row.scope, INSTANCE_ASSET_SCOPE) ? row.id : undefined;
-  return accessResource(kind.kind, name, INSTANCE_ASSET_SCOPE, assetId);
+  return accessResource(kind.kind, name, row?.scope ?? INSTANCE_ASSET_SCOPE, row?.id);
 }
 
 async function recordPlacement(call: AssetCall, type: string, metadata: JsonObject): Promise<void> {
