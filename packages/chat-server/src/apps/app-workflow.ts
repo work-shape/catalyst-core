@@ -13,6 +13,7 @@ import {
   type ConfigAssetFromPage,
   type ConfigAssetRecord,
   type OperationAuthorization,
+  type OperationBeforeEvent,
   type Page
 } from "@vivd-catalyst/core";
 import { accessResource, decide, type AssetCall } from "../asset-access";
@@ -30,6 +31,8 @@ import { appAddress, PageApps } from "./page-apps";
 export interface CreateAppFromPageInput {
   conversationId: string;
   pageId: string;
+  /** The Page revision to copy. The newest where absent. */
+  fileSetId?: string | undefined;
   name: string;
   title: string;
   workspaceId: string;
@@ -40,6 +43,8 @@ export interface UpdateAppFromPageInput {
   app: string;
   conversationId: string;
   pageId: string;
+  /** The Page revision to copy. The newest where absent. */
+  fileSetId?: string | undefined;
   workspaceId: string;
   expectedRevision: number;
   link?: boolean | undefined;
@@ -67,40 +72,93 @@ export class AppWorkflow {
     this.pageApps = new PageApps(options);
   }
 
-  /** The write right on the workspace the App is to belong to. */
-  authorizeCreate(access: ActorAccess, input: CreateAppFromPageInput): OperationAuthorization {
-    return decide(access, APP_ACTIONS.write, {
+  /**
+   * The write right on the workspace the App is to belong to, and the Page read by the caller.
+   * The Page is asked here, before the guardrails read it: they never read one the caller
+   * cannot.
+   */
+  async authorizeCreate(
+    actor: AssetCall["actor"],
+    access: ActorAccess,
+    input: CreateAppFromPageInput
+  ): Promise<OperationAuthorization> {
+    const decision = decide(access, APP_ACTIONS.write, {
       kind: APP_ASSET_KIND,
       name: input.name,
       workspaceId: input.workspaceId
     });
+    if (decision.allowed) await this.requirePersonsPage(actor, input);
+    return decision;
   }
 
-  /** The write right on the App, as a write of its draft with `assets.put` asks it. */
-  authorizeUpdate(
+  /**
+   * The write right on the App, as a write of its draft with `assets.put` asks it, and the Page
+   * read by the caller, as for a new App.
+   */
+  async authorizeUpdate(
+    actor: AssetCall["actor"],
     access: ActorAccess,
     input: UpdateAppFromPageInput
   ): Promise<OperationAuthorization> {
-    return this.assets.authorizeWrite(access, appAddress(input.app, input.workspaceId));
+    const decision = await this.assets.authorizeWrite(
+      access,
+      appAddress(input.app, input.workspaceId)
+    );
+    if (decision.allowed) await this.requirePersonsPage(actor, input);
+    return decision;
   }
 
   /**
-   * Saves the newest revision of a Page as an App with a draft. The files are copied: the
-   * conversation of the Page may expire while the App stays. The App remembers the Page.
+   * `asset.before_write` of the App a Page is saved as or written into. Asked after
+   * `authorize`, so the caller reads the Page.
    */
-  async createFromPage(call: AssetCall, input: CreateAppFromPageInput) {
-    const page = await this.requirePersonsPage(call.actor, input);
-    return this.pageApps.create(call, page, input);
+  writeEventFromPage(input: {
+    app: string;
+    title?: string;
+    conversationId: string;
+    pageId: string;
+    fileSetId?: string | undefined;
+    workspaceId: string;
+  }): OperationBeforeEvent {
+    return this.pageApps.writeEvent({
+      ...input,
+      page: () =>
+        isPageId(input.pageId)
+          ? this.options.stores.pages.getPage({
+              clientInstanceId: this.options.clientInstanceId,
+              conversationId: asConversationId(input.conversationId),
+              pageId: input.pageId
+            })
+          : Promise.resolve(undefined)
+    });
   }
 
   /**
-   * Writes the newest revision of a Page as a new draft revision of the App that is updated
-   * from it, and with `link` of an App that was not. Nothing is published: the App's users are
-   * served what they were served before. The App keeps the name people read.
+   * Saves a revision of a Page as an App with a draft: the one its guardrails read, the one the
+   * call names, or the newest. The files are copied: the conversation of the Page may expire
+   * while the App stays. The App remembers the Page.
    */
-  async updateFromPage(call: AssetCall, input: UpdateAppFromPageInput) {
+  async createFromPage(
+    call: AssetCall,
+    input: CreateAppFromPageInput,
+    checked?: readonly OperationBeforeEvent[]
+  ) {
     const page = await this.requirePersonsPage(call.actor, input);
-    return this.pageApps.update(call, page, { ...input, link: input.link === true });
+    return this.pageApps.create(call, page, input, checked);
+  }
+
+  /**
+   * Writes a revision of a Page, chosen as for a new App, as a new draft revision of the App
+   * that is updated from it, and with `link` of an App that was not. Nothing is published: the
+   * App's users are served what they were served before. The App keeps the name people read.
+   */
+  async updateFromPage(
+    call: AssetCall,
+    input: UpdateAppFromPageInput,
+    checked?: readonly OperationBeforeEvent[]
+  ) {
+    const page = await this.requirePersonsPage(call.actor, input);
+    return this.pageApps.update(call, page, { ...input, link: input.link === true }, checked);
   }
 
   /**

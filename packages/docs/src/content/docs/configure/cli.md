@@ -76,7 +76,7 @@ catalyst agent delete kai-tax --if-revision 5
 
 `--from` takes the forms of the working copy: an `.agent.yaml` or any YAML or JSON definition, a skill's folder with its `SKILL.md`, or the folder of a kind whose revisions hold files, such as an App. A write names the revision it was made against with `--if-revision`, or `new` to create; read it with `show` or `history`. `discard-draft`, `set-availability` and `set-default` complete the list; `catalyst --help` shows each with its options. `--json` prints the instance's answer as it came.
 
-The instance decides every right, revision and check. A refusal is printed as the instance gave it, with each asset, issue or item it names:
+The instance decides every right, revision and check. A `revert` needs the read right on the asset beside the write right, as it restores content. A refusal is printed as the instance gave it, with each asset, issue or item it names:
 
 ```text
 Refused by the instance (HTTP 403 FORBIDDEN): Missing the right 'agent.write'
