@@ -1,5 +1,10 @@
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
-import { createPlatformId, type GuardrailHit, type GuardrailStore } from "@vivd-catalyst/core";
+import { and, desc, eq, gte, lt, sql, type SQL } from "drizzle-orm";
+import {
+  createPlatformId,
+  type GuardrailDryRunSubject,
+  type GuardrailHit,
+  type GuardrailStore
+} from "@vivd-catalyst/core";
 import type { PostgresConnection } from "../postgres-database";
 import { guardrailHits } from "../schema/guardrails";
 
@@ -75,6 +80,99 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
         );
       return { last7Days: row?.last7Days ?? 0, last30Days: row?.last30Days ?? 0 };
     },
+    async listRecentSubjects(input) {
+      const { clientInstanceId, since, limit } = input;
+      // A revision written, or an audited publish of one: each with its asset, its kind and
+      // who acted. Who acted counts people and leaves the store as a key only.
+      const actions =
+        input.action === "write"
+          ? sql`
+              select a.kind, a.name, a.id as asset_id, r.revision,
+                coalesce(r.actor->>'userId', r.actor->>'principalId') as actor_key,
+                a.scope_id, r.created_at
+              from config_asset_revisions r
+              join config_assets a on a.id = r.asset_id
+              where r.client_instance_id = ${clientInstanceId}
+                and r.created_at >= ${since.toISOString()}::timestamptz
+                and r.operation <> 'delete'
+                and r.config is not null`
+          : sql`
+              select a.kind, a.name, a.id as asset_id, (e.metadata->>'revision')::int as revision,
+                coalesce(e.actor->>'userId', e.actor->>'principalId') as actor_key,
+                a.scope_id, e.created_at
+              from audit_events e
+              join config_assets a
+                on a.client_instance_id = e.client_instance_id
+                and a.kind = e.metadata->>'kind'
+                and a.name = e.metadata->>'name'
+              where e.client_instance_id = ${clientInstanceId}
+                and e.created_at >= ${since.toISOString()}::timestamptz
+                and e.type in ('app.published', 'config_asset.published')
+                and e.status = 'success'
+                and jsonb_typeof(e.metadata->'revision') = 'number'`;
+      const conditions: SQL[] = [];
+      if (input.kinds) conditions.push(sql`kind in ${inList(input.kinds)}`);
+      if (input.excludeKinds?.length) conditions.push(sql`kind not in ${inList(input.excludeKinds)}`);
+      if (input.workspaceId !== undefined) conditions.push(sql`scope_id = ${input.workspaceId}`);
+      const where = conditions.length > 0 ? sql`where ${sql.join(conditions, sql` and `)}` : sql``;
+      const rows = await db.execute<{
+        kind: string;
+        name: string;
+        asset_id: string;
+        revision: number;
+        actor_key: string | null;
+        scope_id: string | null;
+        total: number;
+      }>(sql`
+        select kind, name, asset_id, revision, actor_key, scope_id,
+          (count(*) over ())::int as total
+        from (${actions}) as recent
+        ${where}
+        order by created_at desc
+        limit ${limit}`);
+      return {
+        subjects: rows.map(
+          (row): GuardrailDryRunSubject => ({
+            kind: row.kind,
+            name: row.name,
+            assetId: row.asset_id,
+            revision: row.revision,
+            ...(row.actor_key === null ? {} : { actorKey: row.actor_key }),
+            ...(row.scope_id === null ? {} : { workspaceId: row.scope_id })
+          })
+        ),
+        total: rows[0]?.total ?? 0
+      };
+    },
+    async countRecentActions(input) {
+      const { clientInstanceId, since } = input;
+      const conditions: SQL[] = [];
+      if (input.action === "operation_call") {
+        if (input.operation !== undefined) {
+          conditions.push(
+            input.operation.endsWith(".*")
+              ? sql`starts_with(operation, ${input.operation.slice(0, -1)})`
+              : sql`operation = ${input.operation}`
+          );
+        }
+        if (input.origin !== undefined) conditions.push(sql`origin_kind = ${input.origin}`);
+        if (input.workspaceId !== undefined) {
+          conditions.push(sql`collaboration_workspace_id = ${input.workspaceId}`);
+        }
+        const rows = await db.execute<{ count: number }>(sql`
+          select count(*)::int as count from operation_runs
+          where client_instance_id = ${clientInstanceId} and created_at >= ${since.toISOString()}::timestamptz
+            and target = 'live'
+            ${conditions.length > 0 ? sql`and ${sql.join(conditions, sql` and `)}` : sql``}`);
+        return rows[0]?.count ?? 0;
+      }
+      if (input.kind !== undefined) conditions.push(sql`kind = ${input.kind}`);
+      const rows = await db.execute<{ count: number }>(sql`
+        select count(*)::int as count from approval_requests
+        where client_instance_id = ${clientInstanceId} and created_at >= ${since.toISOString()}::timestamptz
+          ${conditions.length > 0 ? sql`and ${sql.join(conditions, sql` and `)}` : sql``}`);
+      return rows[0]?.count ?? 0;
+    },
     async deleteHitsOlderThan({ clientInstanceId, days }) {
       // The cutoff is the database's: its clock stamped the hits.
       const removed = await db
@@ -88,4 +186,14 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
       return removed.count;
     }
   };
+}
+
+/** A parenthesized list of values, for `in`. Never empty: an empty list matches nothing. */
+function inList(values: readonly string[]): SQL {
+  return values.length === 0
+    ? sql`(null)`
+    : sql`(${sql.join(
+        values.map((value) => sql`${value}`),
+        sql`, `
+      )})`;
 }

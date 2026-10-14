@@ -1,13 +1,14 @@
-import type {
-  GuardrailAnswer,
-  GuardrailSubject,
-  OperationBeforeEvent,
-  OperationCall,
-  OperationDefinition,
-  OperationDenial,
-  PlatformEventAnswer,
-  PlatformEventContext,
-  PlatformEventName
+import {
+  GUARDRAIL_ASSET_KIND,
+  type GuardrailAnswer,
+  type GuardrailSubject,
+  type OperationBeforeEvent,
+  type OperationCall,
+  type OperationDefinition,
+  type OperationDenial,
+  type PlatformEventAnswer,
+  type PlatformEventContext,
+  type PlatformEventName
 } from "@vivd-catalyst/core";
 
 // The before-events of a call, asked once its caller's right is known: `operation.before_call`
@@ -22,7 +23,7 @@ export interface BeforeEventsOf {
     name: PlatformEventName,
     phase: "before",
     payload?: Record<string, never> | { subjectKind: string },
-    before?: Pick<PlatformEventContext, "checkable" | "filterBy"> & {
+    before?: Pick<PlatformEventContext, "checkable" | "filterBy" | "aboutGuardrails"> & {
       subject?: PlatformEventContext["subject"];
     }
   ): Promise<PlatformEventAnswer>;
@@ -36,6 +37,9 @@ type SubjectAnswer = PlatformEventAnswer & { subject?: GuardrailSubject };
 /** The answers of the call's before-events, each with what its guardrails may read. */
 export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectAnswer[]> {
   const { definition, call } = context;
+  // Read before any is asked: whether the call is about guardrails decides who answers.
+  const own = (await definition.beforeEvents?.(call.input, call.origin)) ?? [];
+  const about = aboutGuardrails(definition.name, call.input, own) ? { aboutGuardrails: true as const } : {};
   const answers: SubjectAnswer[] = [
     await context.emit(
       "operation.before_call",
@@ -49,14 +53,14 @@ export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectA
         checkable: () => ({
           input: JSON.stringify(definition.inputWithoutSecrets?.(call.input) ?? call.input) ?? ""
         }),
-        filterBy: { operation: definition.name }
+        filterBy: { operation: definition.name },
+        ...about
       }
     )
   ];
   if (definition.events?.before) {
-    answers.push(await context.emit(definition.events.before, "before"));
+    answers.push(await context.emit(definition.events.before, "before", {}, about));
   }
-  const own = (await definition.beforeEvents?.(call.input, call.origin)) ?? [];
   context.asked?.(own);
   for (const event of own) {
     const answer = await context.emit(
@@ -69,12 +73,47 @@ export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectA
         filterBy:
           event.name === "operation.before_call"
             ? { operation: event.subject.name }
-            : { kind: event.subject.kind }
+            : { kind: event.subject.kind },
+        ...about
       }
     );
     answers.push({ ...answer, subject: event.subject });
   }
   return answers;
+}
+
+/**
+ * Whether a call writes, publishes, deletes or tests guardrails and nothing else: an operation
+ * of `guardrails.*`, an asset operation on the kind `guardrail`, a sync of guardrails alone, or
+ * a call whose own events are all about guardrails, as an agent's save of the guardrail its
+ * conversation is about. A sync that carries another kind beside them is not: its guardrails
+ * are its other assets' too.
+ */
+function aboutGuardrails(
+  operation: string,
+  input: unknown,
+  own: readonly OperationBeforeEvent[]
+): boolean {
+  if (operation.startsWith("guardrails.")) return true;
+  if (own.length > 0 && own.every((event) => event.subject.kind === GUARDRAIL_ASSET_KIND)) {
+    return true;
+  }
+  if (typeof input !== "object" || input === null) return false;
+  if ("kind" in input) return input.kind === GUARDRAIL_ASSET_KIND;
+  if ("items" in input && Array.isArray(input.items)) {
+    const items: unknown[] = input.items;
+    return (
+      items.length > 0 &&
+      items.every(
+        (item) =>
+          typeof item === "object" &&
+          item !== null &&
+          "kind" in item &&
+          item.kind === GUARDRAIL_ASSET_KIND
+      )
+    );
+  }
+  return false;
 }
 
 /** The refusal a caller reads: which guardrail, about what, and why, never the content. */

@@ -215,7 +215,11 @@ export const GRANTABLE_ACTION_SCOPES = {
   "workflow.read": ["namespace", "asset"],
   "workflow.use": ["namespace", "asset"],
   "workflow.write": ["namespace", "asset"],
-  "workflow.publish": ["namespace", "asset"]
+  "workflow.publish": ["namespace", "asset"],
+  // Publishing a guardrail stops other people's work, so it is granted for one workspace by an
+  // instance admin, who hold it by role at instance scope; no bundle carries it and no
+  // Namespace scopes it (events-workflows-and-guardrails.md, Scope and publishing).
+  "guardrail.publish": ["workspace"]
 } as const satisfies Partial<
   Record<PlatformAction, readonly Exclude<PermissionGrant["scopeKind"], "instance">[]>
 >;

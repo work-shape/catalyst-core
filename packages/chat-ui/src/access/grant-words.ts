@@ -94,6 +94,19 @@ export const kindWords: Record<GrantKind, KindWords> = {
     chooseAsset: "access.chooseWorkflow",
     noAssets: "access.noWorkflows",
     assetsLoadFailed: "access.workflowsLoadFailed"
+  },
+  // `guardrail.publish` is granted for one workspace only: the asset words name no choice
+  // the dialog offers, and say so where they are read.
+  guardrail: {
+    actionOnKind: "access.actionOnGuardrail",
+    scopeAsset: "access.scopeGuardrail",
+    inNamespaceDescription: "access.scopeInNamespaceGuardrailDescription",
+    onAsset: "access.scopeOnGuardrail",
+    onAssetDescription: "access.scopeOnGuardrailDescription",
+    assetField: "access.grantGuardrail",
+    chooseAsset: "access.chooseGuardrail",
+    noAssets: "access.noGuardrails",
+    assetsLoadFailed: "access.guardrailsLoadFailed"
   }
 };
 
@@ -112,7 +125,8 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
   "workflow.read": "access.actionReadWorkflowDescription",
   "workflow.use": "access.actionUseWorkflowDescription",
   "workflow.write": "access.actionWriteWorkflowDescription",
-  "workflow.publish": "access.actionPublishWorkflowDescription"
+  "workflow.publish": "access.actionPublishWorkflowDescription",
+  "guardrail.publish": "access.actionPublishGuardrailDescription"
 };
 
 /**

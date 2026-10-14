@@ -1,13 +1,17 @@
 import { z } from "zod";
 import {
+  GUARDRAIL_ASSET_KIND,
   GUARDRAIL_CHECKABLE_FIELDS,
   isAppError,
   isModelUsageLimitReached,
   type ApprovalCheckResult,
   type ApprovalRequest,
+  type AssetScope,
   type ClientInstanceId,
+  type ConfigAssetStore,
   type ConversationId,
   type GuardrailAnswer,
+  type GuardrailConfig,
   type GuardrailEvent,
   type GuardrailFields,
   type GuardrailFilter,
@@ -20,6 +24,7 @@ import {
 import {
   GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
   compileGuardrailPattern,
+  guardrailConfigSchema,
   resolveModelBinding,
   type ClientInstanceConfig,
   type GuardrailPattern,
@@ -50,6 +55,21 @@ export interface GuardrailRunnerOptions {
   modelGateway: SystemModelGateway;
   /** Where a warning, a hold or a block is kept, for the guardrail's hits. */
   hits: Pick<GuardrailStore, "recordHits">;
+  /**
+   * Where the published guardrails written as assets are read, beside the release floor.
+   * Without it only the floor runs.
+   */
+  assets?: Pick<ConfigAssetStore, "listPublishedConfigAssets">;
+}
+
+/** The most published guardrails one event reads. More are refused as a fault of the store. */
+const PUBLISHED_GUARDRAILS_MAX = 1_000;
+
+/** A guardrail written as an asset, at the revision that runs. */
+export interface GuardrailOfAsset {
+  guardrail: GuardrailConfig;
+  scope: AssetScope;
+  revision: number;
 }
 
 /** What a before-event hands the guardrails bound to it. */
@@ -61,6 +81,12 @@ export interface GuardrailEventInput {
   match: GuardrailFilter;
   /** The content under review. Read only where a guardrail applies, and never kept. */
   fields(): GuardrailFields | Promise<GuardrailFields>;
+  /**
+   * Set where the action writes, publishes or deletes a guardrail, or reads one to test it:
+   * only the release floor answers, so no published guardrail can stop the change of
+   * guardrails. An `asset.before_write` of the kind `guardrail` is such an action by itself.
+   */
+  aboutGuardrails?: boolean;
 }
 
 /** Who and what a judge's model call is counted for, and how long it may take. */
@@ -98,10 +124,17 @@ export interface GuardrailCheckInput {
 
 type Outcome = GuardrailAnswer["outcome"];
 
+/** What a bound guardrail is read as, the floor's and an asset's alike. */
+type BoundGuardrail = Pick<ReleaseGuardrailConfig, "displayName" | "on" | "check" | "outcome"> & {
+  filter?: GuardrailFilter;
+};
+
 interface Bound {
   name: string;
-  guardrail: ReleaseGuardrailConfig;
+  guardrail: BoundGuardrail;
   pattern?: GuardrailPattern;
+  /** Where the guardrail is an asset: its owner and the revision that runs. */
+  asset?: { scope: AssetScope; revision: number };
 }
 
 /**
@@ -117,52 +150,44 @@ export class GuardrailRunner {
 
   constructor(private readonly options: GuardrailRunnerOptions) {}
 
-  /** The answer of every guardrail that applies and ran, in the order of release config. */
+  /**
+   * The answer of every guardrail that applies and ran: the release floor in the order of
+   * release config, then the published guardrails of the instance and of the event's
+   * workspace in the order of their names. Guardrails written as assets never run where the
+   * action is about guardrails; only the floor does, so nobody can publish a guardrail that
+   * stops the change of guardrails.
+   */
   async answer(
     input: GuardrailEventInput,
     context: GuardrailCallContext
   ): Promise<GuardrailAnswer[]> {
-    // TODO(EW-6a): guardrail assets beside the release floor. They never run on writes,
-    // publishes or deletes of assets of the kind `guardrail`; only the release floor does, so
-    // nobody can publish a guardrail that stops the change of guardrails.
-    const bound = Object.entries(this.options.config.guardrails)
+    const floor = Object.entries(this.options.config.guardrails)
       .filter(
         ([, guardrail]) => guardrail.on === input.event && applies(guardrail.filter, input.match)
       )
       .map(([name, guardrail]): Bound => ({
         name,
         guardrail,
-        pattern: this.patternOf(name, guardrail)
+        pattern: this.patternOf(`release:${name}`, guardrail)
       }));
+    const aboutGuardrails =
+      input.aboutGuardrails === true ||
+      (input.event === "asset.before_write" && input.subject.kind === GUARDRAIL_ASSET_KIND);
+    const assets = aboutGuardrails
+      ? []
+      : (await this.publishedGuardrails())
+          .filter(
+            ({ guardrail, scope }) =>
+              guardrail.on === input.event &&
+              reaches(scope, input.match) &&
+              applies(guardrail.filter, input.match)
+          )
+          .map((asset) => this.boundOf(asset));
+    const bound = [...floor, ...assets];
     if (bound.length === 0) {
       return [];
     }
-    const fields = await input.fields();
-    const results = new Map<string, GuardrailAnswer>();
-    for (const entry of bound) {
-      if (entry.pattern) {
-        const answer = matchPattern(entry, entry.pattern, checked(fields, input.event, entry));
-        if (answer) results.set(entry.name, answer);
-      }
-    }
-    const blocked = [...results.values()].some((answer) => answer.outcome === "block");
-    if (!blocked) {
-      const judged = await Promise.all(
-        bound.flatMap((entry) => {
-          if (entry.pattern) return [];
-          const content = checked(fields, input.event, entry);
-          return content.length === 0 ? [] : [this.judge(entry, content, context)];
-        })
-      );
-      for (const answer of judged) results.set(answer.guardrailName, answer);
-    }
-    const answers = bound.flatMap((entry) => {
-      const answer = results.get(entry.name);
-      if (!answer) return [];
-      return context.cannotWait && answer.outcome === "require_approval"
-        ? [{ ...answer, outcome: "block" as const, approvalCannotWait: true as const }]
-        : [answer];
-    });
+    const answers = await this.evaluateBound(bound, input, context);
     // Asked again, the hits of the first ask are kept already. A block is new: a block then
     // would have refused the action, so it never waited to be asked again.
     const recorded = context.repeated
@@ -195,6 +220,99 @@ export class GuardrailRunner {
     return answers;
   }
 
+  /**
+   * What one guardrail, published or a draft, answers on the fields given, as it would at its
+   * event, and records no hit: a test of a draft and a dry run over recent events. Its filter
+   * and reach are the caller's to ask. A judge's usage is the guardrail's scope's.
+   */
+  async evaluate(
+    asset: GuardrailOfAsset,
+    fields: GuardrailFields,
+    context: GuardrailCallContext
+  ): Promise<GuardrailAnswer> {
+    const bound = this.boundOf(asset);
+    const [answer] = await this.evaluateBound(
+      [bound],
+      { event: asset.guardrail.on, fields: () => fields },
+      context
+    );
+    return answer ?? answerOf(bound, "allow", "");
+  }
+
+  /** Whether a guardrail applies to an event by its filter and its reach. */
+  appliesTo(asset: Pick<GuardrailOfAsset, "guardrail" | "scope">, match: GuardrailFilter): boolean {
+    return reaches(asset.scope, match) && applies(asset.guardrail.filter, match);
+  }
+
+  private boundOf({ guardrail, scope, revision }: GuardrailOfAsset): Bound {
+    return {
+      name: guardrail.name,
+      guardrail,
+      // A draft under test shares its name and revision with no published one only by its
+      // pattern, so the pattern is part of the key.
+      pattern: this.patternOf(
+        `asset:${guardrail.name}:${revision}:${guardrail.check.kind === "pattern" ? guardrail.check.pattern : ""}`,
+        guardrail
+      ),
+      asset: { scope, revision }
+    };
+  }
+
+  /** The published guardrails written as assets. The floor's stored copies are not among them. */
+  private async publishedGuardrails(): Promise<GuardrailOfAsset[]> {
+    const { assets } = this.options;
+    if (!assets) return [];
+    const records = await assets.listPublishedConfigAssets({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: GUARDRAIL_ASSET_KIND,
+      limit: PUBLISHED_GUARDRAILS_MAX
+    });
+    return records.flatMap((record) => {
+      const parsed = guardrailConfigSchema.safeParse(record.publishedConfig);
+      if (!parsed.success || parsed.data.origin !== "asset" || record.publishedRevision === undefined) {
+        return [];
+      }
+      return [{ guardrail: parsed.data, scope: record.scope, revision: record.publishedRevision }];
+    });
+  }
+
+  /** Patterns first, and a block among them skips the judges. Keeps no hit. */
+  private async evaluateBound(
+    bound: readonly Bound[],
+    input: Pick<GuardrailEventInput, "event" | "fields">,
+    context: GuardrailCallContext
+  ): Promise<GuardrailAnswer[]> {
+    const fields = await input.fields();
+    // By the bound entry: a floor guardrail and an asset may share a name.
+    const results = new Map<Bound, GuardrailAnswer>();
+    for (const entry of bound) {
+      if (entry.pattern) {
+        const answer = matchPattern(entry, entry.pattern, checked(fields, input.event, entry));
+        if (answer) results.set(entry, answer);
+      }
+    }
+    const blocked = [...results.values()].some((answer) => answer.outcome === "block");
+    if (!blocked) {
+      const judged = await Promise.all(
+        bound.flatMap((entry) => {
+          if (entry.pattern) return [];
+          const content = checked(fields, input.event, entry);
+          return content.length === 0
+            ? []
+            : [this.judge(entry, content, context).then((answer) => [entry, answer] as const)];
+        })
+      );
+      for (const [entry, answer] of judged) results.set(entry, answer);
+    }
+    return bound.flatMap((entry) => {
+      const answer = results.get(entry);
+      if (!answer) return [];
+      return context.cannotWait && answer.outcome === "require_approval"
+        ? [{ ...answer, outcome: "block" as const, approvalCannotWait: true as const }]
+        : [answer];
+    });
+  }
+
   /** The guardrails of a request before it is filed, as the request keeps their results. */
   async check(
     input: GuardrailCheckInput,
@@ -223,12 +341,12 @@ export class GuardrailRunner {
     }));
   }
 
-  private patternOf(name: string, guardrail: ReleaseGuardrailConfig): GuardrailPattern | undefined {
+  private patternOf(key: string, guardrail: BoundGuardrail): GuardrailPattern | undefined {
     if (guardrail.check.kind !== "pattern") return undefined;
-    let pattern = this.patterns.get(name);
+    let pattern = this.patterns.get(key);
     if (!pattern) {
       pattern = compileGuardrailPattern(guardrail.check.pattern);
-      this.patterns.set(name, pattern);
+      this.patterns.set(key, pattern);
     }
     return pattern;
   }
@@ -277,7 +395,15 @@ export class GuardrailRunner {
           kind: "system",
           purpose: "guardrail_judge",
           ...(context.userId ? { userId: context.userId } : {}),
-          ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
+          // A published guardrail's usage is its scope's: a workspace guardrail's is that
+          // workspace's, an instance guardrail's the instance's. The floor's follows the event.
+          ...(entry.asset
+            ? entry.asset.scope.kind === "workspace"
+              ? { workspaceId: entry.asset.scope.workspaceId }
+              : {}
+            : context.workspaceId
+              ? { workspaceId: context.workspaceId }
+              : {}),
           ...(context.conversationId ? { conversationId: context.conversationId } : {}),
           ...(context.operationRunId ? { operationRunId: context.operationRunId } : {})
         },
@@ -314,9 +440,15 @@ export class GuardrailRunner {
   }
 }
 
+/** A workspace guardrail reaches the events of its workspace and no other. */
+function reaches(scope: AssetScope, match: GuardrailFilter): boolean {
+  return scope.kind === "instance" || match.workspace === scope.workspaceId;
+}
+
 function applies(filter: GuardrailFilter | undefined, match: GuardrailFilter): boolean {
   if (!filter) return true;
   return (
+    (filter.workspace === undefined || filter.workspace === match.workspace) &&
     (filter.kind === undefined || filter.kind === match.kind) &&
     (filter.operation === undefined ||
       (match.operation !== undefined && operationMatches(filter.operation, match.operation))) &&
@@ -421,7 +553,9 @@ function answerOf(entry: Bound, outcome: Outcome, reason: string): GuardrailAnsw
     displayName: entry.guardrail.displayName ?? entry.name,
     outcome,
     reason,
-    origin: "release"
+    ...(entry.asset
+      ? { origin: "asset" as const, scope: entry.asset.scope, revision: entry.asset.revision }
+      : { origin: "release" as const })
   };
 }
 

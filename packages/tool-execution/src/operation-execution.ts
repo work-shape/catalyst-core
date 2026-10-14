@@ -194,7 +194,7 @@ export interface RunContext {
     phase: "before" | "after",
     payload?: JsonObject,
     /** What a before-event's guardrails read, and the subject where it is not the call's. */
-    before?: Pick<PlatformEventContext, "checkable" | "filterBy"> & {
+    before?: Pick<PlatformEventContext, "checkable" | "filterBy" | "aboutGuardrails"> & {
       subject?: PlatformEventContext["subject"];
     }
   ): Promise<PlatformEventAnswer>;
@@ -267,6 +267,7 @@ export function createRunContext(
             phase,
             ...(before.checkable ? { checkable: before.checkable } : {}),
             ...(before.filterBy ? { filterBy: before.filterBy } : {}),
+            ...(before.aboutGuardrails ? { aboutGuardrails: true } : {}),
             runtime: { deadline: input.runtime.deadline, signal: input.runtime.signal },
             ...(input.repeated ? { repeated: true } : {})
           }
