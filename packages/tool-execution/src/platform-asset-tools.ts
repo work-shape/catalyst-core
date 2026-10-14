@@ -6,6 +6,7 @@ import {
   type ConversationId,
   type ConversationSubject,
   type JsonObject,
+  type OperationBeforeEvent,
   type PolicyValue,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
@@ -119,6 +120,11 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls, PageAppCalls
    * conversation, or nothing where no setting matches it. A save is never looser than it.
    */
   putPolicyFloor(conversationId: ConversationId): Promise<PolicyValue | undefined>;
+  /** The before-event of a save of a conversation's subject: `asset.before_write` of it. */
+  putBeforeEvents(
+    conversationId: ConversationId,
+    config: Record<string, unknown>
+  ): Promise<readonly OperationBeforeEvent[]>;
   listOperations(
     context: ToolExecutionContext
   ): Promise<{ operations: PlatformCallableOperation[]; truncated: boolean }>;
@@ -157,6 +163,8 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       validate: (context, config) => required().validate(context, config),
       put: (context, input) => required().put(context, input),
       putPolicyFloor: (conversationId) => required().putPolicyFloor(conversationId),
+      putBeforeEvents: (conversationId, config) =>
+        required().putBeforeEvents(conversationId, config),
       listOperations: (context) => required().listOperations(context),
       readContext: (context) => required().readContext(context),
       listAssets: (context, input) => required().listAssets(context, input),
@@ -382,6 +390,9 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       permission: { mode: "allow" },
       // A setting on the operation this projects holds for the save of the agent too.
       policyFloor: ({ conversationId }) => calls.putPolicyFloor(conversationId),
+      // The guardrails on asset writes answer the agent's save as they answer a person's.
+      beforeEvents: (input, { conversationId }) =>
+        calls.putBeforeEvents(conversationId, input.config),
       async execute(input, context) {
         const written = await calls.put(context, input);
         return toolSuccess(written, {

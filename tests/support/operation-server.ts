@@ -49,6 +49,8 @@ export async function createServer(input: ServerInput = {}) {
   const approvalRequests: string[] = [];
   /** Every event the call path emitted, with its phase, where the test supplies the emitter. */
   const emitted: string[] = [];
+  /** What the guardrails of a before-event were handed to read, where the test supplies the emitter. */
+  const checked: unknown[] = [];
   let release: () => void = () => undefined;
   let entered: () => void = () => undefined;
   const gate = {
@@ -67,11 +69,15 @@ export async function createServer(input: ServerInput = {}) {
   const events: PlatformEventEmitter | undefined =
     guardrail || failingEvent
       ? {
-          emit: (name, _payload, context) => {
+          emit: async (name, _payload, context) => {
             emitted.push(`${name}:${context.phase}`);
+            if (context.checkable) checked.push(await context.checkable());
             return name === failingEvent
               ? Promise.reject(new Error(secret))
-              : Promise.resolve(name === guardrail?.event ? guardrail.outcome : "allow");
+              : Promise.resolve({
+                  outcome: name === guardrail?.event ? guardrail.outcome : "allow",
+                  guardrails: []
+                });
           }
         }
       : undefined;
@@ -182,6 +188,7 @@ export async function createServer(input: ServerInput = {}) {
   return {
     server,
     emitted,
+    checked,
     auditRows,
     executed,
     authorized,

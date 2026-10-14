@@ -370,7 +370,10 @@ async function waitingContext(
     deps,
     // The call is executed later and elsewhere than it was made: nothing of the live call is
     // left. Its time and its signal are set where it is executed.
-    runtime: {}
+    runtime: {},
+    // Its guardrails answer again before it is executed, and their hits were kept when it was
+    // made.
+    repeated: true
   });
 }
 
