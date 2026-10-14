@@ -1,5 +1,7 @@
 import {
   isDataToolName,
+  knowledgeOperationNamesOf,
+  KNOWLEDGE_QUERY_TOOL_NAME,
   type AgentConfig,
   type DataToolDescriptor,
   type DataToolSource,
@@ -38,13 +40,20 @@ export interface AgentDataTools {
  * that lists none costs no read. A tool the source does not describe is missing: the run goes
  * on without it. Without a source every data tool the agent lists is missing, and so it is
  * when the source fails or does not answer within `timeoutMs`. It never throws.
+ *
+ * The Knowledge Bases an agent lists are read in the same call, as the query operation of
+ * each. Where one of them is described, so is the one tool over them, `knowledge.query`,
+ * which the agent is offered in their place.
  */
 export async function describeAgentDataTools(
-  agent: Pick<AgentConfig, "toolNames">,
+  agent: Pick<AgentConfig, "toolNames" | "knowledgeBases">,
   source: DataToolSource | undefined,
   timeoutMs: number = DATA_TOOL_DESCRIBE_TIMEOUT_MS
 ): Promise<AgentDataTools> {
-  const listed = [...new Set(agent.toolNames.filter(isDataToolName))];
+  const knowledge = knowledgeOperationNamesOf(agent);
+  const listed = [...new Set([...agent.toolNames.filter(isDataToolName), ...knowledge])];
+  const accepted = (name: string) =>
+    listed.includes(name) || (name === KNOWLEDGE_QUERY_TOOL_NAME && knowledge.length > 0);
   if (listed.length === 0 || !source) {
     return { described: [], missing: listed };
   }
@@ -55,12 +64,12 @@ export async function describeAgentDataTools(
   const byName = new Map<string, DataToolDescriptor>();
   for (const descriptor of answer) {
     // The agent's own list decides: a source is never trusted to add a tool to it.
-    if (listed.includes(descriptor.name) && !byName.has(descriptor.name)) {
+    if (accepted(descriptor.name) && !byName.has(descriptor.name)) {
       byName.set(descriptor.name, descriptor);
     }
   }
   return {
-    described: listed.flatMap((name) => byName.get(name) ?? []),
+    described: [...listed, KNOWLEDGE_QUERY_TOOL_NAME].flatMap((name) => byName.get(name) ?? []),
     missing: listed.filter((name) => !byName.has(name))
   };
 }
@@ -94,7 +103,9 @@ async function describeWithin(
  * start, and a tool that became ready meanwhile is there for the next run.
  */
 export function isUnofferedDataToolCall(toolName: string, offered: ReadonlySet<string>): boolean {
-  return isDataToolName(toolName) && !offered.has(toolName);
+  return (
+    (isDataToolName(toolName) || toolName === KNOWLEDGE_QUERY_TOOL_NAME) && !offered.has(toolName)
+  );
 }
 
 export interface ModelToolMaterializationInput {
@@ -119,10 +130,12 @@ export function materializeModelTools(input: ModelToolMaterializationInput): Mod
   );
   const releaseTools = input.toolRegistry.listDescriptorsForAgent(functionToolNames);
   const releaseNames = new Set(releaseTools.map((tool) => tool.name));
+  // The operations of the agent's Knowledge Bases are no tools of their own: the one
+  // knowledge tool stands for them.
   const dataTools = (input.dataTools ?? []).filter(
     (tool) =>
-      isDataToolName(tool.name) &&
-      functionToolNames.includes(tool.name) &&
+      ((isDataToolName(tool.name) && functionToolNames.includes(tool.name)) ||
+        tool.name === KNOWLEDGE_QUERY_TOOL_NAME) &&
       !releaseNames.has(tool.name)
   );
   const functionTools = [...releaseTools, ...dataTools].map((tool): ModelTool => ({

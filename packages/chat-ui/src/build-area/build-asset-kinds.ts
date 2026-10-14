@@ -4,6 +4,7 @@ import type { BuildKind } from "./build-asset-kind";
 import { connectionKind } from "./connection-kind";
 import { dataStoreKind } from "./data-store-kind";
 import { guardrailKind } from "./guardrail-kind";
+import { knowledgeBaseKind } from "./knowledge-base-kind";
 import { skillKind } from "./skill-kind";
 
 /**
@@ -16,6 +17,7 @@ export const buildAssetKinds: readonly BuildKind[] = [
   skillKind,
   connectionKind,
   dataStoreKind,
+  knowledgeBaseKind,
   guardrailKind
 ];
 

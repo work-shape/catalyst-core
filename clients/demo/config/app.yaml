@@ -79,6 +79,7 @@ administration:
       - reasoningEffort
       - toolNames
       - skillNames
+      - knowledgeBases
       - initialPrompts
     allowAgentCreation: true
     allowAgentDeletion: true
