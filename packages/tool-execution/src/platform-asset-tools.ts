@@ -170,6 +170,8 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       listAssets: (context, input) => required().listAssets(context, input),
       listFiles: (context, input) => required().listFiles(context, input),
       saveAsApp: (context, input) => required().saveAsApp(context, input),
+      saveAsAppBeforeEvents: (conversationId, input) =>
+        required().saveAsAppBeforeEvents(conversationId, input),
       saveIntoSubjectApp: (context, input) => required().saveIntoSubjectApp(context, input),
       pageAppPolicyFloor: (conversationId, write) =>
         required().pageAppPolicyFloor(conversationId, write)

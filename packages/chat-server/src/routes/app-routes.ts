@@ -1,5 +1,5 @@
 import { APP_ASSET_KIND, apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
+import { AppError, PAGE_FILE_SET_HELD_KEY, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
 import { AppActionCalls } from "../apps/action-call";
 import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-workflow";
@@ -20,7 +20,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   const actionList = new AppActionList(options);
 
   route.operation(apiOperations["apps.create_from_page"], {
-    authorize: (input, { access }) => workflow.authorizeCreate(access, input),
+    authorize: (input, { actor, access }) => workflow.authorizeCreate(actor, access, input),
     resource: (input) => ({
       kind: APP_ASSET_KIND,
       id: input.name,
@@ -29,7 +29,9 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     }),
     changeClass: "reversible",
     module: APPS_MODULE,
-    execute: (input, context) => workflow.createFromPage(context, input)
+    beforeEvents: (input) => [workflow.writeEventFromPage({ ...input, app: input.name })],
+    heldInputKeys: [PAGE_FILE_SET_HELD_KEY],
+    execute: (input, context) => workflow.createFromPage(context, input, context.beforeEvents)
   });
 
   route.operation(apiOperations["apps.actions.list"], {
@@ -43,7 +45,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   });
 
   route.operation(apiOperations["apps.update_from_page"], {
-    authorize: (input, { access }) => workflow.authorizeUpdate(access, input),
+    authorize: (input, { actor, access }) => workflow.authorizeUpdate(actor, access, input),
     resource: (input) => ({
       kind: APP_ASSET_KIND,
       id: input.app,
@@ -52,7 +54,9 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     }),
     changeClass: "reversible",
     module: APPS_MODULE,
-    execute: (input, context) => workflow.updateFromPage(context, input)
+    beforeEvents: (input) => [workflow.writeEventFromPage(input)],
+    heldInputKeys: [PAGE_FILE_SET_HELD_KEY],
+    execute: (input, context) => workflow.updateFromPage(context, input, context.beforeEvents)
   });
 
   // Asked by the surface of a Page each time it opens. What it tells of an App is decided by

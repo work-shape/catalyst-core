@@ -75,6 +75,8 @@ export interface AssembledOperationBinding {
   policyTargets?(input: unknown): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
   /** See `beforeEvents` of the definition: the before-event of each asset a call writes. */
   beforeEvents?: OperationDefinition["beforeEvents"];
+  /** See `heldInputKeys` of the definition. */
+  heldInputKeys?: readonly string[];
   execute(input: unknown, context: OperationBindingContext): unknown;
 }
 
@@ -177,6 +179,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         resource: (input) => binding.resource?.(input),
         ...(binding.policyTargets ? { policyTargets: binding.policyTargets } : {}),
         ...(binding.beforeEvents ? { beforeEvents: binding.beforeEvents } : {}),
+        ...(binding.heldInputKeys ? { heldInputKeys: binding.heldInputKeys } : {}),
         ...(binding.inputWithoutSecrets
           ? { inputWithoutSecrets: binding.inputWithoutSecrets }
           : {}),

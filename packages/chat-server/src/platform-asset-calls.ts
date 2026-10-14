@@ -5,10 +5,8 @@ import {
   DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_OPERATION_PREFIX,
   createAuthorizer,
-  isAppError,
   isPageId,
   moduleOffError,
-  normalizePageName,
   operationDenialError,
   POLICY_VALUES,
   resolvePolicy,
@@ -21,7 +19,6 @@ import {
   type JsonObject,
   type OperationAuthorization,
   type OperationDefinition,
-  type Page,
   type PolicyValue,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
@@ -31,11 +28,17 @@ import {
   PLATFORM_ASSET_TOOLS,
   platformAssetWriteRefusal,
   type PlatformAssetCalls,
-  type PageSaveIntoApp,
   type PlatformAssetFound,
   type PlatformCallableOperation
 } from "@vivd-catalyst/tool-execution";
 import { z } from "zod";
+import {
+  DRAFT_CHANGED_ELSEWHERE,
+  DRAFT_MOVED_TO_OTHER_PAGE,
+  askAboutDraft,
+  draftNotWritten,
+  draftRefusal
+} from "./apps/page-app-drafts";
 import { PageApps } from "./apps/page-apps";
 import type { AssetCall } from "./asset-access";
 import { assetWriteEvent } from "./asset-guardrail-events";
@@ -152,67 +155,9 @@ const withoutSubject = () =>
 const sameSubject = (left: ConversationSubject, right: ConversationSubject | undefined) =>
   right !== undefined && left.kind === right.kind && left.name === right.name;
 
-/** What a save of a Page answers about its App, where the App's draft was not written. */
-const draftNotWritten = (
-  app: { name: string; title: string },
-  message: string
-): PageSaveIntoApp => ({
-  ...app,
-  saved: false,
-  message
-});
-
-const DRAFT_CHANGED_ELSEWHERE =
-  "The App's draft was changed elsewhere since this Page last wrote it, so this save did not write over it; the Page is saved. Tell the person: Update app on the Page replaces the draft with the Page.";
-const DRAFT_MOVED_TO_OTHER_PAGE =
-  "Another Page was put into this App since this Page last wrote it, so its draft is now written from that Page and this save did not change it; the Page is saved. Tell the person: Update app on this Page puts this Page into the App again.";
-
-/**
- * Why a write of the App's draft after a stored Page did not happen, in words the agent may
- * pass on. A refusal of the App's own checks says what it found; whatever else failed is named
- * by its kind only, and logged without content.
- */
-function draftRefusal(error: unknown, logger: AssetWorkflowOptions["logger"]): string {
-  if (isAppError(error)) {
-    if (error.code === "REVISION_CONFLICT") return DRAFT_CHANGED_ELSEWHERE;
-    if (error.code === "FORBIDDEN") {
-      return "The person may not write this App, so its draft was not written; the Page is saved.";
-    }
-    if (error.code === "VALIDATION_FAILED") return error.message;
-    if (error.code === "TIMEOUT") {
-      return "Writing the App's draft took too long, so it was not written; the Page is saved. Save the Page again in a moment.";
-    }
-  } else {
-    logger.error(
-      { error: error instanceof Error ? error.message : "" },
-      "The draft of an App could not be written from its Page"
-    );
-  }
-  return "The App's draft could not be written right now; the Page is saved. Save the Page again in a moment; if it fails again, tell the person to use Update app on the Page.";
-}
-
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
   const pageApps = new PageApps(options);
-
-  /** The Page of that name in the conversation. */
-  async function pageNamed(conversation: Conversation, name: string): Promise<Page> {
-    const wanted = normalizePageName(name);
-    const pages = await options.stores.pages.listPages({
-      clientInstanceId: options.clientInstanceId,
-      conversationId: conversation.id
-    });
-    const page = pages.find((candidate) => candidate.name === wanted);
-    if (!page) {
-      throw new AppError(
-        "NOT_FOUND",
-        `This conversation has no Page named '${wanted}'. Save it with page.save first`,
-        { reason: "page_not_found" },
-        { exposeMessage: true }
-      );
-    }
-    return page;
-  }
 
   /** The conversation the call came from, where it came from one. */
   async function conversationOfCall(
@@ -537,18 +482,44 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       }
     },
 
+    async saveAsAppBeforeEvents(conversationId, input) {
+      const { clientInstanceId, stores } = options;
+      const conversation = await stores.conversations.getConversation(
+        clientInstanceId,
+        conversationId
+      );
+      // A conversation that is gone, or a Page it does not hold, is refused by the save itself.
+      if (!conversation) return [];
+      return [
+        pageApps.writeEvent({
+          app: input.name,
+          title: input.title,
+          workspaceId: conversation.collaborationWorkspaceId,
+          fileSetId: input.fileSetId,
+          page: () => pageApps.named(conversation.id, input.page).catch(() => undefined)
+        })
+      ];
+    },
+
     async saveAsApp(context, input) {
       const conversation = await conversationOf(context);
       // The App becomes the subject, which a conversation others read never has. It is the App
       // this call creates, in the conversation's own workspace: never an asset of the instance,
       // which only a person's step makes a subject.
+      // The Page revision written is the one the guardrails read, or a held call kept.
       await requireOwnTranscript(conversation);
-      const page = await pageNamed(conversation, input.page);
-      const created = await pageApps.create(await callOf(context), page, {
-        name: input.name,
-        title: input.title,
-        workspaceId: conversation.collaborationWorkspaceId
-      });
+      const page = await pageApps.named(conversation.id, input.page);
+      const created = await pageApps.create(
+        await callOf(context),
+        page,
+        {
+          name: input.name,
+          title: input.title,
+          workspaceId: conversation.collaborationWorkspaceId,
+          fileSetId: input.fileSetId
+        },
+        context.beforeEvents
+      );
       await options.stores.conversations.setConversationSubject({
         clientInstanceId: options.clientInstanceId,
         conversationId: conversation.id,
@@ -596,13 +567,28 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       if (row.revisionOrigin?.kind !== "page" || row.revisionOrigin.pageId !== page.id) {
         return draftNotWritten(app, DRAFT_CHANGED_ELSEWHERE);
       }
+      // The revision the save just stored is the draft, which the guardrails answer first.
+      const asked = await askAboutDraft(options.operationCalls?.deps.events, context, pageApps, {
+        app: row.name,
+        workspaceId: row.scope.workspaceId,
+        fileSetId: input.fileSetId,
+        page
+      });
+      if ("refusal" in asked) return draftNotWritten(app, asked.refusal);
+      const { event } = asked;
       try {
-        const updated = await pageApps.update(await callOf(context), page, {
-          app: row.name,
-          workspaceId: row.scope.workspaceId,
-          expectedRevision: row.revision,
-          link: false
-        });
+        const updated = await pageApps.update(
+          await callOf(context),
+          page,
+          {
+            app: row.name,
+            workspaceId: row.scope.workspaceId,
+            expectedRevision: row.revision,
+            link: false,
+            fileSetId: input.fileSetId
+          },
+          [event]
+        );
         return { ...app, saved: true, revision: updated.revision };
       } catch (error) {
         // The Page is saved either way: a write of the App that did not happen is the answer's,

@@ -42,6 +42,8 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
     input: TInput,
     call: { conversationId: ConversationId }
   ): readonly OperationBeforeEvent[] | Promise<readonly OperationBeforeEvent[]>;
+  /** See `heldInputKeys` of an operation: what its before-events may hold beside the input. */
+  heldInputKeys?: readonly string[];
   execute(
     input: TInput,
     context: ToolRuntimeContext
