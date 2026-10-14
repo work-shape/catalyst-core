@@ -143,8 +143,10 @@ export function createSkillChangeApprovalHandler(
     },
     // The skill as the approval writes it, read by the guardrails on asset writes once more: a
     // guardrail added since the agent proposed it reads it too.
-    async applyEvents(payload) {
+    async applyEvents(payload, context) {
       const data = validatePayload(payload);
+      // A change already written, whose approval failed to be recorded, is recovered as it is.
+      if (await findProducedRevision(data.skillName, context.requestId)) return [];
       const snapshot = await options.configAssets.source.getSnapshot();
       const current = snapshot.skills.find((candidate) => candidate.name === data.skillName);
       // A change that no longer applies was found stale before this is asked.
@@ -156,6 +158,29 @@ export function createSkillChangeApprovalHandler(
           checkable: () => ({
             name: skill.name,
             content: guardrailFieldOf(guardrailStringsOf(skill))
+          })
+        }
+      ];
+    },
+    // The skill as the revert writes it back: the revision before the change, read like a new
+    // write. Reverting a created skill deletes it and writes no content.
+    async revertEvents(request) {
+      const data = validatePayload(request.payload);
+      if (data.operations[0]?.type === "create_skill") return [];
+      const history = await listSkillRevisions(data.skillName);
+      const applied = findRequestRevision(history, request.id);
+      const before =
+        applied && history.find((revision) => revision.revision === applied.revision - 1);
+      const config = before?.config;
+      // Nothing to write back: the revert itself refuses it.
+      if (!before || !config) return [];
+      return [
+        {
+          name: "asset.before_write",
+          subject: { kind: "skill", id: before.assetId, name: data.skillName },
+          checkable: () => ({
+            name: data.skillName,
+            content: guardrailFieldOf(guardrailStringsOf(config))
           })
         }
       ];

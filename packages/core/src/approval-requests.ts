@@ -108,6 +108,15 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
     context: ApprovalRequestContext
   ): Promise<JsonObject>;
   /**
+   * The before-events of the write `revert` makes, asked before it: a revision written back
+   * is read like any other write, also one written before a guardrail existed. A block refuses
+   * the revert and leaves the request approved.
+   */
+  revertEvents?(
+    request: ApprovalRequest,
+    context: ApprovalRequestContext
+  ): Promise<readonly OperationBeforeEvent[]>;
+  /**
    * Called while a pending request is ended without an approval: rejected, sent back for
    * changes or withdrawn. A kind whose request holds something open ends it here. A throw
    * leaves the request pending. Takes the stored payload, so it must not require a valid one.
