@@ -978,6 +978,18 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **New agents start in the workspace they were made in:** an agent created in a Shared
+  Workspace, in Studio or by the Build Agent in a conversation there, is available in that
+  workspace only. One created in a Personal Workspace, by `catalyst config push` without the
+  release right, or by `assets.put` without a workspace starts hidden; `assets.put` answers the
+  warning `agent_hidden` and `assets.sync` names the agents in `hiddenAgentNames`. Before, every
+  new agent was available in all workspaces. `assets.put` takes `availableIn` (`"all"` with the
+  right to write agents on the whole instance, or `{ "workspaceId" }`), and the create dialog in
+  Studio offers "All workspaces" to that holder. A release push and the first agent of an
+  instance start in all workspaces as before. **Operators:** a script that creates agents
+  through the API and expects them in every workspace passes `availableIn: "all"` or sets the
+  availability after the write.
+
 - **Skill icons:** a skill's line icon sits on one neutral tile in lists and on starters (32 px
   tile, 18 px icon; 24 px in the picker rows), in ink for a skill that ships with the platform
   and muted for the generic book. Inline, as in a chip, it stands bare at 16 px. The tile is

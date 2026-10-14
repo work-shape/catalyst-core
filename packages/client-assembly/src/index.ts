@@ -43,6 +43,7 @@ export {
   type InstanceModules
 } from "./modules";
 export { createInstanceConnections, type InstanceConnections } from "./connections";
+export { createPlatformTools } from "./conversation-offer";
 export {
   createInstanceWorkflows,
   type InstanceWorkflows,

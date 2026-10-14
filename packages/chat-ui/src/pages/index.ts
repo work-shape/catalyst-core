@@ -38,8 +38,15 @@ export {
   highlightCode
 } from "../code-highlight";
 export { StoredFileView } from "../stored-file-view";
-export { pageSurface, pageSurfaceAfterRunCalls, readPageSave, type PageSave } from "./page-save";
 export {
+  pageBuildingSurface,
+  pageSurface,
+  pageSurfaceAfterRunCalls,
+  readPageSave,
+  type PageSave
+} from "./page-save";
+export {
+  pageBuildingSurfaceRendering,
   pageFrameAddress,
   PageBuildErrors,
   pageSurfaceRendering,

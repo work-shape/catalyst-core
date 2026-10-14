@@ -10,6 +10,7 @@ import {
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import type { PageAppCalls } from "./page-app-tool";
 import type { PlatformDiscoveryCalls } from "./platform-discovery-tools";
 
 // The tools an agent opens, reads and saves the draft of an asset with. Each is a projection of
@@ -93,7 +94,7 @@ export interface PlatformCallableOperation {
  * refusal. A conversation without a subject is refused by each method on the subject, except
  * by a read that names an asset and by the call that opens one.
  */
-export interface PlatformAssetCalls extends PlatformDiscoveryCalls {
+export interface PlatformAssetCalls extends PlatformDiscoveryCalls, PageAppCalls {
   /**
    * Makes `named` the asset the conversation is about, and reads it. One the person may not
    * read, or one that does not exist, is refused alike and leaves the subject as it was; so is
@@ -159,7 +160,11 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       listOperations: (context) => required().listOperations(context),
       readContext: (context) => required().readContext(context),
       listAssets: (context, input) => required().listAssets(context, input),
-      listFiles: (context, input) => required().listFiles(context, input)
+      listFiles: (context, input) => required().listFiles(context, input),
+      saveAsApp: (context, input) => required().saveAsApp(context, input),
+      saveIntoSubjectApp: (context, input) => required().saveIntoSubjectApp(context, input),
+      pageAppPolicyFloor: (conversationId, write) =>
+        required().pageAppPolicyFloor(conversationId, write)
     }
   };
 }

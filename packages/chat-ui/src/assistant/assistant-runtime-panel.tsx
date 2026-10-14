@@ -3,6 +3,7 @@ import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assi
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
+import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import type { LocaleCode } from "@vivd-catalyst/core";
 import {
   createMessageSnapshotKey,
@@ -149,13 +150,17 @@ function AssistantRuntimePane({
   const settleQueuedSend = useCallback(() => setQueuedSend(undefined), []);
   const visibleNotice = rootSubmitError ?? notice;
   useAutoOpenCompletedRunSurface(activeRun, locale);
-  useAutoOpenPageSurface(activeRun, selectedConversationId);
   const conversationSubject = useSubjectSurface({
     activeRun,
     conversationId: selectedConversationId,
     storedSubject: selectedConversationSubject,
     workspaceId: collaborationWorkspaceId
   });
+  useAutoOpenPageSurface(
+    activeRun,
+    selectedConversationId,
+    conversationSubject?.subject.kind === APP_ASSET_KIND
+  );
 
   useEffect(() => {
     activeRef.current = true;

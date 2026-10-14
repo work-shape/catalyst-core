@@ -32,6 +32,7 @@ const availabilityOf = async (t: AccessInstance, name: string) =>
 const defaultAgentOf = async (t: AccessInstance) =>
   (await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).defaultAgentName;
 const hiddenSchema = z.object({ hiddenAgentNames: z.array(z.string()).optional() });
+const hidden = { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] };
 
 async function placeInChosenWorkspaces(t: AccessInstance, agentName: string) {
   await t.stores.configAssets.setAgentAvailability({
@@ -63,7 +64,8 @@ describe("where the agents of a release start", () => {
     expect(hiddenSchema.parse(renamed.json()).hiddenAgentNames).toEqual(["renamed"]);
   });
 
-  it("leaves an agent created or brought back by a put, a revert or another caller's sync where it always started", async () => {
+  // Fails without the change: each of the three started available in every workspace.
+  it("starts an agent created or brought back by a put, a revert or another caller's sync hidden, and says so", async () => {
     const t = await setup();
     await placeInChosenWorkspaces(t, "rel-old");
     // A key that may write agents one by one: its calls come from automation, as the CLI's do.
@@ -85,7 +87,15 @@ describe("where the agents of a release start", () => {
       payload: { config: agent("by-key"), expectedRevision: null }
     });
     expect(created.statusCode, created.body).toBe(200);
-    expect(await availabilityOf(t, "by-key")).toMatchObject({ mode: "all" });
+    expect(await availabilityOf(t, "by-key")).toEqual(hidden);
+    expect(created.json()).toMatchObject({
+      warnings: [
+        {
+          code: "agent_hidden",
+          message: "Agent 'by-key' is hidden until an instance admin makes it available"
+        }
+      ]
+    });
 
     const deleted = await asService(t, "assets.delete", {
       ...address("rel-old"),
@@ -97,13 +107,13 @@ describe("where the agents of a release start", () => {
       payload: { revision: 1, expectedRevision: 2 }
     });
     expect(revived.statusCode, revived.body).toBe(200);
-    expect(await availabilityOf(t, "rel-old")).toMatchObject({ mode: "all" });
+    expect(await availabilityOf(t, "rel-old")).toEqual(hidden);
 
-    // Neither does a sync of a caller who holds no release right.
+    // A push of a caller who holds no release right is made in no workspace either.
     const synced = await syncAs(t, t.admin.id, [putAgent("rel-by-sync")]);
     expect(synced.statusCode, synced.body).toBe(200);
-    expect(await availabilityOf(t, "rel-by-sync")).toMatchObject({ mode: "all" });
-    expect(hiddenSchema.parse(synced.json()).hiddenAgentNames).toBeUndefined();
+    expect(await availabilityOf(t, "rel-by-sync")).toEqual(hidden);
+    expect(hiddenSchema.parse(synced.json()).hiddenAgentNames).toEqual(["rel-by-sync"]);
   });
 });
 
