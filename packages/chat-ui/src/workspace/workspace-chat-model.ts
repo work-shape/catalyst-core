@@ -353,6 +353,8 @@ export interface SelectedChatModel {
   selectedConversationRetainedUntil: string | undefined;
   /** The asset the open conversation is about, once its thread has loaded. */
   selectedConversationSubject: { kind: string; name: string } | undefined;
+  /** The open conversation's title, once its thread has loaded. */
+  selectedConversationTitle: string | undefined;
   /** The conversation stands in the dock of a page, not on its chat route. */
   docked: boolean;
   /** Goes to a route of the interface, such as the page of that asset. */
@@ -1240,6 +1242,7 @@ export function useWorkspaceChatModel({
       selectedConversationId,
       selectedConversationRetainedUntil: selectedThread?.conversation.retainedUntil,
       selectedConversationSubject: selectedThread?.conversation.subject,
+      selectedConversationTitle: selectedThread?.conversation.title,
       docked,
       // A page the conversation links to opens with the conversation in the dock beside it.
       openRoute: (target) =>

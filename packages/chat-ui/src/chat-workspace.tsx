@@ -370,10 +370,13 @@ function ChatWorkspaceContent({
   };
 
   const dockConversationId = dock.conversationId;
+  // The dock names its conversation by the loaded thread, and by its row until then.
   const dockTitle =
     dockConversationId === undefined
       ? t("nav.newChat")
-      : rail.conversations.find(({ id }) => id === dockConversationId)?.title || t("dock.chat");
+      : chat.selectedConversationTitle ||
+        rail.conversations.find(({ id }) => id === dockConversationId)?.title ||
+        t("dock.chat");
 
   const pageHost = {
     viewer: { kind: "member" as const, id: model.auth.user.id, displayName: userLabel },
