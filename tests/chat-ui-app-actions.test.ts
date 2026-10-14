@@ -404,9 +404,10 @@ describe("the test dialog", () => {
       effect: "changing",
       workflow: { name: "visit-log" }
     };
+    // The instance's sentence is English: the dialog says it in its own words.
     const outcome = {
       status: "dry_run" as const,
-      message: "Would have started the Workflow 'visit-log'.",
+      message: "Would have started the Workflow 'visit-log' (instance).",
       input: { page: "/draft" }
     };
 
@@ -414,12 +415,21 @@ describe("the test dialog", () => {
     expect(en).toContain("It is simulated and changes nothing");
     expect(en).toContain("It is listed under Operations.");
     expect(en).toContain('data-app-action-test-status="dry_run"');
-    expect(en).toContain("Would have started the Workflow &#x27;visit-log&#x27;.");
+    expect(en).toContain(
+      "Would have started the Workflow &#x27;visit-log&#x27; with the input below."
+    );
+    expect(en).not.toContain("(instance)");
     expect(en).toContain("What log would have started with");
     expect(en).toContain("&quot;page&quot;: &quot;/draft&quot;");
     const de = dialog({ action: start, outcome }, "de");
     expect(de).toContain("Er wird simuliert und ändert nichts");
     expect(de).toContain("Er steht unter Operationen.");
+    expect(de).toContain("Hätte den Workflow „visit-log“ mit der Eingabe unten gestartet.");
+    expect(de).not.toContain("Would have");
+    // A call of a Connection or a Data Store says the action it would have called.
+    const called = dialog({ action: action({ name: "save", effect: "changing" }), outcome }, "de");
+    expect(called).toContain("Hätte save mit der Eingabe unten aufgerufen.");
+    expect(called).not.toContain("Would have");
   });
 
   it("links the place the call is listed in, for a reader who may open it", () => {

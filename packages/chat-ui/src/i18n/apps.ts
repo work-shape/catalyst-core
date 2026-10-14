@@ -47,6 +47,10 @@ export const apps = defineTranslations({
     "apps.actionTestOpenRun": "Open the run in Operations",
     "apps.actionTestPending": "The call waits for an approval. Its run shows how it ends.",
     "apps.actionTestDryRun": "Not carried out in the draft",
+    "apps.actionTestDryRunCall":
+      "Would have called {name} with the input below. The draft of an app runs in safe mode and changes nothing. Publish the app, or switch on “Run live once” for this action, to carry it out.",
+    "apps.actionTestDryRunWorkflow":
+      "Would have started the Workflow '{workflow}' with the input below. The draft of an app runs in safe mode and changes nothing. Publish the app, or switch on “Run live once” for this action, to carry it out.",
     "apps.actionTestRunning": "Waiting for the answer. This can take up to half a minute.",
     "apps.actionTestTitle": "Test “{name}”",
     "apps.actionTestableInDraft": "Can be tested",
@@ -244,6 +248,10 @@ export const apps = defineTranslations({
     "apps.actionTestOpenRun": "Lauf in Operationen öffnen",
     "apps.actionTestPending": "Der Aufruf wartet auf eine Freigabe. Sein Lauf zeigt, wie er endet.",
     "apps.actionTestDryRun": "Im Entwurf nicht ausgeführt",
+    "apps.actionTestDryRunCall":
+      "Hätte {name} mit der Eingabe unten aufgerufen. Der Entwurf einer App läuft im sicheren Modus und ändert nichts. Veröffentliche die App oder schalte „Einmal live ausführen“ für diese Aktion ein, um sie auszuführen.",
+    "apps.actionTestDryRunWorkflow":
+      "Hätte den Workflow „{workflow}“ mit der Eingabe unten gestartet. Der Entwurf einer App läuft im sicheren Modus und ändert nichts. Veröffentliche die App oder schalte „Einmal live ausführen“ für diese Aktion ein, um ihn auszuführen.",
     "apps.actionTestRunning":
       "Die Antwort steht noch aus. Das kann bis zu einer halben Minute dauern.",
     "apps.actionTestTitle": "„{name}“ testen",

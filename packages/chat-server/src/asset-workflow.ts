@@ -17,7 +17,7 @@ import {
   type PolicyTarget
 } from "@vivd-catalyst/core";
 import { afterRemove, afterWrite } from "./asset-after-write";
-import { AssetDraftWorkflow } from "./asset-draft-workflow";
+import { AssetDraftWorkflow, clearStaleLiveOnceSwitches } from "./asset-draft-workflow";
 import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import {
@@ -667,6 +667,9 @@ export class AssetWorkflow {
           ...(write.auditFiles ? { files: write.auditFiles.map((file) => ({ ...file })) } : {})
         })
     ]);
+    // The write moved the draft: a "Run live once" switch set for the one before is cleared
+    // now, in the name of who wrote it (ADR-0031).
+    await clearStaleLiveOnceSwitches(this.options, call, target, target.asset?.id);
     await afterWrite(this.options, call, target, { previous: current, config: toJsonObject(next) });
     return {
       version: result.version,

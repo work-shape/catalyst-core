@@ -421,10 +421,8 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     await testBook("dry_run");
     await expect(dialog).toContainText("It is simulated and changes nothing");
     await expect(outcome).toContainText("Not carried out in the draft");
-    await expect(outcome).toContainText(
-      `Would have called the action 'book-row' with {"text":"Row 7"}.`
-    );
-    await expect(outcome).toContainText('Publish the App, or switch on "Run live once"');
+    await expect(outcome).toContainText("Would have called book-row with the input below.");
+    await expect(outcome).toContainText("Publish the app, or switch on “Run live once”");
     await expect(outcome.getByRole("region")).toContainText('"text": "Row 7"');
     await shoot(page, "test-dry-run", async () => {
       await openActions(appId);
@@ -434,8 +432,11 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
 
     // "Run live once": the row says the builder's next call runs live, also after a load.
     const liveOnce = row("book-row").locator("[data-run-live-once]");
-    await row("book-row").getByRole("button", { name: "Run book-row live once" }).click();
+    // Pressed from the keyboard, the focus moves to the line that replaces the button.
+    await row("book-row").getByRole("button", { name: "Run book-row live once" }).focus();
+    await page.keyboard.press("Enter");
     await expect(liveOnce).toHaveAttribute("data-run-live-once", "on");
+    await expect(liveOnce).toBeFocused();
     await expect(row("book-row")).toContainText("Your next call runs live.");
     await expect(row("book-row").locator("[data-target]")).toHaveAttribute("data-target", "live");
     await openActions(appId);

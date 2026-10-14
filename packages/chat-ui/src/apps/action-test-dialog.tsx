@@ -281,7 +281,12 @@ function TestOutcome({
         ) : null}
       </div>
       {outcome.status === "dry_run" ? (
-        <p className="text-body text-muted-foreground">{outcome.message}</p>
+        // The interface's own sentence, in its language: the instance's sentence is English.
+        <p className="text-body text-muted-foreground">
+          {action.kind === "workflow"
+            ? t("apps.actionTestDryRunWorkflow", { workflow: action.workflow.name })
+            : t("apps.actionTestDryRunCall", { name: action.name })}
+        </p>
       ) : null}
       {result ? (
         <div className="grid grid-cols-1 gap-1" data-truncated={result.truncated || undefined}>

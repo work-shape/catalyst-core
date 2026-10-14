@@ -63,6 +63,37 @@ export interface AssetWorkflowHost {
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
 }
 
+/**
+ * Clears the "Run live once" switches of an asset that were set for a revision that is not its
+ * draft any more (ADR-0031). A write or a discard that changes the draft calls it at once, so
+ * the audit row names the person who changed the draft; a call that finds a stale switch later
+ * clears it too.
+ */
+export async function clearStaleLiveOnceSwitches(
+  options: AssetWorkflowOptions,
+  call: AssetCall,
+  target: Pick<AssetTarget, "kind" | "name">,
+  assetId: string | undefined
+): Promise<void> {
+  if (!target.kind.draftCalls || assetId === undefined) {
+    return;
+  }
+  const cleared = await options.stores.liveOnceSwitches.clearStale({
+    clientInstanceId: options.clientInstanceId,
+    assetId
+  });
+  for (const stale of cleared) {
+    await recordAssetEvent(call, "live_once.cleared", {
+      kind: target.kind.kind,
+      name: target.name,
+      revisionId: stale.revisionId,
+      part: stale.part,
+      switchedBy: stale.switchedBy.id,
+      reason: "draft_changed"
+    });
+  }
+}
+
 /** The Page revision a file set was read from, as the revision that copies it records it. */
 export type PageRevisionOrigin = Extract<ConfigAssetRevisionOrigin, { kind: "page" }>;
 
@@ -525,25 +556,10 @@ export class AssetDraftWorkflow {
     if (asset.revision !== expectedRevision) {
       throw await revisionConflictOf(this.options, call.access, target);
     }
-    if (kind.draftCalls) {
-      // The discard makes the published revision the draft again. A "Run live once" switch
-      // set for it before the draft changed would apply once more, so the switches the draft
-      // left behind are cleared first (ADR-0031).
-      const cleared = await this.options.stores.liveOnceSwitches.clearStale({
-        clientInstanceId: this.options.clientInstanceId,
-        assetId: asset.id
-      });
-      for (const stale of cleared) {
-        await recordAssetEvent(call, "live_once.cleared", {
-          kind: kind.kind,
-          name,
-          revisionId: stale.revisionId,
-          part: stale.part,
-          switchedBy: stale.switchedBy.id,
-          reason: "draft_changed"
-        });
-      }
-    }
+    // The discard makes the published revision the draft again. A "Run live once" switch set
+    // for it before the draft changed would apply once more, so the switches the draft left
+    // behind are cleared first (ADR-0031).
+    await clearStaleLiveOnceSwitches(this.options, call, target, asset.id);
     let discarded: { revision: number };
     try {
       discarded = await this.options.configAssets.store.discardConfigAssetDraft({
@@ -564,6 +580,8 @@ export class AssetDraftWorkflow {
       revision: discarded.revision,
       discardedRevision: expectedRevision
     });
+    // The switches of the discarded draft are cleared now, in the name of who discarded it.
+    await clearStaleLiveOnceSwitches(this.options, call, target, asset.id);
     return { draftRevision: discarded.revision, publishedRevision: discarded.revision };
   }
 
