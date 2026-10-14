@@ -13,6 +13,7 @@ export {
   people,
   workflowCheckQuestions,
   workspace,
+  workspaceAssets,
   type CheckReason
 } from "./company";
 export { assertLocalDevelopmentHost } from "./adapters/local-network";
