@@ -23,6 +23,16 @@ export const OPERATION_RUN_STATUSES = [
 
 export type OperationRunStatus = (typeof OPERATION_RUN_STATUSES)[number];
 
+/**
+ * Where a call went (ADR-0031). `live`: the asset it calls, for real. `test`: the test target
+ * of that asset, for real (a Data Store's test copy, a Connection's test credential).
+ * `dry_run`: nowhere; a changing call of a draft that answered what it would have done. Every
+ * call of a published revision is `live`. `runOperation()` decides it, never its caller.
+ */
+export const OPERATION_TARGETS = ["live", "test", "dry_run"] as const;
+
+export type OperationTarget = (typeof OPERATION_TARGETS)[number];
+
 /** Who called, as far as the run keeps it: never scopes, rights or an address. */
 export interface OperationRunActor {
   kind: "user" | "service_principal";
@@ -92,8 +102,11 @@ export interface OperationRun {
   ownerUserId?: string;
   workspaceId?: CollaborationWorkspaceId;
   origin: OperationOrigin;
+  /** Where the call went. */
+  target: OperationTarget;
   /** Set from agent and app origins. */
   conversationId?: ConversationId;
+  /** A dry run holds none: a key it held would only ever answer a simulation again. */
   idempotencyKey?: string;
   inputHash: string;
   /** Where the frozen input of a waiting call is kept, such as `approval_request:<id>`. */
@@ -127,6 +140,7 @@ export type NewOperationRun = Pick<
   | "ownerUserId"
   | "workspaceId"
   | "origin"
+  | "target"
   | "conversationId"
   | "idempotencyKey"
   | "inputHash"

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
@@ -6,6 +5,7 @@ import {
   POLICY_VALUES,
   callerCanConfirm,
   isAppError,
+  isAuthenticatedServicePrincipal,
   isToolOperationAnswer,
   moduleOffError,
   operationDenialError,
@@ -24,10 +24,12 @@ import {
   type CollaborationWorkspaceId,
   type JsonObject,
   type JsonValue,
+  type LiveOnceSwitchStore,
   type Logger,
   type ModuleSnapshot,
   type NewOperationRun,
   type OperationAuthorization,
+  type OperationBeforeEvent,
   type OperationCall,
   type OperationCallRuntime,
   type OperationDefinition,
@@ -73,6 +75,11 @@ export interface OperationApprovalRequests {
     run: OperationRun;
     /** The call with its validated input, frozen as the request's payload. */
     call: OperationCall;
+    /**
+     * What the call's before-events read that could change while it waits, kept beside its
+     * input and merged into it when the call is executed (`WaitingOperationCall.heldInput`).
+     */
+    heldInput?: JsonObject;
     resource: OperationResource | undefined;
     /** What the live call has. An agent's call carries the hold of its run here. */
     runtime: OperationCallRuntime;
@@ -96,6 +103,8 @@ export interface RunOperationDeps {
   };
   /** Without it this process cannot hold a call for an approval and refuses one that needs it. */
   approvals?: OperationApprovalRequests;
+  /** "Run live once" on a draft. Without it every changing call of a draft is simulated. */
+  liveOnce?: LiveOnceSwitchStore;
   /** Which modules are on. An operation or a tool of a module that is off does not exist. */
   modules?: ModuleSnapshot;
   /**
@@ -172,6 +181,13 @@ export interface RunContext {
    * asked again, and the guardrails' hits were kept when it was made.
    */
   repeated?: true;
+  /**
+   * The events of the operation's own `beforeEvents` as the guardrails were last asked them
+   * for this call, handed to its execution.
+   */
+  beforeEvents?: readonly OperationBeforeEvent[];
+  /** Keeps the events of the operation's own `beforeEvents` as they are asked. */
+  asked(events: readonly OperationBeforeEvent[]): void;
   now(): Date;
   emit(
     name: PlatformEventName,
@@ -227,6 +243,9 @@ export function createRunContext(
     ...rest,
     ...(unrecordedStart ? { unrecorded: { start: unrecordedStart, heldAfterEvents: [] } } : {}),
     now: deps.now ?? (() => new Date()),
+    asked: (events) => {
+      context.beforeEvents = events;
+    },
     emit: (name, phase, payload = {}, before = {}) => {
       const send = () =>
         deps.events.emit(
@@ -275,14 +294,24 @@ export function requireModuleOn(call: OperationCall, modules: ModuleSnapshot | u
 
 /**
  * What the surface a call came through allows, before the actor's own right is asked. An
- * agent calls the tools its definition lists and nothing else. Every other origin has no rule
- * of its own here.
+ * operation a person calls (`auth: "user"`) is refused to a service principal, as its route
+ * refuses one, also where the call takes no route, such as a step of a Workflow. An agent
+ * calls the tools its definition lists and nothing else. Every other origin has no rule of
+ * its own here.
  */
 export async function authorizeOrigin(
   call: OperationCall,
   definition: OperationDefinition,
   deps: RunOperationDeps
 ): Promise<OperationAuthorization> {
+  if (definition.auth === "user" && isAuthenticatedServicePrincipal(call.actor)) {
+    return {
+      allowed: false,
+      ...(definition.action === null ? {} : { action: definition.action }),
+      reason: "user_only",
+      message: `Only a person may call '${definition.name}', and a service principal is none`
+    };
+  }
   if (call.origin.kind !== "agent") {
     return { allowed: true };
   }
@@ -536,7 +565,8 @@ export async function executeAdmitted(
       ...(run.idempotencyKey === undefined ? {} : { idempotencyKey: run.idempotencyKey }),
       runtime: context.runtime,
       access,
-      audit: auditForRun(deps.audit, run.id, call.correlationId)
+      audit: auditForRun(deps.audit, run.id, call.correlationId),
+      ...(context.beforeEvents ? { beforeEvents: context.beforeEvents } : {})
     };
     await begin?.();
     started = true;
@@ -723,13 +753,15 @@ const forbiddenSchema = z.object({
   code: z.literal("FORBIDDEN"),
   message: z.string(),
   details: z.object({
-    action: z.string(),
+    action: z.string().optional(),
     reason: z.enum([
       "no_grant",
       "denied",
       "unknown_action",
       "holder_inactive",
-      "holder_not_administrable"
+      "holder_not_administrable",
+      "user_only",
+      "outside_key_scope"
     ])
   })
 });
@@ -762,22 +794,4 @@ function auditForRun(
         metadata: { ...input.metadata, operationRunId }
       })
   };
-}
-
-/** The hash a run keeps in place of its input: SHA-256 over the input with sorted keys. */
-export function hashInput(input: unknown): string {
-  return createHash("sha256")
-    .update(canonicalJson(unknownToJsonValue(input)))
-    .digest("hex");
-}
-
-function canonicalJson(value: JsonValue): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (typeof value === "object" && value !== null) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key] ?? null)}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
 }

@@ -7,6 +7,7 @@ import {
 } from "@vivd-catalyst/asset-schemas";
 import { AppError } from "./errors";
 import { operationDenialError } from "./operation-denial";
+import { personalApiKeyCovers, personalApiKeyNamesAction } from "./personal-api-keys";
 import {
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
@@ -143,7 +144,11 @@ export type AccessSource = "role" | "legacy_ref" | "grant" | "membership";
 
 export type AccessDecision =
   | { allowed: true; source: AccessSource }
-  | { allowed: false; reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" };
+  | {
+      allowed: false;
+      /** `outside_key_scope`: the holder has the right, and the personal key of the call does not cover it. */
+      reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" | "outside_key_scope";
+    };
 
 export interface PersistedAccess {
   holderActive: boolean;
@@ -534,10 +539,27 @@ export function evaluateAccess(input: {
   return { allowed: false, reason: "unknown_action" };
 }
 
-/** The synchronous answers for one holder over one load of the persisted state. */
-export function createActorAccess(holder: AccessHolder, persisted: PersistedAccess): ActorAccess {
-  const authorize = (action: string, resource?: AccessResource) =>
-    evaluateAccess({ holder, persisted, action, resource });
+/**
+ * The synchronous answers for one holder over one load of the persisted state. With the scopes
+ * of a personal key, a right is allowed where the holder has it and a scope covers it: removing
+ * the holder's right narrows the key on its next call.
+ */
+export function createActorAccess(
+  holder: AccessHolder,
+  persisted: PersistedAccess,
+  keyScopes?: readonly string[]
+): ActorAccess {
+  const authorize = (action: string, resource?: AccessResource): AccessDecision => {
+    const decision = evaluateAccess({ holder, persisted, action, resource });
+    if (!decision.allowed || keyScopes === undefined || decision.source === "legacy_ref") {
+      // A reference names a tool the holder may use, which a key neither widens nor narrows.
+      return decision;
+    }
+    const legacyActions = isPermission(action) ? LEGACY_PERMISSION_ACTIONS[action] : undefined;
+    return personalApiKeyCovers(keyScopes, action, resource, legacyActions)
+      ? decision
+      : { allowed: false, reason: "outside_key_scope" };
+  };
   return {
     authorize,
     require(action, resource) {
@@ -548,12 +570,41 @@ export function createActorAccess(holder: AccessHolder, persisted: PersistedAcce
     },
     holdsGrantAt: (action, scopeKinds) =>
       persisted.holderActive &&
+      (keyScopes === undefined || personalApiKeyNamesAction(keyScopes, action)) &&
       persisted.grants.some(
         (grant) =>
           grant.action === action &&
           grant.effect === "allow" &&
           scopeKinds.includes(grant.scopeKind)
       )
+  };
+}
+
+/**
+ * The rights of a call in a test run of a Workflow draft (ADR-0031): the person testing,
+ * bounded by the service principal the Workflow runs as. An action is allowed only where both
+ * hold it, so a test lends nobody the principal's grants and does not pass where the live run
+ * would fail. A refusal on the principal's side names the principal.
+ */
+export function boundedActorAccess(
+  tester: ActorAccess,
+  principal: ActorAccess,
+  boundBy: { id: string; label: string }
+): ActorAccess {
+  return {
+    authorize(action, resource) {
+      const own = tester.authorize(action, resource);
+      return own.allowed ? principal.authorize(action, resource) : own;
+    },
+    require(action, resource) {
+      tester.require(action, resource);
+      const bound = principal.authorize(action, resource);
+      if (!bound.allowed) {
+        throw operationDenialError({ kind: "forbidden", action, reason: bound.reason, boundBy });
+      }
+    },
+    holdsGrantAt: (action, scopeKinds) =>
+      tester.holdsGrantAt(action, scopeKinds) && principal.holdsGrantAt(action, scopeKinds)
   };
 }
 
@@ -572,7 +623,11 @@ export function createAuthorizer(accessStore?: AccessStore): Authorizer {
             holder: { kind: holder.kind, id: holder.id }
           })
         : { holderActive: true, grants: [] };
-      return createActorAccess(holder, persisted);
+      return createActorAccess(
+        holder,
+        persisted,
+        isAuthenticatedServicePrincipal(actor) ? undefined : actor.keyScopes
+      );
     }
   };
 }

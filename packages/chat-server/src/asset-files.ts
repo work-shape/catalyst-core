@@ -5,6 +5,7 @@ import {
   ASSET_PUT_FILES_MAX_BYTES,
   assetObjectPrefix,
   createFileSetId,
+  fileSetContentType,
   fileSetFileObjectKey,
   fileSetObjectPrefix,
   requireFileSetWithinLimits,
@@ -14,6 +15,7 @@ import {
   type FileSetOwner,
   type UserId
 } from "@vivd-catalyst/core";
+import { z } from "zod";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import {
   readFileSetFile,
@@ -284,6 +286,108 @@ export async function copyFileSetToAsset(
       .catch(() => undefined);
     throw error;
   }
+}
+
+/**
+ * Stores the folder of one write of a kind whose revision is a config with files beside it
+ * (`revisionFiles`), for an asset whose row may not exist yet. Where the instance has no store
+ * of files the write is the config alone, and is refused only where the folder holds a file
+ * the config cannot.
+ */
+export async function storeRevisionFiles(
+  options: FilesContext,
+  input: {
+    kind: WorkflowAssetKind;
+    assetId: string;
+    files: readonly PageFileInput[];
+    extras: readonly string[];
+    createdByUserId?: UserId;
+  }
+): Promise<FileSet | undefined> {
+  const hook = input.kind.revisionFiles;
+  if (!hook) return undefined;
+  if (!options.pages) {
+    if (input.extras.length === 0) return undefined;
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `This instance has no store of files, so a ${input.kind.kind} holds its text alone here: '${input.extras[0] ?? ""}' cannot be kept`,
+      { reason: "files_unavailable", path: input.extras[0] ?? "" }
+    );
+  }
+  const fileSetId = createFileSetId();
+  try {
+    return await storeAssetFileSet(options, {
+      assetId: input.assetId,
+      fileSetId,
+      kitVersion: UNBUILT_FILE_SET_KIT_VERSION,
+      manifest: hook.manifestOf(input.extras),
+      sourceFiles: input.files,
+      builtFiles: [],
+      writes: ["src"],
+      ...(input.createdByUserId ? { createdByUserId: input.createdByUserId } : {})
+    });
+  } catch (error) {
+    await options.pages.objects
+      .deletePrefix(fileSetObjectPrefix(assetOwner(input.assetId), fileSetId))
+      .catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
+ * The folder of one revision of such a kind, in the order of its paths: the files its config
+ * holds, and the files of its file set the config does not hold. A file of the config is
+ * answered as the bytes that were written where those still say what the config says, so a
+ * folder that was written is read back as it was; otherwise as the config makes it. A
+ * revision without a file set, such as every one from before a skill could hold files, is
+ * read from its config alone.
+ */
+export async function readRevisionFiles(
+  options: FilesContext,
+  kind: WorkflowAssetKind,
+  revision: { assetId: string; config: unknown; fileSetId?: FileSetId }
+): Promise<{ files: AssetFileOutput[] }> {
+  const hook = kind.revisionFiles;
+  if (!hook) return { files: [] };
+  const fileSet = revision.fileSetId
+    ? await options.stores.pages.getAssetFileSet({
+        clientInstanceId: options.clientInstanceId,
+        assetId: revision.assetId,
+        fileSetId: revision.fileSetId
+      })
+    : undefined;
+  const stored = new Map((fileSet?.sourceFiles ?? []).map((file) => [file.path, file]));
+  const bytesOf = (path: string) => {
+    const file = stored.get(path);
+    return fileSet && file ? readFileSetFile(options, fileSet, "src", file) : undefined;
+  };
+  const own = await Promise.all(
+    hook.filesOfConfig(revision.config).map(async (derived) => {
+      const written = await bytesOf(derived.path);
+      return written && hook.matchesConfig(revision.config, { path: derived.path, bytes: written })
+        ? { path: derived.path, bytes: written }
+        : derived;
+    })
+  );
+  const held = new Set(own.map((file) => file.path));
+  const index = hook.indexed({}, fileSet).files;
+  const extras = z.array(z.object({ path: z.string() })).parse(index ?? []);
+  const others = await Promise.all(
+    extras
+      .filter(({ path }) => !held.has(path))
+      .map(async ({ path }) => ({ path, bytes: (await bytesOf(path)) ?? new Uint8Array() }))
+  );
+  return {
+    files: [...own, ...others]
+      .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+      .map((file) => ({
+        path: file.path,
+        contentType: stored.get(file.path)?.contentType ?? fileSetContentType(file.path),
+        sha256: sha256(file.bytes),
+        bytes: file.bytes.byteLength,
+        ...fileContent(file.bytes)
+      }))
+  };
 }
 
 /** The source files of a file set as a write's answer names them: no content. */

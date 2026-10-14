@@ -39,6 +39,7 @@ const assetManagementModule = defineModule({
     "assets.revert",
     "assets.publish",
     "assets.discard_draft",
+    "assets.run_live_once",
     "assets.set_default",
     "assets.set_availability"
   ],
@@ -94,10 +95,38 @@ const appsModule = defineModule({
  */
 const connectionsModule = defineModule({
   name: "connections",
-  operations: ["connections.get", "connections.test", "connections.list_tools"],
+  operations: [
+    "connections.get",
+    "connections.test",
+    "connections.set_secret",
+    "connections.discover",
+    "connections.list_tools"
+  ],
   kinds: ["connection"],
   jobKinds: ["connection.discover"],
   ui: ["build.connections"]
+});
+
+/**
+ * Personal API keys: a person issues keys that act as themself, narrowed to their scopes, in
+ * Settings or by confirming the CLI's connect code; whoever holds `api_access.manage` sees and
+ * revokes every person's keys. Off, no personal key authenticates (`createClientInstanceAuth`)
+ * and the keys stay stored, revocable when the module is on again.
+ */
+const personalApiKeysModule = defineModule({
+  name: "personalApiKeys",
+  operations: [
+    "me.api_keys.list",
+    "me.api_keys.create",
+    "me.api_keys.revoke",
+    "me.connect_codes.get",
+    "me.connect_codes.confirm",
+    "connect_codes.start",
+    "connect_codes.redeem",
+    "personal_api_keys.list",
+    "personal_api_keys.revoke"
+  ],
+  ui: ["settings.you.api-keys", "settings.api-access.personal-keys"]
 });
 
 /** The modules whose code ships with the platform. A capability declares its own. */
@@ -109,7 +138,8 @@ export const platformModules = [
   connectionsModule,
   workflowsModule,
   dataStoresModule,
-  knowledgeModule
+  knowledgeModule,
+  personalApiKeysModule
 ];
 
 /** The seams of the modules that are assembled through one. A new one is one more entry. */

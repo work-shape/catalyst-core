@@ -103,10 +103,10 @@ describe("legacy equivalence: service tokens", () => {
         });
         const expectedKeys = credentialKeysBefore(principalPermissions, scopes);
         // The actor at the exchange and the actor a later request presents hold the same keys.
-        expect(issued.principal.permissions, credentialState).toEqual(expectedKeys);
+        expect(issued.identity.permissions, credentialState).toEqual(expectedKeys);
         expect(verified.permissions, credentialState).toEqual(expectedKeys);
 
-        for (const actor of [issued.principal, verified]) {
+        for (const actor of [issued.identity, verified]) {
           // The credential's scopes cap the principal's rows: the evaluator answers what the
           // token held before AP-4, without a route's scope check in front of it.
           const access = await authorizer.forActor(actor);

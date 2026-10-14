@@ -1,7 +1,12 @@
 import { ASSET_SYNC_BODY_MAX_BYTES, apiOperations } from "@vivd-catalyst/api-contract";
 import { asCollaborationWorkspaceId, type OperationResource } from "@vivd-catalyst/core";
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../asset-files";
-import { assetWriteEvent, publishEvents, syncWriteEvents } from "../asset-guardrail-events";
+import {
+  assetWriteEvent,
+  publishEvents,
+  revertWriteEvents,
+  syncWriteEvents
+} from "../asset-guardrail-events";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { authorizeAssetPlacement, setAssetAvailability, setAssetDefault } from "../asset-placement";
 import { AssetWorkflow } from "../asset-workflow";
@@ -106,6 +111,15 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.drafts.discardDraft(context, input)
   });
 
+  route.operation(apiOperations["assets.run_live_once"], {
+    authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "write"),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => workflow.drafts.runLiveOnce(context, input)
+  });
+
   route.operation(apiOperations["assets.delete"], {
     authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "delete"),
     resource: assetResource,
@@ -139,6 +153,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
+    beforeEvents: (input) => revertWriteEvents(options, input),
     execute: (input, context) => workflow.revert(context, input)
   });
 

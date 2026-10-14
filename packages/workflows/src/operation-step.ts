@@ -275,12 +275,17 @@ export async function callStepOperation(input: {
     case "denied": {
       const refusal = operationDenialError(result.reason);
       if (result.reason.kind === "forbidden") {
-        // The principal does not hold the right, or may not call from a Workflow at all.
+        // The principal does not hold the right, or may not call from a Workflow at all. An
+        // operation only a person calls is refused by a rule no grant to the principal opens.
+        const { reason, message, action } = result.reason;
+        if (reason === "user_only" && message !== undefined) {
+          throw new OperationStepFailure(refusal.code, message, trace, { systemic: true });
+        }
         throw new OperationStepFailure(
           refusal.code,
-          missingRight(run.principal.name, operation, result.reason.action),
+          missingRight(run.principal.name, operation, action),
           trace,
-          { systemic: true, action: result.reason.action }
+          { systemic: true, action }
         );
       }
       // A policy is set for the operation and not for one item: the next would meet it too.
@@ -314,6 +319,14 @@ export async function callStepOperation(input: {
         trace
       );
     }
+    // A run of a published revision is no call of a draft. The test run of a draft (EW-5t)
+    // answers a simulated step.
+    case "dry_run":
+      throw new OperationStepFailure(
+        "operation_simulated",
+        `The operation '${operation}' was simulated, which only a test run of a draft does`,
+        trace
+      );
     case "expired":
     case "pending_approval":
     case "pending_confirmation":

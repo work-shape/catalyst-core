@@ -7,7 +7,7 @@ import {
   createToolResultMetadata
 } from "@vivd-catalyst/core";
 import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
-import { readToolActionLabel, readToolDetailSections } from "../packages/chat-ui/src/tool-call";
+import { readToolActionLabel, readToolDetailSections } from "@vivd-catalyst/chat-ui/tool-call";
 import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
   readSurfacedToolArtifactRefs,

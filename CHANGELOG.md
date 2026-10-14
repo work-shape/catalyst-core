@@ -3,10 +3,79 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+The entries of the next release are files in `changes/unreleased/`, one per change; a change
+adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
+in, and `pnpm changelog` prints the next release's section as it will read.
+
 ## Unreleased
 
 ### Added
 
+- **Connections made on the instance (CS-4, first slice):** Build > Connections has "New
+  connection" for a remote MCP server: name, address and authentication (`none`, `bearer`, or a
+  key in a named header). The asset operations now create, change, revert and delete a
+  Connection of origin `runtime`; the server writes its origin, its owner (the writer) and its
+  secret handle, whatever the caller sent. A Connection of release config stays read-only
+  (`read_only_origin`), and a batch of `assets.sync` holding a Connection is refused with
+  `connection_batch_unavailable`. A save whose address the operator's `egress.allow` does not
+  name is refused with `egress_denied` before anything is stored; the list is asked without a
+  DNS lookup. `connections.set_secret` (`PUT /api/v1/connections/:name/secret`) takes the key
+  once, as the next version after the `expectedVersion` the writer read (`secret_write_conflict`
+  otherwise), answers only the state and the version, and keeps a mark instead of the value in
+  its Operation Run. `connections.discover` (`POST /api/v1/connections/:name/discover`) queues a
+  discovery; every save and every new key queue one too. `connections.get` answers the tools
+  the last discovery read that the Connection does not accept (`discovered`), and the page
+  accepts one with its effect, for agents or not, pinned to the fingerprint it showed. A delete
+  is refused with `409 connection_in_use` while an agent carries a tool of the Connection or an
+  App names it, in its draft or in its published revision, and removes its key and its runtime
+  state. Both operations need `connection.write`. A key is bound to the origin of the
+  Connection's target (protocol, host and port) it was entered for: a save that moves the
+  target to another origin removes it, a new path on the same origin or another Connector type
+  with the same target keeps it, and a key is never handed to a test, discovery or call of
+  another origin (`connection_not_configured`), also where its removal failed. Migration
+  `0078_secret_origin` adds `secrets.origin`. **Upgrade:** an instance whose release config
+  names `secretStore.keys` now needs the first key at start even where release config defines
+  no Connection, and stops naming its variable without it. A secret of release config is bound
+  to its origin by the seed at the next start. Shared OAuth, the CLI and the platform MCP tools for Connections are not
+  part of this slice.
+- **Personal API keys and `catalyst login`:** the module `personalApiKeys` (off by default)
+  lets a person issue keys that act as themself, in Settings, API keys, or by confirming the
+  code `catalyst login` prints; the CLI collects the key itself and saves it in
+  `~/.config/catalyst/credentials.json` with mode 600. A key has a name, scopes
+  (`agent.write` or `agent.write:kai-`; reading, writing, deleting and publishing actions
+  only), and an expiry of at most a year. Every call acts as the key's owner with the owner's
+  rights of that moment, intersected with the key's scopes, so a removed grant or a disabled
+  owner narrows or stops the key at once; a refusal by the key reads `FORBIDDEN` with the
+  reason `outside_key_scope`. Audit names the owner and the key (`credentialId`,
+  `delegatedActor.kind: "api_key"`). Whoever holds `api_access.manage` lists and revokes
+  every person's keys. A key cannot issue keys or confirm codes. A working copy may name its
+  Namespace in `catalyst.yaml` (`namespace: kai-`); its push names it, and its pull, diff
+  and list read only the assets the key may read, without the instance overview. Operations:
+  `me.api_keys.list|create|revoke`, `me.connect_codes.get|confirm`,
+  `connect_codes.start|redeem` (public), `personal_api_keys.list|revoke`. **Operators:**
+  migrations `0075_personal_api_keys` (expand: `api_credentials.owner_user_id`, the owner
+  check and foreign key `NOT VALID`, table `api_connect_codes`),
+  `0076_personal_api_keys_validate` and `0077_personal_api_keys_indexes` (concurrent) run
+  before the new release; the previous release runs on them unchanged, as it writes only
+  service principal keys. Rolling back the release leaves personal keys stored and unusable.
+  Turn the module on with `modules.personalApiKeys.enabled: true`.
+- **Calls made by a draft (ADR-0031):** a call that carries a draft context (`OperationCall.draft`:
+  the App or Workflow, the draft revision and the action or step) is decided in
+  `runOperation()`. A reading call reads live with the caller's rights; a changing call answers
+  `dry_run` with the input it would have been made with and whether the live call would have
+  waited for a confirmation or an approval, changes nothing and holds no idempotency key. Every
+  Operation Run records `target` (`live`, `test` or `dry_run`) and the run resource returns it.
+  `assets.run_live_once` (`POST /api/v1/assets/:kind/:name/run-live-once`), for a holder of the
+  kind's write right, switches one action or step of the current draft revision live for its
+  next call; the switch is audited when set, used and cleared, and a switch whose draft changed
+  since is cleared and never applies. A call of a Workflow test run (`draft.boundBy`) is made
+  as the person testing and allowed only where the Workflow's service principal holds the right
+  too; a refusal on the principal's side names it, and such a call cannot wait for an approval.
+  Migrations `0073_draft_call_targets` (adds `operation_runs.target`, default `live`, and the
+  table `live_once_switches`) and `0074_draft_call_targets_validate` (validates the check of
+  `target`) are expand-only. **Rollback:** the previous release ignores the column and the
+  table; runs it writes during a rollback get `live`, and switches set before it stay unused
+  until a release that reads them, where a changed draft clears them.
 - **Apps, an action that starts a Workflow (App Kit 1.3.0):** an action file
   `actions/<name>.action.yaml` with `workflow: <id>` and `input.schema`/`input.mapping` starts
   the published Workflow as the viewer, who needs `workflow.use` on it; without it the call is
@@ -21,6 +90,15 @@ contain breaking changes; a patch version does not.
   1.3.0. `page.save` documents the kind. The kit's `page.css` for a plain Page leaves out the
   flow canvas rules the library's stylesheet brings. **Operators:** the chat-server tarball
   limit rises to 2.1 MB for the fourth kit version.
+- **Cards open as a whole:** the UI library's `CardTarget` marks a card's one link or button to
+  what the card stands for and stretches its clickable area over the card. Every other control
+  in the card keeps its own action, the keyboard meets the target once under the name of its
+  action and the card's title ("Open Trip planner"), a press dragged across the card opens
+  nothing, and the card shows the hover state and its target's focus on its edge. Text under
+  the area cannot be selected; `CardReachable` keeps content such as a time with its full date
+  as a tooltip, or an id to copy, above it. Agent cards start a chat, App cards open the App (a
+  builder's draft-only App opens its draft) and Workflow cards open the Workflow, from a click
+  anywhere on the card. A card whose reader has nowhere to go opens nothing.
 - **Guardrails replace approval checks, and Build lists them:** release config takes
   `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
   `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
@@ -72,6 +150,38 @@ contain breaking changes; a patch version does not.
   **Rollback:** an earlier release ignores the two new columns, and refuses a config with a
   guardrail it does not know: remove guardrails on the new events, of kind `pattern` or with
   the new outcomes before rolling back.
+- **Guardrails read every way content reaches an asset or goes live:** `asset.before_write` now
+  also answers `apps.create_from_page` and `apps.update_from_page` (the App's definition and
+  the Page revision the write copies: the write copies the revision the guardrails read; a call
+  held for an approval, by a guardrail or by a policy, keeps the revision there was beside its
+  input (`heldInput` of the request, only in the fields the operation declares), so the call
+  the approval answers is checked again and writes exactly that revision; the new optional `fileSetId` names a revision to copy, and a
+  revision that is gone is refused with `CONFLICT`), the agent's `page.save_as_app` (held for an approval, it too keeps the revision its guardrails
+  read) and the App draft a `page.save` writes (the revision the save stored; a block or a hold
+  leaves the draft unwritten and says why, as the Page is saved already), `assets.revert` (the
+  earlier revision it writes again, also one written before the
+  guardrail existed), an approved skill change before it is applied (the skill as the approval
+  writes it) and the undo of an approved skill change (`approval_requests.revert`, the revision
+  it writes back). A block at the approval leaves the skill unchanged and ends the request as
+  not applied (`superseded`, `applyResult.execution` `refused`, `GUARDRAIL_BLOCKED` with the
+  reason), which the Inbox item shows; a block at the undo refuses it and the request stays
+  approved. A new before-event `data_store.before_publish` answers the publish of a Data
+  Store, with the revision's definition and migration files. A UTF-16 text file, with its byte
+  order mark or with a NUL in every other byte of its start, is read as text. Any other file that is no UTF-8 text is no longer skipped: a
+  `pattern` reads its printable runs (line ends included) of at least 4 characters, so a photo
+  passes whatever its size, and only text counts toward the limit of what a check reads and text hidden beside a NUL byte is found; a `model_judge` reads the printable runs of
+  at least 16 characters of an image or a font and answers any other such file as unread. A refusal for content that is
+  too large or cannot be judged no longer says to try again. A block found when a held call
+  or an approved change is asked again is kept as a hit. A revert and a publish read no
+  revision of an asset of another scope than the call's: the call is refused as before, with
+  no guardrail asked. **Access:** `apps.create_from_page` and `apps.update_from_page` ask
+  whether the caller reads the Page before the guardrails read it, so a Page the caller
+  cannot read answers 404 before any check; `assets.revert` now needs the read right on the
+  asset beside the write right, as a revert restores content its guardrails would answer
+  about. **Operators:** a rule that should keep content out of live Apps needs an entry on
+  `app.before_publish` beside the one on `asset.before_write`; the demo's IBAN rule has both.
+  **Rollback:** an earlier release refuses a guardrail on `data_store.before_publish`: remove
+  it before rolling back.
 - **Embedding models:** a model binding of `kind: embedding` with `dimensions` turns text into
   vectors for Knowledge Bases, and `knowledge.defaultEmbeddingBinding` names the default. The
   gateway's `embed` is the one path for an embedding call, admitted, retried and settled like a
@@ -106,6 +216,23 @@ contain breaking changes; a patch version does not.
   caller is shown them, and counts the others. `preview_rows` is unchanged. On a store's page
   in Studio a Workflow under "Used by" is a link to its page, as an App is, for a reader the
   Workflows area is open to.
+- **YAML anchors with aliases are refused** in the frontmatter of a `SKILL.md`, in `store.yaml`,
+  `workflow.yaml`, `app.yaml` and an App's action files: nested aliases in a file of a few
+  hundred bytes made a value of any size for whatever read it. A file that uses one is refused
+  with a sentence that says so; write the value out where it is used.
+- **Skills as folders of files, in the public skill convention:** a skill may carry real files
+  beside `SKILL.md` and its text resources, at any path, and a folder taken from a public skill
+  library round-trips byte for byte. `title` is optional in the frontmatter and derived from
+  the content or the name; further frontmatter keys are kept as `frontmatter`; a skill name may
+  start with a digit; a name or description outside the convention is answered with a warning. `assets.put` takes the whole folder
+  as `files` and `assets.get` with `files=true` answers it byte for byte. The config of a skill
+  is unchanged for a skill that is text alone; other files are kept in the file set of the
+  revision and named in the config's `files` index (path, hash, size, media type). A write of
+  the config alone leaves them in place, and a revert brings a revision's files back. Compiled
+  programs, Git LFS pointers, files below `scripts/` and text files that are no UTF-8, a `SKILL.md` below the
+  root and files or folders over the limits (2 MiB a file, 500 files, 8 MiB a skill) are refused
+  with their path and a reason. No database migration: a revision from before reads from its
+  config. An agent's proposal no longer creates or changes a resource below `scripts/`.
 - **Claude on Amazon Bedrock:** a model provider `aws-bedrock` beside `openai-compatible` and
   `google-vertex`. It calls Claude through the Bedrock runtime in Frankfurt
   (`eu-central-1`) with a Bedrock API key named by `credentialSecret` (default
@@ -353,7 +480,7 @@ contain breaking changes; a patch version does not.
   1,000 rows and 1 MiB per call, `onConflict: fail | skip`, answers `inserted` and `skipped`)
   needs `data_store.insert`. `load` takes a dataset of a Workflow Run into one table in one
   transaction (at most 100,000 rows and 64 MiB per call; `key` with `onConflict: fail | skip |
-  update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
+update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
   reader never sees the table half replaced); it needs `data_store.insert`, and
   `data_store.execute` as well for `update` and `replace`. Until the datasets of Workflow Runs
   exist it answers `not_supported_yet`. `data_stores.get` (`GET /api/v1/data-stores/:store`,
@@ -426,8 +553,8 @@ contain breaking changes; a patch version does not.
     roles and rows stay, and its id is not free. Nothing drops a database yet.
   - **Rollback:** the previous release ignores the table `data_stores` and the store
     databases, so rolling back loses nothing and leaves them in place. The `CONNECT` taken from
-    `PUBLIC` on the platform database stays taken. Store databases are not part of the
-    platform's backup script yet: back them up with it before relying on a restore.
+    `PUBLIC` on the platform database stays taken. The backup holds the store databases, see
+    "Backups of the whole database server" under Fixed.
 - **Asset kinds that read their own files:** a kind may bring `manifestOfFiles`, which reads the
   source files of a write into the manifest of their file set without the build of Pages, and
   `onPublish` and `onRemove`, which run in the transaction of a publish and of a delete.
@@ -1024,39 +1151,6 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
-- **A person's or a service principal's own rights are grant rows (AP-4):** the nine legacy
-  permission keys in the lists of users and service principals become instance-wide rows of
-  `permission_grants`, one per action a key stands for (`config_assets.write` is `agent.write`,
-  `agent.delete`, `skill.write` and `skill.delete`), an allow for `key` and a deny for `!key`.
-  Migration `0073_legacy_permission_grants` writes them with `grantedBy`
-  `legacy_permission_list`; a user whose deletion was requested gets none, an entry that is no
-  key gives none, and a row the holder already had keeps who wrote it (a `!key` still makes it a
-  deny). The evaluator no longer reads the columns `permissions`, and nothing writes them. The
-  Users and API access screens show and save the same lists, now as rows: a saved list rewrites
-  only the keys it changes, and the new rows name who saved them. A list entry that is no key is
-  refused with `422` "'…' is not a permission". **Instance > Access** no longer lists the
-  instance-wide rows of a user or a service principal, and revoking one there is refused with
-  `invalid_scope` "An instance-wide right is changed on the page of the user or the service
-  principal". `permissions.effective` names such an entry with the source `grant`; the source
-  `legacy` is gone from the contract, and the Check tab calls such a right "Given right". An API
-  key created without scopes is stored with `["*"]`; the migration gives `["*"]` to every key
-  without a list, keeps an empty list empty (it still gives nothing) and takes `*` out of a
-  list that held it (it gave nothing before and would give everything now). An API key's
-  scopes still cap its service principal: a key holds a principal's instance-wide right only
-  when one of its scopes carries the legacy key behind it, one key per scope as a request read
-  it before (`governance:read` is `usage.view`). No user, service principal or API key gains or
-  loses a right. **Operators:** after the migration and before anyone changes a right, run `node --experimental-strip-types scripts/verify-permissions.ts`
-  with `DATABASE_URL` set: it compares every holder's rights from the rows with what the columns
-  answered and exits `1` on a difference. Do not change rights while a release before this one
-  still runs beside it: that release writes the column only, and the change is not seen.
-  **Rollback:** the columns are kept for one release. Stop this release, run the script with
-  `--restore-legacy-columns`, then start the earlier release. It writes each holder's rows back
-  into its column and removes them (the earlier release reads every row as well), turns
-  `["*"]` back to null and marks the restore in the new table `legacy_permission_restores`.
-  To upgrade again, run the migration step as always: after the migrations it moves the lists
-  the earlier release kept into rows again and clears the mark, in one transaction, whatever
-  migrations are recorded. Until then this release refuses to start. A later release drops the
-  columns.
 - **New agents start in the workspace they were made in:** an agent created in a Shared
   Workspace, in Studio or by the Build Agent in a conversation there, is available in that
   workspace only. One created in a Personal Workspace, by `catalyst config push` without the
@@ -2205,6 +2299,33 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **A service principal calls no operation that a person calls:** an operation registered with
+  `auth: "user"`, such as `workspaces.create`, is refused to a service principal on the call
+  path as its route refuses one, also where the call takes no route, as from a step of a
+  Workflow. The call is denied before the operation runs, with an Operation Run that is
+  `denied` and the reason `user_only`, and the step says that only a person may call it. Such
+  a refusal names no right where the operation names none: `action` of a forbidden denial is
+  optional, and is left out where no right opens the call.
+  Before, the step's call ran into the operation and failed there.
+- **Parallel browser suites on one Postgres:** `scripts/run-chat-e2e.mjs`, `playwright.config.ts`
+  and the specs hard-coded the database `agent_chat`, so several runs on one machine erased each
+  other's data. `E2E_DATABASE_URL` now replaces that URL for the migration, the API, the worker
+  and the specs; without it nothing changes. The runner still creates and drops no database or
+  role. Use it with `E2E_EXTERNAL_POSTGRES=1` and an empty database per run.
+- **Backups of the whole database server:** `backup-postgres.sh` of the deployment kit dumped
+  only `POSTGRES_DB`, so no Data Store database and no role was in a nightly or pre-deploy
+  backup. A backup is now one tar archive, `<instance>-<database>-<timestamp>[-<label>].tar`,
+  with `globals.sql` from `pg_dumpall --globals-only` and a custom-format `pg_dump` of every
+  database the server lists, except the templates, `postgres`, invalid databases and the
+  scratch databases of `restore-postgres.sh`. `restore-postgres.sh` lists, verifies and recovers
+  both the archives and the earlier `.sql.gz` dumps; a recovery from an archive creates the
+  missing roles, replaces every database it holds and then sets the roles as in the backup, and
+  if a step fails or it is stopped, it puts every database back and leaves the roles' passwords
+  as they were. **Upgrade:** a deploy
+  of the release installs both scripts; nothing else changes. **Rollback:** the previous
+  scripts neither list nor restore a `.tar` backup; restore one with this release's
+  `restore-postgres.sh`.
+
 - **Outside hosts of an App on the viewer's own network:** `externalHosts` in `app.yaml` took a
   name under `.localhost`, `.local`, `.internal`, `.lan` or `.home.arpa`, which reaches the
   viewer's own machine or network. The build refuses one with "a host on the internet: a name
@@ -2241,9 +2362,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   release config or an agent file now reads as plain text or is refused, as `workflow.yaml` and
   `app.yaml` already were. A file whose aliases expand past 100,000 values is refused
   (`'<file>' holds more than 100000 values once its aliases are followed
-  (YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
+(YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
   character or half of a surrogate pair is refused (`'<file>' holds a NUL character or half of a
-  surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
+surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
   to the model as the tool error `invalid_text` and stored with an empty input; before, it ended
   the whole run with `INTERNAL`. Rollback: none needed, nothing is stored differently.
 
@@ -2305,7 +2426,7 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `docker/vivd-client.Dockerfile`, the one `pnpm dev` starts) builds the packages that `core`,
   `config-schema` and `ui` depend on. Before, it built `core` without `asset-schemas`, the
   image built, and the UI container stopped at start with `Cannot find module
-  .../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
+.../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
   a package is missing, and `pnpm check:images` builds this image too.
 
 - **Model providers and redirects:** no model adapter follows a redirect any more. A provider

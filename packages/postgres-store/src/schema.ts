@@ -13,6 +13,7 @@ export * from "./schema/assetRepos";
 export * from "./schema/approvals";
 export * from "./schema/jobs";
 export * from "./schema/operationRuns";
+export * from "./schema/liveOnceSwitches";
 export * from "./schema/access";
 export * from "./schema/infrastructure";
 export * from "./schema/pages";
@@ -21,7 +22,7 @@ export * from "./schema/workflowRuns";
 export * from "./schema/dataStores";
 export * from "./schema/guardrails";
 import { productUsers, userIdentities } from "./schema/users";
-import { servicePrincipals, apiCredentials } from "./schema/apiAccess";
+import { servicePrincipals, apiCredentials, apiConnectCodes } from "./schema/apiAccess";
 import { conversations, messages, modelProviderContinuations } from "./schema/conversations";
 import { agentRuns, agentRunObservations, runStartCommands } from "./schema/agentRuns";
 import {
@@ -44,6 +45,7 @@ import { assetCheckouts, assetRepoBundles } from "./schema/assetRepos";
 import { approvalRequests } from "./schema/approvals";
 import { platformJobs } from "./schema/jobs";
 import { operationRuns } from "./schema/operationRuns";
+import { liveOnceSwitches } from "./schema/liveOnceSwitches";
 import { permissionGrants, namespaces } from "./schema/access";
 import { infrastructureCheckState } from "./schema/infrastructure";
 import { pages, fileSets, pageBuilds } from "./schema/pages";
@@ -58,6 +60,7 @@ export const schema = {
   userIdentities,
   servicePrincipals,
   apiCredentials,
+  apiConnectCodes,
   conversations,
   messages,
   modelProviderContinuations,
@@ -82,6 +85,7 @@ export const schema = {
   assetCheckouts,
   platformJobs,
   operationRuns,
+  liveOnceSwitches,
   permissionGrants,
   namespaces,
   infrastructureCheckState,

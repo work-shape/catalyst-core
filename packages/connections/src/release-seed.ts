@@ -19,7 +19,7 @@ import {
   type PlatformStores,
   type SecretResolver
 } from "@vivd-catalyst/core";
-import { AUTH_SCHEME_NONE } from "./connector-context";
+import { AUTH_SCHEME_NONE, connectionOriginOf } from "./connector-context";
 import { createSecretStore, type SecretKeyring } from "./secret-store";
 
 // The release seed. When the API process starts it makes the stored Connections of origin
@@ -287,8 +287,12 @@ export async function seedReleaseConnections(
         throw new AppError("INTERNAL", `The seeded Connection '${name}' was not stored`);
       }
       const binding = { connectionAssetId: asset.id, subject: SHARED_CREDENTIAL_SUBJECT };
+      const seeded = storedConnection(asset);
+      const type = seeded && connectorTypes.get(seeded.connectorType);
       const health = await bootstrapSecret({
         name,
+        // The environment's secret is for the address release config names now.
+        origin: seeded && type ? connectionOriginOf(type, seeded) : undefined,
         named: input.connections[name]?.secret !== undefined,
         value: values.get(name),
         handle: handles.get(name),
@@ -337,6 +341,7 @@ async function bootstrapSecret(input: {
   named: boolean;
   value: string | undefined;
   handle: string | undefined;
+  origin: string | undefined;
   binding: { connectionAssetId: string; subject: string };
   secretStore: ReturnType<typeof createSecretStore> | undefined;
   deleteSecret(): Promise<void>;
@@ -369,7 +374,8 @@ async function bootstrapSecret(input: {
     binding,
     value: input.value,
     source: "bootstrap",
-    ...(input.handle === undefined ? {} : { handle: input.handle })
+    ...(input.handle === undefined ? {} : { handle: input.handle }),
+    ...(input.origin === undefined ? {} : { origin: input.origin })
   });
   if (written.changed) {
     result.secretVersions[name] = written.version;

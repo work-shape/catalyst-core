@@ -2,9 +2,21 @@ import {
   SKILL_NAME_PATTERN,
   SKILL_NAME_RULE,
   skillConfigSchema,
+  skillPortabilityIssues,
   type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 import { AppError, defineAssetKind } from "@vivd-catalyst/core";
+import { z } from "zod";
+import {
+  SKILL_MANIFEST_FILE,
+  readSkillFiles,
+  skillFileIndex,
+  skillFileSetManifest,
+  skillFilesOfConfig,
+  storedFileMatchesConfig,
+  withCarriedSkillParts,
+  withSkillFileIndex
+} from "../skill-files";
 import { readDefinitionField, readDefinitionName, type WorkflowAssetKind } from "./shared";
 
 /**
@@ -20,9 +32,10 @@ function shippedSkillRefusal(name: string | undefined): AppError {
 }
 
 /**
- * The skill kind: text an agent reads, with its resources. It refers to nothing. A skill that
- * ships with the platform names `origin: release` and its icon. The release seed alone writes
- * it, so every other write that carries either is refused.
+ * The skill kind: text an agent reads, with its resources, and the files of its folder beside
+ * them. It refers to nothing. A skill that ships with the platform names `origin: release` and
+ * its icon. The release seed alone writes it, so every other write that carries either is
+ * refused.
  *
  * `shippedSkillNames` names every skill the platform ships, also those of a module that is
  * off: a skill of the instance's own under one of them would stop the start that turns the
@@ -90,6 +103,21 @@ export function createSkillAssetKind(options: {
       }
     },
     assertInteractiveUpsertAllowed: assertEditingAllowed,
-    assertInteractiveDeleteAllowed: assertEditingAllowed
+    assertInteractiveDeleteAllowed: assertEditingAllowed,
+    // A name or a description outside the public skill convention is said and not refused.
+    writeWarnings: (definition) =>
+      skillPortabilityIssues(
+        z.object({ name: z.unknown(), description: z.unknown() }).parse(definition)
+      ),
+    // A skill is a folder: `SKILL.md`, its text resources, and whatever else it carries.
+    revisionFiles: {
+      manifestFile: SKILL_MANIFEST_FILE,
+      read: readSkillFiles,
+      manifestOf: skillFileSetManifest,
+      indexed: (config, fileSet) => withSkillFileIndex(config, skillFileIndex(fileSet)),
+      carried: withCarriedSkillParts,
+      filesOfConfig: skillFilesOfConfig,
+      matchesConfig: storedFileMatchesConfig
+    }
   };
 }

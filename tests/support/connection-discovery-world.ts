@@ -22,7 +22,7 @@ export const clientInstanceId = asClientInstanceId("demo-local");
 const KEY_VARIABLE = "CATALYST_SECRET_STORE_KEY";
 const TOKEN_VARIABLE = "OUTSIDE_API_TOKEN";
 /** A literal public address, so the egress check of these tests asks no resolver. */
-const OUTSIDE_HOST = "93.184.216.34";
+export const OUTSIDE_HOST = "93.184.216.34";
 export const LOOKUP = "connection.outside.lookup";
 export const LIST = "connection.outside.list";
 

@@ -55,6 +55,7 @@ export function connectionDetail(
     health: "unknown",
     secret: { state: "set", version: 2 },
     sharedCredential: true,
+    discovered: [],
     operations: [
       {
         name: "revenue_by_month",

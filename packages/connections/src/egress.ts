@@ -7,7 +7,8 @@ import {
   type EgressChecker,
   type EgressGrant,
   type EgressProtocol,
-  type EgressTarget
+  type EgressTarget,
+  normalizeEgressHost
 } from "@vivd-catalyst/core";
 import {
   embeddedIpv4AddressesOf,
@@ -122,14 +123,7 @@ function printableHost(host: string): string {
   return /^[a-z0-9.:-]{1,253}$/iu.test(host) ? host.toLowerCase() : "(unreadable host)";
 }
 
-/** Lower case, without the brackets of an IPv6 literal and without a trailing dot. */
-export function normalizeEgressHost(host: string): string {
-  return host
-    .trim()
-    .toLowerCase()
-    .replace(/^\[(.*)\]$/u, "$1")
-    .replace(/\.$/u, "");
-}
+export { normalizeEgressHost };
 
 function isHostName(host: string): boolean {
   return (
@@ -376,32 +370,39 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     });
   };
 
+  /** The entry of the list that names the target, decided without an address, or nothing. */
+  const listedEntryOf = (target: EgressTarget): ListedEntry | undefined => {
+    if (
+      !isEgressProtocol(target.protocol) ||
+      !isPort(target.port) ||
+      !(isHostName(target.host) || isIP(target.host) !== 0)
+    ) {
+      return undefined;
+    }
+    if (options.platformStoreUnknown === true && target.protocol === "postgres") {
+      return undefined;
+    }
+    if (platformStore.some((store) => store.host === target.host && store.port === target.port)) {
+      return undefined;
+    }
+    return entries.find(
+      (candidate) =>
+        candidate.entry.protocol === target.protocol &&
+        candidate.host === target.host &&
+        candidate.entry.port === target.port
+    );
+  };
+  const normalized = (input: EgressTarget): EgressTarget => ({
+    protocol: input.protocol,
+    host: normalizeEgressHost(input.host),
+    port: input.port
+  });
+
   return {
+    admits: (input) => listedEntryOf(normalized(input)) !== undefined,
     async check(input) {
-      const target: EgressTarget = {
-        protocol: input.protocol,
-        host: normalizeEgressHost(input.host),
-        port: input.port
-      };
-      if (
-        !isEgressProtocol(target.protocol) ||
-        !isPort(target.port) ||
-        !(isHostName(target.host) || isIP(target.host) !== 0)
-      ) {
-        throw egressDenied(target);
-      }
-      if (options.platformStoreUnknown === true && target.protocol === "postgres") {
-        throw egressDenied(target);
-      }
-      if (platformStore.some((store) => store.host === target.host && store.port === target.port)) {
-        throw egressDenied(target);
-      }
-      const listed = entries.find(
-        (candidate) =>
-          candidate.entry.protocol === target.protocol &&
-          candidate.host === target.host &&
-          candidate.entry.port === target.port
-      );
+      const target = normalized(input);
+      const listed = listedEntryOf(target);
       if (!listed) {
         throw egressDenied(target);
       }

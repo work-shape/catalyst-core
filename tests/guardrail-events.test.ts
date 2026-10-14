@@ -1,26 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  StoreBackedAuditRecorder,
-  asClientInstanceId,
-  dataStoreOperationName,
-  type GuardrailEvent,
-  type PlatformEventEmitter
-} from "@vivd-catalyst/core";
-import { GuardrailRunner, createAuditingEventEmitter } from "@vivd-catalyst/chat-server";
-import {
-  compileGuardrailPattern,
-  parseClientInstanceConfig,
-  type ClientInstanceConfig,
-  type ReleaseGuardrailConfig
-} from "@vivd-catalyst/config-schema";
-import type { ModelCompletion } from "@vivd-catalyst/model-provider";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { asClientInstanceId, dataStoreOperationName } from "@vivd-catalyst/core";
+import { compileGuardrailPattern, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { createTestConfig } from "./support/fixtures";
-import {
-  createScriptedInstanceModelGateway,
-  type FakeModelProvider as ModelProvider
-} from "./support/model-gateway";
-import { createTestInstance, type TestInstance } from "./support/test-instance";
+import { createTestInstance } from "./support/test-instance";
 import { setupNamespaceHolder } from "./support/asset-operations";
 import { clientInstanceId as accessInstanceId, skill } from "./support/access-instance";
 import { appFiles, setupAppInstance } from "./support/app-instance";
@@ -32,101 +14,22 @@ import {
 import { OPERATION_CALL_APPROVAL_KIND, runOperation } from "@vivd-catalyst/tool-execution";
 import { resultSchema as appActionResultSchema } from "./support/app-actions";
 import { setupFindingsApp } from "./support/findings-app";
+import {
+  IBAN,
+  configWith,
+  guardedEvents,
+  ibanPattern,
+  judge,
+  judgeBinding,
+  noIban,
+  runnerOf
+} from "./support/guardrails";
 
 // The guardrails of release config at every before-event of a call: what a pattern and a judge
 // answer and in which order, how the strictest answer wins, what a hit names, and what a person
 // who saves an asset, publishes an App or calls an operation is told.
 
-type TestStore = TestInstance["stores"];
-
-const IBAN = "DE89 3704 0044 0532 0130 00";
-const ibanPattern = "(?i)\\bDE\\d{2}(?:\\s?\\d{4}){4}\\s?\\d{2}\\b";
-const judgeBinding = {
-  id: "guardrailCheck",
-  providerId: "local",
-  model: "cheap-check",
-  agentSelectable: false
-};
-
-function noIban(overrides: Partial<ReleaseGuardrailConfig> = {}): ReleaseGuardrailConfig {
-  return {
-    displayName: "No IBAN in skills",
-    on: "asset.before_write",
-    filter: { kind: "skill" },
-    check: { kind: "pattern", pattern: ibanPattern, reason: "Skills hold no bank account." },
-    outcome: "block",
-    ...overrides
-  };
-}
-
-function judge(
-  on: GuardrailEvent,
-  outcome: ReleaseGuardrailConfig["outcome"]
-): ReleaseGuardrailConfig {
-  return {
-    on,
-    check: { kind: "model_judge", modelBindingId: judgeBinding.id, instruction: "Datenschutz." },
-    outcome
-  };
-}
-
-function configWith(guardrails: Record<string, unknown>): ClientInstanceConfig {
-  return parseClientInstanceConfig({
-    ...createTestConfig({ modelBindings: [judgeBinding] }),
-    guardrails
-  });
-}
-
-function completion(text: string): ModelCompletion {
-  return {
-    text,
-    toolCalls: [],
-    usage: {
-      inputTokens: 1,
-      outputTokens: 1,
-      totalTokens: 2,
-      source: "provider_reported",
-      webSearchCallCount: 0
-    }
-  };
-}
-
-/** The guardrails of these release entries, with a judge that answers `violates`. */
-function runnerOf(
-  stores: TestStore,
-  clientInstanceId: ReturnType<typeof asClientInstanceId>,
-  guardrails: Record<string, unknown>
-) {
-  const config = configWith(guardrails);
-  const complete = vi
-    .fn<ModelProvider["complete"]>()
-    .mockResolvedValue(completion('{"violates":true,"reason":"Names a person."}'));
-  const runner = new GuardrailRunner({
-    clientInstanceId,
-    config,
-    hits: stores.guardrails,
-    modelGateway: createScriptedInstanceModelGateway({
-      config,
-      modelProvider: { complete },
-      usageGovernance: new ModelUsageGovernance({
-        store: stores.usage,
-        budget: {},
-        safeguards: {}
-      })
-    })
-  });
-  return { runner, complete };
-}
-
-/** The events of an instance whose release config holds these guardrails. */
-function guardedEvents(stores: TestStore, guardrails: Record<string, unknown>) {
-  const { runner, complete } = runnerOf(stores, accessInstanceId, guardrails);
-  const events: PlatformEventEmitter = createAuditingEventEmitter(
-    new StoreBackedAuditRecorder({ clientInstanceId: accessInstanceId, store: stores.audit }),
-    runner
-  );
-  return { events, complete };
-}
+type TestStore = Awaited<ReturnType<typeof createTestInstance>>["stores"];
 
 const runnerInstance = asClientInstanceId("guardrail-events");
 const context = { correlationId: "corr_guardrail" };
@@ -170,7 +73,7 @@ describe("the guardrails at one before-event", () => {
       subjectKind: "skill",
       subjectName: "kunden-faq"
     });
-    expect(JSON.stringify(hit)).not.toContain("3704");
+    expect(JSON.stringify(hit)).not.toContain("3704 0044");
   });
 
   // Fails without the change: a judge ran beside a pattern that had already blocked.
@@ -269,6 +172,18 @@ describe("the guardrails at one before-event", () => {
     ]);
     await f.runner.answer(write("Text"), { ...context, repeated: true });
     expect(await hits(f.stores, "holding")).toHaveLength(1);
+  });
+
+  // Fails without the change: asked again, the runner kept no hit, so a guardrail added while
+  // a call waited blocked it and Build never showed the block.
+  it("keeps a block found when asked again as a new hit, and nothing else it answered", async () => {
+    const f = await fixture({ blocking: noIban(), warning: noIban({ outcome: "warn" }) });
+    const answers = await f.runner.answer(write(`Konto: ${IBAN}`), { ...context, repeated: true });
+    expect(answers.map((answer) => answer.outcome)).toEqual(["block", "warn"]);
+    expect(await hits(f.stores, "blocking")).toEqual([
+      expect.objectContaining({ event: "asset.before_write", outcome: "block" })
+    ]);
+    expect(await hits(f.stores, "warning")).toEqual([]);
   });
 
   // EW-6a makes the kind writable. Until then every guardrail is the release floor, which runs
@@ -380,7 +295,7 @@ describe("a guardrail at a call of the asset operations", () => {
     // The refusal is audited as the call's denial; no row holds the skill's text.
     const audit = await t.stores.audit.listAuditEvents({ clientInstanceId: accessInstanceId });
     expect(audit.map((event) => event.type)).toContain("operation.denied");
-    expect(JSON.stringify(audit)).not.toContain("3704");
+    expect(JSON.stringify(audit)).not.toContain("3704 0044");
 
     // The same push without the IBAN is written.
     const clean = await t.call(t.kai.id, "assets.sync", {

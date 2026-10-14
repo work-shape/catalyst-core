@@ -78,7 +78,7 @@ test("a member finds the agents of the workspace under New chat and starts a cha
   // Start chat opens a new conversation with that agent, by the keyboard as by a click.
   const start = otherCard.getByRole("button", { name: "Start chat" });
   await start.focus();
-  await expect(start).toHaveAccessibleDescription(OTHER_AGENT);
+  await expect(start).toHaveAccessibleName(`Start chat with ${OTHER_AGENT}`);
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/w\/[^/]+$/u);
   await expect(startPageAgent(page)).toHaveAccessibleName(`Select agent: ${OTHER_AGENT}`);
@@ -86,9 +86,22 @@ test("a member finds the agents of the workspace under New chat and starts a cha
   await expect(composer).toBeFocused();
   await expect(composer).toHaveValue("");
 
-  // The starter prompts of the default agent stand in the empty chat with it.
+  // A press dragged across what the agent does, as when selecting it, starts nothing.
   await openAgents(page);
-  await defaultCard.getByRole("button", { name: "Start chat" }).click();
+  const what = defaultCard.getByText("Help with application and document review.");
+  const whatBox = await what.boundingBox();
+  const fromX = whatBox?.x ?? 0;
+  const atY = (whatBox?.y ?? 0) + (whatBox?.height ?? 0) / 2;
+  await page.mouse.move(fromX + 2, atY);
+  await page.mouse.down();
+  await page.mouse.move(fromX + (whatBox?.width ?? 0) - 2, atY, { steps: 5 });
+  await page.mouse.up();
+  await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
+
+  // The whole card starts the chat: a click on what the agent does lands on Start chat, whose
+  // area lies over the text, so the pointer is sent there by force.
+  // The starter prompts of the default agent stand in the empty chat with it.
+  await what.click({ force: true });
   await expect(page).toHaveURL(/\/w\/[^/]+$/u);
   await expect(startPageAgent(page)).toHaveAccessibleName(`Select agent: ${DEFAULT_AGENT}`);
   await expect(page.getByRole("button", { name: PROMPT_TITLE })).toBeVisible();
@@ -113,7 +126,9 @@ test("the Agents page reads in German and keeps inside a phone's width", async (
   await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
   await expect(page.getByRole("heading", { level: 1, name: "Agenten" })).toBeVisible();
   const defaultCard = card(page, DEFAULT_AGENT);
-  await expect(defaultCard.getByRole("button", { name: "Chat starten" })).toBeVisible();
+  await expect(
+    defaultCard.getByRole("button", { name: `Chat starten mit ${DEFAULT_AGENT}`, exact: true })
+  ).toBeVisible();
   await expect(defaultCard).toContainText("Standardagent");
 
   // The title starts below the button that opens the drawer, and nothing reaches past the window.
@@ -148,6 +163,7 @@ test("a builder is led from a card to the agent's page in Studio", async ({
     [1440, 390]
   );
 
+  // The link stands above the card that starts a chat, and keeps its own way.
   await edit.click();
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
   await expect(page.getByRole("region", { name: "Studio" })).toBeVisible();
