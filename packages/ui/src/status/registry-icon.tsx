@@ -13,6 +13,7 @@ import {
   Globe,
   Inbox,
   LayoutGrid,
+  Library,
   Mail,
   Play,
   Plug,
@@ -36,9 +37,9 @@ export type IconFamily = "file" | "service" | "skill" | "tool";
 
 /**
  * The icons the library ships: one per family, one per kind of asset (`agent`, `skill`,
- * `connection`, `workflow`, `app`, `datastore`, `guardrail`), the same everywhere a kind is
- * shown, `inbox` for the Inbox, `guide` for the platform's guide to itself, one per kind of
- * part of a graph, one per category of what a part touches and one per file type
+ * `connection`, `workflow`, `app`, `datastore`, `guardrail`, `knowledge_base`), the same
+ * everywhere a kind is shown, `inbox` for the Inbox, `guide` for the platform's guide to itself,
+ * one per kind of part of a graph, one per category of what a part touches and one per file type
  * (`spreadsheet`, `document`, `presentation`, `pdf`, `image`, `archive`, `text`, and `file` for
  * every other type, which is also the generic icon of the family). None of them is a mark of a
  * vendor.
@@ -57,6 +58,7 @@ export const genericIcons = {
   guardrail: ShieldCheck,
   guide: Compass,
   inbox: Inbox,
+  knowledge_base: Library,
   mail: Mail,
   manual: Play,
   notify: Bell,

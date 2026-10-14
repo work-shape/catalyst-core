@@ -206,6 +206,13 @@ export const GRANTABLE_ACTION_SCOPES = {
   // deleting and approving stay with the role until a slice opens them.
   "connection.read": ["namespace", "asset"],
   "connection.use": ["namespace", "asset"],
+  // A Knowledge Base's rights are granted in a Namespace or on one Knowledge Base: `use`
+  // queries the published revision, `read` shows it and its state, `write` changes the draft
+  // and `publish` makes it live. Deleting stays with the role.
+  "knowledge_base.read": ["namespace", "asset"],
+  "knowledge_base.use": ["namespace", "asset"],
+  "knowledge_base.write": ["namespace", "asset"],
+  "knowledge_base.publish": ["namespace", "asset"],
   // A Workflow is the instance's own: its rights are granted in a Namespace or on one Workflow,
   // and no workspace owns one yet. Reading shows it and its runs, using starts it, writing
   // edits the draft and publishing moves the published pointer; making a revision live that
@@ -240,27 +247,7 @@ export function isGrantableAt(
   return GRANTABLE_ACTION_SCOPES[action].some((candidate) => candidate === scopeKind);
 }
 
-/**
- * The rights a grant row can give a service principal: the use rights of a resource and
- * nothing else. No right that writes, publishes, deletes or manages is here, and none over
- * users, access or API access. A kind adds its use right when it brings one; the grant write
- * hands out only those of them a kind of the instance registers. The list limits what the
- * grant operation writes; the evaluator answers from whatever rows the table holds.
- */
-export const PRINCIPAL_GRANTABLE_ACTIONS = [
-  "connection.use",
-  "data_store.read",
-  "data_store.insert",
-  "data_store.execute",
-  "knowledge_base.use",
-  "workflow.use"
-] as const satisfies readonly PlatformAction[];
-
-export type PrincipalGrantableAction = (typeof PRINCIPAL_GRANTABLE_ACTIONS)[number];
-
-export function isPrincipalGrantableAction(action: string): action is PrincipalGrantableAction {
-  return PRINCIPAL_GRANTABLE_ACTIONS.some((candidate) => candidate === action);
-}
+export * from "./principal-grantable-actions";
 
 /** The one test of the superadmin role. */
 export function isSuperadmin(subject: { roles: readonly string[] }): boolean {

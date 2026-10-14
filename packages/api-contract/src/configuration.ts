@@ -42,6 +42,7 @@ export const agentEditableFieldSchema = z.enum([
   "maxSteps",
   "toolNames",
   "skillNames",
+  "knowledgeBases",
   "initialPrompts"
 ]);
 

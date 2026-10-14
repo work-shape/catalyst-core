@@ -78,7 +78,8 @@ const DATA_STORE_LIST_MAX_STORES = 1_000;
  * interrupted, in milliseconds. It covers the wait for a connection and the reads around it.
  */
 const DATA_STORE_RUN_GRACE_MS = 30_000;
-const RUN_TIMEOUT_MS = DATA_STORE_ROLE_LIMITS.app.statementTimeoutMs + DATA_STORE_RUN_GRACE_MS;
+export const RUN_TIMEOUT_MS =
+  DATA_STORE_ROLE_LIMITS.app.statementTimeoutMs + DATA_STORE_RUN_GRACE_MS;
 
 const scalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const valueSchema = z.union([scalarSchema, z.array(scalarSchema)]);
@@ -87,7 +88,8 @@ const parameterTypes: readonly DataStoreParameterType[] = DATA_STORE_SCALAR_TYPE
 );
 const tableNameSchema = z.string().min(1).max(DATA_STORE_IDENTIFIER_MAX_CHARS);
 
-const queryInputSchema = z.strictObject({
+/** One read-only statement and the values it binds: the input of every SQL read of a store. */
+export const queryInputSchema = z.strictObject({
   sql: z.string().min(1).max(POSTGRES_QUERY_TEXT_MAX_CHARS),
   parameters: z
     .array(
@@ -97,7 +99,8 @@ const queryInputSchema = z.strictObject({
     .optional()
 });
 
-const rowsSchema = z.object({
+/** Rows as a SQL read of a store answers them. */
+export const rowsSchema = z.object({
   columns: z.array(z.object({ name: z.string(), type: z.string(), nativeType: z.string() })),
   rows: z.array(z.record(z.string(), z.json())),
   truncated: z.boolean()
