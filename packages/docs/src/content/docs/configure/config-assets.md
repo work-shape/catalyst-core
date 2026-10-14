@@ -232,7 +232,9 @@ operation text, 60,000 per root or resource, and 30 resources per skill.
 
 The same permission allows reverting an approved request. Revert writes a new
 revision restoring the previous content and records the reverting user. It is
-blocked if the skill has newer revisions. Reverting a newly created skill
+blocked if the skill has newer revisions, and where a guardrail on
+`asset.before_write` blocks the restored content; the request then stays
+approved. Reverting a newly created skill
 removes it and its agent reference together; other agents' references must be
 removed first. Reverting retains the original approval and proposal history.
 
