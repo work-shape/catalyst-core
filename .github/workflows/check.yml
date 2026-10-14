@@ -5,6 +5,8 @@ on:
     branches: [main]
 permissions:
   contents: read
+  # The database of the checks is the instance's Postgres image, a package of this repository.
+  packages: read
 # A newer push to a pull request cancels the run for the older push, so only its latest commit
 # reports a result. Every run on main finishes: a merge that lands while the previous one is
 # checked must not cancel that check, or a break on main goes unseen. A shared group would still
@@ -28,9 +30,12 @@ jobs:
           # The baseline guard needs the history back to where the pull request left its base,
           # and the compatibility step needs the release tags and their trees.
           fetch-depth: 0
-      # A step and not a service container: the script pulls the image by digest from the first
-      # of three registries that serves it, where a service container has one registry and
-      # fails the job when that one answers "toomanyrequests".
+      # A step and not a service container: the script tries the pull three times, where a
+      # service container fails the job at the first answer like "toomanyrequests".
+      - name: Sign in to the registry
+        env:
+          TOKEN: ${{ github.token }}
+        run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
       - name: Database
         timeout-minutes: 5
         run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
@@ -82,6 +87,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - name: Sign in to the registry
+        env:
+          TOKEN: ${{ github.token }}
+        run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
       - name: Database
         timeout-minutes: 5
         run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
@@ -138,8 +147,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - name: Sign in to the registry
+        env:
+          TOKEN: ${{ github.token }}
+        run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
       # The suite's own database, with the names its runner expects on its default port. The
-      # runner would otherwise start `postgres:17` from Docker Hub, which rate-limits the runners.
+      # runner would otherwise start the demo Compose's Postgres itself.
       - name: Database
         timeout-minutes: 5
         run: .github/scripts/start-postgres.sh agent_chat agent_chat agent_chat 55433

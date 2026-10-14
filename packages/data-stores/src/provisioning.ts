@@ -46,11 +46,14 @@ const REACH = `
 
 const reachRow = z.object({ platform: z.boolean(), server: z.boolean() });
 
+type ProvisioningStop =
+  "platform_database_open" | "vector_extension_missing" | "vector_extension_not_permitted";
+
 /** Why provisioning stopped at something an operator settles. The code is the failure of the store. */
 export class DataStoreProvisioningError extends Error {
-  readonly code: "platform_database_open";
+  readonly code: ProvisioningStop;
 
-  constructor(code: "platform_database_open", message: string) {
+  constructor(code: ProvisioningStop, message: string) {
     super(message);
     this.name = "DataStoreProvisioningError";
     this.code = code;
@@ -207,5 +210,75 @@ export async function provisionDataStore(
        alter default privileges in schema public
          grant usage, select on sequences to ${app};`
     )
+  );
+}
+
+/**
+ * What the server offers of pgvector: the version `create extension` installs, whether it is
+ * trusted, and whether the database already has it.
+ */
+const VECTOR_EXTENSION = `
+  select v.version, v.trusted, e.installed_version is not null as installed
+  from pg_catalog.pg_available_extensions e
+  join pg_catalog.pg_available_extension_versions v
+    on v.name operator(pg_catalog.=) e.name and v.version operator(pg_catalog.=) e.default_version
+  where e.name operator(pg_catalog.=) 'vector'
+`;
+
+const vectorExtensionRow = z.object({
+  version: z.string(),
+  trusted: z.boolean(),
+  installed: z.boolean()
+});
+
+/**
+ * Creates pgvector in the database of a store, as the platform's role: only for a store a
+ * Knowledge Base with semantic search owns, never for a store of an App (ADR-0023). The
+ * extension's objects are the platform's; the store's roles use its types and operators.
+ *
+ * A trusted extension may be created by a role with CREATE on the database. The roles of a
+ * store are given none, and where `vector` is trusted it is taken from them here once more, so
+ * only this function creates it. On the instance's own image it is not trusted, and the
+ * platform's role, the server's superuser, creates it.
+ */
+export async function ensureVectorExtension(
+  server: DataStoreServer,
+  record: StoreDatabase,
+  signal: AbortSignal
+): Promise<void> {
+  const where = `${record.location.host}:${record.location.port}`;
+  const offered = await server.executor.query({
+    ...server.asPlatform(record.location.database),
+    signal,
+    sql: VECTOR_EXTENSION
+  });
+  const [row] = z.array(vectorExtensionRow).parse(offered.rows);
+  if (!row) {
+    throw new DataStoreProvisioningError(
+      "vector_extension_missing",
+      `The Postgres server ${where} has no pgvector, which a Knowledge Base with semantic search stores its embeddings with. Run the instance's own Postgres image, or install pgvector on that server; publishing the Knowledge Base again then provisions its store.`
+    );
+  }
+  // Created before, by this function or by an operator as the refusal below tells them to.
+  if (row.installed) return;
+  if (!row.trusted && !(await platformIsSuperuser(server, signal))) {
+    throw new DataStoreProvisioningError(
+      "vector_extension_not_permitted",
+      `pgvector is not a trusted extension on the Postgres server ${where}, so only a superuser creates it, and the platform's database role is none. Create it as a superuser with CREATE EXTENSION vector in the database of the store, or let the platform connect as the server's superuser.`
+    );
+  }
+  const database = quoteIdentifier(record.location.database);
+  const roles = `${quoteIdentifier(record.roles.app)}, ${quoteIdentifier(record.roles.migration)}`;
+  await server.executor.change(
+    {
+      ...server.asPlatform(record.location.database),
+      timeoutMs: DATA_STORE_PROVISION_STEP_TIMEOUT_MS,
+      signal
+    },
+    (sql) =>
+      sql.script(
+        `create extension if not exists vector with schema public;
+         ${row.trusted ? `revoke create on database ${database} from ${roles};` : ""}`
+      )
   );
 }
