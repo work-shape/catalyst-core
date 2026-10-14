@@ -1,6 +1,7 @@
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import { SUBJECT_TOOL_PREFIX, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { AGENT_ASSET_KIND } from "../build-area/build-rights";
+import { PAGE_SAVE_TOOL_NAME } from "../pages/page-save";
 import type { Surface } from "../surface/surface";
 
 // What the calls of a run tell of the asset its conversation is about. Opening an asset makes
@@ -13,6 +14,8 @@ export const ASSET_GET_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}get`;
 export const ASSET_VALIDATE_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}validate`;
 export const ASSET_PUT_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}put`;
 export const ASSET_OPERATIONS_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}operations`;
+/** Keeps a Page of the conversation as an App, which the conversation is about from then on. */
+export const PAGE_SAVE_AS_APP_TOOL_NAME = "page.save_as_app";
 
 /** The asset a conversation is about. */
 export interface SubjectAsset {
@@ -50,7 +53,7 @@ function answered(part: SubjectRunPart, toolName: string): Record<string, unknow
     : undefined;
 }
 
-/** The asset an answer of `platform.assets.open` opened. */
+/** The asset an answer of `platform.assets.open` or of `page.save_as_app` opened. */
 function assetOpened(answer: Record<string, unknown> | undefined): SubjectAsset | undefined {
   return answer !== undefined && typeof answer.kind === "string" && typeof answer.name === "string"
     ? { kind: answer.kind, name: answer.name }
@@ -60,14 +63,16 @@ function assetOpened(answer: Record<string, unknown> | undefined): SubjectAsset 
 /**
  * The asset the last open of the run that stood names, and the call that opened it: what the
  * conversation is about now. Each open is a call of its own, so an asset opened again after
- * its reader closed it shows again.
+ * its reader closed it shows again. A Page kept as an App opens the App.
  */
 export function subjectOpenedInRun(
   parts: readonly SubjectRunPart[]
 ): { subject: SubjectAsset; callId: string | undefined } | undefined {
   let opened: { subject: SubjectAsset; callId: string | undefined } | undefined;
   for (const part of parts) {
-    const subject = assetOpened(answered(part, ASSET_OPEN_TOOL_NAME));
+    const subject = assetOpened(
+      answered(part, ASSET_OPEN_TOOL_NAME) ?? answered(part, PAGE_SAVE_AS_APP_TOOL_NAME)
+    );
     if (subject) {
       opened = { subject, callId: part.toolCallId };
     }
@@ -75,10 +80,21 @@ export function subjectOpenedInRun(
   return opened;
 }
 
-/** The calls of the run that saved a draft of the subject, by their ids. */
+/** Whether a save of a Page also wrote the draft of the App the conversation is about. */
+function savedIntoApp(answer: Record<string, unknown> | undefined): boolean {
+  const app = answer?.app;
+  return isRecord(app) && app.saved === true;
+}
+
+/**
+ * The calls of the run that saved a draft of the subject, by their ids: a save of the asset,
+ * and a save of the Page whose App the conversation is about.
+ */
 export function savedDraftCalls(parts: readonly SubjectRunPart[]): string[] {
   return parts.flatMap((part) =>
-    answered(part, ASSET_PUT_TOOL_NAME)?.saved === true && part.toolCallId !== undefined
+    (answered(part, ASSET_PUT_TOOL_NAME)?.saved === true ||
+      savedIntoApp(answered(part, PAGE_SAVE_TOOL_NAME))) &&
+    part.toolCallId !== undefined
       ? [part.toolCallId]
       : []
   );

@@ -19253,6 +19253,16 @@
           "defaultAgentName": {
             "type": "string"
           },
+          "visibleSections": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "agents",
+                "apps"
+              ]
+            }
+          },
           "items": {
             "type": "array",
             "items": {
@@ -19431,6 +19441,7 @@
           }
         },
         "required": [
+          "visibleSections",
           "items"
         ]
       },
@@ -23755,6 +23766,15 @@
             "items": {
               "$ref": "#/components/schemas/PlatformContextNamespace"
             }
+          },
+          "visibleSections": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "workflows"
+              ]
+            }
           }
         },
         "required": [
@@ -23763,7 +23783,8 @@
           "kinds",
           "actions",
           "assetActions",
-          "namespaces"
+          "namespaces",
+          "visibleSections"
         ]
       },
       "PlatformContextNamespace": {

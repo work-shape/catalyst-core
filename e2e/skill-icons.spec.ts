@@ -227,7 +227,7 @@ test("the chooser of skills says in German that a skill adds no tools", async ({
   await shot(page, "agent-skills-de-light-1440");
 });
 
-test("the gallery's picker of skills shows a shipped skill's page and the generic book, both bare", async ({
+test("the gallery's picker of skills shows a shipped skill's page bare and the generic book on its tile", async ({
   page
 }) => {
   const theme = process.env.E2E_SHOTS_THEME === "dark" ? "Dark" : "Light";
@@ -250,14 +250,17 @@ test("the gallery's picker of skills shows a shipped skill's page and the generi
   const plain = picker.getByRole("option", { name: "Plain language" });
   await expect(plain.locator('[data-skill-icon="generic"]')).toBeVisible();
   await expect(plain.locator("[data-file-type]")).toHaveCount(0);
-  // The icon stands bare on the row: no fill and no border of its own.
-  for (const icon of [pdf, plain].map((row) => row.locator("[data-skill-icon]"))) {
-    const style = await icon.evaluate((element) => {
+  // A page stands bare on the row; the generic book sits on the neutral tile. Neither has a
+  // border of its own.
+  const style = (row: typeof pdf) =>
+    row.locator("[data-skill-icon]").evaluate((element) => {
       const computed = getComputedStyle(element);
       return [computed.backgroundColor, computed.borderTopWidth];
     });
-    expect(style).toEqual(["rgba(0, 0, 0, 0)", "0px"]);
-  }
+  expect(await style(pdf)).toEqual(["rgba(0, 0, 0, 0)", "0px"]);
+  const [tileBackground, tileBorder] = await style(plain);
+  expect(tileBackground).not.toBe("rgba(0, 0, 0, 0)");
+  expect(tileBorder).toBe("0px");
   // A skill without a sentence shows its title alone.
   await expect(picker.getByRole("option", { name: "Offer structure" })).toHaveText(
     "Offer structure"

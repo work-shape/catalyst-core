@@ -5,6 +5,13 @@ export {
   PAGE_SAVE_TOOL_NAME,
   type PageSaveToolOptions
 } from "./page-save-tool";
+export {
+  createPageSaveAsAppTool,
+  PAGE_SAVE_AS_APP_TOOL_NAME,
+  type PageAppCalls,
+  type PageAppCreated,
+  type PageSaveIntoApp
+} from "./page-app-tool";
 export * from "./read-skill-tool";
 export {
   PLATFORM_ASSET_OPEN_NEEDS_PERSON,

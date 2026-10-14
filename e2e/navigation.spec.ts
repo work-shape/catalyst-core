@@ -30,8 +30,20 @@ test("the Recent heading offers New chat on hover and by the keyboard, in both l
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page, reviewer);
   for (const words of [
-    { locale: "en", navigation: "Main navigation", recent: "Recent", newChat: "New chat" },
-    { locale: "de", navigation: "Hauptnavigation", recent: "Zuletzt", newChat: "Neuer Chat" }
+    {
+      locale: "en",
+      navigation: "Main navigation",
+      recent: "Recent",
+      newChat: "New chat",
+      agents: "Agents"
+    },
+    {
+      locale: "de",
+      navigation: "Hauptnavigation",
+      recent: "Zuletzt",
+      newChat: "Neuer Chat",
+      agents: "Agenten"
+    }
   ]) {
     await page.goto("/inbox");
     await page.evaluate(
@@ -45,6 +57,9 @@ test("the Recent heading offers New chat on hover and by the keyboard, in both l
     const heading = group.getByText(words.recent, { exact: true });
     const shown = () =>
       plus.evaluate((button) => getComputedStyle(button.parentElement ?? button).opacity);
+    // The Agents row comes with the workspace's list of agents, above the heading: the rail
+    // has its rows once it is there.
+    await expect(navigation.getByRole("button", { name: words.agents, exact: true })).toBeVisible();
 
     // At rest it is unseen and keeps its room, so the heading stands where it stood.
     await page.mouse.move(800, 450);

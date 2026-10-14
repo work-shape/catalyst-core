@@ -81,7 +81,7 @@ const appsModule = defineModule({
     "apps.sessions.call_connection"
   ],
   kinds: ["app"],
-  tools: ["page.save"],
+  tools: ["page.save", "page.save_as_app"],
   jobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"],
   commandWorkerJobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"]
 });
