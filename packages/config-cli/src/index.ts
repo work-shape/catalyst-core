@@ -1,4 +1,5 @@
 import { realpathSync } from "node:fs";
+import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { RELEASE_VERSION } from "@vivd-catalyst/api-contract";
@@ -25,6 +26,21 @@ export interface CliRuntimeOptions {
   sleep?: (milliseconds: number) => Promise<void>;
   /** Opens an address in a browser, as `setup` does. Tests pass one that opens nothing. */
   openUrl?: (address: string) => void;
+  /**
+   * Asks the person at the terminal and answers what they typed. Left out, the terminal is
+   * asked where there is one, and nobody where there is none.
+   */
+  prompt?: (question: string) => Promise<string>;
+}
+
+/** Asks the question on standard error and reads one line of standard input. */
+async function askTerminal(question: string): Promise<string> {
+  const terminal = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    return await terminal.question(question);
+  } finally {
+    terminal.close();
+  }
 }
 
 const helpText = `Usage: catalyst config <command> [options]
@@ -103,10 +119,12 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
     return runLoginCommand(argv[0], argv.slice(1), runtime, stdout, stderr);
   }
   if (argv[0] !== "config") {
+    const prompt = runtime.prompt ?? (process.stdin.isTTY ? askTerminal : undefined);
     return runAssetCommand(argv, {
       cwd: runtime.cwd ?? process.cwd(),
       ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
       ...(runtime.env === undefined ? {} : { env: runtime.env }),
+      ...(prompt === undefined ? {} : { prompt }),
       stdout,
       stderr
     });

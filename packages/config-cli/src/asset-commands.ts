@@ -58,6 +58,7 @@ const OPTIONS = {
   field: { type: "string" },
   asset: { type: "string" },
   confirm: { type: "string" },
+  yes: { type: "boolean", default: false },
   help: { type: "boolean", short: "h", default: false }
 } as const;
 
@@ -237,9 +238,9 @@ const VERBS: Record<string, Verb> = {
   publish: {
     usage: "publish <name> --revision <n> [--confirm <blocked>]",
     summary:
-      "Make one revision the one its users are served (assets.publish). A guardrail shows its dry run first",
+      "Make one revision the one its users are served (assets.publish). A guardrail shows its dry run first; an App or a Workflow asks you first",
     named: true,
-    flags: ["revision", "confirm"],
+    flags: ["revision", "confirm", "yes"],
     prepare: (values, name) => {
       const revision = revisionNumber(required(values.revision, "--revision <n>"));
       return async (session) => {
@@ -248,6 +249,14 @@ const VERBS: Record<string, Verb> = {
           if (proceed !== undefined) return proceed;
         } else if (values.confirm !== undefined) {
           throw new UsageError("--confirm answers the dry run of a guardrail's publish.");
+        }
+        if (session.kind.actions.approve !== undefined) {
+          const answer = await askBeforePublish(session, name, revision);
+          if (answer !== undefined) return answer;
+        } else if (values.yes) {
+          throw new UsageError(
+            `A ${session.kind.kind} is published without a question; --yes answers none.`
+          );
         }
         const outcome = await session.api.change(
           (client, idempotencyKey) =>
@@ -556,6 +565,35 @@ async function guardrailDryRunBeforePublish(
   return EXIT.refused;
 }
 
+/**
+ * The question a publish of an App or a Workflow asks in the terminal before it is sent: a
+ * revision of either goes live only on a person's click or their answer here (GR-PUB-1). An
+ * answer that is not yes publishes nothing. `--yes`, or a terminal nobody can answer, is
+ * refused until such a publish can wait as a confirmation in the person's Inbox (OP-4).
+ * Answers an exit code where the publish stops here, and nothing where it goes ahead.
+ */
+async function askBeforePublish(
+  session: Session,
+  name: string,
+  revision: number
+): Promise<number | undefined> {
+  const kind = session.kind.kind;
+  const prompt = session.options.prompt;
+  if (session.values.yes || !prompt) {
+    writeErr(
+      session.options,
+      `Publishing a ${kind} needs your answer here or your click in the interface, so ${session.values.yes ? "--yes" : "a run without a terminal to ask"} publishes nothing. Run 'catalyst ${kindNoun(session.kind)} publish ${name} --revision ${revision}' in a terminal and answer its question, or publish it in the interface.`
+    );
+    return EXIT.refused;
+  }
+  const answer = await prompt(
+    `Publish revision ${revision} of ${kind} '${name}'? Its users are then served it, or an approver is asked first if you may not approve it yourself. [y/N] `
+  );
+  if (/^y(?:es)?$/iu.test(answer.trim())) return undefined;
+  writeErr(session.options, "Nothing was published.");
+  return EXIT.refused;
+}
+
 /** The words before the kind that are commands of their own. */
 const INSTANCE_COMMANDS = ["context", "kinds", "references"] as const;
 
@@ -686,11 +724,12 @@ function filesRead(session: Session, from: string, files: number): number {
 /** Prints what a changing call answered, or that it waits and has changed nothing yet. */
 function settle<Output>(
   session: Session,
-  outcome: OperationOutcome<Output, { id: string }>,
+  outcome: OperationOutcome<Output, { id: string; approvalRequestId?: string }>,
   lines: (output: Output) => string[]
 ): number {
   if (outcome.status === "pending_approval") {
-    const text = `Waits for an approval on the instance; nothing has changed yet (Operation Run ${outcome.run.id}).`;
+    const { id, approvalRequestId } = outcome.run;
+    const text = `Waits for an approval on the instance; nothing has changed yet (${approvalRequestId === undefined ? "" : `request ${approvalRequestId}, `}Operation Run ${id}).`;
     if (session.values.json)
       writeOut(
         session.options,
@@ -777,5 +816,7 @@ Options:
 
 The instance decides every right and every check, and a refusal is printed as it gave it.
 A write names the revision it was made against: read it with 'show' or 'history'.
+A publish of an App or a Workflow asks you first and needs your answer in a terminal; --yes
+publishes nothing. If you may not approve it yourself, it then waits for an approver.
 Exit codes: 0 done, 1 refused or failed, 2 usage, 3 waits for an approval (nothing changed yet).
 `;

@@ -2818,7 +2818,8 @@ describe("catalyst asset commands against an instance", () => {
    * The CLI as one user of the instance: the key exchange is answered here, and every other
    * call reaches the instance signed in as that user. Each request is recorded.
    */
-  function cliAs(instance: TestInstance, userId: string, cwd: string) {
+  /** The CLI as `userId`. `answers` are typed at its questions, in order; without them nobody can be asked. */
+  function cliAs(instance: TestInstance, userId: string, cwd: string, answers?: string[]) {
     const serverFetch = createTestFetch(instance, { "x-test-user": userId });
     const requests: string[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
@@ -2833,6 +2834,7 @@ describe("catalyst asset commands against an instance", () => {
       }
       return serverFetch(request);
     };
+    const asked: string[] = [];
     const run = async (...args: string[]) => {
       const out: string[] = [];
       const err: string[] = [];
@@ -2841,11 +2843,19 @@ describe("catalyst asset commands against an instance", () => {
         env: { CATALYST_API_KEY: "cat_personal" },
         fetchImpl,
         stdout: (text) => out.push(text),
-        stderr: (text) => err.push(text)
+        stderr: (text) => err.push(text),
+        ...(answers
+          ? {
+              prompt: (question: string) => {
+                asked.push(question);
+                return Promise.resolve(answers.shift() ?? "");
+              }
+            }
+          : {})
       });
       return { code, out: out.join(""), err: err.join("") };
     };
-    return { run, requests };
+    return { run, requests, asked };
   }
 
   // Check 57, from the verification of PR 67. Fails without the fix: a guardrail on
@@ -3209,7 +3219,43 @@ describe("catalyst asset commands against an instance", () => {
       });
       expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
 
-      const published = await run("app", "publish", "offers", "--revision", "1", ...workspace);
+      // An App is published on a person's answer to the question, and on nothing else.
+      const unasked = await run("app", "publish", "offers", "--revision", "1", ...workspace);
+      expect(unasked.code).toBe(1);
+      expect(unasked.err).toContain("needs your answer here or your click in the interface");
+      const scripted = await cliAs(t.instance, t.admin.id, cwd, ["y"]).run(
+        "app",
+        "publish",
+        "offers",
+        "--revision",
+        "1",
+        "--yes",
+        ...workspace
+      );
+      expect(scripted.code).toBe(1);
+      expect(scripted.err).toContain("--yes publishes nothing");
+      const declining = cliAs(t.instance, t.admin.id, cwd, ["n"]);
+      const declined = await declining.run(
+        "app",
+        "publish",
+        "offers",
+        "--revision",
+        "1",
+        ...workspace
+      );
+      expect(declined).toMatchObject({ code: 1, err: "Nothing was published.\n" });
+      expect(declining.asked).toEqual([
+        "Publish revision 1 of app 'offers'? Its users are then served it, or an approver is asked first if you may not approve it yourself. [y/N] "
+      ]);
+      expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
+      const published = await cliAs(t.instance, t.admin.id, cwd, ["y"]).run(
+        "app",
+        "publish",
+        "offers",
+        "--revision",
+        "1",
+        ...workspace
+      );
       expect(published, published.err).toMatchObject({
         code: 0,
         out: "Published revision 1 of app 'offers'.\n"
@@ -3217,6 +3263,54 @@ describe("catalyst asset commands against an instance", () => {
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
       const shown = await run("apps", "show", "offers", "--files", ...workspace);
       expect(shown.out).toContain("index.html");
+    } finally {
+      await t.close();
+    }
+  });
+
+  // GR-PUB-1, check 66: a member who may publish and not approve answers the question, and the
+  // CLI ends with the request an approver decides. Nothing is live until then.
+  it("ends a member's publish of an App with the request an approver decides", async () => {
+    const t = await setupAppInstance({
+      explicitCredentials: true,
+      server: (stores) => ({
+        operations: { events: guardedEvents(stores, {}, { shipped: true }).events }
+      })
+    });
+    try {
+      for (const action of ["app.read", "app.write", "app.publish"]) {
+        await t.stores.access.createGrant({
+          clientInstanceId: accessInstanceId,
+          holderKind: "user",
+          holderId: t.kai.id,
+          action,
+          effect: "allow",
+          scopeKind: "workspace",
+          scopeId: t.workspaceId,
+          grantedBy: t.admin.id
+        });
+      }
+      await t.putApp(t.admin.id, "offers", appFiles("one"));
+      const cwd = await createTemporaryDirectory();
+
+      const held = await cliAs(t.instance, t.kai.id, cwd, ["yes"]).run(
+        "app",
+        "publish",
+        "offers",
+        "--revision",
+        "1",
+        "--workspace",
+        t.workspaceId
+      );
+
+      expect(held.code, held.err).toBe(3);
+      const [request] = await t.stores.approvals.listApprovalRequests({
+        clientInstanceId: accessInstanceId,
+        kinds: ["app_publish"],
+        status: "pending"
+      });
+      expect(held.err).toContain(`request ${request?.id ?? "none"}`);
+      expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
     } finally {
       await t.close();
     }

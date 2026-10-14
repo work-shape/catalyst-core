@@ -56,6 +56,8 @@ export interface ConfigCommandOptions {
   env?: Readonly<Record<string, string | undefined>>;
   stdout?: (text: string) => void;
   stderr?: (text: string) => void;
+  /** Asks the person at the terminal. Absent where nobody can be asked. */
+  prompt?: (question: string) => Promise<string>;
 }
 
 export function canonicalBundleFiles(bundle: WorkingCopyBundle): Map<string, string> {
