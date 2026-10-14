@@ -134,9 +134,18 @@ function AssistantRuntimePane({
         workspaceBlock,
         snapshotStatus,
         noAgentsMessage,
+        queueWhileLoading: !docked,
         t
       }),
-    [conversationRunning, noAgentsMessage, rootSubmitPending, snapshotStatus, t, workspaceBlock]
+    [
+      conversationRunning,
+      docked,
+      noAgentsMessage,
+      rootSubmitPending,
+      snapshotStatus,
+      t,
+      workspaceBlock
+    ]
   );
   const sendDisabledReason = sendBlock?.reason;
   const [queuedSend, setQueuedSend] = useState<QueuedSend | undefined>(undefined);

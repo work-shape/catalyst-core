@@ -311,8 +311,19 @@ export function useWorkspaceThreadQuery(
       input.client.conversations.thread.get({
         params: { conversationId: input.conversationId ?? "" }
       }),
+    // A thread the instance refuses, as one the person may not read, is not asked for again:
+    // the dock that names it opens empty at once.
+    retry: (failureCount: number, error: unknown) =>
+      failureCount < THREAD_LOAD_RETRIES && !isRefusal(error),
     enabled: input.enabled
   });
+}
+
+/** As often as a query is tried again by default. */
+const THREAD_LOAD_RETRIES = 3;
+
+function isRefusal(error: unknown): boolean {
+  return error instanceof ApiError && error.status >= 400 && error.status < 500;
 }
 
 export function useConversationResourcesQuery(

@@ -118,6 +118,11 @@ describe("send block", () => {
       expected: { reason: "Loading conversation", loading: true }
     },
     {
+      name: "the dock's conversation still loads, without waiting to send",
+      input: { snapshotStatus: "loading", queueWhileLoading: false },
+      expected: { reason: "Loading conversation", loading: false }
+    },
+    {
       name: "the conversation failed to load",
       input: { snapshotStatus: "error" },
       expected: { reason: "The conversation could not be loaded.", loading: false }
