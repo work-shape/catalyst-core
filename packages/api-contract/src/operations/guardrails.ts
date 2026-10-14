@@ -114,6 +114,8 @@ const dryRunCountSchema = z.object({
 export const dryRunGuardrailResponseSchema = z.object({
   revision: z.number().int().positive(),
   event: z.string(),
+  /** What a hit of this revision does: a `block` or a `require_approval` stops the action. */
+  outcome: guardrailOutcomeSchema,
   days: z.number().int().positive(),
   since: timestampSchema,
   /** The actions of the period its filter and scope take. */

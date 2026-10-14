@@ -514,8 +514,10 @@ function formatDryRun(name: string, answer: DryRun): string {
 }
 
 /**
- * The dry run a guardrail's publish shows first. A first publish that would have blocked
- * anything goes ahead only with `--confirm` naming that number. Answers an exit code where the
+ * The dry run a guardrail's publish shows first. A first publish of a guardrail that stops
+ * actions (it blocks or holds them for an approval) goes ahead only with `--confirm` naming
+ * the actions it would have stopped and those it could not check: a dry run that checked
+ * nothing does not say that the guardrail stops nothing. Answers an exit code where the
  * publish stops here, and nothing where it goes ahead.
  */
 async function guardrailDryRunBeforePublish(
@@ -525,20 +527,27 @@ async function guardrailDryRunBeforePublish(
 ): Promise<number | undefined> {
   const answer = await guardrailDryRun(session, name, revision);
   if (!session.values.json) writeErr(session.options, formatDryRun(name, answer));
-  const blocked = answer.wouldBlock.actions;
+  const stops = answer.outcome === "block" || answer.outcome === "require_approval";
+  const stopped = answer.wouldBlock.actions + answer.wouldRequireApproval.actions;
+  const unchecked = stops ? answer.notEvaluable : 0;
+  const named = stopped + unchecked;
   const confirmed = session.values.confirm;
-  if (answer.published || blocked === 0) {
+  if (answer.published || named === 0) {
     if (confirmed !== undefined) {
-      throw new UsageError("--confirm answers a first publish that would block, and this is none.");
+      throw new UsageError(
+        "--confirm answers a first publish that would stop actions or could not check them, and this is none."
+      );
     }
     return undefined;
   }
-  if (confirmed === String(blocked)) return undefined;
+  if (confirmed === String(named)) return undefined;
+  const actions = (count: number) => `${count} action${count === 1 ? "" : "s"}`;
+  const what = `${actions(stopped)} it would have stopped${unchecked > 0 ? ` and ${actions(unchecked)} it could not check` : ""}`;
   writeErr(
     session.options,
     confirmed === undefined
-      ? `This first publish would have blocked ${blocked} action${blocked === 1 ? "" : "s"} in the last ${answer.days} days. Publish it with --confirm ${blocked}, or publish a draft with the outcome 'warn' first.`
-      : `--confirm ${confirmed} does not name the ${blocked} action${blocked === 1 ? "" : "s"} it would have blocked. Nothing was published.`
+      ? `This first publish acts on ${what} in the last ${answer.days} days. Publish it with --confirm ${named}, or publish a draft with the outcome 'warn' first.`
+      : `--confirm ${confirmed} does not name the ${named}: ${what}. Nothing was published.`
   );
   return EXIT.refused;
 }

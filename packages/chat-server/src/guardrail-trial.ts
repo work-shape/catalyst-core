@@ -235,6 +235,7 @@ export async function dryRunGuardrail(
   }): DryRunGuardrailResponse => ({
     revision: trial.revision,
     event,
+    outcome: guardrail.outcome,
     days: GUARDRAIL_DRY_RUN_DAYS,
     since: since.toISOString(),
     ...input,

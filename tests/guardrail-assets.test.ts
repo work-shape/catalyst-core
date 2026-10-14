@@ -42,6 +42,7 @@ const dryRunSchema = z
   .object({
     revision: z.number(),
     event: z.string(),
+    outcome: z.enum(["allow", "warn", "require_approval", "block"]),
     days: z.literal(14),
     since: z.string(),
     matched: z.number(),
