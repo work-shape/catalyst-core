@@ -22,7 +22,8 @@ import { BuildErrorList } from "./page-surface";
 
 /**
  * The card of one `page.save` call in the thread. A stored revision reopens beside the
- * conversation from here; a refused save shows what the build found.
+ * conversation from here; a refused save shows what the build found. A save that wrote the
+ * draft of the App the conversation is about says so, and the App is shown as the App.
  */
 export function PageSaveCard({
   args,
@@ -81,10 +82,17 @@ export function PageSaveCardView({
         <div className="grid min-w-0 flex-1 gap-0.5">
           <p className="truncate font-medium text-foreground">{name}</p>
           <p className="truncate text-caption text-muted-foreground">
-            {t("pages.revision", { number: save.number })}
+            {save.app?.saved === true
+              ? t("pages.savedToApp", { number: save.number, title: save.app.title })
+              : t("pages.revision", { number: save.number })}
           </p>
+          {save.app?.saved === false ? (
+            <p className="text-caption text-muted-foreground" data-testid="page-card-app-note">
+              {t("pages.notSavedToApp", { title: save.app.title })}
+            </p>
+          ) : null}
         </div>
-        {shown ? (
+        {save.app?.saved === true ? null : shown ? (
           <span className="shrink-0 text-caption text-muted-foreground">{t("pages.shown")}</span>
         ) : onOpen ? (
           <Button type="button" size="sm" variant="outline" onClick={onOpen}>
@@ -164,14 +172,17 @@ interface WatchedRun {
 const FINISHED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
 
 /**
- * Shows a Page beside the conversation when a run saves it. Only a run seen while it was going
- * counts, so opening a conversation whose Page was built earlier opens nothing: its card does.
- * Each revision opens by itself once, however often the calls of its run are seen again.
- * A save the build refused puts its findings under the revision of that Page that is shown.
+ * Shows a Page beside the conversation when a run saves it: from the start of the save, as the
+ * Page that builds, and then its revision. Only a run seen while it was going counts, so opening
+ * a conversation whose Page was built earlier opens nothing: its card does. Each revision opens
+ * by itself once, however often the calls of its run are seen again. A save the build refused
+ * puts its findings under the revision of that Page that is shown. Where the conversation is
+ * about an App (`aboutApp`), its saves are seen as the App and open no Page.
  */
 export function useAutoOpenPageSurface(
   activeRun: WatchedRun | undefined,
-  conversationId: string | undefined
+  conversationId: string | undefined,
+  aboutApp = false
 ): void {
   const panel = useToolDisplayPanel();
   const { t } = useTranslation();
@@ -193,19 +204,20 @@ export function useAutoOpenPageSurface(
       conversationId,
       parts: activeRun.projection.parts,
       handled: handledCalls.current,
-      current: panel.open && panel.entry?.kind === "page" ? panel.entry : undefined,
+      current: panel.open ? panel.entry : undefined,
+      aboutApp,
       t
     });
     if (!next) {
       return;
     }
     if (panel.open && panel.entry?.key === next.key) {
-      // The revision that is shown gets what the run found for it.
+      // The revision or the building Page that is shown gets what the run found for it.
       panel.show(next);
     } else {
       // A revision opens by itself once. Coming back to the conversation while its run is
       // still ending replays the run's calls, and they open nothing a second time.
       panel.showOnce(next);
     }
-  }, [activeRun, conversationId, panel, t]);
+  }, [aboutApp, activeRun, conversationId, panel, t]);
 }

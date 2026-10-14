@@ -425,7 +425,8 @@ export async function createClientInstanceExecutionAssembly(
           : undefined
       })
     : undefined;
-  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService });
+  const apps = platformTools.pageApps;
+  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService, apps });
   const tools = createToolDefinitions({
     config,
     tools: [

@@ -72,6 +72,10 @@ export async function searchWorkspaceFiles(
         and ${inReadable(drizzleSql`a.conversation_id`)}
         and a.message_id is not null and a.status <> 'deleted'`,
     // The newest copy of each file an agent made, as a conversation's Resources list it.
+    // Inspection rows are skipped before the newest is picked: the rule of
+    // `isWorkspaceInspectionArtifact` in tool-execution, which the Resources list applies too.
+    // An image the agent only looked at is not a file it made for the person, and a promoted
+    // file looked at again keeps resolving to its promoted row.
     generated_file: drizzleSql`
       select * from (
         select distinct on (m.conversation_id, m.metadata->>'workspaceId', m.metadata->>'workspacePath')
@@ -85,6 +89,8 @@ export async function searchWorkspaceFiles(
           and m.metadata->>'source' = 'execution_workspace'
           and jsonb_typeof(m.metadata->'workspaceId') = 'string'
           and jsonb_typeof(m.metadata->'workspacePath') = 'string'
+          and coalesce(m.metadata->>'purpose', '') <> 'inspection'
+          and m.id not like 'art\\_workspace\\_preview\\_%'
         order by m.conversation_id, m.metadata->>'workspaceId', m.metadata->>'workspacePath',
           m.created_at desc, m.id desc
       ) made`

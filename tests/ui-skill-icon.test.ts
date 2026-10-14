@@ -23,10 +23,40 @@ describe("SkillIcon", () => {
     expect(render({ icon: "not-registered" })).toContain("lucide-book-open");
   });
 
-  it("is hidden from assistive technology and never sits on a tile", () => {
+  it("is hidden from assistive technology", () => {
     for (const markup of [render({ icon: "pdf", size: "lg" }), render({ size: "sm" })]) {
       expect(markup).toMatch(/^<span aria-hidden="true"/u);
+    }
+  });
+
+  it("stands a file-type page bare, at every size", () => {
+    for (const size of ["sm", "md", "lg"] as const) {
+      const markup = render({ icon: "pdf", size });
+      expect(markup).not.toContain("data-skill-icon-tile");
       expect(markup).not.toMatch(/\bbg-|rounded/u);
+    }
+  });
+
+  it("puts a line icon on the neutral tile in lists, bare inline", () => {
+    for (const size of ["md", "lg"] as const) {
+      const markup = render({ icon: "guide", size });
+      expect(markup).toContain("data-skill-icon-tile");
+      expect(markup).toContain("bg-secondary");
+      // Never tinted: colour means a file type and nothing else.
+      expect(markup).not.toMatch(/bg-primary|bg-file-/u);
+    }
+    const inline = render({ icon: "guide", size: "sm" });
+    expect(inline).not.toContain("data-skill-icon-tile");
+    expect(inline).not.toMatch(/\bbg-|rounded/u);
+  });
+
+  it("draws a platform skill's line icon in ink and the generic book muted", () => {
+    expect(render({ icon: "guide", size: "lg" })).toMatch(
+      /^<span[^>]*data-skill-icon="guide"[^>]*text-foreground/u
+    );
+    for (const markup of [render({ size: "lg" }), render({ icon: "not-registered" })]) {
+      expect(markup).toMatch(/^<span[^>]*data-skill-icon="generic"[^>]*text-muted-foreground/u);
+      expect(markup).toContain("data-skill-icon-tile");
     }
   });
 });

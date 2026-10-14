@@ -5,6 +5,9 @@ import {
   FILE_SET_MAX_FILE_BYTES,
   FILE_SET_MAX_FILES,
   FILE_SET_MAX_TOTAL_BYTES,
+  INSTANCE_ASSET_SCOPE,
+  WORKFLOW_ACTIONS,
+  WORKFLOW_ASSET_KIND,
   hasAuthScope,
   isPrincipalGrantableAction,
   type ActorAccess,
@@ -13,6 +16,7 @@ import {
   type OperationScope
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
+import { listedWorkflowActions, workflowOf } from "./workflow-listing";
 
 // Where a caller is: the instance, its release, the asset kinds and what the caller may do with
 // them. `platform.context.get` answers it, and so does the agent's tool that projects it.
@@ -93,6 +97,39 @@ function principalActionsOf(
 }
 
 /**
+ * The section rows of the sidebar that belong to no workspace and are there for this caller.
+ * The Workflows row stands for whoever may build a Workflow, so the first one has a place to
+ * go, and otherwise only while `workflows.list` names one to this caller: the list's own
+ * check is asked of each published Workflow until one passes.
+ */
+async function visibleSections(
+  options: ContextOptions,
+  caller: Caller
+): Promise<PlatformContext["visibleSections"]> {
+  if (!options.modules.isEnabled("workflows")) {
+    return [];
+  }
+  const writes =
+    hasAuthScope(caller.actor, SCOPE_OF_VERB.write) &&
+    (caller.access.authorize(WORKFLOW_ACTIONS.write, { kind: WORKFLOW_ASSET_KIND }).allowed ||
+      caller.access.holdsGrantAt(WORKFLOW_ACTIONS.write, ["namespace", "asset"]));
+  if (writes) {
+    return ["workflows"];
+  }
+  const listed = await options.configAssets.store.listConfigAssetPage({
+    clientInstanceId: options.clientInstanceId,
+    kind: WORKFLOW_ASSET_KIND,
+    scope: INSTANCE_ASSET_SCOPE,
+    limit: 1,
+    readable: (asset) =>
+      asset.published === true &&
+      listedWorkflowActions(caller.access, caller.actor, workflowOf(asset.name, asset.id)).length >
+        0
+  });
+  return listed.length > 0 ? ["workflows"] : [];
+}
+
+/**
  * The context of one caller. A Namespace is listed for a caller who holds at least one action
  * of a registered kind in it, through any grant that covers its names, and whose credential
  * carries the scope the action is called with: the answer never names an action this
@@ -104,9 +141,10 @@ export async function readPlatformContext(
 ): Promise<PlatformContext> {
   const { kinds } = options.configAssets.kinds;
   // The Namespaces alone: no count is shown here, so none is computed.
-  const namespaces = await options.stores.access.listNamespaceRecords({
-    clientInstanceId: options.clientInstanceId
-  });
+  const [namespaces, sections] = await Promise.all([
+    options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId }),
+    visibleSections(options, caller)
+  ]);
   return {
     instance: {
       id: options.clientInstanceId,
@@ -140,6 +178,7 @@ export async function readPlatformContext(
       return actions.length > 0
         ? [{ prefix: namespace.prefix, displayName: namespace.displayName, actions }]
         : [];
-    })
+    }),
+    visibleSections: sections
   };
 }

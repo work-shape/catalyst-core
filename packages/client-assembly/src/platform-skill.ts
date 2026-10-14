@@ -1,5 +1,6 @@
 import type { ShippedSkill } from "@vivd-catalyst/core";
 import {
+  PAGE_SAVE_AS_APP_TOOL_NAME,
   PAGE_SAVE_TOOL_NAME,
   PLATFORM_ASSET_TOOLS,
   PLATFORM_DISCOVERY_TOOLS
@@ -27,12 +28,12 @@ The platform keeps assets. Each has a kind, a unique lowercase name with hyphens
 - agent (kind \`agent\`): an assistant with instructions, a model, tools and skills. You are one.
 - skill (\`skill\`): instructions an agent reads when a task matches, like this one.
 - Workflow (\`workflow\`): steps that run one after the other, started by hand or on a schedule. For work that repeats without a person in the chat.
-- App (\`app\`): a Page the user kept with "Save as app", with data that is kept and actions that read from and write to Connections and Data Stores.
+- App (\`app\`): a Page kept as an App, with data that is kept and actions that read from and write to Connections and Data Stores.
 - Data Store (\`data_store\`): tables of structured data that Apps and Workflows read and write.
 - Knowledge Base (\`knowledge_base\`): documents, indexed so agents can search them.
 - Connection (\`connection\`): access to an outside system, and the operations it offers.
 
-A Page is no asset. It is your quick HTML view, built with \`${PAGE_SAVE_TOOL_NAME}\` in this conversation and shown beside the chat. It stays with this conversation; only "Save as app" keeps it as an App. Without that tool you cannot build one: say so.
+A Page is no asset. It is your quick HTML view, built with \`${PAGE_SAVE_TOOL_NAME}\` in this conversation and shown beside the chat from its first save. It stays with this conversation until it is kept as an App: by you with \`${PAGE_SAVE_AS_APP_TOOL_NAME}\`, or by the user with "Save as app". Without \`${PAGE_SAVE_TOOL_NAME}\` you cannot build one: say so.
 
 Not every instance has every kind. Call \`${context.name}\` to see the kinds that exist here, the modules that are on and what the user may do: \`workflow.write\` means the user may change drafts of Workflows, \`workflow.publish\` that they may publish them.
 
@@ -44,7 +45,8 @@ Pages and files from other conversations of this workspace you find with \`${lis
 
 ## When to use which
 
-- "Build me an app", "a dashboard", "a tool": build a Page. It is fast and loses nothing. When the Page needs data that is kept, or actions that change things, suggest "Save as app": the user keeps it as an App. Never hand over a loose HTML file instead of a Page.
+- "Build me an app", "a dashboard", "a tool": decide from the wording. A quick view, a calculator or a chart with data you can write in: a sketch, which is a Page. Data that is kept, records people add or change, or something to share with colleagues: a real App. Where the wording does not tell, build the sketch: it is fast and loses nothing. Ask at most once, and only when a wrong guess would cost the user more than the sketch does. Never hand over a loose HTML file instead of a Page.
+- A real App starts as a Page too: build the Page, then make it an App with \`${PAGE_SAVE_AS_APP_TOOL_NAME}\`. When the user says "save this as an app" or "keep it", call \`${PAGE_SAVE_AS_APP_TOOL_NAME}\` on the Page as it is: never build it again. From then on this conversation is about the App, and each \`${PAGE_SAVE_TOOL_NAME}\` of that Page writes the App's draft, which a person publishes.
 - Something that should run again and again without the user: a Workflow. Suggest one when a Page or a chat task should run without the person.
 - Facts for answers from documents: a Knowledge Base. Rows and records: a Data Store.
 
