@@ -124,7 +124,7 @@ describe("a step that names an operation of the platform's own assets", () => {
     ]);
     expect(steps[1]?.outputPreview).toBeUndefined();
     expect(steps[1]?.operationRunId).toBeUndefined();
-    const calls = await t.runs();
+    const calls = await t.stores.operationRuns.list({ clientInstanceId });
     expect(calls.filter((call) => call.operation.startsWith("assets."))).toEqual([]);
   });
 });
