@@ -148,11 +148,11 @@ export function readPaste(
 }
 
 /**
- * The page's way to add the tools of a REST API by pasting them: the YAML, then the approval
- * list, then one save of the definition through the page. With `drafted`, the operations the
- * agent drafted, it opens at the list, and discarding them closes it.
+ * The page's way to add the tools of a REST API: pasted, the YAML, then the approval list, then
+ * one save of the definition through the page. With `drafted`, the agent's draft from its card,
+ * it opens at the list, and discarding the draft closes it.
  */
-function PasteToolsDialog({
+function AddToolsDialog({
   drafted,
   onClose,
   approve
@@ -317,7 +317,7 @@ export function RestToolsSection({
           : {})}
       />
       {pasting || opened.draft ? (
-        <PasteToolsDialog
+        <AddToolsDialog
           // A draft opened over a paste in progress starts its own dialog.
           key={opened.draft ? "drafted" : "pasted"}
           {...(opened.draft ? { drafted: opened.draft } : {})}
