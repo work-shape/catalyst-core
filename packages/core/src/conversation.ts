@@ -77,6 +77,14 @@ export interface ShippedSkill {
   resources?: readonly SkillResourceConfig[];
   /** The key of the interface's icon registry that marks the skill in lists. */
   icon: string;
+  /** The sentence for people that completes "Knows how to". */
+  summary?: string;
+  /**
+   * The tools the skill has the agent call. It ships only where the instance has every one of
+   * them, so the switch of the module or the setting that owns them decides it; without a list
+   * it ships everywhere.
+   */
+  tools?: readonly string[];
 }
 
 export interface ConversationOfferSource {
