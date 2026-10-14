@@ -154,3 +154,8 @@ commits the result with the version bump. It turns the Unreleased section of `CH
 `## <version> — <date>`, puts each file's entry after the entries already in its section, files in
 name order, and deletes the files. Entries in the Unreleased section of `CHANGELOG.md` are the ones
 written before change files existed.
+
+A release that offers the Connect a local agent command publishes the CLI of its version to npm
+before it names that version in `PUBLISHED_CLI_VERSION` and before the instance switches on
+`personalApiKeys`. The order is in `packages/docs/src/content/docs/configure/cli.md`, For
+maintainers.

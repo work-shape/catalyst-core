@@ -26,48 +26,56 @@ const toolNames: Record<LocalAgentTool, { label: string } | { labelKey: Translat
 };
 
 /**
- * The one command that connects a local agent: it installs the CLI of the instance's own
- * release and runs `catalyst setup` for the tool against the instance's address.
+ * The one command that connects a local agent: it installs the CLI version the instance names
+ * and runs `catalyst setup` for the tool against the instance's address.
  */
 export function localAgentCommand(tool: LocalAgentTool, version: string, url: string): string {
   return `npm install --global @work-shape/catalyst-cli@${version} && catalyst setup ${tool} --instance ${url}`;
 }
 
+/** The command as the page has it: read, unread, unreadable, or not offered by the instance. */
+export type LocalAgentCommandState =
+  | { status: "loading" }
+  | { status: "failed" }
+  | { status: "unavailable" }
+  | { status: "ready"; command: string };
+
 /**
  * You > Connect a local agent: the person picks Claude Code, Codex or another tool and copies
  * one command. Nothing here is a secret, so the page issues nothing: no key and no connect code
- * exists until the command runs. It reads only the instance's release from its context.
+ * exists until the command runs. It reads only the CLI version the instance's context names,
+ * one that is on npm; while the instance names none, it offers no command.
  */
 export function ConnectLocalAgentPage() {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const [tool, setTool] = useState<LocalAgentTool>("claude-code");
   const contextQuery = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
-  const version = contextQuery.data?.release.version;
-  return (
-    <ConnectLocalAgentView
-      tool={tool}
-      onToolChange={setTool}
-      command={
-        version === undefined
-          ? undefined
-          : localAgentCommand(tool, version, instanceUrl(apiBaseUrl, window.location.origin))
-      }
-      failed={contextQuery.isError}
-    />
-  );
+  const version = contextQuery.data?.release.cliVersion;
+  const state: LocalAgentCommandState = contextQuery.isError
+    ? { status: "failed" }
+    : contextQuery.data === undefined
+      ? { status: "loading" }
+      : version === undefined
+        ? { status: "unavailable" }
+        : {
+            status: "ready",
+            command: localAgentCommand(
+              tool,
+              version,
+              instanceUrl(apiBaseUrl, window.location.origin)
+            )
+          };
+  return <ConnectLocalAgentView tool={tool} onToolChange={setTool} state={state} />;
 }
 
 export function ConnectLocalAgentView({
   tool,
   onToolChange,
-  command,
-  failed
+  state
 }: {
   tool: LocalAgentTool;
   onToolChange(tool: LocalAgentTool): void;
-  /** Absent while the instance's release is read. */
-  command: string | undefined;
-  failed: boolean;
+  state: LocalAgentCommandState;
 }) {
   const { t } = useTranslation();
   const name = (choice: LocalAgentTool) => {
@@ -105,13 +113,15 @@ export function ConnectLocalAgentView({
         title={t("localAgent.command")}
         description={t("localAgent.commandHint")}
       >
-        {failed ? (
+        {state.status === "failed" ? (
           <Banner tone="danger">{t("settings.requestFailed")}</Banner>
-        ) : command === undefined ? (
+        ) : state.status === "loading" ? (
           <Skeleton className="h-10 w-full" />
+        ) : state.status === "unavailable" ? (
+          <Banner>{t("localAgent.unavailable")}</Banner>
         ) : (
           <CommandLine
-            command={command}
+            command={state.command}
             label={t("localAgent.commandLabel", { tool: name(tool) })}
           />
         )}
