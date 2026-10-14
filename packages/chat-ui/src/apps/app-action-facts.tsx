@@ -16,20 +16,23 @@ export function AppActionEffect({ effect }: { effect: AppAction["effect"] }) {
 }
 
 /**
- * What an action reaches: the Connection by the name people read and its operation, or the
- * Data Store a statement reads or adds a row to.
+ * What an action reaches: the Connection by the name people read and its operation, the
+ * Data Store a statement reads or adds a row to, or the Workflow it starts.
  */
 export function AppActionTarget({ action }: { action: AppAction }) {
-  const reached = action.kind === "sql" ? action.dataStore : action.connection;
+  const { name, title, verb } =
+    action.kind === "sql"
+      ? { ...action.dataStore, verb: action.kind }
+      : action.kind === "workflow"
+        ? { ...action.workflow, title: undefined, verb: "start" }
+        : { ...action.connection, verb: action.operation };
   return (
     <span className="wrap-anywhere">
-      {reached.title ?? reached.name}
+      {title ?? name}
       <span aria-hidden="true" className="text-muted-foreground">
         {" · "}
       </span>
-      <code className="font-mono text-code">
-        {action.kind === "sql" ? action.kind : action.operation}
-      </code>
+      <code className="font-mono text-code">{verb}</code>
     </span>
   );
 }

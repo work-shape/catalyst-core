@@ -14,6 +14,7 @@ import {
   createAppFromPageResponseSchema,
   updateAppFromPageRequestSchema
 } from "../apps";
+import { appWorkflowRunSchema } from "../app-bridge";
 import { defineOperation, defineRegisteredOperation, json } from "./define-operation";
 
 /**
@@ -167,5 +168,24 @@ export const appOperations = {
     summary:
       "Call an operation of a Connection the manifest of the shown Page or App lists, with the caller's rights",
     body: appConnectionCallRequestSchema
+  }),
+  // POST because it carries the token of the frame's address, which never stands in a path.
+  // The run is read through `workflows.get_run` with the caller's rights, which lets whoever
+  // started a run read it.
+  "apps.sessions.get_workflow_run": defineOperation({
+    id: "apps.sessions.get_workflow_run",
+    method: "POST",
+    path: "/api/v1/app-content-sessions/:pageSessionId/workflow-runs/:runId",
+    summary:
+      "Read the state and result of a Workflow Run that a workflow action of the Page or App a frame shows started",
+    tag: "Apps",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    body: appSessionContextRequestSchema,
+    response: json(appWorkflowRunSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
   })
 } as const;
