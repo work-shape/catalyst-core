@@ -307,3 +307,86 @@ starlight-toc a:focus-visible {
 .docs-diagram .arrowhead {
   fill: var(--sl-color-gray-3);
 }
+
+/* The diagram language of the "How it works" pages: icons, people and accounts, workspaces,
+   outside systems, numbered decisions and "runs as" lines. */
+.docs-diagram .icon {
+  fill: none;
+  stroke: var(--sl-color-gray-3);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.docs-diagram .icon-outside {
+  stroke: var(--sl-color-blue);
+}
+
+.docs-diagram .icon-stop {
+  stroke: var(--sl-color-red);
+  stroke-width: 2.5;
+}
+
+.docs-diagram .node-person,
+.docs-diagram .node-account,
+.docs-diagram .node-role {
+  fill: var(--sl-color-bg-inline-code);
+  stroke: var(--sl-color-gray-3);
+  stroke-width: 1.25;
+}
+
+.docs-diagram .initial {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.docs-diagram .zone {
+  fill: none;
+  stroke: var(--sl-color-gray-3);
+  stroke-dasharray: 5 4;
+}
+
+.docs-diagram .box-outside {
+  fill: var(--sl-color-blue-low);
+  stroke: var(--sl-color-blue);
+  stroke-dasharray: 5 3;
+}
+
+.docs-diagram .gate {
+  fill: var(--sl-color-accent);
+}
+
+.docs-diagram .gate-outside {
+  fill: var(--sl-color-blue);
+}
+
+.docs-diagram .gate-num {
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--sl-color-black);
+}
+
+.docs-diagram .runs-as {
+  fill: none;
+  stroke: var(--sl-color-gray-3);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 3;
+}
+
+.docs-diagram .line-stop {
+  fill: none;
+  stroke: var(--sl-color-red);
+  stroke-width: 1.5;
+}
+
+.docs-diagram .arrowhead-stop {
+  fill: var(--sl-color-red);
+}
+
+.docs-diagram .lane {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  fill: var(--sl-color-gray-3);
+}

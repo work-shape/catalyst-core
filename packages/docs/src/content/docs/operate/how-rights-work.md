@@ -5,6 +5,8 @@ description: Who may do what in Workshape Catalyst, explained from the start. Ro
 
 ## The short version
 
+[Rights at a glance](/how-it-works/rights/) explains the same in three pictures.
+
 1. An action is checked before it runs, in a fixed order, whether you click a button, a script calls the API or an agent uses a tool for you.
 2. The instance first finds out who is calling, and for an API key what that key may be used for.
 3. Then it asks whether the caller holds the right for this action in this place. A right comes from your role, from a single right on the Users page, or from a grant on the Access page.
@@ -44,12 +46,12 @@ This page explains the rights system to a reader who has never seen it. It says 
 Three words come up on every screen, so here they are once.
 
 - A **right** is the permission to do one kind of thing, such as "write agents". In the API a right has a short name like `agent.write`.
-- A **grant** is one row that gives or refuses one person one right in one place. You write grants on the Access page.
+- A **grant** is one row that gives or refuses one person one right in one place. A Service Principal can hold a grant too, see [API keys and Service Principals](#api-keys-and-service-principals). You write grants on the Access page.
 - A **Namespace** is a registered beginning of a name, such as `tax-`. Every agent and skill whose name starts with it belongs to it, and so does every Connection where that module is on. See [Namespaces](#namespaces). It is not a workspace, as the next section shows. Namespaces are being retired: a new right is no longer given in one, and those already registered keep working until a later release removes them.
 
 ## Namespace or workspace?
 
-They are two different things. A **workspace** is where people work and what they see: its conversations, their files and the agents they can choose there. A **Namespace** is a name prefix, such as `tax-`, that says which agents and skills a right covers. Nothing links the two today. In practice they often come together, because a team tends to have a workspace and a prefix, and that is why they get mixed up.
+They are two different things. A **workspace** is where people work and what they see: its conversations, their files and the agents they can choose there. A **Namespace** is a name prefix, such as `tax-`, that says which agents and skills a right covers. Since an agent or skill made in a Shared Workspace belongs to that workspace, a right can also be given on what a workspace owns, and the workspace takes over the Namespace's job. In practice they often come together, because a team tends to have a workspace and a prefix, and that is why they get mixed up.
 
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 660 534" role="img" aria-labelledby="rights-fig-5-title rights-fig-5-desc">
@@ -152,9 +154,9 @@ To offer an agent in more workspaces, or to show a hidden one, somebody opens it
 
 Two exceptions. The default agent of the instance is always available everywhere, so the first agent of an instance starts there. And an agent that arrives through a release push starts in all workspaces, and hidden when the same push deletes an agent that was limited to selected workspaces, because that is a rename and the new name must not reach more people than the old one did.
 
-Nothing links a Namespace to a workspace today. You cannot say "the agents of `tax-` belong to the workspace Tax team". The only bridge is the **Available in** setting, agent by agent, and only a person with the instance-wide right sets it.
+Nothing links a Namespace to a workspace. You cannot say "the agents of `tax-` belong to the workspace Tax team". What does link an agent to a workspace is where it was made: an agent or skill made in Tax team belongs to Tax team. To offer an agent in further workspaces, the **Available in** setting is the bridge, agent by agent, and only a person with the instance-wide right sets it.
 
-No new grant names a workspace. A grant to read or use Connections is written on one Connection: the instance owns every Connection, so a grant on a workspace would cover nothing, and the instance refuses one. A Connection grant written on a workspace before keeps applying until it is revoked. It says nothing about agents, skills or conversations.
+A new grant on agents or skills can name a Shared Workspace. It covers everything of that kind the workspace owns, also what is made later, and gives no access to its conversations. A grant to read or use Connections is written on one Connection: the instance owns every Connection, so a grant on a workspace would cover nothing, and the instance refuses one. A Connection grant written on a workspace before keeps applying until it is revoked. It says nothing about agents, skills or conversations.
 
 ## The four questions
 
@@ -261,13 +263,13 @@ A role and a single right always apply to the whole instance. A grant is for eve
 
 | Part | Choices today |
 | --- | --- |
-| Who | One person. |
+| Who | One person. A Service Principal gets its grants on the API access page. |
 | Kind | Agents, or skills. Connections and Workflows too, where their modules are on. |
 | Action | Read, write, delete for agents and skills. Read and use for Connections. Read, use, write and publish for Workflows. |
-| Where | One existing asset. Rows written before in a Namespace or on a Shared Workspace stay until they are revoked. |
+| Where | For agents and skills: what one Shared Workspace owns, or one existing asset. For Connections and Workflows: one existing item. Rows written before in a Namespace stay until they are revoked. |
 | Effect | Allow, or deny. |
 
-So the answer to "can rights only be given to single people" is yes, today. A grant names one person. There are no groups, and a role cannot hold a grant.
+So the answer to "can rights only be given to single people" is yes, today. A grant names one person or one Service Principal. There are no groups, and a role cannot hold a grant.
 
 **Deny wins.** A deny on an asset beats every allow, including the one from the Admin role. Use it for the one agent that even administrators should not change by accident. A deny has limits of its own, which [Rights for one person or asset](/operate/rights-and-namespaces/#grants) lists.
 
@@ -590,7 +592,7 @@ You need "Manage users" yourself. Open **Settings > Instance > Access**, the tab
 | Person | One person from the list | The right is for this person alone. To give it to three colleagues, send the dialog three times. |
 | Kind | Agents or Skills | One kind per dialog. A colleague who edits both needs the dialog twice. With the modules `connections` and `workflows` on, the dialog offers Connections and Workflows too. |
 | Actions | Read, Write, Delete | Tick Read and Write for somebody who should edit. Tick Delete only if they should remove the agent too. The dialog writes one row per tick. |
-| Asset | The one agent | The right covers this agent, which exists now. The dialog asks for no place today, because one asset is the only place a new right can be written. |
+| Where and asset | **On one asset** ("An einem Asset"), then the one agent | The right covers this agent, which exists now. **In a shared workspace** ("In einem geteilten Arbeitsbereich") would cover every agent the workspace owns instead, also later ones. |
 | Effect | Allow or Deny | Allow gives the ticked actions there. Deny refuses them there and beats every allow and every role. For this task choose Allow. |
 
 Press **Create right**. Under the default policy the right works at once. On an instance that sends changes to an approval, it works once the approval is given. Your colleague sees **Studio** in the main rail the next time the interface loads, with the agent. If these rights are all they hold, they see nothing else. For a team with several agents, send the dialog once per agent.
@@ -634,10 +636,10 @@ A release push reaches every agent and skill of the instance and is not held bac
 
 ## What the system does not have yet
 
-- **Groups and teams.** A grant names one person. Nothing gives a right to a group.
+- **Groups and teams.** A grant names one person or one Service Principal. Nothing gives a right to a group.
 - **Custom roles.** The three roles are fixed. The Rights card on the Users page shows which rights a person has by role, and nothing edits what a role carries.
 - **Company sign-in with group mapping.** People are not signed in through a company identity provider with its groups.
-- **Grants on a workspace or on the whole instance, and grants for other kinds.** The **New right** dialog writes a grant on one agent, skill, Connection or Workflow. The one grant on a Shared Workspace is the right to publish that workspace's guardrails. Grants written before in a Namespace, or on a Shared Workspace for Connections, keep applying until they are revoked. Writing, deleting and approving a Connection stay with the Admin role. Data Stores and Apps have no grant for a person.
+- **Grants on the whole instance, and grants for other kinds.** The **New right** dialog writes a grant on one agent, skill, Connection or Workflow, on the agents or skills a Shared Workspace owns, or the right to publish a Shared Workspace's guardrails. A right on the whole instance comes only from a role or from the Users page. Grants written before in a Namespace, or on a Shared Workspace for Connections, keep applying until they are revoked. Writing, deleting and approving a Connection stay with the Admin role. Data Stores and Apps have no grant for a person.
 - **Policy settings for administrators.** The instance can already resolve a policy value per action, per Namespace, per workspace and per kind of asset. Nothing stores such settings and no screen edits them. Today the policy is two instance-wide defaults and the mode a tool states. An administrator cannot set "saving in `tax-` needs an approval" in the interface.
 - **An agent that waits for a person.** A run cannot pause for a confirmation or an approval and continue.
 - **One path for everything.** Conversations, workspaces and the other areas named [above](#which-actions-take-the-whole-path) are checked for sign-in, module, scope and right, without policy and without an Operation Run.
