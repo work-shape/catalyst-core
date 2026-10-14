@@ -1,4 +1,4 @@
-import type { AnimationEvent, ReactNode } from "react";
+import type { AnimationEvent, CSSProperties, ReactNode } from "react";
 import { Maximize2, MessageSquare, PanelRight, X } from "lucide-react";
 import { Button, cn, CountBadge, IconButton, SurfaceHeader } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
@@ -71,22 +71,21 @@ export function ChatColumn({
         mode === "closed" && !over && "absolute inset-y-0 left-0",
         // The thread starts close under the dock's head; on the chat route a floating header
         // stands where the head would.
-        mode !== "main" && "[--thread-start:1.5rem]",
+        mode !== "main" && "[--thread-start:var(--layout-gutter)]",
         arrival === "out" && "motion-safe:animate-dock-widen"
       )}
-      style={
-        beside
-          ? { width: `${width}px` }
-          : arrival === "out"
-            ? { ["--dock-from" as string]: `${width}px` }
-            : undefined
-      }
+      style={beside ? { width: `${width}px` } : arrival === "out" ? widenFrom(width) : undefined}
     >
       {mode === "main" ? null : head}
       <div className="relative min-h-0 flex-1">{children}</div>
       {beside && mode === "dock" ? handle : null}
     </div>
   );
+}
+
+/** Where the conversation widens out of the dock from: the dock's width. */
+function widenFrom(width: number): CSSProperties & { "--dock-from": string } {
+  return { "--dock-from": `${width}px` };
 }
 
 /** The head of the dock: what it holds, the way to its chat route, and close. */
@@ -108,12 +107,13 @@ export function DockHead({
   return (
     <SurfaceHeader
       // Below 768 px the button that opens the sidebar floats over the head's start.
-      className="bg-background max-md:ps-[calc(1rem+var(--layout-header-control))]"
+      className="bg-background max-md:ps-[calc(var(--layout-gutter)+var(--layout-header-control))]"
       leading={
         over ? (
           <Button variant="ghost" size="sm" onClick={onShowPage}>
             <PanelRight aria-hidden="true" />
-            {t("dock.showPage")}
+            {/* On a phone the conversation's name wins the row: the button keeps its icon. */}
+            <span className="max-sm:sr-only">{t("dock.showPage")}</span>
           </Button>
         ) : undefined
       }
