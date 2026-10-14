@@ -747,3 +747,29 @@ export function storedWritableIssues(
     throw error;
   }
 }
+
+/**
+ * What a write of a definition would be refused for by the instance's own rules, asked once
+ * the definitions themselves hold. `withinOwners` is the writer's rule on what the definition
+ * names across owners.
+ */
+export async function writeIssuesOf(
+  options: AssetWorkflowOptions,
+  access: ActorAccess,
+  stored: AssetSet,
+  found: ReturnType<typeof findAssetSetIssues>,
+  withinOwners: () => void
+): Promise<AssetSetIssue[]> {
+  try {
+    const issues = found.validateWrite(stored);
+    if (issues.length > 0) return issues;
+    withinOwners();
+    const { refusals } = await findChangedAgentRefusals(options, access, stored, found.accepted);
+    return refusals.flatMap(({ error }) => errorIssues(error));
+  } catch (error) {
+    if (isAppError(error) && error.code === "VALIDATION_FAILED") {
+      return errorIssues(error);
+    }
+    throw error;
+  }
+}

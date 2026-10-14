@@ -190,10 +190,9 @@ export const PERMISSION_REF_ACTION_PREFIX = "ref:";
 export { NAMESPACE_PREFIX_MAX_LENGTH, NAMESPACE_PREFIX_MIN_LENGTH, NAMESPACE_PREFIX_PATTERN };
 
 /**
- * The actions a grant row can be written for, with the scope kinds it can be written at; a
- * workspace grant covers what the workspace owns (WS-OWN-1a). No grant is written at instance
- * scope: an instance-wide row is a key of a user's or a service principal's legacy list (AP-4).
- * `guardrail.publish` is one workspace's; no bundle carries it.
+ * The actions a grant row can be written for, with the scope kinds it can be written at. No
+ * grant is written at instance scope: an instance-wide row is a key of a user's or a service
+ * principal's legacy list (AP-4). `guardrail.publish` is one workspace's; no bundle carries it.
  */
 export const GRANTABLE_ACTION_SCOPES = {
   "agent.read": ["workspace", "namespace", "asset"],

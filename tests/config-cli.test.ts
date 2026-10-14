@@ -75,7 +75,6 @@ import {
   updateManifestDefaultAgent
 } from "../packages/config-cli/src/index";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
-import { serializeGuardrailFiles } from "../packages/config-cli/src/guardrail-files";
 import {
   agentConfig as namespaceAgentConfig,
   grantKaiNamespace,
@@ -3717,21 +3716,29 @@ describe("a working copy bound to a workspace", () => {
     ).toBe(0);
 
     const guardrail = {
-      name: "team_no_iban",
-      displayName: "No IBAN in Team's skills",
+      name: "team_no_codes",
+      displayName: "No codes in Team's skills",
       on: "asset.before_write",
       filter: { kind: "skill" },
-      check: {
-        kind: "pattern",
-        pattern: "\\bDE\\d{2}(?:\\s?\\d{4}){4}\\s?\\d{2}\\b",
-        reason: "Skills hold no bank account."
-      },
+      check: { kind: "pattern", pattern: "CODE-[0-9]+", reason: "Skills hold no codes." },
       outcome: "block"
     };
     await mkdir(resolve(directory, "guardrails", guardrail.name), { recursive: true });
     await writeFile(
       resolve(directory, "guardrails", guardrail.name, "guardrail.yaml"),
-      serializeGuardrailFiles(guardrail).yaml,
+      [
+        `name: ${guardrail.name}`,
+        `displayName: ${guardrail.displayName}`,
+        `on: ${guardrail.on}`,
+        "filter:",
+        "  kind: skill",
+        "check:",
+        "  kind: pattern",
+        `  pattern: ${guardrail.check.pattern}`,
+        `  reason: ${guardrail.check.reason}`,
+        `outcome: ${guardrail.outcome}`,
+        ""
+      ].join("\n"),
       "utf8"
     );
     output.length = 0;

@@ -28,16 +28,9 @@ import {
   withDefaultAgentName,
   withDefinition,
   withoutDefinition,
-  type AssetSet,
-  type AssetSetIssue
+  type AssetSet
 } from "./asset-set";
-import {
-  accessResource,
-  decide,
-  deleteDecision,
-  errorIssues,
-  type AssetCall
-} from "./asset-access";
+import { accessResource, decide, deleteDecision, type AssetCall } from "./asset-access";
 import {
   assetSyncPolicyTargets,
   authorizeAssetSync,
@@ -52,7 +45,6 @@ import {
   assetKey,
   authorizeInteractiveWrite,
   clearsLastDefault,
-  findChangedAgentRefusals,
   findIssuesOfChange,
   isReleaseSync,
   loadReferableAssets,
@@ -67,7 +59,8 @@ import {
   storedWritableIssues,
   requireOwnerWorkspace,
   toJsonObject,
-  withPublishedConfigs
+  withPublishedConfigs,
+  writeIssuesOf
 } from "./asset-write-rules";
 import {
   assertStoredWritable,
@@ -511,7 +504,7 @@ export class AssetWorkflow {
       readOnly ??
       (ofDefinition.length > 0
         ? ofDefinition
-        : await this.writeIssues(call, view.set, found, () => {
+        : await writeIssuesOf(this.options, call.access, view.set, found, () => {
             const { scope } = target;
             const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
             assertReferencesWithinOwners(kinds, [{ ...write, config: prepared }], stored.assets);
@@ -533,33 +526,6 @@ export class AssetWorkflow {
   /** What `sync` would refuse the batch for, asked without writing anything. */
   checkSync(call: AssetCall, input: AssetSyncInput) {
     return checkAssetSync(this.options, call, input);
-  }
-
-  /** The instance's own rules, asked once the definitions themselves hold. */
-  private async writeIssues(
-    call: AssetCall,
-    stored: AssetSet,
-    found: ReturnType<typeof findAssetSetIssues>,
-    /** The writer's own rule on what the definition names across owners. */
-    withinOwners: () => void
-  ): Promise<AssetSetIssue[]> {
-    try {
-      const issues = found.validateWrite(stored);
-      if (issues.length > 0) return issues;
-      withinOwners();
-      const { refusals } = await findChangedAgentRefusals(
-        this.options,
-        call.access,
-        stored,
-        found.accepted
-      );
-      return refusals.flatMap(({ error }) => errorIssues(error));
-    } catch (error) {
-      if (isAppError(error) && error.code === "VALIDATION_FAILED") {
-        return errorIssues(error);
-      }
-      throw error;
-    }
   }
 
   private async upsert(
