@@ -14,7 +14,9 @@ import { apiOrigin, signIn, uiOrigin } from "./view-fixtures";
 // there on everything is the product: the member asks for the address of the Page and a frame
 // on the interface's origin loads it.
 
-const databaseUrl = `postgres://agent_chat:agent_chat@${process.env.E2E_HOST ?? "127.0.0.1"}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
+const databaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${process.env.E2E_HOST ?? "127.0.0.1"}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
 /** `clientInstance.id` and the root of `infrastructure.objectStorage.files` in the suite's config. */
 const clientInstanceId = "demo-e2e";
 const filesRoot = resolve(".tmp/e2e/files");
