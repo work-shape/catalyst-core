@@ -60,8 +60,7 @@ function stricterPolicy(left: PolicyValue, right: PolicyValue | undefined): Poli
 export async function resolveGuardedPolicy(
   context: RunContext
 ): Promise<
-  | { policy: PolicyResolution; approvalAskedBy?: GuardrailNamed }
-  | { denial: OperationDenial }
+  { policy: PolicyResolution; approvalAskedBy?: GuardrailNamed } | { denial: OperationDenial }
 > {
   const { definition } = context;
   const policyInput = await policyInputOf(context);

@@ -186,9 +186,7 @@ describe("a run of a published Workflow revision", () => {
     const finish = async (runId: string) => {
       for (let pass = 0; pass < 20; pass++) {
         await jobs.runDue();
-        const read = runSchema.parse(
-          (await ok("workflows.get_run", { params: { runId } })).json()
-        );
+        const read = runSchema.parse((await ok("workflows.get_run", { params: { runId } })).json());
         if (!["queued", "running", "waiting"].includes(read.status)) return read;
       }
       throw new Error("The Workflow Run did not end");
@@ -293,7 +291,10 @@ describe("a run of a published Workflow revision", () => {
   }, 120_000);
 
   /** Writes and publishes an instance guardrail on the insert with the outcome given. */
-  async function guard(w: Awaited<ReturnType<typeof world>>, outcome: "require_approval" | "block") {
+  async function guard(
+    w: Awaited<ReturnType<typeof world>>,
+    outcome: "require_approval" | "block"
+  ) {
     const params = { kind: "guardrail", name: "findings-guarded" };
     const written = await w.ok("assets.put", {
       params,
