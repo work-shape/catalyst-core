@@ -91,6 +91,7 @@ export function createInstanceOperationCalls(
     async agentToolNames(agentName, conversationId) {
       const assets = await assetSource.getSnapshot();
       const agent = assets.agents.find((candidate) => candidate.name === agentName);
+      const listed = agent?.toolNames ?? [];
       // The tools the server binds to the subject of a conversation are no part of an agent's
       // definition: the conversation of the call decides whether the agent has them.
       const offer = conversationId
@@ -102,7 +103,7 @@ export function createInstanceOperationCalls(
         : undefined;
       // The query of each Knowledge Base the agent lists, which its one knowledge tool calls.
       return [
-        ...(await conversationToolNames(agent?.toolNames ?? [], offer)),
+        ...(await conversationToolNames(listed, offer)),
         ...(agent ? knowledgeOperationNamesOf(agent) : [])
       ];
     }

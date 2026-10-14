@@ -1,4 +1,3 @@
-import { Library } from "lucide-react";
 import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
 import { KnowledgeBaseEditor } from "./knowledge-base-editor";
 import { knowledgeBaseConfigToForm, startedKnowledgeBaseForm } from "./knowledge-base-model";
@@ -39,7 +38,7 @@ export function knowledgeBaseKindOn(useSource: () => KnowledgeBaseSource): Build
     emptyText: "knowledge.empty",
     emptyReadOnlyText: "knowledge.emptyReadOnly",
     missingText: "knowledge.missing",
-    icon: Library,
+    icon: "knowledge_base",
     rowText: (asset) => asset.description,
     Editor: KnowledgeBaseAssetEditor
   };
