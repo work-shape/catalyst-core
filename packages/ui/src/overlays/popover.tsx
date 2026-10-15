@@ -62,7 +62,12 @@ export interface PopoverContentProps extends HTMLAttributes<HTMLDivElement> {
    * the width of a panel the content opens beside itself, so the content shifts far enough for
    * the panel to show whole.
    */
-  reserve?: Partial<Record<PopoverSide, number>>;
+  reserve?: { left?: number; right?: number };
+  /**
+   * Called when Escape is pressed, before the popover closes. Content with a level of its own,
+   * such as a panel beside a menu, calls `preventDefault()` to close that level instead.
+   */
+  onEscapeKeyDown?(event: KeyboardEvent): void;
   side?: PopoverSide;
   align?: "start" | "center" | "end";
   sideOffset?: number;
@@ -92,9 +97,9 @@ export const PopoverContent = forwardRef<HTMLDivElement, PopoverContentProps>(
           align={align}
           sideOffset={sideOffset}
           collisionPadding={{
-            top: ANCHORED_COLLISION_PADDING + (reserve.top ?? 0),
+            top: ANCHORED_COLLISION_PADDING,
             right: ANCHORED_COLLISION_PADDING + (reserve.right ?? 0),
-            bottom: ANCHORED_COLLISION_PADDING + (reserve.bottom ?? 0),
+            bottom: ANCHORED_COLLISION_PADDING,
             left: ANCHORED_COLLISION_PADDING + (reserve.left ?? 0)
           }}
           className={cn(

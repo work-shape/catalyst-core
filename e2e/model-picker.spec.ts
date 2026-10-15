@@ -67,6 +67,8 @@ test("the model picker's panels show whole in the dock beside a Workflow canvas 
     await expect(page.getByTestId("workflow-page")).toBeVisible();
     await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "dock");
     await expectPanelsShowWhole(page, "dock-beside-workflow");
+    await expectKeyboardLevels(page);
+    await expectPointerReachesOpenPanel(page);
 
     await chatColumn(page)
       .locator("header")
@@ -75,18 +77,50 @@ test("the model picker's panels show whole in the dock beside a Workflow canvas 
       .click();
     await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "main");
     await expectPanelsShowWhole(page, "full-chat");
+    await expectPanelFollowsResize(page);
   } finally {
     await requestWithOrigin(page, "post", `${assetUrl}/delete`, { data: { expectedRevision: 1 } });
     await removeServicePrincipal(principal.id);
   }
 });
 
+// In a window too short for the whole model list, the panel in the menu's place is no taller
+// than the room above the composer: its Back row and first options stay in reach, and the list
+// scrolls to the rest.
+test("in a short narrow window the model panel keeps its Back row and options in reach", async ({
+  page,
+  accessState: _accessState
+}) => {
+  await page.setViewportSize({ width: 400, height: 300 });
+  await offerModelChoice(page, 12);
+  await page.goto("/");
+  await signIn(page, superadmin);
+  const stamp = randomUUID().slice(0, 8);
+  const conversation = await createListedConversation(page, `Short ${stamp}`, `Short ${stamp}`);
+  await page.goto(
+    `/w/${encodeURIComponent(conversation.collaborationWorkspaceId)}/c/${conversation.id}`
+  );
+
+  await page.getByRole("button", { name: "Select model" }).click();
+  const picker = page.getByRole("dialog", { name: "Select model" });
+  await picker.getByRole("button", { name: /^Model/u }).click();
+  const back = picker.getByRole("button", { name: "Model", exact: true });
+  const options = picker.getByRole("option");
+  await expect(options).toHaveCount(13);
+  await expect.poll(() => uncoveredShare(back)).toBe(1);
+  await expect.poll(() => uncoveredShare(options.first())).toBe(1);
+  await screenshot(page, "short-window-model");
+  await options.last().scrollIntoViewIfNeeded();
+  await expect.poll(() => uncoveredShare(options.last())).toBe(1);
+  await expect.poll(() => uncoveredShare(back)).toBe(1);
+});
+
 /**
  * The suite's instance has one model with a fixed effort, so the composer shows no picker.
- * Every agent the interface reads is given a second model with a long name, and efforts to
- * choose from, as an operated instance offers them.
+ * Every agent the interface reads is given more models, the first with a long name, and
+ * efforts to choose from, as an operated instance offers them.
  */
-async function offerModelChoice(page: Page): Promise<void> {
+async function offerModelChoice(page: Page, moreModels = 1): Promise<void> {
   const agentSchema = z.looseObject({ selectableModels: z.array(z.looseObject({})) });
   const withChoice = (agent: unknown) => {
     const parsed = agentSchema.safeParse(agent);
@@ -102,13 +136,13 @@ async function offerModelChoice(page: Page): Promise<void> {
           reasoningEffort: "medium",
           selectableReasoningEfforts: ["low", "medium", "high"]
         },
-        {
-          bindingId: "e2e-picker-second",
-          model: "gpt-5.1-codex-max-preview",
-          label: "GPT-5.1 Codex Max Preview",
+        ...Array.from({ length: moreModels }, (_, index) => ({
+          bindingId: `e2e-picker-${index + 2}`,
+          model: index === 0 ? "gpt-5.1-codex-max-preview" : `e2e-model-${index + 2}`,
+          label: index === 0 ? "GPT-5.1 Codex Max Preview" : `E2E model ${index + 2}`,
           reasoningEffort: "medium",
           selectableReasoningEfforts: ["low", "medium", "high"]
-        }
+        }))
       ]
     };
   };
@@ -156,8 +190,110 @@ async function expectPanelsShowWhole(page: Page, shot: string): Promise<void> {
   await expect.poll(() => uncoveredShare(effort)).toBe(1);
   await screenshot(page, `${shot}-reasoning`);
 
+  // Escape goes back one level: first the panel closes, then the picker.
+  await page.keyboard.press("Escape");
+  await expect(effort).toHaveCount(0);
+  await expect(picker).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
+}
+
+/**
+ * In the dock the panels open to the menu's right. The arrow key towards the panel and Enter
+ * take the focus into it; the other arrow key and Escape bring it back to its row, one level
+ * at a time.
+ */
+async function expectKeyboardLevels(page: Page): Promise<void> {
+  await chatColumn(page).getByRole("button", { name: "Select model" }).focus();
+  await page.keyboard.press("Enter");
+  const picker = page.getByRole("dialog", { name: "Select model" });
+  const modelRow = picker.getByRole("button", { name: /^Model/u });
+  const selected = picker.getByRole("option", { selected: true });
+  await expect(modelRow).toBeFocused();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(selected).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(selected).toHaveCount(0);
+  await expect(modelRow).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await expect(selected).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(selected).toHaveCount(0);
+  await expect(picker).toBeVisible();
+  await expect(modelRow).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+}
+
+/**
+ * On its way from the Model row into the open model panel the pointer crosses the Reasoning
+ * row. Crossing it leaves the model panel open; resting on it opens the reasoning panel.
+ */
+async function expectPointerReachesOpenPanel(page: Page): Promise<void> {
+  const trigger = chatColumn(page).getByRole("button", { name: "Select model" });
+  await trigger.click();
+  const picker = page.getByRole("dialog", { name: "Select model" });
+  const modelRow = picker.getByRole("button", { name: /^Model/u });
+  const reasoningRow = picker.getByRole("button", { name: /^Reasoning/u });
+  await modelRow.hover();
+  const models = picker.getByRole("listbox", { name: "Select model" });
+  await expect.poll(() => uncoveredShare(models)).toBe(1);
+  const lower = models.getByRole("option", { name: /GPT-5\.1 Codex Max Preview/u });
+  const across = await centreOf(reasoningRow, 0.9);
+  const target = await centreOf(lower, 0.5);
+  await page.mouse.move(across.x, across.y, { steps: 3 });
+  await page.mouse.move(target.x, target.y, { steps: 3 });
+  await expect(models).toBeVisible();
+  await lower.click();
+  await expect(trigger).toContainText("GPT-5.1 Codex Max Preview");
+
+  await reasoningRow.hover();
+  await expect(picker.getByRole("slider", { name: "Reasoning" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+}
+
+/**
+ * A window that narrows past the breakpoint while the model panel is open puts the panel in
+ * the menu's place, whole on the screen. Opened there, the panel takes the focus, and Back
+ * gives it to the row again.
+ */
+async function expectPanelFollowsResize(page: Page): Promise<void> {
+  const trigger = chatColumn(page).getByRole("button", { name: "Select model" });
+  await trigger.click();
+  const picker = page.getByRole("dialog", { name: "Select model" });
+  await picker.getByRole("button", { name: /^Model/u }).click();
+  const models = picker.getByRole("listbox", { name: "Select model" });
+  await expect.poll(() => uncoveredShare(models)).toBe(1);
+  await page.setViewportSize({ width: 400, height: 900 });
+  await expect.poll(() => uncoveredShare(models)).toBe(1);
+  await screenshot(page, "resized-to-400-model");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+
+  await trigger.click();
+  const modelRow = picker.getByRole("button", { name: /^Model/u });
+  await modelRow.click();
+  await expect(picker.getByRole("option", { selected: true })).toBeFocused();
+  await picker.getByRole("button", { name: "Model", exact: true }).click();
+  await expect(modelRow).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await page.setViewportSize({ width: 1440, height: 900 });
+}
+
+/** A point inside the element: across its width by `share`, halfway down. */
+async function centreOf(element: Locator, share: number): Promise<{ x: number; y: number }> {
+  const box = await element.boundingBox();
+  if (!box) {
+    throw new Error("The element has no box.");
+  }
+  return { x: box.x + box.width * share, y: box.y + box.height / 2 };
 }
 
 /**

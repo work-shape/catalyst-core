@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn, LevelMeter, Popover, PopoverContent, PopoverTrigger } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
@@ -39,6 +39,8 @@ const VIEWPORT_GUTTER = 16;
 const BESIDE_MENU_QUERY = "(min-width: 40rem)";
 /** What a `w-72` panel beside the menu takes with the gap between them. */
 const PANEL_ROOM = 294;
+/** How long the pointer rests on another row before its panel replaces the open one. */
+const HOVER_SWITCH_MS = 250;
 
 /** Whether the composer has anything to offer: another model, or an effort for the only one. */
 export function hasModelChoice(
@@ -49,6 +51,26 @@ export function hasModelChoice(
 }
 
 type Panel = "model" | "reasoning";
+
+interface Placement {
+  /** Panels open beside the menu; below the `sm` breakpoint one takes the menu's place. */
+  beside: boolean;
+  /** Panels open to the menu's right; otherwise to its left. */
+  opensRight: boolean;
+}
+
+/**
+ * Where panels open for a trigger: beside the menu from the breakpoint the stylesheet switches
+ * on, to the right where the window has room for a panel there.
+ */
+function placementOf(trigger: HTMLElement | null): Placement {
+  const right = trigger?.getBoundingClientRect().right ?? window.innerWidth;
+  const beside = window.matchMedia(BESIDE_MENU_QUERY).matches;
+  return {
+    beside,
+    opensRight: beside && window.innerWidth - VIEWPORT_GUTTER - right >= PANEL_ROOM
+  };
+}
 
 const surfaceClassName = "rounded-xl border bg-popover text-popover-foreground shadow-lg";
 
@@ -79,11 +101,40 @@ export function ModelPicker({
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel | undefined>();
   const [previewedModel, setPreviewedModel] = useState<AgentSelectableModel | undefined>();
-  const [besideMenu, setBesideMenu] = useState(false);
-  const [opensRight, setOpensRight] = useState(false);
+  const [placement, setPlacement] = useState<Placement>({ beside: false, opensRight: false });
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef<Partial<Record<Panel, HTMLButtonElement | null>>>({});
+  const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** Where focus goes once the panel change under way has rendered: into the panel, or a row. */
+  const pendingFocus = useRef<"panel" | Panel>(undefined);
   const selectedModel =
     models.find((model) => model.bindingId === selectedModelBindingId) ?? models[0];
+  const { beside: besideMenu, opensRight } = placement;
+
+  // A window that resizes while the picker is open can cross the breakpoint: the placement
+  // follows it, or the room kept for a panel beside the menu would push a panel in its place
+  // off the screen.
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const measure = () => setPlacement(placementOf(triggerRef.current));
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open]);
+
+  useEffect(() => {
+    const target = pendingFocus.current;
+    pendingFocus.current = undefined;
+    if (target === "panel") {
+      focusIntoPanel(panelRef.current);
+    } else if (target) {
+      rowRefs.current[target]?.focus();
+    }
+  }, [panel]);
+
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
   if (!selectedModel || !hasModelChoice(models, selectedModel)) {
     return null;
@@ -102,23 +153,48 @@ export function ModelPicker({
   // under the pointer. The model card sits on top of the menu, beside the list, for the same
   // reason.
   function changeOpen(nextOpen: boolean) {
+    clearTimeout(hoverTimer.current);
     if (nextOpen) {
-      const trigger = triggerRef.current?.getBoundingClientRect();
-      const beside = window.matchMedia(BESIDE_MENU_QUERY).matches;
-      setBesideMenu(beside);
-      setOpensRight(
-        beside &&
-          window.innerWidth - VIEWPORT_GUTTER - (trigger?.right ?? window.innerWidth) >= PANEL_ROOM
-      );
+      setPlacement(placementOf(triggerRef.current));
       setPanel(undefined);
       setPreviewedModel(undefined);
     }
     setOpen(nextOpen);
   }
 
-  function showPanel(next: Panel) {
+  // A panel opened from the keyboard takes the focus. So does one in the menu's place, where
+  // the row that opened it is gone.
+  function showPanel(next: Panel, takeFocus: boolean) {
+    clearTimeout(hoverTimer.current);
+    const focus = takeFocus || !besideMenu;
+    if (next === shownPanel) {
+      if (focus) {
+        focusIntoPanel(panelRef.current);
+      }
+      return;
+    }
+    pendingFocus.current = focus ? "panel" : undefined;
     setPanel(next);
     setPreviewedModel(undefined);
+  }
+
+  /** One level back: the panel closes and its row has the focus. */
+  function closePanel() {
+    clearTimeout(hoverTimer.current);
+    pendingFocus.current = shownPanel;
+    setPanel(undefined);
+    setPreviewedModel(undefined);
+  }
+
+  // The arrow key towards the panel enters it and the other one comes back. The effort slider
+  // keeps the arrow keys for itself; Escape leaves it.
+  const intoKey = besideMenu && !opensRight ? "ArrowLeft" : "ArrowRight";
+  const backKey = intoKey === "ArrowLeft" ? "ArrowRight" : "ArrowLeft";
+  function onPanelKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === backKey && !(event.target instanceof HTMLInputElement)) {
+      event.preventDefault();
+      closePanel();
+    }
   }
 
   const menuRow = (rowPanel: Panel, label: string, value: ReactNode) => (
@@ -129,16 +205,35 @@ export function ModelPicker({
         "hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground",
         shownPanel === rowPanel && "bg-accent text-accent-foreground"
       )}
+      ref={(node) => {
+        rowRefs.current[rowPanel] = node;
+      }}
       aria-expanded={shownPanel === rowPanel}
       aria-haspopup="dialog"
       onPointerEnter={(event) => {
         // Only where the panel opens beside the menu: in its place it would slide under the
         // pointer and take the click meant for this row.
-        if (event.pointerType === "mouse" && window.matchMedia(BESIDE_MENU_QUERY).matches) {
-          showPanel(rowPanel);
+        if (event.pointerType !== "mouse" || !besideMenu || shownPanel === rowPanel) {
+          return;
+        }
+        clearTimeout(hoverTimer.current);
+        if (shownPanel === undefined) {
+          showPanel(rowPanel, false);
+          return;
+        }
+        // With a panel open the pointer may only be crossing this row on its way into it, so
+        // this row's panel replaces it once the pointer rests here.
+        hoverTimer.current = setTimeout(() => showPanel(rowPanel, false), HOVER_SWITCH_MS);
+      }}
+      onPointerLeave={() => clearTimeout(hoverTimer.current)}
+      onKeyDown={(event) => {
+        if (event.key === intoKey) {
+          event.preventDefault();
+          showPanel(rowPanel, true);
         }
       }}
-      onClick={() => showPanel(rowPanel)}
+      // A click from the keyboard (Enter or Space) carries no pointer presses.
+      onClick={(event) => showPanel(rowPanel, event.detail === 0)}
     >
       {/* The chevron points to where the panel opens: beside the menu, or in its place on a
           narrow screen. */}
@@ -160,8 +255,8 @@ export function ModelPicker({
   // Beside the menu a panel hangs off its edge, level with its foot where the menu opens
   // upwards and with its head where it opens downwards, no taller than the window allows.
   const panelClassName = cn(
-    "flex w-72 max-w-full flex-col overflow-hidden",
-    "sm:absolute sm:max-h-(--radix-popover-content-available-height) sm:max-w-none",
+    "flex max-h-(--radix-popover-content-available-height) w-72 max-w-full flex-col overflow-hidden",
+    "sm:absolute sm:max-w-none",
     "group-data-[side=top]/picker:bottom-0 group-data-[side=bottom]/picker:top-0",
     opensRight ? "sm:left-full sm:ml-1.5" : "sm:right-full sm:mr-1.5"
   );
@@ -169,8 +264,8 @@ export function ModelPicker({
   const backRow = (
     <button
       type="button"
-      className="flex h-9 w-full items-center gap-1.5 border-b px-3 text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground sm:hidden"
-      onClick={() => setPanel(undefined)}
+      className="flex h-9 w-full shrink-0 items-center gap-1.5 border-b px-3 text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground sm:hidden"
+      onClick={closePanel}
     >
       <ChevronLeft size={14} aria-hidden="true" />
       {t(shownPanel === "model" ? "modelPickerModel" : "modelPickerReasoning")}
@@ -213,12 +308,25 @@ export function ModelPicker({
         side="top"
         align="end"
         sideOffset={8}
-        reserve={besideMenu ? { [opensRight ? "right" : "left"]: PANEL_ROOM } : undefined}
+        reserve={
+          besideMenu ? (opensRight ? { right: PANEL_ROOM } : { left: PANEL_ROOM }) : undefined
+        }
+        onEscapeKeyDown={(event) => {
+          if (shownPanel) {
+            event.preventDefault();
+            closePanel();
+          }
+        }}
         aria-label={t("selectModel")}
         className="group/picker relative max-w-[calc(100vw-2rem)]"
       >
         {shownPanel === "model" ? (
-          <div className={cn(surfaceClassName, panelClassName)}>
+          <div
+            ref={panelRef}
+            className={cn(surfaceClassName, panelClassName)}
+            onPointerEnter={() => clearTimeout(hoverTimer.current)}
+            onKeyDown={onPanelKeyDown}
+          >
             {backRow}
             <div
               role="listbox"
@@ -248,8 +356,7 @@ export function ModelPicker({
                     onBlur={() => setPreviewedModel(undefined)}
                     onClick={() => {
                       onSelectModelBinding(model.bindingId ?? "");
-                      setPanel(undefined);
-                      setPreviewedModel(undefined);
+                      closePanel();
                     }}
                   >
                     <ModelVendorIcon model={model} />
@@ -272,9 +379,15 @@ export function ModelPicker({
         ) : null}
 
         {shownPanel === "reasoning" && offersReasoning ? (
-          <div className={cn(surfaceClassName, panelClassName)}>
+          <div
+            ref={panelRef}
+            className={cn(surfaceClassName, panelClassName)}
+            onPointerEnter={() => clearTimeout(hoverTimer.current)}
+            onKeyDown={onPanelKeyDown}
+          >
             {backRow}
             <ReasoningEffortSlider
+              className="min-h-0 overflow-y-auto"
               efforts={efforts}
               value={reasoningEffort}
               onChange={(effort) => onSelectReasoningEffort(selectedModel.bindingId ?? "", effort)}
@@ -325,6 +438,14 @@ export function ModelPicker({
       </PopoverContent>
     </Popover>
   );
+}
+
+/** Focuses the selected option of a panel, or its first option or control. */
+function focusIntoPanel(panel: HTMLElement | null) {
+  const target =
+    panel?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]') ??
+    panel?.querySelector<HTMLElement>('[role="option"], input');
+  target?.focus();
 }
 
 function ReasoningEffortSlider({
