@@ -156,12 +156,22 @@ function operationHtml(
   path: string,
   operation: OpenApiOperation
 ): string {
+  const credentials = new Map<string, Set<string>>();
+  for (const requirement of operation.security) {
+    for (const [scheme, scopes] of Object.entries(requirement)) {
+      const alternatives = credentials.get(scheme) ?? new Set<string>();
+      alternatives.add(scopes.length > 0 ? codeList([...new Set(scopes)].sort()) : "no scopes");
+      credentials.set(scheme, alternatives);
+    }
+  }
   const accepts =
-    operation.security.length === 0
+    credentials.size === 0
       ? "No credential"
-      : operation.security
-          .flatMap((requirement) => Object.keys(requirement))
-          .map((scheme) => `<code>${text(scheme)}</code>`)
+      : [...credentials]
+          .map(
+            ([scheme, alternatives]) =>
+              `<code>${text(scheme)}</code> (${[...alternatives].join(" or ")})`
+          )
           .join(", ");
   const scopes = [...new Set(operation.security.flatMap((item) => Object.values(item).flat()))];
   const facts: [string, string][] = [

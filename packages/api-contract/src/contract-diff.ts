@@ -75,13 +75,21 @@ function compareSecurity(before: OpenApiOperation, after: OpenApiOperation, repo
   if (before.security.length === 0 && after.security.length > 0) {
     report("the operation now asks for a credential");
   }
+  const compared = new Set<string>();
   for (const requirement of before.security) {
     for (const [scheme, scopes] of Object.entries(requirement)) {
-      const kept = after.security.find((candidate) => scheme in candidate)?.[scheme];
-      if (!kept) {
+      const alternative = JSON.stringify([scheme, [...new Set(scopes)].sort()]);
+      if (compared.has(alternative)) continue;
+      compared.add(alternative);
+      const alternatives = after.security.flatMap((candidate) =>
+        candidate[scheme] === undefined ? [] : [candidate[scheme]]
+      );
+      if (alternatives.length === 0) {
         report(`the credential ${scheme} is no longer accepted`);
-      } else if (kept.some((scope) => !scopes.includes(scope))) {
-        report(`the credential ${scheme} now needs the scope ${kept.join(", ")}`);
+      } else if (!alternatives.some((kept) => kept.every((scope) => scopes.includes(scope)))) {
+        report(
+          `the credential ${scheme} no longer accepts the scope alternative ${scopes.join(", ") || "without scopes"}`
+        );
       }
     }
   }

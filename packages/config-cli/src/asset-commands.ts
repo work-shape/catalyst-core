@@ -10,6 +10,7 @@ import {
 import type { OperationOutcome } from "@vivd-catalyst/api-client";
 import { ConfigApiError, type ConfigApi } from "./api";
 import { readAssetSource } from "./asset-sources";
+import { runFollowCommand } from "./follow-commands";
 import {
   formatAsset,
   formatAssetList,
@@ -52,6 +53,7 @@ const OPTIONS = {
   field: { type: "string" },
   asset: { type: "string" },
   confirm: { type: "string" },
+  withdraw: { type: "string" },
   help: { type: "boolean", short: "h", default: false }
 } as const;
 
@@ -551,7 +553,7 @@ async function guardrailDryRunBeforePublish(
 }
 
 /** The words before the kind that are commands of their own. */
-const INSTANCE_COMMANDS = ["context", "kinds", "references"] as const;
+const INSTANCE_COMMANDS = ["context", "kinds", "references", "operation", "requests"] as const;
 
 /** Runs `catalyst <argv>` for every command but `config`. */
 export async function runAssetCommand(
@@ -584,9 +586,24 @@ export async function runAssetCommand(
   }
   try {
     if (instanceCommand !== undefined) {
-      if (positionals.length > 0) throw new UsageError(`Unexpected argument '${positionals[0]}'.`);
-      refuseFlags(values, COMMON_FLAGS, instanceCommand);
-      return await runInstanceCommand(instanceCommand, values, options);
+      if (instanceCommand === "operation") {
+        if (verbName !== "show" || name === "" || extra.length > 0) {
+          throw new UsageError("Usage: catalyst operation show <run-id>");
+        }
+      } else if (positionals.length > 0) {
+        throw new UsageError(`Unexpected argument '${positionals[0]}'.`);
+      }
+      refuseFlags(
+        values,
+        instanceCommand === "requests"
+          ? ["instance", "dir", "json", "help", "withdraw"]
+          : instanceCommand === "operation"
+            ? ["instance", "dir", "json", "help"]
+            : COMMON_FLAGS,
+        instanceCommand
+      );
+      if (values.withdraw !== undefined) required(values.withdraw, "--withdraw <id>");
+      return await runInstanceCommand(instanceCommand, values, options, name);
     }
     const verb = VERBS[verbName];
     if (verb === undefined) throw new UsageError(`Unknown command '${noun} ${verbName}'.`);
@@ -622,12 +639,16 @@ export async function runAssetCommand(
 async function runInstanceCommand(
   command: (typeof INSTANCE_COMMANDS)[number],
   values: Values,
-  options: ConfigCommandOptions
+  options: ConfigCommandOptions,
+  runId: string
 ): Promise<number> {
   const { api } = await openInstance(options);
   const json = values.json;
   const out = (value: unknown, text: () => string) =>
     writeOut(options, json ? JSON.stringify(value, null, 2) : text());
+  if (command === "operation" || command === "requests") {
+    return runFollowCommand(api, command, { runId, json, withdraw: values.withdraw }, options);
+  }
   if (command === "references") {
     const references = await api.read((client) => client.platform.references.get());
     out(references, () => formatReferences(references));
@@ -739,6 +760,8 @@ Instance:
   context                   The instance, your rights on it and its asset kinds (platform.context.get)
   kinds                     The asset kinds: their command word, lifecycle and rights
   references                Models, efforts and tools a definition may name (platform.references.get)
+  operation show <run-id>    Follow your call to its decision (operations.get_run)
+  requests [--withdraw <id>] List your requests, or withdraw one of them
 
 Assets, for every kind the instance registers (agent, skill, app, workflow, data-store, ...):
 ${Object.values(VERBS)
