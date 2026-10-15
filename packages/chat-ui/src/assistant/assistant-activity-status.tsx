@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Spinner } from "@vivd-catalyst/ui";
-import { formatElapsedSeconds } from "./elapsed-time";
+import { formatElapsedSeconds } from "./thread-time";
 import { useTranslation } from "../i18n";
 import type { RunActivity } from "./thread-activity";
 import { useToolActivityLabel } from "./tool-activity";

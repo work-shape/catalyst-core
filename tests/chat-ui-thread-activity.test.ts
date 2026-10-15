@@ -1,8 +1,4 @@
 import { describe, expect, it } from "vitest";
-import {
-  formatElapsedSeconds,
-  formatWorkHistoryLabel
-} from "../packages/chat-ui/src/assistant/elapsed-time";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AssistantActivityStatus } from "../packages/chat-ui/src/assistant/assistant-activity-status";
@@ -141,12 +137,6 @@ describe("chat UI thread activity", () => {
 
   it("shows the elapsed run time next to the phrase", () => {
     expect(renderActivityStatus({})).toContain(">0s<");
-  });
-
-  it("formats elapsed time consistently for active and completed runs", () => {
-    expect(formatElapsedSeconds(42)).toBe("42s");
-    expect(formatElapsedSeconds(102)).toBe("1m 42s");
-    expect(formatWorkHistoryLabel("Arbeitsverlauf", 102_000)).toBe("Arbeitsverlauf · 1m 42s");
   });
 
   it("blocks sending whenever the durable conversation run is active", () => {

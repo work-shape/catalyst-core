@@ -35,7 +35,7 @@ import { useTranslation } from "../i18n";
 import { MarkdownText } from "../markdown-text";
 import { DataPart, ToolCallFoldLabel, ToolCallPart } from "../tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
-import { formatWorkHistoryLabel } from "./elapsed-time";
+import { formatWorkHistoryLabel } from "./thread-time";
 import { isWorkspacePromotedSurfacesData } from "../tool-surfaces";
 
 const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();

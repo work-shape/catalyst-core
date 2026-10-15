@@ -102,6 +102,22 @@ test("a conversation over several days shows when it started and where each day 
   await dockReady();
   await expect(markers(dock).first()).toHaveText(`${weekday} 9:15 AM`);
   await shootThemes(page, "day-markers-side", dockReady);
+
+  // At the reader's midnight the markers are read again, without a reload: today's becomes
+  // yesterday's, and yesterday's names its weekday.
+  await page.clock.install();
+  await page.goto(`/w/${workspace}/c/${conversation.id}`);
+  await expect(markers(thread).nth(2)).toHaveText(/^Today /u);
+  await page.clock.fastForward(today + dayMs - Date.now() + 1_000);
+  const yesterdaysWeekday = new Date(yesterday).toLocaleDateString("en-US", {
+    weekday: "long",
+    timeZone: "UTC"
+  });
+  await expect(markers(thread)).toHaveText([
+    `${weekday} 9:15 AM`,
+    `${yesterdaysWeekday} 4:12 PM`,
+    /^Yesterday \d{1,2}:\d{2}\s[AP]M$/u
+  ]);
 });
 
 async function signIn(page: Page): Promise<void> {

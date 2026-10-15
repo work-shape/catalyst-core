@@ -43,7 +43,6 @@
       "@vivd-catalyst/chat-ui/workflows": ["packages/chat-ui/src/workflows/index.ts"],
       "@vivd-catalyst/chat-ui/shell": ["packages/chat-ui/src/shell.tsx"],
       "@vivd-catalyst/chat-ui/reading-place": ["packages/chat-ui/src/assistant/reading-place.ts"],
-      "@vivd-catalyst/chat-ui/day-markers": ["packages/chat-ui/src/assistant/day-markers.ts"],
       "@vivd-catalyst/chat-ui/surface-layout": ["packages/chat-ui/src/surface/surface-layout.ts"],
       "@vivd-catalyst/chat-ui/dock-state": ["packages/chat-ui/src/workspace/dock-state.ts"],
       "@vivd-catalyst/chat-ui/subject-run": ["packages/chat-ui/src/conversation/subject-run.ts"],

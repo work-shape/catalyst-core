@@ -2,9 +2,14 @@ import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
   calendarDay,
+  createThreadTimes,
   dayMarkerLabel,
-  dayOpeningMessages
-} from "@vivd-catalyst/chat-ui/day-markers";
+  dayOpeningMessages,
+  formatElapsedSeconds,
+  formatWorkHistoryLabel,
+  msUntilNextMidnight,
+  transcriptMessageTimes
+} from "../packages/chat-ui/src/assistant/thread-time";
 
 const berlin = "Europe/Berlin";
 
@@ -24,6 +29,14 @@ function openings(
     )
   ];
 }
+
+describe("run times", () => {
+  it("formats elapsed time consistently for active and completed runs", () => {
+    expect(formatElapsedSeconds(42)).toBe("42s");
+    expect(formatElapsedSeconds(102)).toBe("1m 42s");
+    expect(formatWorkHistoryLabel("Arbeitsverlauf", 102_000)).toBe("Arbeitsverlauf · 1m 42s");
+  });
+});
 
 describe("day boundaries of a conversation", () => {
   it("marks the first message, and the first one of each later day only", () => {
@@ -173,6 +186,123 @@ describe("day marker wording", () => {
     expect(label("2026-10-15T16:00:00.000Z", "en", "America/Los_Angeles")).toBe("Today 9:00 AM");
     expect(label("2026-10-15T01:00:00.000Z", "en", "America/Los_Angeles")).toBe(
       "Yesterday 6:00 PM"
+    );
+  });
+});
+
+describe("the moments of a thread's messages", () => {
+  const t = createTranslationContext("en").t;
+  /** The labels of the markers a thread shows, read at `now` in Berlin. */
+  function labelsOf(timed: Array<{ id: string; at: string }>, now: Date): Array<[string, string]> {
+    return [...dayOpeningMessages(timed, berlin)].map(([id, at]) => [
+      id,
+      plain(dayMarkerLabel({ at, now, locale: "en", t, timeZone: berlin }))
+    ]);
+  }
+
+  it("dates the latest run's answer, shown under the run's id, by the run's start", () => {
+    expect(
+      transcriptMessageTimes(
+        [
+          { id: "m1", createdAt: "2026-10-14T08:00:00.000Z" },
+          { id: "m2", createdAt: "2026-10-14T08:00:05.000Z" }
+        ],
+        { run: { id: "run_1", startedAt: "2026-10-14T08:00:06.000Z" } }
+      )
+    ).toEqual({
+      m1: "2026-10-14T08:00:00.000Z",
+      m2: "2026-10-14T08:00:05.000Z",
+      run_1: "2026-10-14T08:00:06.000Z"
+    });
+  });
+
+  it("does not mark yesterday's stopped answer as written today when the thread is reopened", () => {
+    const now = new Date("2026-10-15T10:00:00.000Z");
+    const ids = ["m1", "run_failed"];
+    const question = { m1: "2026-10-14T14:12:00.000Z" };
+    // With the run's start, as the thread is given it.
+    const withRun = createThreadTimes()({
+      ids,
+      stored: { ...question, run_failed: "2026-10-14T14:12:01.000Z" },
+      busy: false,
+      now
+    });
+    expect(labelsOf(withRun, now)).toEqual([["m1", "Yesterday 4:12 PM"]]);
+    // Without any moment of its own, it takes the message before it: never now.
+    const withoutRun = createThreadTimes()({ ids, stored: question, busy: false, now });
+    expect(withoutRun).toEqual([
+      { id: "m1", at: "2026-10-14T14:12:00.000Z" },
+      { id: "run_failed", at: "2026-10-14T14:12:00.000Z" }
+    ]);
+    expect(labelsOf(withoutRun, now)).toEqual([["m1", "Yesterday 4:12 PM"]]);
+    // A message without a moment before any stored one takes the one after it.
+    expect(
+      createThreadTimes()({ ids: ["x", "m1"], stored: question, busy: false, now })[0]
+    ).toEqual({ id: "x", at: "2026-10-14T14:12:00.000Z" });
+  });
+
+  it("keeps the moment a message was sent until the server's arrives", () => {
+    const times = createThreadTimes();
+    const stored = { m1: "2026-10-14T08:00:00.000Z", m2: "2026-10-14T08:00:05.000Z" };
+    // Sent at 23:59:50 in Berlin.
+    const sent = new Date("2026-10-15T21:59:50.000Z");
+    expect(
+      times({ ids: ["m1", "m2", "optimistic"], stored, busy: true, now: sent }).at(-1)
+    ).toEqual({ id: "optimistic", at: sent.toISOString() });
+    // The answer appears at 00:00:10; the message sent does not move into the next day.
+    const answered = new Date("2026-10-15T22:00:10.000Z");
+    const later = times({
+      ids: ["m1", "m2", "optimistic", "reply"],
+      stored,
+      busy: true,
+      now: answered
+    });
+    expect(later.slice(-2)).toEqual([
+      { id: "optimistic", at: sent.toISOString() },
+      { id: "reply", at: answered.toISOString() }
+    ]);
+    expect(labelsOf(later, answered).map(([id]) => id)).toEqual(["m1", "optimistic", "reply"]);
+    // Read again while nothing is busy any more: still the moment it was sent.
+    expect(
+      times({ ids: ["m1", "m2", "optimistic"], stored, busy: false, now: new Date() }).at(-1)
+    ).toEqual({ id: "optimistic", at: sent.toISOString() });
+    // Once the server's moment arrives, that one counts.
+    expect(
+      times({
+        ids: ["m1", "m2", "optimistic"],
+        stored: { ...stored, optimistic: "2026-10-15T21:59:51.000Z" },
+        busy: false,
+        now: answered
+      }).at(-1)
+    ).toEqual({ id: "optimistic", at: "2026-10-15T21:59:51.000Z" });
+  });
+});
+
+describe("the next midnight", () => {
+  function inBerlin<T>(read: () => T): T {
+    const zone = process.env.TZ;
+    process.env.TZ = berlin;
+    try {
+      return read();
+    } finally {
+      if (zone === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = zone;
+      }
+    }
+  }
+
+  it("is the reader's next midnight, also across a change of the clocks", () => {
+    // 23:59:50 in Berlin: ten seconds.
+    expect(inBerlin(() => msUntilNextMidnight(new Date("2026-10-15T21:59:50.000Z")))).toBe(10_000);
+    // 00:30 on the 25-hour day: 24 and a half hours.
+    expect(inBerlin(() => msUntilNextMidnight(new Date("2026-10-24T22:30:00.000Z")))).toBe(
+      24.5 * 3_600_000
+    );
+    // 00:30 on the 23-hour day: 22 and a half hours.
+    expect(inBerlin(() => msUntilNextMidnight(new Date("2026-03-28T23:30:00.000Z")))).toBe(
+      22.5 * 3_600_000
     );
   });
 });

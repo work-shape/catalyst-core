@@ -17,6 +17,7 @@ import { useToolDisplayPanel } from "../tool-display-panel";
 import { dedupeToolSurfaceRefs, readToolSurfaceRefs } from "../tool-surfaces";
 import { AssistantThread, type StartComposerPosition } from "./assistant-thread";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
+import { transcriptMessageTimes } from "./thread-time";
 import { useRegisterToolDisplayActions } from "../domain-ui-widgets";
 import { useConversationSubject } from "../conversation/use-conversation-subject";
 import {
@@ -123,9 +124,8 @@ function AssistantRuntimePane({
   } = chat;
   const { t } = useTranslation();
   const messageTimes = useMemo(
-    () =>
-      Object.fromEntries((chat.messages ?? []).map((message) => [message.id, message.createdAt])),
-    [chat.messages]
+    () => transcriptMessageTimes(chat.messages ?? [], chat.activeRun),
+    [chat.activeRun, chat.messages]
   );
   const activeRef = useRef(true);
   const rootSubmitPendingRef = useRef(false);

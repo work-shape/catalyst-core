@@ -125,7 +125,7 @@ export function AssistantThread({
    * effect later, so its own empty state alone would show the start page for a frame.
    */
   loadedMessageCount: number;
-  /** When each stored message of the open conversation was written, by id: its day markers. */
+  /** When each message of the open conversation was written, by the thread's id: its day markers. */
   messageTimes: Readonly<Record<string, string>>;
   /** The open conversation; undefined on the screen for a new one. */
   conversationId?: string;
@@ -227,7 +227,11 @@ export function AssistantThread({
             {messagesEnabled ? (
               <div className="flex flex-col gap-6 pb-12 empty:hidden md:pb-16">
                 <ToolSubjectsProvider agents={toolSubjectAgents}>
-                  <DayMarkersProvider messageTimes={messageTimes}>
+                  <DayMarkersProvider
+                    messageTimes={messageTimes}
+                    conversationRunning={conversationRunning}
+                    optimisticPending={optimisticPending}
+                  >
                     <ThreadPrimitive.Messages>
                       {() => (
                         <>
