@@ -78,11 +78,15 @@ function completion(text: string): ModelCompletion {
   };
 }
 
-/** The guardrails of these release entries, with a judge that answers `violates`. */
+/**
+ * The guardrails of these release entries, with a judge that answers `violates`. `shipped`
+ * runs the guardrails the release ships too, as an assembled instance does.
+ */
 export function runnerOf(
   stores: TestStore,
   clientInstanceId: ClientInstanceId,
-  guardrails: Record<string, unknown>
+  guardrails: Record<string, unknown>,
+  options: { shipped?: true } = {}
 ) {
   const config = configWith(guardrails);
   const complete = vi
@@ -94,6 +98,7 @@ export function runnerOf(
     hits: stores.guardrails,
     // The published guardrails written as assets run beside the floor, as on an instance.
     assets: stores.configAssets,
+    ...(options.shipped ? { shipped: stores.guardrails } : {}),
     modelGateway: createScriptedInstanceModelGateway({
       config,
       modelProvider: { complete },
@@ -108,8 +113,12 @@ export function runnerOf(
 }
 
 /** The events of an instance whose release config holds these guardrails. */
-export function guardedEvents(stores: TestStore, guardrails: Record<string, unknown>) {
-  const { runner, complete } = runnerOf(stores, accessInstanceId, guardrails);
+export function guardedEvents(
+  stores: TestStore,
+  guardrails: Record<string, unknown>,
+  options: { shipped?: true } = {}
+) {
+  const { runner, complete } = runnerOf(stores, accessInstanceId, guardrails, options);
   const events: PlatformEventEmitter = createAuditingEventEmitter(
     new StoreBackedAuditRecorder({ clientInstanceId: accessInstanceId, store: stores.audit }),
     runner

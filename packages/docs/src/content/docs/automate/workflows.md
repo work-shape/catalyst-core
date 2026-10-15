@@ -23,6 +23,8 @@ A new Workflow is created with the CLI (`catalyst workflow put <name> --from …
 
 A change is always a **draft** first. The banner says **Draft, not published yet** ("Entwurf, noch nicht veröffentlicht") or **Draft differs from published** ("Entwurf weicht von der veröffentlichten Version ab"). Runs keep using the published version until the draft is published.
 
+The line **Runs as** ("Läuft als") under the heading names the active account by its display label. An unpublished draft shows the account configured in that draft too. No line is shown when that account is disabled or missing.
+
 ## Try it with a test run
 
 1. On the draft banner, click **Test run** ("Testlauf").
@@ -54,9 +56,9 @@ An administrator gives these rights under **Settings > Instance > Access** ("Ein
 
 | Right | What the Access page says |
 | --- | --- |
-| Read workflows | See the Workflow, its steps and its runs. |
+| View workflows | See the Workflow, its steps and its runs. |
 | Use workflows | Start the Workflow. It then runs with the Workflow's own rights, not with this person's. |
-| Write workflows | Change the draft of the Workflow. A draft does not run until it is published. |
-| Publish workflows | Make a draft the version that runs. Today this also needs the superadmin role and the right to manage API access. |
+| Edit workflows | Change the draft of the Workflow. A draft does not run until it is published. |
+| Publish workflows | Make a draft the version that runs. Publishing also needs every right of the service principal the Workflow runs as. |
 
-Administrators hold every right; publishing also needs the superadmin role. A test run needs the right to write the Workflow.
+Administrators hold every right. A test run needs the right to edit the Workflow.

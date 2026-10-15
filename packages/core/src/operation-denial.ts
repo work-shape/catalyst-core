@@ -39,12 +39,13 @@ export type OperationDenial =
       operation: string;
       /**
        * `approval_unavailable`: the policy asks for another person's approval and the call
-       * cannot be held for one, as no call of a service principal can. Without a reason the
-       * policy refuses the call itself. `workflow_deleted`: the call is a step of a run of a
-       * published Workflow whose `confirm` its publish approved, and the Workflow was deleted
-       * since.
+       * cannot be held for one, as no call of a service principal can. `approval_stale`: the
+       * call waited for an approval, and what it is about moved since, or a newer call about
+       * the same replaced it. `workflow_deleted`: the call is a step of a run of a published
+       * Workflow whose `confirm` its publish approved, and the Workflow was deleted since.
+       * Without a reason the policy refuses the call itself.
        */
-      reason?: "approval_unavailable" | "workflow_deleted";
+      reason?: "approval_unavailable" | "approval_stale" | "workflow_deleted";
       /**
        * The guardrail whose `require_approval` asked for the approval, where one did, with
        * its reason where it gave one.
@@ -64,6 +65,12 @@ export function operationDenialError(denial: OperationDenial): AppError {
         ...(denial.boundBy ? { boundBy: denial.boundBy } : {})
       });
     case "policy":
+      if (denial.reason === "approval_stale") {
+        return new AppError("POLICY_DENIED", approvalStaleMessage(denial.operation), {
+          operation: denial.operation,
+          reason: denial.reason
+        });
+      }
       if (denial.reason === "workflow_deleted") {
         return new AppError(
           "POLICY_DENIED",
@@ -98,6 +105,11 @@ export function operationDenialError(denial: OperationDenial): AppError {
         ...(denial.comment === undefined ? {} : { comment: denial.comment })
       });
   }
+}
+
+/** Why a call that waited for an approval can no longer be approved. */
+function approvalStaleMessage(operation: string): string {
+  return `The call of '${operation}' waited for an approval, and what it is about changed since or a newer call replaced it. Make the call again.`;
 }
 
 /** A reason as the end of a sentence: with its own full stop, or one added. */

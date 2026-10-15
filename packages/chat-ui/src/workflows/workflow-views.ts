@@ -94,6 +94,8 @@ export interface WorkflowView {
   id: string;
   name: string;
   description?: string;
+  /** The account every run acts as, by its label, where the instance names it. */
+  runsAs?: string;
   published: boolean;
   /** The id of the revision that is published, which is the one the page draws. */
   revisionId?: string;

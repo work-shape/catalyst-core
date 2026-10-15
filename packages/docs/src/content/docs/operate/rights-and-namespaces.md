@@ -76,4 +76,6 @@ The tab gives a result only when it has everything it decides from: the person's
 
 ## API
 
+Every person may read their own effective rights through `permissions.effective`, without `users.manage`. Reading another person’s effective rights or grant rows requires `users.manage`. A holder of `service_principals.manage` may read a technical account’s effective rights and grant rows; without `users.manage`, a grant-list request must explicitly select `holderKind=service_principal`. This gives no access to people’s rights. Credential scopes still apply.
+
 The page uses the eight operations under `/api/v1/instance/access`. See the [API reference](/reference/api/).

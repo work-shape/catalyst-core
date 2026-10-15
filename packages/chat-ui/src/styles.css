@@ -10,6 +10,9 @@
 @import "@univerjs/preset-sheets-core/lib/index.css" layer(univer);
 
 @source "./**/*.{ts,tsx}";
+/* Published packages carry the compiled components instead of a second copy of their source.
+   Keep the source scan above for workspace development and HMR before a package build. */
+@source "../dist/**/*.js";
 /* Streamdown ships its classes in dist/. The first three paths match the workspace layout
    (packages/chat-ui/node_modules), the last three the installed layout, where the dependencies
    are siblings of this package in node_modules. Tailwind ignores paths that do not exist. */

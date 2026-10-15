@@ -313,7 +313,7 @@
       "target": "lint",
       "rule": "knip/exports",
       "scope": "packages/chat-ui",
-      "count": 12,
+      "count": 11,
       "owner": "G-5c"
     },
     {

@@ -8473,6 +8473,327 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/guardrails/shipped": {
+      "get": {
+        "operationId": "guardrails.list_shipped",
+        "summary": "List the guardrails the release ships, whether each is switched on, and who switched it last",
+        "tags": [
+          "Guardrails"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "on": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "allow",
+                              "warn",
+                              "require_approval",
+                              "block"
+                            ]
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "switchedBy": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label"
+                            ]
+                          },
+                          "switchedAt": {
+                            "$ref": "#/components/schemas/Timestamp"
+                          },
+                          "canSwitch": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "displayName",
+                          "reason",
+                          "on",
+                          "outcome",
+                          "enabled",
+                          "canSwitch"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/guardrails/shipped/{name}/switch": {
+      "post": {
+        "operationId": "guardrails.switch_shipped",
+        "summary": "Switch a guardrail the release ships off or on again, for the whole instance. A release never switches it back on",
+        "tags": [
+          "Guardrails"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:publish"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:publish"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "on": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "allow",
+                        "warn",
+                        "require_approval",
+                        "block"
+                      ]
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "switchedBy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label"
+                      ]
+                    },
+                    "switchedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "canSwitch": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "displayName",
+                    "reason",
+                    "on",
+                    "outcome",
+                    "enabled",
+                    "canSwitch"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/guardrails/{name}/dry-run": {
       "post": {
         "operationId": "guardrails.dry_run",
@@ -9206,9 +9527,6 @@
           }
         },
         "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "users.manage"
-        ],
         "x-catalyst-rate-class": "read"
       }
     },
@@ -9341,9 +9659,6 @@
           }
         },
         "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "users.manage"
-        ],
         "x-catalyst-rate-class": "read"
       },
       "post": {
@@ -15463,6 +15778,9 @@
                             },
                             "additionalProperties": {}
                           },
+                          "runsAs": {
+                            "type": "string"
+                          },
                           "actions": {
                             "type": "array",
                             "items": {
@@ -18636,7 +18954,7 @@
         }
       },
       "ForbiddenOrPolicyDeniedOrGuardrailBlocked": {
-        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `details.reason` is `approval_unavailable` where the policy asks for another person's approval and the call cannot wait for one; `details.guardrailId` then names the guardrail that asked for it, where one did. It is `workflow_deleted` where a step of a run of a published Workflow needs the confirmation its publish gave, and the Workflow was deleted since. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it.",
+        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `details.reason` is `approval_unavailable` where the policy asks for another person's approval and the call cannot wait for one; `details.guardrailId` then names the guardrail that asked for it, where one did. It is `workflow_deleted` where a step of a run of a published Workflow needs the confirmation its publish gave, and the Workflow was deleted since. It is `approval_stale` where a call that waited can no longer be approved because what it is about changed or a newer call replaced it. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it.",
         "content": {
           "application/json": {
             "schema": {
@@ -18656,7 +18974,7 @@
         }
       },
       "ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined": {
-        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `details.reason` is `approval_unavailable` where the policy asks for another person's approval and the call cannot wait for one; `details.guardrailId` then names the guardrail that asked for it, where one did. It is `workflow_deleted` where a step of a run of a published Workflow needs the confirmation its publish gave, and the Workflow was deleted since. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it. `DECLINED`: The person asked to approve the call declined it. `details.by` names them, `details.comment` holds their reason where they gave one.",
+        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `details.reason` is `approval_unavailable` where the policy asks for another person's approval and the call cannot wait for one; `details.guardrailId` then names the guardrail that asked for it, where one did. It is `workflow_deleted` where a step of a run of a published Workflow needs the confirmation its publish gave, and the Workflow was deleted since. It is `approval_stale` where a call that waited can no longer be approved because what it is about changed or a newer call replaced it. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it. `DECLINED`: The person asked to approve the call declined it. `details.by` names them, `details.comment` holds their reason where they gave one.",
         "content": {
           "application/json": {
             "schema": {
@@ -21109,6 +21427,9 @@
           },
           "config": {
             "$ref": "#/components/schemas/ConfigAssetConfig"
+          },
+          "runsAs": {
+            "type": "string"
           },
           "contentRevision": {
             "type": "integer",
@@ -26024,7 +26345,8 @@
                 "type": "string",
                 "enum": [
                   "inherited_approval_not_applied",
-                  "workflow_publish"
+                  "workflow_publish",
+                  "approved_by_caller"
                 ]
               },
               "by": {
@@ -26755,6 +27077,9 @@
                 "type": "string"
               },
               "publish": {
+                "type": "string"
+              },
+              "approve": {
                 "type": "string"
               },
               "use": {

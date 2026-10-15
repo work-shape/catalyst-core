@@ -42,6 +42,18 @@ auth:
           - admin
         permissionRefs:
           - demo-tools
+      # This manager belongs to principal-rights.spec.ts and may not administer people.
+      - email: e2e-principal-manager@example.test
+        displayLabel: E2E Principal Manager
+        passwordEnvName: E2E_PRINCIPAL_MANAGER_PASSWORD
+        developmentPassword: e2e-principal-manager-password
+        roles:
+          - user
+          - admin
+        permissions:
+          - "!users.manage"
+        permissionRefs:
+          - demo-tools
       # A member for each spec file that fills that member's conversation list or Inbox. Spec
       # files run side by side on this one instance, so a file that shared its member with
       # another pushed the other's rows out of the rail's cap.
@@ -238,6 +250,17 @@ auth:
         displayLabel: E2E Zz App Workflow Member
         passwordEnvName: E2E_APP_WORKFLOW_MEMBER_PASSWORD
         developmentPassword: e2e-app-workflow-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
+      # The member of the publish test of the Inbox spec, used by no other spec: the test
+      # writes them the rights to write and publish Apps, and not to approve
+      # a publish (GR-PUB-1). The label sorts after every other for the reason given above.
+      - email: e2e-publish-member@example.test
+        displayLabel: E2E Zz Publish Member
+        passwordEnvName: E2E_PUBLISH_MEMBER_PASSWORD
+        developmentPassword: e2e-publish-member-password
         roles:
           - user
         permissionRefs:

@@ -76,6 +76,7 @@ describe("the lifecycle and the representation of an asset kind", () => {
         write: "app.write",
         delete: "app.delete",
         publish: "app.publish",
+        approve: "app.approve",
         use: "app.use"
       }
     });

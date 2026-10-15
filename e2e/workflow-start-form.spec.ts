@@ -229,6 +229,9 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
   ];
 
   try {
+    // The Workflow's page says in its head whom every run acts as: the account's label.
+    await page.goto(`/w/${workspaceId}/workflows/${id}`);
+    await expect(page.getByTestId("workflow-page").getByText(`Runs as ${runAs}`)).toBeVisible();
     await page.goto(`/w/${workspaceId}/workflows`);
     const card = page.getByRole("listitem").filter({ hasText: name });
     const dialog = page.getByRole("dialog", { name: `Start “${name}” now?` });

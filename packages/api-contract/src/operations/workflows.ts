@@ -207,6 +207,11 @@ export const workflowSummarySchema = z.object({
    */
   inputs: z.record(z.string(), z.unknown()).optional(),
   /**
+   * The display label of the service principal every run of the Workflow acts as. Missing
+   * where that principal is disabled or gone, which `reasons` then says.
+   */
+  runsAs: z.string().optional(),
+  /**
    * What the caller may do with this Workflow, of `workflow.read` (its runs) and `workflow.use`
    * (a start). Never empty: a Workflow the caller holds neither on is not listed.
    */

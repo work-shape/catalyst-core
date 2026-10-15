@@ -15,6 +15,9 @@ import { sampleWorkflows, type SampleWorkflow } from "./sample-workflows";
 // cancels in memory. It answers through the mapping the instance's source uses, so the samples
 // page shows what a screen makes of the contract's shapes.
 
+/** The account the samples run as, by its label: a sample names no principal of the instance. */
+const SAMPLE_ACCOUNT = "Workflow runner";
+
 function missing(what: string): ApiError {
   return new ApiError(404, `${what} was not found.`, { code: "NOT_FOUND" });
 }
@@ -178,7 +181,12 @@ export function createSampleSource(
       return Promise.resolve(
         toWorkflow(
           { name: sample.manifest.id, config: withReadings(sample), publishedRevision: 2 },
-          { revisionId: SAMPLE_REVISION, mayStart, startForm: startFormOf(sample.manifest.inputs) }
+          {
+            revisionId: SAMPLE_REVISION,
+            mayStart,
+            startForm: startFormOf(sample.manifest.inputs),
+            runsAs: SAMPLE_ACCOUNT
+          }
         )
       );
     },

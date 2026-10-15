@@ -283,6 +283,7 @@ export function WorkspaceMembersView({
       <Section
         layout="stacked"
         title={t("settings.members")}
+        description={t("collaborationWorkspaceMembersDescription")}
         count={members?.length}
         action={
           <Button

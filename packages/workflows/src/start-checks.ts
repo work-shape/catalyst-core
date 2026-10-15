@@ -3,7 +3,8 @@ import type {
   ApiAccessStore,
   ClientInstanceId,
   OperationRegistry,
-  WorkflowManifest
+  WorkflowManifest,
+  WorkflowRun
 } from "@vivd-catalyst/core";
 import { indexWorkflowSteps, type WorkflowDefinitionIssue } from "./definition";
 import { secretOperationSteps } from "./operation-step";
@@ -52,6 +53,8 @@ export function workflowDefinitionStartIssues(
 export async function workflowStartIssues(
   manifest: WorkflowManifest,
   instance: {
+    /** The principal the definition runs as, as `workflowRunPrincipal` answers it. */
+    principal: WorkflowRun["principal"] | undefined;
     clientInstanceId: ClientInstanceId;
     principals: Pick<ApiAccessStore, "findServicePrincipalByName">;
     registry: Pick<OperationRegistry, "resolve">;
@@ -83,11 +86,11 @@ export async function workflowStartIssues(
     });
   }
   issues.push(...(await secretOperationSteps(manifest, instance.registry)));
-  const principal = await instance.principals.findServicePrincipalByName({
-    clientInstanceId: instance.clientInstanceId,
-    name: manifest.runAs
-  });
-  if (principal?.status !== "active") {
+  if (!instance.principal) {
+    const principal = await instance.principals.findServicePrincipalByName({
+      clientInstanceId: instance.clientInstanceId,
+      name: manifest.runAs
+    });
     issues.push({
       code: "principal_inactive",
       message: principal
