@@ -328,15 +328,13 @@ describe("catalyst app commands", () => {
     }
   });
 
-  it("refuses every App command to a holder of a Namespace who may not write the App", async () => {
+  it("refuses every App command to a workspace builder who may not write the App", async () => {
     const t = await setupAppInstance({ explicitCredentials: true, build: passThroughBuild });
     try {
-      // Kai is a member of the workspace and holds agents and skills in `kai-`. A Namespace
-      // covers only the instance's own assets, and no grant gives a right on Apps: the App
-      // rights come from the role.
-      await t.createNamespace("kai-");
+      // Kai holds agent and skill rights in the workspace. Those rights do not grant
+      // access to Apps; workspace membership alone does not allow their drafts either.
       for (const action of ["agent.read", "agent.write", "skill.read", "skill.write"]) {
-        await t.grant(t.kai.id, action, { namespace: "kai-" });
+        await t.grant(t.kai.id, action, { workspaceId: t.workspaceId });
       }
       const cwd = await temporaryDirectory();
       await writeFolder(join(cwd, "offers"), { "app.yaml": manifest(), "index.html": "<p>1</p>" });
