@@ -46,6 +46,21 @@ export const CONNECTION_OPERATION_NAME_MAX_LENGTH = 64;
  */
 export const CONNECTION_MAX_ACCEPTED_OPERATIONS = 100;
 
+/**
+ * The words that make a name of a request's header or parameter one that can carry a
+ * credential, compared without case. A REST API's fixed header holding one is refused in its
+ * settings; an agent's draft refuses a parameter holding one as a word. A release constant
+ * (manager, 2026-10-14).
+ */
+export const CONNECTION_CREDENTIAL_WORDS = [
+  "auth",
+  "key",
+  "token",
+  "secret",
+  "password",
+  "session"
+] as const;
+
 /** What an operation does to the outside system. A hint of that system never decides it. */
 export type ConnectionOperationEffect = "reading" | "changing";
 

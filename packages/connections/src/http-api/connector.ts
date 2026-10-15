@@ -1,5 +1,6 @@
 import type { IncomingMessage } from "node:http";
 import {
+  CONNECTION_CREDENTIAL_WORDS,
   CONNECTION_REFUSALS,
   connectionCallError,
   connectionCallReasonOf,
@@ -45,16 +46,10 @@ const FIXED_HEADER_VALUE_MAX_CHARS = 1_024;
 /**
  * The words that make a header name one that can carry a credential, compared without case.
  * Such a header is refused in the settings with `credential_in_settings`: a credential goes
- * through the auth scheme, never into a fixed header. A release constant (manager, 2026-10-14).
+ * through the auth scheme, never into a fixed header. The release's one list, which an agent's
+ * draft also refuses parameters by.
  */
-export const HTTP_API_CREDENTIAL_HEADER_WORDS = [
-  "auth",
-  "key",
-  "token",
-  "secret",
-  "password",
-  "session"
-] as const;
+export const HTTP_API_CREDENTIAL_HEADER_WORDS = CONNECTION_CREDENTIAL_WORDS;
 /** Names refused as a whole, beside the words: `Authorization` holds `auth` already. */
 const CREDENTIAL_HEADER_NAMES = ["proxy-authorization", "cookie"];
 

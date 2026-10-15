@@ -4004,7 +4004,19 @@ function unlistedInHelp(skill: string, help: string): string[] {
   for (const command of commands) {
     const [, first = "", second = ""] = command.split(/\s+/u);
     if (first.startsWith("-")) continue;
-    if (["config", "context", "kinds", "references", "login", "logout", "setup"].includes(first)) {
+    if (
+      [
+        "config",
+        "context",
+        "kinds",
+        "references",
+        "operation",
+        "requests",
+        "login",
+        "logout",
+        "setup"
+      ].includes(first)
+    ) {
       if (!listed(first)) problems.push(`command '${first}' in: ${command}`);
       if (first === "config" && !listed(second)) {
         problems.push(`command 'config ${second}' in: ${command}`);

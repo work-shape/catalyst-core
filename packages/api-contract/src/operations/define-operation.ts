@@ -138,6 +138,8 @@ export type OperationConfig = OperationAccess & {
   readonly path: string;
   readonly summary: string;
   readonly tag: string;
+  /** An alternative scope for personal keys only; the handler must enforce ownership. */
+  readonly personalKeyScope?: OperationScope;
   readonly effect: OperationEffect;
   readonly query?: OperationQuerySchema;
   readonly body?: z.ZodType;

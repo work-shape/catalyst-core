@@ -64,6 +64,10 @@ catalyst guardrail unpublish iban-check
 
 A publish shows its dry run first. A first publish that would stop actions asks for `--confirm <number>`: show the person the dry run and let them decide; never fill in the number yourself.
 
+## Follow a held call
+
+A change that exits 3 prints its Operation Run id. Follow it with `catalyst operation show <run-id>` and list your requests with `catalyst requests`. Add `--json` for the full record or list. A held run still exits 3; a failed, denied or expired run exits 1. Withdraw your own request with `catalyst requests --withdraw <id>` only when the person asks; the key needs an asset write or delete scope. Do not send the held change again.
+
 ## Exit codes
 
 - 0: done.
