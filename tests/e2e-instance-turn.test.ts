@@ -52,32 +52,53 @@ test("a turn records its holder and releases both the lock and its diagnostics",
   )();
 });
 
-test.each([
-  { workers: 1, budget: 180_000 },
-  { workers: 16, budget: 300_000 }
-])(
-  "a jammed queue with $workers workers fails after $budget ms and names its holder",
-  async ({ workers, budget }) => {
-    const { baseURL, lock } = instance();
-    const release = await takeTurn("access", baseURL);
-    // Even an abandoned directory that cannot be removed must respect the queue deadline.
-    await writeFile(join(lock, "jammed"), "");
-    info.config.workers = workers;
-    const started = Date.now();
-    vi.spyOn(Date, "now")
-      .mockReturnValueOnce(started)
-      .mockReturnValue(started + budget + 1);
-    try {
-      await expect(takeTurn("access", baseURL)).rejects.toThrow(
-        new RegExp(`after ${budget} ms: .*Holder: .*"title":"${info.title}"`, "u")
-      );
-      expect(await readFile(`${lock}.holder.json`, "utf8")).toContain(info.file);
-    } finally {
-      await rm(join(lock, "jammed"));
-      await release();
+test("a healthy queue can exceed five minutes across successive holders", async () => {
+  const { baseURL, lock, holder } = instance();
+  const release = await takeTurn("access", baseURL);
+  const started = Date.now();
+  let now = started;
+  vi.spyOn(Date, "now").mockImplementation(() => now);
+  let acquired = false;
+  const waiting = takeTurn("access", baseURL).then((done) => {
+    acquired = true;
+    return done;
+  });
+  try {
+    // Each holder is healthy for 170 s, while this waiter loses three turns. Update both
+    // the directory's acquisition time and the diagnostics just as a new holder does.
+    for (let turn = 0; turn < 3; turn++) {
+      const acquiredAt = new Date(started + turn * 170_000);
+      await utimes(lock, acquiredAt, acquiredAt);
+      await writeFile(holder, JSON.stringify({ pid: process.pid, startedAt: acquiredAt }));
+      now = acquiredAt.getTime() + 170_000;
+      await new Promise((done) => setTimeout(done, 300));
+      expect(acquired).toBe(false);
     }
+    expect(now - started).toBe(510_000);
+  } finally {
+    await release();
+    await (
+      await waiting
+    )();
   }
-);
+});
+
+test("an abandoned directory that cannot be reclaimed fails with holder diagnostics", async () => {
+  const { baseURL, lock, holder } = instance();
+  const release = await takeTurn("access", baseURL);
+  await writeFile(join(lock, "jammed"), "");
+  const abandonedAt = new Date(Date.now() - 180_001);
+  await utimes(lock, abandonedAt, abandonedAt);
+  try {
+    await expect(takeTurn("access", baseURL)).rejects.toThrow(
+      new RegExp(`holder older than 180000 ms: .*Holder: .*"title":"${info.title}"`, "u")
+    );
+    expect(await readFile(holder, "utf8")).toContain(info.file);
+  } finally {
+    await rm(join(lock, "jammed"));
+    await release();
+  }
+});
 
 test("an abandoned turn is reclaimed at the unchanged three-minute age", async () => {
   const { baseURL, lock } = instance();

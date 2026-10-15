@@ -486,8 +486,6 @@ function isAllowed(text: string, address: string, testTitle: string): boolean {
  * The budget for one holder of the instance state, also used to reclaim an abandoned lock.
  */
 const ACCESS_STATE_WAIT_MS = 180_000;
-/** A jammed queue fails within five minutes, naming the test holding the turn. */
-const MAX_TURN_QUEUE_WAIT_MS = 300_000;
 
 export interface PageErrorWatch {
   /** Watches a context a test opened itself, such as a second user's, before it opens a page. */
@@ -517,8 +515,6 @@ export async function takeTurn(
   const testInfo = base.info();
   // The sidecar keeps the directory empty, so abandoning a lock still uses atomic rmdir.
   const holderPath = `${lock}.holder.json`;
-  const waitMs = Math.min(ACCESS_STATE_WAIT_MS * testInfo.config.workers, MAX_TURN_QUEUE_WAIT_MS);
-  const waitUntil = Date.now() + waitMs;
   for (;;) {
     try {
       await mkdir(lock);
@@ -526,16 +522,22 @@ export async function takeTurn(
       if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
         throw error;
       }
-      if (Date.now() > waitUntil) {
-        const holder = await readFile(holderPath, "utf8").catch(() => "unavailable");
-        throw new Error(
-          `The turn "${name}" on the instance stayed taken after ${waitMs} ms: ${lock}. Holder: ${holder}`
-        );
-      }
-      // A run that was killed leaves its lock behind: one older than any test is taken over.
-      const age = (await ageOf(lock)) ?? 0;
-      if (age > ACCESS_STATE_WAIT_MS) {
-        await rmdir(lock).catch(() => undefined);
+      // Queue time is unbounded: only the age of the current holder matters. Each new
+      // holder creates a fresh directory, so progress restarts the abandonment clock.
+      const age = await ageOf(lock);
+      if (age !== undefined && age > ACCESS_STATE_WAIT_MS) {
+        try {
+          await rmdir(lock);
+        } catch (cause) {
+          if (cause instanceof Error && "code" in cause && cause.code === "ENOENT") {
+            continue;
+          }
+          const holder = await readFile(holderPath, "utf8").catch(() => "unavailable");
+          throw new Error(
+            `The turn "${name}" on the instance could not reclaim a holder older than ${ACCESS_STATE_WAIT_MS} ms: ${lock}. Holder: ${holder}`,
+            { cause }
+          );
+        }
       } else {
         await pause();
       }
@@ -615,7 +617,7 @@ export const test = base.extend<{
         await release();
       }
     },
-    // takeTurn caps the queue wait at five minutes, outside the test's own timeout.
+    // Healthy queue time is unbounded and does not consume the test's own timeout.
     { timeout: 0 }
   ],
   /**
@@ -701,7 +703,7 @@ export const test = base.extend<{
         await release();
       }
     },
-    // takeTurn caps the queue wait at five minutes, outside the test's own timeout.
+    // Healthy queue time is unbounded and does not consume the test's own timeout.
     { timeout: 0 }
   ],
   pageErrors: [
