@@ -23,6 +23,8 @@ A new Workflow is created with the CLI (`catalyst workflow put <name> --from …
 
 A change is always a **draft** first. The banner says **Draft, not published yet** ("Entwurf, noch nicht veröffentlicht") or **Draft differs from published** ("Entwurf weicht von der veröffentlichten Version ab"). Runs keep using the published version until the draft is published.
 
+The line **Runs as <account>** ("Läuft als <account>") under the heading names the active account by its display label. An unpublished draft shows the account configured in that draft too. No line is shown when that account is disabled or missing.
+
 ## Try it with a test run
 
 1. On the draft banner, click **Test run** ("Testlauf").

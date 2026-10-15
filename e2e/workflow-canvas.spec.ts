@@ -1,9 +1,103 @@
+import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { removeServicePrincipal } from "./connection-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
+
+test("an unpublished Workflow names its configured account under the heading in both locales", async ({
+  page,
+  accessState: _accessState
+}) => {
+  const id = `e2e-runas-${randomUUID().slice(0, 8)}`;
+  const assetUrl = `${apiBaseUrl}/api/v1/assets/workflow/${id}`;
+  const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+    data: {
+      email: "e2e-superadmin@example.test",
+      password: "e2e-superadmin-password",
+      rememberMe: true
+    }
+  });
+  expect(signedIn.ok()).toBe(true);
+  const created = await requestWithOrigin(
+    page,
+    "post",
+    `${apiBaseUrl}/api/v1/instance/service-principals`,
+    {
+      data: { displayLabel: "Draft automation", permissions: ["config_assets.read"] }
+    }
+  );
+  expect(created.ok()).toBe(true);
+  const { principal }: { principal: { id: string; name: string } } = await created.json();
+  try {
+    const saved = await requestWithOrigin(page, "put", assetUrl, {
+      data: {
+        expectedRevision: null,
+        config: {
+          name: id,
+          manifest: {
+            id,
+            name: "Draft account check",
+            runAs: principal.name,
+            inputs: { type: "object", additionalProperties: false },
+            outputs: {
+              type: "object",
+              properties: { done: { type: "integer" } },
+              required: ["done"]
+            },
+            steps: [
+              { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+              { id: "result", name: "Result", type: "output", input: { done: { value: 1 } } }
+            ]
+          }
+        }
+      }
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    const workspace = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/workspaces/personal`,
+      {}
+    );
+    expect(workspace.ok()).toBe(true);
+    const personal: { id: string } = await workspace.json();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    for (const locale of ["en", "de"]) {
+      await page.goto("/");
+      await page.evaluate(
+        (language) => window.localStorage.setItem("vivd-catalyst:locale", language),
+        locale
+      );
+      await page.goto(`/w/${personal.id}/workflows/${id}`);
+      const workflow = page.getByTestId("workflow-page");
+      await expect(workflow.getByRole("heading", { level: 1 })).toHaveText("Draft account check");
+      await expect(workflow.locator("[data-workflow-draft]")).toHaveAttribute(
+        "data-workflow-draft",
+        "unpublished"
+      );
+      await expect(
+        workflow.getByText(
+          locale === "de" ? "Läuft als Draft automation" : "Runs as Draft automation"
+        )
+      ).toBeVisible();
+      if (process.env.E2E_SHOTS_DIR) {
+        await mkdir(process.env.E2E_SHOTS_DIR, { recursive: true });
+        await page.screenshot({
+          path: join(process.env.E2E_SHOTS_DIR, `workflow-draft-head-${locale}-1280.png`),
+          animations: "disabled"
+        });
+      }
+    }
+  } finally {
+    await requestWithOrigin(page, "post", `${assetUrl}/delete`, { data: { expectedRevision: 1 } });
+    await removeServicePrincipal(principal.id);
+  }
+});
 
 interface Box {
   id: string;

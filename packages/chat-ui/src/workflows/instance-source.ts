@@ -133,7 +133,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
           config: isRecord(manifest) ? manifest : {},
           publishedRevision: summary === undefined ? undefined : asset.publishedRevision
         },
-        listedOf(summary),
+        summary === undefined ? { ...listedOf(summary), runsAs: asset.runsAs } : listedOf(summary),
         asset
       );
     },

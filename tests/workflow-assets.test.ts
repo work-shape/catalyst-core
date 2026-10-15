@@ -103,6 +103,34 @@ describe("a Workflow stored as an asset", () => {
       payload: { input: { note: NOTE } }
     });
 
+  it("names the active configured account on an unpublished draft to its writer", async () => {
+    const t = await ready();
+    await put(t, notifyClients(), null);
+    expect(await listed(t)).toEqual([]);
+    // A writer may read the draft's label without administering technical accounts.
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.write");
+    const read = () => t.expectOk(t.kai.id, "assets.get", { params: address });
+    expect((await read()).json()).toMatchObject({ runsAs: t.principal.displayLabel });
+    expect((await read()).json()).not.toHaveProperty("publishedRevision");
+    await t.expectRefused(
+      t.lena.id,
+      "assets.get",
+      { params: address },
+      {
+        status: 403,
+        code: "FORBIDDEN"
+      }
+    );
+    await t.stores.apiAccess.updateServicePrincipal({
+      clientInstanceId,
+      servicePrincipalId: t.principal.id,
+      status: "disabled"
+    });
+    expect((await read()).json()).not.toHaveProperty("runsAs");
+    await put(t, { ...notifyClients(), runAs: "unknown-account" }, 1);
+    expect((await read()).json()).not.toHaveProperty("runsAs");
+  });
+
   it("is written, published, listed, started and run to its end", async () => {
     const t = await ready();
     const revision = await put(t, notifyClients(), null);

@@ -21084,6 +21084,9 @@
           "config": {
             "$ref": "#/components/schemas/ConfigAssetConfig"
           },
+          "runsAs": {
+            "type": "string"
+          },
           "contentRevision": {
             "type": "integer",
             "exclusiveMinimum": 0,
