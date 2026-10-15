@@ -337,8 +337,7 @@ function ChatWorkspaceContent({
       onSignOut={model.auth.signOut}
     />
   );
-  const chat = model.selectedChat;
-  const collaborationWorkspace = model.collaborationWorkspace;
+  const { selectedChat: chat, collaborationWorkspace, conversationRail: rail } = model;
   const userLabel = model.auth.user.displayLabel || (model.auth.user.email ?? "");
   const collaborationWorkspaceSelector = collaborationWorkspacesAvailable ? (
     <CollaborationWorkspaceSelector
@@ -360,7 +359,6 @@ function ChatWorkspaceContent({
   const activeWorkspaceName = activeWorkspace
     ? collaborationWorkspaceDisplayName(activeWorkspace, userLabel, t)
     : undefined;
-  const rail = model.conversationRail;
   const closeDrawer = model.chrome.closeSidebarDrawer;
   const startNewChat = () => {
     closeDrawer();
