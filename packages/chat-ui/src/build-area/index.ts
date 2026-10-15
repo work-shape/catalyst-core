@@ -10,7 +10,8 @@ export type {
   BuildAssetKind,
   BuildAssetRow,
   BuildKind,
-  BuildListedKind
+  BuildListedKind,
+  BuildListLeadFilter
 } from "./build-asset-kind";
 export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
 export { type BuildAssetRead, type BuildList, type BuildSource } from "./build-data";
@@ -38,7 +39,7 @@ export { dataStoreKindOn } from "./data-store-kind";
 export { GuardrailPage } from "./guardrail-page";
 export { guardrailRunSentence, type GuardrailRunFacts } from "./guardrail-sentence";
 export type { GuardrailSource, ShippedGuardrailsRead } from "./guardrail-source";
-export { ShippedGuardrails } from "./shipped-guardrails";
+export { ShippedGuardrailsLead } from "./shipped-guardrails";
 export { dataStoreStateView, formatDataStoreSize } from "./data-store-model";
 export { DataStoreValueDialog } from "./data-store-rows";
 export type {
