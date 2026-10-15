@@ -472,6 +472,33 @@ describe("Banner", () => {
     expect(row?.split(" ")).toEqual(expect.arrayContaining(["flex", "flex-wrap", "min-w-0"]));
   });
 
+  it("centres its actions on the whole message and keeps the icon on the title's line", () => {
+    const markup = inRoot(
+      createElement(
+        Banner,
+        {
+          title: "Draft · not published",
+          action: createElement("button", { type: "button" }, "Publish"),
+          onDismiss: () => undefined
+        },
+        "Body"
+      )
+    );
+    // The message and the actions share one row that centres them; the icon and the text share
+    // one that starts at the top, so the icon stays beside the title.
+    const row = /<div role="status"[^>]*><div class="([^"]*)"><div class="([^"]*)"><span/u.exec(
+      markup
+    );
+    expect(row?.[1]?.split(" ")).toEqual(expect.arrayContaining(["flex", "items-center"]));
+    expect(row?.[2]?.split(" ")).toEqual(expect.arrayContaining(["flex", "items-start"]));
+    // An action is never pulled into the banner's padding.
+    const actions = /<div class="([^"]*)"><button type="button">Publish/u.exec(markup)?.[1];
+    expect(actions).toBeDefined();
+    expect(actions).not.toMatch(/-my-/u);
+    // The dismiss stays outside the row, so it never wraps under the actions.
+    expect(markup).toMatch(/<\/div><\/div><button[^>]*aria-label="Dismiss"/u);
+  });
+
   it("keeps the box and the tone's fill for the other layouts", () => {
     const inline = inRoot(createElement(Banner, { tone: "warning" }, "Read-only."));
     expect(inline).toMatch(/class="[^"]*border-warning-border bg-warning-soft[^"]*rounded-md/u);

@@ -173,6 +173,8 @@ export interface GalleryText
   bannerAction: string;
   bannerPage: string;
   bannerLine: string;
+  bannerTitleOnly: string;
+  bannerTitleOnlyAction: string;
   showAgain: string;
   noticeSaved: string;
   noticeFailed: string;
@@ -417,6 +419,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     bannerAction: "Connect",
     bannerPage: "You are working on the staging instance.",
     bannerLine: "Will be deleted automatically on Friday, October 16.",
+    bannerTitleOnly: "Draft · not published",
+    bannerTitleOnlyAction: "Publish",
     showAgain: "Show again",
     noticeSaved: "Saved",
     noticeFailed: "The connection test failed.",
@@ -668,6 +672,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     bannerAction: "Verbinden",
     bannerPage: "Du arbeitest auf der Staging-Instanz.",
     bannerLine: "Wird am Freitag, 16. Oktober automatisch gelöscht.",
+    bannerTitleOnly: "Entwurf · nicht veröffentlicht",
+    bannerTitleOnlyAction: "Veröffentlichen",
     showAgain: "Wieder anzeigen",
     noticeSaved: "Gespeichert",
     noticeFailed: "Der Verbindungstest ist fehlgeschlagen.",

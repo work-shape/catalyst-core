@@ -20,9 +20,16 @@ const bannerTones: Record<BannerTone, string> = {
 };
 
 const bannerLayouts: Record<BannerLayout, string> = {
-  inline: "gap-2.5 rounded-md border px-3 py-2 text-body",
-  page: "gap-2.5 border-b px-(--layout-gutter) py-2 text-body",
-  line: "gap-1.5 text-caption text-muted-foreground"
+  inline: "rounded-md border px-3 py-2 text-body",
+  page: "border-b px-(--layout-gutter) py-2 text-body",
+  line: "text-caption text-muted-foreground"
+};
+
+// One gap between the icon, the text, the actions and the dismiss, on every level of the row.
+const bannerGaps: Record<BannerLayout, string> = {
+  inline: "gap-2.5",
+  page: "gap-2.5",
+  line: "gap-1.5"
 };
 
 // A line has no fill to carry the tone, so its icon takes the tone's own colour.
@@ -70,52 +77,71 @@ export function Banner({
   const labels = useUiLabels("Banner");
   const shownIcon = icon === undefined ? toneIcons[tone] : icon;
   const line = layout === "line";
+  const gap = bannerGaps[layout];
   return (
     <div
       role={tone === "danger" ? "alert" : "status"}
       data-tone={tone}
       className={cn(
         "flex items-start",
-        // A message with an action stacks where the two do not fit beside each other.
-        action === undefined ? undefined : "flex-wrap sm:flex-nowrap",
         line ? undefined : bannerTones[tone],
         bannerLayouts[layout],
+        gap,
         className
       )}
       {...props}
     >
-      {shownIcon === null ? null : (
-        <span
-          className={cn(
-            "flex shrink-0 items-center",
-            line ? cn("h-4 [&>svg]:size-3.5", lineIconTones[tone]) : "h-5 [&>svg]:size-4"
+      {/*
+       * The message and its actions. An action is taller than a line of text, so it is centred
+       * on the whole message: one line sits on the action's middle, a title with its text has
+       * the action beside both, and the action never reaches into the banner's padding. Where
+       * the two do not fit beside each other, the actions take a line of their own.
+       */}
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 items-center",
+          action === undefined ? undefined : "flex-wrap sm:flex-nowrap",
+          gap
+        )}
+      >
+        {/* The icon stays on the first line of the message, beside the title it marks. */}
+        <div className={cn("flex min-w-0 flex-1 items-start", gap)}>
+          {shownIcon === null ? null : (
+            <span
+              className={cn(
+                "flex shrink-0 items-center",
+                line ? cn("h-4 [&>svg]:size-3.5", lineIconTones[tone]) : "h-5 [&>svg]:size-4"
+              )}
+            >
+              {shownIcon}
+            </span>
           )}
-        >
-          {shownIcon}
-        </span>
-      )}
-      <div className="grid min-w-0 flex-1 gap-0.5">
-        {title === undefined ? null : <p className="text-label">{title}</p>}
-        {children === undefined ? null : <div>{children}</div>}
-      </div>
-      {action === undefined ? null : (
-        <div
-          className={cn(
-            // Several actions wrap onto further lines where one line is too narrow for them,
-            // as on a phone, instead of running past the edge.
-            "flex min-w-0 shrink-0 basis-full flex-wrap items-center gap-1 sm:-my-1.5 sm:basis-auto",
-            // On its own line the action starts where the text does, after the icon.
-            shownIcon === null ? undefined : line ? "pl-5 sm:pl-0" : "pl-6.5 sm:pl-0"
-          )}
-        >
-          {action}
+          <div className="grid min-w-0 flex-1 gap-0.5">
+            {title === undefined ? null : <p className="text-label">{title}</p>}
+            {children === undefined ? null : <div>{children}</div>}
+          </div>
         </div>
-      )}
+        {action === undefined ? null : (
+          <div
+            className={cn(
+              // Several actions wrap onto further lines where one line is too narrow for them,
+              // as on a phone, instead of running past the edge.
+              "flex min-w-0 shrink-0 basis-full flex-wrap items-center gap-1 sm:basis-auto",
+              // On its own line the action starts where the text does, after the icon.
+              shownIcon === null ? undefined : line ? "pl-5 sm:pl-0" : "pl-6.5 sm:pl-0"
+            )}
+          >
+            {action}
+          </div>
+        )}
+      </div>
       {onDismiss ? (
         <IconButton
           size="sm"
           label={labels.dismiss}
-          className="-my-1 -mr-1 text-current"
+          // Beside the actions it takes their middle; above actions on a line of their own it
+          // stays on the first line, at the top end of the banner.
+          className="-my-1 -mr-1 text-current sm:self-center"
           onClick={onDismiss}
         >
           <X aria-hidden="true" />

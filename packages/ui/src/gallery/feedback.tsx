@@ -54,6 +54,15 @@ function BannerSamples({ text }: { text: GalleryText }) {
           {text.bannerWarning}
         </Banner>
       )}
+      <Banner
+        tone="info"
+        title={text.bannerTitleOnly}
+        action={
+          <Button variant="outline" size="sm">
+            {text.bannerTitleOnlyAction}
+          </Button>
+        }
+      />
       <Banner tone="success" icon={null}>
         {text.bannerSuccess}
       </Banner>
