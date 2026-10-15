@@ -17,7 +17,7 @@ import {
   type RegisteredJobHandler,
   type WorkspaceCommand,
   type WorkspaceCommandError
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   WORKSPACE_COMMAND_CANCELLATION_CHECK_INTERVAL_MS,
   WORKSPACE_COMMAND_LEASE_MS,

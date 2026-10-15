@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { createChatServerJobs } from "@vivd-catalyst/chat-server";
-import { createJobWorker } from "@vivd-catalyst/client-assembly";
-import type { ClientInstanceId, Logger, ModelUsageBackfillPosition } from "@vivd-catalyst/core";
+import { createChatServerJobs } from "@work-shape/catalyst-server";
+import { createJobWorker } from "@work-shape/catalyst-client-assembly";
+import type {
+  ClientInstanceId,
+  Logger,
+  ModelUsageBackfillPosition
+} from "@work-shape/catalyst-core";
 import { waitUntil } from "./support/assertions";
 import { createFailingTestLogger } from "./support/fixtures";
 import { usePostgresSuite } from "./support/postgres-suite";

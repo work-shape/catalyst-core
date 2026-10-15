@@ -3,21 +3,24 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { defineClientInstance } from "@vivd-catalyst/client-assembly";
-import { connectionConfigSchema, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { defineClientInstance } from "@work-shape/catalyst-client-assembly";
+import {
+  connectionConfigSchema,
+  parseClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import {
   createSecretStore,
   egressTargetOfUrl,
   loadSecretKeyring,
   openConnectorContext
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   SHARED_CREDENTIAL_SUBJECT,
   asClientInstanceId,
   connectionCallSentence,
   egressOriginOf,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import { connection } from "./support/connections";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";

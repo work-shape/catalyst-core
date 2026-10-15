@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { isJsonObject } from "@vivd-catalyst/core";
-import { defineTool } from "@vivd-catalyst/tool-sdk";
+import { isJsonObject } from "@work-shape/catalyst-core";
+import { defineTool } from "@work-shape/catalyst-tool-sdk";
 
 describe("tool SDK", () => {
   it("derives provider-facing input JSON Schema from Zod input schemas", () => {

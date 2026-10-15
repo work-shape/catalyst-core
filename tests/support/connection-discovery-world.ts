@@ -1,8 +1,8 @@
 import { expect } from "vitest";
 import { z } from "zod";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { discoverConnection, readConnectionCatalog } from "@vivd-catalyst/connections";
-import { asClientInstanceId, type ConnectorOperationDescriptor } from "@vivd-catalyst/core";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { discoverConnection, readConnectionCatalog } from "@work-shape/catalyst-connections";
+import { asClientInstanceId, type ConnectorOperationDescriptor } from "@work-shape/catalyst-core";
 import { required } from "./assertions";
 import { createDiscoveringTestConnector, listedOperation } from "./discovering-test-connector";
 import { createTestConfig, setTestAgent } from "./fixtures";

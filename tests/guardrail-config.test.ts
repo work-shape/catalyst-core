@@ -2,14 +2,14 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { type ApprovalRequestHandler } from "@vivd-catalyst/core";
+import { type ApprovalRequestHandler } from "@work-shape/catalyst-core";
 import {
   APPROVAL_CHECKS_WITH_GUARDRAILS_REFUSAL,
   clientInstanceConfigSchema,
   loadClientInstanceConfigFromFile,
   parseClientInstanceConfig,
   type ReleaseGuardrailConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import { assertClientAssemblyValid } from "../packages/client-assembly/src/assembly-validation";
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 

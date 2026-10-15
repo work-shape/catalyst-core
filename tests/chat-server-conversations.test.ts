@@ -8,10 +8,10 @@ import {
   asConversationId,
   asClientInstanceId,
   asManagedFileId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import {
   createTestConfig,
   createTestUser,

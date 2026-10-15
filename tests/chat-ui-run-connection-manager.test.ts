@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RunObservation } from "@vivd-catalyst/api-client";
+import type { RunObservation } from "@work-shape/catalyst-api-client";
 import {
   startRunConnectionManager,
   type RunConnectionCompletion,

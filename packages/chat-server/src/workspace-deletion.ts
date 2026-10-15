@@ -4,7 +4,7 @@ import {
   type CollaborationWorkspaceId,
   type PlatformStores,
   type UserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { assertConversationIdle } from "./conversation-idle";
 import { deleteWorkspaceJob } from "./job-kinds";
 import {

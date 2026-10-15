@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { combineDataToolSources, createAppActionToolSource } from "@vivd-catalyst/chat-server";
-import { createConnectionToolSource } from "@vivd-catalyst/connections";
-import { asUserId, type AuditEvent, type OperationRun } from "@vivd-catalyst/core";
+import { combineDataToolSources, createAppActionToolSource } from "@work-shape/catalyst-server";
+import { createConnectionToolSource } from "@work-shape/catalyst-connections";
+import { asUserId, type AuditEvent, type OperationRun } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { resultSchema } from "./support/app-actions";
 import { expectStatus } from "./support/app-instance";

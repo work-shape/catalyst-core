@@ -1,8 +1,8 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { AUTH_MOUNT_PATH } from "@vivd-catalyst/api-client";
-import { runLocalKeyCli } from "@vivd-catalyst/client-assembly";
+import { AUTH_MOUNT_PATH } from "@work-shape/catalyst-api-client";
+import { runLocalKeyCli } from "@work-shape/catalyst-client-assembly";
 import { afterEach, describe, expect, it } from "vitest";
 import { testOperations } from "./support/operations";
 

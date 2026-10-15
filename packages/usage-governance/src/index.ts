@@ -27,7 +27,7 @@ import {
   type UsageSafeguardsConfig,
   createModelUsageWindowBounds,
   isBilledAsFast
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { calculateUsageCost, normalizeCount, priceTokens, totalComponents } from "./cost";
 
 export { calculateUsageCost, type UsageCostEvent } from "./cost";

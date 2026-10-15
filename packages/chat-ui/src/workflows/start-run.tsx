@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
-import { Button, Dialog, Field, InlineError, Input, Select, Switch } from "@vivd-catalyst/ui";
+import { Button, Dialog, Field, InlineError, Input, Select, Switch } from "@work-shape/catalyst-ui";
 import { instanceSentence, readRefusalDetails } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
 import {

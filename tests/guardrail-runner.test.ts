@@ -16,26 +16,26 @@ import {
   unknownToJsonValue,
   type JsonObject,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 import {
   GuardrailRunner,
   ApprovalRequestWorkflow,
   createSkillChangeApprovalHandler
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   createSkillChangePreview,
   parseClientInstanceConfig,
   type ReleaseGuardrailConfig,
   type SkillChangeOperation
-} from "@vivd-catalyst/config-schema";
-import type { ModelCompletion } from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-config-schema";
+import type { ModelCompletion } from "@work-shape/catalyst-model-provider";
 import {
   createScriptedInstanceModelGateway,
   type FakeModelProvider as ModelProvider
 } from "./support/model-gateway";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { createProposeSkillChangeTool } from "@vivd-catalyst/tool-execution";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
+import { createProposeSkillChangeTool } from "@work-shape/catalyst-tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
 import { createConfigAssetSource } from "../packages/client-assembly/src/config-asset-source";
 import { createTestConfig } from "./support/fixtures";

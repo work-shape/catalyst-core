@@ -9,9 +9,12 @@ import {
 import { testOperations } from "./support/operations";
 
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { API_VERSION_PREFIX, issueSessionTokenResponseSchema } from "@vivd-catalyst/api-contract";
-import { createInProcessRateLimiter } from "@vivd-catalyst/chat-server";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import {
+  API_VERSION_PREFIX,
+  issueSessionTokenResponseSchema
+} from "@work-shape/catalyst-api-contract";
+import { createInProcessRateLimiter } from "@work-shape/catalyst-server";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 
 import {
@@ -22,7 +25,7 @@ import {
   IdentityResolvingAuthAdapter,
   createStandaloneAuthRuntime,
   type StandaloneAuthRuntime
-} from "@vivd-catalyst/auth";
+} from "@work-shape/catalyst-auth";
 import { routeTestOperations } from "./support/operations";
 import Fastify from "../packages/chat-server/node_modules/fastify/fastify.js";
 import { installErrorHandler } from "../packages/chat-server/src/errors";

@@ -1,4 +1,7 @@
-import { IDEMPOTENCY_KEY_MAX_LENGTH, type OperationEffect } from "@vivd-catalyst/asset-schemas";
+import {
+  IDEMPOTENCY_KEY_MAX_LENGTH,
+  type OperationEffect
+} from "@work-shape/catalyst-asset-schemas";
 import type { OperationDenial } from "./operation-denial";
 import type { ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { ActingServicePrincipal, AuthenticatedIdentity, RuntimeCallContext } from "./identity";

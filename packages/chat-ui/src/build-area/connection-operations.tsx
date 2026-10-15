@@ -8,8 +8,8 @@ import {
   FormNotice,
   List,
   type BadgeTone
-} from "@vivd-catalyst/ui";
-import type { ConnectionOperationDetail } from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-ui";
+import type { ConnectionOperationDetail } from "@work-shape/catalyst-api-client";
 import { useTranslation, type TranslationKey } from "../i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { operationTitle } from "./connection-approval-model";

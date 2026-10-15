@@ -1,4 +1,4 @@
-import type { PersonalApiKeyStore } from "@vivd-catalyst/core";
+import type { PersonalApiKeyStore } from "@work-shape/catalyst-core";
 import {
   approveConnectCode,
   createPersonalApiKey,

@@ -1,6 +1,11 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, listAll, type ApiClient, type DraftAttachment } from "@vivd-catalyst/api-client";
+import {
+  ApiError,
+  listAll,
+  type ApiClient,
+  type DraftAttachment
+} from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useTranslation, type TranslationContextValue } from "../i18n";
 import type { LocalUploadingAttachment } from "../assistant/assistant-composer";

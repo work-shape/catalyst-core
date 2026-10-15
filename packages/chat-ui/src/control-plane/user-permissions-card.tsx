@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import type { AdministeredUser, UpdateAdministeredUserRequest } from "@vivd-catalyst/api-client";
-import type { Permission } from "@vivd-catalyst/core";
-import { Badge, Card, CardContent, CardHeader, CardTitle, Switch } from "@vivd-catalyst/ui";
+import type {
+  AdministeredUser,
+  UpdateAdministeredUserRequest
+} from "@work-shape/catalyst-api-client";
+import type { Permission } from "@work-shape/catalyst-core";
+import { Badge, Card, CardContent, CardHeader, CardTitle, Switch } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import {
   USER_PERMISSION_SOURCE_LABEL_KEYS,

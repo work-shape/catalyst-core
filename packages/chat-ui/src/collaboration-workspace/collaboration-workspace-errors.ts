@@ -1,4 +1,4 @@
-import type { ApiErrorCode } from "@vivd-catalyst/api-client";
+import type { ApiErrorCode } from "@work-shape/catalyst-api-client";
 import type { TranslationKey } from "../i18n";
 import { apiErrorCode, apiErrorStatus } from "../workspace-utils";
 

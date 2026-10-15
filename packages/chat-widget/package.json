@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/chat-widget",
+  "name": "@work-shape/catalyst-chat-widget",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/chat-widget"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,7 +34,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/chat-ui": "workspace:*",
+    "@work-shape/catalyst-chat-ui": "workspace:*",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

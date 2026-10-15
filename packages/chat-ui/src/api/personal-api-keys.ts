@@ -7,7 +7,7 @@ import {
   type ConfirmConnectCodeRequest,
   type CreatePersonalApiKeyRequest,
   type CreatePersonalApiKeyResponse
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 
 interface PersonalApiKeysInput {

@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   Field,
   PageHeader,
@@ -7,7 +7,7 @@ import {
   SegmentedControlItem,
   Select,
   Switch
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../i18n";
 import type { ThemeModePreference } from "../../theme";
 import { useSettingsPage, type SettingsPageContextValue } from "../settings-page-context";

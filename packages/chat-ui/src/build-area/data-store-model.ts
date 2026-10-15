@@ -1,5 +1,5 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
-import type { BadgeTone } from "@vivd-catalyst/ui";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../i18n";
 import type { DataStoreState } from "./data-store-source";
 

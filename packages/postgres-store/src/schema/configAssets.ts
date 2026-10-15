@@ -23,7 +23,7 @@ import type {
   ConfigAssetRevisionRecord,
   FileSetId,
   JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { collaborationWorkspaces } from "./workspaces";
 
 export const configAssetState = pgTable("config_asset_state", {

@@ -97,7 +97,7 @@ const requiredContextFiles = [
 const demoOnlyServerBuildGuards = [
   "clients/demo/dist/artifact-preview-worker.js",
   "packages/client-assembly/dist/index.js",
-  "clients/demo/node_modules/@vivd-catalyst/client-assembly",
+  "clients/demo/node_modules/@work-shape/catalyst-client-assembly",
   "cd clients/demo"
 ];
 
@@ -130,7 +130,7 @@ describe("artifact preview runtime wiring", () => {
     for (const demoOnlyGuard of demoOnlyServerBuildGuards) {
       expect(serverBuild).not.toContain(demoOnlyGuard);
     }
-    expect(serverBuild).toContain("await import('@vivd-catalyst/client-assembly')");
+    expect(serverBuild).toContain("await import('@work-shape/catalyst-client-assembly')");
     expect(serverBuild).toContain("runClientInstanceArtifactPreviewWorker");
     expect(serverBuild).not.toContain("build:ui");
     expect(uiBuild).toContain('pnpm --filter "${UI_PACKAGE}^..." build');
@@ -172,7 +172,7 @@ describe("artifact preview runtime wiring", () => {
     // The runner carries the command that builds a saved Page, and its build runs the command:
     // an image without it, or with one that cannot build, does not come out of the build.
     const pageBuild = extractDockerStage(dockerfile, "page-build-command");
-    expect(pageBuild).toContain('pnpm --filter "@vivd-catalyst/app-build..." build');
+    expect(pageBuild).toContain('pnpm --filter "@work-shape/catalyst-app-build..." build');
     expect(pageBuild).toContain("install --offline --frozen-lockfile");
     expect(workspaceRunner).toContain(
       "COPY --from=page-build-command /opt/catalyst-page-build /opt/catalyst-page-build"
@@ -182,7 +182,7 @@ describe("artifact preview runtime wiring", () => {
     // The command that keeps repositories reaches the runner the same way, with the git it
     // runs. Git is installed in the runner's own stage: every other image builds on a stage
     // before it and carries none.
-    expect(pageBuild).toContain('pnpm --filter "@vivd-catalyst/asset-repo..." build');
+    expect(pageBuild).toContain('pnpm --filter "@work-shape/catalyst-asset-repo..." build');
     expect(workspaceRunner).toContain(
       "COPY --from=page-build-command /opt/catalyst-asset-repo /opt/catalyst-asset-repo"
     );

@@ -1,5 +1,5 @@
-import type { Operation } from "@vivd-catalyst/api-contract";
-import { AppError } from "@vivd-catalyst/core";
+import type { Operation } from "@work-shape/catalyst-api-contract";
+import { AppError } from "@work-shape/catalyst-core";
 import type { z } from "zod";
 import type { ResolvedChatServerOptions } from "../types";
 

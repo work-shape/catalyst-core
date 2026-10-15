@@ -10,12 +10,12 @@ import {
   type EgressProtocol,
   type EgressTarget,
   normalizeEgressHost
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   embeddedIpv4AddressesOf,
   isBlockedIpAddress,
   nodeWebFetchAddressResolver
-} from "@vivd-catalyst/web-access";
+} from "@work-shape/catalyst-web-access";
 
 // The one egress checker. Every connection a Connection opens passes `check` first, whatever
 // its Connector type. The list is the operator's and is deny by default.

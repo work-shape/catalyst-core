@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EmptyState } from "@vivd-catalyst/ui";
+import { EmptyState } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { changedSourcePaths, defaultOpenPath, PageFilesView } from "../pages/page-files";
 import { useAppFiles } from "./app-data";

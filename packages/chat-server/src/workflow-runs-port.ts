@@ -8,7 +8,7 @@ import type {
   WorkflowRunView,
   WorkflowStepRunFilter,
   WorkflowStepRunView
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * What the API reaches of the Workflow engine. The assembly hands it in where the module

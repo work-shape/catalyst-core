@@ -1,7 +1,7 @@
-import type { ChatServerOptions } from "@vivd-catalyst/chat-server";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { ProviderCreateContext, ProviderRegistry } from "@vivd-catalyst/core";
-import { TemplateMailSender, type MailSenderIdentity } from "@vivd-catalyst/mail";
+import type { ChatServerOptions } from "@work-shape/catalyst-server";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import type { ProviderCreateContext, ProviderRegistry } from "@work-shape/catalyst-core";
+import { TemplateMailSender, type MailSenderIdentity } from "@work-shape/catalyst-mail";
 
 /** The mail sender of an instance, or nothing when `infrastructure.mail` is absent. */
 export async function createClientInstanceMail(input: {

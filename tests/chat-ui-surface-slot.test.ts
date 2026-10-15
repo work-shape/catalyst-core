@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
-import { pageSurfaceRendering } from "@vivd-catalyst/chat-ui/pages";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { pageSurfaceRendering } from "@work-shape/catalyst-chat-ui/pages";
 import { SurfaceSlotFrame } from "../packages/chat-ui/src/surface/surface-slot";
 import { renderToStaticMarkup } from "./chat-ui-render-harness";
 

@@ -1,4 +1,4 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { Route } from "../http/route";
 import { PersonalApiKeysWorkflow, authorizeOwnKeyChange } from "../personal-api-keys-workflow";
 import type { ChatServerOptions } from "../types";

@@ -5,7 +5,7 @@ import {
   WORKFLOW_STEP_TYPES,
   type ShippedSkill,
   type WorkflowStep
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   WORKFLOW_CODE_ERRORS,
   WORKFLOW_CODE_FILE_MAX_BYTES,

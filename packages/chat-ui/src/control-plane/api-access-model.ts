@@ -1,4 +1,7 @@
-import type { ApiCredentialScope, ServicePrincipalPermission } from "@vivd-catalyst/api-client";
+import type {
+  ApiCredentialScope,
+  ServicePrincipalPermission
+} from "@work-shape/catalyst-api-client";
 import type { TranslationKey } from "../i18n";
 
 export const DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS: ServicePrincipalPermission[] = [

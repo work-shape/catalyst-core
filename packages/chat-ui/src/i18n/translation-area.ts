@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 
 /** The messages of one area of the interface: the same keys in every supported locale. */
 export type TranslationArea<Key extends string = string> = Record<LocaleCode, Record<Key, string>>;

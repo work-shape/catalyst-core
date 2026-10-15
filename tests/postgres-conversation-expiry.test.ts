@@ -1,4 +1,4 @@
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import {
   asAgentRunId,
@@ -6,7 +6,7 @@ import {
   type Conversation,
   type ManagedFileRecord,
   type PrepareConversationRunStartInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { settled, waitUntilBlocked } from "./support/postgres-concurrency-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
 

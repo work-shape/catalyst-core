@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ApiKeyAccessTokenExchange, HmacServiceAccessTokenAuthAdapter } from "@vivd-catalyst/auth";
+import {
+  ApiKeyAccessTokenExchange,
+  HmacServiceAccessTokenAuthAdapter
+} from "@work-shape/catalyst-auth";
 import {
   createPlatformId,
   WORKFLOW_ASSET_KIND,
@@ -8,9 +11,9 @@ import {
   type OperationDraftContext,
   type ServicePrincipalRecord,
   type UserRecord
-} from "@vivd-catalyst/core";
-import { runOperation } from "@vivd-catalyst/tool-execution";
-import { parseWorkflowManifest } from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
+import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { runIdentity, workflowOrigin } from "./support/principal-grants";
 import type { WorkflowFixture } from "./support/workflow-instance";

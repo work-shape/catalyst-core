@@ -10,8 +10,8 @@ import { setTestAgent } from "./support/fixtures";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { sendWebResponse } from "../packages/chat-server/src/routes/better-auth-routes";
 
 describe("web response bridge", () => {

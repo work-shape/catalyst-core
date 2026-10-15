@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect } from "vitest";
 import { z } from "zod";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { JsonObject } from "@vivd-catalyst/core";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import type { JsonObject } from "@work-shape/catalyst-core";
 import { createTestConfig } from "./fixtures";
 import { createTestInstance, getTestExecution, type TestInstance } from "./test-instance";
 

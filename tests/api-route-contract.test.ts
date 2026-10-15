@@ -5,14 +5,14 @@ import {
   listQuerySchema,
   timestampSchema,
   type Operation
-} from "@vivd-catalyst/api-contract";
-import { HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
+} from "@work-shape/catalyst-api-contract";
+import { HmacSessionTokenIssuer } from "@work-shape/catalyst-auth";
 import {
   AppError,
   asClientInstanceId,
   StoreBackedAuditRecorder,
   type Logger
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { routeTestOperations as operations } from "./support/operations";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";

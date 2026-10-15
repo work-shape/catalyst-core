@@ -15,7 +15,7 @@ import {
   type EgressGrant,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { isSameEgressOrigin } from "./egress";
 
 // The connector auth component. It is the one place a Connector type gets a context from,

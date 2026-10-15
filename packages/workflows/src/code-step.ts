@@ -5,7 +5,7 @@ import {
   type OperationEffect,
   type WorkflowManifest,
   type WorkflowStep
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // The `code` step: one script file of a Workflow's step files folder, run on the step's input
 // in a container of the command runner. This file holds what a definition is checked against;

@@ -5,7 +5,7 @@ import type {
   InfrastructureCheck,
   InfrastructureClass,
   InfrastructureProvider
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Banner,
@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
   type BadgeTone
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatTime } from "../../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../../i18n";
 import { OperatorManaged } from "../operator-managed";

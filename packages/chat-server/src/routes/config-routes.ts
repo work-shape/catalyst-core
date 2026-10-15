@@ -1,10 +1,10 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { createClientBranding, createSafeConfigView } from "@vivd-catalyst/config-schema";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { createClientBranding, createSafeConfigView } from "@work-shape/catalyst-config-schema";
 import {
   allowedLegacyPermissions,
   moduleConfigKey,
   readDatabaseReadiness
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { getWorkspaceAssetSnapshot } from "../agent-availability";
 import { agentConnections } from "../agent-connections";
 import type { Route } from "../http/route";

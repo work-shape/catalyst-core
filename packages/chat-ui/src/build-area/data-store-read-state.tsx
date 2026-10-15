@@ -1,6 +1,6 @@
 import { Lock } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button, EmptyState, InlineError, SkeletonList } from "@vivd-catalyst/ui";
+import { Button, EmptyState, InlineError, SkeletonList } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import type { DataStoreRead } from "./data-store-source";
 

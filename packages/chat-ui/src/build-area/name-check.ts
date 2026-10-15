@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { AddressCheck } from "@vivd-catalyst/ui";
+import type { AddressCheck } from "@work-shape/catalyst-ui";
 import type { CheckName, NameCheckAnswer } from "../api/asset-writes";
 import { useTranslation, type TranslationContextValue } from "../i18n";
 import { apiErrorCode } from "../workspace-utils";

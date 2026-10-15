@@ -8,7 +8,7 @@ import {
   type NamespaceWithUsage,
   type PermissionGrantRow,
   type PlatformContext
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   NAMESPACE_PREFIX_MAX_LENGTH,
   NAMESPACE_PREFIX_MIN_LENGTH,
@@ -17,7 +17,7 @@ import {
   GRANTABLE_ACTIONS,
   explainAccessEntries,
   type GrantableAction
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /** A kind of the instance's registry, with the actions its rights are checked as. */
 export type CheckedKind = PlatformContext["kinds"][number];

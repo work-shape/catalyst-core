@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
-import { createOpenApiDocument } from "@vivd-catalyst/api-contract";
-import type { Logger } from "@vivd-catalyst/core";
-import { READINESS_DATABASE_TIMEOUT_MS } from "@vivd-catalyst/postgres-store";
+import { createOpenApiDocument } from "@work-shape/catalyst-api-contract";
+import type { Logger } from "@work-shape/catalyst-core";
+import { READINESS_DATABASE_TIMEOUT_MS } from "@work-shape/catalyst-postgres-store";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 

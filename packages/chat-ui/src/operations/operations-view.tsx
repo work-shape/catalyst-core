@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import type { ReactNode } from "react";
-import type { OperationRunResource } from "@vivd-catalyst/api-client";
+import type { OperationRunResource } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
   cn
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import {

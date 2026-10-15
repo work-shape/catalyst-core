@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { WORKFLOW_RUN_JOB_KINDS } from "@vivd-catalyst/core";
+import { WORKFLOW_RUN_JOB_KINDS } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestJobs } from "./support/test-instance";

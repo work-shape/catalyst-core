@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from "react";
-import { EmptyState, Spinner } from "@vivd-catalyst/ui";
+import { EmptyState, Spinner } from "@work-shape/catalyst-ui";
 
 /** What a preview shows. A bundle is a built Page at an address of the instance. */
 type PreviewSource = { kind: "bundle"; url: string };

@@ -9,7 +9,7 @@ import {
   type WorkspaceCommandId,
   type WorkspaceCommandStore,
   type WorkspaceFile
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   cancelClaimedWorkspaceCommand as cancelClaimedPostgresWorkspaceCommand,
   claimWorkspaceCommand as claimPostgresWorkspaceCommand,
@@ -35,7 +35,7 @@ import {
   requestWorkspaceCommandCancellation as requestPostgresWorkspaceCommandCancellation,
   upsertWorkspaceFile as upsertPostgresWorkspaceFile
 } from "../postgres-execution-workspace-operations";
-import type { ExecutionWorkspacesStore } from "@vivd-catalyst/core";
+import type { ExecutionWorkspacesStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 export function createPostgresExecutionWorkspacesStore(
   db: PostgresConnection

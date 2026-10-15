@@ -1,11 +1,11 @@
-import { AGENT_RUN_HELD_END_MAX_EVENTS } from "@vivd-catalyst/agent-runtime";
-import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
+import { AGENT_RUN_HELD_END_MAX_EVENTS } from "@work-shape/catalyst-agent-runtime";
+import { ApprovalRequestWorkflow } from "@work-shape/catalyst-server";
 import {
   JobLeaseLostError,
   StoreBackedAuditRecorder,
   type AgentRunJobLease,
   type ApprovalRequestHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import {
   useAgentRunJobFixture,

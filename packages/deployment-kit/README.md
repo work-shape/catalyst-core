@@ -1,4 +1,4 @@
-# @vivd-catalyst/deployment-kit
+# @work-shape/catalyst-deployment-kit
 
 Release and deploy tooling for operated Catalyst instances: one Hetzner VM per environment,
 Docker Compose, images on GHCR, releases as manifests of image digests. A deployment repo
@@ -18,7 +18,7 @@ The package is not published yet. A deployment uses it from the platform checkou
 ```sh
 INSTANCE=acme
 IMAGE_REPOSITORY=ghcr.io/vivd-solutions/vivd-catalyst-acme
-APP_PACKAGE=@vivd-catalyst/acme
+APP_PACKAGE=@work-shape/deployment-acme
 EXECUTION_WORKSPACES=1
 ```
 

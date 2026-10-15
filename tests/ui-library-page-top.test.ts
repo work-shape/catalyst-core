@@ -9,7 +9,7 @@ import {
   SubRail,
   UiRoot,
   uiLabelsEn
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 
 function render(element: ReactElement): string {
   return renderToStaticMarkup(

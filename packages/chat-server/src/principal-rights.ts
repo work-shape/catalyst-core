@@ -11,7 +11,7 @@ import {
   type HeldRight,
   type OperationAuthorization,
   type ServicePrincipalRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { authorizeHeldRightsWithin } from "./held-rights-within";
 
 /** What the rights of a service principal are read from: its grant rows and their assets. */

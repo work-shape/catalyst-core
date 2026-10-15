@@ -1,4 +1,4 @@
-import { createConfigAssetSource } from "@vivd-catalyst/client-assembly";
+import { createConfigAssetSource } from "@work-shape/catalyst-client-assembly";
 import type {
   AgentConfig,
   ClientInstanceId,
@@ -6,7 +6,7 @@ import type {
   ConfigAssetStore,
   RuntimeAssetSnapshot,
   SkillConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 export function createStaticConfigAssetSource(input: {
   agents?: AgentConfig[];

@@ -2,15 +2,15 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
-import type { AssetSummary, PermissionGrantRow } from "@vivd-catalyst/api-client";
+import type { AssetSummary, PermissionGrantRow } from "@work-shape/catalyst-api-client";
 import {
   actionLabel,
   GrantsTab,
   PrincipalRights,
   principalGrantViews
-} from "@vivd-catalyst/chat-ui/access";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
-import { ACTIONS, PERMISSIONS, PRINCIPAL_GRANTABLE_ACTIONS } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-chat-ui/access";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { ACTIONS, PERMISSIONS, PRINCIPAL_GRANTABLE_ACTIONS } from "@work-shape/catalyst-core";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";

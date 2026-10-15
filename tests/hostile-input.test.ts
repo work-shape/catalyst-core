@@ -1,21 +1,21 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import { buildPage } from "@vivd-catalyst/app-build/build";
-import { SkillMarkdownError, parseSkillMarkdown } from "@vivd-catalyst/asset-schemas";
-import { loadSecretKeyring } from "@vivd-catalyst/connections";
+import { LocalAgentRuntime } from "@work-shape/catalyst-agent-runtime";
+import { buildPage } from "@work-shape/catalyst-app-build/build";
+import { SkillMarkdownError, parseSkillMarkdown } from "@work-shape/catalyst-asset-schemas";
+import { loadSecretKeyring } from "@work-shape/catalyst-connections";
 import {
   asClientInstanceId,
   isAppError,
   type ModelProviderConfig,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
-import { createDataStores } from "@vivd-catalyst/data-stores";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { readWorkflowManifest } from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-core";
+import { createDataStores } from "@work-shape/catalyst-data-stores";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
+import { readWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { errorSchema } from "./support/access-instance";
 import { setupAppInstance, type AppInstance } from "./support/app-instance";
 import {

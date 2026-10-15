@@ -3,7 +3,7 @@ import {
   INSTANCE_ASSET_SCOPE,
   type AssetScope,
   type ConfigAssetRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 
 /** A write as far as this rule reads it: a store mutation, or a definition a validate asks of. */

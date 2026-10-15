@@ -11,7 +11,7 @@ import {
   type WorkflowConditionOutput,
   type WorkflowParallelOutput,
   type WorkflowStep
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 // The file form of branches and parallel paths: nested blocks in the step list. The two block

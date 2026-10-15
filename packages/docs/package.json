@@ -1,5 +1,5 @@
 {
-  "name": "@vivd-catalyst/docs",
+  "name": "@work-shape/catalyst-docs",
   "version": "0.7.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
-    "@vivd-catalyst/api-contract": "workspace:*",
+    "@work-shape/catalyst-api-contract": "workspace:*",
     "typescript": "^6.0.3",
     "vite": "^7.3.5"
   }

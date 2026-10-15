@@ -9,7 +9,7 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { ClientInstanceId, JobId, JobStatus, JsonObject } from "@vivd-catalyst/core";
+import type { ClientInstanceId, JobId, JobStatus, JsonObject } from "@work-shape/catalyst-core";
 
 /** The one queue of the product. `jobs/` holds the only code that reads or writes it. */
 export const platformJobs = pgTable(

@@ -4,21 +4,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, vi } from "vitest";
 import { z } from "zod";
-import { infrastructureSchema } from "@vivd-catalyst/api-contract";
-import { InfrastructureWorkflow, type InfrastructureEntry } from "@vivd-catalyst/chat-server";
+import { infrastructureSchema } from "@work-shape/catalyst-api-contract";
+import { InfrastructureWorkflow, type InfrastructureEntry } from "@work-shape/catalyst-server";
 import {
   createInstanceInfrastructure,
   declaredSecretNames,
   infrastructureOverview
-} from "@vivd-catalyst/client-assembly";
-import { getClientInstanceId, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-client-assembly";
+import { getClientInstanceId, parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   defineProvider,
   legacyPermissionFor,
   type Logger,
   type SecretResolver
-} from "@vivd-catalyst/core";
-import type { ModelAdapterFactory } from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-core";
+import type { ModelAdapterFactory } from "@work-shape/catalyst-model-provider";
 import { createFakeSecrets } from "./fixtures";
 import { asCaller, createCallerAuthAdapter } from "./route-callers";
 import { createTestInstanceWith } from "./test-instance";

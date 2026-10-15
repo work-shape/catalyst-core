@@ -7,8 +7,8 @@ import {
   type Logger,
   type PlatformStores,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import { afterEach, expect, vi } from "vitest";
 import { z } from "zod";
 import { required } from "./assertions";

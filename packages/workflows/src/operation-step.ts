@@ -19,8 +19,8 @@ import {
   type WorkflowRun,
   type WorkflowStepRun,
   type WorkflowStepRunCall
-} from "@vivd-catalyst/core";
-import { runOperation, type RunOperationDeps } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation, type RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
 import { indexWorkflowSteps, stepOperationRefusal } from "./definition";
 import { jsonValueSchema } from "./json";

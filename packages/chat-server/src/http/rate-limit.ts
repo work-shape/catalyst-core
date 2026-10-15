@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
-import { rateLimitedDetailsSchema, type OperationRateClass } from "@vivd-catalyst/api-contract";
-import type { RateLimitsConfig } from "@vivd-catalyst/config-schema";
+import {
+  rateLimitedDetailsSchema,
+  type OperationRateClass
+} from "@work-shape/catalyst-api-contract";
+import type { RateLimitsConfig } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   getSubjectUserId,
@@ -9,7 +12,7 @@ import {
   type RateLimitDecision,
   type RateLimiter,
   type RateLimitRule
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 const MINUTE_MS = 60 * 1000;

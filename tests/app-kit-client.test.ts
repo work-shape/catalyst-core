@@ -4,17 +4,17 @@ import {
   appBridgeHostMessageSchema,
   appBridgePageMessageSchema,
   type AppBridgeContext
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { RELEASED_KIT_VERSIONS } from "@vivd-catalyst/app-build";
-import * as kitClient from "@vivd-catalyst/app-kit/client";
+import { RELEASED_KIT_VERSIONS } from "@work-shape/catalyst-app-build";
+import * as kitClient from "@work-shape/catalyst-app-kit/client";
 import {
   AppCallError,
   createAppClient,
   createFrameTransport,
   type Transport
-} from "@vivd-catalyst/app-kit/client";
+} from "@work-shape/catalyst-app-kit/client";
 import {
   BRIDGE_MARK,
   BRIDGE_VERSION,
@@ -22,7 +22,7 @@ import {
   readHostMessage,
   type HostMessage,
   type PageMessage
-} from "@vivd-catalyst/app-kit/protocol";
+} from "@work-shape/catalyst-app-kit/protocol";
 
 // The kit client is the Page's half of the bridge. It is written without a schema library,
 // because its lines ship with every Page; the interface reads the same messages through the

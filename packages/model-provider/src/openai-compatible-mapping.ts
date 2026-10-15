@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import { type MessageCitation, type ModelTokenUsage, type WebSource } from "@vivd-catalyst/core";
+import {
+  type MessageCitation,
+  type ModelTokenUsage,
+  type WebSource
+} from "@work-shape/catalyst-core";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   isModelFunctionTool,

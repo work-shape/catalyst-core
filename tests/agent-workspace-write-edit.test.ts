@@ -3,23 +3,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
+import { LocalAgentRuntime } from "@work-shape/catalyst-agent-runtime";
 import {
   createPageBuildClient,
   createPageBundleJobs,
   createSandboxPageBuild
-} from "@vivd-catalyst/chat-server";
-import type { JobWorker, Logger } from "@vivd-catalyst/core";
-import { modelContentText } from "@vivd-catalyst/model-provider";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-server";
+import type { JobWorker, Logger } from "@work-shape/catalyst-core";
+import { modelContentText } from "@work-shape/catalyst-model-provider";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import {
   createPageSaveTool,
   createWorkspaceToolDefinitions,
   LocalWorkspaceCommandProcessExecutor,
   ToolRegistry,
   WorkspaceCommandService
-} from "@vivd-catalyst/tool-execution";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-tool-execution";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { withTestModelGateway, type FakeModelProvider } from "./support/model-gateway";
 import { htmlManifest, pageBuildCommandFromSource } from "./support/page-build";

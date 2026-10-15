@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createApiClient, type Message } from "@vivd-catalyst/api-client";
+import { createApiClient, type Message } from "@work-shape/catalyst-api-client";
 import {
   ARTIFACT_PREVIEW_MAX_PAGES,
   asManagedArtifactId,
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createToolResultMetadata
-} from "@vivd-catalyst/core";
-import { genericIcons } from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-core";
+import { genericIcons } from "@work-shape/catalyst-ui";
 import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
 import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
@@ -26,8 +26,8 @@ import {
   ConversationFileDownloadButton,
   conversationFileFromArtifact
 } from "../packages/chat-ui/src/conversation-file-presentation";
-import { ToolCallPart } from "@vivd-catalyst/chat-ui/tool-call";
-import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
+import { ToolCallPart } from "@work-shape/catalyst-chat-ui/tool-call";
+import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 
 describe("chat UI artifact download cards", () => {
   it("surfaces promoted final artifacts on the final assistant message for common formats", () => {

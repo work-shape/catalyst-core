@@ -4,7 +4,7 @@ import {
   DATA_STORE_OPERATION_PREFIX,
   type DataStoreCondition,
   type OperationDefinition
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { DATA_STORE_SIZE_WARNING_RATIO } from "./size";
 import type { PublishedStore } from "./verbs";

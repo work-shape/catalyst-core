@@ -1,5 +1,5 @@
 import { CircleHelp } from "lucide-react";
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   Avatar,
   Button,
@@ -8,7 +8,7 @@ import {
   List,
   ListRow,
   SkeletonList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { ApprovalStatusBadge } from "../approvals/approval-status-badge";
 import { useTranslation } from "../i18n";
 import { useInboxItemKindLookup } from "./inbox-item-kinds";

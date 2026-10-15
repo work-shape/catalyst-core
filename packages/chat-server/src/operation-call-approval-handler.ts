@@ -24,7 +24,7 @@ import {
   type OperationRun,
   type OperationRunStore,
   type UserStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   OPERATION_CALL_APPROVAL_KIND,
   declineWaitingOperation,
@@ -35,7 +35,7 @@ import {
   type OperationApprovalRequests,
   type RunOperationDeps,
   type WaitingOperationCall
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { HELD_ASSET_OPERATION, type HeldAssetPreviewer } from "./held-asset-preview";
 import { executeApprovedOperationCallJob } from "./job-kinds";
 import type { HeldCallApprovalKind } from "./held-call-kind";

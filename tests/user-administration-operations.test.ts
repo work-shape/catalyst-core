@@ -4,9 +4,9 @@ import { createHash } from "node:crypto";
 import { inspect } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import postgres from "postgres";
-import { apiErrorResponseSchema } from "@vivd-catalyst/api-contract";
-import type { ChatServerOptions } from "@vivd-catalyst/chat-server";
-import { platformModules } from "@vivd-catalyst/client-assembly";
+import { apiErrorResponseSchema } from "@work-shape/catalyst-api-contract";
+import type { ChatServerOptions } from "@work-shape/catalyst-server";
+import { platformModules } from "@work-shape/catalyst-client-assembly";
 import {
   AppError,
   StoreBackedAuditRecorder,
@@ -17,9 +17,9 @@ import {
   type AuthenticatedUser,
   type Logger,
   type UserRecord
-} from "@vivd-catalyst/core";
-import { CaptureMailTransport, TemplateMailSender } from "@vivd-catalyst/mail";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-core";
+import { CaptureMailTransport, TemplateMailSender } from "@work-shape/catalyst-mail";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { z } from "zod";
 import { createMissingRuntime, createUnusedModelProvider } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";

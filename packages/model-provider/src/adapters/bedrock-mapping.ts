@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@vivd-catalyst/core";
+import { MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@work-shape/catalyst-core";
 import { createProviderToolMetadata, type ProviderToolNames } from "../openai-compatible-mapping";
 import type { ModelAdapterRequest, ModelCompletion, ModelContent, ModelToolCall } from "../types";
 import { assertBedrockDocuments, toBedrockDocumentBlock } from "./bedrock-documents";

@@ -15,7 +15,7 @@ import {
   getAuthPrincipal,
   getAuthScopes,
   getRuntimeSubjectUserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { RunState, toRunFailureError } from "./run-state";
 import { createAssistantFinalMetadata } from "./model-context-projection";
 import { ModelInput, getProviderCompactionThreshold } from "./run/model-input";

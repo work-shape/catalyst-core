@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import { clientInstanceId, setupAccessInstance } from "./support/access-instance";
 import { holdTransaction, settled } from "./support/postgres-concurrency-harness";
 import { fileTestDatabaseUrl } from "./support/test-database";

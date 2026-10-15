@@ -1,4 +1,4 @@
-import type { BadgeTone } from "@vivd-catalyst/ui";
+import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../i18n";
 import type { KnowledgeBaseState } from "./knowledge-base-source";
 

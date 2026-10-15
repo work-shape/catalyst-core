@@ -1,4 +1,4 @@
-import { DATA_STORE_ACTIONS, type ActorAccess } from "@vivd-catalyst/core";
+import { DATA_STORE_ACTIONS, type ActorAccess } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { readStores } from "./operations";
 import type { DataStoreRuntime } from "./runtime";

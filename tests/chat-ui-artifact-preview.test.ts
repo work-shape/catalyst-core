@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createApiClient, type ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
+import { createApiClient, type ArtifactPreviewResponse } from "@work-shape/catalyst-api-client";
 import {
   ArtifactPreview,
   ARTIFACT_PREVIEW_POLL_DELAYS_MS,

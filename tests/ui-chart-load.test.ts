@@ -1,11 +1,11 @@
 import { createElement } from "react";
 import { prerenderToNodeStream } from "react-dom/static";
 import { describe, expect, it, vi } from "vitest";
-import { Chart, UiRoot, uiLabelsDe, uiLabelsEn } from "@vivd-catalyst/ui";
+import { Chart, UiRoot, uiLabelsDe, uiLabelsEn } from "@work-shape/catalyst-ui";
 
 const engine = vi.hoisted(() => ({ requests: 0, fails: true }));
 
-vi.mock("@vivd-catalyst/ui/chart-engine", () => {
+vi.mock("@work-shape/catalyst-ui/chart-engine", () => {
   engine.requests += 1;
   if (engine.fails) {
     throw new Error("The chunk could not be loaded.");

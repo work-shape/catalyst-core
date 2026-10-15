@@ -14,9 +14,9 @@ import { UniverSheetsDrawingUIPlugin } from "@univerjs/sheets-drawing-ui";
 import "@univerjs/sheets-drawing-ui/facade";
 import "@univerjs/sheets-drawing-ui/lib/index.css";
 import "@univerjs/ui/facade";
-import type { ApiClient } from "@vivd-catalyst/api-client";
+import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { SegmentedControl, SegmentedControlItem, Spinner } from "@vivd-catalyst/ui";
+import { SegmentedControl, SegmentedControlItem, Spinner } from "@work-shape/catalyst-ui";
 import {
   LiveArtifactPreview,
   shouldUseLiveArtifactPreviewState as shouldUseLiveArtifactPreviewStateValue

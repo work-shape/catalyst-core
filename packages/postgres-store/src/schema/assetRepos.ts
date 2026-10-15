@@ -19,7 +19,7 @@ import type {
   ClientInstanceId,
   ConversationId,
   OperationRunId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { configAssets } from "./configAssets";
 import { conversations } from "./conversations";
 

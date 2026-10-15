@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { asClientInstanceId, createProvider } from "@vivd-catalyst/core";
+import { asClientInstanceId, createProvider } from "@work-shape/catalyst-core";
 import {
   createModelGateway,
   modelProviderDefinitions,
@@ -9,7 +9,7 @@ import {
   type ModelAdapterFactory,
   type ModelAdapterRequest,
   type ModelAdapterStreamEvent
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { RECORDED_BEDROCK_PROFILE } from "./model-adapter-recordings";
 import {
   createRecordingGovernance,

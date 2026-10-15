@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { ApiError } from "@vivd-catalyst/api-client";
+import { ApiError } from "@work-shape/catalyst-api-client";
 import {
   configAssetsOverviewSchema,
   effectivePermissionsSchema,
   permissionGrantSchema
-} from "@vivd-catalyst/api-contract";
-import { accessWriteFailure, checkAsset, checkedAssetId } from "@vivd-catalyst/chat-ui/access";
-import { asUserId } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-contract";
+import {
+  accessWriteFailure,
+  checkAsset,
+  checkedAssetId
+} from "@work-shape/catalyst-chat-ui/access";
+import { asUserId } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   clientInstanceId,

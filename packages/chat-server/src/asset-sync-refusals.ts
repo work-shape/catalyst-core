@@ -4,7 +4,7 @@ import {
   type ActorAccess,
   type AssetScope,
   type ConfigAssetRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { accessResource, errorIssues } from "./asset-access";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import {

@@ -6,15 +6,15 @@ import {
   APP_CONTENT_TOKEN_TTL_SECONDS,
   deriveAppContentKey,
   storePageFileSet
-} from "@vivd-catalyst/chat-server";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-server";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   asClientInstanceId,
   asConversationId,
   pageFileObjectKey,
   type Logger
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { callTestPath, createTestInstanceWith, listenTestInstance } from "./support/test-instance";

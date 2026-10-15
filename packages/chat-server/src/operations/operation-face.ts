@@ -2,7 +2,7 @@ import {
   isRegisteredOperation,
   operationPathParamNames,
   type Operation
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   isAppError,
@@ -21,8 +21,8 @@ import {
   type PolicyTarget,
   type PolicyValue,
   type StorePage
-} from "@vivd-catalyst/core";
-import { runOperation } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import type { FastifyReply } from "fastify";
 import { z } from "zod";
 import { checkResponse } from "../http/check-response";

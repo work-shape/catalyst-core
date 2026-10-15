@@ -1,4 +1,8 @@
-import { appErrorCodeSchema, type ApiErrorCode, type LocaleCode } from "@vivd-catalyst/api-client";
+import {
+  appErrorCodeSchema,
+  type ApiErrorCode,
+  type LocaleCode
+} from "@work-shape/catalyst-api-client";
 import type { ThemeModePreference } from "./theme";
 
 export const STANDALONE_AUTH_SOURCE = "better-auth";

@@ -1,4 +1,4 @@
-@import "@vivd-catalyst/chat-ui/styles.css";
+@import "@work-shape/catalyst-chat-ui/styles.css";
 
 @source "./**/*.{ts,tsx}";
 @source "../widgets/**/*.{ts,tsx}";

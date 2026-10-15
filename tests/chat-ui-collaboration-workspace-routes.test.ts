@@ -3,13 +3,13 @@ import {
   createApiClient,
   type Conversation,
   type ConversationListItem
-} from "@vivd-catalyst/api-client";
-import { apiOperations } from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-client";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   asClientInstanceId,
   asCollaborationWorkspaceId,
   asConversationId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import { workspaceRouteFromPath, workspaceRouteNavigation } from "../packages/chat-ui/src/routes";
 import {

@@ -4,8 +4,8 @@ import type {
   ManagedArtifactRef,
   SupportedImageMimeType,
   ToolExecutionResult
-} from "@vivd-catalyst/core";
-import type { ModelContent, ModelContentPart } from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-core";
+import type { ModelContent, ModelContentPart } from "@work-shape/catalyst-model-provider";
 
 export interface ModelContextArtifactReader {
   readArtifact(input: {
@@ -18,7 +18,7 @@ export interface ModelContextArtifactReader {
 }
 
 export interface ModelVisibleArtifactProjectionOptions {
-  logger?: import("@vivd-catalyst/core").Logger;
+  logger?: import("@work-shape/catalyst-core").Logger;
   clientInstanceId?: ClientInstanceId;
   artifactReader?: ModelContextArtifactReader;
 }

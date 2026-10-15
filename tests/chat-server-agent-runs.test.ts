@@ -1,4 +1,4 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   type TestInstance as TestServer,
   fetchTestOperation,
@@ -20,7 +20,7 @@ import {
   asCollaborationWorkspaceId,
   executeAgentRunJob,
   type AgentAvailability
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { waitUntil } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { createHeldModel, HELD_MODEL_PROVIDER } from "./support/held-model";

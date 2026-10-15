@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { AssetScope } from "@vivd-catalyst/core";
+import type { AssetScope } from "@work-shape/catalyst-core";
 import { agent, clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import { setupNamespaceHolder, type NamespaceHolderInstance } from "./support/asset-operations";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";

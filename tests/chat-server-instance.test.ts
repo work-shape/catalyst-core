@@ -5,9 +5,9 @@ import {
 } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
 
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { createTestConfig } from "./support/fixtures";
 import { injectStartConversationRun, drainRunEvents } from "./support/chat-server-run-harness";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";

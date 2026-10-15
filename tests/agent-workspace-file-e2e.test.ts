@@ -6,18 +6,22 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { asClientInstanceId, asManagedFileId, type RuntimeCallContext } from "@vivd-catalyst/core";
+import {
+  asClientInstanceId,
+  asManagedFileId,
+  type RuntimeCallContext
+} from "@work-shape/catalyst-core";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
-import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import { modelContentText } from "@vivd-catalyst/model-provider";
+import { LocalAgentRuntime } from "@work-shape/catalyst-agent-runtime";
+import { modelContentText } from "@work-shape/catalyst-model-provider";
 import {
   createWorkspaceToolDefinitions,
   LocalWorkspaceCommandRunner,
   ToolRegistry,
   WorkspaceCommandService
-} from "@vivd-catalyst/tool-execution";
-import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-tool-execution";
+import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 
 describe("agent workspace file e2e", () => {
   it("imports an uploaded file, executes a read command, and answers from stdout", async () => {

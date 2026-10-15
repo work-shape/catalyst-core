@@ -1,5 +1,5 @@
 import { CircleHelp, Languages, LogOut, Moon, Sun, UserRound } from "lucide-react";
-import type { ApiUser } from "@vivd-catalyst/api-client";
+import type { ApiUser } from "@work-shape/catalyst-api-client";
 import {
   Avatar,
   Button,
@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
   IconButton,
   useSidebarCollapsed
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import type { PlatformIdentity } from "../control-plane/control-plane-model";
 import { useTranslation } from "../i18n";
 import type { ResolvedThemeMode } from "../theme";

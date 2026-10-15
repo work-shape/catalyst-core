@@ -1,22 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { PLATFORM_TOOL_NAMES, platformModules } from "@vivd-catalyst/client-assembly";
+import { PLATFORM_TOOL_NAMES, platformModules } from "@work-shape/catalyst-client-assembly";
 import {
   createHttpApiConnectorType,
   HTTP_API_CONNECTOR_TYPE,
   isCredentialHeaderName
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   asClientInstanceId,
   createConnectorTypeRegistry,
   createModuleRegistry,
   isJsonObject,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
   createConnectionDraftTool,
   ToolRegistry
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 
 // The agent's draft of the tools of a REST API (CS-5c): the tool checks the declarations as a
 // save would and answers the draft the card shows, or every issue and no card. The draft never

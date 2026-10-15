@@ -1,6 +1,6 @@
 import { useAuiState } from "@assistant-ui/react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { TimeMarker } from "@vivd-catalyst/ui";
+import { TimeMarker } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { shouldShowRunActivity } from "./thread-activity";
 import {

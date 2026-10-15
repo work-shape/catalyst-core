@@ -1,4 +1,4 @@
-import { ApiError, type LocaleCode } from "@vivd-catalyst/api-client";
+import { ApiError, type LocaleCode } from "@work-shape/catalyst-api-client";
 import { startFormOf } from "../start-form";
 import { toWorkflow, toWorkflowRun, toWorkflowStepRun } from "../workflow-mapping";
 import type { WorkflowRunsSource, WorkflowsSource } from "../source-shapes";

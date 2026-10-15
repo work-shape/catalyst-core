@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { asAgentRunId, asConversationId, type ClientInstanceId } from "@vivd-catalyst/core";
+import { asAgentRunId, asConversationId, type ClientInstanceId } from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import { usePostgresSuite } from "./support/postgres-suite";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";

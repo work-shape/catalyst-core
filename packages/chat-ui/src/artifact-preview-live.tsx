@@ -1,7 +1,7 @@
-import type { ApiClient, ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
+import type { ApiClient, ArtifactPreviewResponse } from "@work-shape/catalyst-api-client";
 import { RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@vivd-catalyst/ui";
+import { Button } from "@work-shape/catalyst-ui";
 import { useTranslation } from "./i18n";
 import { ArtifactPreviewFrame, ArtifactPreviewMessage } from "./artifact-preview-shell";
 import {

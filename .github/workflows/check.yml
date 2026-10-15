@@ -142,11 +142,11 @@ jobs:
           build: ${{ needs.paths.outputs.code }}
       - name: Build docs and their dependencies
         if: needs.paths.outputs.code != 'true'
-        run: pnpm --filter "@vivd-catalyst/docs..." build
+        run: pnpm --filter "@work-shape/catalyst-docs..." build
       - name: Documentation types
         run: pnpm typecheck:docs
       - name: Documentation links, assets and search
-        run: pnpm --filter @vivd-catalyst/docs check:site
+        run: pnpm --filter @work-shape/catalyst-docs check:site
   tests:
     name: tests ${{ matrix.shard }}/4
     needs: [paths, build]

@@ -1,8 +1,8 @@
 import { expect } from "vitest";
 import { z } from "zod";
-import type { AuthAdapter } from "@vivd-catalyst/auth";
-import type { WorkflowAssetKind } from "@vivd-catalyst/chat-server";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import type { AuthAdapter } from "@work-shape/catalyst-auth";
+import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   LEGACY_LIST_GRANTOR,
   StoreBackedAuditRecorder,
@@ -16,7 +16,7 @@ import {
   legacyGrantRows,
   type UserRecord,
   type UserRole
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { atCurrentRevision } from "./asset-revisions";
 import { createStoredConfigAssetSource } from "./static-config-asset-source";
 import type { TestCallInput, TestOperationName } from "./operations";

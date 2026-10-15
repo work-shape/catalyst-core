@@ -1,6 +1,6 @@
-import type { PlatformContext } from "@vivd-catalyst/api-client";
-import { WORKFLOW_ACTIONS } from "@vivd-catalyst/core";
-import type { BadgeTone } from "@vivd-catalyst/ui";
+import type { PlatformContext } from "@work-shape/catalyst-api-client";
+import { WORKFLOW_ACTIONS } from "@work-shape/catalyst-core";
+import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../i18n";
 import { startFormUsable } from "./start-form";
 import type {

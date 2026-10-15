@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createElement, createRef } from "react";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   readBuildRefusal,
   SkillEditor,
@@ -16,9 +16,9 @@ import {
   type BuildAsset,
   type BuildAssetEditorProps,
   type SkillFormState
-} from "@vivd-catalyst/chat-ui/build-area";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
-import type { JsonObject } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-chat-ui/build-area";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import type { JsonObject } from "@work-shape/catalyst-core";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { required } from "./support/assertions";
 import {

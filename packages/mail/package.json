@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/mail",
+  "name": "@work-shape/catalyst-mail",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/mail"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,7 +34,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/core": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

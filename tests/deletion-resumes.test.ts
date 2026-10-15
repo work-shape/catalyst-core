@@ -5,9 +5,9 @@ import {
   HmacSessionTokenIssuer,
   IdentityResolvingAuthAdapter,
   createStandaloneAuthRuntime
-} from "@vivd-catalyst/auth";
-import { DELETION_MAX_ATTEMPTS } from "@vivd-catalyst/chat-server";
-import { asUserId } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-auth";
+import { DELETION_MAX_ATTEMPTS } from "@work-shape/catalyst-server";
+import { asUserId } from "@work-shape/catalyst-core";
 import { createConversationCleanupFixture } from "./support/conversation-cleanup-fixture";
 import { arrangeDeletion } from "./support/deletion-fixture";
 import { usePostgresSuite } from "./support/postgres-suite";

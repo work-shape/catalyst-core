@@ -1,112 +1,121 @@
 {
-  "@vivd-catalyst/agent-runtime": ["@vivd-catalyst/core", "@vivd-catalyst/model-provider"],
-  "@vivd-catalyst/api-client": ["@vivd-catalyst/api-contract"],
-  "@vivd-catalyst/api-contract": ["@vivd-catalyst/asset-schemas"],
-  "@vivd-catalyst/app-build": ["@vivd-catalyst/core"],
-  "@vivd-catalyst/app-kit": ["@vivd-catalyst/ui"],
-  "@vivd-catalyst/asset-repo": [],
-  "@vivd-catalyst/asset-schemas": [],
-  "@vivd-catalyst/auth": ["@vivd-catalyst/core"],
-  "@vivd-catalyst/capability-sdk": [
-    "@vivd-catalyst/core",
-    "@vivd-catalyst/data-source",
-    "@vivd-catalyst/tool-sdk"
+  "@work-shape/catalyst-agent-runtime": [
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-model-provider"
   ],
-  "@vivd-catalyst/chat-server": [
-    "@vivd-catalyst/api-contract",
-    "@vivd-catalyst/app-build",
-    "@vivd-catalyst/asset-repo",
-    "@vivd-catalyst/auth",
-    "@vivd-catalyst/config-schema",
-    "@vivd-catalyst/core",
-    "@vivd-catalyst/mail",
-    "@vivd-catalyst/model-provider",
-    "@vivd-catalyst/tool-execution",
-    "@vivd-catalyst/usage-governance"
+  "@work-shape/catalyst-api-client": ["@work-shape/catalyst-api-contract"],
+  "@work-shape/catalyst-api-contract": ["@work-shape/catalyst-asset-schemas"],
+  "@work-shape/catalyst-app-build": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-app-kit": ["@work-shape/catalyst-ui"],
+  "@work-shape/catalyst-asset-repo": [],
+  "@work-shape/catalyst-asset-schemas": [],
+  "@work-shape/catalyst-auth": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-capability-sdk": [
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-data-source",
+    "@work-shape/catalyst-tool-sdk"
   ],
-  "@vivd-catalyst/chat-standalone": ["@vivd-catalyst/chat-ui"],
-  "@vivd-catalyst/chat-ui": [
-    "@vivd-catalyst/api-client",
-    "@vivd-catalyst/config-schema",
-    "@vivd-catalyst/core",
-    "@vivd-catalyst/ui"
+  "@work-shape/catalyst-server": [
+    "@work-shape/catalyst-api-contract",
+    "@work-shape/catalyst-app-build",
+    "@work-shape/catalyst-asset-repo",
+    "@work-shape/catalyst-auth",
+    "@work-shape/catalyst-config-schema",
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-mail",
+    "@work-shape/catalyst-model-provider",
+    "@work-shape/catalyst-tool-execution",
+    "@work-shape/catalyst-usage-governance"
   ],
-  "@vivd-catalyst/chat-widget": ["@vivd-catalyst/chat-ui"],
-  "@vivd-catalyst/client-assembly": [
-    "@vivd-catalyst/agent-runtime",
-    "@vivd-catalyst/api-client",
-    "@vivd-catalyst/api-contract",
-    "@vivd-catalyst/app-build",
-    "@vivd-catalyst/asset-repo",
-    "@vivd-catalyst/auth",
-    "@vivd-catalyst/capability-sdk",
-    "@vivd-catalyst/chat-server",
-    "@vivd-catalyst/config-schema",
-    "@vivd-catalyst/connections",
-    "@vivd-catalyst/core",
-    "@vivd-catalyst/data-source",
-    "@vivd-catalyst/data-stores",
-    "@vivd-catalyst/mail",
-    "@vivd-catalyst/model-provider",
-    "@vivd-catalyst/object-storage",
-    "@vivd-catalyst/postgres-store",
-    "@vivd-catalyst/tool-execution",
-    "@vivd-catalyst/tool-sdk",
-    "@vivd-catalyst/usage-governance",
-    "@vivd-catalyst/web-access",
-    "@vivd-catalyst/workflows"
+  "@work-shape/catalyst-chat-standalone": ["@work-shape/catalyst-chat-ui"],
+  "@work-shape/catalyst-chat-ui": [
+    "@work-shape/catalyst-api-client",
+    "@work-shape/catalyst-config-schema",
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-ui"
   ],
-  "@vivd-catalyst/config-schema": ["@vivd-catalyst/asset-schemas", "@vivd-catalyst/core"],
-  "@vivd-catalyst/connections": [
-    "@vivd-catalyst/config-schema",
-    "@vivd-catalyst/core",
-    "@vivd-catalyst/web-access"
+  "@work-shape/catalyst-chat-widget": ["@work-shape/catalyst-chat-ui"],
+  "@work-shape/catalyst-client-assembly": [
+    "@work-shape/catalyst-agent-runtime",
+    "@work-shape/catalyst-api-client",
+    "@work-shape/catalyst-api-contract",
+    "@work-shape/catalyst-app-build",
+    "@work-shape/catalyst-asset-repo",
+    "@work-shape/catalyst-auth",
+    "@work-shape/catalyst-capability-sdk",
+    "@work-shape/catalyst-server",
+    "@work-shape/catalyst-config-schema",
+    "@work-shape/catalyst-connections",
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-data-source",
+    "@work-shape/catalyst-data-stores",
+    "@work-shape/catalyst-mail",
+    "@work-shape/catalyst-model-provider",
+    "@work-shape/catalyst-object-storage",
+    "@work-shape/catalyst-postgres-store",
+    "@work-shape/catalyst-tool-execution",
+    "@work-shape/catalyst-tool-sdk",
+    "@work-shape/catalyst-usage-governance",
+    "@work-shape/catalyst-web-access",
+    "@work-shape/catalyst-workflows"
   ],
-  "@vivd-catalyst/core": ["@vivd-catalyst/asset-schemas"],
-  "@vivd-catalyst/data-source": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
-  "@vivd-catalyst/data-stores": [
-    "@vivd-catalyst/connections",
-    "@vivd-catalyst/core",
-    "@vivd-catalyst/postgres-connector"
+  "@work-shape/catalyst-config-schema": [
+    "@work-shape/catalyst-asset-schemas",
+    "@work-shape/catalyst-core"
   ],
-  "@vivd-catalyst/demo": [
-    "@vivd-catalyst/api-client",
-    "@vivd-catalyst/chat-ui",
-    "@vivd-catalyst/client-assembly",
-    "@vivd-catalyst/config-schema",
-    "@vivd-catalyst/core",
-    "@vivd-catalyst/tool-sdk",
-    "@vivd-catalyst/ui",
+  "@work-shape/catalyst-connections": [
+    "@work-shape/catalyst-config-schema",
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-web-access"
+  ],
+  "@work-shape/catalyst-core": ["@work-shape/catalyst-asset-schemas"],
+  "@work-shape/catalyst-data-source": [
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-tool-sdk"
+  ],
+  "@work-shape/catalyst-data-stores": [
+    "@work-shape/catalyst-connections",
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-postgres-connector"
+  ],
+  "@work-shape/catalyst-demo": [
+    "@work-shape/catalyst-api-client",
+    "@work-shape/catalyst-chat-ui",
+    "@work-shape/catalyst-client-assembly",
+    "@work-shape/catalyst-config-schema",
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-tool-sdk",
+    "@work-shape/catalyst-ui",
     "@work-shape/catalyst-cli"
   ],
-  "@vivd-catalyst/deployment-kit": [],
-  "@vivd-catalyst/docs": ["@vivd-catalyst/api-contract"],
-  "@vivd-catalyst/document-execution": [],
-  "@vivd-catalyst/mail": ["@vivd-catalyst/core"],
-  "@vivd-catalyst/model-provider": ["@vivd-catalyst/core"],
-  "@vivd-catalyst/object-storage": ["@vivd-catalyst/core"],
-  "@vivd-catalyst/postgres-connector": ["@vivd-catalyst/core"],
-  "@vivd-catalyst/postgres-store": ["@vivd-catalyst/core"],
-  "@vivd-catalyst/quality-config": [],
-  "@vivd-catalyst/tool-execution": [
-    "@vivd-catalyst/config-schema",
-    "@vivd-catalyst/core",
-    "@vivd-catalyst/document-execution",
-    "@vivd-catalyst/tool-sdk"
+  "@work-shape/catalyst-deployment-kit": [],
+  "@work-shape/catalyst-docs": ["@work-shape/catalyst-api-contract"],
+  "@work-shape/catalyst-document-execution": [],
+  "@work-shape/catalyst-mail": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-model-provider": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-object-storage": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-postgres-connector": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-postgres-store": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-quality-config": [],
+  "@work-shape/catalyst-tool-execution": [
+    "@work-shape/catalyst-config-schema",
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-document-execution",
+    "@work-shape/catalyst-tool-sdk"
   ],
-  "@vivd-catalyst/tool-sdk": ["@vivd-catalyst/core"],
-  "@vivd-catalyst/ui": [],
-  "@vivd-catalyst/usage-governance": ["@vivd-catalyst/core"],
-  "@vivd-catalyst/web-access": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
-  "@vivd-catalyst/workflows": [
-    "@vivd-catalyst/connections",
-    "@vivd-catalyst/core",
-    "@vivd-catalyst/tool-execution"
+  "@work-shape/catalyst-tool-sdk": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-ui": [],
+  "@work-shape/catalyst-usage-governance": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-web-access": ["@work-shape/catalyst-core", "@work-shape/catalyst-tool-sdk"],
+  "@work-shape/catalyst-workflows": [
+    "@work-shape/catalyst-connections",
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-tool-execution"
   ],
   "@vivd-solutions/registry-canary": [],
   "@work-shape/catalyst-cli": [
-    "@vivd-catalyst/api-client",
-    "@vivd-catalyst/api-contract",
-    "@vivd-catalyst/asset-schemas"
+    "@work-shape/catalyst-api-client",
+    "@work-shape/catalyst-api-contract",
+    "@work-shape/catalyst-asset-schemas"
   ]
 }

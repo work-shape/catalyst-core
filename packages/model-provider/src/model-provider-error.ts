@@ -1,4 +1,4 @@
-import { AppError, type AppErrorCode, type ModelTokenUsage } from "@vivd-catalyst/core";
+import { AppError, type AppErrorCode, type ModelTokenUsage } from "@work-shape/catalyst-core";
 
 // Protects logs from a provider's error body, which can repeat what a user sent: the provider's
 // message is kept up to this length, for the log only. Nobody sees it in the product.

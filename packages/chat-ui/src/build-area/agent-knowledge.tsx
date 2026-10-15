@@ -1,5 +1,5 @@
 import { Library } from "lucide-react";
-import { Chip, Picker, PickerButton } from "@vivd-catalyst/ui";
+import { Chip, Picker, PickerButton } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import type { KnowledgeChoice } from "./knowledge-base-source";
 

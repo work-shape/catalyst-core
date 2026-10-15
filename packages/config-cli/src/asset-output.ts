@@ -6,7 +6,7 @@ import type {
   ConfigAssetRevision,
   DryRunGuardrailResponse,
   PlatformContext
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import { ConfigApiError } from "./api";
 
 // How the asset commands print what the instance answered. Every line is built from the

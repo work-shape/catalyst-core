@@ -6,7 +6,7 @@ import type {
   WorkflowRun,
   WorkflowRunsStore,
   WorkflowStepRun
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { WorkflowStepIndex } from "./definition";
 import { WORKFLOW_ITERATION_LABEL_MAX_CHARS } from "./limits";
 import { WorkflowStepFailure } from "./step-failure";

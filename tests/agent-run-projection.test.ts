@@ -10,7 +10,7 @@ import {
   type AgentRun,
   type AgentRuntimeEvent,
   type RunObservation
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 describe("agent run projection", () => {
   it("clears an unfinished preparing tool when the run becomes terminal", () => {

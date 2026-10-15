@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
-import { ApiError } from "@vivd-catalyst/api-client";
-import { Button, Field, FormNotice, Input, PageHeader, Section } from "@vivd-catalyst/ui";
+import { ApiError } from "@work-shape/catalyst-api-client";
+import { Button, Field, FormNotice, Input, PageHeader, Section } from "@work-shape/catalyst-ui";
 import { useChangeCurrentUserPasswordMutation } from "../../api/workspace-mutations";
 import { useTranslation } from "../../i18n";
 import { useSettingsPage } from "../settings-page-context";

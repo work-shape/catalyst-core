@@ -4,8 +4,8 @@ import {
   ToolCallFoldLabel,
   ToolCallPart,
   ToolSubjectsProvider
-} from "@vivd-catalyst/chat-ui/tool-call";
-import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
+} from "@work-shape/catalyst-chat-ui/tool-call";
+import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // A tool call of a Connection in a conversation. It reads as what was done and with what,

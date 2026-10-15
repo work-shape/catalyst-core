@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { opensAssets, type BuildKind } from "./build-asset-kind";
 import type { BuildKindState } from "./build-data";
 import type { BuildLocation } from "./build-route";

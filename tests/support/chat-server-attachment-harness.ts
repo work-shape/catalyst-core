@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { expect } from "vitest";
-import type { ClientInstanceCapability } from "@vivd-catalyst/client-assembly";
+import type { ClientInstanceCapability } from "@work-shape/catalyst-client-assembly";
 import {
   createPlatformId,
   type AttachmentManifestEntry,
@@ -9,7 +9,7 @@ import {
   type FileAttachmentFormat,
   type ImageFileFormat,
   type ManagedFileId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { MemoryObjectStorage } from "./memory-object-storage";
 import type { TestInstance as TestServer } from "./test-instance";
 
@@ -406,7 +406,7 @@ async function readUploadBytes(input: {
 
 export function uploadContent(
   bytes: Uint8Array
-): import("@vivd-catalyst/capability-sdk").UploadFileContent {
+): import("@work-shape/catalyst-capability-sdk").UploadFileContent {
   return {
     byteSize: bytes.byteLength,
     checksum: createHash("sha256").update(bytes).digest("hex"),

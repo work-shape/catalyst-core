@@ -3,8 +3,8 @@ import {
   VIEW_RUNTIME,
   VIEW_SHELL,
   VIEW_SHELL_MESSAGES
-} from "@vivd-catalyst/api-client";
-import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
+} from "@work-shape/catalyst-api-client";
+import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@work-shape/catalyst-ui/theme";
 import { sha256Base64 } from "./sha256";
 import { writeStaticViewBody } from "./static-view-html";
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FlowCanvas, type FlowGraph } from "@vivd-catalyst/ui";
+import { FlowCanvas, type FlowGraph } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { LoopEntries } from "./loop-entries";
 import { StepPanel, stepPanelTabs, type StepPanelRun, type StepPanelTab } from "./step-panel";

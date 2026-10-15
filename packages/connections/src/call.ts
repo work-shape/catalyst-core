@@ -17,7 +17,7 @@ import {
   type ConnectorTypeDefinition,
   type JsonValue,
   type OperationExecutionContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { connectionOperationStatus, describedByOutsideSystem } from "./catalog";
 import {
   readConnection,

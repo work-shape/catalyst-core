@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { connectionConfigSchema } from "@vivd-catalyst/config-schema";
+import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   HTTP_API_CONNECTOR_TYPE,
   HTTP_API_RESULT_MAX_BYTES,
@@ -10,7 +10,7 @@ import {
   createSecretStore,
   loadSecretKeyring,
   openConnectorContext
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   SHARED_CREDENTIAL_SUBJECT,
   asClientInstanceId,
@@ -22,7 +22,7 @@ import {
   type ConnectorTypeDefinition,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import { required } from "./support/assertions";
 import { connection } from "./support/connections";

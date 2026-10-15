@@ -1,6 +1,6 @@
-import type { HttpRuntime, Logger } from "@vivd-catalyst/core";
+import type { HttpRuntime, Logger } from "@work-shape/catalyst-core";
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
-import { createAuthorizer, normalizeAllowedOrigins } from "@vivd-catalyst/core";
+import { createAuthorizer, normalizeAllowedOrigins } from "@work-shape/catalyst-core";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";

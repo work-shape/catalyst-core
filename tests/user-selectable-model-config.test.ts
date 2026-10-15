@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   createSafeConfigView,
   parseClientInstanceConfig,
   type ClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
-import { MODEL_USAGE_TIER_BOUNDS, modelUsageTierFromRates } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-config-schema";
+import { MODEL_USAGE_TIER_BOUNDS, modelUsageTierFromRates } from "@work-shape/catalyst-core";
 import { builtInModelCapabilities } from "./support/model-gateway";
 
 /** The efforts the adapters declare, as the config route reads them from the gateway. */

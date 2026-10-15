@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { required } from "./support/assertions";
 import { auditEvents, runJobs, statuses, storedState } from "./support/connection-discovery-world";
 import { createTestConfig } from "./support/fixtures";

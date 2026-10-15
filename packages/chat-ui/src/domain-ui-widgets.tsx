@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 
 export interface ToolDisplayPayload {
   kind?: unknown;

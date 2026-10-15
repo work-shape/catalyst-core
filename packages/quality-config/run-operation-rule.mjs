@@ -15,7 +15,7 @@
  * }} Helpers
  */
 
-const runner = "@vivd-catalyst/tool-execution";
+const runner = "@work-shape/catalyst-tool-execution";
 
 /**
  * The files that may import `runOperation`, each as its package and the path inside it. A

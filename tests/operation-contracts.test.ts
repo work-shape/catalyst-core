@@ -31,7 +31,7 @@ import {
   type OperationScope,
   type PersistedAccess,
   type ToolExecutionRequest
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 const clientInstanceId = asClientInstanceId("instance");
 const user: AuthenticatedUser = {

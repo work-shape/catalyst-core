@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   LoopEntriesView,
   StartDialog,
@@ -12,7 +12,7 @@ import {
   toWorkflowStepRun,
   workflowGraph,
   type WorkflowRunRead
-} from "@vivd-catalyst/chat-ui/workflows";
+} from "@work-shape/catalyst-chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // What the design review asked of the run page and of a step: a next action on a run that has

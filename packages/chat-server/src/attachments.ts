@@ -5,7 +5,7 @@ import type {
   DraftAttachment,
   ManagedFileId,
   ManagedObjectDeletionResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 export interface UploadDraftAttachmentInput {
   conversationId: ConversationId;

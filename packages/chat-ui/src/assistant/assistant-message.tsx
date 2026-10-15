@@ -12,7 +12,7 @@ import {
 } from "@assistant-ui/react";
 import { Check, Copy, ListRestart, Pencil, RefreshCw, User } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Button, cn, IconButton } from "@vivd-catalyst/ui";
+import { Button, cn, IconButton } from "@work-shape/catalyst-ui";
 import { ApprovalDecisionLine } from "../approvals/approval-decision-line";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "../attachment-content";
 import { resolveFileType } from "../file-type";

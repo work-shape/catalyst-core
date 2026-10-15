@@ -1,5 +1,5 @@
-import type { AppAction, AppMode } from "@vivd-catalyst/api-client";
-import type { BadgeTone } from "@vivd-catalyst/ui";
+import type { AppAction, AppMode } from "@work-shape/catalyst-api-client";
+import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../i18n";
 import { PAGE_ADDRESS_LIFETIME_MS, PAGE_ADDRESS_RENEWAL_MARGIN_MS } from "../pages/page-address";
 import type { AppRights } from "./app-model";

@@ -3,8 +3,8 @@ import {
   listAll,
   type ApiClient,
   type ConversationResourceListItem
-} from "@vivd-catalyst/api-client";
-import { resolveFilePreviewCapability } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-client";
+import { resolveFilePreviewCapability } from "@work-shape/catalyst-core";
 import { Download } from "lucide-react";
 import {
   Component,
@@ -16,7 +16,7 @@ import {
   type MouseEvent,
   type ReactNode
 } from "react";
-import { Button, cn, Spinner } from "@vivd-catalyst/ui";
+import { Button, cn, Spinner } from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import {

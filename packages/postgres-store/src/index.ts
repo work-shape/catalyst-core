@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres, { type Notice } from "postgres";
-import type { DatabaseReadiness, Logger, PlatformStores } from "@vivd-catalyst/core";
+import type { DatabaseReadiness, Logger, PlatformStores } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { assertDatabaseMigrated } from "./migrations";
 import { createDatabaseReadinessCheck } from "./readiness";

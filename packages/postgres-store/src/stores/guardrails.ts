@@ -5,7 +5,7 @@ import {
   type GuardrailHit,
   type GuardrailStore,
   type ShippedGuardrailSwitch
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 import { guardrailHits, shippedGuardrailSwitches } from "../schema/guardrails";
 

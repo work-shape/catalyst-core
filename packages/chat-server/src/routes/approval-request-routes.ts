@@ -1,4 +1,4 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { ApprovalRequestWorkflow } from "../approval-request-workflow";
 import type { Route } from "../http/route";
 import { requirePathParam } from "../request-context";

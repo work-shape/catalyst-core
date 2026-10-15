@@ -9,7 +9,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
   APPROVAL_AUTH_SCOPE,

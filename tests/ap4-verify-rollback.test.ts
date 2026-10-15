@@ -6,8 +6,8 @@ import {
   createAuthorizer,
   type AuthenticatedIdentity,
   type PermissionGrant
-} from "@vivd-catalyst/core";
-import { migrateDatabase } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { migrateDatabase } from "@work-shape/catalyst-postgres-store";
 import { restoreLegacyColumns } from "../scripts/verify-permissions";
 import * as pre from "./support/ap4-verify/pre-ap4-permissions";
 import { migrationsUntil } from "./support/migrations-until";

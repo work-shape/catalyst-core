@@ -5,7 +5,7 @@ import { join } from "node:path";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
@@ -14,8 +14,8 @@ import {
   asClientInstanceId,
   dataStoreOperationName,
   type CentralPolicySetting
-} from "@vivd-catalyst/core";
-import { workflowScheduleJobKind } from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-core";
+import { workflowScheduleJobKind } from "@work-shape/catalyst-workflows";
 import { eventually, required } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { fileTestDatabaseUrl } from "./support/test-database";

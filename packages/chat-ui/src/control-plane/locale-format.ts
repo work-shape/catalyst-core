@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 
 /** A moment as date and time, written the way the reader's language writes it. */
 export function formatDateTime(value: string, locale: LocaleCode): string {

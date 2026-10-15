@@ -1,4 +1,4 @@
-import { createAuditingEventEmitter } from "@vivd-catalyst/chat-server";
+import { createAuditingEventEmitter } from "@work-shape/catalyst-server";
 import {
   createAuthorizer,
   createOperationRegistry,
@@ -14,14 +14,14 @@ import {
   type OperationRunStore,
   type PolicyValue,
   type ToolOperationRunner
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createToolOperationRunner,
   registerToolOperations,
   type OperationApprovalRequests,
   type RunOperationDeps,
   type ToolRegistry
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { createMemoryOperationRunStore } from "./memory-operation-runs";
 
 export interface TestToolRunnerOptions {

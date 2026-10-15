@@ -7,7 +7,7 @@ import {
   type OpenAiCompatibleContextManagementConfig,
   type ReasoningEffortConfig,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   type ModelAdapterEmbedding,

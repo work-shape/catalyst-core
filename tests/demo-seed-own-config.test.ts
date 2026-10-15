@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { listAll } from "@vivd-catalyst/api-client";
-import { assetKindLabelKey } from "@vivd-catalyst/chat-ui/access";
-import { connectionCheckQuestions } from "@vivd-catalyst/demo/seed";
+import { listAll } from "@work-shape/catalyst-api-client";
+import { assetKindLabelKey } from "@work-shape/catalyst-chat-ui/access";
+import { connectionCheckQuestions } from "@work-shape/catalyst-demo/seed";
 import {
   createdBy,
   demoConfigEnv,

@@ -4,9 +4,9 @@ import type {
   DataSourceConfig,
   PostgresDataSourceConfig,
   SecretResolver
-} from "@vivd-catalyst/core";
-import { AppError, isSecretName, SecretNotResolvedError } from "@vivd-catalyst/core";
-import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { AppError, isSecretName, SecretNotResolvedError } from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 
 export interface DataSourceRegistration {
   name: string;

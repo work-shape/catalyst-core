@@ -1,5 +1,5 @@
 import { timestampSchema } from "./shared";
-import { FIRST_PARTY_AUTH_SCOPES } from "@vivd-catalyst/asset-schemas";
+import { FIRST_PARTY_AUTH_SCOPES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 
 export const authScopeSchema = z.enum(FIRST_PARTY_AUTH_SCOPES);

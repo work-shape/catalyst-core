@@ -1,7 +1,7 @@
 import { UserPlus } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { WorkspaceMemberCandidate } from "@vivd-catalyst/api-client";
-import { Button, cn, Input, Spinner, useScrollEdgeFade } from "@vivd-catalyst/ui";
+import type { WorkspaceMemberCandidate } from "@work-shape/catalyst-api-client";
+import { Button, cn, Input, Spinner, useScrollEdgeFade } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 
 /** One add-member form is on screen at a time, so fixed ids are enough here. */

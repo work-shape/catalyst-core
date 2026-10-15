@@ -1,4 +1,4 @@
-import { Badge, Banner, KeyValue, KeyValueList } from "@vivd-catalyst/ui";
+import { Badge, Banner, KeyValue, KeyValueList } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 import type { PublishChange, PublishReview, PublishStale } from "./operation-call-preview";
 

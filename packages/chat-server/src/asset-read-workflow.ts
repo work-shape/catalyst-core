@@ -1,4 +1,7 @@
-import { agentConfigSchema, resolveStoredAgentReferences } from "@vivd-catalyst/config-schema";
+import {
+  agentConfigSchema,
+  resolveStoredAgentReferences
+} from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   asUserId,
@@ -18,8 +21,8 @@ import {
   type OperationAuthorization,
   type LocaleCode,
   type StorePage
-} from "@vivd-catalyst/core";
-import { resolveConfigLocale } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-core";
+import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
 import { accessResource, decide, type AssetCall } from "./asset-access";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";

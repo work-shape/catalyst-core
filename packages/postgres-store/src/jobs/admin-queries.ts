@@ -7,7 +7,7 @@ import {
   type JobsStore,
   type JobStatus,
   type RetryJobResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { keysetFilter } from "../paging";
 import type { PostgresConnection } from "../postgres-database";
 import { platformJobs } from "../schema/jobs";

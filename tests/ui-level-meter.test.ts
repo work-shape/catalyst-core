@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { LevelMeter, type LevelMeterProps } from "@vivd-catalyst/ui";
+import { LevelMeter, type LevelMeterProps } from "@work-shape/catalyst-ui";
 
 // LevelMeter is a level on a short scale of named steps. Every test here fails without the
 // component: the library did not export it.

@@ -8,7 +8,7 @@ import {
   type ArtifactPreviewJobRecord,
   type JsonObject,
   type ArtifactPreviewManifest
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 const clientInstanceId = asClientInstanceId("preview-lifecycle-test");
 const conversationId = asConversationId("conv_preview_lifecycle");

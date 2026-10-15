@@ -8,7 +8,11 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { ExecutionWorkspace, WorkspaceCommand, WorkspaceFile } from "@vivd-catalyst/core";
+import type {
+  ExecutionWorkspace,
+  WorkspaceCommand,
+  WorkspaceFile
+} from "@work-shape/catalyst-core";
 import { conversations } from "./conversations";
 import { agentRuns } from "./agentRuns";
 

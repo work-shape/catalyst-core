@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { connectionCallError } from "@vivd-catalyst/core";
-import { WORKFLOW_STEP_JOB_MAX_ATTEMPTS } from "@vivd-catalyst/workflows";
+import { connectionCallError } from "@work-shape/catalyst-core";
+import { WORKFLOW_STEP_JOB_MAX_ATTEMPTS } from "@work-shape/catalyst-workflows";
 import { operationOf } from "./support/connection-operations";
 import { withTestSql } from "./support/test-sql";
 import type { workflowFixture, WorkflowFixture } from "./support/workflow-instance";

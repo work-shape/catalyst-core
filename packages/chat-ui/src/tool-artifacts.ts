@@ -1,5 +1,8 @@
-import type { ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
-import { ARTIFACT_PREVIEW_MAX_PAGES, resolveFilePreviewCapability } from "@vivd-catalyst/core";
+import type { ArtifactPreviewResponse } from "@work-shape/catalyst-api-client";
+import {
+  ARTIFACT_PREVIEW_MAX_PAGES,
+  resolveFilePreviewCapability
+} from "@work-shape/catalyst-core";
 import { resolveFileType, type FileType } from "./file-type";
 
 export const WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE = "data-workspace-promoted-artifacts";

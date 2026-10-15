@@ -12,16 +12,16 @@ import type {
   PlatformStores,
   RegisteredJobHandler,
   SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   OperationCalls,
   RouteRegistration,
   WorkflowAssetKind
-} from "@vivd-catalyst/chat-server";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { ModelGateway } from "@vivd-catalyst/model-provider";
-import type { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-server";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import type { ModelGateway } from "@work-shape/catalyst-model-provider";
+import type { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import type { ToolAssemblyDefinition } from "@work-shape/catalyst-tool-sdk";
 
 /**
  * What the seam of a module builds on: the parts of one process that exist before its asset

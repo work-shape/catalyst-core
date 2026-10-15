@@ -8,7 +8,7 @@ import {
   type AuthenticatedUser,
   type JsonObject,
   type PermissionGrant
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { accessOf } from "./support/access";
 import { eventually, required } from "./support/assertions";
 import {

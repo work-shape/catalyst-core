@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-client";
+import type { ConnectionDetail, ConnectionTestResult } from "@work-shape/catalyst-api-client";
 import { loadFailure } from "../access/access-model";
 import { useAssetGrantsQuery } from "../access/access-queries";
 import {

@@ -11,7 +11,7 @@ import {
   type RuntimeCallContext,
   type RunObservationStore,
   type StartAgentRunInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { setTimeout as delay } from "node:timers/promises";
 
 // How often an observer reads the store for new events of a run that a worker in another

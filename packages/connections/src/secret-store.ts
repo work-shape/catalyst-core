@@ -19,7 +19,7 @@ import {
   type SecretResolver,
   type SecretStore,
   type StoredSecretRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // The Secret Store: AES-256-GCM over one secret per Connection and subject. A fresh random
 // nonce for every encryption, and associated data that binds a row to its instance, its

@@ -1,4 +1,4 @@
-import type { WorkflowRunDatasetsStore, WorkflowRunsStore } from "@vivd-catalyst/core";
+import type { WorkflowRunDatasetsStore, WorkflowRunsStore } from "@work-shape/catalyst-core";
 import * as operations from "../postgres-workflow-run-operations";
 import type { PostgresConnection } from "../postgres-database";
 

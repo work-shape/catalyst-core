@@ -22,7 +22,7 @@ import {
   asMessageId,
   type RunStartCommand,
   type UpdateAgentRunStatusInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { enqueueJob } from "./jobs/store";
 import { lockActiveConversation } from "./postgres-conversation-operations";
 import type { PostgresConnection } from "./postgres-database";

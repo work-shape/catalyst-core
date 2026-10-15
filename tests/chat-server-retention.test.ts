@@ -8,8 +8,8 @@ import { describe, expect, it } from "vitest";
 import {
   ConversationRetentionWorkflow,
   ExecutionWorkspaceCleanupWorkflow
-} from "@vivd-catalyst/chat-server";
-import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
+} from "@work-shape/catalyst-server";
+import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -26,7 +26,7 @@ import {
   type ManagedFileRecord,
   type PlatformFileStore,
   type PrepareConversationRunStartInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   RecordingByteStore,
   createAttachedObjects,
@@ -540,8 +540,8 @@ describe("conversation expiry claim in Postgres", () => {
   };
 
   async function raceInOrder<A, B>(
-    first: (stores: import("@vivd-catalyst/core").PlatformStores) => Promise<A>,
-    second: (stores: import("@vivd-catalyst/core").PlatformStores) => Promise<B>
+    first: (stores: import("@work-shape/catalyst-core").PlatformStores) => Promise<A>,
+    second: (stores: import("@work-shape/catalyst-core").PlatformStores) => Promise<B>
   ) {
     const prefix = `expiry_${globalThis.crypto.randomUUID()}`;
     const firstName = `${prefix}_first`;

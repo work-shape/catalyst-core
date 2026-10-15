@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { SKILL_NAME_RULE, validateConfigAssetBundle } from "@vivd-catalyst/config-schema";
-import type { AssetScope, CollaborationWorkspaceId } from "@vivd-catalyst/core";
+import { SKILL_NAME_RULE, validateConfigAssetBundle } from "@work-shape/catalyst-config-schema";
+import type { AssetScope, CollaborationWorkspaceId } from "@work-shape/catalyst-core";
 import {
   SERVICE_HEADER,
   agent,

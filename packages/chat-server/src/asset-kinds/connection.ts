@@ -1,4 +1,4 @@
-import { connectionConfigSchema, connectionNameSchema } from "@vivd-catalyst/config-schema";
+import { connectionConfigSchema, connectionNameSchema } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   CONNECTION_ACTIONS,
@@ -20,7 +20,7 @@ import {
   type ConnectorTypeRegistry,
   type EgressChecker,
   type EgressTarget
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { requestConnectionDiscovery } from "../connection-jobs";
 import {
   configValuesEqual,

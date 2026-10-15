@@ -17,16 +17,16 @@ import {
   type AssetRepoCommitRunner,
   type PageBuildRunner,
   type WorkflowAssetKind
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   asConversationId,
   assetObjectPrefix,
   type CollaborationWorkspaceId,
   type JobWorker,
   type Logger
-} from "@vivd-catalyst/core";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
-import { LocalWorkspaceCommandProcessExecutor } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
+import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
 import {
   SCOPES_HEADER,
   clientInstanceId,

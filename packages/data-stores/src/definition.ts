@@ -9,7 +9,7 @@ import {
   type AssetValidationIssue,
   type DataStoreAppliedMigration,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // What a Data Store's folder is read into: the definition a revision holds as its config.
 // Everything here is checked and bounded before a statement is sent to a database.

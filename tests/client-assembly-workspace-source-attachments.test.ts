@@ -18,16 +18,16 @@ import {
   type DraftAttachment,
   type FileAttachmentFormat,
   type ManagedFileId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createExecutionWorkspaceSourceAttachmentHandler,
   detectWorkspaceSourceFileFormat,
   type ClientInstanceCapability,
   WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES
-} from "@vivd-catalyst/client-assembly";
-import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
+} from "@work-shape/catalyst-client-assembly";
+import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 
 describe("execution workspace source attachments", () => {
   it("accepts source artifact formats used by workspace skills", () => {

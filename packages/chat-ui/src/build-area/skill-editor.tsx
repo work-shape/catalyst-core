@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { SKILL_SUMMARY_MAX_LENGTH } from "@vivd-catalyst/core";
-import { Field, Input, Textarea } from "@vivd-catalyst/ui";
+import { SKILL_SUMMARY_MAX_LENGTH } from "@work-shape/catalyst-core";
+import { Field, Input, Textarea } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import { FieldRefusals } from "./asset-form-fields";

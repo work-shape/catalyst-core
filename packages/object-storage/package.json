@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/object-storage",
+  "name": "@work-shape/catalyst-object-storage",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/object-storage"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -41,7 +36,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "3.1072.0",
     "@aws-sdk/s3-request-presigner": "3.1072.0",
-    "@vivd-catalyst/core": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -5,12 +5,12 @@ import type {
   WorkflowCodeOutcome,
   WorkflowStagedCode,
   WorkflowStepRunLog
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   SANDBOX_SOURCE_DIRECTORY,
   type SandboxCommandLimits,
   type WorkspaceCommandProcessExecutor
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { WORKFLOW_CODE_ERRORS, WORKFLOW_CODE_LOG_MAX_BYTES, codeLanguageOf } from "./code-step";
 import { jsonValueSchema } from "./json";
 

@@ -1,4 +1,4 @@
-import { prefersReducedMotion } from "@vivd-catalyst/ui";
+import { prefersReducedMotion } from "@work-shape/catalyst-ui";
 import type { DockMotion } from "../workspace/workspace-route";
 
 /**

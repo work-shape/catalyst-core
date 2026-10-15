@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { connectionConfigSchema, egressConfigSchema } from "@vivd-catalyst/config-schema";
-import { egressTargetOfUrl, openConnectorContext } from "@vivd-catalyst/connections";
-import type { ConnectionCredentialResolver } from "@vivd-catalyst/core";
+import { connectionConfigSchema, egressConfigSchema } from "@work-shape/catalyst-config-schema";
+import { egressTargetOfUrl, openConnectorContext } from "@work-shape/catalyst-connections";
+import type { ConnectionCredentialResolver } from "@work-shape/catalyst-core";
 import { connection } from "./support/connections";
 import { checkerOf, denied, https } from "./support/egress";
 import { createTestConnector, generateTestSecret } from "./support/test-connector";

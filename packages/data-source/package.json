@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/data-source",
+  "name": "@work-shape/catalyst-data-source",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/data-source"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,8 +34,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/tool-sdk": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
+    "@work-shape/catalyst-tool-sdk": "workspace:*",
     "postgres": "^3.4.9",
     "zod": "^4.4.3"
   },

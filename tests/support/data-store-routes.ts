@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { createTestConfig } from "./fixtures";
 import { createTestInstance, getTestExecution, type TestRoute } from "./test-instance";
 

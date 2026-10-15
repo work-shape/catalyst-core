@@ -1,6 +1,6 @@
 import { containsPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import type { StorePage } from "@vivd-catalyst/core";
+import type { StorePage } from "@work-shape/catalyst-core";
 import {
   and,
   asc,
@@ -35,7 +35,7 @@ import {
   type SetConversationSubjectInput,
   type UserId,
   createPlatformId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {

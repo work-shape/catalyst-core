@@ -1,13 +1,13 @@
-import { PLATFORM_TOOL_NAMES } from "@vivd-catalyst/client-assembly";
+import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { ClientInstanceCapability } from "@vivd-catalyst/client-assembly";
+import type { ClientInstanceCapability } from "@work-shape/catalyst-client-assembly";
 import {
   WORKFLOW_ASSET_KIND,
   asClientInstanceId,
   createPlatformId,
   defineProvider
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   DETERMINISTIC_CAPABILITIES,
   isModelFunctionTool,
@@ -15,11 +15,11 @@ import {
   type ModelAdapterFactory,
   type ModelCompletion,
   type ModelAdapterRequest
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import {
   WORKFLOW_CODE_FILE_MAX_BYTES,
   WORKFLOW_STEP_FILES_MAX_BYTES
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";

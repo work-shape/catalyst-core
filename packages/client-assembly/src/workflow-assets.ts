@@ -3,12 +3,12 @@ import {
   type PublishReach,
   type WorkflowAssetKind,
   type WorkflowRunAsOptions
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   WORKFLOW_NAME_PATTERN,
   WORKFLOW_NAME_RULE,
   workflowConfigSchema
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   WORKFLOW_ACTIONS,
@@ -20,7 +20,7 @@ import {
   type ConfigAssetStore,
   type JsonObject,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   WORKFLOW_MANIFEST_MAX_BYTES,
   indexWorkflowSteps,
@@ -36,7 +36,7 @@ import {
   type WorkflowDefinitionSource,
   type WorkflowStepFile,
   type WorkflowStepFiles
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { z } from "zod";
 
 // A Workflow as an asset: the kind the asset operations register, and the published revisions

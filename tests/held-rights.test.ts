@@ -9,7 +9,7 @@ import {
   type AccessHolder,
   type HeldRight,
   type PermissionGrant
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // The rule of no escalation (RIGHTS-1a, check 38): a person gives or lends a right only where
 // the call holds it. "Holds" is the call's own `authorize`: role, rows, denies and the scopes of

@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { createEnvironmentSecrets } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { createEnvironmentSecrets } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   asClientInstanceId,
   createProvider,
@@ -13,14 +13,14 @@ import {
   resolveOptionalSecret,
   secretRef,
   SecretNotResolvedError
-} from "@vivd-catalyst/core";
-import { mailProviderDefinitions } from "@vivd-catalyst/mail";
+} from "@work-shape/catalyst-core";
+import { mailProviderDefinitions } from "@work-shape/catalyst-mail";
 import {
   createInstanceModelGateway,
   modelProviderDefinitions,
   type ModelAdapterFactory,
   type ModelCall
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { adapterFromFakeProvider, createRecordingGovernance } from "./support/model-gateway";
 import { createFailingTestLogger, createFakeSecrets } from "./support/fixtures";
 import { createTestInstanceOnSecrets } from "./support/test-instance";

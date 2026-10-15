@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAuditingEventEmitter } from "@vivd-catalyst/chat-server";
+import { createAuditingEventEmitter } from "@work-shape/catalyst-server";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -15,15 +15,15 @@ import {
   type OperationSource,
   type RuntimeCallContext,
   type ToolExecutionRequest
-} from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import {
   ToolRegistry,
   createToolOperationRunner,
   registerToolOperations,
   type OperationApprovalRequests,
   type RunOperationDeps
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { createMemoryOperationRunStore } from "./memory-operation-runs";
 import { silentTestLogger } from "./model-gateway";
 import { recordedAuditEvent } from "./tool-runner";

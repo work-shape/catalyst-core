@@ -3,7 +3,7 @@ import {
   type WorkflowManifest,
   type WorkflowStep,
   type WorkflowStepRunView
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { indexWorkflowSteps } from "./definition";
 import { WORKFLOW_STEP_JOB_SLOTS } from "./limits";
 

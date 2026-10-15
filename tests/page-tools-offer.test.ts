@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createPlatformTools, platformModules } from "@vivd-catalyst/client-assembly";
-import { createModuleRegistry } from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { createPlatformTools, platformModules } from "@work-shape/catalyst-client-assembly";
+import { createModuleRegistry } from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 // Every agent builds a Page: the conversation offers the save, the step to an App and the file

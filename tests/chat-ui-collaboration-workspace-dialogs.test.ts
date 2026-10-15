@@ -6,7 +6,7 @@ import type {
   WorkspaceAccessRequestItem,
   WorkspaceMember,
   WorkspaceMemberCandidate
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
 import { BrowseCollaborationWorkspacesDialog } from "../packages/chat-ui/src/collaboration-workspace/browse-collaboration-workspaces-dialog";
 import { CreateCollaborationWorkspaceDialog } from "../packages/chat-ui/src/collaboration-workspace/create-collaboration-workspace-dialog";

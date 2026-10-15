@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ConfigAssetStore } from "@vivd-catalyst/core";
+import type { ConfigAssetStore } from "@work-shape/catalyst-core";
 import {
   arrangeAssetRepo,
   FAR_FUTURE,

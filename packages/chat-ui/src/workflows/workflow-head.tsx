@@ -1,5 +1,5 @@
 import { Bot, Play } from "lucide-react";
-import { Button, PageHeader, PageLead, TabsLink, TabsNav } from "@vivd-catalyst/ui";
+import { Button, PageHeader, PageLead, TabsLink, TabsNav } from "@work-shape/catalyst-ui";
 import { CopyIdMenu } from "../copy-id-item";
 import { useTranslation } from "../i18n";
 import type { WorkflowEdit } from "./workflow-draft";

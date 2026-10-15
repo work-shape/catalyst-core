@@ -1,4 +1,4 @@
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import { createTestInstance } from "./test-instance";
 import {
   asClientInstanceId,
@@ -11,7 +11,7 @@ import {
   type Conversation,
   type JsonObject,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 import { MemoryObjectStorage } from "./memory-object-storage";
 import { createTestToolRunner } from "./tool-runner";
@@ -20,7 +20,7 @@ import {
   ToolRegistry,
   WorkspaceCommandService,
   type WorkspaceCommandTelemetry
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 
 interface WorkspaceHarnessInput {
   agentToolNames?: string[];

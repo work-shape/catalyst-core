@@ -8,7 +8,7 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { UserModelPreference, UserRecord, UserStatus } from "@vivd-catalyst/core";
+import type { UserModelPreference, UserRecord, UserStatus } from "@work-shape/catalyst-core";
 
 export const productUsers = pgTable(
   "product_users",

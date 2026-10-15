@@ -1,5 +1,5 @@
 import { loadNewerVersion } from "./build-fixtures";
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { randomUUID } from "node:crypto";
 import { assetRevision, readAsset, requestWithOrigin } from "./request-with-origin";
 import type { Locator, Page } from "@playwright/test";

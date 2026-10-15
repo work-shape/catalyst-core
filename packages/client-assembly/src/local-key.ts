@@ -7,9 +7,9 @@ import {
   listAll,
   signInForSessionFetch,
   type ApiClientOptions
-} from "@vivd-catalyst/api-client";
-import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
-import { createEnvironmentSecretResolver, resolveOptionalSecret } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-client";
+import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
+import { createEnvironmentSecretResolver, resolveOptionalSecret } from "@work-shape/catalyst-core";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 
 /** The variable the `catalyst` command line tool reads its key from. */

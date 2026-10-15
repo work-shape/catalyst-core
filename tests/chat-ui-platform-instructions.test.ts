@@ -4,7 +4,7 @@ import {
   AgentEditor,
   PlatformInstructionsBody,
   agentConfigToForm
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The agent page shows what the platform tells the agent before its own instructions: the rules

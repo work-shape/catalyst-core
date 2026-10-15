@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { asUserId, type CollaborationWorkspaceId, type UserRecord } from "@vivd-catalyst/core";
+import {
+  asUserId,
+  type CollaborationWorkspaceId,
+  type UserRecord
+} from "@work-shape/catalyst-core";
 import {
   agent,
   clientInstanceId,

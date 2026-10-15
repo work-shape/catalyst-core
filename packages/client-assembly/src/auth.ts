@@ -1,4 +1,4 @@
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import {
   CompositeAuthAdapter,
   ApiKeyAccessTokenExchange,
@@ -9,15 +9,18 @@ import {
   IdentityResolvingAuthAdapter,
   createStandaloneAuthRuntime,
   type AuthAdapter
-} from "@vivd-catalyst/auth";
+} from "@work-shape/catalyst-auth";
 import {
   AppError,
   normalizeAllowedOrigins,
   resolveOptionalSecret,
   type ClientInstanceId,
   type SecretResolver
-} from "@vivd-catalyst/core";
-import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-core";
+import {
+  getDevelopmentAuthUsers,
+  type ClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import type { ClientInstanceEnv } from "./env";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
 

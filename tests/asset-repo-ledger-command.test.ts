@@ -6,8 +6,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   ASSET_REPO_OUTPUT_DIRECTORY,
   ASSET_REPO_REPOSITORY_DIRECTORY
-} from "@vivd-catalyst/asset-repo";
-import { readObjectBytes, type ConfigAssetStore, type OperationRunId } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-asset-repo";
+import {
+  readObjectBytes,
+  type ConfigAssetStore,
+  type OperationRunId
+} from "@work-shape/catalyst-core";
 import { commitFolder, materialise, testGit, type TestBundle } from "./support/asset-repo";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { arrangeAssetRepo, FAR_FUTURE, runId } from "./support/asset-repo-ledger";

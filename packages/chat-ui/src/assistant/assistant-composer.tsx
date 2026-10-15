@@ -2,8 +2,9 @@ import { ComposerPrimitive, useAuiState, useComposer } from "@assistant-ui/react
 import { AlertCircle, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { DraftAttachment } from "@vivd-catalyst/api-client";
-import { Button, cn, scrollEdgeFadeStyle, Spinner, useScrollEdgeFade } from "@vivd-catalyst/ui";
+import type { DraftAttachment } from "@work-shape/catalyst-api-client";
+import { Button, cn, Spinner } from "@work-shape/catalyst-ui";
+import { scrollEdgeFadeStyle, useScrollEdgeFade } from "@work-shape/catalyst-ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { AttachmentPreview } from "../attachment-preview";
 import { resolveFileType } from "../file-type";

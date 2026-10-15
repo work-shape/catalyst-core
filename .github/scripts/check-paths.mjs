@@ -29,7 +29,7 @@ export function browserDependencyPaths(root = fileURLToPath(new URL("../../", im
     }))
       visit(dependency);
   };
-  for (const name of ["@vivd-catalyst/demo", "@vivd-catalyst/chat-server"]) {
+  for (const name of ["@work-shape/catalyst-demo", "@work-shape/catalyst-server"]) {
     if (!packages.has(name)) throw new Error(`Missing browser workspace: ${name}`);
     visit(name);
   }

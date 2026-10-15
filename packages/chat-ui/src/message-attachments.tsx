@@ -1,7 +1,7 @@
 import { MessagePrimitive, useAuiState } from "@assistant-ui/react";
 import { Paperclip } from "lucide-react";
 import { useMemo, useState } from "react";
-import { cn } from "@vivd-catalyst/ui";
+import { cn } from "@work-shape/catalyst-ui";
 import { AttachmentPreview, isImageAttachment } from "./attachment-preview";
 import { useTranslation } from "./i18n";
 

@@ -1,4 +1,4 @@
-import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-client";
+import type { ConnectionDetail, ConnectionTestResult } from "@work-shape/catalyst-api-client";
 import { PendingApprovalError } from "./build-refusals";
 import { addressOrigin, DISCOVERY_WAIT_MS } from "./connection-form-model";
 

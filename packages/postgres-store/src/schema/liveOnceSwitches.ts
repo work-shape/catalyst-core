@@ -1,5 +1,5 @@
 import { index, primaryKey, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { ClientInstanceId } from "@vivd-catalyst/core";
+import type { ClientInstanceId } from "@work-shape/catalyst-core";
 import { configAssets } from "./configAssets";
 import { workflowRuns } from "./workflowRuns";
 

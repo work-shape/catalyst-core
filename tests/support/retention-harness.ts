@@ -1,5 +1,5 @@
-import type { ChatAttachmentService, ChatServerOptions } from "@vivd-catalyst/chat-server";
-import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
+import type { ChatAttachmentService, ChatServerOptions } from "@work-shape/catalyst-server";
+import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
 import {
   StoreBackedAuditRecorder,
   type AuthenticatedUser,
@@ -12,10 +12,10 @@ import {
   type ManagedFileRecord,
   type ObjectStorage,
   type PlatformFileStore
-} from "@vivd-catalyst/core";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { PostgresStores } from "@vivd-catalyst/postgres-store";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-core";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import type { PostgresStores } from "@work-shape/catalyst-postgres-store";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 import { completeServerOptions } from "./test-instance";
 import { MemoryObjectStorage } from "./memory-object-storage";

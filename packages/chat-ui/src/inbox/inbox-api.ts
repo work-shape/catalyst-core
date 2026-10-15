@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { listAll, type ApprovalRequestView } from "@vivd-catalyst/api-client";
+import { listAll, type ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   approvalRequestQueryKeys,
   type ApprovalRequestApiInput

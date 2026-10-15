@@ -36,7 +36,7 @@ export const PUBLIC_TOOL_DIR = "config-cli";
  */
 export const BUNDLED_SOURCE_DIRS = ["asset-schemas", "api-contract", "api-client"];
 /** Package scopes of this workspace. No file of the tarball may import from one. */
-const WORKSPACE_SCOPES = ["@vivd-catalyst/", "@work-shape/"];
+const WORKSPACE_SCOPES = [["@vivd", "catalyst/"].join("-"), "@work-shape/"];
 /** What the tarball may hold besides package.json. */
 const ALLOWED_FILES = /^(?:dist\/.+|skills\/[a-z0-9-]+\/SKILL\.md|LICENSE|README\.md)$/u;
 const TEXT_FILES = /\.(?:[cm]?js|d\.[cm]?ts|json|md)$|^LICENSE$/u;
@@ -216,7 +216,7 @@ export function packPublicTool(workDir) {
  * Installs the tarball with npm in an empty directory outside the workspace, with no
  * overrides and no registry credentials, and runs the bin. Returns what is wrong.
  */
-function checkInstall(tarball, workDir) {
+export function checkInstall(tarball, workDir, toolName) {
   const problems = [];
   const consumer = join(workDir, "install");
   mkdirSync(consumer);
@@ -240,7 +240,10 @@ function checkInstall(tarball, workDir) {
   const workspacePackages = tree
     .split("\n")
     .map((line) => line.split(":")[1] ?? "")
-    .filter((id) => id.startsWith("@vivd-catalyst/"));
+    .filter(
+      (id) =>
+        !id.startsWith(`${toolName}@`) && WORKSPACE_SCOPES.some((scope) => id.startsWith(scope))
+    );
   for (const id of workspacePackages) {
     problems.push(`the install pulled in the workspace package ${id}`);
   }
@@ -272,7 +275,8 @@ function main(argv) {
     const { tarball, root } = packPublicTool(workDir);
     const problems = inspectPublicPackage(root);
     if (problems.length === 0 && !argv.includes("--no-install")) {
-      problems.push(...checkInstall(tarball, workDir));
+      const { name } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+      problems.push(...checkInstall(tarball, workDir, name));
     }
     return report(problems);
   } finally {

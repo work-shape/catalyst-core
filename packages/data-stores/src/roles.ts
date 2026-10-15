@@ -3,9 +3,9 @@ import { promisify } from "node:util";
 import {
   PostgresExecutorError,
   type PostgresChangeStatements
-} from "@vivd-catalyst/postgres-connector";
+} from "@work-shape/catalyst-postgres-connector";
 import { z } from "zod";
-import type { DataStoreRecord } from "@vivd-catalyst/core";
+import type { DataStoreRecord } from "@work-shape/catalyst-core";
 import type { DataStoreRole } from "./credentials";
 import { DATA_STORE_ROLE_LIMITS, roleSettings } from "./role-limits";
 import type { DataStoreRuntime } from "./runtime";

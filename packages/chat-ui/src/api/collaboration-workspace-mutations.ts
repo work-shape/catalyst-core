@@ -5,7 +5,7 @@ import type {
   OperationInput,
   OperationOutcome,
   WorkspaceMembershipRole
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { CollaborationWorkspaceChangeHeldError } from "../collaboration-workspace/collaboration-workspace-errors";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 

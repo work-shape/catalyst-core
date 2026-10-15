@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildingAgentNameFor } from "@vivd-catalyst/chat-ui/agents";
+import { buildingAgentNameFor } from "@work-shape/catalyst-chat-ui/agents";
 
 // The New buttons of NAV-2: where an agent here holds the platform's asset tools, "New" opens
 // the dock with a conversation with it, and its first save creates the asset.

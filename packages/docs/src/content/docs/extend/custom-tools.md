@@ -7,14 +7,14 @@ Custom code tools are the primary extension point for a Workshape Catalyst clien
 
 A tool lets the agent do a bounded action: look up a record, create a ticket, fetch a document, send a draft to review, or call an internal service.
 
-For larger reusable behavior, author a capability package with `@vivd-catalyst/capability-sdk`. Capabilities can contribute tools, attachment handlers, managed object readers, and lifecycle cleanup while consuming platform-owned services such as the datasource registry and Managed Object Access.
+For larger reusable behavior, author a capability package with `@work-shape/catalyst-capability-sdk`. Capabilities can contribute tools, attachment handlers, managed object readers, and lifecycle cleanup while consuming platform-owned services such as the datasource registry and Managed Object Access.
 
 ## Configured Tool Shape
 
 Use the public tool SDK and product-owned types. Prefer configured tool factories when customer-specific values should live in release config.
 
 ```ts
-import { defineConfiguredTool, defineTool } from "@vivd-catalyst/tool-sdk";
+import { defineConfiguredTool, defineTool } from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
 
 export const lookupTicketToolFactory = defineConfiguredTool({
@@ -86,7 +86,7 @@ the tool in the deployment repository, not in a platform package.
 Register tool factories explicitly in `src/client.ts`.
 
 ```ts
-import { defineClientInstance } from "@vivd-catalyst/client-assembly";
+import { defineClientInstance } from "@work-shape/catalyst-client-assembly";
 import { createEscalationToolFactory } from "../tools/create-escalation";
 import { lookupTicketToolFactory } from "../tools/lookup-ticket";
 

@@ -1,4 +1,4 @@
-import type { JsonObject, JsonValue } from "@vivd-catalyst/core";
+import type { JsonObject, JsonValue } from "@work-shape/catalyst-core";
 
 /**
  * The driver hands every value over as the server's text. These readers give each type its

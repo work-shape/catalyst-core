@@ -14,12 +14,12 @@ import {
   type PlatformStores,
   type RegisteredJobHandler,
   type UserStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   readApprovedOperationEnd,
   refuseWaitingOperation,
   type RunOperationDeps
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import {
   APPROVED_OPERATION_CALL_SLOTS,
   executeApprovedOperationCallJob,

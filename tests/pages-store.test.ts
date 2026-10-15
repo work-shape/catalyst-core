@@ -5,7 +5,7 @@ import {
   ConversationRetentionWorkflow,
   deriveAppContentKey,
   storePageFileSet
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   CONVERSATION_MAX_PAGES,
   FILE_SET_MAX_FILE_BYTES,
@@ -18,7 +18,7 @@ import {
   readObjectBytes,
   type Conversation,
   type ObjectStorage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createConversationCleanupFixture } from "./support/conversation-cleanup-fixture";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { usePostgresSuite } from "./support/postgres-suite";

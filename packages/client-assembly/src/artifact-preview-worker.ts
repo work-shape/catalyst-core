@@ -5,17 +5,17 @@ import {
   type PlatformStores,
   type ProviderCreateContext,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
   type ClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   createArtifactPreviewJobHandler,
   LibreOfficeArtifactPreviewRenderer
-} from "@vivd-catalyst/tool-execution";
-import type { ArtifactPreviewSourceReader } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
+import type { ArtifactPreviewSourceReader } from "@work-shape/catalyst-tool-execution";
 import type { ClientInstanceCapability } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {

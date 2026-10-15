@@ -5,7 +5,7 @@ import {
   GRANTABLE_ACTIONS,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { SCOPES_HEADER, clientInstanceId, grantSchema } from "./support/access-instance";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { NOTE, notifyClients, readyWorkflows } from "./support/workflow-runs";

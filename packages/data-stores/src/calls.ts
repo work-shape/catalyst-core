@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
-import type { PostgresChangeStatements, PostgresTarget } from "@vivd-catalyst/postgres-connector";
+import type {
+  PostgresChangeStatements,
+  PostgresTarget
+} from "@work-shape/catalyst-postgres-connector";
 import {
   AppError,
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
   type DataStoreRecord,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { DataStoreRuntime } from "./runtime";
 import { quoteIdentifier } from "./server";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asUserId } from "@vivd-catalyst/core";
+import { asUserId } from "@work-shape/catalyst-core";
 import { arrangeDeletion } from "./support/deletion-fixture";
 import { usePostgresSuite } from "./support/postgres-suite";
 

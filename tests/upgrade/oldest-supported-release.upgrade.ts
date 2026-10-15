@@ -8,7 +8,7 @@ import {
   asClientInstanceId,
   asConversationId,
   asUserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { runVerifyPermissions } from "../../scripts/verify-permissions";
 import {
   extractRelease,

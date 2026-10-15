@@ -1,4 +1,4 @@
-import type { JsonValue } from "@vivd-catalyst/core";
+import type { JsonValue } from "@work-shape/catalyst-core";
 import {
   runSchema,
   stepRunsSchema,

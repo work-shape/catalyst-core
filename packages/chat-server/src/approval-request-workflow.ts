@@ -1,5 +1,5 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import type { StorePage } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import type { StorePage } from "@work-shape/catalyst-core";
 import {
   AppError,
   auditActorFromUser,
@@ -24,8 +24,8 @@ import {
   type OperationBeforeEvent,
   type ApprovalTransactionStores,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
-import { guardrailDenial } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { guardrailDenial } from "@work-shape/catalyst-tool-execution";
 import type { GuardrailRunner } from "./guardrail-runner";
 
 /** Scopes the approval routes require; the view flags use the same ones. */

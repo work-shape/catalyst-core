@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import type { TranslationContextValue } from "../i18n";
 import { formatFileBytes } from "./skill-form-model";
 import { apiErrorCode, apiErrorMessage } from "../workspace-utils";

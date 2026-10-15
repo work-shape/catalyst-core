@@ -1,4 +1,4 @@
-import type { OperationRunStore } from "@vivd-catalyst/core";
+import type { OperationRunStore } from "@work-shape/catalyst-core";
 import * as operations from "../postgres-operation-run-operations";
 import type { PostgresConnection } from "../postgres-database";
 

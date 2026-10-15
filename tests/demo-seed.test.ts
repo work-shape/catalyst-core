@@ -2,8 +2,8 @@ import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { listAll } from "@vivd-catalyst/api-client";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { listAll } from "@work-shape/catalyst-api-client";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import {
   assertLocalDevelopmentHost,
   builder,
@@ -12,7 +12,7 @@ import {
   seedDemo,
   workflowCheckQuestions,
   workspaceAssets
-} from "@vivd-catalyst/demo/seed";
+} from "@work-shape/catalyst-demo/seed";
 import {
   createdBy,
   expectCheckAnswers,

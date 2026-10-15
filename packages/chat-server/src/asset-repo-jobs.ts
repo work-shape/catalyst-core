@@ -5,7 +5,7 @@ import {
   ASSET_REPO_MAX_FILE_BYTES,
   ASSET_REPO_MAX_FILES,
   ASSET_REPO_MAX_TREE_BYTES
-} from "@vivd-catalyst/asset-repo";
+} from "@work-shape/catalyst-asset-repo";
 import {
   assetObjectPrefix,
   assetRepoBundleObjectKey,
@@ -32,7 +32,7 @@ import {
   type OperationRunId,
   type PlatformStores,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { AssetRepoCommitRunner } from "./asset-repo-sandbox";
 

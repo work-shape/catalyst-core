@@ -8,10 +8,10 @@ import {
   kitImportPath,
   kitStylesPlainPages,
   RELEASED_KIT_VERSIONS
-} from "@vivd-catalyst/app-build";
-import { appKitFilesOf, deriveAppContentKey, loadAppKitFiles } from "@vivd-catalyst/chat-server";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-app-build";
+import { appKitFilesOf, deriveAppContentKey, loadAppKitFiles } from "@work-shape/catalyst-server";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { z } from "zod";
 import { createTestConfig } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";

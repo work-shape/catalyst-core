@@ -6,7 +6,7 @@ import type {
   CreatePermissionGrantRequest,
   LocaleCode,
   PermissionGrantRow
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Banner,
@@ -32,7 +32,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   useDocsLinkShown
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { DocsReference } from "../docs-links";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import {

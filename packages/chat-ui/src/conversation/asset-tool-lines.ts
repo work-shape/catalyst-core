@@ -1,5 +1,5 @@
-import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
-import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
+import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { AGENT_ASSET_KIND } from "../build-area/build-rights";
 import type { TranslationContextValue, TranslationKey } from "../i18n";
 import {

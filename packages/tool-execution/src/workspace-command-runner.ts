@@ -28,7 +28,7 @@ import {
   type WorkspaceFile,
   readObjectBytes,
   type ObjectStorage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { promoteWorkspaceFile } from "./workspace-artifact-promotion";
 import { putWorkspaceFile, upsertStoredWorkspaceFile } from "./workspace-file-bytes";
 import {

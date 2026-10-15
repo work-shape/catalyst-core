@@ -15,8 +15,8 @@ import {
   type SupportedImageMimeType,
   type ToolExecutionContext,
   type ToolHandlerResult
-} from "@vivd-catalyst/core";
-import { toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import type {
   workspacePreviewImagesInputSchema,
   workspacePreviewImagesOutputSchema

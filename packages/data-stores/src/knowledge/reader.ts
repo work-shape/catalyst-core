@@ -1,4 +1,8 @@
-import type { ConnectionsStore, DataStoreRecord, KnowledgeBaseTarget } from "@vivd-catalyst/core";
+import type {
+  ConnectionsStore,
+  DataStoreRecord,
+  KnowledgeBaseTarget
+} from "@work-shape/catalyst-core";
 import { asStoreRole, writeReaderRole } from "../roles";
 import type { DataStoreRuntime } from "../runtime";
 import { quoteIdentifier } from "../server";

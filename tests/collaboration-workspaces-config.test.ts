@@ -2,12 +2,12 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   createSafeConfigView,
   loadClientInstanceConfigFromFile,
   parseClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 
 const REMOVED_SWITCH_MESSAGE =
   /'ui\.collaborationWorkspaces' was removed.*Remove the key from the config/u;

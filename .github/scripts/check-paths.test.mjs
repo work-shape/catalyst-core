@@ -81,9 +81,9 @@ test("new transitive dependencies are discovered from manifests, including cycle
   const root = mkdtempSync(join(tmpdir(), "check-paths-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const manifests = {
-    "clients/demo": { name: "@vivd-catalyst/demo", dependencies: { direct: "workspace:*" } },
+    "clients/demo": { name: "@work-shape/catalyst-demo", dependencies: { direct: "workspace:*" } },
     "packages/chat-server": {
-      name: "@vivd-catalyst/chat-server",
+      name: "@work-shape/catalyst-server",
       devDependencies: { builder: "workspace:*" }
     },
     "packages/direct": {

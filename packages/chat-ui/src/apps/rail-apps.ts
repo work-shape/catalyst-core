@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import type { AssetSummary } from "@vivd-catalyst/api-client";
+import type { AssetSummary } from "@work-shape/catalyst-api-client";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useAppList } from "./app-data";
 import { appState } from "./app-model";

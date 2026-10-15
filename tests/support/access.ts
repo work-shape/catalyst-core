@@ -8,7 +8,7 @@ import {
   type AuthenticatedIdentity,
   type PermissionGrant,
   type PersistedAccess
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * The answers the route helper would load for a caller, for a test that calls a workflow

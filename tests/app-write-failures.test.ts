@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { HELD_OPERATION_INPUT_MAX_BYTES } from "@vivd-catalyst/chat-server";
-import { StoreBackedAuditRecorder } from "@vivd-catalyst/core";
-import { OPERATION_CALL_APPROVAL_KIND } from "@vivd-catalyst/tool-execution";
+import { HELD_OPERATION_INPUT_MAX_BYTES } from "@work-shape/catalyst-server";
+import { StoreBackedAuditRecorder } from "@work-shape/catalyst-core";
+import { OPERATION_CALL_APPROVAL_KIND } from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import {
   appFiles,

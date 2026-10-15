@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineProvider, secretRef } from "@vivd-catalyst/core";
+import { defineProvider, secretRef } from "@work-shape/catalyst-core";
 import { MailjetTransport } from "./mailjet-transport";
 
 const mailjetConfigSchema = z.object({

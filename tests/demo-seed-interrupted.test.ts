@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { completedOutput, listAll } from "@vivd-catalyst/api-client";
+import { completedOutput, listAll } from "@work-shape/catalyst-api-client";
 import {
   createdBy,
   demoConfigEnv,

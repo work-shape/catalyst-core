@@ -5,14 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { PageBuildLimits } from "@vivd-catalyst/app-build";
+import type { PageBuildLimits } from "@work-shape/catalyst-app-build";
 import {
   createPageBuildClient,
   createPageBundleJobs,
   createSandboxPageBuild,
   PAGE_BUILD_NO_WORKER_MESSAGE,
   pageBundleJob
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   createPageBuildId,
   FILE_SET_MAX_FILE_BYTES,
@@ -21,15 +21,15 @@ import {
   type Logger,
   type PageBuildClient,
   type PageBuildId
-} from "@vivd-catalyst/core";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import {
   createPageSaveTool,
   LocalWorkspaceCommandProcessExecutor,
   ToolRegistry,
   WorkspaceCommandService,
   type PageSaveToolOptions
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import {
   fileRoute,

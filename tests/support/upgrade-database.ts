@@ -4,7 +4,7 @@ import {
   createPostgresStores,
   migrateDatabase,
   type PostgresStores
-} from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-postgres-store";
 import type { PostgresFixtures } from "./postgres-fixtures";
 
 /**

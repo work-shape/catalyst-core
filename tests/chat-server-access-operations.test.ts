@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { operationRunSchema } from "@vivd-catalyst/api-contract";
-import type { CentralPolicySetting } from "@vivd-catalyst/core";
+import { operationRunSchema } from "@work-shape/catalyst-api-contract";
+import type { CentralPolicySetting } from "@work-shape/catalyst-core";
 import {
   clientInstanceId,
   grantSchema,

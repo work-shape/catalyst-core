@@ -7,13 +7,13 @@ import {
   type GuardrailFields,
   type JsonObject,
   type OperationBeforeEvent
-} from "@vivd-catalyst/core";
-import type { AssetSyncItem } from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-core";
+import type { AssetSyncItem } from "@work-shape/catalyst-api-contract";
 import {
   GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
   guardrailFieldOf,
   guardrailStringsOf
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import type { AssetFileInput } from "./asset-files";
 import { readFileSetFile } from "./page-file-sets";
 import { readDefinitionName } from "./asset-kinds/shared";

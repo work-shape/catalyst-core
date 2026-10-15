@@ -1,7 +1,7 @@
 import { request as httpRequest } from "node:http";
 import postgres, { type Sql } from "postgres";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { apiOperations, INVALID_JSON_BODY_REASON } from "@vivd-catalyst/api-contract";
+import { apiOperations, INVALID_JSON_BODY_REASON } from "@work-shape/catalyst-api-contract";
 import {
   CompositeAuthAdapter,
   HmacSessionTokenAuthAdapter,
@@ -9,15 +9,15 @@ import {
   IdentityResolvingAuthAdapter,
   createStandaloneAuthRuntime,
   type StandaloneAuthRuntime
-} from "@vivd-catalyst/auth";
-import { createInProcessRateLimiter } from "@vivd-catalyst/chat-server";
-import { rateLimitsConfigSchema, type RateLimitsConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-auth";
+import { createInProcessRateLimiter } from "@work-shape/catalyst-server";
+import { rateLimitsConfigSchema, type RateLimitsConfig } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   asClientInstanceId,
   type RateLimiter,
   type RateLimitRule
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { inventedAuthPath, routeTestOperations, signInPathSpellings } from "./support/operations";
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";

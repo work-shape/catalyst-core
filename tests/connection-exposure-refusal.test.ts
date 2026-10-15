@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { connectionConfigSchema } from "@vivd-catalyst/config-schema";
-import { CONNECTION_EXPOSURES, connectionExposureRefusal } from "@vivd-catalyst/core";
+import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
+import { CONNECTION_EXPOSURES, connectionExposureRefusal } from "@work-shape/catalyst-core";
 import { connection } from "./support/connections";
 
 // Which exposures a Connection's definition may name. `outside` is one more value a shared

@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ConnectionIcon, IconRegistryProvider } from "@vivd-catalyst/ui";
+import { ConnectionIcon, IconRegistryProvider } from "@work-shape/catalyst-ui";
 
 describe("ConnectionIcon", () => {
   const Mark = () => createElement("svg", { "data-mark": "ledger" });

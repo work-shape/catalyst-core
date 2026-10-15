@@ -11,7 +11,7 @@ import type {
   PageBuildResult,
   PageId,
   UserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { conversations } from "./conversations";
 
 /**

@@ -16,8 +16,8 @@ import {
   PageOutline,
   Section,
   SkeletonList
-} from "@vivd-catalyst/ui";
-import type { GuardrailHitView } from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-ui";
+import type { GuardrailHitView } from "@work-shape/catalyst-api-client";
 import { formatMomentShort } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useInboxItemKindLookup } from "../inbox/inbox-item-kinds";

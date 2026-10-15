@@ -1,5 +1,5 @@
-import { AppError, type StorePage } from "@vivd-catalyst/core";
-import { listQuerySchema, timestampSchema } from "@vivd-catalyst/api-contract";
+import { AppError, type StorePage } from "@work-shape/catalyst-core";
+import { listQuerySchema, timestampSchema } from "@work-shape/catalyst-api-contract";
 import { z } from "zod";
 
 const rowSchema = z.record(z.string(), z.unknown());

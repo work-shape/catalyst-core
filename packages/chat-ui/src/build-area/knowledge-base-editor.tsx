@@ -9,7 +9,7 @@ import {
   Picker,
   PickerButton,
   Textarea
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import { FieldRefusals } from "./asset-form-fields";

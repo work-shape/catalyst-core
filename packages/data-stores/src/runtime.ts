@@ -5,7 +5,7 @@ import type {
   Logger,
   PlatformStores,
   WorkflowDatasetReference
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { DataStoreCredentials } from "./credentials";
 import type { DataStoreServer, DataStoreStatementLimits } from "./server";
 

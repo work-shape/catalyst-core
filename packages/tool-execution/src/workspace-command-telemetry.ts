@@ -1,4 +1,4 @@
-import type { Logger } from "@vivd-catalyst/core";
+import type { Logger } from "@work-shape/catalyst-core";
 import {
   auditActorFromUser,
   type ActiveWorkspaceCommandCounts,
@@ -8,7 +8,7 @@ import {
   type AuthenticatedUser,
   type JsonObject,
   type WorkspaceCommand
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 export type WorkspaceCommandTelemetryEventType =
   | "queued"

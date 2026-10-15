@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestJobs } from "./support/test-instance";
 

@@ -2,7 +2,7 @@ import {
   INTERRUPTED_RUN_ERROR,
   type OperationRun,
   type OperationRunStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * The run store for tests of the call path that need no database: it keeps the runs of one

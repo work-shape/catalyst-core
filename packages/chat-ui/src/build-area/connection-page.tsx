@@ -19,8 +19,8 @@ import {
   Section,
   SkeletonList,
   type BadgeTone
-} from "@vivd-catalyst/ui";
-import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-ui";
+import type { ConnectionDetail, ConnectionTestResult } from "@work-shape/catalyst-api-client";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { agentKind } from "./agent-kind";

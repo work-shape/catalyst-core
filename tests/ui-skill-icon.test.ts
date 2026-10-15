@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { KnowsHowTo, SkillIcon, UiRoot, uiLabelsEn } from "@vivd-catalyst/ui";
-import { UiGallery } from "@vivd-catalyst/ui/gallery";
+import { KnowsHowTo, SkillIcon, UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
+import { UiGallery } from "@work-shape/catalyst-ui/gallery";
 
 describe("SkillIcon", () => {
   const render = (props: Parameters<typeof SkillIcon>[0]) =>

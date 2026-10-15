@@ -15,7 +15,7 @@ import {
   type SkillStarterConfig,
   type SkillResourceConfig,
   type SkillResourceMediaType
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 import type { LocalizationConfig, LocalizedStringConfig } from "./localization";
 import type { ProviderRegion } from "./providers";
 

@@ -4,7 +4,7 @@ import type {
   ModelUsageDailyBucket,
   ModelUsageMonthlyBucket,
   UsageSummary
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Banner,
@@ -23,7 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatDate, formatTime } from "./locale-format";
 import { usageCaller, usageRegion, usageStatus } from "./usage-attribution-labels";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";

@@ -7,15 +7,15 @@ import {
   assetRepoSweepJob,
   createPageBundleJobs,
   createSandboxPageBuild
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   assertCommandWorkerServesModuleJobKinds,
   createClientInstanceWorkspaceCommandWorker,
   platformModules
-} from "@vivd-catalyst/client-assembly";
-import { createModuleRegistry, type Logger } from "@vivd-catalyst/core";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { LocalWorkspaceCommandProcessExecutor } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-client-assembly";
+import { createModuleRegistry, type Logger } from "@work-shape/catalyst-core";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
 import { createTestConfig, workspaceInfrastructure } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { fileTestDatabaseUrl } from "./support/test-database";

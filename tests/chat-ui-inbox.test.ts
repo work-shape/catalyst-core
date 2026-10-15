@@ -1,7 +1,7 @@
 import { createElement } from "react";
-import { ApiError, type ApprovalRequestView } from "@vivd-catalyst/api-client";
+import { ApiError, type ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   approvalActionFailure,
   decision,
@@ -26,7 +26,7 @@ import {
   type InboxItemKind,
   type InboxTab
 } from "./chat-ui-inbox-harness";
-import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
+import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 
 // Every test here fails without the Inbox frame: the modules it reads did not exist.
 

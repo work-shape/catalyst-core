@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { FlowBox, FlowDirection, FlowGraph } from "@vivd-catalyst/ui";
+import type { FlowBox, FlowDirection, FlowGraph } from "@work-shape/catalyst-ui";
 import {
   FLOW_GROUP_PADDING,
   FLOW_NODE_WIDTH,
@@ -7,7 +7,7 @@ import {
   fitFlowViewport,
   layoutFlow,
   panIntoView
-} from "@vivd-catalyst/ui/flow-layout";
+} from "@work-shape/catalyst-ui/flow-layout";
 
 // The layout of a structured graph: a condition with named exits, a parallel part, a loop body
 // and a subflow, with a group inside a group. It runs without a browser, on estimated sizes.

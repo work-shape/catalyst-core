@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { runCli, type CliRuntimeOptions } from "@work-shape/catalyst-cli";
 import { createTestFetch, type TestInstance } from "./support/test-instance";
 import { errorSchema } from "./support/access-instance";

@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ToolCallPart, readToolDetailSections } from "@vivd-catalyst/chat-ui/tool-call";
-import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
+import { ToolCallPart, readToolDetailSections } from "@work-shape/catalyst-chat-ui/tool-call";
+import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 
 // An open tool call in the work history. An output that is only an error is a sentence for a
 // person: what happened, whether trying again helps and who can act. It was shown as one line

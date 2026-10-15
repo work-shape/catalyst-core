@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/asset-repo",
+  "name": "@work-shape/catalyst-asset-repo",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/asset-repo"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {

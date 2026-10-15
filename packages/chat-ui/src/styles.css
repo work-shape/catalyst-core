@@ -6,7 +6,7 @@
 @layer theme, base, univer, components, utilities;
 
 /* Tailwind, the theme tokens and the default theme come with the shared UI library. */
-@import "@vivd-catalyst/ui/styles.css";
+@import "@work-shape/catalyst-ui/styles.css";
 @import "@univerjs/preset-sheets-core/lib/index.css" layer(univer);
 
 @source "./**/*.{ts,tsx}";

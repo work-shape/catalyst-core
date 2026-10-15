@@ -4,7 +4,7 @@ import {
   asMessageId,
   type ModelProviderContinuationCheckpoint,
   type ModelProviderContinuationStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { requireClaimedAgentRun } from "./postgres-agent-run-worker-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { modelProviderContinuations } from "./schema";

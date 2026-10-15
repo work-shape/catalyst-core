@@ -1,6 +1,6 @@
-import type { StorePage } from "@vivd-catalyst/core";
+import type { StorePage } from "@work-shape/catalyst-core";
 import { randomBytes } from "node:crypto";
-import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
+import { STANDALONE_AUTH_SOURCE } from "@work-shape/catalyst-auth";
 import {
   AppError,
   isSuperadmin,
@@ -18,7 +18,7 @@ import {
   userInDeletionError,
   type UserRole,
   type UserStatus
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { requestAccountDeletion } from "./account-deletion";
 import type { ChatServerOptions } from "./types";
 import { recordGovernanceAccess } from "./governance-actions";

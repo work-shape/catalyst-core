@@ -6,7 +6,7 @@ import {
   dataStoreOperationName,
   isAppError,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import {
   INIT_SQL,

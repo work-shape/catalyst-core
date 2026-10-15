@@ -4,8 +4,8 @@ import { claimAttachmentsForStoredMessage } from "./support/test-store";
 import { createTestInstance, type TestStore, type TestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 
-import { HmacSessionTokenAuthAdapter, HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
-import { type ChatAttachmentService } from "@vivd-catalyst/chat-server";
+import { HmacSessionTokenAuthAdapter, HmacSessionTokenIssuer } from "@work-shape/catalyst-auth";
+import { type ChatAttachmentService } from "@work-shape/catalyst-server";
 import {
   AppError,
   NoopAuditRecorder,
@@ -17,11 +17,11 @@ import {
   type ManagedFileId,
   type RuntimeCallContext,
   type ToolExecutionResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 
 describe("conversation resource store queries", () => {
   it("lists sent attachments and available conversation artifacts newest-first", async () => {

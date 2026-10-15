@@ -1,4 +1,4 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   isAuthenticatedServicePrincipal,
@@ -8,7 +8,7 @@ import {
   type AuthenticatedUser,
   type Namespace,
   type PermissionGrant
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { AccessWorkflow, type GrantViewContext } from "../access-workflow";
 import type { Route } from "../http/route";
 import { requirePathParam } from "../request-context";

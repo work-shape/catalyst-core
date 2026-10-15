@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge } from "@vivd-catalyst/ui";
+import { Badge } from "@work-shape/catalyst-ui";
 import { useAgentPlacementMutations } from "../api/agent-placement-mutations";
 import {
   useAdministeredCollaborationWorkspacesQuery,

@@ -1,6 +1,6 @@
 import { createElement, Fragment, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { UserMenu } from "../packages/chat-ui/src/workspace/user-menu";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { settingsUser } from "./chat-ui-settings-fixtures";
@@ -10,8 +10,8 @@ import { settingsUser } from "./chat-ui-settings-fixtures";
  * Here the parts of the menu are plain elements, so the markup holds what the open menu says.
  * Opening it, and where it stands, is the browser suite's.
  */
-vi.mock("@vivd-catalyst/ui", async (importOriginal) => {
-  const library = await importOriginal<typeof import("@vivd-catalyst/ui")>();
+vi.mock("@work-shape/catalyst-ui", async (importOriginal) => {
+  const library = await importOriginal<typeof import("@work-shape/catalyst-ui")>();
   const passThrough = ({ children }: { children?: ReactNode }) =>
     createElement(Fragment, null, children);
   return {

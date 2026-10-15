@@ -5,7 +5,7 @@ import {
   type CreateServicePrincipalInput,
   type ServicePrincipalRecord,
   type UpdateServicePrincipalInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createApiCredential as createPostgresApiCredential,
   createServicePrincipal as createPostgresServicePrincipal,

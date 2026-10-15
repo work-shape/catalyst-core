@@ -5,7 +5,7 @@ import { join } from "node:path";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
@@ -13,7 +13,7 @@ import {
   WORKFLOW_ASSET_KIND,
   asClientInstanceId,
   dataStoreOperationName
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { eventually, required } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { fileTestDatabaseUrl } from "./support/test-database";

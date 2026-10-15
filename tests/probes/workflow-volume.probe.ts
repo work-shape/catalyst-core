@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { WORKFLOW_LOOP_MAX_CONCURRENCY } from "@vivd-catalyst/core";
+import { WORKFLOW_LOOP_MAX_CONCURRENCY } from "@work-shape/catalyst-core";
 import {
   WORKFLOW_LOOP_MAX_ITEMS,
   WORKFLOW_STEP_DATA_MAX_BYTES,
   WORKFLOW_STEP_JOB_SLOTS
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { stepRunsSchema } from "../support/workflow-instance";
 import {
   ended,

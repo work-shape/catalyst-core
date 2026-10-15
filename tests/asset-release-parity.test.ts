@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ASSET_RELEASE_SYNC_MAX_ITEMS, ASSET_SYNC_MAX_ITEMS } from "@vivd-catalyst/api-contract";
-import { defineAssetKind } from "@vivd-catalyst/core";
+import {
+  ASSET_RELEASE_SYNC_MAX_ITEMS,
+  ASSET_SYNC_MAX_ITEMS
+} from "@work-shape/catalyst-api-contract";
+import { defineAssetKind } from "@work-shape/catalyst-core";
 import {
   agent,
   clientInstanceId,

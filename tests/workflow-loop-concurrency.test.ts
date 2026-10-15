@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { JsonValue } from "@vivd-catalyst/core";
-import { WORKFLOW_STEP_JOB_SLOTS, parseWorkflowManifest } from "@vivd-catalyst/workflows";
+import type { JsonValue } from "@work-shape/catalyst-core";
+import { WORKFLOW_STEP_JOB_SLOTS, parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import {
   publishedDefinitions,
   type workflowFixture,

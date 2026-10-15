@@ -1,4 +1,4 @@
-import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
+import type { CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
 import { canManageCollaborationWorkspace } from "../collaboration-workspace/collaboration-workspace-selector";
 import { canChangePassword } from "../control-plane/governance";
 import type { TranslationKey } from "../i18n";

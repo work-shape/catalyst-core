@@ -17,7 +17,7 @@ import {
   Page,
   PageHeader,
   SkeletonPage
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import type { AssetContent, AssetFileEntry } from "../api/asset-writes";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation, type TranslationKey } from "../i18n";

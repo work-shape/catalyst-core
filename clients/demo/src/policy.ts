@@ -1,4 +1,4 @@
-import type { DefinedClientInstance } from "@vivd-catalyst/client-assembly";
+import type { DefinedClientInstance } from "@work-shape/catalyst-client-assembly";
 
 type Operations = NonNullable<
   NonNullable<Parameters<DefinedClientInstance["listen"]>[0]>["operations"]

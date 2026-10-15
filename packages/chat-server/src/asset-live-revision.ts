@@ -1,4 +1,8 @@
-import { AppError, type ConfigAssetRevisionRecord, type JsonObject } from "@vivd-catalyst/core";
+import {
+  AppError,
+  type ConfigAssetRevisionRecord,
+  type JsonObject
+} from "@work-shape/catalyst-core";
 import type { AssetCall } from "./asset-access";
 import type { AssetTarget } from "./asset-target";
 import type { AssetWorkflowOptions } from "./types";

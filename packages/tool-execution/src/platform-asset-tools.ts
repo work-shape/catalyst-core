@@ -9,8 +9,8 @@ import {
   type OperationBeforeEvent,
   type PolicyValue,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
-import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import type { PageAppCalls } from "./page-app-tool";
 import type { PlatformDiscoveryCalls } from "./platform-discovery-tools";
 

@@ -20,7 +20,7 @@ import {
   type FlowEdgeState,
   type FlowNodeProps,
   type FlowStatus
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 
 // The parts of a graph canvas, each rendered on its own. Every test here fails without the
 // components: the library did not export them.

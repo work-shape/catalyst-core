@@ -1,6 +1,6 @@
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { fileTestDatabaseUrl } from "./support/test-database";
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import { type TestPostgresStore, createTestInstance } from "./support/test-instance";
 import { afterAll, describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
@@ -10,7 +10,7 @@ import {
   type ClientInstanceId,
   type ExecutionWorkspace,
   type WorkspaceCommandOutput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 describe("Postgres execution workspace store", () => {
   let store: PlatformStores;

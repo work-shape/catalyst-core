@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { NameWithAddress, UiRoot, uiLabelsEn, type AddressCheck } from "@vivd-catalyst/ui";
+import { NameWithAddress, UiRoot, uiLabelsEn, type AddressCheck } from "@work-shape/catalyst-ui";
 
 function render(check: AddressCheck, typedAddress?: string): string {
   return renderToStaticMarkup(

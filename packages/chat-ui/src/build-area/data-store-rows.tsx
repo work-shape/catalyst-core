@@ -16,7 +16,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { cellText, DATA_STORE_CELL_WIDTH, wholeValueText } from "./data-store-model";
 import { ReadState } from "./data-store-read-state";

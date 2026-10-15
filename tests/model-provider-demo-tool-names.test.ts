@@ -3,8 +3,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { isDataToolName } from "@vivd-catalyst/core";
-import { OpenAiCompatibleChatProvider } from "@vivd-catalyst/model-provider";
+import { isDataToolName } from "@work-shape/catalyst-core";
+import { OpenAiCompatibleChatProvider } from "@work-shape/catalyst-model-provider";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** What an OpenAI-compatible provider accepts as the name of a function. */

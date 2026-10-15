@@ -11,7 +11,7 @@ import {
   type PlatformEventDefinition,
   type PlatformEventEmitter,
   type PlatformEventName
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 type Callable = ts.FunctionDeclaration | ts.MethodDeclaration;
 type EventArgument = { index: number; path: string[] };

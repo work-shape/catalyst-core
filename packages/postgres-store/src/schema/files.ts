@@ -16,7 +16,7 @@ import type {
   ConversationAttachment,
   ManagedArtifactRecord,
   ManagedFileRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { conversations, messages } from "./conversations";
 
 export const managedFiles = pgTable(

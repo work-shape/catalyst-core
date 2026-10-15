@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-catalyst/core";
+import { AppError } from "@work-shape/catalyst-core";
 import { ModelProviderError } from "./model-provider-error";
 
 /** What bounds one call in time: the caller's stop and the call's deadline. */

@@ -12,7 +12,7 @@ import {
   Page,
   PageHeader,
   Section
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { CopyIdMenu } from "../copy-id-item";
 import { useTranslation } from "../i18n";
 import type { BuildAssetViewProps } from "./build-asset-kind";

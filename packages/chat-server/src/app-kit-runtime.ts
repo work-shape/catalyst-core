@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { KIT_PLAIN_PAGE_FILES, kitStylesPlainPages } from "@vivd-catalyst/app-build";
+import { KIT_PLAIN_PAGE_FILES, kitStylesPlainPages } from "@work-shape/catalyst-app-build";
 import { z } from "zod";
 
 // The App Kit a Page loads from the instance: one frozen directory per released version under

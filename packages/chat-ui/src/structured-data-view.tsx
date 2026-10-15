@@ -1,6 +1,6 @@
 import { Check, ClipboardCopy, FileSearch, TriangleAlert } from "lucide-react";
 import { useState } from "react";
-import type { StructuredDataResourceResponse } from "@vivd-catalyst/api-client";
+import type { StructuredDataResourceResponse } from "@work-shape/catalyst-api-client";
 import {
   Button,
   IconButton,
@@ -11,7 +11,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "./i18n";
 import { formatStructuredDataValue, structuredDataToTsv } from "./resources-panel-model";
 

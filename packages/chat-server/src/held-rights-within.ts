@@ -9,7 +9,7 @@ import {
   type HeldRight,
   type OperationAuthorization,
   type RightsTransfer
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /** What placing the denies reads: the assets of asset-scope rows. */
 interface DenyPlacementOptions {

@@ -19,8 +19,8 @@ import {
   type AgentRuntimeEvent,
   type RuntimeCallContext,
   type StartAgentRunInput
-} from "@vivd-catalyst/core";
-import type { ModelCall, ModelCompletion, ModelGateway } from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-core";
+import type { ModelCall, ModelCompletion, ModelGateway } from "@work-shape/catalyst-model-provider";
 import type { RunState, RunFailureError } from "../run-state";
 import type {
   StoredReasoningSummary,
@@ -31,7 +31,7 @@ import type {
 import type { ModelToolRegistryView } from "../model-tool-materialization";
 
 export interface LocalAgentRuntimeOptions {
-  logger?: import("@vivd-catalyst/core").Logger;
+  logger?: import("@work-shape/catalyst-core").Logger;
   assetSource: ConfigAssetSource;
   modelProviders: ModelProviderConfig[];
   modelBindings?: readonly ModelBindingConfig[];

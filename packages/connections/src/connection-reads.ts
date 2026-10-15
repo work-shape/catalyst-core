@@ -1,4 +1,4 @@
-import { connectionConfigSchema } from "@vivd-catalyst/config-schema";
+import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   CONNECTION_ASSET_KIND,
   type ClientInstanceId,
@@ -12,7 +12,7 @@ import {
   type EgressChecker,
   type Logger,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { readConnectionCatalog } from "./catalog";
 import type { OutsideSchemaChecker } from "./schema-check";
 

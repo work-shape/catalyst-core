@@ -1,4 +1,4 @@
-import type { PlatformAction } from "@vivd-catalyst/asset-schemas";
+import type { PlatformAction } from "@work-shape/catalyst-asset-schemas";
 
 /**
  * The rights a grant row can give a service principal: the use rights of a resource and

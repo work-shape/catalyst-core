@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { APP_ASSET_KIND, appInterfacePath, type AppMode } from "@vivd-catalyst/api-contract";
+import { APP_ASSET_KIND, appInterfacePath, type AppMode } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -15,7 +15,7 @@ import {
   type OperationAuthorization,
   type OperationBeforeEvent,
   type Page
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { accessResource, decide, type AssetCall } from "../asset-access";
 import { APP_CONTENT_TOKEN_TTL_SECONDS, appContentPath, mintAppContentToken } from "../app-content";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";

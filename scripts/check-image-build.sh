@@ -23,7 +23,7 @@
 set -euo pipefail
 
 platform_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-client_package="@vivd-catalyst/demo"
+client_package="@work-shape/catalyst-demo"
 client_path="platform/clients/demo"
 
 command -v docker >/dev/null 2>&1 || { echo "check-image-build: docker is required" >&2; exit 1; }

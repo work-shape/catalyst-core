@@ -1,6 +1,6 @@
 import { CalendarDays, Calculator, LayoutGrid, MoreHorizontal } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { AssetSummary, LocaleCode } from "@vivd-catalyst/api-client";
+import type { AssetSummary, LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   Avatar,
   Badge,
@@ -25,7 +25,7 @@ import {
   SkeletonList,
   Starter,
   StarterList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { formatUpdated } from "../build-area/build-model";
 import { formatDateTime } from "../control-plane/locale-format";

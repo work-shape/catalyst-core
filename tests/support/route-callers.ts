@@ -1,4 +1,4 @@
-import type { AuthAdapter } from "@vivd-catalyst/auth";
+import type { AuthAdapter } from "@work-shape/catalyst-auth";
 import {
   LEGACY_LIST_GRANTOR,
   LEGACY_PERMISSION_ACTIONS,
@@ -7,7 +7,7 @@ import {
   asClientInstanceId,
   asServicePrincipalId,
   legacyGrantRows
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { withTestSql } from "./test-sql";
 

@@ -1,4 +1,4 @@
-import { ACTIONS, type PlatformAction } from "@vivd-catalyst/asset-schemas";
+import { ACTIONS, type PlatformAction } from "@work-shape/catalyst-asset-schemas";
 // Frozen copy of packages/core/src/permissions.ts at 6c1ab255 (the commit before AP-4), for the AP-4 verifier.
 import {
   operationDenialError,
@@ -7,7 +7,7 @@ import {
   type ClientInstanceId,
   type UserId,
   type ISODateString
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 const PERMISSIONS = [
   "agent_skills.approve",

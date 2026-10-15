@@ -1,7 +1,7 @@
 import { Agent as HttpAgent, request as httpRequest, type IncomingMessage } from "node:http";
 import { Agent as HttpsAgent, request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
-import type { EgressGrant } from "@vivd-catalyst/core";
+import type { EgressGrant } from "@work-shape/catalyst-core";
 import { pinnedLookup } from "./egress";
 
 // One HTTP request of a Connector type to a target the egress checker granted. Where it goes

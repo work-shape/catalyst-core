@@ -82,16 +82,16 @@ RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
 COPY . ./
 
 RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
-  pnpm --filter "@vivd-catalyst/app-build..." install --offline --frozen-lockfile \
-  && pnpm --filter "@vivd-catalyst/app-build..." build \
-  && pnpm --config.inject-workspace-packages=true --filter "@vivd-catalyst/app-build" deploy --prod --offline /opt/catalyst-page-build
+  pnpm --filter "@work-shape/catalyst-app-build..." install --offline --frozen-lockfile \
+  && pnpm --filter "@work-shape/catalyst-app-build..." build \
+  && pnpm --config.inject-workspace-packages=true --filter "@work-shape/catalyst-app-build" deploy --prod --offline /opt/catalyst-page-build
 
 # The command that keeps the repository of an asset. It is built beside the Page build and
 # reaches the runner image the same way.
 RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
-  pnpm --filter "@vivd-catalyst/asset-repo..." install --offline --frozen-lockfile \
-  && pnpm --filter "@vivd-catalyst/asset-repo..." build \
-  && pnpm --config.inject-workspace-packages=true --filter "@vivd-catalyst/asset-repo" deploy --prod --offline /opt/catalyst-asset-repo
+  pnpm --filter "@work-shape/catalyst-asset-repo..." install --offline --frozen-lockfile \
+  && pnpm --filter "@work-shape/catalyst-asset-repo..." build \
+  && pnpm --config.inject-workspace-packages=true --filter "@work-shape/catalyst-asset-repo" deploy --prod --offline /opt/catalyst-asset-repo
 
 FROM workspace-artifact-runtime AS workspace-command-runner
 
@@ -159,7 +159,7 @@ RUN pnpm --filter "${APP_PACKAGE}^..." build \
   && pnpm --filter "${APP_PACKAGE}" build:server \
   && if [ -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" ]; then \
     test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}" \
-    && pnpm --filter "${APP_PACKAGE}" exec node --input-type=module -e "const module = await import('@vivd-catalyst/client-assembly'); if (typeof module.runClientInstanceArtifactPreviewWorker !== 'function') throw new Error('artifact preview worker runtime export is missing');"; \
+    && pnpm --filter "${APP_PACKAGE}" exec node --input-type=module -e "const module = await import('@work-shape/catalyst-client-assembly'); if (typeof module.runClientInstanceArtifactPreviewWorker !== 'function') throw new Error('artifact preview worker runtime export is missing');"; \
   fi
 
 FROM deps AS api-dev
@@ -254,11 +254,11 @@ ENV NODE_ENV=development
 # line loads the plugin as Vite does at start: the image fails to build when a package it needs
 # has no built output, instead of the container stopping when it starts.
 RUN pnpm \
-    --filter "@vivd-catalyst/core..." \
-    --filter "@vivd-catalyst/config-schema..." \
-    --filter "@vivd-catalyst/ui..." \
+    --filter "@work-shape/catalyst-core..." \
+    --filter "@work-shape/catalyst-config-schema..." \
+    --filter "@work-shape/catalyst-ui..." \
     build \
-  && pnpm --filter "${UI_PACKAGE}" exec node --input-type=module -e "await import('@vivd-catalyst/chat-ui/vite');"
+  && pnpm --filter "${UI_PACKAGE}" exec node --input-type=module -e "await import('@work-shape/catalyst-chat-ui/vite');"
 
 EXPOSE 5173
 CMD ["sh", "-c", "pnpm --filter \"${UI_PACKAGE}\" exec vite --host 0.0.0.0 --port ${UI_DEV_PORT}"]

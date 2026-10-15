@@ -1,7 +1,7 @@
 import { createElement, createRef } from "react";
 import { describe, expect, it } from "vitest";
-import type { ConfigAssetReferences, LocaleCode } from "@vivd-catalyst/api-client";
-import type { ConnectionToolsRead } from "@vivd-catalyst/chat-ui/build-area";
+import type { ConfigAssetReferences, LocaleCode } from "@work-shape/catalyst-api-client";
+import type { ConnectionToolsRead } from "@work-shape/catalyst-chat-ui/build-area";
 import {
   AgentEditor,
   agentConfigToForm,
@@ -13,7 +13,7 @@ import {
   toolPackages,
   withImpliedTools,
   type BuildAssetEditorProps
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The tools on an agent's page as rows (TOOLS-1, variant A): a row per package, per own tool of

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { createSecretStore, loadSecretKeyring } from "@vivd-catalyst/connections";
-import { SHARED_CREDENTIAL_SUBJECT } from "@vivd-catalyst/core";
+import { createSecretStore, loadSecretKeyring } from "@work-shape/catalyst-connections";
+import { SHARED_CREDENTIAL_SUBJECT } from "@work-shape/catalyst-core";
 import { errorSchema } from "./support/access-instance";
 import { required } from "./support/assertions";
 import { URL_OF_HOST, fixture } from "./support/connection-operations";

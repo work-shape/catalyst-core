@@ -2,8 +2,8 @@ import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
   type ClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
-import { AppError, type SecretResolver } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-config-schema";
+import { AppError, type SecretResolver } from "@work-shape/catalyst-core";
 import { createStandaloneAuthRuntimeForClientInstance, resolveTrustedOrigins } from "./auth";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createEnvironmentSecrets } from "./infrastructure";

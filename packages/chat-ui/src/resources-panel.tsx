@@ -1,8 +1,8 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { BarChart3, ChevronDown, Database, Library, X } from "lucide-react";
 import { useCallback, type AnimationEventHandler } from "react";
-import type { ApiClient, ConversationResourceListItem } from "@vivd-catalyst/api-client";
-import { cn, Spinner, IconButton } from "@vivd-catalyst/ui";
+import type { ApiClient, ConversationResourceListItem } from "@work-shape/catalyst-api-client";
+import { cn, Spinner, IconButton } from "@work-shape/catalyst-ui";
 import { ArtifactFileIcon } from "./artifact-download-card";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import {

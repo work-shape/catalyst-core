@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { WorkspaceCommandLimits, WorkspaceExpectedOutput } from "@vivd-catalyst/core";
+import type { WorkspaceCommandLimits, WorkspaceExpectedOutput } from "@work-shape/catalyst-core";
 import { validateWorkspaceShellCommand } from "../workspace-command-validation";
 import type {
   expectedOutputInputSchema,

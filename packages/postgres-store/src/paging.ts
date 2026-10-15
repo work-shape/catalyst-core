@@ -1,5 +1,5 @@
 import { sql, type SQLWrapper } from "drizzle-orm";
-import { AppError, type StorePage } from "@vivd-catalyst/core";
+import { AppError, type StorePage } from "@work-shape/catalyst-core";
 
 export function keysetFilter(
   page: StorePage | undefined,

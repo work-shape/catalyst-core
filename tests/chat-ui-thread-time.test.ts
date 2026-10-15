@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   calendarDay,
   createThreadTimes,

@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import type { SendBlock } from "../assistant/send-block";
 import { createTranslationContext } from "../i18n";
 

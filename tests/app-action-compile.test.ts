@@ -6,8 +6,8 @@ import {
   applyAppActionMapping,
   compiledActionsOf,
   type PageBuildResult
-} from "@vivd-catalyst/app-build";
-import { APP_MAX_ACTIONS, buildPage } from "@vivd-catalyst/app-build/build";
+} from "@work-shape/catalyst-app-build";
+import { APP_MAX_ACTIONS, buildPage } from "@work-shape/catalyst-app-build/build";
 import { pageFiles } from "./support/page-build";
 
 // The named actions of a Page as the build compiles them: one file per action, written into

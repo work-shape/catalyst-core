@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { z } from "zod";
-import type { DataStoreAppliedMigration, DataStoreRecord } from "@vivd-catalyst/core";
+import type { DataStoreAppliedMigration, DataStoreRecord } from "@work-shape/catalyst-core";
 import type { DataStoreMigration } from "./definition";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import { ROLE_STATE, roleNames, rolesAreUnchanged } from "./roles";

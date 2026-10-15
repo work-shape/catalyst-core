@@ -5,8 +5,8 @@ import { config as loadDotenv } from "dotenv";
 import type {
   ConnectorTypeDefinition,
   StructuredDataPublicationReviewer
-} from "@vivd-catalyst/core";
-import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import type { ToolAssemblyDefinition } from "@work-shape/catalyst-tool-sdk";
 import {
   createClientInstanceApp,
   type ClientInstanceApp,

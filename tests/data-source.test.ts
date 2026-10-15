@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { DataSourceConfig } from "@vivd-catalyst/core";
+import type { DataSourceConfig } from "@work-shape/catalyst-core";
 import {
   assertReadOnlyQuery,
   createDataSourceRegistry,
   createDataSourceTools
-} from "@vivd-catalyst/data-source";
+} from "@work-shape/catalyst-data-source";
 import { createFakeSecrets } from "./support/fixtures";
 
 describe("data source registry", () => {

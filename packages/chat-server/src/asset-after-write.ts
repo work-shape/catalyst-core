@@ -1,4 +1,4 @@
-import type { JsonObject } from "@vivd-catalyst/core";
+import type { JsonObject } from "@work-shape/catalyst-core";
 import type { AssetCall } from "./asset-access";
 import { recordAssetEvent, type AssetTarget } from "./asset-target";
 import type { AssetWorkflowOptions } from "./types";

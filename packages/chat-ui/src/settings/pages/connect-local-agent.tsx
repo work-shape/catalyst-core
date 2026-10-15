@@ -8,7 +8,7 @@ import {
   SegmentedControlItem,
   Skeleton,
   TextLink
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { usePlatformContextQuery } from "../../api/workspace-queries";
 import { instanceUrl } from "../../control-plane/personal-api-keys-model";
 import { useTranslation, type TranslationKey } from "../../i18n";

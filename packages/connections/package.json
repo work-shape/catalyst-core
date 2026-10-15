@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/connections",
+  "name": "@work-shape/catalyst-connections",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/connections"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -40,9 +35,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
-    "@vivd-catalyst/config-schema": "workspace:*",
-    "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/web-access": "workspace:*",
+    "@work-shape/catalyst-config-schema": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
+    "@work-shape/catalyst-web-access": "workspace:*",
     "ajv": "^8.20.0",
     "zod": "^4.4.3"
   },

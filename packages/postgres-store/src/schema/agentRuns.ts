@@ -9,7 +9,7 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { AgentRun, RunObservation, RunStartCommand } from "@vivd-catalyst/core";
+import type { AgentRun, RunObservation, RunStartCommand } from "@work-shape/catalyst-core";
 import { conversations, messages } from "./conversations";
 
 export const agentRuns = pgTable(

@@ -2,7 +2,7 @@ import {
   auditActorFromIdentity,
   type AuthenticatedIdentity,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "./types";
 
 /**

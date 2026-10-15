@@ -1,10 +1,10 @@
 import { text, jsonObject } from "./support/assertions";
 
 import { describe, expect, it } from "vitest";
-import { asManagedArtifactId } from "@vivd-catalyst/core";
-import { listConversationResources } from "@vivd-catalyst/chat-server";
-import { createExecutionWorkspaceManagedObjectReader } from "@vivd-catalyst/client-assembly";
-import { createArtifactPreviewSettingsHash } from "@vivd-catalyst/tool-execution";
+import { asManagedArtifactId } from "@work-shape/catalyst-core";
+import { listConversationResources } from "@work-shape/catalyst-server";
+import { createExecutionWorkspaceManagedObjectReader } from "@work-shape/catalyst-client-assembly";
+import { createArtifactPreviewSettingsHash } from "@work-shape/catalyst-tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
 import { createWorkspaceHarness, encode } from "./support/workspace-tools-harness";
 

@@ -1,4 +1,4 @@
-import type { StorePage } from "@vivd-catalyst/core";
+import type { StorePage } from "@work-shape/catalyst-core";
 import {
   type ClientInstanceId,
   type CreateUserInput,
@@ -11,7 +11,7 @@ import {
   type UserModelPreferenceInput,
   type UserRecord,
   type UserStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { appendAuditEvent as appendPostgresAuditEvent } from "../postgres-audit-usage-operations";
 import {
   createUser as createPostgresUser,

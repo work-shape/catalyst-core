@@ -34,7 +34,7 @@ import {
   isAppError,
   readObjectBytes,
   type ObjectStorage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   DataSourceDescribeInput,
   DataSourceDescribeResult,
@@ -42,15 +42,20 @@ import type {
   DataSourceQueryResult,
   DataSourceRegistry,
   DataSourceRegistration
-} from "@vivd-catalyst/data-source";
-import { defineTool, defineConfiguredTool, toolFailed, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-data-source";
+import {
+  defineTool,
+  defineConfiguredTool,
+  toolFailed,
+  toolSuccess
+} from "@work-shape/catalyst-tool-sdk";
 import type {
   AnyConfiguredToolDefinition,
   AnyToolDefinition,
   ConfiguredToolDefinition,
   ToolAssemblyDefinition,
   ToolDefinition
-} from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-tool-sdk";
 
 export type {
   DataSourceDescribeInput,
@@ -421,7 +426,7 @@ export interface CreateManagedObjectAccessInput {
   files: PlatformFileStore;
   byteStore: ObjectStorage;
   keyFactory: ManagedObjectKeyFactory;
-  logger?: import("@vivd-catalyst/core").Logger;
+  logger?: import("@work-shape/catalyst-core").Logger;
 }
 
 export interface CreateManagedObjectAccessFromContextInput {

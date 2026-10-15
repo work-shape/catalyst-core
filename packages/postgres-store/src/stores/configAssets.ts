@@ -8,7 +8,7 @@ import {
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
   type ConfigAssetStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   applyConfigAssetMutations as applyPostgresConfigAssetMutations,
   getConfigAsset as getPostgresConfigAsset,

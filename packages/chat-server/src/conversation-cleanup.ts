@@ -4,9 +4,9 @@ import {
   type CollaborationWorkspaceId,
   type ConversationId,
   type UserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { deleteConversationPages } from "./page-file-sets";
-import { OPERATION_CALL_APPROVAL_KIND } from "@vivd-catalyst/tool-execution";
+import { OPERATION_CALL_APPROVAL_KIND } from "@work-shape/catalyst-tool-execution";
 import type { ChatServerOptions } from "./types";
 import { endHeldOperationCalls } from "./operation-call-approval-handler";
 import { cleanupExecutionWorkspaceForConversation } from "./workspace-cleanup";

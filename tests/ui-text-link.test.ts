@@ -1,7 +1,7 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { TextLink, UiRoot, uiLabelsEn } from "@vivd-catalyst/ui";
+import { TextLink, UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 
 function render(element: ReactElement): string {
   return renderToStaticMarkup(

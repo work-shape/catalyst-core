@@ -5,7 +5,7 @@ import {
   createActorAccess,
   type AccessHolder,
   type PermissionGrant
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { clientInstanceId, setupAccessInstance } from "./support/access-instance";
 
 // The second review of RIGHTS-1b: a right given over a Namespace, a workspace or the instance

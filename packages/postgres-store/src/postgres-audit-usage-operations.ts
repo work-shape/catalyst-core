@@ -1,5 +1,5 @@
 import { keysetFilter } from "./paging";
-import type { StorePage } from "@vivd-catalyst/core";
+import type { StorePage } from "@work-shape/catalyst-core";
 import { and, desc, eq, gte, lt, sql as drizzleSql } from "drizzle-orm";
 import {
   type AuditEvent,
@@ -9,7 +9,7 @@ import {
   type ModelUsageEventStore,
   AppError,
   createPlatformId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapAuditEvent, mapModelUsageEvent } from "./rows";
 import {

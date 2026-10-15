@@ -24,7 +24,7 @@ import {
   type ObjectStorageFailure,
   type ProviderCheckContext,
   type ProviderCheckResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * The transport bounds of a check's own request: how long the connection may take and how long

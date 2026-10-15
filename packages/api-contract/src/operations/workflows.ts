@@ -10,7 +10,7 @@ import { defineRegisteredOperation, json, page } from "./define-operation";
 /** How many characters of a result a read shows at most. The store cuts to the same number. */
 export const WORKFLOW_RUN_OUTPUT_PREVIEW_MAX_CHARS = 2_000;
 
-// The values of the Workflow contract in `@vivd-catalyst/core`, which this package does not
+// The values of the Workflow contract in `@work-shape/catalyst-core`, which this package does not
 // import. A value the engine writes and this list lacks fails the answer of the read.
 const runStatusSchema = z.enum([
   "queued",

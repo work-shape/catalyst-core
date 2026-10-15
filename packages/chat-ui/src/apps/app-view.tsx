@@ -1,6 +1,6 @@
 import { MoreHorizontal, Pencil } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
-import type { AppPreviewResponse } from "@vivd-catalyst/api-client";
+import type { AppPreviewResponse } from "@work-shape/catalyst-api-client";
 import {
   Button,
   DropdownMenu,
@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   IconButton
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../i18n";
 import { workspaceRouteFromPath, workspaceRoutePath } from "../routes";

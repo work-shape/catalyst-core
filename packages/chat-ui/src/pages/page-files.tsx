@@ -1,8 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import { useState } from "react";
-import { ApiError, type PageSourceFileEntryResponse } from "@vivd-catalyst/api-client";
-import { Badge, Button, cn, EmptyState, List, ListRow, SkeletonList } from "@vivd-catalyst/ui";
+import { ApiError, type PageSourceFileEntryResponse } from "@work-shape/catalyst-api-client";
+import {
+  Badge,
+  Button,
+  cn,
+  EmptyState,
+  List,
+  ListRow,
+  SkeletonList
+} from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useTranslation } from "../i18n";
 import { StoredFileView } from "../stored-file-view";

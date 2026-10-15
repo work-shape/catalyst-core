@@ -4,7 +4,7 @@
 // and the author's own rules read them. It brings neither React nor the library's components,
 // and it greets the interface for itself: a Page whose script imports the kit greets a second
 // time and is told the same.
-import { createThemeTokens } from "@vivd-catalyst/ui/theme";
+import { createThemeTokens } from "@work-shape/catalyst-ui/theme";
 import { getContext, onThemeChange } from "./client";
 import type { AppThemeChange } from "./protocol";
 

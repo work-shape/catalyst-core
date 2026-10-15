@@ -1,4 +1,4 @@
-import type { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
+import type { createClientInstanceApp as createUnseededClientInstanceApp } from "@work-shape/catalyst-client-assembly";
 import {
   asClientInstanceId,
   asConversationId,
@@ -10,11 +10,11 @@ import {
   type JsonObject,
   type Logger,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   parseClientInstanceConfig,
   type UsageSafeguardsConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import { applyAtCurrentRevisions } from "./asset-revisions";
 
 type LocalizedTestString =

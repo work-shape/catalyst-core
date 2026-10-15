@@ -10,7 +10,7 @@ import {
   type PlatformEventAnswer,
   type PlatformEventContext,
   type PlatformEventName
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // The before-events of a call, asked once its caller's right is known: `operation.before_call`
 // with the call's input, the operation's own, and one per subject its `beforeEvents` names.

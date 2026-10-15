@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { PageBuildLimits, PageFile } from "@vivd-catalyst/app-build";
+import type { PageBuildLimits, PageFile } from "@work-shape/catalyst-app-build";
 import {
   createPageBuildId,
   defineJobHandler,
@@ -31,7 +31,7 @@ import {
   type PageBuildSourceFile,
   type PlatformStores,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { PageBuildRunner } from "./page-build-sandbox";
 import { storeAssetFileSet, storePageFileSet } from "./page-file-sets";

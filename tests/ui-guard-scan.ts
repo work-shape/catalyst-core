@@ -25,7 +25,7 @@ export interface UiGuardFinding {
 
 export const uiGuardHints: Record<UiGuardCategory, string> = {
   elements:
-    "Use Button, IconButton, Input, Textarea, Select or Dialog from @vivd-catalyst/ui in place of the raw element.",
+    "Use Button, IconButton, Input, Textarea, Select or Dialog from @work-shape/catalyst-ui in place of the raw element.",
   roles:
     "Use the library's Dialog, Picker, DropdownMenu or Tabs; they own these roles and their keyboard handling.",
   palette: "Use a theme token (for example text-success-soft-foreground), not a palette colour.",
@@ -35,7 +35,7 @@ export const uiGuardHints: Record<UiGuardCategory, string> = {
   scrollbar:
     "Style no scrollbar: the base rule in packages/ui/src/styles.css gives every scroll area the one scrollbar. Only the library hides one.",
   "overlay-imports":
-    "Import the component from @vivd-catalyst/ui. Only the library imports radix-ui and cmdk.",
+    "Import the component from @work-shape/catalyst-ui. Only the library imports radix-ui and cmdk.",
   "library-imports":
     "The library imports only react, react-dom, radix-ui, cmdk, lucide-react, class-variance-authority, clsx, tailwind-merge and its own files. Only data/chart-engine.ts imports echarts.",
   "library-storage": "The library keeps nothing in storage and loads nothing.",

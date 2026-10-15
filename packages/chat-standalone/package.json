@@ -1,5 +1,5 @@
 {
-  "name": "@vivd-catalyst/chat-standalone",
+  "name": "@work-shape/catalyst-chat-standalone",
   "version": "0.7.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/chat-ui": "workspace:*",
+    "@work-shape/catalyst-chat-ui": "workspace:*",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

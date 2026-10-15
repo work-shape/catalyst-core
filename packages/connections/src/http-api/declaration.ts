@@ -5,7 +5,7 @@ import {
   type DeclaredOperationParameter,
   type DeclaredOperations,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { measureOutsideJsonSchema, type OutsideSchemaBoundRefusal } from "../json-schema";
 
 // The operations of an `http_api` Connection, as the Connection declares them: what a save

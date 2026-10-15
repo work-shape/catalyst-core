@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
-import { connectionOperationName, isDataToolName } from "@vivd-catalyst/core";
-import { outputSchemas } from "@vivd-catalyst/demo/sample-mcp";
+import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
+import { connectionOperationName, isDataToolName } from "@work-shape/catalyst-core";
+import { outputSchemas } from "@work-shape/catalyst-demo/sample-mcp";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONNECTION = "sample-business";

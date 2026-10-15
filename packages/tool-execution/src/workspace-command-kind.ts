@@ -6,7 +6,7 @@ import {
   subjectDedupeKey,
   type ExecutionWorkspaceId,
   type WorkspaceCommandId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 // The lease of a running command and of the copy on its row. A worker that was killed is

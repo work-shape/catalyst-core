@@ -1,4 +1,4 @@
-import type { ApiClient } from "@vivd-catalyst/api-client";
+import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { useEffect, useState } from "react";
 
 export type ConversationFileContentRef =

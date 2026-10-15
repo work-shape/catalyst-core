@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { createPlatformId } from "@vivd-catalyst/core";
+import { createPlatformId } from "@work-shape/catalyst-core";
 import {
   defineTool,
   toolSuccess,
   type AnyToolDefinition,
   type ToolAssemblyDefinition
-} from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-tool-sdk";
 import { createPageSaveTool, type PageSaveToolOptions } from "./page-save-tool";
 
 /** The part of the instance's `views` config the tool tells the agent about. */

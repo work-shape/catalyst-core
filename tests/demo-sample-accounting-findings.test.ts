@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { ACCOUNTING_RULES } from "@vivd-catalyst/demo/sample-mcp";
+import { ACCOUNTING_RULES } from "@work-shape/catalyst-demo/sample-mcp";
 import { required } from "./support/assertions";
 import {
   cents,

@@ -30,7 +30,7 @@ import {
   type WorkflowStepRun,
   type WorkflowStepRunId,
   type WorkflowStepRunView
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
 import type { PostgresConnection } from "./postgres-database";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";

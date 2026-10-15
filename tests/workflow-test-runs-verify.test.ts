@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_ASSET_KIND, type UserRecord } from "@vivd-catalyst/core";
+import { WORKFLOW_ASSET_KIND, type UserRecord } from "@work-shape/catalyst-core";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import {
   NOTE,

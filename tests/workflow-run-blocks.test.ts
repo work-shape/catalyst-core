@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { workflowStepRunFilterSchema, type WorkflowManifest } from "@vivd-catalyst/core";
+import { workflowStepRunFilterSchema, type WorkflowManifest } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import {
   publishedDefinitions,

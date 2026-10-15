@@ -2,8 +2,8 @@ import { listenTestInstance, createTestInstance, type TestInstance } from "./sup
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { completedOutput, createApiClient, listAll } from "@vivd-catalyst/api-client";
-import { apiErrorResponseSchema, apiOperations } from "@vivd-catalyst/api-contract";
+import { completedOutput, createApiClient, listAll } from "@work-shape/catalyst-api-client";
+import { apiErrorResponseSchema, apiOperations } from "@work-shape/catalyst-api-contract";
 import { openApiJsonOperation } from "./support/operations";
 import { inspect } from "node:util";
 import postgres from "postgres";
@@ -20,11 +20,11 @@ import {
   type AuthenticatedUser,
   type Logger,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 
 const servers: TestInstance[] = [];
 

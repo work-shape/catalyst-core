@@ -1,4 +1,4 @@
-import { IdentityResolvingAuthAdapter, type AuthAdapter } from "@vivd-catalyst/auth";
+import { IdentityResolvingAuthAdapter, type AuthAdapter } from "@work-shape/catalyst-auth";
 import {
   agentRunJobOptions,
   createPlatformId,
@@ -9,7 +9,7 @@ import {
   type Conversation,
   type JobId,
   type UserRole
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createConversationCleanupFixture } from "./conversation-cleanup-fixture";
 import type { PostgresSuite } from "./postgres-suite";
 import {

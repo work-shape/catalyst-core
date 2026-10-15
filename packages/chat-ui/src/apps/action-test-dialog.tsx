@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { AppAction } from "@vivd-catalyst/api-client";
+import type { AppAction } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
@@ -11,7 +11,7 @@ import {
   KeyValueList,
   Spinner,
   Textarea
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useTranslation } from "../i18n";
 import { operationStatusLabelKeys } from "../operations/operations-model";

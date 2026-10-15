@@ -3,7 +3,7 @@ import {
   type AssetSummary,
   type CollaborationWorkspaceAgents,
   type PlatformContext
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import type { TranslationKey } from "../i18n";
 
 /** The four rights of an App, by the names the instance decides them under. */

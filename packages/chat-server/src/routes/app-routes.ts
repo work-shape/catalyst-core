@@ -1,5 +1,9 @@
-import { APP_ASSET_KIND, apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, PAGE_FILE_SET_HELD_KEY, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
+import { APP_ASSET_KIND, apiOperations } from "@work-shape/catalyst-api-contract";
+import {
+  AppError,
+  PAGE_FILE_SET_HELD_KEY,
+  asCollaborationWorkspaceId
+} from "@work-shape/catalyst-core";
 import { AppActionCalls } from "../apps/action-call";
 import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-workflow";

@@ -1,5 +1,5 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { AppError } from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
 import { VIEW_SHELL_FILES, viewShellContentPolicy } from "../view-shell";

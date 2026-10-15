@@ -1,6 +1,6 @@
 import { Check, Link } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Asset } from "@vivd-catalyst/api-client";
+import type { Asset } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
@@ -14,7 +14,7 @@ import {
   PageHeader,
   PageHeaderBack,
   SkeletonList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { workspaceRoutePath } from "../routes";
 import { AppActionEffect, AppActionOutcomeBadge } from "./app-action-facts";

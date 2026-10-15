@@ -12,7 +12,7 @@ import {
   type WorkflowRunMode,
   type WorkflowRunView,
   type WorkflowStep
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { codeStepIssues, workflowStepFilesRefusal, type WorkflowStepFiles } from "./code-step";
 import type { WorkflowDefinitionRevision } from "./definition-source";
 import type { WorkflowRunLimits } from "./limits";

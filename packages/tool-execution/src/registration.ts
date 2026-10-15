@@ -1,4 +1,4 @@
-import type { ProviderDefinition } from "@vivd-catalyst/core";
+import type { ProviderDefinition } from "@work-shape/catalyst-core";
 import { dockerSandboxProvider } from "./adapters/docker-sandbox";
 import { localSandboxProvider } from "./adapters/local-sandbox";
 import type { WorkspaceCommandProcessExecutor } from "./workspace-command-executor";

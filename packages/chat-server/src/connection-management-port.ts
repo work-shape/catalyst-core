@@ -3,8 +3,8 @@ import type {
   ConnectionSecretState,
   ConnectionTestResult,
   ConnectionTools
-} from "@vivd-catalyst/api-contract";
-import type { AccessResource, OperationResource, PlatformStores } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-contract";
+import type { AccessResource, OperationResource, PlatformStores } from "@work-shape/catalyst-core";
 
 /**
  * How one discovery of a Connection ended. `skipped` is a Connection that has nothing to

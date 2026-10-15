@@ -1,4 +1,4 @@
-import type { WorkflowRunError } from "@vivd-catalyst/core";
+import type { WorkflowRunError } from "@work-shape/catalyst-core";
 
 /** What a step failure says beside its code and its sentence. */
 export interface WorkflowStepFailureOptions {

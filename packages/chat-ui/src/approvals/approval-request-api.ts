@@ -5,7 +5,7 @@ import {
   type ApiClient,
   type ApprovalRequestView,
   type OperationInput
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 
 export interface ApprovalRequestApiInput {

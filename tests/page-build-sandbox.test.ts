@@ -10,12 +10,12 @@ import {
   PAGE_BUILD_MAX_RESULT_BYTES,
   readPageBuildOutput,
   type PageBuildOutcome
-} from "@vivd-catalyst/app-build";
-import { createSandboxPageBuild, removeStalePageBuilds } from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-app-build";
+import { createSandboxPageBuild, removeStalePageBuilds } from "@work-shape/catalyst-server";
 import {
   DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandProcessExecutor
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import {
   fileRoute,
   htmlManifest,

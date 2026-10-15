@@ -10,7 +10,7 @@ import {
   IconButton,
   IconTile,
   Textarea
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { ConnectionApprovalList, approveLabel, useApprovalChoice } from "./connection-approval";

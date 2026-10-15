@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-catalyst/core";
+import { AppError } from "@work-shape/catalyst-core";
 
 /**
  * Keys that held provider settings before the `infrastructure` section. Each is refused with

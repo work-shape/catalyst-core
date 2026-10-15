@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { KnowledgeBaseTarget } from "@vivd-catalyst/core";
+import type { KnowledgeBaseTarget } from "@work-shape/catalyst-core";
 import { DATA_STORE_NAME_PATTERN } from "../definition";
 
 // What a Knowledge Base's definition holds: the fields of this cut, and a refusal that names

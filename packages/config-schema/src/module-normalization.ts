@@ -1,4 +1,4 @@
-import { AppError, type ModuleName, type ModuleSwitches } from "@vivd-catalyst/core";
+import { AppError, type ModuleName, type ModuleSwitches } from "@work-shape/catalyst-core";
 import { isPasswordMailEnabled } from "./branding";
 import type { ClientInstanceConfig } from "./schemas";
 

@@ -1,4 +1,4 @@
-import type { ToolExecutionContext, ToolExecutionRequest } from "@vivd-catalyst/core";
+import type { ToolExecutionContext, ToolExecutionRequest } from "@work-shape/catalyst-core";
 
 /**
  * What the log keeps of a database error: its class and code and the names it reports. Its

@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { createLocalAgentRunExecutor } from "@vivd-catalyst/agent-runtime";
+import { createLocalAgentRunExecutor } from "@work-shape/catalyst-agent-runtime";
 import {
   AGENT_RUN_LEASE_MS,
   AGENT_RUN_MAX_QUEUED_MS,
@@ -9,9 +9,9 @@ import {
   type AgentRunJobLease,
   type ModelProviderConfig,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-core";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   useAgentRunJobFixture,

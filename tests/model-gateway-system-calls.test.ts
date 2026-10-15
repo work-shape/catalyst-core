@@ -3,8 +3,8 @@ import {
   GuardrailRunner,
   createChatServerJobs,
   generateConversationTitleJob
-} from "@vivd-catalyst/chat-server";
-import { createJobWorker } from "@vivd-catalyst/client-assembly";
+} from "@work-shape/catalyst-server";
+import { createJobWorker } from "@work-shape/catalyst-client-assembly";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -14,10 +14,10 @@ import {
   type AuthenticatedUser,
   type ModelUsageEvent,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
-import type { ReleaseGuardrailConfig } from "@vivd-catalyst/config-schema";
-import type { ModelCompletion } from "@vivd-catalyst/model-provider";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-core";
+import type { ReleaseGuardrailConfig } from "@work-shape/catalyst-config-schema";
+import type { ModelCompletion } from "@work-shape/catalyst-model-provider";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { settleOnFakeClock, useFakeClockBesidePostgres } from "./support/fake-clock";
 import { createFailingTestLogger, createTestConfig } from "./support/fixtures";
 import {

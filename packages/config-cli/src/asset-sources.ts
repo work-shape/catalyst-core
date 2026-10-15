@@ -4,8 +4,8 @@ import {
   ASSET_PUT_FILES_MAX_BYTES,
   ASSET_SYNC_ITEM_MAX_BYTES,
   FILE_SET_MAX_FILES
-} from "@vivd-catalyst/api-contract";
-import { loadYamlData, parseSkillMarkdown } from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-api-contract";
+import { loadYamlData, parseSkillMarkdown } from "@work-shape/catalyst-asset-schemas";
 import { GUARDRAIL_FILE, readGuardrailFolder } from "./guardrail-files";
 import { readSkillResources, walkFiles } from "./working-copy";
 

@@ -1,4 +1,4 @@
-import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
+import { LocalAgentRuntime } from "@work-shape/catalyst-agent-runtime";
 import {
   asUserId,
   defineJobHandler,
@@ -6,10 +6,10 @@ import {
   type Conversation,
   type Logger,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-core";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { describe, expect, it } from "vitest";
 import { deferred } from "./support/assertions";
 import { arrangeDeletion } from "./support/deletion-fixture";

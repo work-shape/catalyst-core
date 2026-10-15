@@ -1,9 +1,9 @@
 import { vi } from "vitest";
 import { z } from "zod";
-import type { PageBuildOutcome } from "@vivd-catalyst/app-build";
-import { buildPage } from "@vivd-catalyst/app-build/build";
-import { storePageFileSet } from "@vivd-catalyst/chat-server";
-import { asConversationId, type OperationRun, type RateLimiter } from "@vivd-catalyst/core";
+import type { PageBuildOutcome } from "@work-shape/catalyst-app-build";
+import { buildPage } from "@work-shape/catalyst-app-build/build";
+import { storePageFileSet } from "@work-shape/catalyst-server";
+import { asConversationId, type OperationRun, type RateLimiter } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./access-instance";
 import {
   expectStatus,

@@ -14,7 +14,7 @@ import {
   ASSET_REPO_WORK_DIRECTORY,
   type CommitFolderResult,
   type MaterialiseResult
-} from "@vivd-catalyst/asset-repo";
+} from "@work-shape/catalyst-asset-repo";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/asset-repo");
 const run = promisify(execFile);

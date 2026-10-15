@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { egressTargetOfUrl } from "@vivd-catalyst/connections";
+import { egressTargetOfUrl } from "@work-shape/catalyst-connections";
 import type {
   ConnectorContext,
   ConnectorOperationDescriptor,
   ConnectorTypeDefinition,
   JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // A Connector type that reads its operations from an outside system, for the tests of the
 // discovery. It reaches nothing: `discover` answers what the test sets, and the type records

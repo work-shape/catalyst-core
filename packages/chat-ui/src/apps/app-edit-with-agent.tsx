@@ -1,7 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { useState } from "react";
-import { ApiError } from "@vivd-catalyst/api-client";
-import { Button, Dialog } from "@vivd-catalyst/ui";
+import { ApiError } from "@work-shape/catalyst-api-client";
+import { Button, Dialog } from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
 import { useAppsHost } from "./apps-host";

@@ -4,7 +4,7 @@ import {
   createOpenApiDocumentFromOperations,
   renderApiReferencePage,
   type OpenApiDocument
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 

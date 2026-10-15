@@ -1,7 +1,7 @@
 import { forwardRef, useState, type ComponentPropsWithoutRef } from "react";
 import { Bot, ChevronDown } from "lucide-react";
-import type { SafeConfig } from "@vivd-catalyst/api-client";
-import { Button, cn, Picker, type PickerOption } from "@vivd-catalyst/ui";
+import type { SafeConfig } from "@work-shape/catalyst-api-client";
+import { Button, cn, Picker, type PickerOption } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 
 /** The start page introduces the agent; the header of a conversation only keeps its icon. */

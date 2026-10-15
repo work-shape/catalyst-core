@@ -11,7 +11,7 @@ import {
   type AccessResource,
   type ActorAccess,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { SCOPES_HEADER, clientInstanceId, type AccessInstance } from "./support/access-instance";
 import { assetPageSchema } from "./support/asset-operations";
 import { connection, setupConnectionInstance } from "./support/connections";

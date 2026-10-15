@@ -3,8 +3,8 @@ import { appendFile, cp, mkdtemp, readdir, readFile, rm } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { VIEW_RUNTIME, VIEW_SHELL, VIEW_SHELL_MESSAGES } from "@vivd-catalyst/api-contract";
-import { loadViewRuntimeFiles } from "@vivd-catalyst/chat-server";
+import { VIEW_RUNTIME, VIEW_SHELL, VIEW_SHELL_MESSAGES } from "@work-shape/catalyst-api-contract";
+import { loadViewRuntimeFiles } from "@work-shape/catalyst-server";
 import { z } from "zod";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, createTestInstanceWith } from "./support/test-instance";

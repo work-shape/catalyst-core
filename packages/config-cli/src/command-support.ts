@@ -8,8 +8,8 @@ import {
   skillConfigSchema,
   type AgentConfig,
   type SkillConfig
-} from "@vivd-catalyst/asset-schemas";
-import { BODY_TOO_LARGE_REASON, UNKNOWN_OPERATION_REASON } from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-asset-schemas";
+import { BODY_TOO_LARGE_REASON, UNKNOWN_OPERATION_REASON } from "@work-shape/catalyst-api-contract";
 import { ConfigApiError, createConfigApi, type ConfigApi } from "./api";
 import {
   GUARDRAIL_CHECK_FILE,

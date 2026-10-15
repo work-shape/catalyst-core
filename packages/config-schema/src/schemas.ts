@@ -17,8 +17,12 @@ import type {
   UsageRateCardConfig,
   UsageSafeguardsConfig,
   WebAccessConfig
-} from "@vivd-catalyst/core";
-import { AGENT_EDITABLE_FIELDS, isSecretName, SECRET_NAME_EXPECTATION } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
+import {
+  AGENT_EDITABLE_FIELDS,
+  isSecretName,
+  SECRET_NAME_EXPECTATION
+} from "@work-shape/catalyst-core";
 import {
   egressConfigSchema,
   releaseConnectionsConfigSchema,
@@ -227,7 +231,7 @@ export {
   WORKFLOW_NAME_RULE,
   workflowConfigSchema,
   type WorkflowAssetConfig
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 
 export const usageBudgetConfigSchema = z
   .object({

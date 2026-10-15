@@ -1,6 +1,6 @@
 import { BookOpen, FileText, LayoutGrid, Workflow, Zap, type LucideIcon } from "lucide-react";
 import { createContext, createElement, useContext, type ComponentType } from "react";
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import { OperationCallBody } from "../approvals/operation-call-body";
 import {
   SKILL_ASSET_KIND,

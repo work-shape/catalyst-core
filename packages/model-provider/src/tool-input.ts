@@ -1,4 +1,4 @@
-import { AppError, checkStorableTexts } from "@vivd-catalyst/core";
+import { AppError, checkStorableTexts } from "@work-shape/catalyst-core";
 import type { ModelToolCall } from "./types";
 
 export function parseToolInput(value: string): Pick<ModelToolCall, "input" | "inputParseError"> {

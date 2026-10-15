@@ -1,12 +1,12 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import type { RouteRegistration, WorkflowAssetKind } from "@vivd-catalyst/chat-server";
-import { AppError, KNOWLEDGE_BASE_ACTIONS } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import type { RouteRegistration, WorkflowAssetKind } from "@work-shape/catalyst-server";
+import { AppError, KNOWLEDGE_BASE_ACTIONS } from "@work-shape/catalyst-core";
 import {
   createKnowledgeBases,
   knowledgeModule,
   knowledgeOperationName,
   type KnowledgeBases
-} from "@vivd-catalyst/data-stores";
+} from "@work-shape/catalyst-data-stores";
 import type { ModuleSeam } from "./module-assembly";
 
 export { knowledgeModule };

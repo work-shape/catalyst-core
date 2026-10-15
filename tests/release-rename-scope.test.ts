@@ -171,6 +171,30 @@ describe("rename-scope codemod", () => {
     );
   });
 
+  it("renames the server package and the local exampletax assembly without moving files", () => {
+    const platform = createTree({
+      "packages/chat-server/package.json": JSON.stringify({ name: `${OLD}/chat-server` }),
+      "src/server.ts": `export * from "${OLD}/chat-server";\n`
+    });
+    const deployment = createTree({
+      "package.json": JSON.stringify({ name: `${OLD}/exampletax`, private: true }),
+      "deploy/deployment.env": `APP_PACKAGE=${OLD}/exampletax\n`
+    });
+
+    expect(run("--write", platform, deployment).status).toBe(0);
+    expect(JSON.parse(read(platform, "packages/chat-server/package.json")).name).toBe(
+      "@work-shape/catalyst-server"
+    );
+    expect(read(platform, "src/server.ts")).toContain('"@work-shape/catalyst-server"');
+    expect(JSON.parse(read(deployment, "package.json")).name).toBe(
+      "@work-shape/deployment-exampletax"
+    );
+    expect(read(deployment, "deploy/deployment.env")).toBe(
+      "APP_PACKAGE=@work-shape/deployment-exampletax\n"
+    );
+    expect(run("--check", platform, deployment).status).toBe(0);
+  });
+
   it("refuses to guess a name for an unlisted client or deployment package", () => {
     const manifest = JSON.stringify({ name: `${OLD}/new-customer`, private: true });
     const root = createTree({

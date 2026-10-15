@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { ApiError } from "@vivd-catalyst/api-client";
+import { ApiError } from "@work-shape/catalyst-api-client";
 import {
   Button,
   ConfirmDialog,
@@ -8,7 +8,7 @@ import {
   Input,
   PageHeader,
   Section
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import {
   useDeleteCurrentUserMutation,
   useUpdateCurrentUserMutation

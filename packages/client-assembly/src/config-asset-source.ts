@@ -3,13 +3,13 @@ import type {
   ConfigAssetSource,
   ConfigAssetStore,
   RuntimeAssetSnapshot
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   skillConfigSchema,
   resolveStoredAgentReferences,
   type StoredAgentReferences
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 
 export function createConfigAssetSource(input: {
   store: ConfigAssetStore;

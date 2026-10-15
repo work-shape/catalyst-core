@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ConversationThreadSnapshot, RunObservation } from "@vivd-catalyst/api-client";
+import type { ConversationThreadSnapshot, RunObservation } from "@work-shape/catalyst-api-client";
 import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
 import {
   applyRunObservationToControllerState,

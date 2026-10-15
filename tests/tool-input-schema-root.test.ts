@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { JsonObject } from "@vivd-catalyst/core";
+import type { JsonObject } from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 

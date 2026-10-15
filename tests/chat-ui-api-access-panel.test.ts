@@ -1,6 +1,6 @@
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
-import type { ServicePrincipalDetail } from "@vivd-catalyst/api-client";
+import type { ServicePrincipalDetail } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
 import { ApiAccessPanel } from "../packages/chat-ui/src/control-plane/api-access-panel";
 import {

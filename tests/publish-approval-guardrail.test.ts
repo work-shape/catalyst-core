@@ -4,8 +4,8 @@ import {
   PUBLISH_APPROVAL_GUARDRAIL,
   WORKFLOW_ASSET_KIND,
   type OperationOrigin
-} from "@vivd-catalyst/core";
-import { runOperation } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { guardedEvents } from "./support/guardrails";

@@ -4,7 +4,7 @@ import {
   scheduledJobPayloadSchema,
   type JobKind,
   type ScheduledJobPayload
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 const MINUTE_MS = 60 * 1000;

@@ -19,14 +19,14 @@ import {
   type JsonSchemaCheckRequest,
   type JsonSchemaWorkerData,
   type OutsideSchemaChecker
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   connectionCallReasonOf,
   type ConnectionCatalog,
   type ConnectorOperationDescriptor,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { required } from "./support/assertions";
 import { fixture, operationOf } from "./support/connection-operations";

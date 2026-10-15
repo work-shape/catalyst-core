@@ -1,9 +1,9 @@
 import { addTestRoute, createTestInstance, getTestJobs } from "./support/test-instance";
-import { createLogger } from "@vivd-catalyst/client-assembly";
+import { createLogger } from "@work-shape/catalyst-client-assembly";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AppError, asClientInstanceId } from "@vivd-catalyst/core";
-import { OpenAiCompatibleChatProvider } from "@vivd-catalyst/model-provider";
+import { AppError, asClientInstanceId } from "@work-shape/catalyst-core";
+import { OpenAiCompatibleChatProvider } from "@work-shape/catalyst-model-provider";
 import { readProviderErrorMetadata } from "../packages/model-provider/src/provider-error";
 import { createTestConfig, createTestUser } from "./support/fixtures";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";

@@ -1,7 +1,7 @@
 import { useQueries } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { listAll, type ServicePrincipalDetail } from "@vivd-catalyst/api-client";
-import { Banner, Section } from "@vivd-catalyst/ui";
+import { listAll, type ServicePrincipalDetail } from "@work-shape/catalyst-api-client";
+import { Banner, Section } from "@work-shape/catalyst-ui";
 import { loadFailure } from "../../access/access-model";
 import {
   useEffectivePermissionsQuery,

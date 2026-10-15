@@ -4,7 +4,7 @@ import type {
   FlowGraphGroup,
   FlowGraphNode,
   FlowStatus
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatElapsed, formatMoment } from "../control-plane/locale-format";
 import type { TranslationContextValue } from "../i18n";
 import { scheduleInWords } from "./schedule-words";

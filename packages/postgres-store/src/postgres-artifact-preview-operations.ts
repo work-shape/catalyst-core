@@ -19,7 +19,7 @@ import {
   asManagedArtifactId,
   createPlatformId,
   normalizeArtifactPreviewIdentity
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapArtifactPreviewJob, mapArtifactPreviewManifest } from "./rows";
 import {

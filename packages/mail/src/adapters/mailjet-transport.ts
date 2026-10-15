@@ -2,7 +2,7 @@ import {
   providerCheckResultOfStatus,
   type ProviderCheckContext,
   type ProviderCheckResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { MailSendResult, MailSenderIdentity, MailTransport, RenderedMail } from "../types";
 
 const MAILJET_SEND_URL = "https://api.mailjet.com/v3.1/send";

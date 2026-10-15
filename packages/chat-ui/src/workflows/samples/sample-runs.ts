@@ -1,4 +1,4 @@
-import type { WorkflowLoopCounts } from "@vivd-catalyst/core";
+import type { WorkflowLoopCounts } from "@work-shape/catalyst-core";
 import type { WorkflowRunResource, WorkflowStepRunResource } from "../workflow-mapping";
 
 // Sample runs in the shape of the run view of the contract: one per state a run page shows.

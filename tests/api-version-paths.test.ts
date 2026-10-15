@@ -6,9 +6,9 @@ import {
   createOpenApiDocument,
   type ApiOperationName,
   type Operation
-} from "@vivd-catalyst/api-contract";
-import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@vivd-catalyst/auth";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-contract";
+import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@work-shape/catalyst-auth";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { authMountRoutes } from "./support/operations";
 import { removedAssetPaths, retiredApiPaths } from "./support/retired-api-paths";
 import { fileTestDatabaseUrl } from "./support/test-database";

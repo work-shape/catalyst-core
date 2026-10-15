@@ -8,7 +8,7 @@ import {
   type Job,
   type JobsStore,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { ChatServerOptions } from "./types";
 

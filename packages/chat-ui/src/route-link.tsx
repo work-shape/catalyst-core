@@ -1,5 +1,5 @@
 import type { AnchorHTMLAttributes } from "react";
-import { Button } from "@vivd-catalyst/ui";
+import { Button } from "@work-shape/catalyst-ui";
 import { opensHere } from "./apps/app-header";
 import { workspaceRoutePath } from "./routes";
 import type { WorkspaceRoute } from "./workspace/workspace-route";

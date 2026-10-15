@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineProvider } from "@vivd-catalyst/core";
+import { defineProvider } from "@work-shape/catalyst-core";
 import { embedDeterministically } from "../deterministic-embedding";
 import { DETERMINISTIC_CAPABILITIES, DeterministicModelProvider } from "../deterministic-provider";
 import type { ModelAdapterFactory, ModelAdapterRequest } from "../types";

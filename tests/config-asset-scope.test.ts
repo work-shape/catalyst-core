@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { AssetScope, ConfigAssetMutation } from "@vivd-catalyst/core";
-import { applyValidatedConfigAssetMutations } from "@vivd-catalyst/chat-server";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import type { AssetScope, ConfigAssetMutation } from "@work-shape/catalyst-core";
+import { applyValidatedConfigAssetMutations } from "@work-shape/catalyst-server";
 import {
   agent,
   clientInstanceId,

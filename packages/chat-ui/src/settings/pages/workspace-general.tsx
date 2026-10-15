@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
+import type { CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
 import {
   Banner,
   Button,
@@ -10,7 +10,7 @@ import {
   SaveBar,
   Section,
   Textarea
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useCollaborationWorkspaceMutations } from "../../api/collaboration-workspace-mutations";
 import {
   useCollaborationWorkspaceDeletionImpactQuery,

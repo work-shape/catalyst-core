@@ -1,4 +1,4 @@
-import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import { workspaceApplyPatchTool } from "./apply-patch";
 import type { WorkspaceCommandServiceOptions } from "./dependencies";
 import { workspaceEditFileTool } from "./edit-file";

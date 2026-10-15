@@ -9,8 +9,8 @@ import {
   createAssetRepoJobs,
   createSandboxAssetRepo,
   type AssetRepoCommitRunner
-} from "@vivd-catalyst/chat-server";
-import { ASSET_REPO_MAX_BUNDLE_BYTES } from "@vivd-catalyst/asset-repo";
+} from "@work-shape/catalyst-server";
+import { ASSET_REPO_MAX_BUNDLE_BYTES } from "@work-shape/catalyst-asset-repo";
 import {
   createPlatformId,
   readObjectBytes,
@@ -20,9 +20,9 @@ import {
   type JobWorker,
   type Logger,
   type OperationRunId
-} from "@vivd-catalyst/core";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
-import { LocalWorkspaceCommandProcessExecutor } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
+import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
 import { assetRepoCommandFromSource } from "./support/asset-repo";
 import { runId } from "./support/asset-repo-ledger";
 import { MemoryObjectStorage } from "./support/memory-object-storage";

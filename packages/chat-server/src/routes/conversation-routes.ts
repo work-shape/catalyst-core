@@ -1,11 +1,11 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   asCollaborationWorkspaceId,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   isAuthenticatedServicePrincipal
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import { RunObservationWorkflow } from "../conversations/run-observation-workflow";
 import type { Route } from "../http/route";

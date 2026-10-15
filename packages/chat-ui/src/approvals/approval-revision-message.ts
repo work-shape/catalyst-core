@@ -1,4 +1,4 @@
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import type { TranslationContextValue } from "../i18n";
 import {
   SKILL_ROOT_TARGET,

@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-catalyst/core";
+import { AppError } from "@work-shape/catalyst-core";
 import { ModelProviderError, toModelTransportFailure } from "../model-provider-error";
 import { MODEL_STREAM_IDLE_TIMEOUT_MS } from "../openai-compatible-stream";
 

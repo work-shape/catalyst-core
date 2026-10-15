@@ -11,7 +11,7 @@ import {
   type OperationAuthorization,
   type UserRecord,
   type UserRole
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { authorizeHeldRightsWithin } from "./held-rights-within";
 import { personRights } from "./person-rights";
 import { requireAuthorized } from "./rights-held";

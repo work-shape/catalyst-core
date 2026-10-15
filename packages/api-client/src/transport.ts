@@ -1,4 +1,4 @@
-import { isUnknownOperationResponse, type Operation } from "@vivd-catalyst/api-contract";
+import { isUnknownOperationResponse, type Operation } from "@work-shape/catalyst-api-contract";
 import { refusalError, transportError } from "./errors";
 
 export interface ApiClientOptions {

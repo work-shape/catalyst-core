@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ConfigAssetRevision } from "@vivd-catalyst/api-client";
+import type { ConfigAssetRevision } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
@@ -9,7 +9,7 @@ import {
   List,
   ListRow,
   SkeletonList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import type { AppRevisionPage } from "./app-data";

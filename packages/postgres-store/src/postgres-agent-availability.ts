@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { AppError, type AgentAvailability, type ConfigAssetStore } from "@vivd-catalyst/core";
+import { AppError, type AgentAvailability, type ConfigAssetStore } from "@work-shape/catalyst-core";
 import { findConfigAssetRow } from "./postgres-config-asset-operations";
 import type { PostgresConnection } from "./postgres-database";
 import {

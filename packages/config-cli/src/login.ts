@@ -1,5 +1,5 @@
 import { hostname } from "node:os";
-import { createApiClient } from "@vivd-catalyst/api-client";
+import { createApiClient } from "@work-shape/catalyst-api-client";
 import { assertSafeApiKeyExchangeUrl, instanceFetch, toConfigApiError } from "./api";
 import {
   type ConfigCommandOptions,

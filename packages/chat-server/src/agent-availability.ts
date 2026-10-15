@@ -2,7 +2,7 @@ import {
   isAgentAvailableInWorkspace,
   type CollaborationWorkspace,
   type RuntimeAssetSnapshot
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "./types";
 
 /**

@@ -15,7 +15,7 @@ import {
   Page,
   PageHeader,
   SkeletonList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatUpdated } from "../build-area/build-model";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";

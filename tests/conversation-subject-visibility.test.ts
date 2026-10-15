@@ -1,4 +1,4 @@
-import { PLATFORM_TOOL_NAMES } from "@vivd-catalyst/client-assembly";
+import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -6,7 +6,7 @@ import {
   asClientInstanceId,
   asCollaborationWorkspaceId,
   asUserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";

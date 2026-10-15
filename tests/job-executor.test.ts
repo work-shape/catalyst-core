@@ -12,7 +12,7 @@ import {
   type JobWorker,
   type Logger,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { describe, expect, it, vi } from "vitest";
 import { deferred, required, waitUntil } from "./support/assertions";
 import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./support/fake-clock";

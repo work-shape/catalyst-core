@@ -5,8 +5,8 @@ import {
   type ToolExecutionResult,
   type ToolOperationRunner,
   asToolCallId
-} from "@vivd-catalyst/core";
-import type { ModelToolCall } from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-core";
+import type { ModelToolCall } from "@work-shape/catalyst-model-provider";
 import {
   createModelVisibleToolOutput,
   type ModelContextProjectionOptions,

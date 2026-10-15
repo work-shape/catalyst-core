@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { NoopAuditRecorder, asClientInstanceId, createPlatformId } from "@vivd-catalyst/core";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { NoopAuditRecorder, asClientInstanceId, createPlatformId } from "@work-shape/catalyst-core";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { createTestConfig, createTestUser } from "./support/fixtures";
 import {
   createMissingRuntime,

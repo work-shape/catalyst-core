@@ -7,7 +7,7 @@ import {
   type OperationExecutionContext,
   type RetryJobResult,
   type StorePage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { jobRetriesByKind } from "./job-retries";
 import type { ChatServerOptions } from "./types";
 

@@ -1,17 +1,17 @@
 import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createInstanceWorkflows, createJobWorker } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { createInstanceWorkflows, createJobWorker } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   asConversationId,
   asUserId,
   type AuthenticatedIdentity,
   type JobWorker
-} from "@vivd-catalyst/core";
-import { createSampleMcpServer } from "@vivd-catalyst/demo/sample-mcp";
-import { runOperation } from "@vivd-catalyst/tool-execution";
-import { createWorkflowFolderSource } from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-core";
+import { createSampleMcpServer } from "@work-shape/catalyst-demo/sample-mcp";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
+import { createWorkflowFolderSource } from "@work-shape/catalyst-workflows";
 import { runJobs, statuses } from "./support/connection-discovery-world";
 import { createTestConfig } from "./support/fixtures";
 import { generateSecretStoreKey, generateTestSecret } from "./support/test-connector";

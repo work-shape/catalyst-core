@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import type { ThemeMode } from "@vivd-catalyst/ui/theme";
+import type { ThemeMode } from "@work-shape/catalyst-ui/theme";
 import type { ClientLabelOverrides } from "./i18n";
 import { ChatWorkspace } from "./chat-workspace";
 import { createWorkspaceQueryClient } from "./api/workspace-queries";
@@ -22,7 +22,7 @@ export interface ChatShellProps {
   getToken?: () => string | undefined | Promise<string | undefined>;
   /**
    * The administration this host ships: the Instance pages of Settings and the Build page,
-   * from `@vivd-catalyst/chat-ui/admin`. Without it the shell has neither.
+   * from `@work-shape/catalyst-chat-ui/admin`. Without it the shell has neither.
    */
   administration?: ChatShellAdministration;
   displayWidgets?: ToolDisplayWidgetRegistry;

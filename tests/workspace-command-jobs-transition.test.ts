@@ -1,4 +1,4 @@
-import type { WorkspaceCommand } from "@vivd-catalyst/core";
+import type { WorkspaceCommand } from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import { waitUntil } from "./support/assertions";
 import { useJobExecutorHarness } from "./support/job-executor-harness";

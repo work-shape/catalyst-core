@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AppError, asClientInstanceId, asConversationId } from "@vivd-catalyst/core";
+import { AppError, asClientInstanceId, asConversationId } from "@work-shape/catalyst-core";
 import {
   ModelProviderError,
   createModelGateway,
@@ -11,7 +11,7 @@ import {
   type ModelGateway,
   type ModelMessage,
   type ModelTool
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { advanceFakeClockUntilSettled } from "./support/fake-clock";
 import {
   conformanceAdapters,

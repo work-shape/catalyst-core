@@ -7,8 +7,8 @@ import {
 } from "@assistant-ui/react";
 import { ArrowDown, CircleAlert, Lock } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
-import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
-import { Banner, cn, SkillIcon, Spinner, Starter, StarterList } from "@vivd-catalyst/ui";
+import type { DraftAttachment, SafeConfig } from "@work-shape/catalyst-api-client";
+import { Banner, cn, SkillIcon, Spinner, Starter, StarterList } from "@work-shape/catalyst-ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import {
   agentChipDisplayFor,

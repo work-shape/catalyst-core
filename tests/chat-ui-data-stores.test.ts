@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
@@ -24,7 +24,7 @@ import {
   type DataStoreUsedBy,
   type DataStoreValue,
   usingPageRoute
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

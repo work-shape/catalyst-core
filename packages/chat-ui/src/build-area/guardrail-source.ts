@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { GuardrailHits, ShippedGuardrailView } from "@vivd-catalyst/api-client";
+import type { GuardrailHits, ShippedGuardrailView } from "@work-shape/catalyst-api-client";
 import { useSettingsPage, type SettingsPageContextValue } from "../settings/settings-page-context";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
 

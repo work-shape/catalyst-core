@@ -1,4 +1,4 @@
-import type { LiveOnceSwitchStore } from "@vivd-catalyst/core";
+import type { LiveOnceSwitchStore } from "@work-shape/catalyst-core";
 import * as operations from "../postgres-live-once-switch-operations";
 import type { PostgresConnection } from "../postgres-database";
 

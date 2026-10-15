@@ -1,8 +1,8 @@
 x-client-build-args: &client-build-args
-  APP_PACKAGE: "@vivd-catalyst/demo"
+  APP_PACKAGE: "@work-shape/catalyst-demo"
   SERVER_ENTRY: clients/demo/dist/server.js
   ARTIFACT_PREVIEW_WORKER_ENTRY: clients/demo/dist/artifact-preview-worker.js
-  UI_PACKAGE: "@vivd-catalyst/demo"
+  UI_PACKAGE: "@work-shape/catalyst-demo"
   UI_DIST_DIR: clients/demo/dist/client
   NGINX_CONFIG_PATH: docker/nginx-spa.conf
   VITE_CHAT_API_URL: ${VITE_CHAT_API_URL:-}

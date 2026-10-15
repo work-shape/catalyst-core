@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { ClientInstanceCapability } from "@vivd-catalyst/capability-sdk";
+import type { ClientInstanceCapability } from "@work-shape/catalyst-capability-sdk";
 import {
   asClientInstanceId,
   asCollaborationWorkspaceId,
@@ -8,8 +8,8 @@ import {
   createPlatformId,
   getRuntimeSubjectUserId,
   type CentralPolicySetting
-} from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-instance";

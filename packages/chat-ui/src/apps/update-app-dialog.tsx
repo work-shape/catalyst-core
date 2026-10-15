@@ -1,6 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { Button, Dialog, FormNotice, InlineError } from "@vivd-catalyst/ui";
+import { Button, Dialog, FormNotice, InlineError } from "@work-shape/catalyst-ui";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
 import { apiErrorCode } from "../workspace-utils";

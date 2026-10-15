@@ -4,7 +4,7 @@ import {
   createPlatformId,
   type Conversation,
   type ConversationListItem
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig, personalConversationListInput } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
 

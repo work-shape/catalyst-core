@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
-import { uiLabelsDe } from "@vivd-catalyst/ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { uiLabelsDe } from "@work-shape/catalyst-ui";
 import {
   LoopEntriesView,
   StartDialog,
@@ -16,7 +16,7 @@ import {
   toWorkflowStepRun,
   workflowGraph,
   type LiveOnceControl
-} from "@vivd-catalyst/chat-ui/workflows";
+} from "@work-shape/catalyst-chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { recordedApiClient } from "./support/recorded-api-client";
 

@@ -1,13 +1,17 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   clientInstanceConfigSchema,
   createSafeConfigView,
   parseClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
-import { asClientInstanceId, isJsonObject, type ToolExecutionContext } from "@vivd-catalyst/core";
-import { createShowViewTool, showViewTool } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-config-schema";
+import {
+  asClientInstanceId,
+  isJsonObject,
+  type ToolExecutionContext
+} from "@work-shape/catalyst-core";
+import { createShowViewTool, showViewTool } from "@work-shape/catalyst-tool-execution";
 
 describe("built-in platform tools", () => {
   it("stores the model's HTML alone and keeps it out of model-visible output", async () => {

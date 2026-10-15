@@ -1,11 +1,11 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   asCollaborationWorkspaceId,
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
   type OperationRun
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
 import { readOperationRunApps, toOperationRunResource } from "../operations/operation-run-resource";
 import type { ResolvedChatServerOptions } from "../types";

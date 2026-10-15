@@ -6,7 +6,7 @@ import type {
   ArtifactPreviewFailureCode,
   ArtifactPreviewImageFormat,
   ArtifactPreviewSourceKind
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   boundedPdfPageResolution,
   convertOfficeDocument,
@@ -16,7 +16,7 @@ import {
   MODEL_PAGE_IMAGE_MIME_TYPE,
   NativeProcessError,
   renderPdfPage
-} from "@vivd-catalyst/document-execution";
+} from "@work-shape/catalyst-document-execution";
 import { previewFailure } from "./artifact-preview-failures";
 import {
   formatSpreadsheetRangeSelector,

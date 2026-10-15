@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { deriveAppContentKey, storePageFileSet } from "@vivd-catalyst/chat-server";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { asClientInstanceId, asConversationId } from "@vivd-catalyst/core";
+import { deriveAppContentKey, storePageFileSet } from "@work-shape/catalyst-server";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { asClientInstanceId, asConversationId } from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { createTestInstanceWith } from "./support/test-instance";

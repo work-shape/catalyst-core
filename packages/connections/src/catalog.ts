@@ -11,7 +11,7 @@ import {
   type DeclaredOperations,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   compileJsonSchema,

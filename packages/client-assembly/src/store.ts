@@ -1,6 +1,6 @@
 import { createLogger } from "./logger";
-import { createPostgresStores } from "@vivd-catalyst/postgres-store";
-import type { Logger, PlatformStores, SecretResolver } from "@vivd-catalyst/core";
+import { createPostgresStores } from "@work-shape/catalyst-postgres-store";
+import type { Logger, PlatformStores, SecretResolver } from "@work-shape/catalyst-core";
 import type { ClientInstanceEnv } from "./env";
 import { createEnvironmentSecrets, PLATFORM_SECRET_NAMES } from "./infrastructure";
 

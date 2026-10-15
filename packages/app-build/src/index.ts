@@ -1,6 +1,6 @@
 // What the worker and the tools need of a Page build: its names, limits and types, and the
 // reader of what a build left behind. Nothing here loads the bundler or the route generator;
-// those are reached through `@vivd-catalyst/app-build/build` and run in the sandbox only.
+// those are reached through `@work-shape/catalyst-app-build/build` and run in the sandbox only.
 export {
   APP_KIT_PACKAGE,
   KIT_IMPORT_NAMES,

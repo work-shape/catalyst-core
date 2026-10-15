@@ -1,5 +1,5 @@
 import { and, eq, type SQL } from "drizzle-orm";
-import type { ConfigAssetRevisionRecord, ConfigAssetStore } from "@vivd-catalyst/core";
+import type { ConfigAssetRevisionRecord, ConfigAssetStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapConfigAssetRevision } from "./rows";
 import { configAssetRevisions, configAssets } from "./schema";

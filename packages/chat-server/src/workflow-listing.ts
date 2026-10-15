@@ -1,4 +1,4 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
@@ -6,7 +6,7 @@ import {
   type AccessResource,
   type ActorAccess,
   type AuthenticatedIdentity
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { decide } from "./asset-access";
 
 /** The rights an entry of the list names, each with the scope of the calls it opens. */

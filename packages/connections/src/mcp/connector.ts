@@ -9,7 +9,7 @@ import {
   type JsonObject,
   type JsonValue,
   type Logger
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { egressTargetOfUrl } from "../egress";
 import {

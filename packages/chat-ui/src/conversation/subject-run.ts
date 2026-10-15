@@ -1,9 +1,9 @@
-import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
 import {
   DATA_STORE_ASSET_KIND,
   SUBJECT_TOOL_PREFIX,
   WORKFLOW_ASSET_KIND
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { AGENT_ASSET_KIND } from "../build-area/build-rights";
 import { AGENTS_BUILD_PATH } from "../build-area/build-route";
 import { PAGE_SAVE_TOOL_NAME } from "../pages/page-save";

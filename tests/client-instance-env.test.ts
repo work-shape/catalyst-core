@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { defineClientInstance } from "@vivd-catalyst/client-assembly";
+import { defineClientInstance } from "@work-shape/catalyst-client-assembly";
 
 describe("client instance environment loading", () => {
   it("keeps explicit process env above workspace and client .env files", async () => {

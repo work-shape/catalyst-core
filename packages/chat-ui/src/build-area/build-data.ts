@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
+import type { ConfigAssetRevision, OperationOutcome } from "@work-shape/catalyst-api-client";
 import { invalidateOfferedAgents } from "../api/agent-placement-mutations";
 import {
   createAssetWrites,

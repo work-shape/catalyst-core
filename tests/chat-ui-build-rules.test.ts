@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
-import { addressOf } from "@vivd-catalyst/ui";
+import { ApiError, createApiClient } from "@work-shape/catalyst-api-client";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { addressOf } from "@work-shape/catalyst-ui";
 import {
   addressBlocksCreate,
   addressCheckOf,
@@ -13,7 +13,7 @@ import {
   refusalsOf,
   resolveBuildRights,
   resolveBuildScope
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { createAssetWrites } from "../packages/chat-ui/src/api/asset-writes";
 import {
   instanceActions,

@@ -1,5 +1,5 @@
 import { context, transform, type Loader, type Message, type Plugin } from "esbuild";
-import { fileSetPathIssue } from "@vivd-catalyst/core";
+import { fileSetPathIssue } from "@work-shape/catalyst-core";
 import type { CompiledAppAction } from "./action-input";
 import { compileActions } from "./actions";
 import { resolveReference, rewriteHtml, withHeadStart } from "./html";

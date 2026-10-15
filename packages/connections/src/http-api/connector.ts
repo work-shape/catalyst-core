@@ -13,7 +13,7 @@ import {
   type ConnectorTypeDefinition,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { holdsCredential } from "../connector-context";
 import { egressTargetOfUrl } from "../egress";

@@ -1,10 +1,15 @@
-import type { ClientInstanceId, JobWorker, Logger, PlatformStores } from "@vivd-catalyst/core";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
+import type {
+  ClientInstanceId,
+  JobWorker,
+  Logger,
+  PlatformStores
+} from "@work-shape/catalyst-core";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import {
   createWorkspaceCommandJobs,
   type WorkspaceCommandJobsOptions,
   type WorkspaceCommandResultSource
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 
 const silent: Logger = {
   debug() {},

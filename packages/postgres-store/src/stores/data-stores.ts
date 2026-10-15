@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import type { DataStoreRecord, DataStoreRecordsStore } from "@vivd-catalyst/core";
+import type { DataStoreRecord, DataStoreRecordsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 import { dataStores } from "../schema";
 

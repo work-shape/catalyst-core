@@ -1,8 +1,8 @@
-import type { AgentToolReference, ConfigAssetValidationRefs } from "@vivd-catalyst/chat-server";
-import { getEnabledToolNames, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { REASONING_EFFORTS, type ModelProviderConfig } from "@vivd-catalyst/core";
-import { WEB_SEARCH_MODEL_TOOL_NAME } from "@vivd-catalyst/model-provider";
-import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import type { AgentToolReference, ConfigAssetValidationRefs } from "@work-shape/catalyst-server";
+import { getEnabledToolNames, type ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { REASONING_EFFORTS, type ModelProviderConfig } from "@work-shape/catalyst-core";
+import { WEB_SEARCH_MODEL_TOOL_NAME } from "@work-shape/catalyst-model-provider";
+import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import { agentListableToolNames } from "./platform-orientation";
 
 /**

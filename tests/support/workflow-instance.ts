@@ -8,7 +8,7 @@ import {
   resolveInstanceModules,
   type InstanceWorkflows,
   type InstanceWorkflowsParts
-} from "@vivd-catalyst/client-assembly";
+} from "@work-shape/catalyst-client-assembly";
 import type {
   JobControl,
   JobSchedule,
@@ -20,7 +20,7 @@ import type {
   RegisteredJobHandler,
   ServicePrincipalRecord,
   WorkflowManifest
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createWorkflowFolderSource,
   parseWorkflowManifest,
@@ -28,7 +28,7 @@ import {
   workflowManifestFingerprint,
   type WorkflowDefinitionRevision,
   type WorkflowDefinitionSource
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { clientInstanceId, setupAccessInstance } from "./access-instance";
 import { fixtureOn, operationOf, type ConnectionOperationsFixture } from "./connection-operations";
 

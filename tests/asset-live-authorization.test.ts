@@ -5,7 +5,7 @@ import {
   createWorkflowLiveCheck,
   requireWorkflowRunAs,
   type PageBuildRunner
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   accessHolderFromIdentity,
   asServicePrincipalId,
@@ -13,7 +13,7 @@ import {
   createPlatformId,
   legacyGrantRows,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { accessOf } from "./support/access";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";

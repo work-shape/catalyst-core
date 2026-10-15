@@ -8,7 +8,7 @@ import {
   workflowsRowShown,
   workspaceRouteFromPath,
   workspaceRoutePath
-} from "@vivd-catalyst/chat-ui/workflows";
+} from "@work-shape/catalyst-chat-ui/workflows";
 
 // Who is shown the Workflows area: its row in the rail and its addresses. One function
 // decides both, from the module's switch and the rights the instance names. Every test here

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { WorkspaceRoute } from "@vivd-catalyst/chat-ui/shell";
+import type { WorkspaceRoute } from "@work-shape/catalyst-chat-ui/shell";
 import {
   areaOfRoute,
   areaRoutePaths,
@@ -18,7 +18,7 @@ import {
   dockMotion,
   dockPlacement,
   searchWithDock
-} from "@vivd-catalyst/chat-ui/dock-state";
+} from "@work-shape/catalyst-chat-ui/dock-state";
 
 type Area = (typeof areaRoutes)[number]["area"];
 

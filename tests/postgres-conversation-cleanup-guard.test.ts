@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   ConversationRetentionWorkflow,
   ExecutionWorkspaceCleanupWorkflow
-} from "@vivd-catalyst/chat-server";
-import { asUserId, type AuthenticatedUser, type Conversation } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-server";
+import { asUserId, type AuthenticatedUser, type Conversation } from "@work-shape/catalyst-core";
 import { createConversationCleanupFixture } from "./support/conversation-cleanup-fixture";
 import { usePostgresSuite } from "./support/postgres-suite";
 import { getTestJobs } from "./support/test-instance";

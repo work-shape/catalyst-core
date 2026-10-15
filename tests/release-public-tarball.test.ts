@@ -1,12 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const script = resolve("scripts/release/check-public-tarball.mjs");
 // Assembled so that this test file names no workspace package as an import.
-const PRIVATE_CORE = ["@vivd-catalyst", "core"].join("/");
+const PRIVATE_CORE = ["@work-shape", "catalyst-core"].join("/");
+const LEGACY_CORE = [["@vivd", "catalyst"].join("-"), "core"].join("/");
 const roots: string[] = [];
 
 const manifest = {
@@ -59,29 +61,70 @@ describe("the public tarball check", () => {
     expect(check(unpacked())).toEqual({ status: 0, output: "check-public-tarball passed\n" });
   });
 
-  it("fails a bundle that imports a private workspace package", () => {
+  it.each([undefined, PRIVATE_CORE, LEGACY_CORE, `${manifest.name}-extra`])(
+    "checks a full npm install, excluding only the CLI itself (dependency: %s)",
+    (dependency) => {
+      const workDir = mkdtempSync(join(tmpdir(), "public-tool-install-"));
+      roots.push(workDir);
+      const pack = (root: string, name: string) => {
+        const tarball = join(workDir, `${name}.tgz`);
+        const packageDir = join(workDir, name, "package");
+        mkdirSync(dirname(packageDir), { recursive: true });
+        cpSync(root, packageDir, { recursive: true });
+        const result = spawnSync("tar", ["-czf", tarball, "package"], {
+          cwd: dirname(packageDir),
+          encoding: "utf8"
+        });
+        expect(result.status, result.stderr).toBe(0);
+        return tarball;
+      };
+      const dependencies: Record<string, string> = {};
+      if (dependency) {
+        const root = unpacked({
+          "package.json": JSON.stringify({ name: dependency, version: "1.0.0" })
+        });
+        dependencies[dependency] = `file:${pack(root, "dependency")}`;
+      }
+      const root = unpacked({
+        "package.json": JSON.stringify({ ...manifest, version: "0.7.0", dependencies }),
+        "dist/index.js": '#!/usr/bin/env node\nconsole.log("Usage: catalyst");\n'
+      });
+      const tarball = pack(root, "cli");
+      const code = `import { checkInstall } from ${JSON.stringify(pathToFileURL(script).href)};
+console.log(JSON.stringify(checkInstall(process.argv[1], process.argv[2], process.argv[3])));`;
+      const result = spawnSync(
+        process.execPath,
+        ["--input-type=module", "-e", code, tarball, workDir, manifest.name],
+        { encoding: "utf8", env: { ...process.env, npm_config_offline: "true" } }
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual(
+        dependency ? [`the install pulled in the workspace package ${dependency}@1.0.0`] : []
+      );
+    }
+  );
+
+  it.each([PRIVATE_CORE, LEGACY_CORE])("fails a bundle that imports %s", (name) => {
     const result = check(
       unpacked({
-        "dist/index.js": `import { AppError } from "${PRIVATE_CORE}";\nexport { AppError };\n`
+        "dist/index.js": `import { AppError } from "${name}";\nexport { AppError };\n`
       })
     );
     expect(result.status).toBe(1);
-    expect(result.output).toContain(`dist/index.js: imports the workspace package ${PRIVATE_CORE}`);
+    expect(result.output).toContain(`dist/index.js: imports the workspace package ${name}`);
   });
 
-  it("fails a manifest that depends on a workspace package", () => {
+  it.each([PRIVATE_CORE, LEGACY_CORE])("fails a manifest that depends on %s", (name) => {
     const result = check(
       unpacked({
         "package.json": JSON.stringify({
           ...manifest,
-          dependencies: { ...manifest.dependencies, [PRIVATE_CORE]: "0.6.3" }
+          dependencies: { ...manifest.dependencies, [name]: "0.6.3" }
         })
       })
     );
     expect(result.status).toBe(1);
-    expect(result.output).toContain(
-      `the manifest depends on the workspace package ${PRIVATE_CORE}`
-    );
+    expect(result.output).toContain(`the manifest depends on the workspace package ${name}`);
   });
 
   it("fails a bundle that holds source of a private package", () => {

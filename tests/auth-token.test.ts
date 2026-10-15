@@ -4,12 +4,12 @@ import {
   CHAT_SESSION_AUTH_SCOPES,
   asClientInstanceId,
   type DelegatedActor
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   HmacSessionTokenAuthAdapter,
   HmacSessionTokenIssuer,
   type SessionTokenInput
-} from "@vivd-catalyst/auth";
+} from "@work-shape/catalyst-auth";
 
 /** Signs claims as the issuer does: a token only a holder of the secret can make. */
 function signedToken(claims: object, secret: string): string {

@@ -5,7 +5,7 @@ import type {
   EffectivePermissions,
   NamespaceWithUsage,
   PermissionGrantRow
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Banner,
@@ -24,7 +24,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { DocsReference } from "../docs-links";
 import { modelDisplayLabel } from "../model-label";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";

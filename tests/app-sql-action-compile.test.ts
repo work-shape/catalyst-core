@@ -6,9 +6,9 @@ import {
   declaredDataStoresOf,
   type CompiledAppAction,
   type PageBuildResult
-} from "@vivd-catalyst/app-build";
-import { buildPage, builtPageManifestSchema } from "@vivd-catalyst/app-build/build";
-import { POSTGRES_QUERY_TEXT_MAX_CHARS } from "@vivd-catalyst/postgres-connector";
+} from "@work-shape/catalyst-app-build";
+import { buildPage, builtPageManifestSchema } from "@work-shape/catalyst-app-build/build";
+import { POSTGRES_QUERY_TEXT_MAX_CHARS } from "@work-shape/catalyst-postgres-connector";
 import { pageFiles } from "./support/page-build";
 
 // The statement files of a Page as the build compiles them: the header into the parameters a

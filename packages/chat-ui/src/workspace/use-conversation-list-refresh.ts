@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ConversationListItem, StartConversationRunResponse } from "@vivd-catalyst/api-client";
+import type {
+  ConversationListItem,
+  StartConversationRunResponse
+} from "@work-shape/catalyst-api-client";
 
 /**
  * How often the rail's conversations are read again while the server still changes them. Each

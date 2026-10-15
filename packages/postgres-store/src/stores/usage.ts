@@ -1,4 +1,4 @@
-import type { ModelUsageEventStore } from "@vivd-catalyst/core";
+import type { ModelUsageEventStore } from "@work-shape/catalyst-core";
 import {
   backfillModelUsageAttribution,
   clearUserFromModelUsageEvents,

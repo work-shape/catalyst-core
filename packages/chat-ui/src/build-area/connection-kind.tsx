@@ -1,4 +1,4 @@
-import { Badge, Chip, ConnectionIcon } from "@vivd-catalyst/ui";
+import { Badge, Chip, ConnectionIcon } from "@work-shape/catalyst-ui";
 import { connectionCategory } from "../connection-facts";
 import type { BuildAsset, BuildAssetKind } from "./build-asset-kind";
 import { ConnectionCreateDialog } from "./connection-create-dialog";

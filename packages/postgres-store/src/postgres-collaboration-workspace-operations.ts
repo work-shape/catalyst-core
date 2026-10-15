@@ -16,7 +16,7 @@ import {
   createCollaborationWorkspaceId,
   createWorkspaceAccessRequestId,
   validateWorkspaceCreation
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { lockRights } from "./rights-lock";
 import { containsPattern } from "./like-pattern";
 import { deleteWorkspaceOwnedAssets } from "./postgres-config-asset-operations";

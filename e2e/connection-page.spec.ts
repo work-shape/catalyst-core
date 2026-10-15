@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import type { ConnectionDetail } from "@vivd-catalyst/api-client";
+import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
 import { connectionDetail, recordedStates } from "../tests/chat-ui-connection-fixtures";
 import {
   ALLOWED_URL,

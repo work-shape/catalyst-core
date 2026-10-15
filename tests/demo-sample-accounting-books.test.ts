@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ACCOUNTING_MAXIMUM_PAGE_SIZE, SIZE_GROUPS } from "@vivd-catalyst/demo/sample-mcp";
+import { ACCOUNTING_MAXIMUM_PAGE_SIZE, SIZE_GROUPS } from "@work-shape/catalyst-demo/sample-mcp";
 import { required } from "./support/assertions";
 import {
   cents,

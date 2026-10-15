@@ -4,8 +4,8 @@ import {
   PRINCIPAL_GRANTABLE_ACTIONS,
   createAuthorizer,
   type ServicePrincipalRecord
-} from "@vivd-catalyst/core";
-import { runOperation } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import {
   SCOPES_HEADER,
   SERVICE_HEADER,

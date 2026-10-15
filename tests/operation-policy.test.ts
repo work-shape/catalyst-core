@@ -9,7 +9,7 @@ import {
   type OperationDefinition,
   type OperationOrigin,
   type PolicyInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // `resolvePolicy` is the one function that says what the policy asks of a call. Every surface
 // and the startup check read it, so each rule is stated here once.

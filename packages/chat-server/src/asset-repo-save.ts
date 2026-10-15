@@ -1,4 +1,4 @@
-import { assetRepoMib, ASSET_REPO_MAX_BUNDLE_BYTES } from "@vivd-catalyst/asset-repo";
+import { assetRepoMib, ASSET_REPO_MAX_BUNDLE_BYTES } from "@work-shape/catalyst-asset-repo";
 import {
   AppError,
   fileSetFileObjectKey,
@@ -8,7 +8,7 @@ import {
   type AuthenticatedIdentity,
   type FileSet,
   type OperationRunId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createAssetRepoCommitClient } from "./asset-repo-jobs";
 import type { AssetWorkflowOptions } from "./types";
 

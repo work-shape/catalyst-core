@@ -2,7 +2,7 @@ import { rejectInvalidOrigins, createTestInstance } from "./support/test-instanc
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DevelopmentAuthAdapter } from "@vivd-catalyst/auth";
+import { DevelopmentAuthAdapter } from "@work-shape/catalyst-auth";
 import { createTestConfig } from "./support/fixtures";
 import {
   createMultipartFilePayload,

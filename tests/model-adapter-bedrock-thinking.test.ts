@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReasoningEffortConfig } from "@vivd-catalyst/core";
+import type { ReasoningEffortConfig } from "@work-shape/catalyst-core";
 import type {
   ModelMessage,
   ModelProviderContinuation,
   ModelTool
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { answerWith, bedrock, collect, hello, message } from "./support/bedrock-adapter";
 import {
   RECORDED_BEDROCK_PROFILE,

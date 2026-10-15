@@ -1,6 +1,6 @@
 import { Lock } from "lucide-react";
 import type { ReactNode } from "react";
-import { Banner } from "@vivd-catalyst/ui";
+import { Banner } from "@work-shape/catalyst-ui";
 
 /**
  * Says that the operator sets what a page shows and that nothing on it can be changed. Every

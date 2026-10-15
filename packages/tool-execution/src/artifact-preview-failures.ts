@@ -1,4 +1,4 @@
-import type { ArtifactPreviewFailureCode } from "@vivd-catalyst/core";
+import type { ArtifactPreviewFailureCode } from "@work-shape/catalyst-core";
 
 export interface ArtifactPreviewFailure {
   code: ArtifactPreviewFailureCode;

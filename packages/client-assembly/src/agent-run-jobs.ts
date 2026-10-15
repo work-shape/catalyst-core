@@ -4,7 +4,7 @@ import {
   type AgentRunJobs,
   type AgentRunSignal,
   type WorkerLocalAgentRuntimeOptions
-} from "@vivd-catalyst/agent-runtime";
+} from "@work-shape/catalyst-agent-runtime";
 import {
   AppError,
   asUserId,
@@ -15,7 +15,7 @@ import {
   type JobWorker,
   type Logger,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ClientInstanceEnv } from "./env";
 import { createJobWorker } from "./job-worker";
 

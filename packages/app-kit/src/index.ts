@@ -1,6 +1,6 @@
 // The App Kit as a Page imports it: `@work-shape/catalyst-app-kit`. The components of the
 // shared UI library come along, so a Page needs one import name for both.
-export * from "@vivd-catalyst/ui";
+export * from "@work-shape/catalyst-ui";
 export {
   AppCallError,
   actions,

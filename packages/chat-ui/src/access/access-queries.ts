@@ -5,7 +5,7 @@ import {
   type CreateNamespaceRequest,
   type CreatePermissionGrantRequest,
   type UpdateNamespaceRequest
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { accessWriteFailure, GrantWriteError, type GrantWriteResult } from "./access-model";
 import { PrincipalGrantHeldError, principalGrantRequest } from "./principal-grants-model";

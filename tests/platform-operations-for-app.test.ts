@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createPlatformAssetCalls } from "@vivd-catalyst/chat-server";
+import { createPlatformAssetCalls } from "@work-shape/catalyst-server";
 import {
   asAgentRunId,
   asConversationId,
   asToolCallId,
   type ToolExecutionContext,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { setupAppActions, type AppActionsInstance } from "./support/app-actions";
 import { operationOf } from "./support/connection-operations";

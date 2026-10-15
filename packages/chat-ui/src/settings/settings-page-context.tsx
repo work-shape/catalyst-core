@@ -5,7 +5,7 @@ import type {
   CollaborationWorkspaceWithRole,
   LocaleCode,
   SafeConfig
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import type { ThemeModePreference } from "../theme";
 
 /**

@@ -3,7 +3,7 @@ import {
   defineJobKind,
   defineSchedule,
   scheduledJobPayloadSchema
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,

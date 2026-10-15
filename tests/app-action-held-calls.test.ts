@@ -4,13 +4,13 @@ import {
   APP_ACTION_TOOL_MAX_APPS,
   createAppActionOperationSource,
   createAppActionToolSource
-} from "@vivd-catalyst/chat-server";
-import { createConnectionToolSource } from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-server";
+import { createConnectionToolSource } from "@work-shape/catalyst-connections";
 import {
   APP_ACTION_CALLS_PER_MINUTE_PER_SESSION,
   type RateLimiter,
   type RateLimitRule
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus } from "./support/app-instance";
 import {

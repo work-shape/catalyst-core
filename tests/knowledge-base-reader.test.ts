@@ -4,7 +4,7 @@ import {
   DATA_STORE_MANIFEST_FILE,
   KNOWLEDGE_BASE_ASSET_KIND,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import {
   clientInstanceId,

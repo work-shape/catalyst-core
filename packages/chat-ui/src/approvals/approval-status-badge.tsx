@@ -1,4 +1,4 @@
-import { Badge, type BadgeProps } from "@vivd-catalyst/ui";
+import { Badge, type BadgeProps } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import {
   approvalStatusPresentation,

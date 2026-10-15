@@ -1,5 +1,5 @@
-import type { Asset } from "@vivd-catalyst/api-client";
-import { WORKFLOW_ACTIONS } from "@vivd-catalyst/core";
+import type { Asset } from "@work-shape/catalyst-api-client";
+import { WORKFLOW_ACTIONS } from "@work-shape/catalyst-core";
 import {
   CONNECTION_OPERATION_PREFIX,
   DATA_STORE_OPERATION_PREFIX,
@@ -11,7 +11,7 @@ import {
   type WorkflowStepRunLink,
   type WorkflowStepRunPlacement,
   type WorkflowStepRunStatus
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   WorkflowBranchView,
   WorkflowFailureReason,

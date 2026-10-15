@@ -4,8 +4,8 @@ import {
   KNOWLEDGE_OPERATION_PREFIX,
   type ConversationId,
   type OperationOrigin
-} from "@vivd-catalyst/core";
-import type { PlatformOperationsAudience } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import type { PlatformOperationsAudience } from "@work-shape/catalyst-tool-execution";
 
 // Who would call the operations `platform.assets.operations` lists: a step of a Workflow, or a
 // `connection` action of an App. Each audience is offered the operations exposed to its own

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isMainThread, parentPort, workerData, type MessagePort } from "node:worker_threads";
-import type { JsonObject, JsonValue } from "@vivd-catalyst/core";
+import type { JsonObject, JsonValue } from "@work-shape/catalyst-core";
 import { Ajv, type ErrorObject, type ValidateFunction } from "ajv";
 import { Ajv2020 } from "ajv/dist/2020.js";
 

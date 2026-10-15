@@ -1,7 +1,10 @@
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
-import { hasExplicitCredentials, STANDALONE_AUTH_CLIENT_ADDRESS_HEADER } from "@vivd-catalyst/auth";
-import { AppError } from "@vivd-catalyst/core";
+import {
+  hasExplicitCredentials,
+  STANDALONE_AUTH_CLIENT_ADDRESS_HEADER
+} from "@work-shape/catalyst-auth";
+import { AppError } from "@work-shape/catalyst-core";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { accountTried, requireWithinLimit } from "../http/rate-limit";
 import type { ResolvedChatServerOptions } from "../types";

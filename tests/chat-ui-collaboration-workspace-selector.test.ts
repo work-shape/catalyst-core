@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
-import type { CollaborationWorkspaceWithRole, SafeConfig } from "@vivd-catalyst/api-client";
+import type { CollaborationWorkspaceWithRole, SafeConfig } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
 import {
   CollaborationWorkspaceSelector,

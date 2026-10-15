@@ -1,5 +1,5 @@
-import type { AppAction } from "@vivd-catalyst/api-client";
-import { Badge } from "@vivd-catalyst/ui";
+import type { AppAction } from "@work-shape/catalyst-api-client";
+import { Badge } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { appActionOutcome } from "./app-actions-model";
 

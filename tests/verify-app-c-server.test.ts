@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runOperation } from "@vivd-catalyst/tool-execution";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus } from "./support/app-instance";
 import { appSource, setupAppActions, type AppActionsInstance } from "./support/app-actions";

@@ -1,4 +1,4 @@
-import type { ApiUser, CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
+import type { ApiUser, CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
 
 export function settingsUser(overrides: Partial<ApiUser> = {}): ApiUser {
   return {

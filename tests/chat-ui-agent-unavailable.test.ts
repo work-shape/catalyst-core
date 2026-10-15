@@ -1,7 +1,10 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
-import { AgentUnavailableNotices, savedAgentUnavailable } from "@vivd-catalyst/chat-ui/build-area";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import {
+  AgentUnavailableNotices,
+  savedAgentUnavailable
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 type Status = Parameters<typeof AgentUnavailableNotices>[0]["status"];

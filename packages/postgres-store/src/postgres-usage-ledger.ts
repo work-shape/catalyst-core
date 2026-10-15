@@ -12,7 +12,7 @@ import {
   type RecentModelUsage,
   AppError,
   createPlatformId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapModelUsageEvent } from "./rows";
 import { modelUsageCounters, modelUsageDailyRollups, modelUsageEvents } from "./schema";

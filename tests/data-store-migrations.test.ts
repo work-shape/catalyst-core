@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DATA_STORE_ASSET_KIND } from "@vivd-catalyst/core";
+import { DATA_STORE_ASSET_KIND } from "@work-shape/catalyst-core";
 import { eventually } from "./support/assertions";
 import {
   INIT_SQL,

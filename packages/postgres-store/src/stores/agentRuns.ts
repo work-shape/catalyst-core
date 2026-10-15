@@ -17,7 +17,7 @@ import {
   type RunObservation,
   type RunObservationStore,
   type UpdateAgentRunStatusInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   appendClaimedAgentRunEnd as appendPostgresClaimedAgentRunEnd,
   appendClaimedAgentRunMessage as appendPostgresClaimedAgentRunMessage,
@@ -44,7 +44,7 @@ import {
   requestAgentRunCancellation as requestPostgresAgentRunCancellation,
   updateAgentRunStatus as updatePostgresAgentRunStatus
 } from "../postgres-agent-run-operations";
-import type { AgentRunsStore } from "@vivd-catalyst/core";
+import type { AgentRunsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 /** `enqueued` is called for every job this store inserts, before its transaction commits. */
 export function createPostgresAgentRunsStore(

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres from "postgres";
 import { afterEach, expect } from "vitest";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   DATA_STORE_ASSET_KIND,
   DATA_STORE_MANIFEST_FILE,
@@ -14,7 +14,7 @@ import {
   type JsonObject,
   type PolicyValue,
   type UserRole
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { eventually, required } from "./assertions";
 import { createTestConfig } from "./fixtures";
 import { fileTestDatabaseUrl } from "./test-database";

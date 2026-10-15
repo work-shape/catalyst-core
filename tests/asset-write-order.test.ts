@@ -1,13 +1,13 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { WorkflowAssetKind } from "@vivd-catalyst/chat-server";
+import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
 import {
   AppError,
   StoreBackedAuditRecorder,
   defineAssetKind,
   type AuditRecorder
-} from "@vivd-catalyst/core";
-import { ASSET_SYNC_ITEM_MAX_BYTES } from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-core";
+import { ASSET_SYNC_ITEM_MAX_BYTES } from "@work-shape/catalyst-api-contract";
 import {
   agent,
   clientInstanceId,

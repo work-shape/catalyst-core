@@ -6,7 +6,7 @@ import {
   type ConfigAssetState,
   type ConfigAssetStore,
   type RegisteredAssetKind
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { assetSetOf, validateAssetSet, withDefaultAgentName, type AssetSet } from "./asset-set";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import {

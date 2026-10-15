@@ -13,7 +13,7 @@ import {
   type ReasoningEffortConfig,
   type RuntimeAssetSnapshot,
   type SkillConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { AgentConfig, ClientInstanceConfig } from "./schemas";
 import { createClientBranding } from "./branding";
 import { getModelSelectionForAgent, resolveModelBinding } from "./selectors";

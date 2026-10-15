@@ -1,6 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { AppError, WORKFLOW_MANIFEST_FILE, type WorkflowManifest } from "@vivd-catalyst/core";
+import { AppError, WORKFLOW_MANIFEST_FILE, type WorkflowManifest } from "@work-shape/catalyst-core";
 import {
   readWorkflowManifest,
   workflowManifestFingerprint,

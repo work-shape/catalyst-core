@@ -3,7 +3,7 @@ import type {
   ClientInstanceId,
   KnowledgeBaseState,
   KnowledgeBaseStateStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 import { knowledgeBaseStates } from "../schema";
 

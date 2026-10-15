@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { WorkflowAssetKind } from "@vivd-catalyst/chat-server";
-import { defineAssetKind } from "@vivd-catalyst/core";
+import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
+import { defineAssetKind } from "@work-shape/catalyst-core";
 
 export const noticeSchema = z.strictObject({ name: z.string(), text: z.string() });
 

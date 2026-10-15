@@ -1,5 +1,5 @@
-import type { CollaborationWorkspaceDirectoryItem } from "@vivd-catalyst/api-client";
-import { Badge, Button, Dialog } from "@vivd-catalyst/ui";
+import type { CollaborationWorkspaceDirectoryItem } from "@work-shape/catalyst-api-client";
+import { Badge, Button, Dialog } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { CollaborationWorkspaceAvatar } from "./collaboration-workspace-avatar";
 import {

@@ -1,4 +1,4 @@
-import type { StoredAgentReferences } from "@vivd-catalyst/config-schema";
+import type { StoredAgentReferences } from "@work-shape/catalyst-config-schema";
 import type {
   ActorAccess,
   AssetScope,
@@ -13,7 +13,7 @@ import type {
   PlatformStores,
   RegisteredAssetKind,
   ToolPresentation
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /** What an agent or skill definition may refer to on this instance. */
 export interface ConfigAssetValidationRefs extends StoredAgentReferences {

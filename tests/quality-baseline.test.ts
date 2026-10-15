@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { baselineRises, compareBaseline } from "@vivd-catalyst/quality-config/baseline";
+import { baselineRises, compareBaseline } from "@work-shape/catalyst-quality-config/baseline";
 
 const entry = {
   target: "lint",

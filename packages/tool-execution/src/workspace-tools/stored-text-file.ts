@@ -4,7 +4,7 @@ import {
   type WorkspaceFile,
   createPlatformId,
   type ResolvedWorkspaceHandle
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { STANDARD_WORKSPACE_DIRECTORIES } from "../workspace-command-runner";
 import { putWorkspaceFile, upsertStoredWorkspaceFile } from "../workspace-file-bytes";
 import { normalizeWorkspaceFilePath } from "../workspace-paths";

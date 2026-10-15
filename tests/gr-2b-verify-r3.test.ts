@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { deriveAppContentKey, storePageFileSet } from "@vivd-catalyst/chat-server";
-import { asConversationId } from "@vivd-catalyst/core";
+import { deriveAppContentKey, storePageFileSet } from "@work-shape/catalyst-server";
+import { asConversationId } from "@work-shape/catalyst-core";
 import { clientInstanceId as accessInstanceId } from "./support/access-instance";
 import { appFiles, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { IBAN, guardedEvents, ibanPattern, judge, noIban } from "./support/guardrails";

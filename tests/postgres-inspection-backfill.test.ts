@@ -11,9 +11,9 @@ import {
   type JsonObject,
   type SupportedImageMimeType,
   type JsonValue
-} from "@vivd-catalyst/core";
-import { migrateDatabase } from "@vivd-catalyst/postgres-store";
-import { listConversationResources } from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-core";
+import { migrateDatabase } from "@work-shape/catalyst-postgres-store";
+import { listConversationResources } from "@work-shape/catalyst-server";
 import { migrationsUntil } from "./support/migrations-until";
 import { PostgresFixtures } from "./support/postgres-fixtures";
 

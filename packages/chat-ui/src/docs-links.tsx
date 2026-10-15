@@ -1,4 +1,4 @@
-import { DocsLink } from "@vivd-catalyst/ui";
+import { DocsLink } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "./i18n";
 
 /**

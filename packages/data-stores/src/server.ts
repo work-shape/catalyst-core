@@ -5,14 +5,14 @@ import {
   type PostgresExecutor,
   type PostgresLimits,
   type PostgresTarget
-} from "@vivd-catalyst/postgres-connector";
+} from "@work-shape/catalyst-postgres-connector";
 import {
   AppError,
   type ClientInstanceId,
   type ConnectionsStore,
   type DataStoreLocation,
   type DataStoreRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { DataStoreCredentials, DataStoreRole } from "./credentials";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 

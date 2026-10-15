@@ -13,14 +13,14 @@ import {
   type RuntimeCallContext,
   type SkillConfig,
   type StartAgentRunInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   ModelBindingRef,
   ModelCapabilities,
   ModelCompletion,
   ModelMessage,
   ModelTool
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import {
   dropCurrentSubmittedMessage,
   projectAgentVisibleHistory,

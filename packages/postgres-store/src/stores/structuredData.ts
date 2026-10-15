@@ -1,4 +1,7 @@
-import { type StructuredDataResourceRecord, type StructuredDataStore } from "@vivd-catalyst/core";
+import {
+  type StructuredDataResourceRecord,
+  type StructuredDataStore
+} from "@work-shape/catalyst-core";
 import {
   getStructuredDataResource as getPostgresStructuredDataResource,
   listStructuredDataResources as listPostgresStructuredDataResources,

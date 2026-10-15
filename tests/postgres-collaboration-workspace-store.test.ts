@@ -1,10 +1,10 @@
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { fileTestDatabaseUrl } from "./support/test-database";
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import { createTestInstance } from "./support/test-instance";
 import { afterAll, describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
-import { asClientInstanceId, type ClientInstanceId } from "@vivd-catalyst/core";
+import { asClientInstanceId, type ClientInstanceId } from "@work-shape/catalyst-core";
 
 describe("Postgres Collaboration Workspace store", () => {
   let store: PlatformStores;

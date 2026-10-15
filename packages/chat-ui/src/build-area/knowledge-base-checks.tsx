@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
   Textarea
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { ReadState } from "./data-store-read-state";

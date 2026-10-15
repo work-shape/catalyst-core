@@ -1,5 +1,5 @@
 import { createScriptedInstanceModelGateway } from "./model-gateway";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { accessOf } from "./access";
 import { createTestAssetKinds, createTestInstance } from "./test-instance";
 import { vi, type Mock } from "vitest";
@@ -15,23 +15,23 @@ import {
   type AuthenticatedUser,
   type JsonObject,
   type SkillConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   createSkillChangePreview,
   getModelProviderConfigs,
   parseClientInstanceConfig,
   type SkillChangeOperation
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   ApprovalRequestWorkflow,
   GuardrailRunner,
   createSkillChangeApprovalHandler
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   createProposeSkillChangeTool,
   createSkillSourceVersion
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { createConfigAssetSource } from "../../packages/client-assembly/src/config-asset-source";
 import { createTestConfig } from "./fixtures";
 import { applyAtCurrentRevisions } from "./asset-revisions";

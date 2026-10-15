@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_ASSET_KIND, type UserRecord } from "@vivd-catalyst/core";
+import { WORKFLOW_ASSET_KIND, type UserRecord } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { operationOf } from "./support/connection-operations";
 import { fileTestDatabaseUrl } from "./support/test-database";

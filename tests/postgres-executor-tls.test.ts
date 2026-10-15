@@ -5,7 +5,7 @@ import {
   type PostgresExecutor,
   type PostgresLocation,
   type PostgresTarget
-} from "@vivd-catalyst/postgres-connector";
+} from "@work-shape/catalyst-postgres-connector";
 import { required } from "./support/assertions";
 import { executorFailure as failure, useCustomerDatabase } from "./support/customer-database";
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";

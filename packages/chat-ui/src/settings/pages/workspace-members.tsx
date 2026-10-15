@@ -7,7 +7,7 @@ import type {
   WorkspaceMember,
   WorkspaceMemberCandidate,
   WorkspaceMembershipRole
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Avatar,
   Banner,
@@ -21,7 +21,7 @@ import {
   Section,
   Select,
   SkeletonList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useCollaborationWorkspaceMutations } from "../../api/collaboration-workspace-mutations";
 import {
   useCollaborationWorkspaceAccessRequestsQuery,

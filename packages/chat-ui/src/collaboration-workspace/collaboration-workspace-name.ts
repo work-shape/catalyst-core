@@ -1,4 +1,4 @@
-import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
+import type { CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
 import type { TranslationContextValue } from "../i18n";
 
 /** German sets only an apostrophe after a name that ends in an s sound: "Felix' Arbeitsbereich". */

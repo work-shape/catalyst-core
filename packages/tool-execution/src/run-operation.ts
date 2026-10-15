@@ -21,7 +21,7 @@ import {
   type OperationRun,
   type OperationRunActor,
   type PolicyResolution
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   accessOf,
   authorizeRights,

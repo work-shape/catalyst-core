@@ -1,5 +1,5 @@
-import { listAll, type ApiClient } from "@vivd-catalyst/api-client";
-import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import { listAll, type ApiClient } from "@work-shape/catalyst-api-client";
+import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
   listedOf,

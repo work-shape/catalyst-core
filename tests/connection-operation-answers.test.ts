@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { connectionDetailSchema, connectionToolsSchema } from "@vivd-catalyst/api-contract";
-import { AppError, connectionCallError, type JsonValue } from "@vivd-catalyst/core";
+import { connectionDetailSchema, connectionToolsSchema } from "@work-shape/catalyst-api-contract";
+import { AppError, connectionCallError, type JsonValue } from "@work-shape/catalyst-core";
 import { agent, clientInstanceId } from "./support/access-instance";
 import {
   DEFAULT_LIMITS,

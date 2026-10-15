@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { safeConfigSchema } from "@vivd-catalyst/api-contract";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { safeConfigSchema } from "@work-shape/catalyst-api-contract";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   agentConfigSchema,
   createSafeConfigView,
   parseClientInstanceConfig,
   type SafeConfigConnection
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 
 // An agent list tells each agent's Connections, so that a conversation can say what a tool
 // call touched: the name people read, the icon and the tools of it the agent holds. Nothing

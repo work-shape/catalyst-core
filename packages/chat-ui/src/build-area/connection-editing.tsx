@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Button, EmptyState, FormNotice, SkeletonList } from "@vivd-catalyst/ui";
-import type { ConnectionDetail } from "@vivd-catalyst/api-client";
+import { Button, EmptyState, FormNotice, SkeletonList } from "@work-shape/catalyst-ui";
+import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
 import { useTranslation } from "../i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { instanceSentence, PendingApprovalError, type BuildWriteOutcome } from "./build-refusals";

@@ -1,5 +1,5 @@
-import type { ConnectionDiscoveredTool } from "@vivd-catalyst/api-client";
-import { readYamlData } from "@vivd-catalyst/core";
+import type { ConnectionDiscoveredTool } from "@work-shape/catalyst-api-client";
+import { readYamlData } from "@work-shape/catalyst-core";
 import type { ApprovedOperation } from "./connection-form-model";
 
 // The list a person approves the tools of a Connection in, at once: the tools an MCP server

@@ -9,7 +9,7 @@ import type {
   ToolExecutionErrorCode,
   ToolRuntimeContext,
   WebSource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { extractWebPageText } from "./html-text";
 import {
   type WebFetchAddressResolver,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { JsonObject } from "@vivd-catalyst/core";
+import type { JsonObject } from "@work-shape/catalyst-core";
 import { DEFAULT_LIMITS } from "./workspace-tool-schemas";
 
 /**

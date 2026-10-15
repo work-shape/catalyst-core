@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import type { ApiClient } from "@vivd-catalyst/api-client";
+import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { useAppsHost } from "../apps/apps-host";
 import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import { useSettingsPage } from "../settings/settings-page-context";

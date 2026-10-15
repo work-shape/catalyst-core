@@ -1,4 +1,4 @@
-import type { ReasoningEffortConfig } from "@vivd-catalyst/core";
+import type { ReasoningEffortConfig } from "@work-shape/catalyst-core";
 import type { ModelProviderContinuation } from "../types";
 import type { BedrockEffort, BedrockMessagesRequest, BedrockThinkingBlock } from "./bedrock-wire";
 

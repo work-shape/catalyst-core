@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { prefersReducedMotion } from "@vivd-catalyst/ui";
+import { prefersReducedMotion } from "@work-shape/catalyst-ui";
 import { useSplitArea } from "../surface/use-split-area";
 import { readStoredSurfaceWidth, writeStoredSurfaceWidth } from "../workspace-utils";
 import {

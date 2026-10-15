@@ -1,4 +1,8 @@
-import { AppError, type ProviderCheckContext, type ProviderCheckResult } from "@vivd-catalyst/core";
+import {
+  AppError,
+  type ProviderCheckContext,
+  type ProviderCheckResult
+} from "@work-shape/catalyst-core";
 import { readBedrockEventStream, type BedrockEventStreamMessage } from "./bedrock-event-stream";
 import {
   missingBedrockAnswerReason,

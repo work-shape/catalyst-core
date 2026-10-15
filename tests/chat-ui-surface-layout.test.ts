@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { scrollTopKeepingPlace } from "@vivd-catalyst/chat-ui/reading-place";
+import { scrollTopKeepingPlace } from "@work-shape/catalyst-chat-ui/reading-place";
 import {
   clampSurfaceWidth,
   defaultSurfaceWidth,
   maxSurfaceWidth,
   SPLIT_MIN_FALLBACK_PX,
   surfacePlacement
-} from "@vivd-catalyst/chat-ui/surface-layout";
+} from "@work-shape/catalyst-chat-ui/surface-layout";
 
 const SPLIT_MIN = SPLIT_MIN_FALLBACK_PX;
 const SIDEBAR = 280;

@@ -13,7 +13,7 @@ import {
   ObjectStorageUnavailable,
   type ObjectListEntry,
   type ObjectStorage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * Keeps objects as files below one directory that the API and its workers share. A key is the

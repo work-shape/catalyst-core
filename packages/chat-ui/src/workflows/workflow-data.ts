@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { ApiError } from "@vivd-catalyst/api-client";
-import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import { ApiError } from "@work-shape/catalyst-api-client";
+import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { PendingApprovalError } from "../build-area/build-refusals";

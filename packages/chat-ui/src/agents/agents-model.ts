@@ -1,4 +1,4 @@
-import type { CollaborationWorkspaceAgents, SafeConfig } from "@vivd-catalyst/api-client";
+import type { CollaborationWorkspaceAgents, SafeConfig } from "@work-shape/catalyst-api-client";
 import type { CheckName } from "../api/asset-writes";
 import type { BuildAssetStart } from "../build-area/build-asset-kind";
 import { requestBuildStart } from "../build-area/build-create-request";

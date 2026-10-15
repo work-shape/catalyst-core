@@ -21,7 +21,7 @@ import type {
 } from "./workflows";
 
 // A Workflow Run and its step runs as they are stored and read. The names a definition and a
-// call carry are in `workflows.ts`; the engine is in `@vivd-catalyst/workflows`.
+// call carry are in `workflows.ts`; the engine is in `@work-shape/catalyst-workflows`.
 
 /**
  * How many characters of a run's result or of a step's output a read shows. The whole value

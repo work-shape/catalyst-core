@@ -1,4 +1,4 @@
-import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
+import { STANDALONE_AUTH_SOURCE } from "@work-shape/catalyst-auth";
 import {
   AppError,
   asUserId,
@@ -7,7 +7,7 @@ import {
   type AuthenticatedUser,
   type RuntimeCallContext,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { requestAccountDeletion } from "./account-deletion";
 import type { DeletionOutcome } from "./subject-deletion";
 import type { ChatServerOptions } from "./types";

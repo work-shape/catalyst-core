@@ -1,5 +1,5 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { AppError } from "@work-shape/catalyst-core";
 import { loadAppKitFiles } from "../app-kit-runtime";
 import type { Route } from "../http/route";
 import { loadViewRuntimeFiles } from "../view-runtime";

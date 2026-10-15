@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { CodeFile } from "@vivd-catalyst/ui";
+import { CodeFile } from "@work-shape/catalyst-ui";
 import { codeColouring, useCodeTokens } from "./code-highlight";
 import { useTranslation } from "./i18n";
 

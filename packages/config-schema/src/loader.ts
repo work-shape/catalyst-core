@@ -4,8 +4,8 @@ import {
   loadYamlData,
   parseSkillMarkdown as parseSkillFileMarkdown,
   SkillMarkdownError
-} from "@vivd-catalyst/asset-schemas";
-import { AppError } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-asset-schemas";
+import { AppError } from "@work-shape/catalyst-core";
 import {
   clientInstanceConfigFileSchema,
   uiConfigOverlaySchema,

@@ -14,7 +14,7 @@ import type {
   DataStoreAppliedMigration,
   DataStoreCondition,
   DataStoreStatus
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * One row per Data Store: where its database is, the roles that reach it, the migrations it

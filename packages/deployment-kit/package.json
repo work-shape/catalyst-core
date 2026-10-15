@@ -1,13 +1,8 @@
 {
-  "name": "@vivd-catalyst/deployment-kit",
+  "name": "@work-shape/catalyst-deployment-kit",
   "version": "0.7.0",
   "private": true,
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/deployment-kit"
-  },
   "type": "module",
   "engines": {
     "node": ">=22"

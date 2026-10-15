@@ -4,17 +4,22 @@ import {
   LocalAgentRuntime,
   describeAgentDataTools,
   materializeModelTools
-} from "@vivd-catalyst/agent-runtime";
-import { findAgentReferenceIssues } from "@vivd-catalyst/config-schema";
-import type { AgentConfig, DataToolSource, Logger, ModelProviderConfig } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-agent-runtime";
+import { findAgentReferenceIssues } from "@work-shape/catalyst-config-schema";
+import type {
+  AgentConfig,
+  DataToolSource,
+  Logger,
+  ModelProviderConfig
+} from "@work-shape/catalyst-core";
 import {
   DETERMINISTIC_CAPABILITIES,
   DeterministicModelProvider,
   modelContentText
-} from "@vivd-catalyst/model-provider";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-model-provider";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { setupAccessInstance } from "./support/access-instance";
 import {
   ECHO,

@@ -5,11 +5,11 @@ import {
   type KnowledgeBackend,
   type KnowledgeBaseTarget,
   type KnowledgeCheckResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { catalogTarget, rowsOf } from "../catalog";
 import { databaseFailureError } from "../failures";
 import { readStores } from "../operations";
-import { PostgresExecutorError } from "@vivd-catalyst/postgres-connector";
+import { PostgresExecutorError } from "@work-shape/catalyst-postgres-connector";
 import { asStoreRole } from "../roles";
 import type { DataStoreRuntime } from "../runtime";
 import type { PublishedStore } from "../verbs";

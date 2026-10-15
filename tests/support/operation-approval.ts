@@ -1,11 +1,11 @@
 import { expect } from "vitest";
-import { apiErrorResponseSchema, operationRunSchema } from "@vivd-catalyst/api-contract";
+import { apiErrorResponseSchema, operationRunSchema } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   asClientInstanceId,
   legacyPermissionFor,
   type CentralPolicySetting
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig } from "./fixtures";
 import { registeredTestOperations as operations } from "./operations";
 import {

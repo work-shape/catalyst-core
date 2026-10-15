@@ -1,13 +1,13 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import type { RouteRegistration, WorkflowAssetKind } from "@vivd-catalyst/chat-server";
-import { loadSecretKeyring } from "@vivd-catalyst/connections";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import type { RouteRegistration, WorkflowAssetKind } from "@work-shape/catalyst-server";
+import { loadSecretKeyring } from "@work-shape/catalyst-connections";
 import {
   AppError,
   DATA_STORE_ACTIONS,
   DATA_STORE_OPERATION_RIGHTS,
   dataStoreOperationName,
   type DataStoreOperationVerb
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createDataStores,
   dataStorePageOperationName,
@@ -15,7 +15,7 @@ import {
   dataStoresModule,
   sizeLimitBytes,
   type DataStores
-} from "@vivd-catalyst/data-stores";
+} from "@work-shape/catalyst-data-stores";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
 import type { ModuleSeam } from "./module-assembly";
 

@@ -4,7 +4,7 @@ import {
   type AgentRunExecutionControl,
   type AgentRunJobsOptions,
   type ExecuteAgentRun
-} from "@vivd-catalyst/agent-runtime";
+} from "@work-shape/catalyst-agent-runtime";
 import {
   asAgentRunId,
   asMessageId,
@@ -23,7 +23,7 @@ import {
   type PlatformStores,
   type RuntimeCallContext,
   type StartAgentRunInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { deferred, required } from "./assertions";
 import type { useJobExecutorHarness } from "./job-executor-harness";
 import type { PostgresSuite } from "./postgres-suite";

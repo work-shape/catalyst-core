@@ -17,7 +17,7 @@ import {
   type ResolvedApiCredential,
   type ServicePrincipalRecord,
   type UpdateServicePrincipalInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapApiCredential, mapServicePrincipal } from "./rows";
 import { lockRights } from "./rights-lock";

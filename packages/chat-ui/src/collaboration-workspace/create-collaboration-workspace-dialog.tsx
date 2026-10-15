@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Dialog, Input, Textarea } from "@vivd-catalyst/ui";
+import { Button, Dialog, Input, Textarea } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import {
   randomCollaborationWorkspaceAccentColor,

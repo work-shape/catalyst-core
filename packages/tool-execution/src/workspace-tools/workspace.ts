@@ -5,7 +5,7 @@ import type {
   ToolExecutionContext,
   WorkspaceHandle,
   WorkspaceFile
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { failed, failedValidationResult, type ValidationResult } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
 

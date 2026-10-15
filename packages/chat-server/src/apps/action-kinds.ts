@@ -2,7 +2,7 @@ import {
   applyAppActionMapping,
   bindSqlActionParameters,
   type CompiledAppAction
-} from "@vivd-catalyst/app-build";
+} from "@work-shape/catalyst-app-build";
 import {
   AppError,
   CONNECTION_ASSET_KIND,
@@ -20,7 +20,7 @@ import {
   type OperationAuthorizeContext,
   type OperationDefinition,
   type OperationResource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // What each kind of named action stands for. An action of every kind is one operation of the
 // registry, reached through that operation's own definition: a `connection` action an

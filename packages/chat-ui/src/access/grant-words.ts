@@ -1,4 +1,4 @@
-import type { GrantableAction } from "@vivd-catalyst/core";
+import type { GrantableAction } from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../i18n";
 import type { GrantKind, GrantScopeKind } from "./access-model";
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { platformContextSchema } from "@vivd-catalyst/api-contract";
-import { WORKFLOW_ACTIONS, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import { platformContextSchema } from "@work-shape/catalyst-api-contract";
+import { WORKFLOW_ACTIONS, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { setupAccessInstance } from "./support/access-instance";
 import type { WorkflowFixture } from "./support/workflow-instance";
 import { notifyClients, readyWorkflows } from "./support/workflow-runs";

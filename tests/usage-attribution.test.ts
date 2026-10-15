@@ -7,14 +7,14 @@ import {
   type ModelAttribution,
   type ModelCallAdmission,
   type ModelProviderConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createModelGateway,
   type ModelAdapter,
   type ModelBindingRef,
   type ModelGateway
-} from "@vivd-catalyst/model-provider";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-model-provider";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { arrangeDeletion } from "./support/deletion-fixture";
 import { ALL_MODEL_CAPABILITIES, silentTestLogger } from "./support/model-gateway";
 import { waitUntilBlocked } from "./support/postgres-concurrency-harness";

@@ -1,6 +1,6 @@
 import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
 
 describe("Postgres Collaboration Workspaces", () => {
   it("provisions exactly one private Personal Workspace and owner membership", async () => {

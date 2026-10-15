@@ -1,4 +1,4 @@
-import type { ApiUser, PlatformContext } from "@vivd-catalyst/api-client";
+import type { ApiUser, PlatformContext } from "@work-shape/catalyst-api-client";
 import { STANDALONE_AUTH_SOURCE } from "../workspace-utils";
 
 export function canViewAdministrationPanel(user: ApiUser | undefined): boolean {

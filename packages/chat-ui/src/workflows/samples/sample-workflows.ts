@@ -1,5 +1,5 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
-import type { JsonObject, WorkflowManifest, WorkflowStep } from "@vivd-catalyst/core";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import type { JsonObject, WorkflowManifest, WorkflowStep } from "@work-shape/catalyst-core";
 
 // Sample Workflows in the file form of the contract, for the samples page, the pictures and
 // the browser tests. They are data of a development page and no part of the product.

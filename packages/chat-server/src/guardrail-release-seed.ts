@@ -2,7 +2,7 @@ import {
   guardrailConfigSchema,
   guardrailFromRelease,
   type ReleaseGuardrailConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   GUARDRAIL_ASSET_KIND,
   sameJson,
@@ -12,7 +12,7 @@ import {
   type ConfigAssetMutation,
   type JsonObject,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // The release seed of Guardrails. When the API process starts it makes the stored Guardrails of
 // release config equal to `guardrails` of release config, each published: in one transaction,

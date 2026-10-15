@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
-import { CancelRunDialog } from "@vivd-catalyst/chat-ui/workflows";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { CancelRunDialog } from "@work-shape/catalyst-chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 const { t } = createTranslationContext("en");

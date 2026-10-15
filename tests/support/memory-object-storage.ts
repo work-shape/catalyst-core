@@ -9,7 +9,7 @@ import {
   type ObjectPutOptions,
   type ObjectStorage,
   type StoredObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * An object store in memory, for tests that need a store and not a provider. It keeps the

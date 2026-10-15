@@ -5,7 +5,7 @@ import type {
   InfrastructureOrigin,
   InfrastructureProvider,
   InfrastructureSecret
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   JOB_WORKER_SILENT_MS,
@@ -20,7 +20,7 @@ import {
   type ProviderCheckResult,
   type ProviderRegion,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { INFRASTRUCTURE_CHECK_INTERVAL_MS } from "./job-kinds";
 
 /**

@@ -1,4 +1,4 @@
-import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
+import { STANDALONE_AUTH_SOURCE } from "@work-shape/catalyst-auth";
 import {
   NonRetryableJobError,
   pendingConversationCleanupError,
@@ -6,7 +6,7 @@ import {
   type PlatformStores,
   type UserId,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { deleteAccountJob } from "./job-kinds";
 import {
   acceptDeletion,

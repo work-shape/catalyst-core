@@ -4,8 +4,8 @@ import type {
   CollaborationWorkspaceWithRole,
   PlatformContext,
   SafeConfig
-} from "@vivd-catalyst/api-client";
-import type { PageWidth } from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-api-client";
+import type { PageWidth } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../i18n";
 
 /** The groups of the Settings rail: what a page changes. */

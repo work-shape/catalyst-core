@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   agentConfigSchema,
   createSafeConfigView,
   parseClientInstanceConfig,
   skillConfigSchema
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 
 const starter = (title: string, extra: Record<string, unknown> = {}) => ({
   title: { en: title, de: `${title} (de)` },

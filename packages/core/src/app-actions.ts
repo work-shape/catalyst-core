@@ -1,5 +1,5 @@
 // What a named action of an App is called as an operation. The action itself, its input and
-// what it reaches are compiled by the build (`@vivd-catalyst/app-build`).
+// what it reaches are compiled by the build (`@work-shape/catalyst-app-build`).
 
 /**
  * The prefix of every operation that is a named action of an App: `app.<id>.<action>`. It is

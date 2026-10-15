@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { operationRunSchema } from "@vivd-catalyst/api-contract";
+import { operationRunSchema } from "@work-shape/catalyst-api-contract";
 import {
   asUserId,
   isAgentAvailableInWorkspace,
   type CentralPolicySetting,
   type CollaborationWorkspaceId,
   type UserRecord
-} from "@vivd-catalyst/core";
-import { runOperation } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import {
   agent,
   clientInstanceId,

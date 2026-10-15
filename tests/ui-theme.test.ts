@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { composeViewDocument, viewRuntimeAddress } from "@vivd-catalyst/chat-ui";
-import { uiConfigSchema } from "@vivd-catalyst/config-schema";
+import { composeViewDocument, viewRuntimeAddress } from "@work-shape/catalyst-chat-ui";
+import { uiConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   contrastRatio,
   createThemeTokens,
@@ -15,7 +15,7 @@ import {
   type ThemeMode,
   type ThemeTokenName,
   type ThemeTokens
-} from "@vivd-catalyst/ui/theme";
+} from "@work-shape/catalyst-ui/theme";
 import { stubViewHtmlParser } from "./view-html-parser";
 
 stubViewHtmlParser();

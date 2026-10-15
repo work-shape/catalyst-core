@@ -1,4 +1,4 @@
-import type { PagesStore } from "@vivd-catalyst/core";
+import type { PagesStore } from "@work-shape/catalyst-core";
 import * as operations from "../postgres-page-operations";
 import type { PostgresConnection } from "../postgres-database";
 

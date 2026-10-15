@@ -7,7 +7,7 @@ import {
   type ApprovalRequestCreator,
   type ConfigAssetSource,
   type SkillConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   applySkillChange,
   assertSkillChangeScope,
@@ -16,13 +16,13 @@ import {
   guardrailStringsOf,
   skillChangeOperationsSchema,
   skillNameSchema
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   defineTool,
   toolFailed,
   toolSuccess,
   type AnyToolDefinition
-} from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-tool-sdk";
 import { createSkillSourceVersion } from "./skill-source-version";
 
 export const proposeSkillChangeInputSchema = z

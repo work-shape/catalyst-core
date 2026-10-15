@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { ConversationRetentionWorkflow } from "@vivd-catalyst/chat-server";
+import { ConversationRetentionWorkflow } from "@work-shape/catalyst-server";
 import {
   asUserId,
   type AuthenticatedUser,
@@ -7,7 +7,7 @@ import {
   type Conversation,
   type Logger,
   type UserRole
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresSuite } from "./postgres-suite";
 import {
   RecordingByteStore,

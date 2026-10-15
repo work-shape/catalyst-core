@@ -10,7 +10,7 @@ import {
   runsOutsideTransaction,
   statementBreakpoint,
   statementName
-} from "@vivd-catalyst/postgres-store/migration-statements";
+} from "@work-shape/catalyst-postgres-store/migration-statements";
 
 export const platformRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export const migrationsPath = "packages/postgres-store/migrations";
@@ -19,7 +19,7 @@ export const migrationsDirectory = join(platformRoot, migrationsPath);
 /**
  * @typedef {{ historyThrough: string, oldestSupportedRelease: string }} MigrationPolicy
  * @typedef {{ migration: string, statement: string, rule: string, message: string }} LintFinding
- * @typedef {import("@vivd-catalyst/postgres-store/migration-statements").MigrationStatement} MigrationStatement
+ * @typedef {import("@work-shape/catalyst-postgres-store/migration-statements").MigrationStatement} MigrationStatement
  */
 
 /** @returns {MigrationPolicy} */

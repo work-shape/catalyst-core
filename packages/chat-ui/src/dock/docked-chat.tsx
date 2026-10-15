@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { PanelRight } from "lucide-react";
-import { PageHeaderShellAction, SplitHandle } from "@vivd-catalyst/ui";
+import { PageHeaderShellAction, SplitHandle } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { SurfaceSlot } from "../surface/surface-slot";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";

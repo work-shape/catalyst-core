@@ -1,5 +1,5 @@
 export * from "./errors";
-export { yamlValueIssue, yamlValueIssueSentence } from "@vivd-catalyst/asset-schemas";
+export { yamlValueIssue, yamlValueIssueSentence } from "@work-shape/catalyst-asset-schemas";
 export * from "./ids";
 export * from "./json";
 export * from "./localization";

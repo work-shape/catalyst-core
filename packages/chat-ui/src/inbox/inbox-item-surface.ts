@@ -1,4 +1,4 @@
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import type { SurfaceOf } from "../surface/surface";
 import type { InboxItemKind, Translate } from "./inbox-item-kinds";
 

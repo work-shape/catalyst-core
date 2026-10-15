@@ -1,5 +1,5 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { AppError } from "@work-shape/catalyst-core";
 import { configAssetReferences } from "../config-asset-workflow";
 import type { Route } from "../http/route";
 import { readPlatformContext, usableActions } from "../platform-context";

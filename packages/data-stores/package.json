@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/data-stores",
+  "name": "@work-shape/catalyst-data-stores",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/data-stores"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,9 +34,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/connections": "workspace:*",
-    "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/postgres-connector": "workspace:*",
+    "@work-shape/catalyst-connections": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
+    "@work-shape/catalyst-postgres-connector": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

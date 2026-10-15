@@ -14,7 +14,7 @@ import {
   type ConfigAssetStore,
   type FileSet,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { AssetCall } from "./asset-access";
 import type { AssetWarning } from "./asset-placement";
 import {

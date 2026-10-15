@@ -8,7 +8,7 @@ import {
   type JsonObject,
   type PlatformStores,
   type UserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { retryPendingConversationCleanup, type PendingCleanupScope } from "./conversation-cleanup";
 import { DELETION_BACKOFF_BASE_MS } from "./job-kinds";
 import type { ChatServerOptions } from "./types";

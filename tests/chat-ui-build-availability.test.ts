@@ -5,7 +5,7 @@ import {
   agentConfigToForm,
   type AgentAvailabilityChoice,
   type BuildAssetEditorProps
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // Where an agent can be chosen: a section of the agent's page, named once by its heading and

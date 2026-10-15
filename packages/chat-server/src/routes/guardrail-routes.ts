@@ -2,7 +2,7 @@ import {
   apiOperations,
   GUARDRAIL_HITS_LIMIT,
   type ShippedGuardrailView
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   GUARDRAIL_ACTIONS,
@@ -15,7 +15,7 @@ import {
   type OperationResource,
   type ShippedGuardrail,
   type ShippedGuardrailSwitch
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { accessResource, decide } from "../asset-access";
 import { AssetWorkflow } from "../asset-workflow";
 import { GuardrailRunner } from "../guardrail-runner";

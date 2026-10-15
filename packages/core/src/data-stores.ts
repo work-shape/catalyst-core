@@ -9,7 +9,7 @@ import type { JsonObject } from "./json";
 
 // The names and shapes of a Data Store that more than one package reads: the asset kind,
 // what its operations and jobs are called, and the handle a caller reaches the rows of one
-// store through. The store is in `@vivd-catalyst/data-stores`. A Knowledge Base, which a Data
+// store through. The store is in `@work-shape/catalyst-data-stores`. A Knowledge Base, which a Data
 // Store can back, is in `knowledge.ts`.
 
 /** The asset kind of a Data Store. Spec: data-stores-and-knowledge-bases.md, build order DS-1. */

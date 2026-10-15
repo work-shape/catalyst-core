@@ -8,7 +8,7 @@ import {
   type WorkspaceHandle,
   isAppError,
   noWorkerTakesJobs
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { runWorkspaceCommandJob, workspaceCommandJobOptions } from "./workspace-command-kind";
 
 const DEFAULT_RESULT_POLL_INTERVAL_MS = 500;

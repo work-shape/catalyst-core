@@ -1,4 +1,4 @@
-import type { AuthenticatedIdentity, RuntimeCallContext } from "@vivd-catalyst/core";
+import type { AuthenticatedIdentity, RuntimeCallContext } from "@work-shape/catalyst-core";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import { recordGovernanceAccess } from "./governance-actions";
 import type { ChatServerOptions } from "./types";

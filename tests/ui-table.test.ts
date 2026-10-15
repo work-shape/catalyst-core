@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
   type TableProps
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 
 // The density, the head row that stays, the alignment and the cut of a cell. Every test here
 // fails without them: the props did not exist and reached the DOM unread, or not at all.

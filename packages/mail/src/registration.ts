@@ -1,4 +1,4 @@
-import type { ProviderDefinition } from "@vivd-catalyst/core";
+import type { ProviderDefinition } from "@work-shape/catalyst-core";
 import { captureMailProvider } from "./adapters/capture";
 import { mailjetMailProvider } from "./adapters/mailjet";
 import type { MailProviderInstance } from "./types";

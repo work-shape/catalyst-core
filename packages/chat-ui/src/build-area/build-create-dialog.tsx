@@ -10,7 +10,7 @@ import {
   Textarea,
   addressOf,
   type NameAndAddress
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import type { CheckName } from "../api/asset-writes";
 import { useTranslation } from "../i18n";
 import type { BuildAssetKind, BuildAssetStart } from "./build-asset-kind";

@@ -1,8 +1,14 @@
 import { createContext, useContext, type MouseEvent } from "react";
 import { ArrowRight, FileText } from "lucide-react";
-import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
-import { DATA_STORE_ASSET_KIND, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
-import { Banner, Button, RegistryIcon, TextLink, type GenericIconKey } from "@vivd-catalyst/ui";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
+import { DATA_STORE_ASSET_KIND, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
+import {
+  Banner,
+  Button,
+  RegistryIcon,
+  TextLink,
+  type GenericIconKey
+} from "@work-shape/catalyst-ui";
 import { opensHere } from "../apps/app-header";
 import { AGENT_ASSET_KIND } from "../build-area/build-rights";
 import { useTranslation } from "../i18n";

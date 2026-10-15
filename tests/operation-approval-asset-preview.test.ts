@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { operationRunSchema } from "@vivd-catalyst/api-contract";
-import type { CentralPolicySetting } from "@vivd-catalyst/core";
+import { operationRunSchema } from "@work-shape/catalyst-api-contract";
+import type { CentralPolicySetting } from "@work-shape/catalyst-core";
 import { agent, skill } from "./support/access-instance";
 import { setupNamespaceHolder } from "./support/asset-operations";
 

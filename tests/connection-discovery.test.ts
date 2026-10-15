@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fingerprintOperation } from "@vivd-catalyst/connections";
-import { connectionCallError } from "@vivd-catalyst/core";
+import { fingerprintOperation } from "@work-shape/catalyst-connections";
+import { connectionCallError } from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import {

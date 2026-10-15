@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import postgres from "postgres";
 import { afterAll, expect } from "vitest";
-import { PostgresExecutorError } from "@vivd-catalyst/postgres-connector";
+import { PostgresExecutorError } from "@work-shape/catalyst-postgres-connector";
 import { required } from "./assertions";
 import { beforeAllWithPostgres as beforeAll } from "./postgres-hooks";
 import { fileTestDatabaseUrl } from "./test-database";

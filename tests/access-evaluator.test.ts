@@ -14,7 +14,7 @@ import {
   type AccessResource,
   type PermissionGrant,
   type PersistedAccess
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 const clientInstanceId = asClientInstanceId("evaluator-test");
 const otherClientInstanceId = asClientInstanceId("evaluator-other");

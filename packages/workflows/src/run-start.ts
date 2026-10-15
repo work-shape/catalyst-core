@@ -1,4 +1,4 @@
-import { compileJsonSchema } from "@vivd-catalyst/connections";
+import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   AppError,
   type ClientInstanceId,
@@ -6,7 +6,7 @@ import {
   type PlatformStores,
   type WorkflowRun,
   type WorkflowStep
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { WorkflowDefinitionRevision } from "./definition-source";
 import { jsonBytes, jsonObjectSchema, unstorableTextPaths } from "./json";
 import type { WorkflowRunLimits } from "./limits";

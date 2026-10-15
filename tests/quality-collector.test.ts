@@ -26,7 +26,7 @@ const handler = () => {};
 const project: Record<string, string> = {
   ".gitignore": "node_modules\n",
   "package.json": JSON.stringify({ name: "fixture", private: true, workspaces: ["packages/*"] }),
-  "eslint.config.mjs": `import config from "@vivd-catalyst/quality-config";
+  "eslint.config.mjs": `import config from "@work-shape/catalyst-quality-config";
 export default [...config, { rules: { "catalyst/retired-terms": "error" } }, { files: ["**/warned.ts"], rules: { "no-debugger": "warn" } }];
 `,
   "knip.json": JSON.stringify({
@@ -526,7 +526,7 @@ function measure(target: string, place: "file" | "scope" = "file") {
 beforeAll(() => {
   directory = realpathSync(mkdtempSync(join(tmpdir(), "catalyst-quality-")));
   write(project);
-  link(qualityConfig, "node_modules/@vivd-catalyst/quality-config");
+  link(qualityConfig, "node_modules/@work-shape/catalyst-quality-config");
   link(join(directory, "packages/beta"), "node_modules/@fixture/beta");
   expect(spawnSync("git", ["init", "--quiet"], { cwd: directory }).status).toBe(0);
 });

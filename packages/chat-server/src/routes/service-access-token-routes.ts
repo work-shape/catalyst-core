@@ -1,11 +1,11 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { extractApiKey } from "@vivd-catalyst/auth";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { extractApiKey } from "@work-shape/catalyst-auth";
 import {
   AppError,
   auditActorFromServicePrincipal,
   auditActorFromUser,
   isAuthenticatedServicePrincipal
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 

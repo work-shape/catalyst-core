@@ -48,7 +48,7 @@ import {
   type PolicySource,
   type ToolExecutionResult,
   type ConversationId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { failureLogFields } from "./tool-failure-log";
 

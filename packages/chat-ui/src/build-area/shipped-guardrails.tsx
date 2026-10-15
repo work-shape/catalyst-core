@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import type { ShippedGuardrailView } from "@vivd-catalyst/api-client";
-import { Badge, Chip, ConfirmDialog, InlineError, Switch } from "@vivd-catalyst/ui";
+import type { ShippedGuardrailView } from "@work-shape/catalyst-api-client";
+import { Badge, Chip, ConfirmDialog, InlineError, Switch } from "@work-shape/catalyst-ui";
 import { formatMomentShort } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import type { BuildListLead, BuildListLeadFilter, BuildListLeadRow } from "./build-asset-kind";

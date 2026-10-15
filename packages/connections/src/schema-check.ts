@@ -4,7 +4,7 @@ import {
   connectionCallReasonOf,
   type ConnectionCallReason,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   JSON_SCHEMA_WORKER_ROLE,

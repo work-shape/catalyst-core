@@ -15,7 +15,7 @@ import type {
   ConnectionHealth,
   JsonValue,
   SecretSource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { configAssets } from "./configAssets";
 
 const bytes = customType<{ data: Uint8Array; driverData: Uint8Array }>({

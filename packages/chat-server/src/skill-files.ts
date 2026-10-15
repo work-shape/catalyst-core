@@ -7,7 +7,7 @@ import {
   SkillMarkdownError,
   type SkillConfig,
   type SkillFileEntry
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import { z } from "zod";
 import {
   AppError,
@@ -15,7 +15,7 @@ import {
   fileSetPathIssue,
   type FileSet,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // A skill as a folder of files, as the public skill convention has it: `SKILL.md`, and
 // whatever lies beside it, commonly below `references/`, `scripts/` and `assets/`. A folder

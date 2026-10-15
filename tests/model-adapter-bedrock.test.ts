@@ -1,12 +1,12 @@
 import { crc32 } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError } from "@work-shape/catalyst-core";
 import {
   ModelProviderError,
   type ModelAdapter,
   type ModelMessage,
   type ModelTool
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import {
   BEDROCK_TEST_ACCOUNT_ID,
   answerWith,

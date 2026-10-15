@@ -4,9 +4,9 @@ import {
   type ConnectorTypeDefinition,
   type JobWorker,
   type StructuredDataPublicationReviewer
-} from "@vivd-catalyst/core";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import type { ToolAssemblyDefinition } from "@work-shape/catalyst-tool-sdk";
 import { createClientInstanceExecutionAssembly } from "./app";
 import type { ClientInstanceCapability } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";

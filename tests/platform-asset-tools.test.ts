@@ -1,4 +1,4 @@
-import { PLATFORM_TOOL_NAMES } from "@vivd-catalyst/client-assembly";
+import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
 import type { ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -12,7 +12,7 @@ import {
   asConversationId,
   readToolResultMetadata,
   asUserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { waitUntil } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";

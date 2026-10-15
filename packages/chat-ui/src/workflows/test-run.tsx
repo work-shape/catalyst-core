@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ApiError } from "@vivd-catalyst/api-client";
+import { ApiError } from "@work-shape/catalyst-api-client";
 import { instanceSentence, readRefusalDetails } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
 import type { StartRefusalIssue } from "./start-form";

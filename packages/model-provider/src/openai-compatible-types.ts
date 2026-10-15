@@ -1,4 +1,4 @@
-import type { JsonObject, ReasoningEffortConfig } from "@vivd-catalyst/core";
+import type { JsonObject, ReasoningEffortConfig } from "@work-shape/catalyst-core";
 
 export interface OpenAiCompatibleUsage {
   prompt_tokens: number;

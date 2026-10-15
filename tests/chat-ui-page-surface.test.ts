@@ -4,9 +4,9 @@ import {
   APP_BRIDGE_VERSION,
   appBridgeHostMessageSchema,
   type AppBridgeContext
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   changedSourcePaths,
   contextMessage,
@@ -26,7 +26,7 @@ import {
   themeMessage,
   type ArrivedMessage,
   type PageSave
-} from "@vivd-catalyst/chat-ui/pages";
+} from "@work-shape/catalyst-chat-ui/pages";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // A Page built in chat shows beside the conversation. These tests hold the rules of that

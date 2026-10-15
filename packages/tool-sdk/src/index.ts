@@ -11,7 +11,7 @@ import type {
   ToolPermissionPolicy,
   ToolPresentation,
   ToolRuntimeContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * A tool an agent can call. `title`, `summary`, `group` and `icon` are for people: the agent page

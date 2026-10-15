@@ -4,8 +4,8 @@ import {
   createProvider,
   type ModelBindingConfig,
   type ModelProviderConfig
-} from "@vivd-catalyst/core";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-core";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   MODEL_EMBEDDING_MAX_TEXTS_PER_CALL,
   ModelProviderError,
@@ -16,8 +16,8 @@ import {
   type ModelAdapterEmbeddingRequest,
   type ModelCallGovernance,
   type ModelEmbeddingCall
-} from "@vivd-catalyst/model-provider";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-model-provider";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { advanceFakeClockUntilSettled } from "./support/fake-clock";
 import { createFakeSecrets } from "./support/fixtures";
 import {

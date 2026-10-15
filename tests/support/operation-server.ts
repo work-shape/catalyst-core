@@ -1,4 +1,4 @@
-import { apiErrorResponseSchema } from "@vivd-catalyst/api-contract";
+import { apiErrorResponseSchema } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   StoreBackedAuditRecorder,
@@ -10,7 +10,7 @@ import {
   type OperationRun,
   type PlatformEventEmitter,
   type PlatformEventName
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig } from "./fixtures";
 import { registeredTestOperations as operations } from "./operations";
 import { asCaller, createCallerAuthAdapter, type TestCaller } from "./route-callers";

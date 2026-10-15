@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPlatformId, type CentralPolicySetting } from "@vivd-catalyst/core";
+import { createPlatformId, type CentralPolicySetting } from "@work-shape/catalyst-core";
 import { approvalSetting, errorOf, fixture, HOUR_MS } from "./support/operation-approval";
 import { getTestJobs } from "./support/test-instance";
 

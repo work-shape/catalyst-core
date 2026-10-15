@@ -4,8 +4,8 @@ import {
   BODY_TOO_LARGE_REASON,
   INVALID_JSON_BODY_REASON,
   UNKNOWN_OPERATION_REASON
-} from "@vivd-catalyst/api-contract";
-import { AppError, isAppError, toErrorEnvelope } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-contract";
+import { AppError, isAppError, toErrorEnvelope } from "@work-shape/catalyst-core";
 
 const catalogRoutes = Object.values(apiOperations).map((operation) => ({
   method: operation.method,

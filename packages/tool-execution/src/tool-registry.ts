@@ -3,8 +3,8 @@ import {
   DATA_TOOL_PREFIXES,
   type ModuleSnapshot,
   type ToolDescriptor
-} from "@vivd-catalyst/core";
-import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 
 export interface ToolRegistryOptions {
   tools: AnyToolDefinition[];

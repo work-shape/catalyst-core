@@ -25,7 +25,7 @@ import {
   asUserId,
   createPlatformId,
   subjectRowLeaseOwnerId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
 import { withdrawUnclaimedWorkspaceCommandsOfRuns } from "./postgres-execution-workspace-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";

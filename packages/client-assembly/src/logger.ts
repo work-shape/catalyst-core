@@ -1,5 +1,5 @@
 import pino from "pino";
-import { LOG_REDACTION, type Logger } from "@vivd-catalyst/core";
+import { LOG_REDACTION, type Logger } from "@work-shape/catalyst-core";
 
 const REDACTED = "[REDACTED]";
 const TRUNCATED = "[TRUNCATED]";

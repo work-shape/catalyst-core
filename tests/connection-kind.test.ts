@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
-import { connectionConfigSchema, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import {
+  connectionConfigSchema,
+  parseClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import {
   CONNECTION_MAX_ACCEPTED_OPERATIONS,
   asClientInstanceId,
@@ -9,7 +12,7 @@ import {
   createConnectorTypeRegistry,
   findConnectorTypeIssues,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { agent, clientInstanceId, errorSchema } from "./support/access-instance";
 import { assetPageSchema } from "./support/asset-operations";
 import {

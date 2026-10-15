@@ -3,8 +3,8 @@ import {
   createApiClient,
   signInForSessionFetch,
   type ApiClientOptions
-} from "@vivd-catalyst/api-client";
-import { API_KEY_ENV_NAME, writeApiKeyToEnvFile } from "@vivd-catalyst/client-assembly";
+} from "@work-shape/catalyst-api-client";
+import { API_KEY_ENV_NAME, writeApiKeyToEnvFile } from "@work-shape/catalyst-client-assembly";
 import {
   ApiKeyExchangeError,
   canonicalizeAgentConfig,
@@ -13,12 +13,12 @@ import {
   readManifest,
   readWorkingCopy
 } from "@work-shape/catalyst-cli";
-import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
+import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
 import {
   createEnvironmentSecretResolver,
   resolveOptionalSecret,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   CONNECTIONS_MODULE,
   CONNECTION_KIND,

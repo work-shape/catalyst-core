@@ -1,5 +1,5 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { projectAuditActivities } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { projectAuditActivities } from "@work-shape/catalyst-core";
 import { recordGovernanceAccess } from "../governance-actions";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";

@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { createApiClient, type ApiClient } from "@vivd-catalyst/api-client";
+import { createApiClient, type ApiClient } from "@work-shape/catalyst-api-client";
 
 interface WorkspaceApiClientContextValue {
   apiBaseUrl: string;

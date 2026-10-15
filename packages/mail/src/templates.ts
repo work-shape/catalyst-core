@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/core";
+import type { LocaleCode } from "@work-shape/catalyst-core";
 import type { MailMessage, MailSenderIdentity, MailTemplate, RenderedMail } from "./types";
 
 interface MailCopy {

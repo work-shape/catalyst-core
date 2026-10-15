@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/agent-runtime",
+  "name": "@work-shape/catalyst-agent-runtime",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/agent-runtime"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,8 +34,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/model-provider": "workspace:*"
+    "@work-shape/catalyst-core": "workspace:*",
+    "@work-shape/catalyst-model-provider": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.1",

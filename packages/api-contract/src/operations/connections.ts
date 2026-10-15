@@ -3,7 +3,7 @@ import {
   CONNECTION_HEALTH_STATES,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { timestampSchema } from "../shared";
 import { defineRegisteredOperation, json } from "./define-operation";

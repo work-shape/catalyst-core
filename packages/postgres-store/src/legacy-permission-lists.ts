@@ -8,7 +8,7 @@ import {
   legacyPermissionList,
   type ClientInstanceId,
   type PermissionGrant
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { lockRights } from "./rights-lock";
 import { permissionGrants } from "./schema";

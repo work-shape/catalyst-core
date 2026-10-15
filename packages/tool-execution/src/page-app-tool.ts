@@ -6,8 +6,8 @@ import {
   type OperationBeforeEvent,
   type PolicyValue,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
-import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 
 // A Page becoming an App from the conversation it was built in, and the saves of that Page
 // that follow: they write the App's draft. The agent turns the quick Page into an App when

@@ -1,4 +1,4 @@
-import config from "@vivd-catalyst/quality-config";
+import config from "@work-shape/catalyst-quality-config";
 
 export default [
   ...config,

@@ -13,7 +13,7 @@ import {
   type PersonalApiKeyRecord,
   type PersonalApiKeyStore,
   type ResolvedPersonalApiKey
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
 import type { PostgresConnection } from "./postgres-database";
 import { mapPersonalApiKey } from "./rows";

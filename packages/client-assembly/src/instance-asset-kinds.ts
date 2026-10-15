@@ -5,8 +5,8 @@ import {
   createGuardrailAssetKind,
   createSkillAssetKind,
   type WorkflowAssetKind
-} from "@vivd-catalyst/chat-server";
-import { createAssetKindRegistry, type ModuleSnapshot } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-server";
+import { createAssetKindRegistry, type ModuleSnapshot } from "@work-shape/catalyst-core";
 import type { InstanceConnections } from "./connections";
 
 /**

@@ -17,11 +17,11 @@ import {
   treeRefusal,
   type AssetRepoRefusal,
   type CommitFolderRequest
-} from "@vivd-catalyst/asset-repo";
+} from "@work-shape/catalyst-asset-repo";
 import {
   DEFAULT_WORKSPACE_COMMAND_PATH,
   type WorkspaceCommandProcessExecutor
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
 import { removeStalePageBuilds } from "./page-build-sandbox";
 

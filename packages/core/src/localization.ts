@@ -2,7 +2,7 @@ import {
   localeCodes,
   type LocaleCode,
   type LocalizedStringConfig
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 
 export { localeCodes, type LocaleCode, type LocalizedStringConfig };
 

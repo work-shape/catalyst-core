@@ -6,8 +6,8 @@ import {
   type AgentRun,
   type Conversation,
   type CreateConversationInput
-} from "@vivd-catalyst/core";
-import type { PostgresStores } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import type { PostgresStores } from "@work-shape/catalyst-postgres-store";
 import { fileTestDatabaseUrl } from "./test-database";
 
 type TestConversationInput = Omit<

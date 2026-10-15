@@ -1,9 +1,9 @@
-import type { AgentRunProjection, Message } from "@vivd-catalyst/api-client";
+import type { AgentRunProjection, Message } from "@work-shape/catalyst-api-client";
 import {
   readAssistantFinalMetadata,
   readAssistantModelContextSnapshot,
   readAssistantToolCallsMetadata
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 const APPROXIMATE_CHARACTERS_PER_TOKEN = 4;
 const APPROXIMATE_MESSAGE_OVERHEAD_TOKENS = 4;

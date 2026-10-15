@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPlatformId, workflowStepIdempotencyKey } from "@vivd-catalyst/core";
+import { createPlatformId, workflowStepIdempotencyKey } from "@work-shape/catalyst-core";
 import { change, createServer, person } from "./support/operation-server";
 
 // The key of a step's changing call, held against what an Operation Run does with a key.

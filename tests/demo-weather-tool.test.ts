@@ -8,8 +8,8 @@ import {
   type LocaleCode,
   type ToolExecutionContext,
   type ToolExecutionResult
-} from "@vivd-catalyst/core";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
 import { weatherForecastTool } from "../clients/demo/tools/weather-forecast";
 import { createTestToolRunner } from "./support/tool-runner";
 

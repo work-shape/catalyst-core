@@ -1,4 +1,4 @@
-import { createEnvironmentSecrets } from "@vivd-catalyst/client-assembly";
+import { createEnvironmentSecrets } from "@work-shape/catalyst-client-assembly";
 
 /** The environment of the sample MCP server. The key is taken from the secret resolver. */
 export function readSampleMcpEnvironment() {

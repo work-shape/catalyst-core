@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, inject, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 import { z } from "zod";
-import { SERVICE_PRINCIPAL_NAME_PATTERN } from "@vivd-catalyst/core";
+import { SERVICE_PRINCIPAL_NAME_PATTERN } from "@work-shape/catalyst-core";
 
 const fixtures = new PostgresFixtures(inject("postgresFixturePrefix"));
 const migrationsDirectory = resolve("packages/postgres-store/migrations");

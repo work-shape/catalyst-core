@@ -4,7 +4,7 @@ import type {
   KnowledgeBaseState,
   Logger,
   PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { knowledgeTargetOf, type KnowledgeBaseDefinition } from "./definition";
 
 /** What everything that serves Knowledge Bases in one process is built on. */

@@ -5,7 +5,7 @@ import {
   type ConversationId,
   type PlatformStores,
   type UserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   attemptConversationDataCleanup,
   type ConversationDataCleanupOutcome,

@@ -1,10 +1,10 @@
-import { APP_ASSET_KIND, type AppActionPermission } from "@vivd-catalyst/api-contract";
+import { APP_ASSET_KIND, type AppActionPermission } from "@work-shape/catalyst-api-contract";
 import {
   appActionInputAsZod,
   compiledActionsOf,
   declaredDataStoresOf,
   type CompiledAppAction
-} from "@vivd-catalyst/app-build";
+} from "@work-shape/catalyst-app-build";
 import {
   APP_ACTION_OPERATION_PREFIX,
   AppError,
@@ -33,7 +33,7 @@ import {
   type OperationSource,
   type PolicyDefaults,
   type PolicyValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { decide } from "../asset-access";
 import { appActionBinding, type AppActionOwner } from "./action-kinds";

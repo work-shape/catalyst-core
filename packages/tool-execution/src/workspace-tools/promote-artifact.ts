@@ -1,7 +1,7 @@
 import { posix as path } from "node:path";
 import type { z } from "zod";
-import type { ToolExecutionContext, ToolHandlerResult } from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import type { ToolExecutionContext, ToolHandlerResult } from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { promoteWorkspaceFile } from "../workspace-artifact-promotion";
 import {
   workspacePromoteArtifactInputSchema,

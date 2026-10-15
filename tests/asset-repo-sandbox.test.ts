@@ -3,13 +3,13 @@ import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createSandboxAssetRepo, type AssetRepoCommitOutcome } from "@vivd-catalyst/chat-server";
-import { ASSET_REPO_MAX_TREE_BYTES } from "@vivd-catalyst/asset-repo";
+import { createSandboxAssetRepo, type AssetRepoCommitOutcome } from "@work-shape/catalyst-server";
+import { ASSET_REPO_MAX_TREE_BYTES } from "@work-shape/catalyst-asset-repo";
 import {
   DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandProcessExecutor,
   type WorkspaceCommandProcessExecutor
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { assetRepoCommandFromSource } from "./support/asset-repo";
 
 // A commit to the repository of an asset is made by a command in the sandbox, and what the

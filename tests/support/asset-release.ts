@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ConfigAssetRecord, UserRecord } from "@vivd-catalyst/core";
+import type { ConfigAssetRecord, UserRecord } from "@work-shape/catalyst-core";
 import {
   SCOPES_HEADER,
   SERVICE_HEADER,

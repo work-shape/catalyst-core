@@ -10,7 +10,7 @@ import {
   hasPermission,
   legacyPermissionFor,
   resolveEffectivePermissions
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 describe("permissions", () => {
   it("maps each action a legacy key names to exactly one of the nine legacy keys", () => {

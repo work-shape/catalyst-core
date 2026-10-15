@@ -1,7 +1,7 @@
 import { AttachmentPrimitive, useAuiState } from "@assistant-ui/react";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { cn, Spinner } from "@vivd-catalyst/ui";
+import { cn, Spinner } from "@work-shape/catalyst-ui";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
 import { useOpenConversationFile } from "./conversation-file-presentation";
 import { resolveFileType } from "./file-type";

@@ -1,5 +1,5 @@
-import { CATALYST_INTERNAL_AGENT_PROMPT } from "@vivd-catalyst/agent-runtime";
-import type { PlatformInstructions } from "@vivd-catalyst/chat-server";
+import { CATALYST_INTERNAL_AGENT_PROMPT } from "@work-shape/catalyst-agent-runtime";
+import type { PlatformInstructions } from "@work-shape/catalyst-server";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
   PAGE_SAVE_AS_APP_TOOL_NAME,
@@ -8,7 +8,7 @@ import {
   PLATFORM_ASSET_TOOL_NAMES,
   PLATFORM_DISCOVERY_TOOLS,
   PLATFORM_DISCOVERY_TOOL_NAMES
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { PLATFORM_DOCS_SKILL_NAME } from "./platform-docs-skill";
 
 // How the platform works, for an agent that holds the platform's tools: a section of its system

@@ -12,10 +12,10 @@ import {
   asClientInstanceId,
   createAssistantFinalMetadata,
   createPlatformId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { toolSuccess } from "@vivd-catalyst/tool-sdk";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { eventually } from "./support/assertions";
 import { createTestConfig, createTestUser } from "./support/fixtures";
 import { createHeldModel, HELD_MODEL_PROVIDER } from "./support/held-model";

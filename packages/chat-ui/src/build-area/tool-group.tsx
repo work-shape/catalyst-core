@@ -6,7 +6,7 @@ import {
   Disclosure,
   DisclosureContent,
   DisclosureTrigger
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 
 // What every source of tools in an agent's Tools section is built from: a folding sub-group

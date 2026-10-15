@@ -7,13 +7,13 @@ import {
   type AppActionCallResult,
   type AppActionPermission,
   type AppWorkflowRun
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   appActionInputAsZod,
   compiledActionsOf,
   declaredDataStoresOf,
   type CompiledAppAction
-} from "@vivd-catalyst/app-build";
+} from "@work-shape/catalyst-app-build";
 import {
   APP_ACTION_CALLS_PER_MINUTE_PER_SESSION,
   APP_ACTION_INPUT_MAX_BYTES,
@@ -38,8 +38,8 @@ import {
   type OperationOrigin,
   type OperationResult,
   type ServedFileSet
-} from "@vivd-catalyst/core";
-import { runOperation, type OperationOutcome } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
 import { appContentView, checkAppContentToken } from "../app-content";
 import { mayOpenAssetFileSet } from "../asset-access";

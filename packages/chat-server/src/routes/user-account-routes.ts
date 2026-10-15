@@ -1,5 +1,5 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { asUserId, getSubjectUserId, allowedLegacyPermissions } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { asUserId, getSubjectUserId, allowedLegacyPermissions } from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
 import { deletionAnswer } from "./deletion-answer";
 import { resolveRequestLocale } from "../request-context";

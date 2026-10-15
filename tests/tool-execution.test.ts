@@ -9,14 +9,14 @@ import {
   type AuditRecorder,
   type ToolExecutionContext,
   type ToolExecutionRequest
-} from "@vivd-catalyst/core";
-import { createOperationRegistry } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
+import { createOperationRegistry } from "@work-shape/catalyst-core";
 import {
   registerToolOperations,
   ToolRegistry,
   type OperationApprovalRequests
-} from "@vivd-catalyst/tool-execution";
-import { defineTool, toolFailed, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-tool-execution";
+import { defineTool, toolFailed, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { createMemoryOperationRunStore } from "./support/memory-operation-runs";
 import {
   createTestToolRunner,

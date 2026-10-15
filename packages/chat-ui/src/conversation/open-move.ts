@@ -1,4 +1,4 @@
-import type { Message } from "@vivd-catalyst/api-client";
+import type { Message } from "@work-shape/catalyst-api-client";
 import { readCompatibleMessageRunId } from "../assistant/assistant-message-compat";
 import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import { routeConversationId } from "../workspace/workspace-route";

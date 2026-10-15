@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Banner, cn } from "@vivd-catalyst/ui";
+import { Banner, cn } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import {
   SKILL_ROOT_TARGET,

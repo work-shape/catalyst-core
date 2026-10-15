@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   findModelToolMaterializationIssues,
   materializeModelTools
-} from "@vivd-catalyst/agent-runtime";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-agent-runtime";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   asAgentRunId,
@@ -11,12 +11,12 @@ import {
   asConversationId,
   type AgentConfig,
   type WebAccessConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createModelGateway,
   type ModelAdapterRequest,
   type ModelNativeToolId
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import {
   ALL_MODEL_CAPABILITIES,
   adapterFromFakeProvider,

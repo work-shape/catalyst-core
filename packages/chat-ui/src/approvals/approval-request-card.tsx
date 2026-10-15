@@ -1,6 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import { useId, useState, type FormEvent, type ReactNode } from "react";
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   Button,
   Card,
@@ -10,7 +10,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useTranslation } from "../i18n";
 import { useInboxItemActions, type InboxItemActions } from "../inbox/inbox-item-actions";

@@ -5,13 +5,13 @@ import {
   type StructuredDataFieldSource,
   type StructuredDataPublicationReviewer,
   type StructuredDataState
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   defineTool,
   toolFailed,
   toolSuccess,
   type AnyToolDefinition
-} from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-tool-sdk";
 import {
   structuredDataPublishInputSchema,
   structuredDataPublishOutputSchema,

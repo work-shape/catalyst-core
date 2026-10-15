@@ -1,7 +1,7 @@
 import { createElement } from "react";
-import type { SafeConfig } from "@vivd-catalyst/api-client";
+import type { SafeConfig } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { AgentsPage } from "@vivd-catalyst/chat-ui/agents";
+import { AgentsPage } from "@work-shape/catalyst-chat-ui/agents";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // Verifier's test for CARD-1 (PR 53, round 2). A card's target is named by `aria-label`, which

@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-catalyst/core";
+import { AppError } from "@work-shape/catalyst-core";
 import { ModelProviderError } from "./model-provider-error";
 
 // Protects a call from a provider's server error or dropped connection: the wait before the

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { PageBuildResult } from "@vivd-catalyst/app-build";
-import { buildPage } from "@vivd-catalyst/app-build/build";
+import type { PageBuildResult } from "@work-shape/catalyst-app-build";
+import { buildPage } from "@work-shape/catalyst-app-build/build";
 import { pageFiles } from "./support/page-build";
 
 // The keys a coming part of Apps will give a meaning: `rights` and `requires` at the top of the

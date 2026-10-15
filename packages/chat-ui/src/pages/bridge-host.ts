@@ -7,7 +7,7 @@ import {
   type AppBridgeContext,
   type AppBridgeHostMessage,
   type AppBridgePageMessage
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import type { FrameCallAnswer, FrameCalls, FrameWorkflowRunAnswer } from "./frame-calls";
 
 // The interface's side of the bridge to a Page. A Page is code an agent wrote, running in a

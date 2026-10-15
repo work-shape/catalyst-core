@@ -7,7 +7,7 @@ import {
   createLogger,
   resolveInstanceModules,
   type CreateClientInstanceAppInput
-} from "@vivd-catalyst/client-assembly";
+} from "@work-shape/catalyst-client-assembly";
 import {
   createChatServer,
   createAgentAssetKind,
@@ -18,9 +18,9 @@ import {
   type ChatServerJobOptions,
   type ChatServerOptions,
   type OperationCalls
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import { frameworkBehind } from "../../packages/chat-server/src/http/framework";
-import { buildApiPath, operationPathParamNames } from "@vivd-catalyst/api-contract";
+import { buildApiPath, operationPathParamNames } from "@work-shape/catalyst-api-contract";
 import {
   asClientInstanceId,
   createAssetKindRegistry,
@@ -30,13 +30,13 @@ import {
   type HttpRuntime,
   type JobWorker,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createStaticConfigAssetSource } from "./static-config-asset-source";
-import { createPostgresStores, type PostgresStores } from "@vivd-catalyst/postgres-store";
+import { createPostgresStores, type PostgresStores } from "@work-shape/catalyst-postgres-store";
 import { fileTestDatabaseUrl, closeFileTestDatabase, resetFileTestDatabase } from "./test-database";
 import { addTestStoreHelpers, type TestStore } from "./test-store";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { testOperations, type TestOperationName, type TestCallInput } from "./operations";
 import { createTestConfig, seedTestAssets } from "./fixtures";
 import { createScriptedInstanceModelGateway, type ScriptedModelProvider } from "./model-gateway";
@@ -726,7 +726,7 @@ export async function rejectInvalidOrigins(
 export function fetchTestOperation(
   baseUrl: string,
   operation: TestOperationName,
-  input: import("@vivd-catalyst/api-contract").BuildApiPathOptions & RequestInit = {}
+  input: import("@work-shape/catalyst-api-contract").BuildApiPathOptions & RequestInit = {}
 ): Promise<Response> {
   const { params, query, ...request } = input;
   const descriptor = testOperations[operation];

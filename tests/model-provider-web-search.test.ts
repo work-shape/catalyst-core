@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { asClientInstanceId, type RuntimeCallContext } from "@vivd-catalyst/core";
+import { asClientInstanceId, type RuntimeCallContext } from "@work-shape/catalyst-core";
 import {
   OpenAiCompatibleChatProvider,
   type ModelAdapterStreamEvent
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 
 const OPENAI_WEB_SEARCH_TOOL = {
   kind: "provider",

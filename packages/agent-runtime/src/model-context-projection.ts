@@ -12,7 +12,7 @@ import {
   readToolResultMetadata as readAgentRuntimeToolResultMetadata,
   readUserMessageMetadata,
   unknownToJsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   AttachmentManifest,
   AttachmentManifestEntry,
@@ -23,13 +23,13 @@ import type {
   ManagedFileId,
   SupportedImageMimeType,
   ToolExecutionResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   ModelContent,
   ModelContentPart,
   ModelMessage,
   ModelToolCall
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import {
   projectModelVisibleArtifacts,
   summarizeModelVisibleArtifactsNotLoaded,
@@ -46,12 +46,12 @@ export {
   readAssistantProviderContinuation,
   unknownToJsonValue
 };
-export type { StoredReasoningSummary } from "@vivd-catalyst/core";
+export type { StoredReasoningSummary } from "@work-shape/catalyst-core";
 
 const CHARS_PER_TOKEN = 4;
 
 export interface ModelContextProjectionOptions {
-  logger?: import("@vivd-catalyst/core").Logger;
+  logger?: import("@work-shape/catalyst-core").Logger;
   toolOutput: {
     maxTokens: number;
     maxBytes?: number;

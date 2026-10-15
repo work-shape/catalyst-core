@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   StartDialog,
   WorkflowPageView,
@@ -20,7 +20,7 @@ import {
   toWorkflowStepRun,
   type WorkflowRunList,
   type WorkflowRunRead
-} from "@vivd-catalyst/chat-ui/workflows";
+} from "@work-shape/catalyst-chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The screens of the Workflows area, each state from fixtures built here and taken through the

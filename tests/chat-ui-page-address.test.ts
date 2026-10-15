@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "@vivd-catalyst/api-client";
+import { ApiError } from "@work-shape/catalyst-api-client";
 import {
   heldPageAddress,
   keepPageAddress,
@@ -10,7 +10,7 @@ import {
   pageAddressRetryDelay,
   pageAddressToShow,
   type PageAddressState
-} from "@vivd-catalyst/chat-ui/pages";
+} from "@work-shape/catalyst-chat-ui/pages";
 
 // The address of a Page holds a token that serves for an hour. A preview that stays open asks
 // for the next address before that hour ends, and moves its frame only when the address it

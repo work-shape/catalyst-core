@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ApiClient } from "@vivd-catalyst/api-client";
+import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { apiErrorCode } from "../workspace-utils";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";

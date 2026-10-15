@@ -3,9 +3,9 @@ import {
   APP_BRIDGE_MARK,
   APP_BRIDGE_VERSION,
   type AppBridgeContext
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import { describe, expect, it } from "vitest";
-import { ApiError } from "@vivd-catalyst/api-client";
+import { ApiError } from "@work-shape/catalyst-api-client";
 import {
   callResultMessage,
   contextMessage,
@@ -16,7 +16,7 @@ import {
   frameSessionProof,
   type ArrivedMessage,
   type FrameCalls
-} from "@vivd-catalyst/chat-ui/pages";
+} from "@work-shape/catalyst-chat-ui/pages";
 
 // The calls a Page asks the interface to make: what the bridge does with a call message, and
 // how the interface names the frame to the instance.

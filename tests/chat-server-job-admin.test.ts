@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { apiErrorResponseSchema } from "@vivd-catalyst/api-contract";
+import { apiErrorResponseSchema } from "@work-shape/catalyst-api-contract";
 import {
   StoreBackedAuditRecorder,
   asClientInstanceId,
   defineJobKind,
   legacyPermissionFor,
   type JobRetry
-} from "@vivd-catalyst/core";
-import { runWorkspaceCommandJob } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runWorkspaceCommandJob } from "@work-shape/catalyst-tool-execution";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
 import { withTestSql as withSql } from "./support/test-sql";
 import { createTestInstanceWith, getTestJobs } from "./support/test-instance";

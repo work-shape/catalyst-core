@@ -119,12 +119,12 @@ function kitFiles(current) {
       pluginBuild.onResolve({ filter: new RegExp("^@tanstack/react-router$") }, () =>
         external("router.js")
       );
-      pluginBuild.onResolve({ filter: new RegExp("^@vivd-catalyst/ui$") }, () =>
+      pluginBuild.onResolve({ filter: new RegExp("^@work-shape/catalyst-ui$") }, () =>
         current === "ui.js" ? { path: UI_ENTRY } : external("ui.js")
       );
       // The token mapping, from its source like the library itself, and inside the file that
       // imports it: it is a few lines, and `ui.js` would bring every component with it.
-      pluginBuild.onResolve({ filter: new RegExp("^@vivd-catalyst/ui/theme$") }, () => ({
+      pluginBuild.onResolve({ filter: new RegExp("^@work-shape/catalyst-ui/theme$") }, () => ({
         path: UI_THEME_ENTRY
       }));
       pluginBuild.onResolve({ filter: new RegExp("chart-engine$") }, (args) =>

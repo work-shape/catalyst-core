@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HELD_OPERATION_CALLS_PER_ACTOR } from "@vivd-catalyst/chat-server";
+import { HELD_OPERATION_CALLS_PER_ACTOR } from "@work-shape/catalyst-server";
 import { errorOf, fixture, HOUR_MS } from "./support/operation-approval";
 
 // What a held call keeps of its input and how many calls may wait. Every test here fails

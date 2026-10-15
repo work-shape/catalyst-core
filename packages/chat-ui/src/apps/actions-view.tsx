@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { AppAction } from "@vivd-catalyst/api-client";
+import type { AppAction } from "@work-shape/catalyst-api-client";
 import {
   Button,
   EmptyState,
@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
   TargetBadge
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
 import { apiErrorCode } from "../workspace-utils";

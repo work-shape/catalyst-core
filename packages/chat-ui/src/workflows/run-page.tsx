@@ -10,7 +10,7 @@ import {
   PageHeader,
   PageLead,
   TextLink
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { formatMoment, formatTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";

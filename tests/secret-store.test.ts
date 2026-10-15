@@ -9,7 +9,7 @@ import {
   loadSecretKeyring,
   secretAssociatedData,
   type SecretKeyring
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   AppError,
   SHARED_CREDENTIAL_SUBJECT,
@@ -17,7 +17,7 @@ import {
   asClientInstanceId,
   type SecretBinding,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { barrier, required } from "./support/assertions";
 import { connection } from "./support/connections";
 import {

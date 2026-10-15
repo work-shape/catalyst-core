@@ -1,6 +1,6 @@
 import { CircleHelp, MessageSquare } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   Banner,
   Button,
@@ -13,7 +13,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
   APPROVAL_AUTH_SCOPE,

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createPlatformAssetCalls, type ChatServerOptions } from "@vivd-catalyst/chat-server";
+import { createPlatformAssetCalls, type ChatServerOptions } from "@work-shape/catalyst-server";
 import {
   PAGE_FILE_SET_HELD_KEY,
   asAgentRunId,
@@ -12,17 +12,17 @@ import {
   isPageId,
   type ToolExecutionContext,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   ToolRegistry,
   createPageSaveAsAppTool,
   createToolOperationRunner,
   registerToolOperations
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { IBAN, guardedEvents, ibanPattern, noIban } from "./support/guardrails";
-import type { ReleaseGuardrailConfig } from "@vivd-catalyst/config-schema";
+import type { ReleaseGuardrailConfig } from "@work-shape/catalyst-config-schema";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { getTestJobs, testServerOptions } from "./support/test-instance";
 

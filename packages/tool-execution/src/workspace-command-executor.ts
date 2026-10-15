@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir } from "node:fs/promises";
-import type { WorkspaceCommand } from "@vivd-catalyst/core";
+import type { WorkspaceCommand } from "@work-shape/catalyst-core";
 
 export const DEFAULT_WORKSPACE_COMMAND_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 export const DEFAULT_WORKSPACE_COMMAND_SHELL = "/bin/bash";
@@ -301,7 +301,7 @@ function signalNumber(signal: NodeJS.Signals): number {
   }
 }
 
-declare module "@vivd-catalyst/core" {
+declare module "@work-shape/catalyst-core" {
   /** What the `sandbox` port creates. */
   interface ProviderInstances {
     sandbox: WorkspaceCommandProcessExecutor;

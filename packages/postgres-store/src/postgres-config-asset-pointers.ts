@@ -5,7 +5,7 @@ import {
   type ClientInstanceId,
   type ConfigAssetStore,
   type FileSetId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { sweepAssetRepoBundlesOf } from "./postgres-asset-repo-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import type { ConfigAssetRow } from "./rows";

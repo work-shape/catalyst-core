@@ -33,7 +33,7 @@ import type {
   WorkflowStepRunId,
   WorkflowStepRunStatus,
   WorkflowTriggerKind
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * One row per run of a Workflow. It keeps the definition it executes and the id of that

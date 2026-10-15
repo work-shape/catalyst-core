@@ -10,7 +10,7 @@ import {
   type WorkspaceInDeletion,
   type WorkspaceMembership,
   type WorkspaceAccessRequest
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   addMembership as addPostgresMembership,
   createAccessRequest as createPostgresAccessRequest,

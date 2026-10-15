@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import type { AppMode, AppPreviewResponse } from "@vivd-catalyst/api-client";
-import { Button } from "@vivd-catalyst/ui";
+import type { AppMode, AppPreviewResponse } from "@work-shape/catalyst-api-client";
+import { Button } from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useTranslation } from "../i18n";
 import { LivePagePreview, pageFrameAddress, type PreviewRoute } from "../pages/page-surface";

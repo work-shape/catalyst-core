@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/app-build",
+  "name": "@work-shape/catalyst-app-build",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/app-build"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -52,7 +47,7 @@
   },
   "dependencies": {
     "@tanstack/router-generator": "1.167.41",
-    "@vivd-catalyst/core": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
     "esbuild": "0.28.0",
     "parse5": "7.3.0",
     "zod": "^4.4.3"

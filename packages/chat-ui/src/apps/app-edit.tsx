@@ -1,6 +1,6 @@
 import { History, MoreHorizontal, Trash2 } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
-import type { ConfigAssetRevision } from "@vivd-catalyst/api-client";
+import type { ConfigAssetRevision } from "@work-shape/catalyst-api-client";
 import {
   Banner,
   Badge,
@@ -21,7 +21,7 @@ import {
   TabsDisclosure,
   TabsList,
   TabsTrigger
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../i18n";

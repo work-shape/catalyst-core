@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
-import type { OperationRunResource } from "@vivd-catalyst/api-client";
-import { administration } from "@vivd-catalyst/chat-ui/admin";
+import type { OperationRunResource } from "@work-shape/catalyst-api-client";
+import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import {
   defaultOperationRunFilter,
   formatOperationRunDuration,
@@ -13,7 +13,7 @@ import {
   operationRunQuery,
   OperationRunsTable,
   operationRunWorkspaceLabel
-} from "@vivd-catalyst/chat-ui/operations";
+} from "@work-shape/catalyst-chat-ui/operations";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { settingsUser } from "./chat-ui-settings-fixtures";

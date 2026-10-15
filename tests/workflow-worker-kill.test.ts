@@ -3,7 +3,7 @@ import { waitUntil } from "./support/assertions";
 import {
   WORKFLOW_STEP_JOB_HEARTBEAT_MS,
   WORKFLOW_STEP_JOB_LEASE_MS
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { stepRunsSchema } from "./support/workflow-instance";
 import {
   ended,

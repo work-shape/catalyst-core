@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import type { AppBridgeContext } from "@vivd-catalyst/api-client";
+import type { AppBridgeContext } from "@work-shape/catalyst-api-client";
 
 /**
  * What the interface tells a Page about where it runs, apart from the Page itself: who looks at

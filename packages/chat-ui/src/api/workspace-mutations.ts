@@ -14,8 +14,8 @@ import type {
   UpdateServicePrincipalRequest,
   UpdateCurrentUserRequest,
   UpsertAdministeredUserIdentityRequest
-} from "@vivd-catalyst/api-client";
-import { completedOutput, signOut } from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
+import { completedOutput, signOut } from "@work-shape/catalyst-api-client";
 import { apiErrorMessage } from "../workspace-utils";
 import { updateRailConversations } from "./rail-conversations";
 import { workspaceQueryKeys } from "./workspace-query-keys";
