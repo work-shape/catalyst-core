@@ -315,3 +315,122 @@ test("a superadmin gives a service principal a Connection, is refused one that i
     await removeConnection(ledger.id);
   }
 });
+
+test("a principal manager without user administration gives only rights they hold", async ({
+  page,
+  accessState: _accessState,
+  releaseConnections: _releaseConnections
+}) => {
+  test.setTimeout(120_000);
+  const crm: PlantedConnection = {
+    id: `cfga_${randomUUID()}`,
+    name: `e2e_${randomUUID().slice(0, 8)}`,
+    displayName: "Restricted register",
+    url: ALLOWED_URL,
+    authScheme: "none"
+  };
+  let principalId: string | undefined;
+  const manager = {
+    email: "e2e-principal-manager@example.test",
+    password: "e2e-principal-manager-password"
+  };
+  await signIn(page, manager);
+  const person: { id: string } = await (await page.request.get(`${apiBaseUrl}/api/v1/me`)).json();
+  await page.context().clearCookies();
+  await signIn(page, superadmin);
+  try {
+    await plantConnection(crm);
+    const created = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/instance/service-principals`,
+      { data: { displayLabel: "Review automation", permissions: ["config_assets.read"] } }
+    );
+    expect(created.ok()).toBe(true);
+    const detail: { principal: { id: string } } = await created.json();
+    principalId = detail.principal.id;
+    expect(
+      (
+        await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/access/grants`, {
+          data: {
+            holderKind: "user",
+            holderId: person.id,
+            action: "connection.use",
+            effect: "deny",
+            scopeKind: "asset",
+            scopeId: crm.id
+          }
+        })
+      ).ok()
+    ).toBe(true);
+    await page.context().clearCookies();
+    await signIn(page, manager);
+    expect(
+      (
+        await page.request.get(
+          `${apiBaseUrl}/api/v1/instance/access/effective?holderKind=user&holderId=${person.id}`
+        )
+      ).status()
+    ).toBe(200);
+    expect(
+      (
+        await page.request.get(
+          `${apiBaseUrl}/api/v1/instance/access/grants?holderKind=service_principal&holderId=${principalId}`
+        )
+      ).status()
+    ).toBe(200);
+    const refused = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/instance/access/grants`,
+      {
+        data: {
+          holderKind: "service_principal",
+          holderId: principalId,
+          action: "connection.use",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: crm.id
+        }
+      }
+    );
+    expect(refused.status()).toBe(403);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    for (const locale of ["de", "en"]) {
+      await page.goto("/");
+      await page.evaluate(
+        (language) => window.localStorage.setItem("vivd-catalyst:locale", language),
+        locale
+      );
+      await page.goto(`/settings/instance/api-access?principal=${principalId}`);
+      const rights = page.locator("[data-principal-rights]");
+      await expect(rights.getByRole("button").first()).toBeVisible();
+      await rights.getByRole("button").first().click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      await dialog
+        .getByRole("button", { name: locale === "de" ? /^Verbindung:/u : /^Connection:/u })
+        .click();
+      const option = page.getByRole("option", { name: /Restricted register/u });
+      await expect(option).toHaveAttribute("aria-disabled", "true");
+      await expect(option).toContainText(
+        locale === "de"
+          ? "Du hast dieses Recht hier selbst nicht"
+          : "You do not hold this right here yourself"
+      );
+      if (shotsDir) {
+        await mkdir(shotsDir, { recursive: true });
+        await page.screenshot({
+          path: join(shotsDir, `principal-manager-grant-dialog-${locale}-1280.png`),
+          animations: "disabled"
+        });
+      }
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+    }
+  } finally {
+    if (principalId) await removeServicePrincipal(principalId);
+    await removeGrantsOn(crm.id);
+    await removeConnection(crm.id);
+  }
+});

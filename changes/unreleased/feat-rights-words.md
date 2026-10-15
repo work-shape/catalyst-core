@@ -14,8 +14,9 @@ section: Changed
 - **Workspace > Members** says what a member gets and what Builder and Publisher add.
 - **The principal-rights dialog on API access** offers only rights the person holds
   themselves: a Connection they are denied, or hold no right on, stands disabled with the
-  reason. It asks the instance's own evaluator over the person's rights, read where the person
-  may read them (`users.manage`); without that the instance still refuses and names the right.
+  reason. Everyone may read their own effective rights, and principal managers may read
+  principal grants and effective rights without `users.manage`; other people’s rights
+  remain protected. The instance still refuses an unheld grant itself.
   A holder of `api_access.manage` alone is told that the service principals need the right to
   manage them, instead of "No service principals yet".
 - **An agent's page (AGENT-AVAIL-1)** names "Available in" ("Verfügbar in") once, as its

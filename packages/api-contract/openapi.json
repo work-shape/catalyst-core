@@ -9191,9 +9191,6 @@
           }
         },
         "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "users.manage"
-        ],
         "x-catalyst-rate-class": "read"
       }
     },
@@ -9326,9 +9323,6 @@
           }
         },
         "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "users.manage"
-        ],
         "x-catalyst-rate-class": "read"
       },
       "post": {
