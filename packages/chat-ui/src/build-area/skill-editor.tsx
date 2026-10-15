@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { SKILL_SUMMARY_MAX_LENGTH } from "@vivd-catalyst/core";
 import { Field, Input, Textarea } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
@@ -24,7 +24,7 @@ import {
   type SkillFormState
 } from "./skill-form-model";
 
-/** Where the next chosen file goes: added to a folder, or in place of a file, by its place. */
+/** Where chosen files go: added to a folder, or in place of a file, by its place. */
 type UploadTarget = { folder: SkillFolder } | { replace: number };
 
 /** How the content of the files the skill's index names is read. */
@@ -50,8 +50,6 @@ export function SkillEditor({
   const [selected, setSelected] = useState<SkillFileSelection>("root");
   const [folderRead, setFolderRead] = useState<FolderRead>("idle");
   const [readAttempt, setReadAttempt] = useState(0);
-  const uploadInput = useRef<HTMLInputElement>(null);
-  const uploadTarget = useRef<UploadTarget>(undefined);
   const editable = frame.canWrite && instanceEditable;
   const { folder } = frame;
   const unread = form.files.some(isUnread);
@@ -111,13 +109,7 @@ export function SkillEditor({
     return answer;
   };
 
-  const chooseFile = (target: UploadTarget) => {
-    uploadTarget.current = target;
-    uploadInput.current?.click();
-  };
-  const takeFiles = async (chosen: readonly File[]) => {
-    const target = uploadTarget.current;
-    if (target === undefined || chosen.length === 0) return;
+  const takeFiles = async (target: UploadTarget, chosen: readonly File[]) => {
     const files = [...form.files];
     let last: number | undefined;
     for (const chosenFile of chosen) {
@@ -202,29 +194,15 @@ export function SkillEditor({
       refusalField: "files",
       body: (
         <>
-          {filesEditable ? (
-            <input
-              ref={uploadInput}
-              type="file"
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden="true"
-              multiple
-              data-skill-file-input=""
-              onChange={(event) => {
-                const chosen = [...(event.currentTarget.files ?? [])];
-                event.currentTarget.value = "";
-                takeFiles(chosen).catch(() => undefined);
-              }}
-            />
-          ) : null}
           <SkillFileList
             files={form.files}
             selected={selected}
             editable={filesEditable}
             onSelect={setSelected}
             onNew={addEmptyFile}
-            onUpload={(folderName) => chooseFile({ folder: folderName })}
+            onUpload={(folderName, chosen) => {
+              takeFiles({ folder: folderName }, chosen).catch(() => undefined);
+            }}
           />
           <FieldRefusals messages={fileRefusals} />
           {file === undefined ? (
@@ -256,7 +234,9 @@ export function SkillEditor({
                   text
                 }))
               }
-              onReplace={() => chooseFile({ replace: at })}
+              onReplace={(chosen) => {
+                takeFiles({ replace: at }, [chosen]).catch(() => undefined);
+              }}
               onDelete={() => {
                 updateFile(at, () => undefined);
                 setSelected("root");

@@ -55,6 +55,8 @@ export interface GalleryText
   disabled: string;
   settings: string;
   addItem: string;
+  chooseFiles: string;
+  noFileChosen: string;
   moreActions: string;
   name: string;
   namePlaceholder: string;
@@ -278,6 +280,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     disabled: "Disabled",
     settings: "Settings",
     addItem: "Add",
+    chooseFiles: "Choose files",
+    noFileChosen: "No file chosen",
     moreActions: "More actions",
     name: "Name",
     namePlaceholder: "Support assistant",
@@ -536,6 +540,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     disabled: "Deaktiviert",
     settings: "Einstellungen",
     addItem: "Hinzufügen",
+    chooseFiles: "Dateien auswählen",
+    noFileChosen: "Keine Datei ausgewählt",
     moreActions: "Weitere Aktionen",
     name: "Name",
     namePlaceholder: "Support-Assistent",

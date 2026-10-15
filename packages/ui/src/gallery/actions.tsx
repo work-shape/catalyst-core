@@ -1,6 +1,7 @@
-import { Ellipsis, Plus, Settings } from "lucide-react";
+import { Ellipsis, Plus, Settings, Upload } from "lucide-react";
 import { useState } from "react";
 import { Button, type ButtonSize, type ButtonVariant } from "../actions/button";
+import { FilePicker } from "../actions/file-picker";
 import { IconButton, type IconButtonSize } from "../actions/icon-button";
 import { RunLiveOnce, type RunLiveOnceState } from "../actions/run-live-once";
 import { TextLink } from "../actions/text-link";
@@ -31,6 +32,26 @@ function LiveOnceSample({ text }: { text: GalleryText }) {
           {text.showAgain}
         </Button>
       ) : null}
+    </Samples>
+  );
+}
+
+/** A trigger that opens the file dialog, and the names of the files chosen last. */
+function FilePickerSample({ text }: { text: GalleryText }) {
+  const [names, setNames] = useState<readonly string[]>([]);
+  return (
+    <Samples>
+      <FilePicker multiple onFiles={(files) => setNames(files.map((file) => file.name))}>
+        {(choose) => (
+          <Button variant="outline" size="sm" onClick={choose}>
+            <Upload aria-hidden="true" />
+            {text.chooseFiles}
+          </Button>
+        )}
+      </FilePicker>
+      <span className="text-body text-muted-foreground">
+        {names.length > 0 ? names.join(", ") : text.noFileChosen}
+      </span>
     </Samples>
   );
 }
@@ -114,6 +135,11 @@ export const actionsGallery: GalleryGroup = {
           </Samples>
         </>
       )
+    },
+    {
+      name: "FilePicker",
+      components: ["FilePicker"],
+      render: (text) => <FilePickerSample text={text} />
     },
     {
       name: "TextLink",

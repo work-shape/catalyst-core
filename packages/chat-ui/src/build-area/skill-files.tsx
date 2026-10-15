@@ -6,6 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  FilePicker,
   Field,
   IconButton,
   InlineError,
@@ -62,7 +63,7 @@ export function SkillFileList({
   editable: boolean;
   onSelect(selection: SkillFileSelection): void;
   onNew(folder: SkillFolder): void;
-  onUpload(folder: SkillFolder): void;
+  onUpload(folder: SkillFolder, files: readonly File[]): void;
 }) {
   const { t } = useTranslation();
   const sorted = files.map((file, at) => ({ file, at })).sort(byPath);
@@ -105,27 +106,31 @@ export function SkillFileList({
               actionsVisible
               actions={
                 editable ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <IconButton label={t("skillFiles.addTo", { folder: `${folder}/` })} size="sm">
-                        <Plus aria-hidden="true" />
-                      </IconButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        icon={<Upload aria-hidden="true" />}
-                        onSelect={() => onUpload(folder)}
-                      >
-                        {t("skillFiles.upload")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        icon={<FilePlus aria-hidden="true" />}
-                        onSelect={() => onNew(folder)}
-                      >
-                        {t("skillFiles.new")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <FilePicker multiple onFiles={(chosen) => onUpload(folder, chosen)}>
+                    {(choose) => (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <IconButton
+                            label={t("skillFiles.addTo", { folder: `${folder}/` })}
+                            size="sm"
+                          >
+                            <Plus aria-hidden="true" />
+                          </IconButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem icon={<Upload aria-hidden="true" />} onSelect={choose}>
+                            {t("skillFiles.upload")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            icon={<FilePlus aria-hidden="true" />}
+                            onSelect={() => onNew(folder)}
+                          >
+                            {t("skillFiles.new")}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </FilePicker>
                 ) : undefined
               }
             />
@@ -161,7 +166,7 @@ export function SkillFilePane({
   onRetryRead(): void;
   onRename(path: string): void;
   onText(text: string): void;
-  onReplace(): void;
+  onReplace(file: File): void;
   onDelete(): void;
 }) {
   const { locale, t } = useTranslation();
@@ -190,10 +195,14 @@ export function SkillFilePane({
           </Button>
           {editable ? (
             <>
-              <Button variant="outline" size="sm" onClick={onReplace}>
-                <Replace aria-hidden="true" />
-                {t("skillFiles.replace")}
-              </Button>
+              <FilePicker onFiles={([chosen]) => (chosen ? onReplace(chosen) : undefined)}>
+                {(choose) => (
+                  <Button variant="outline" size="sm" onClick={choose}>
+                    <Replace aria-hidden="true" />
+                    {t("skillFiles.replace")}
+                  </Button>
+                )}
+              </FilePicker>
               <Button variant="ghost" size="sm" onClick={onDelete}>
                 <Trash2 aria-hidden="true" />
                 {t("skillFiles.delete")}
