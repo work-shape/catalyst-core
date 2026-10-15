@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 import type { GuardrailEvent, GuardrailHitOutcome } from "@vivd-catalyst/core";
 
 /**
@@ -34,5 +34,28 @@ export const guardrailHits = pgTable(
       table.createdAt,
       table.id
     )
+  ]
+);
+
+/**
+ * A shipped guardrail somebody switched, and who did it last. A shipped guardrail without a
+ * row is on: it is on on every instance, existing ones included, from the release that ships
+ * it. A release never writes a row, so what an instance admin switched off stays off.
+ */
+export const shippedGuardrailSwitches = pgTable(
+  "shipped_guardrail_switches",
+  {
+    clientInstanceId: text("client_instance_id").notNull(),
+    guardrailName: text("guardrail_name").notNull(),
+    enabled: boolean("enabled").notNull(),
+    switchedById: text("switched_by_id").notNull(),
+    switchedByLabel: text("switched_by_label").notNull(),
+    switchedAt: timestamp("switched_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    primaryKey({
+      name: "shipped_guardrail_switches_pk",
+      columns: [table.clientInstanceId, table.guardrailName]
+    })
   ]
 );

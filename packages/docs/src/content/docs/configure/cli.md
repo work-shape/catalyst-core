@@ -99,6 +99,8 @@ catalyst agent revert tax-vat --to 2 --if-revision 4
 catalyst agent delete tax-vat --if-revision 5
 ```
 
+`catalyst app publish` and `catalyst workflow publish` ask before they publish and need your answer in a terminal; `--yes` publishes nothing. When approval is required, the command ends with exit code `3` and the request id, including for an admin's key. An instance approver can approve it in the Inbox ([Guardrails](/manage/guardrails/#publishing-needs-an-instance-admins-approval)). A CLI answer never supplies that approval.
+
 `--from` takes the forms of the working copy: an `.agent.yaml` or any YAML or JSON definition, a skill's folder with its `SKILL.md`, or the folder of a kind whose revisions hold files, such as an App. A write names the revision it was made against with `--if-revision`, or `new` to create; read it with `show` or `history`. `discard-draft`, `set-availability` and `set-default` complete the list; `catalyst --help` shows each with its options. `--json` prints the instance's answer as it came.
 
 Guardrails have four commands of their own beside `put`:

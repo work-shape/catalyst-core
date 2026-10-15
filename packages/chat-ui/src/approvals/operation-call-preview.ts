@@ -74,6 +74,36 @@ export interface OperationCallAsset {
   beforeWithheld: boolean;
 }
 
+/** Why a held publish can no longer be approved: what it would publish moved since. */
+export type PublishStale = "gone" | "draft_moved" | "live_moved";
+const staleReasons: readonly PublishStale[] = ["gone", "draft_moved", "live_moved"];
+
+/** One entry of a list that is new or changed against the live revision. */
+export interface PublishChange {
+  label: string;
+  change: "new" | "changed" | "added" | "removed";
+}
+
+/**
+ * What a held publish makes live, against the live revision, as the server reviewed it while
+ * the request waits (GR-PUB-1).
+ */
+export interface PublishReview {
+  kind: string;
+  title: string;
+  revision: number;
+  /** The live revision it replaces. Absent before the first publish. */
+  liveRevision?: number;
+  files: PublishChange[];
+  /** The actions or the steps that change something, new or changed. Absent where unknown. */
+  changing?: PublishChange[];
+  hostsAdded: string[];
+  connections: string[];
+  dataStores: { name: string; minSchema?: number }[];
+  runAs?: string;
+  stale?: PublishStale;
+}
+
 /** The values of `heldBy` that are a standing rule of the instance, not one finding. */
 const standingRules = ["instance_default", "declared_default", "central_setting"];
 
@@ -93,6 +123,8 @@ export interface OperationCallPreview {
   expiresAt?: string;
   /** What the call saves, where it is a save of an asset that still waits. */
   asset?: OperationCallAsset;
+  /** What a held publish makes live, for one opened request that still waits. */
+  review?: PublishReview;
   /** A setting or a default of the instance made the call wait. Unknown for an older request. */
   heldByRule: boolean;
   /**
@@ -124,6 +156,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
   const workspaceId = readText(preview.workspaceId);
   const expiresAt = readText(preview.expiresAt);
   const asset = parseAsset(preview.asset);
+  const review = parseReview(preview.review);
   const inputs = Array.isArray(preview.inputs)
     ? preview.inputs.flatMap((input) => parseInput(input) ?? [])
     : [];
@@ -142,6 +175,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
     heldByRule: standingRules.includes(readText(preview.heldBy) ?? ""),
     heldByFloor: preview.heldBy === "policy_floor",
     ...(asset ? { asset } : {}),
+    ...(review ? { review } : {}),
     ...(workspaceId ? { workspaceId } : {}),
     ...(expiresAt ? { expiresAt } : {})
   };
@@ -188,6 +222,54 @@ function parseAsset(value: unknown): OperationCallAsset | undefined {
     ...(value.content === undefined ? {} : { content: value.content })
   };
 }
+
+function parseReview(value: unknown): PublishReview | undefined {
+  if (!isRecord(value) || typeof value.revision !== "number") return undefined;
+  const kind = readText(value.kind);
+  const name = readText(value.name);
+  if (!kind || !name) return undefined;
+  const texts = (list: unknown) =>
+    Array.isArray(list) ? list.flatMap((entry) => readText(entry) ?? []) : [];
+  const changes = (list: unknown, label: "path" | "label"): PublishChange[] =>
+    Array.isArray(list)
+      ? list.flatMap((entry) => {
+          if (!isRecord(entry)) return [];
+          const text = readText(entry[label]);
+          const change = changeKinds.find((candidate) => candidate === entry.change);
+          return text && change ? [{ label: text, change }] : [];
+        })
+      : [];
+  const runAs = readText(value.runAs);
+  const stale = staleReasons.find((reason) => reason === value.stale);
+  return {
+    kind,
+    title: readText(value.title) ?? name,
+    revision: value.revision,
+    ...(typeof value.liveRevision === "number" ? { liveRevision: value.liveRevision } : {}),
+    files: changes(value.files, "path"),
+    ...(Array.isArray(value.changing) ? { changing: changes(value.changing, "label") } : {}),
+    hostsAdded: texts(value.hostsAdded),
+    connections: texts(value.connections),
+    dataStores: Array.isArray(value.dataStores)
+      ? value.dataStores.flatMap((store) => {
+          if (!isRecord(store)) return [];
+          const storeName = readText(store.name);
+          return storeName
+            ? [
+                {
+                  name: storeName,
+                  ...(typeof store.minSchema === "number" ? { minSchema: store.minSchema } : {})
+                }
+              ]
+            : [];
+        })
+      : [],
+    ...(runAs ? { runAs } : {}),
+    ...(stale ? { stale } : {})
+  };
+}
+
+const changeKinds: readonly PublishChange["change"][] = ["new", "changed", "added", "removed"];
 
 function parseOrigin(value: unknown): OperationCallPreview["origin"] | undefined {
   if (!isRecord(value)) {

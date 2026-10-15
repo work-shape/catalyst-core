@@ -16,7 +16,6 @@ import {
   type UserStore
 } from "@vivd-catalyst/core";
 import {
-  OPERATION_CALL_APPROVAL_KIND,
   readApprovedOperationEnd,
   refuseWaitingOperation,
   type RunOperationDeps
@@ -32,6 +31,7 @@ import {
   removeEndedOperationCallInputSchedule
 } from "./job-kinds";
 import {
+  HELD_CALL_APPROVAL_KINDS,
   endedOperationCallOutcome,
   executeApprovedOperationCall,
   minimizedOperationCallPayload,
@@ -226,7 +226,7 @@ async function removeEndedOperationCallInput(
     if (signal?.aborted) break;
     const requests = await approvals.listApprovalRequests({
       clientInstanceId,
-      kinds: [OPERATION_CALL_APPROVAL_KIND],
+      kinds: HELD_CALL_APPROVAL_KINDS,
       payloadKey: "input",
       page: { limit: ENDED_INPUT_CLEANUP_PAGE_SIZE, ...(after ? { after } : {}) }
     });

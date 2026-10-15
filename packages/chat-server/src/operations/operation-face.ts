@@ -77,6 +77,8 @@ export interface AssembledOperationBinding {
   beforeEvents?: OperationDefinition["beforeEvents"];
   /** See `heldInputKeys` of the definition. */
   heldInputKeys?: readonly string[];
+  /** See `approval` of the definition: who decides a call that waits for an approval. */
+  approval?: OperationDefinition["approval"];
   execute(input: unknown, context: OperationBindingContext): unknown;
 }
 
@@ -180,6 +182,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         ...(binding.policyTargets ? { policyTargets: binding.policyTargets } : {}),
         ...(binding.beforeEvents ? { beforeEvents: binding.beforeEvents } : {}),
         ...(binding.heldInputKeys ? { heldInputKeys: binding.heldInputKeys } : {}),
+        ...(binding.approval ? { approval: binding.approval } : {}),
         ...(binding.inputWithoutSecrets
           ? { inputWithoutSecrets: binding.inputWithoutSecrets }
           : {}),

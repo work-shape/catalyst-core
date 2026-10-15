@@ -43,6 +43,31 @@ export interface PlatformInstructions {
   toolNames: readonly string[];
 }
 
+/**
+ * What a revision reaches that its live revision does not, as the person who approves its
+ * publish reads it. Read from the two stored configs alone.
+ */
+export interface PublishReach {
+  /**
+   * The actions or the steps that call an operation, each new or changed against the live
+   * revision. `effect` where the definition says it; otherwise the operation's is read.
+   */
+  calls: readonly {
+    label: string;
+    operation?: string;
+    effect?: OperationEffect;
+    change: "new" | "changed";
+  }[];
+  /** Outside hosts the revision calls and the live one does not. */
+  hostsAdded: readonly string[];
+  /** The Connections the revision names. */
+  connections: readonly string[];
+  /** The Data Stores the revision uses, with the level it needs of each. */
+  dataStores: readonly { name: string; minSchema?: number }[];
+  /** The service principal a run of the revision acts as. */
+  runAs?: string;
+}
+
 /** The operation a write of an asset arrives through. */
 export type AssetWriteSurface = "put" | "delete" | "revert" | "sync";
 
@@ -127,6 +152,11 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * revision goes live by a publish and by nothing else, and a delete takes the published
    * revision away, so a deleted asset that is written again is a draft.
    */
+  /**
+   * What a revision reaches beside its live revision, for the review of a held publish. A kind
+   * whose publish no guardrail holds leaves it out.
+   */
+  publishReach?(next: JsonObject, live: JsonObject | undefined): PublishReach;
   authorizeLive?(input: {
     actor: AuthenticatedIdentity;
     access: ActorAccess;

@@ -78,6 +78,8 @@ export function AppEdit({ app }: { app: string }) {
   const [error, setError] = useState<string>();
   // The outside hosts the shown draft lists that its frame may not call before a publish.
   const [heldBackHosts, setHeldBackHosts] = useState<readonly string[]>([]);
+  // The publish was sent and waits for an approver: the live revision stays until then.
+  const [publishWaits, setPublishWaits] = useState(false);
   // Each save of the draft, also the agent's from the dock, is another revision: the frame asks
   // for its address anew. The first read of the record is the revision the frame starts with.
   const draftNow = record.app ? appDraftRevision(record.app) : undefined;
@@ -120,6 +122,10 @@ export function AppEdit({ app }: { app: string }) {
       await change();
       return true;
     } catch (caught) {
+      if (caught instanceof PendingApprovalError && failure === "publish") {
+        setPublishWaits(true);
+        return true;
+      }
       const refusal = appRefusalText(caught);
       setError(
         caught instanceof PendingApprovalError
@@ -177,6 +183,11 @@ export function AppEdit({ app }: { app: string }) {
           setDeleteOpen(true);
         }}
       >
+        {publishWaits ? (
+          <Banner layout="page" className="shrink-0" data-testid="app-publish-waits">
+            {t("apps.publishWaits")}
+          </Banner>
+        ) : null}
         {/* The preview stays mounted under the other sides, so the App keeps its state. */}
         <div className="size-full" hidden={view !== "preview"}>
           {record.failed ? (

@@ -148,8 +148,11 @@ export interface GuardrailAnswer {
   outcome: GuardrailOutcome;
   /** The reason in plain language. Empty where it allowed, or where a warning check could not run. */
   reason: string;
-  /** `release`: the operator's floor, set in release config. `asset`: a published guardrail. */
-  origin: GuardrailOrigin;
+  /**
+   * `release`: the operator's floor, set in release config. `asset`: a published guardrail.
+   * `shipped`: a guardrail of the release that an instance admin can switch off.
+   */
+  origin: GuardrailOrigin | "shipped";
   /** Who the guardrail of an `asset` answer belongs to: the instance or one workspace. */
   scope?: AssetScope;
   /** The published revision of an `asset` answer. */
@@ -282,8 +285,59 @@ export interface GuardrailStore {
     kind?: string;
     workspaceId?: string;
   }): Promise<number>;
+  /** The shipped guardrails somebody switched, with who did it last. A missing one is on. */
+  listShippedGuardrailSwitches(input: {
+    clientInstanceId: ClientInstanceId;
+  }): Promise<ShippedGuardrailSwitch[]>;
+  /** Switches one shipped guardrail on or off. */
+  switchShippedGuardrail(
+    input: { clientInstanceId: ClientInstanceId } & ShippedGuardrailSwitch
+  ): Promise<ShippedGuardrailSwitch>;
   /** Deletes the hits older than the audit retention. Answers how many it deleted. */
   deleteHitsOlderThan(input: { clientInstanceId: ClientInstanceId; days: number }): Promise<number>;
+}
+
+/**
+ * A guardrail the release ships beside the operator's floor. It is on on every instance until a
+ * holder of `guardrail.publish` at instance scope switches it off, and a release never switches
+ * it back on. Its content is the release's and is not edited. Unlike a guardrail a person
+ * writes, it may be bound to several events, and it has no check: it answers its outcome at
+ * every event it is bound to. Spec: events-workflows-and-guardrails.md, Publishing needs a
+ * person's click.
+ */
+export interface ShippedGuardrail {
+  name: string;
+  displayName: string;
+  /** What a person it stops or holds is told. */
+  reason: string;
+  on: readonly GuardrailEvent[];
+  outcome: GuardrailOutcome;
+}
+
+/**
+ * Every publish of an App or a Workflow waits for an approval, which a holder of the kind's
+ * `approve` right gives with their own Publish (GR-PUB-1).
+ */
+export const PUBLISH_APPROVAL_GUARDRAIL = {
+  name: "publishing-needs-approval",
+  displayName: "Publishing needs an instance admin's approval",
+  reason: "A new revision of an App or a Workflow goes live once an instance admin approved it.",
+  on: ["app.before_publish", "workflow.before_publish"],
+  outcome: "require_approval"
+} as const satisfies ShippedGuardrail;
+
+export const SHIPPED_GUARDRAILS: readonly ShippedGuardrail[] = [PUBLISH_APPROVAL_GUARDRAIL];
+
+export function shippedGuardrail(name: string): ShippedGuardrail | undefined {
+  return SHIPPED_GUARDRAILS.find((guardrail) => guardrail.name === name);
+}
+
+/** Who switched a shipped guardrail last, and to what. Nobody has: it is on. */
+export interface ShippedGuardrailSwitch {
+  name: string;
+  enabled: boolean;
+  switchedBy: { id: string; label: string };
+  switchedAt: ISODateString;
 }
 
 /** The reason of the refusal of every write of a release Guardrail through the asset operations. */

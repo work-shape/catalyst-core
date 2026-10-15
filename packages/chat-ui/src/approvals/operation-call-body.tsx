@@ -22,6 +22,7 @@ import {
   type OperationCallOutcome,
   type OperationCallPreview
 } from "./operation-call-preview";
+import { PublishReviewBody } from "./publish-review";
 import { SkillChangeBody } from "./skill-change-body";
 import { parseSkillChangePreview } from "./skill-change-preview";
 
@@ -92,9 +93,14 @@ export function OperationCallBody({
   const skill = asset?.kind === SKILL_ASSET_KIND && asset.content !== undefined ? asset : undefined;
   const hiddenFields = call.inputFieldCount - call.inputs.length;
 
+  // A publish that waits shows what it makes live, and the call itself only in the fold.
+  const review = pending ? call.review : undefined;
+
   return (
     <div className="grid min-w-0 gap-4" data-testid="operation-call" data-run-id={call.runId}>
-      {pending ? (
+      {review ? (
+        <PublishReviewBody actor={actor} review={review} />
+      ) : pending ? (
         <div className="grid min-w-0 gap-1.5">
           <p className="font-medium text-foreground" data-testid="operation-call-headline">
             {asset
@@ -139,7 +145,7 @@ export function OperationCallBody({
           ) : null}
         </Banner>
       ) : null}
-      {skill ? (
+      {review ? null : skill ? (
         <SkillAsset asset={skill} />
       ) : (
         <>
@@ -159,7 +165,7 @@ export function OperationCallBody({
       <TechnicalDetails
         call={call}
         pending={pending}
-        showsOperation={skill !== undefined}
+        showsOperation={skill !== undefined || review !== undefined}
         fullInput={operationCallFullInput(request.payload)}
         // A reader who is told to read the rest finds it open.
         defaultOpen={hiddenFields > 0}

@@ -19,6 +19,7 @@ import {
   type GuardrailStore,
   type GuardrailSubject,
   type RuntimeCallContext,
+  SHIPPED_GUARDRAILS,
   getRuntimeSubjectUserId
 } from "@vivd-catalyst/core";
 import {
@@ -60,6 +61,11 @@ export interface GuardrailRunnerOptions {
    * Without it only the floor runs.
    */
   assets?: Pick<ConfigAssetStore, "listPublishedConfigAssets">;
+  /**
+   * Where it is read which shipped guardrails an instance admin switched off. Without it the
+   * shipped guardrails do not run.
+   */
+  shipped?: Pick<GuardrailStore, "listShippedGuardrailSwitches">;
 }
 
 /** The most published guardrails one event reads. More are refused as a fault of the store. */
@@ -129,13 +135,26 @@ type BoundGuardrail = Pick<ReleaseGuardrailConfig, "displayName" | "on" | "check
   filter?: GuardrailFilter;
 };
 
-interface Bound {
-  name: string;
-  guardrail: BoundGuardrail;
-  pattern?: GuardrailPattern;
-  /** Where the guardrail is an asset: its owner and the revision that runs. */
-  asset?: { scope: AssetScope; revision: number };
-}
+type Bound =
+  | {
+      name: string;
+      guardrail: BoundGuardrail;
+      pattern?: GuardrailPattern;
+      /** Where the guardrail is an asset: its owner and the revision that runs. */
+      asset?: { scope: AssetScope; revision: number };
+      shipped?: undefined;
+    }
+  /** A shipped guardrail: it has no check and answers its outcome wherever it is bound. */
+  | {
+      name: string;
+      guardrail: Pick<BoundGuardrail, "displayName" | "outcome">;
+      shipped: { reason: string };
+      pattern?: undefined;
+      asset?: undefined;
+    };
+
+/** A bound guardrail that runs a check. */
+type CheckedBound = Extract<Bound, { shipped?: undefined }>;
 
 /**
  * Runs the guardrails of release config bound to one before-event and keeps their hits. Every
@@ -183,7 +202,8 @@ export class GuardrailRunner {
               applies(guardrail.filter, input.match)
           )
           .map((asset) => this.boundOf(asset));
-    const bound = [...floor, ...assets];
+    const shipped = aboutGuardrails ? [] : await this.shippedGuardrails(input.event);
+    const bound = [...floor, ...assets, ...shipped];
     if (bound.length === 0) {
       return [];
     }
@@ -244,7 +264,7 @@ export class GuardrailRunner {
     return reaches(asset.scope, match) && applies(asset.guardrail.filter, match);
   }
 
-  private boundOf({ guardrail, scope, revision }: GuardrailOfAsset): Bound {
+  private boundOf({ guardrail, scope, revision }: GuardrailOfAsset): CheckedBound {
     return {
       name: guardrail.name,
       guardrail,
@@ -256,6 +276,24 @@ export class GuardrailRunner {
       ),
       asset: { scope, revision }
     };
+  }
+
+  /** The shipped guardrails bound to the event that nobody switched off. */
+  private async shippedGuardrails(event: GuardrailEvent): Promise<Bound[]> {
+    const { shipped } = this.options;
+    const bound = SHIPPED_GUARDRAILS.filter((guardrail) => guardrail.on.includes(event));
+    if (!shipped || bound.length === 0) return [];
+    const switches = await shipped.listShippedGuardrailSwitches({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    const off = new Set(switches.filter((entry) => !entry.enabled).map((entry) => entry.name));
+    return bound
+      .filter((guardrail) => !off.has(guardrail.name))
+      .map((guardrail) => ({
+        name: guardrail.name,
+        guardrail: { displayName: guardrail.displayName, outcome: guardrail.outcome },
+        shipped: { reason: guardrail.reason }
+      }));
   }
 
   /** The published guardrails written as assets. The floor's stored copies are not among them. */
@@ -290,7 +328,9 @@ export class GuardrailRunner {
     // By the bound entry: a floor guardrail and an asset may share a name.
     const results = new Map<Bound, GuardrailAnswer>();
     for (const entry of bound) {
-      if (entry.pattern) {
+      if (entry.shipped) {
+        results.set(entry, answerOf(entry, entry.guardrail.outcome, entry.shipped.reason));
+      } else if (entry.pattern) {
         const answer = matchPattern(entry, entry.pattern, checked(fields, input.event, entry));
         if (answer) results.set(entry, answer);
       }
@@ -299,7 +339,7 @@ export class GuardrailRunner {
     if (!blocked) {
       const judged = await Promise.all(
         bound.flatMap((entry) => {
-          if (entry.pattern) return [];
+          if (entry.shipped || entry.pattern) return [];
           const content = checked(fields, input.event, entry);
           return content.length === 0
             ? []
@@ -356,7 +396,7 @@ export class GuardrailRunner {
   }
 
   private async judge(
-    entry: Bound,
+    entry: CheckedBound,
     content: readonly Checked[],
     context: GuardrailCallContext
   ): Promise<GuardrailAnswer> {
@@ -467,7 +507,11 @@ function operationMatches(named: string, operation: string): boolean {
 }
 
 /** The fields a check reads that the event has a value for, in the event's order. */
-function checked(fields: GuardrailFields, event: GuardrailEvent, { guardrail }: Bound): Checked[] {
+function checked(
+  fields: GuardrailFields,
+  event: GuardrailEvent,
+  { guardrail }: CheckedBound
+): Checked[] {
   const names: readonly string[] = guardrail.check.fields ?? GUARDRAIL_CHECKABLE_FIELDS[event];
   return names.flatMap((name) => {
     const value = fields[name];
@@ -506,7 +550,7 @@ const NO_TEXT_CAUSE = "could not judge a file that is no text";
  * such as a judge that timed out, may pass when it is tried again; content too large or no
  * text stays so.
  */
-function unchecked(entry: Bound, cause: string, temporary?: "temporary"): GuardrailAnswer {
+function unchecked(entry: CheckedBound, cause: string, temporary?: "temporary"): GuardrailAnswer {
   const { outcome } = entry.guardrail;
   // Unread content does not pass a guardrail that stops or holds. One that warns says it could
   // not check, without a reason: the card words that in the reader's language.
@@ -521,7 +565,7 @@ function unchecked(entry: Bound, cause: string, temporary?: "temporary"): Guardr
 
 /** What a pattern answers, or undefined where it had nothing to read. */
 function matchPattern(
-  entry: Bound,
+  entry: CheckedBound,
   pattern: GuardrailPattern,
   content: readonly Checked[]
 ): GuardrailAnswer | undefined {
@@ -559,7 +603,7 @@ function answerOf(entry: Bound, outcome: Outcome, reason: string): GuardrailAnsw
     reason,
     ...(entry.asset
       ? { origin: "asset" as const, scope: entry.asset.scope, revision: entry.asset.revision }
-      : { origin: "release" as const })
+      : { origin: entry.shipped ? ("shipped" as const) : ("release" as const) })
   };
 }
 
