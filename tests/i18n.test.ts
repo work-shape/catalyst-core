@@ -88,6 +88,18 @@ describe("interface translations", () => {
     );
   });
 
+  it("translates an unavailable technical account without showing its internal name", () => {
+    expect(en.t("workflows.notRunnable.accountDisabled", { name: "Booking checks" })).toBe(
+      "The technical account “Booking checks” is disabled."
+    );
+    expect(de.t("workflows.notRunnable.accountDisabled", { name: "Booking checks" })).toBe(
+      "Das technische Konto „Booking checks“ ist deaktiviert."
+    );
+    expect(de.t("workflows.notRunnable.accountUnavailable")).not.toBe(
+      en.t("workflows.notRunnable.accountUnavailable")
+    );
+  });
+
   it("puts values into their placeholders", () => {
     expect(en.t("attachmentsShowMore", { count: 3 })).toBe("+ 3 more");
     expect(de.t("attachmentsSummary", { count: 2, size: "4 MB" })).toBe("2 Dateien · 4 MB");
