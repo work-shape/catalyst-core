@@ -8,7 +8,7 @@ import {
   type ClientInstanceId,
   type ExecutionWorkspace,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // How a job takes the row of its command: by id, under a lease the row carries for the
 // previous release's worker.

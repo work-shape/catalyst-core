@@ -5,8 +5,11 @@ import type {
   CreateNamespaceRequest,
   NamespaceWithUsage,
   UpdateNamespaceRequest
-} from "@vivd-catalyst/api-client";
-import { NAMESPACE_PREFIX_MAX_LENGTH, NAMESPACE_PREFIX_MIN_LENGTH } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-client";
+import {
+  NAMESPACE_PREFIX_MAX_LENGTH,
+  NAMESPACE_PREFIX_MIN_LENGTH
+} from "@work-shape/catalyst-core";
 import {
   Banner,
   Button,
@@ -33,7 +36,7 @@ import {
   TableHeader,
   TableRow,
   type PickerOption
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { modelDisplayLabel } from "../model-label";
 import { useTranslation, type TranslationKey } from "../i18n";
 import {

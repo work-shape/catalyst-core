@@ -17,7 +17,7 @@ import {
   type WorkflowManifest,
   type WorkflowStep,
   type WorkflowStepType
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { codeFileIssue } from "./code-step";
 import { parseCron } from "./cron";

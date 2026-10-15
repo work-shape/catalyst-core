@@ -52,7 +52,7 @@ export interface ToolPresentation {
   /** One sentence on what the tool does for the people who use the agent. */
   summary?: ToolText;
   group?: ToolGroup;
-  /** A key of the icon registry of `@vivd-catalyst/ui`. */
+  /** A key of the icon registry of `@work-shape/catalyst-ui`. */
   icon?: string;
 }
 

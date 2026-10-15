@@ -158,7 +158,7 @@ export const modelGatewayRules = ({ root, rule, packageAt, keyName, loadedModule
           if (
             target === adaptersDirectory ||
             target?.startsWith(`${adaptersDirectory}${sep}`) ||
-            /^@vivd-catalyst\/model-provider\/.*\badapters\b/.test(specifier)
+            /^@work-shape\/catalyst-model-provider\/.*\badapters\b/.test(specifier)
           )
             report(node);
         };

@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-catalyst/core";
+import { AppError } from "@work-shape/catalyst-core";
 
 const REMOVED_KEY = "collaborationWorkspaces";
 

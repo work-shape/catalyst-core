@@ -1,4 +1,4 @@
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import { claimAttachmentsForStoredMessage } from "./support/test-store";
 import { type TestStore, createTestInstance } from "./support/test-instance";
 import { createTestToolRunner } from "./support/tool-runner";
@@ -11,9 +11,12 @@ import {
   createToolResultMetadata,
   type StructuredDataPublicationReviewer,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { createStructuredDataToolDefinitions, ToolRegistry } from "@vivd-catalyst/tool-execution";
+import {
+  createStructuredDataToolDefinitions,
+  ToolRegistry
+} from "@work-shape/catalyst-tool-execution";
 
 describe("the words the agent page shows for the fact sheet tools", () => {
   it("says what each tool does, in both languages", async () => {

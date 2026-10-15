@@ -2,7 +2,7 @@ import type { TestInstance as TestServer } from "./test-instance";
 
 import { expect } from "vitest";
 
-import { AppError, type AgentRuntime, type RuntimeCallContext } from "@vivd-catalyst/core";
+import { AppError, type AgentRuntime, type RuntimeCallContext } from "@work-shape/catalyst-core";
 
 import type { FakeModelProvider as ModelProvider } from "./model-gateway";
 

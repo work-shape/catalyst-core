@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProvider } from "@vivd-catalyst/core";
-import { modelProviderDefinitions, type ModelAdapterFactory } from "@vivd-catalyst/model-provider";
+import { createProvider } from "@work-shape/catalyst-core";
+import {
+  modelProviderDefinitions,
+  type ModelAdapterFactory
+} from "@work-shape/catalyst-model-provider";
 import {
   loadModelAdapterRecording,
   replayModelAdapterRecording,

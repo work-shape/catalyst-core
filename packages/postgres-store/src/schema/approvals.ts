@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { ApprovalRequest, JsonObject } from "@vivd-catalyst/core";
+import type { ApprovalRequest, JsonObject } from "@work-shape/catalyst-core";
 
 export const approvalRequests = pgTable(
   "approval_requests",

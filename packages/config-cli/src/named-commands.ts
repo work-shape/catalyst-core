@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import yaml from "js-yaml";
-import { apiOperations, MAX_LIST_LIMIT, type Operation } from "@vivd-catalyst/api-contract";
+import { apiOperations, MAX_LIST_LIMIT, type Operation } from "@work-shape/catalyst-api-contract";
 import { ConfigApiError, toConfigApiError } from "./api";
 import { formatRefusal } from "./asset-output";
 import {

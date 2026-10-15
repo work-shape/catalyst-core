@@ -7,7 +7,7 @@ import {
   type AuthenticatedIdentity,
   type ConfigAssetMutation,
   type PolicyTarget
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { clearLiveOnceSwitches } from "./asset-after-write";
 import { z } from "zod";
 import { readDefinitionName } from "./asset-kinds/shared";

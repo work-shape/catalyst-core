@@ -1,6 +1,6 @@
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   MODEL_CALL_RESERVED_OUTPUT_TOKENS,
   asAgentRunId,
@@ -9,9 +9,9 @@ import {
   isAppError,
   runFailureCodeOf,
   type UsageRateCardConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { ModelUsageGovernance, calculateUsageCost } from "@vivd-catalyst/usage-governance";
+import { ModelUsageGovernance, calculateUsageCost } from "@work-shape/catalyst-usage-governance";
 
 const customerRateCard: UsageRateCardConfig = {
   id: "customer",

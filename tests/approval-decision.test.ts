@@ -19,13 +19,13 @@ import {
   type ApprovalRequestStatus,
   type AuthenticatedUser,
   type ModelProviderConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
-import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
-import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { messageSchema } from "@vivd-catalyst/api-contract";
+import { ApprovalRequestWorkflow } from "@work-shape/catalyst-server";
+import { LocalAgentRuntime } from "@work-shape/catalyst-agent-runtime";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
+import { messageSchema } from "@work-shape/catalyst-api-contract";
 import {
   dropCurrentSubmittedMessage,
   projectAgentVisibleHistory,

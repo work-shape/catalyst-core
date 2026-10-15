@@ -1,4 +1,4 @@
-import type { AgentRun } from "@vivd-catalyst/core";
+import type { AgentRun } from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import {
   useAgentRunJobFixture,

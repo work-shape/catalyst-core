@@ -1,10 +1,10 @@
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import { posix } from "node:path";
-import { isWorkspaceInspectionArtifact } from "@vivd-catalyst/tool-execution";
+import { isWorkspaceInspectionArtifact } from "@work-shape/catalyst-tool-execution";
 import type {
   ConversationResourceListItem,
   ConversationResourceListResponse
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF,
   currentStructuredResults,
@@ -16,7 +16,7 @@ import {
   type ConversationId,
   type ManagedArtifactRecord,
   type StructuredDataResourceRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 type SourceFileResource = Extract<ConversationResourceListItem, { resourceType: "source_file" }>;
 type GeneratedFileResource = Extract<

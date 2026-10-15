@@ -27,7 +27,7 @@ import {
   type WorkflowStepRunPlacement,
   type WorkflowStepRunRef,
   type WorkflowStepRunView
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { noWorkflowStepFiles, type WorkflowStepFiles } from "./code-step";
 import {
   WORKFLOW_STEP_DATA_DAYS,

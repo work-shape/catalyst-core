@@ -5,7 +5,7 @@ import {
   createApiClient,
   type ConversationResourceListItem,
   type StructuredDataResourceResponse
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   groupConversationResources,
   isResourcesPanelAvailable,
@@ -22,7 +22,7 @@ import {
   SourceFilePreview
 } from "../packages/chat-ui/src/conversation-file-presentation";
 import { StructuredDataView } from "../packages/chat-ui/src/structured-data-view";
-import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
+import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 
 const resources: ConversationResourceListItem[] = [
   {

@@ -8,7 +8,7 @@ import {
   currentStructuredResults,
   type ChatMessage,
   type StructuredResultPublication
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 describe("structured result projection", () => {
   it("keeps the first kind for a key and ignores later conflicting publications", () => {

@@ -5,7 +5,7 @@ import {
   parseCron,
   parseWorkflowManifest,
   workflowScheduleJobKind
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import {
   publishedDefinitions,

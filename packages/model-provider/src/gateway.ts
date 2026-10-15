@@ -13,7 +13,7 @@ import {
   type ModelTokenUsage,
   type ReasoningEffortConfig,
   type SystemModelAttribution
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { deadlinePassed, limitModelCall, stopOf, type ModelCallLimit } from "./model-call-limit";
 import { ModelProviderError, normalizeModelAdapterError } from "./model-provider-error";
 import { createModelRetryPolicy, modelCallFailureFor, type ModelRetryPolicy } from "./retry";
@@ -40,7 +40,7 @@ export type {
   ModelAttribution,
   ModelSystemPurpose,
   SystemModelAttribution
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * Which model a call goes to: a model binding of the instance, or a provider entry with the

@@ -23,12 +23,15 @@ import {
   type Namespace,
   type OperationAuthorization,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
-import { ASSET_RELEASE_SYNC_MAX_ITEMS, ASSET_SYNC_MAX_ITEMS } from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-core";
+import {
+  ASSET_RELEASE_SYNC_MAX_ITEMS,
+  ASSET_SYNC_MAX_ITEMS
+} from "@work-shape/catalyst-api-contract";
 import {
   agentConfigSchema,
   findAgentUserSelectableModelIssues
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import { agentModelSettingValue } from "./asset-kinds/agent";
 import {
   configValuesEqual,

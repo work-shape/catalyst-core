@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { buildPage, ROUTE_GENERATOR_EXECUTED_FILE } from "@vivd-catalyst/app-build/build";
+import { buildPage, ROUTE_GENERATOR_EXECUTED_FILE } from "@work-shape/catalyst-app-build/build";
 import { fileRoute, htmlManifest, pageFiles, reactManifest, rootRoute } from "./support/page-build";
 
 // The build hands author files to two libraries: the route generator and the bundler. What

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import type { ApiClient, Message } from "@vivd-catalyst/api-client";
+import type { ApiClient, Message } from "@work-shape/catalyst-api-client";
 import { showOwnerInStudio } from "../build-area/build-rights";
 import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";

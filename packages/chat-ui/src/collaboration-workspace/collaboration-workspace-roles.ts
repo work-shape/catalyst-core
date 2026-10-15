@@ -1,7 +1,7 @@
 import type {
   CollaborationWorkspaceWithRole,
   WorkspaceMembershipRole
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import type { TranslationKey } from "../i18n";
 
 export const collaborationWorkspaceRoleLabelKeys: Record<WorkspaceMembershipRole, TranslationKey> =

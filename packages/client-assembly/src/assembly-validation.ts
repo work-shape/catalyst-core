@@ -1,23 +1,23 @@
-import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime";
+import { findModelToolMaterializationIssues } from "@work-shape/catalyst-agent-runtime";
 import {
   type ApprovalRequestHandlerRegistry,
   AppError,
   resolvePolicy,
   type ModuleSnapshot
-} from "@vivd-catalyst/core";
-import { toolEffectIssue, toolOperationPolicy } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { toolEffectIssue, toolOperationPolicy } from "@work-shape/catalyst-tool-execution";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   type ModelBindingRef,
   type ModelCapabilities
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import {
   getModelProviderConfigs,
   getModelSelectionForAgent,
   type AgentConfig,
   type ClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
-import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-config-schema";
+import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import type { ClientInstanceCapability } from "./capabilities";
 
 export function assertClientAssemblyValid(input: {

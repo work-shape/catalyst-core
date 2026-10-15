@@ -1,5 +1,5 @@
 import { and, desc, eq, sql as drizzleSql } from "drizzle-orm";
-import { asAgentRunId, type ConversationListItem } from "@vivd-catalyst/core";
+import { asAgentRunId, type ConversationListItem } from "@work-shape/catalyst-core";
 import {
   listedConversations,
   type ListConversationsInput

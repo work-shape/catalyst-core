@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { localizedStringSchema } from "@vivd-catalyst/asset-schemas";
+import { localizedStringSchema } from "@work-shape/catalyst-asset-schemas";
 import {
   localeCodes,
   resolveLocalePreference,
   type LocaleCode,
   type LocalizationConfig,
   type LocalizedStringConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 export const localeCodeSchema = z.enum(localeCodes);
 

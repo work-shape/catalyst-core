@@ -96,7 +96,9 @@ async function runGatedDatabaseTests(tag, checkout) {
 async function importHeadStore() {
   const entry = join(platformRoot, "packages/postgres-store/dist/index.js");
   if (!existsSync(entry))
-    throw new Error("Build @vivd-catalyst/postgres-store first; pnpm test:compatibility does.");
+    throw new Error(
+      "Build @work-shape/catalyst-postgres-store first; pnpm test:compatibility does."
+    );
   return import(entry);
 }
 

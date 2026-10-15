@@ -1,4 +1,4 @@
-import { fileSetPathIssue, readYamlData } from "@vivd-catalyst/core";
+import { fileSetPathIssue, readYamlData } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   compiledAppActionSchema,

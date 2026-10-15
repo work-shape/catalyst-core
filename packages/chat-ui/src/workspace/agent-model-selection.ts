@@ -1,4 +1,4 @@
-import type { SafeConfig } from "@vivd-catalyst/api-client";
+import type { SafeConfig } from "@work-shape/catalyst-api-client";
 
 type SafeAgent = SafeConfig["agents"][number];
 export type AgentSelectableModel = SafeAgent["selectableModels"][number];

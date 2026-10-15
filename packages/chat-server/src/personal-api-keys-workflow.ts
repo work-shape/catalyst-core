@@ -22,7 +22,7 @@ import {
   type PersonalApiKeyRecord,
   type RuntimeCallContext,
   type StorePage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { recordGovernanceAccess } from "./governance-actions";
 import { withRightsHeld } from "./rights-held";
 import type { ChatServerOptions } from "./types";

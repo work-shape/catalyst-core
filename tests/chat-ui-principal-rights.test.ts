@@ -5,7 +5,7 @@ import {
   type EffectivePermissions,
   type PermissionGrantRow,
   type ServicePrincipalDetail
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   grantableResources,
   principalGrantFailure,
@@ -19,7 +19,7 @@ import {
   readerHolds,
   resourceHolders,
   type PrincipalRightsProps
-} from "@vivd-catalyst/chat-ui/access";
+} from "@work-shape/catalyst-chat-ui/access";
 import { describe, expect, it } from "vitest";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";

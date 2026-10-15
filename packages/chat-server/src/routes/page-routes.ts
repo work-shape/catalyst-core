@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   asUserId,
@@ -16,7 +16,7 @@ import {
   type Page,
   type PageId,
   type ServedFileSet
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   APP_CONTENT_TOKEN_TTL_SECONDS,

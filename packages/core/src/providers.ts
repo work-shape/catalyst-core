@@ -5,7 +5,7 @@ import {
   type ProviderCheckErrorClass,
   type ProviderPort,
   type ProviderRegion
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { AppError } from "./errors";
 import type { Logger } from "./logger";

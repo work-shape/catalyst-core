@@ -1,4 +1,4 @@
-import { Banner, Disclosure, DisclosureContent, DisclosureTrigger } from "@vivd-catalyst/ui";
+import { Banner, Disclosure, DisclosureContent, DisclosureTrigger } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { failureHappened, failureSentences } from "./workflow-model";
 import type { WorkflowFailure } from "./workflow-views";

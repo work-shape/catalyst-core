@@ -3,19 +3,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { JsonValue } from "@vivd-catalyst/core";
+import type { JsonValue } from "@work-shape/catalyst-core";
 import {
   DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandProcessExecutor,
   type ProcessResult,
   type WorkspaceCommandProcessExecutor
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import {
   WORKFLOW_CODE_STEP_EFFECT,
   createCodeStepJobs,
   parseWorkflowManifest,
   type WorkflowStepFiles
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import { publishedDefinitions, runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { readyWorkflows, stepRunsOf } from "./support/workflow-runs";

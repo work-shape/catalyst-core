@@ -1,8 +1,8 @@
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import { createTestInstance } from "./support/test-instance";
 import { afterAll, describe, expect, it } from "vitest";
-import { asClientInstanceId, createPlatformId } from "@vivd-catalyst/core";
+import { asClientInstanceId, createPlatformId } from "@work-shape/catalyst-core";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 interface ConfigAssetStoreFixture extends Pick<

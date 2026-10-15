@@ -6,8 +6,8 @@ import type {
   PermissionGrantRow,
   PlatformContext,
   ServicePrincipalDetail
-} from "@vivd-catalyst/api-client";
-import { explainAccessEntries } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-client";
+import { explainAccessEntries } from "@work-shape/catalyst-core";
 import { accessWriteFailure, refusalReason } from "./access-model";
 
 // The rights of a service principal on named resources, as two pages show them: the

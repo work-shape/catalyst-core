@@ -6,7 +6,7 @@ import {
   type EffectivePermissions,
   type NamespaceWithUsage,
   type PermissionGrantRow
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   accessWriteFailure,
   boundAssets,
@@ -26,8 +26,8 @@ import {
   namespaceRequest,
   NamespacesTab,
   withGrantKind
-} from "@vivd-catalyst/chat-ui/access";
-import { DocsAddressProvider } from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-chat-ui/access";
+import { DocsAddressProvider } from "@work-shape/catalyst-ui";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

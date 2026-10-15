@@ -17,7 +17,7 @@ import {
   type OperationOrigin,
   type OperationResource,
   type OperationSource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   CONNECTION_CALL_TIMEOUT_MS,

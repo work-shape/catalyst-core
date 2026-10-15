@@ -2,7 +2,7 @@ import type {
   ApiClient,
   CollaborationWorkspaceWithRole,
   ConversationListItem
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { useCollaborationWorkspaceDirectoryQuery } from "../api/workspace-queries";
 import { useCollaborationWorkspaceMutations } from "../api/collaboration-workspace-mutations";
 import { useMoveConversationMutation } from "../api/workspace-mutations";

@@ -3,8 +3,8 @@ import {
   type ToolExecutionContext,
   type ToolHandlerResult,
   readObjectBytes
-} from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import {
   WORKSPACE_READ_DEFAULT_LINES,
   workspaceReadFileInputSchema,

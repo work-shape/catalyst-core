@@ -2,13 +2,13 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { apiOperations, safeConfigSchema } from "@vivd-catalyst/api-contract";
-import { defineCapability } from "@vivd-catalyst/capability-sdk";
+import { apiOperations, safeConfigSchema } from "@work-shape/catalyst-api-contract";
+import { defineCapability } from "@work-shape/catalyst-capability-sdk";
 import {
   createClientInstanceApp,
   platformModules,
   resolveInstanceModules
-} from "@vivd-catalyst/client-assembly";
+} from "@work-shape/catalyst-client-assembly";
 import {
   createSafeConfigView,
   isPasswordMailEnabled,
@@ -16,13 +16,13 @@ import {
   parseClientInstanceConfig,
   resolveModuleSwitches,
   type ClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   createModuleRegistry,
   defineModule,
   MODULE_NAMES,
   type ModuleSnapshot
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestOperationCalls } from "./support/test-instance";
 

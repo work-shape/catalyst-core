@@ -13,7 +13,7 @@
 // counts the known lifetime of a token from the moment it asked for the address, which is
 // never later than the moment the instance made the token.
 
-import { ApiError } from "@vivd-catalyst/api-client";
+import { ApiError } from "@work-shape/catalyst-api-client";
 
 /**
  * How long a token serves, as the instance mints it (`APP_CONTENT_TOKEN_TTL_SECONDS` of the

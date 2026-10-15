@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createApiClient, signInWithEmail, type LocaleCode } from "@vivd-catalyst/api-client";
+import { createApiClient, signInWithEmail, type LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   Button,
   Card,
@@ -10,7 +10,7 @@ import {
   cn,
   Input,
   UiRoot
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { useTranslation } from "./i18n";
 import { LocaleSelector } from "./locale-selector";

@@ -1,4 +1,4 @@
-import type { AgentConfig } from "@vivd-catalyst/core";
+import type { AgentConfig } from "@work-shape/catalyst-core";
 import { findMissingAgentToolReferences } from "./reference-validation";
 
 export type UnavailableTool =

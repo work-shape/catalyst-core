@@ -10,7 +10,7 @@ import {
   type StepProps,
   type StepState,
   type UiLabels
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 
 // Steps is an ordered list of steps joined by a line. Every test here fails without the
 // components: the library did not export them.

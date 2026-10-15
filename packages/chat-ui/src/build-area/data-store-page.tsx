@@ -22,7 +22,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { CopyIdMenu } from "../copy-id-item";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";

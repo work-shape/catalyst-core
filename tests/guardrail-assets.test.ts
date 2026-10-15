@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createGuardrailAssetKind } from "@vivd-catalyst/chat-server";
+import { createGuardrailAssetKind } from "@work-shape/catalyst-server";
 import {
   asCollaborationWorkspaceId,
   type AuditActor,
   type CollaborationWorkspaceId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import { appFiles, setupAppInstance, type AppInstance } from "./support/app-instance";
 import {

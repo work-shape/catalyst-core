@@ -1,4 +1,4 @@
-import { AppError, MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@vivd-catalyst/core";
+import { AppError, MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@work-shape/catalyst-core";
 import { clientInstanceConfigSchema, type AgentConfig, type ClientInstanceConfig } from "./schemas";
 import { isPasswordMailEnabled } from "./branding";
 import { resolveModuleSwitches } from "./module-normalization";

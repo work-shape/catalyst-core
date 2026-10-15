@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { asClientInstanceId, dataStoreOperationName } from "@vivd-catalyst/core";
-import { compileGuardrailPattern, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { asClientInstanceId, dataStoreOperationName } from "@work-shape/catalyst-core";
+import {
+  compileGuardrailPattern,
+  parseClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
 import { setupNamespaceHolder } from "./support/asset-operations";
@@ -11,7 +14,7 @@ import {
   finding,
   useDataStoreInstance
 } from "./support/data-store-instance";
-import { OPERATION_CALL_APPROVAL_KIND, runOperation } from "@vivd-catalyst/tool-execution";
+import { OPERATION_CALL_APPROVAL_KIND, runOperation } from "@work-shape/catalyst-tool-execution";
 import { resultSchema as appActionResultSchema } from "./support/app-actions";
 import { setupFindingsApp } from "./support/findings-app";
 import {

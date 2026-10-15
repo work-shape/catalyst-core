@@ -1,5 +1,5 @@
 import { keysetFilter } from "./paging";
-import type { StorePage } from "@vivd-catalyst/core";
+import type { StorePage } from "@work-shape/catalyst-core";
 import { and, eq, inArray, isNull, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
@@ -22,7 +22,7 @@ import {
   createUserId,
   requireUsableUser,
   userInDeletionError
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
 import {

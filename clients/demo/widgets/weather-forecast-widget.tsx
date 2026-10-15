@@ -1,6 +1,9 @@
 import { CalendarDays, Cloud, CloudRain, CloudSun, MapPin, Sun, Wind } from "lucide-react";
-import { defineToolDisplayWidget, type ToolDisplayRenderInput } from "@vivd-catalyst/chat-ui/shell";
-import { Badge, Card, List, ListRow } from "@vivd-catalyst/ui";
+import {
+  defineToolDisplayWidget,
+  type ToolDisplayRenderInput
+} from "@work-shape/catalyst-chat-ui/shell";
+import { Badge, Card, List, ListRow } from "@work-shape/catalyst-ui";
 import {
   weatherForecastOutputSchema,
   type WeatherForecastDay,

@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { ConnectionDetail, LocaleCode } from "@vivd-catalyst/api-client";
+import type { ConnectionDetail, LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
@@ -16,7 +16,7 @@ import {
   type ConnectionHoldersRead,
   type ConnectionSource,
   type ConnectionTestRun
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { platformContext } from "./chat-ui-build-fixtures";
 import {
   connectionAsset,

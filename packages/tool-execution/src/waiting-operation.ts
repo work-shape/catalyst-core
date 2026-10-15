@@ -13,7 +13,7 @@ import {
   type OperationRunDecision,
   type OperationRunEnd,
   type OperationRunId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   authorizeActor,
   authorizeOrigin,

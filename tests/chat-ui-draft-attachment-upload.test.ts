@@ -4,7 +4,7 @@ import {
   environmentManager,
   focusManager
 } from "@tanstack/react-query";
-import { ApiError, type DraftAttachment } from "@vivd-catalyst/api-client";
+import { ApiError, type DraftAttachment } from "@work-shape/catalyst-api-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   draftAttachmentPolling,
@@ -16,7 +16,7 @@ import {
   isAbandonedDraftConversation,
   terminalRunNotice
 } from "../packages/chat-ui/src/workspace/workspace-chat-model";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 
 const file = () => new File(["content"], "Perso.pdf", { type: "application/pdf" });
 const { t } = createTranslationContext("de");

@@ -4,7 +4,7 @@ import {
   type Operation,
   type OperationPathParamName,
   type OperationRequestHeader
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import type { z } from "zod";
 import { ApiError, ApiResponseShapeError, transportError, unreadableResponseError } from "./errors";
 import { readServerSentEvents } from "./server-sent-events";

@@ -1,5 +1,5 @@
 import { and, desc, eq, notExists, sql } from "drizzle-orm";
-import type { LiveOnceSwitch, LiveOnceSwitchStore } from "@vivd-catalyst/core";
+import type { LiveOnceSwitch, LiveOnceSwitchStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { configAssets } from "./schema/configAssets";
 import { liveOnceRuns, liveOnceSwitches } from "./schema/liveOnceSwitches";

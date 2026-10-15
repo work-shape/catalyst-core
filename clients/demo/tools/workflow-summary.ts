@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineConfiguredTool, defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { defineConfiguredTool, defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 
 const toolConfigSchema = z.object({
   permissionRef: z.string().min(1).default("demo-tools"),

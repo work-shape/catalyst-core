@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import type { OperationRunResource } from "@vivd-catalyst/api-client";
+import type { OperationRunResource } from "@work-shape/catalyst-api-client";
 import {
   Banner,
   Button,
@@ -9,7 +9,7 @@ import {
   PageHeader,
   Section,
   SkeletonList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useCollaborationWorkspacesQuery } from "../../api/workspace-queries";
 import { collaborationWorkspaceDisplayName } from "../../collaboration-workspace/collaboration-workspace-name";
 import { useTranslation } from "../../i18n";

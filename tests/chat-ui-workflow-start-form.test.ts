@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { checkStartForm, startFormOf, startRefusalByField } from "@vivd-catalyst/chat-ui/workflows";
+import {
+  checkStartForm,
+  startFormOf,
+  startRefusalByField
+} from "@work-shape/catalyst-chat-ui/workflows";
 
 // The start form of a Workflow: made from the JSON Schema of its published inputs, and the
 // check of what a person entered before the instance checks it again.

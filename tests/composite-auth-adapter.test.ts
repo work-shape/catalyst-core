@@ -1,8 +1,8 @@
 import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
-import { AppError, asClientInstanceId, type AuthenticatedUser } from "@vivd-catalyst/core";
+import { AppError, asClientInstanceId, type AuthenticatedUser } from "@work-shape/catalyst-core";
 
-import { CompositeAuthAdapter, IdentityResolvingAuthAdapter } from "@vivd-catalyst/auth";
+import { CompositeAuthAdapter, IdentityResolvingAuthAdapter } from "@work-shape/catalyst-auth";
 
 const request = {
   clientInstanceId: asClientInstanceId("composite-auth-test"),

@@ -9,8 +9,8 @@ import {
   type PlatformEventAnswer,
   type PlatformEventEmitter,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
-import { guardrailDenial, type PageSaveIntoApp } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { guardrailDenial, type PageSaveIntoApp } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
 import type { AssetWorkflowOptions } from "../types";
 import type { PageApps } from "./page-apps";

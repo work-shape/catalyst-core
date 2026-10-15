@@ -4,8 +4,8 @@ import {
   type ModelBindingConfig,
   type ModelProviderConfig,
   type ModelUsageEventInput
-} from "@vivd-catalyst/core";
-import type { LocalAgentRuntimeOptions } from "@vivd-catalyst/agent-runtime";
+} from "@work-shape/catalyst-core";
+import type { LocalAgentRuntimeOptions } from "@work-shape/catalyst-agent-runtime";
 import {
   createModelGateway,
   DETERMINISTIC_CAPABILITIES,
@@ -20,9 +20,12 @@ import {
   type ModelAdapterStreamEvent,
   type ModelGateway,
   type ModelTransportContext
-} from "@vivd-catalyst/model-provider";
-import { REASONING_EFFORTS } from "@vivd-catalyst/core";
-import { getModelProviderConfigs, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-model-provider";
+import { REASONING_EFFORTS } from "@work-shape/catalyst-core";
+import {
+  getModelProviderConfigs,
+  type ClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 
 /** A provider as tests script it: it answers whatever entry the call names. */
 export interface FakeModelProvider {

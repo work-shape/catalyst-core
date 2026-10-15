@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { PersonalApiKey, PlatformContext } from "@vivd-catalyst/api-client";
-import { administration } from "@vivd-catalyst/chat-ui/admin";
+import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
+import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import { PersonalApiKeysTable } from "../packages/chat-ui/src/control-plane/personal-api-keys-list";
 import {
   buildPersonalKeyScopes,

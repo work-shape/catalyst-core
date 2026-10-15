@@ -28,7 +28,7 @@ import {
   type ServicePrincipalRecord,
   type StorePage,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { SERVICE_PRINCIPALS_ACTION } from "./api-access-administration-workflow";
 import {
   authorizePrincipalHolderWrite,

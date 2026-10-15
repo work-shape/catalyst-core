@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { AppError, asWorkspaceCommandId, type Logger } from "@vivd-catalyst/core";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import { AppError, asWorkspaceCommandId, type Logger } from "@work-shape/catalyst-core";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 import { createTestToolRunner } from "./support/tool-runner";
 

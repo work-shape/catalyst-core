@@ -1,4 +1,4 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   CONNECTION_ACTIONS,
@@ -6,7 +6,7 @@ import {
   type ActorAccess,
   type OperationAuthorization,
   type OperationResource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { accessResource, decide } from "../asset-access";
 import { requestConnectionDiscovery } from "../connection-jobs";
 import type { ConnectionManagementPort } from "../connection-management-port";

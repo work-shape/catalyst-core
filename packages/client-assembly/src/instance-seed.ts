@@ -1,6 +1,6 @@
-import { seedReleaseGuardrails } from "@vivd-catalyst/chat-server";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { PlatformStores } from "@vivd-catalyst/core";
+import { seedReleaseGuardrails } from "@work-shape/catalyst-server";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import type { PlatformStores } from "@work-shape/catalyst-core";
 import type { InstanceConnections } from "./connections";
 import { seedInstanceShippedSkills } from "./shipped-skills";
 

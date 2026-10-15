@@ -7,7 +7,7 @@ import {
   type AssetRepoWrite,
   type ConfigAssetStore,
   type OperationRunId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { usePostgresSuite } from "./postgres-suite";
 
 // What the tests of the ledger of asset repositories share: one asset on a client instance of

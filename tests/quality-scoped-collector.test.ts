@@ -21,8 +21,8 @@ function collect(target: string) {
 
 beforeAll(() => {
   directory = realpathSync(mkdtempSync(join(tmpdir(), "catalyst-quality-scope-")));
-  mkdirSync(join(directory, "node_modules/@vivd-catalyst"), { recursive: true });
-  symlinkSync(quality, join(directory, "node_modules/@vivd-catalyst/quality-config"), "dir");
+  mkdirSync(join(directory, "node_modules/@work-shape"), { recursive: true });
+  symlinkSync(quality, join(directory, "node_modules/@work-shape/catalyst-quality-config"), "dir");
   write("package.json", { name: "fixture", private: true, workspaces: ["packages/*"] });
   write("knip.json", {
     workspaces: {
@@ -43,7 +43,7 @@ beforeAll(() => {
   });
   writeFileSync(
     join(directory, "eslint.config.mjs"),
-    'export { default } from "@vivd-catalyst/quality-config";\n'
+    'export { default } from "@work-shape/catalyst-quality-config";\n'
   );
   for (const name of ["alpha", "beta"]) {
     mkdirSync(join(directory, `packages/${name}/src`), { recursive: true });

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { appInterfacePath } from "@vivd-catalyst/api-contract";
-import { createAppAssetKind } from "@vivd-catalyst/chat-server";
+import { appInterfacePath } from "@work-shape/catalyst-api-contract";
+import { createAppAssetKind } from "@work-shape/catalyst-server";
 import {
   ASSET_GET_FILES_MAX_BYTES,
   ASSET_PUT_FILES_MAX_BYTES,
@@ -17,7 +17,7 @@ import {
   liveRevisionId,
   type AccessHolder,
   type PersistedAccess
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { appFiles, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { createNoticeKind, noticeSchema } from "./support/notice-kind";

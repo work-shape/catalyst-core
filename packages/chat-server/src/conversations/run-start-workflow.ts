@@ -1,4 +1,4 @@
-import { auditActorFromUser } from "@vivd-catalyst/core";
+import { auditActorFromUser } from "@work-shape/catalyst-core";
 import {
   AppError,
   type AgentRun,
@@ -20,8 +20,8 @@ import {
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
   reasoningEffortChoiceForBinding
-} from "@vivd-catalyst/core";
-import { resolveModelBinding } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-core";
+import { resolveModelBinding } from "@work-shape/catalyst-config-schema";
 import { getWorkspaceAssetSnapshot } from "../agent-availability";
 import { createEmptyAttachmentManifest } from "../attachments";
 import { createConversationTitle } from "../conversation-title";

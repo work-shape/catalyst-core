@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ConversationRetentionWorkflow, storePageFileSet } from "@vivd-catalyst/chat-server";
-import { asClientInstanceId, asConversationId } from "@vivd-catalyst/core";
+import { ConversationRetentionWorkflow, storePageFileSet } from "@work-shape/catalyst-server";
+import { asClientInstanceId, asConversationId } from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { createRetentionOptions } from "./support/retention-harness";

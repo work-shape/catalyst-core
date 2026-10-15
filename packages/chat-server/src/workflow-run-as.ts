@@ -6,7 +6,7 @@ import {
   type ApiAccessStore,
   type AuthenticatedIdentity,
   type ServicePrincipalRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import { requireHeldRightsWithin } from "./held-rights-within";
 import { RELEASE_KEY, principalRights, type PrincipalRightsOptions } from "./principal-rights";

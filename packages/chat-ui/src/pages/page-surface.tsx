@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
   type ReactNode
 } from "react";
-import type { AppBridgeContext, PagePreviewResponse } from "@vivd-catalyst/api-client";
+import type { AppBridgeContext, PagePreviewResponse } from "@work-shape/catalyst-api-client";
 import {
   Button,
   Disclosure,
@@ -17,7 +17,7 @@ import {
   DisclosureTrigger,
   SegmentedControl,
   SegmentedControlItem
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { PageAppAction } from "../apps/page-app-action";
 import { useTranslation } from "../i18n";

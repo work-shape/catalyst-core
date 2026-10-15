@@ -4,7 +4,7 @@ import {
   type AgentAvailability,
   type ClientInstanceId,
   type ConfigAssetStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresTransaction } from "./postgres-database";
 import { configAssetAvailability, configAssets, configAssetWorkspaceAvailability } from "./schema";
 

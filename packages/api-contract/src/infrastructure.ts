@@ -2,7 +2,7 @@ import {
   PROVIDER_CHECK_ERROR_CLASSES,
   PROVIDER_PORTS,
   PROVIDER_REGIONS
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { timestampSchema } from "./shared";
 

@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-catalyst/core";
+import { AppError } from "@work-shape/catalyst-core";
 
 /**
  * The message carries the first issue, so a log line or a terminal names the key that stopped

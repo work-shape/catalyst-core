@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/auth",
+  "name": "@work-shape/catalyst-auth",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/auth"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,7 +34,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/core": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
     "better-auth": "^1.6.15",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"

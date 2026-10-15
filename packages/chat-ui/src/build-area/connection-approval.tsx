@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Badge, Button, Checkbox, FoldedText, List, Textarea } from "@vivd-catalyst/ui";
+import { Badge, Button, Checkbox, FoldedText, List, Textarea } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import {
   APPROVAL_SURFACES,

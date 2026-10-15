@@ -1,7 +1,7 @@
 import type net from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import postgres from "postgres";
-import type { JsonObject, ScopedSecretResolver } from "@vivd-catalyst/core";
+import type { JsonObject, ScopedSecretResolver } from "@work-shape/catalyst-core";
 import { PostgresExecutorError, type PostgresExecutorErrorKind } from "./errors";
 import {
   POSTGRES_CANCEL_REPEAT_MS,

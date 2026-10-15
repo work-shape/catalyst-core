@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiOperations, MAX_LIST_LIMIT, type ApiOperationName } from "@vivd-catalyst/api-contract";
+import {
+  apiOperations,
+  MAX_LIST_LIMIT,
+  type ApiOperationName
+} from "@work-shape/catalyst-api-contract";
 import { runCli, type CliRuntimeOptions } from "@work-shape/catalyst-cli";
 
 const directories: string[] = [];

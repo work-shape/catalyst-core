@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/core",
+  "name": "@work-shape/catalyst-core",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/core"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,7 +34,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/asset-schemas": "workspace:*",
+    "@work-shape/catalyst-asset-schemas": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import { renderArtifactPreviewJob, type JobRetry } from "@vivd-catalyst/core";
+import { renderArtifactPreviewJob, type JobRetry } from "@work-shape/catalyst-core";
 import { connectionDiscoverJob } from "./connection-jobs";
 import { deleteAccountJob, deleteWorkspaceJob, generateConversationTitleJob } from "./job-kinds";
 

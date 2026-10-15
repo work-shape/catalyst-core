@@ -1,5 +1,5 @@
 import { jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { ClientInstanceId, InfrastructureCheckOutcome } from "@vivd-catalyst/core";
+import type { ClientInstanceId, InfrastructureCheckOutcome } from "@work-shape/catalyst-core";
 
 /**
  * One row per instance: the last check outcome of each of its providers, by the provider's id,

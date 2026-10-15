@@ -9,12 +9,12 @@ import {
   type PageBuildLimits,
   type PageBuildOutcome,
   type PageFile
-} from "@vivd-catalyst/app-build";
-import { fileSetPathIssue } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-app-build";
+import { fileSetPathIssue } from "@work-shape/catalyst-core";
 import {
   DEFAULT_WORKSPACE_COMMAND_PATH,
   type WorkspaceCommandProcessExecutor
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 
 // One Page build is one command in the sandbox the instance runs agent commands in. A file of
 // a Page is untrusted, and the route generator the build uses can be brought to run one. So the

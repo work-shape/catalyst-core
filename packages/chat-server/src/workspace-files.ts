@@ -6,7 +6,7 @@ import {
   type FoundFile,
   type FoundFileKind,
   type StorePage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "./types";
 import { requireWorkspaceAccess } from "./workspace-access";
 

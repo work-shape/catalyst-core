@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { PROVIDER_REGIONS, REASONING_EFFORTS, type ModelProviderConfig } from "@vivd-catalyst/core";
+import {
+  PROVIDER_REGIONS,
+  REASONING_EFFORTS,
+  type ModelProviderConfig
+} from "@work-shape/catalyst-core";
 
 /** The model a `deterministic` entry answers with when it names none. */
 const DETERMINISTIC_MODEL = "deterministic-local";

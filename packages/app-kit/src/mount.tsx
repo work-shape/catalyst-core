@@ -1,5 +1,5 @@
 import { RouterProvider, type AnyRoute } from "@tanstack/react-router";
-import { UiRoot, uiLabelsDe, uiLabelsEn } from "@vivd-catalyst/ui";
+import { UiRoot, uiLabelsDe, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { getContext, navigate, onThemeChange } from "./client";

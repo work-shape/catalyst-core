@@ -7,9 +7,9 @@ import {
   type DataSourceConfig,
   type Logger,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
-import { createDataSourceRegistry, createDataSourceTools } from "@vivd-catalyst/data-source";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { createDataSourceRegistry, createDataSourceTools } from "@work-shape/catalyst-data-source";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
 import { createTestToolRunner } from "./support/tool-runner";
 import { usePostgresSuite } from "./support/postgres-suite";
 

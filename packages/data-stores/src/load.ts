@@ -1,4 +1,4 @@
-import type { PostgresChangeStatements } from "@vivd-catalyst/postgres-connector";
+import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import {
   AppError,
   DATA_STORE_LOAD_CHANGE_RIGHT,
@@ -7,7 +7,7 @@ import {
   dataStoreOperationName,
   type DataStoreLoadResult,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { catalogTarget, readTables } from "./catalog";
 import { quoteIdentifier } from "./server";

@@ -1,4 +1,4 @@
-import { AppError, type AuthenticatedIdentity } from "@vivd-catalyst/core";
+import { AppError, type AuthenticatedIdentity } from "@work-shape/catalyst-core";
 import { hasExplicitCredentials } from "./explicit-credentials";
 import type { AuthAdapter, AuthRequest } from "./types";
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
-import { WORKFLOW_MAX_BLOCK_DEPTH } from "@vivd-catalyst/core";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { WORKFLOW_MAX_BLOCK_DEPTH } from "@work-shape/catalyst-core";
 import {
   countsLine,
   defaultEntryFilter,
@@ -13,7 +13,7 @@ import {
   stepOutputRows,
   workflowGraph,
   type CanvasRun
-} from "@vivd-catalyst/chat-ui/workflows";
+} from "@work-shape/catalyst-chat-ui/workflows";
 
 // The drawing of a Workflow as a pure function of its file form and of the step runs of a
 // run. Every definition here is the parsed file, taken through the mapping the instance's

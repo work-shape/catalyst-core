@@ -1,14 +1,14 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import { CodeBlock } from "@vivd-catalyst/ui";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { CodeBlock } from "@work-shape/catalyst-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   codeColouring,
   HIGHLIGHT_MAX_CHARS,
   HIGHLIGHT_MAX_LINES,
   highlightCode,
   StoredFileView
-} from "@vivd-catalyst/chat-ui/pages";
+} from "@work-shape/catalyst-chat-ui/pages";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // A stored file shows in the colours of its language, through the highlighter the chat's code

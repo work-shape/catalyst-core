@@ -4,7 +4,7 @@ import {
   GUARDRAIL_NAME_MAX_LENGTH,
   GUARDRAIL_NAME_PATTERN,
   GUARDRAIL_NAME_RULE
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { invalidConfigError } from "./config-errors";
 import type { ReleaseGuardrailConfig } from "./guardrail-schema";
 

@@ -9,7 +9,7 @@ import {
   type Namespace,
   type NamespaceUsage,
   type PermissionGrant
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { keysetFilter } from "../paging";
 import type { PostgresConnection } from "../postgres-database";
 import { lockRights } from "../rights-lock";

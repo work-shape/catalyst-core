@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createPlatformAssetCalls } from "@vivd-catalyst/chat-server";
+import { createPlatformAssetCalls } from "@work-shape/catalyst-server";
 import {
   asAgentRunId,
   asConversationId,
@@ -12,7 +12,7 @@ import {
   type CollaborationWorkspaceId,
   type ToolExecutionContext,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   agent,
   clientInstanceId,

@@ -1,6 +1,6 @@
-import type { ReasoningEffortConfig } from "@vivd-catalyst/core";
-import type { ResolvedModelSelection } from "@vivd-catalyst/config-schema";
-import type { ModelBindingRef, ModelGateway } from "@vivd-catalyst/model-provider";
+import type { ReasoningEffortConfig } from "@work-shape/catalyst-core";
+import type { ResolvedModelSelection } from "@work-shape/catalyst-config-schema";
+import type { ModelBindingRef, ModelGateway } from "@work-shape/catalyst-model-provider";
 
 /** The gateway as the server's own model calls use it: conversation titles and approval checks. */
 export type SystemModelGateway = Pick<ModelGateway, "complete" | "capabilities">;

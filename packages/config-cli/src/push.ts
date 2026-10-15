@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { ASSET_RELEASE_SYNC_MAX_ITEMS } from "@vivd-catalyst/api-contract";
+import { ASSET_RELEASE_SYNC_MAX_ITEMS } from "@work-shape/catalyst-api-contract";
 import { ConfigApiError, type ConfigApi, type SyncBatch, type SyncOutput } from "./api";
 import {
   STATE_FILENAME,

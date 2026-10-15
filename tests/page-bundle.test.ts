@@ -5,8 +5,8 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { PageBuildResult, PageFile } from "@vivd-catalyst/app-build";
-import { buildPage, parsePageManifest } from "@vivd-catalyst/app-build/build";
+import type { PageBuildResult, PageFile } from "@work-shape/catalyst-app-build";
+import { buildPage, parsePageManifest } from "@work-shape/catalyst-app-build/build";
 import { fileRoute, htmlManifest, pageFiles, reactManifest, rootRoute } from "./support/page-build";
 import { refuseNetwork } from "./support/refuse-network";
 
@@ -94,6 +94,36 @@ function Home() {
         pages: [{ path: "/" }, { path: "/history" }]
       }
     });
+  });
+
+  it("rebuilds stored Page source importing the four legacy kit names", async () => {
+    const legacyKit = ["@vivd", "catalyst/app-kit"].join("-");
+    const files = built(
+      await buildPage({
+        files: reactPage({
+          "index.tsx": `import { createFileRoute } from "${legacyKit}/router";
+import { getContext } from "${legacyKit}";
+import { Button } from "${legacyKit}/ui";
+import { drawChart } from "${legacyKit}/charts";
+export const Route = createFileRoute("/")({
+  component: () => <Button onClick={() => console.log(getContext(), drawChart)}>Saved App</Button>
+});
+`
+        })
+      })
+    );
+    const script = files.get("app.js") ?? "";
+    for (const file of ["kit.js", "ui.js", "charts.js", "router.js"]) {
+      expect(script).toContain(`"/app-runtime/kit/1.0.0/${file}"`);
+    }
+    expect(script).not.toContain(legacyKit);
+
+    const invalid = await buildPage({
+      files: reactPage({ "index.tsx": `import "unavailable-package";\n${fileRoute("/")}` })
+    });
+    const errors = JSON.stringify(errorsOf(invalid));
+    expect(errors).toContain("@work-shape/catalyst-app-kit");
+    expect(errors).not.toContain(legacyKit);
   });
 
   it("reports a syntax error with its file and line, also in a file no route imports", async () => {

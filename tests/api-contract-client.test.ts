@@ -13,7 +13,7 @@ import {
   createOpenApiDocument,
   operationPathParamNames,
   type Operation
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   ApiError,
   completedOutput,
@@ -27,7 +27,7 @@ import {
   type OperationOutcome,
   type OperationRunResource,
   type RunObservation
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 
 const createdAt = "2026-06-27T00:00:00.000Z";
 

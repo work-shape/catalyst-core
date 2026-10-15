@@ -2,8 +2,8 @@ import {
   asUserId,
   createOperationRegistry,
   isAgentAvailableInWorkspace
-} from "@vivd-catalyst/core";
-import type { RunOperationDeps } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import {
   ApprovalRequestWorkflow,
   type ApprovalRequestWorkflowOptions

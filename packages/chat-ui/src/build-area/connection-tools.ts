@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ConnectionTools } from "@vivd-catalyst/api-client";
+import type { ConnectionTools } from "@work-shape/catalyst-api-client";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { useBuildNavigation } from "./build-route";
 import { toolGroupStartsOpen } from "./tool-group";

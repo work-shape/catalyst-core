@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { agentConfigSchema } from "@vivd-catalyst/config-schema";
+import { agentConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   createConfigAssetSource,
   type ClientInstanceCapability
-} from "@vivd-catalyst/client-assembly";
+} from "@work-shape/catalyst-client-assembly";
 import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
   asToolCallId
-} from "@vivd-catalyst/core";
-import { createReadSkillTool } from "@vivd-catalyst/tool-execution";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { createReadSkillTool } from "@work-shape/catalyst-tool-execution";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { SERVICE_HEADER, setupAccessInstance } from "./support/access-instance";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";

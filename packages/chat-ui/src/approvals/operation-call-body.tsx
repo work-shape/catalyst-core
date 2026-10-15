@@ -1,4 +1,4 @@
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   Banner,
   CodeBlock,
@@ -8,7 +8,7 @@ import {
   EmptyState,
   KeyValue,
   KeyValueList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { operationOriginLabelKeys } from "../operations/operations-model";
 import { formatApprovalDate } from "./approval-request-model";

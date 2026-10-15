@@ -15,7 +15,7 @@ import {
   ListRow,
   Spinner,
   Textarea
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { saveBlobAsFile } from "../conversation-file-content";
 import { resolveFileType } from "../file-type";
 import { FileTypeIcon } from "../file-type-icon";

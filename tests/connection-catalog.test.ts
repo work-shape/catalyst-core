@@ -6,7 +6,7 @@ import {
   fingerprintOperation,
   jsonSchemaAsZod,
   readConnectionCatalog
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   asAgentRunId,
   asConversationId,
@@ -23,7 +23,7 @@ import {
   type ConnectorOperationDescriptor,
   type ConnectorTypeDefinition,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import { createTestConnector } from "./support/test-connector";
 

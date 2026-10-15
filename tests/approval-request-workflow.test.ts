@@ -9,9 +9,9 @@ import {
   type ApprovalRequestHandler,
   type AuthenticatedUser,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
+import { ApprovalRequestWorkflow } from "@work-shape/catalyst-server";
 import { eventually } from "./support/assertions";
 
 const clientInstanceId = asClientInstanceId("approval_test");

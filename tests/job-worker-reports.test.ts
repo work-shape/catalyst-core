@@ -3,7 +3,7 @@ import {
   JOB_WORKER_SILENT_MS,
   JobWithdrawnError,
   defineJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { describe, expect, it, vi } from "vitest";
 import { required } from "./support/assertions";
 import { kindOf, useJobExecutorHarness } from "./support/job-executor-harness";

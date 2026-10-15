@@ -1,11 +1,11 @@
-import { AppError } from "@vivd-catalyst/core";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { AppError } from "@work-shape/catalyst-core";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   isConfiguredToolDefinition,
   type AnyConfiguredToolDefinition,
   type AnyToolDefinition,
   type ToolAssemblyDefinition
-} from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-tool-sdk";
 
 export function createToolDefinitions(input: {
   config: ClientInstanceConfig;

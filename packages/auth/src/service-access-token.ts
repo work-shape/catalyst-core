@@ -23,7 +23,7 @@ import {
   type ResolvedApiCredential,
   type ResolvedPersonalApiKey,
   type UserStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { AuthAdapter, AuthRequest, AuthRequestHeaders } from "./types";
 
 const SERVICE_ACCESS_TOKEN_TYPE = "catalyst-service-access";

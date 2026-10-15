@@ -1,7 +1,10 @@
 import postgres from "postgres";
 import { z } from "zod";
 import { describe, expect, inject, it } from "vitest";
-import { ApiKeyAccessTokenExchange, HmacServiceAccessTokenAuthAdapter } from "@vivd-catalyst/auth";
+import {
+  ApiKeyAccessTokenExchange,
+  HmacServiceAccessTokenAuthAdapter
+} from "@work-shape/catalyst-auth";
 import {
   LEGACY_LIST_GRANTOR,
   PERMISSIONS,
@@ -16,8 +19,8 @@ import {
   legacyGrantRows,
   type AuthenticatedServicePrincipal,
   type PermissionGrant
-} from "@vivd-catalyst/core";
-import { migrateDatabase } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { migrateDatabase } from "@work-shape/catalyst-postgres-store";
 import {
   LEGACY_KEYS,
   frozenCredentialPermissions,

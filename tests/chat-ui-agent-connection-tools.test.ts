@@ -1,6 +1,6 @@
 import { createElement, createRef } from "react";
 import { describe, expect, it } from "vitest";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   AgentEditor,
   agentConfigToForm,
@@ -10,7 +10,7 @@ import {
   toggleToolName,
   toolPackages,
   type ConnectionToolsRead
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Connections in an agent's Tools section, a row each as the packages are (TOOLS-1), on

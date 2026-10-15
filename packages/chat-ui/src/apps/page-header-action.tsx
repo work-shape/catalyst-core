@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button, IconButton } from "@vivd-catalyst/ui";
+import { Button, IconButton } from "@work-shape/catalyst-ui";
 
 /**
  * One action in the header of a Page. The header is narrow on a phone and in an App's frame

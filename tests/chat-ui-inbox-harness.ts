@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from "react";
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import {
   approvalActionFailure,
   formatInboxAge,

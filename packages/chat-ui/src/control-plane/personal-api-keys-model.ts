@@ -1,4 +1,4 @@
-import type { PersonalApiKey, PlatformContext } from "@vivd-catalyst/api-client";
+import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
 
 /** How long a new key lives, in days. The instance takes at most a year. */
 export const PERSONAL_KEY_EXPIRY_DAYS = [30, 90, 365] as const;

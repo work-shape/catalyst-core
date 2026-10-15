@@ -1,7 +1,12 @@
 import { MoreHorizontal, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, type Job, type JobKindSummary, type JobStatus } from "@vivd-catalyst/api-client";
+import {
+  ApiError,
+  type Job,
+  type JobKindSummary,
+  type JobStatus
+} from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Banner,
@@ -29,7 +34,7 @@ import {
   TabsList,
   TabsTrigger,
   type BadgeTone
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatDateTime, formatElapsed } from "../../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../../i18n";
 import { useModuleName } from "../../module-texts";

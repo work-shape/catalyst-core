@@ -31,8 +31,8 @@ import {
   type ToolHandlerFailureResult,
   type ToolOperationRunner,
   type ToolPermissionMode
-} from "@vivd-catalyst/core";
-import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import type { OperationOutcome, RunOperationDeps } from "./operation-execution";
 import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";

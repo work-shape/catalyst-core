@@ -3,7 +3,7 @@ import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-i
 import { withTestSql } from "./support/test-sql";
 import { describe, expect, it } from "vitest";
 
-import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
+import { STANDALONE_AUTH_SOURCE } from "@work-shape/catalyst-auth";
 import {
   AppError,
   PERMISSIONS,
@@ -11,9 +11,9 @@ import {
   asClientInstanceId,
   asManagedFileId,
   asUserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import {
   createTestConfig,
   personalConversationListInput,

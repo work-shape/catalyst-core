@@ -1,6 +1,9 @@
 import postgres, { type Sql } from "postgres";
 import { afterEach, describe, expect, inject, it } from "vitest";
-import { ApiKeyAccessTokenExchange, HmacServiceAccessTokenAuthAdapter } from "@vivd-catalyst/auth";
+import {
+  ApiKeyAccessTokenExchange,
+  HmacServiceAccessTokenAuthAdapter
+} from "@work-shape/catalyst-auth";
 import {
   LEGACY_PERMISSION_ACTIONS,
   PERMISSIONS,
@@ -11,8 +14,8 @@ import {
   createAuthorizer,
   type AuthenticatedIdentity,
   type PermissionGrant
-} from "@vivd-catalyst/core";
-import { migrateDatabase, type PostgresStores } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { migrateDatabase, type PostgresStores } from "@work-shape/catalyst-postgres-store";
 import { restoreLegacyColumns } from "../scripts/verify-permissions";
 import * as pre from "./support/ap4-verify/pre-ap4-permissions";
 import { migrationsUntil } from "./support/migrations-until";

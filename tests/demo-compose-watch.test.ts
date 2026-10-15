@@ -35,7 +35,11 @@ describe("demo Compose watch", () => {
     );
     // Demo's browser entry, widgets and Vite plugin use chat-ui and ui;
     // api-client is also an explicit root for the shared frontend stack.
-    const pending = ["@vivd-catalyst/chat-ui", "@vivd-catalyst/ui", "@vivd-catalyst/api-client"];
+    const pending = [
+      "@work-shape/catalyst-chat-ui",
+      "@work-shape/catalyst-ui",
+      "@work-shape/catalyst-api-client"
+    ];
     const visited = new Set<string>();
     const syncEntries = Array.from(
       serviceBlock("ui").matchAll(/- action: sync\n\s+path: (\S+)\n\s+target: (\S+)/gu),

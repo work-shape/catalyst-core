@@ -1,4 +1,4 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   WORKFLOW_ACTIONS,
@@ -12,7 +12,7 @@ import {
   type OperationResource,
   type WorkflowRunView,
   type WorkflowStepRunView
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { decide } from "../asset-access";
 import type { ModuleRoutes, RouteRegistration } from "../http/route";
 import { listedWorkflowActions, workflowOf } from "../workflow-listing";

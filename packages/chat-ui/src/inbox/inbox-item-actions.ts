@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import type { ApprovalRequestView, DraftAttachment } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView, DraftAttachment } from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {

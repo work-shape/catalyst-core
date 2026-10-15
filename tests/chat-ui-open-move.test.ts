@@ -4,10 +4,10 @@ import {
   pendingOpen,
   placeFollowsOpens,
   planOpenMoves
-} from "@vivd-catalyst/chat-ui/open-move";
-import { readLastBuildScope, showOwnerInStudio } from "@vivd-catalyst/chat-ui/build-area";
-import type { WorkspaceRoute } from "@vivd-catalyst/chat-ui/shell";
-import type { AssetOpen } from "@vivd-catalyst/chat-ui/subject-run";
+} from "@work-shape/catalyst-chat-ui/open-move";
+import { readLastBuildScope, showOwnerInStudio } from "@work-shape/catalyst-chat-ui/build-area";
+import type { WorkspaceRoute } from "@work-shape/catalyst-chat-ui/shell";
+import type { AssetOpen } from "@work-shape/catalyst-chat-ui/subject-run";
 
 // The navigation rule of the agent's opens (navigation-and-layout.md 4.7b, checks 27 and 28;
 // platform-access.md check 46).

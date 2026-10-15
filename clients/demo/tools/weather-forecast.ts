@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineConfiguredTool, defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { defineConfiguredTool, defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { weatherForecastOutputSchema, type WeatherForecastOutput } from "./weather-forecast-schema";
 
 const toolConfigSchema = z

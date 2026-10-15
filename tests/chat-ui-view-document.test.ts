@@ -4,7 +4,7 @@ import {
   composeViewDocument,
   viewRuntimeAddress,
   type ViewDocumentInput
-} from "@vivd-catalyst/chat-ui";
+} from "@work-shape/catalyst-chat-ui";
 import { stubViewHtmlParser } from "./view-html-parser";
 
 stubViewHtmlParser();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError } from "@work-shape/catalyst-core";
 import { approvalSetting, fixture } from "./support/operation-approval";
 import { getTestJobs } from "./support/test-instance";
 

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type { ConfigAssetFromPage, ConfigAssetStore } from "@vivd-catalyst/core";
+import type { ConfigAssetFromPage, ConfigAssetStore } from "@work-shape/catalyst-core";
 import { publishedColumns, publishedRevisions } from "./postgres-config-asset-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { mapConfigAsset } from "./rows";

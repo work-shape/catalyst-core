@@ -3,20 +3,20 @@ import {
   StoreBackedAgentRuntime,
   createAgentRunSignal,
   type WorkerLocalAgentRuntimeOptions
-} from "@vivd-catalyst/agent-runtime";
+} from "@work-shape/catalyst-agent-runtime";
 import {
   StoreBackedAuditRecorder,
   type AgentConfig,
   type ApprovalRequestHandlerRegistry,
   type StructuredDataPublicationReviewer
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createSkillChangeApprovalHandler,
   createChatServer,
   createChatServerJobs
-} from "@vivd-catalyst/chat-server";
-import type { ChatAttachmentService, ChatServerOptions } from "@vivd-catalyst/chat-server";
-import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
+} from "@work-shape/catalyst-server";
+import type { ChatAttachmentService, ChatServerOptions } from "@work-shape/catalyst-server";
+import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
 import {
   AppError,
   type ConnectorTypeDefinition,
@@ -24,7 +24,7 @@ import {
   type JobWorker,
   type PlatformStores,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   type ClientInstanceConfig,
   getClientInstanceId,
@@ -32,9 +32,9 @@ import {
   getModelProviderConfigs,
   loadClientInstanceConfigFromFile,
   validateConfigAssetBundle
-} from "@vivd-catalyst/config-schema";
-import { createDataSourceTools, createDataSourceRegistry } from "@vivd-catalyst/data-source";
-import { createWebFetchToolDefinitions } from "@vivd-catalyst/web-access";
+} from "@work-shape/catalyst-config-schema";
+import { createDataSourceTools, createDataSourceRegistry } from "@work-shape/catalyst-data-source";
+import { createWebFetchToolDefinitions } from "@work-shape/catalyst-web-access";
 import {
   createBuiltInToolDefinitions,
   createConsoleWorkspaceCommandTelemetry,
@@ -43,8 +43,8 @@ import {
   createStructuredDataToolDefinitions,
   createWorkspaceToolDefinitions,
   WorkspaceCommandService
-} from "@vivd-catalyst/tool-execution";
-import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-tool-execution";
+import type { ToolAssemblyDefinition } from "@work-shape/catalyst-tool-sdk";
 import {
   assertCapabilityConfigKeys,
   assertClientAssemblyValid,

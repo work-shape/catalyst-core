@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/core";
+import type { LocaleCode } from "@work-shape/catalyst-core";
 
 export interface MailRecipient {
   email: string;
@@ -73,7 +73,7 @@ export interface MailProviderInstance {
   listCaptured?: () => CapturedMail[];
 }
 
-declare module "@vivd-catalyst/core" {
+declare module "@work-shape/catalyst-core" {
   /** What the `mail` port creates. */
   interface ProviderInstances {
     mail: MailProviderInstance;

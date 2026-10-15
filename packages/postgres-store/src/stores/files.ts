@@ -1,4 +1,4 @@
-import { type PlatformFileStore } from "@vivd-catalyst/core";
+import { type PlatformFileStore } from "@work-shape/catalyst-core";
 import { touchConversation } from "../postgres-conversation-operations";
 import { createPostgresPlatformFileStore } from "../postgres-file-store";
 import type { PostgresConnection } from "../postgres-database";

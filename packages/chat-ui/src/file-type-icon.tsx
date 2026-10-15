@@ -1,4 +1,4 @@
-import { cn, RegistryIcon } from "@vivd-catalyst/ui";
+import { cn, RegistryIcon } from "@work-shape/catalyst-ui";
 import type { FileType } from "./file-type";
 
 /**

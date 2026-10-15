@@ -1,4 +1,7 @@
-import { APP_ASSET_KIND, APP_BRIDGE_CONNECTION_CALL_REMOVED } from "@vivd-catalyst/api-contract";
+import {
+  APP_ASSET_KIND,
+  APP_BRIDGE_CONNECTION_CALL_REMOVED
+} from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   CONNECTION_OPERATION_PREFIX,
@@ -9,7 +12,7 @@ import {
   type OperationAuthorizeContext,
   type OperationDefinition,
   type OperationRegistry
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { decide } from "../asset-access";
 import { appResourceOf, authorizePublishedApp, requirePublishedRevision } from "./action-source";
 import { APP_ACTIONS } from "./app-kind";

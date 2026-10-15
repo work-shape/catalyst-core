@@ -5,7 +5,7 @@ import type {
   WorkflowManifest,
   WorkflowRun,
   WorkflowRunPrincipal
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // Who a Workflow Run acts as. The one place of the engine that reads `runAs`: a definition
 // names its principal by its `name`, which is unique on the instance, never changes and is

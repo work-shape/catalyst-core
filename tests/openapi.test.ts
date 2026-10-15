@@ -14,9 +14,9 @@ import {
   selectContractBaseline,
   type OpenApiDocument,
   type Operation
-} from "@vivd-catalyst/api-contract";
-import type { AuthAdapter } from "@vivd-catalyst/auth";
-import { APP_ERROR_STATUS_CODES, AppError } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-contract";
+import type { AuthAdapter } from "@work-shape/catalyst-auth";
+import { APP_ERROR_STATUS_CODES, AppError } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { required } from "./support/assertions";
 import { registeredTestOperations } from "./support/operations";

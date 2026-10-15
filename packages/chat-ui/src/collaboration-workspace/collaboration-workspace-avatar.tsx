@@ -1,4 +1,4 @@
-import { Avatar, type AvatarSize } from "@vivd-catalyst/ui";
+import { Avatar, type AvatarSize } from "@work-shape/catalyst-ui";
 import {
   collaborationWorkspaceAccentAttributes,
   resolveCollaborationWorkspaceAccentColor

@@ -21,7 +21,7 @@ import {
   skillFormToConfig,
   startedAgentForm,
   startedSkillForm
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 
 describe("asset form model", () => {
   it("round-trips a full agent config through the form state", () => {

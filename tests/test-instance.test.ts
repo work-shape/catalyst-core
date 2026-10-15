@@ -7,7 +7,7 @@ import postgres from "postgres";
 import { PostgresFixtures, requiredTestDatabaseUrl } from "./support/postgres-fixtures";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { describe, expect, it, vi } from "vitest";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { createTestInstance } from "./support/test-instance";
 import { createTestConfig, seedConversationMessage } from "./support/fixtures";
 

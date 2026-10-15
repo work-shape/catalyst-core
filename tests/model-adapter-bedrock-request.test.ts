@@ -3,7 +3,7 @@ import {
   ModelProviderError,
   type ModelMessage,
   type ModelTool
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { answerWith, bedrock, collect, message } from "./support/bedrock-adapter";
 import { RECORDED_BEDROCK_PROFILE } from "./support/model-adapter-recordings";
 

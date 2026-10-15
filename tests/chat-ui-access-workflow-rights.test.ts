@@ -3,7 +3,7 @@ import {
   ApiError,
   type AdministeredUser,
   type PermissionGrantRow
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   accessWriteFailure,
   emptyGrantForm,
@@ -15,8 +15,8 @@ import {
   grantVerbs,
   splitGrantableAction,
   withGrantKind
-} from "@vivd-catalyst/chat-ui/access";
-import { GRANTABLE_ACTION_SCOPES, GRANTABLE_ACTIONS } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-chat-ui/access";
+import { GRANTABLE_ACTION_SCOPES, GRANTABLE_ACTIONS } from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

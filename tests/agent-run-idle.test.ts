@@ -1,6 +1,6 @@
-import { AGENT_RUN_IDLE_LIMIT_MS } from "@vivd-catalyst/agent-runtime";
-import { asToolCallId, type AgentRun } from "@vivd-catalyst/core";
-import { createWorkspaceCommandClient } from "@vivd-catalyst/tool-execution";
+import { AGENT_RUN_IDLE_LIMIT_MS } from "@work-shape/catalyst-agent-runtime";
+import { asToolCallId, type AgentRun } from "@work-shape/catalyst-core";
+import { createWorkspaceCommandClient } from "@work-shape/catalyst-tool-execution";
 import { describe, expect, it, vi } from "vitest";
 import {
   useAgentRunJobFixture,

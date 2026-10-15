@@ -2,8 +2,8 @@ import type { TestOperationName, TestCallInput } from "./support/operations";
 import { createTestFetch, createTestInstance, getTestConfig } from "./support/test-instance";
 
 import { describe, expect, it } from "vitest";
-import { createApiClient } from "@vivd-catalyst/api-client";
-import { approvalRequestSchema } from "@vivd-catalyst/api-contract";
+import { createApiClient } from "@work-shape/catalyst-api-client";
+import { approvalRequestSchema } from "@work-shape/catalyst-api-contract";
 import {
   asClientInstanceId,
   asConversationId,
@@ -12,7 +12,7 @@ import {
   readApprovalDecisionMetadata,
   type ApprovalRequest,
   type ApprovalRequestHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 
 const fakeHandler: ApprovalRequestHandler = {

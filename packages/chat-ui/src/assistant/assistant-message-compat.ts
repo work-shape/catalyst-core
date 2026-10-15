@@ -1,4 +1,4 @@
-import type { Message } from "@vivd-catalyst/api-client";
+import type { Message } from "@work-shape/catalyst-api-client";
 import {
   readAgentRuntimeMessageMetadata,
   readAssistantModelContextSnapshot,
@@ -8,7 +8,7 @@ import {
   readUserMessageMetadata,
   type MessageCitation,
   type WebSource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 export interface PersistedAttachmentRef {
   fileId: string;

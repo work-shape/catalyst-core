@@ -4,7 +4,7 @@ import {
   createAccountingSample,
   SIZE_GROUPS,
   type accountingOutputSchemas
-} from "@vivd-catalyst/demo/sample-mcp";
+} from "@work-shape/catalyst-demo/sample-mcp";
 import { required } from "./assertions";
 
 // What the tests of the demo's accounting sample share: the data of the server's own seed, as

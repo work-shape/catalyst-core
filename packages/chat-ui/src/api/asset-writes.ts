@@ -1,4 +1,4 @@
-import type { ApiClient } from "@vivd-catalyst/api-client";
+import type { ApiClient } from "@work-shape/catalyst-api-client";
 
 /** Where a new agent starts: everywhere, or in the shared workspace it was made in. */
 export type AvailableIn = "all" | { workspaceId: string };

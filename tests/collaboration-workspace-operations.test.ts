@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { operationRunSchema } from "@vivd-catalyst/api-contract";
-import type { CentralPolicySetting, CollaborationWorkspaceId, UserId } from "@vivd-catalyst/core";
+import { operationRunSchema } from "@work-shape/catalyst-api-contract";
+import type {
+  CentralPolicySetting,
+  CollaborationWorkspaceId,
+  UserId
+} from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema, setupAccessInstance } from "./support/access-instance";
 import type { TestCallInput, TestOperationName } from "./support/operations";
 import { getTestJobs } from "./support/test-instance";

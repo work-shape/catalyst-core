@@ -4,8 +4,8 @@ import {
   createPlatformId,
   workflowStepIdempotencyKey,
   type WorkflowManifest
-} from "@vivd-catalyst/core";
-import { parseWorkflowManifest } from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-core";
+import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import {
   hangingAt,

@@ -6,8 +6,8 @@ import type {
   ModuleSnapshot,
   PlatformStores,
   RegisteredJobHandler
-} from "@vivd-catalyst/core";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 
 export interface CreateJobWorkerInput {
   stores: PlatformStores;

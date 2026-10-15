@@ -1,5 +1,5 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, CHAT_SESSION_AUTH_SCOPES } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { AppError, CHAT_SESSION_AUTH_SCOPES } from "@work-shape/catalyst-core";
 import type { Route, RouteCall } from "../http/route";
 import type { ChatServerOptions } from "../types";
 

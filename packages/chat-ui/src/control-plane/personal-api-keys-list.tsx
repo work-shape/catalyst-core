@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { PersonalApiKey } from "@vivd-catalyst/api-client";
+import type { PersonalApiKey } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
@@ -14,7 +14,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { copyStateFor, type RecordedSecretCopy } from "./api-access-model";
 import { copySecretField, SecretFields, type RevealedSecret } from "./api-access-secret-fields";

@@ -8,7 +8,7 @@ import type {
   ReasoningEffortConfig,
   SupportedImageMimeType,
   WebSource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 export const WEB_SEARCH_MODEL_TOOL_NAME = "web_search";
 
@@ -289,7 +289,7 @@ export type ModelAdapterFactory = ((provider: ModelProviderConfig) => ModelAdapt
   check?: (context: ProviderCheckContext) => Promise<ProviderCheckResult>;
 };
 
-declare module "@vivd-catalyst/core" {
+declare module "@work-shape/catalyst-core" {
   /** What the `models` port creates. */
   interface ProviderInstances {
     models: ModelAdapterFactory;

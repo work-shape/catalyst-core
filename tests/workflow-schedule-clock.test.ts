@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clientInstanceConfigSchema } from "@vivd-catalyst/config-schema";
+import { clientInstanceConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   lastDueWithin,
   nextDueAfter,
   parseCron,
   workflowScheduleJobKind,
   type WorkflowDefinitionSource
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import {
   publishedDefinitions,

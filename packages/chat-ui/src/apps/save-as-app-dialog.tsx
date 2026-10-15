@@ -1,6 +1,6 @@
 import { LayoutGrid } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Button, Dialog, Field, InlineError, Input } from "@vivd-catalyst/ui";
+import { Button, Dialog, Field, InlineError, Input } from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
 import { apiErrorCode } from "../workspace-utils";

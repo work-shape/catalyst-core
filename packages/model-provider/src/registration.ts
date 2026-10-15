@@ -1,4 +1,4 @@
-import type { ModelProviderConfig, ProviderDefinition } from "@vivd-catalyst/core";
+import type { ModelProviderConfig, ProviderDefinition } from "@work-shape/catalyst-core";
 import { bedrockModelProvider } from "./adapters/bedrock";
 import { deterministicModelProvider } from "./adapters/deterministic";
 import { googleVertexModelProvider } from "./adapters/google-vertex";

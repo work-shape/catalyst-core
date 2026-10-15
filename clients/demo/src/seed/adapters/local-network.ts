@@ -1,6 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import type { ApiClientOptions } from "@vivd-catalyst/api-client";
+import type { ApiClientOptions } from "@work-shape/catalyst-api-client";
 
 // The seed signs in with development passwords, so nothing it sends may leave this machine:
 // the address it is given is a local one, the name behind it resolves to this machine, and

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_LIST_DESCRIPTION_MAX } from "@vivd-catalyst/client-assembly";
-import { WORKFLOW_ASSET_KIND, type JsonObject } from "@vivd-catalyst/core";
-import { WORKFLOW_MANIFEST_MAX_BYTES } from "@vivd-catalyst/workflows";
+import { WORKFLOW_LIST_DESCRIPTION_MAX } from "@work-shape/catalyst-client-assembly";
+import { WORKFLOW_ASSET_KIND, type JsonObject } from "@work-shape/catalyst-core";
+import { WORKFLOW_MANIFEST_MAX_BYTES } from "@work-shape/catalyst-workflows";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
 import { NOTE, notifyClients, readyWorkflows, start, stepRunsOf } from "./support/workflow-runs";

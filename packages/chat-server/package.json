@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/chat-server",
+  "name": "@work-shape/catalyst-server",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/chat-server"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -42,16 +37,16 @@
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^9.3.0",
-    "@vivd-catalyst/api-contract": "workspace:*",
-    "@vivd-catalyst/app-build": "workspace:*",
-    "@vivd-catalyst/asset-repo": "workspace:*",
-    "@vivd-catalyst/auth": "workspace:*",
-    "@vivd-catalyst/config-schema": "workspace:*",
-    "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/mail": "workspace:*",
-    "@vivd-catalyst/model-provider": "workspace:*",
-    "@vivd-catalyst/tool-execution": "workspace:*",
-    "@vivd-catalyst/usage-governance": "workspace:*",
+    "@work-shape/catalyst-api-contract": "workspace:*",
+    "@work-shape/catalyst-app-build": "workspace:*",
+    "@work-shape/catalyst-asset-repo": "workspace:*",
+    "@work-shape/catalyst-auth": "workspace:*",
+    "@work-shape/catalyst-config-schema": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
+    "@work-shape/catalyst-mail": "workspace:*",
+    "@work-shape/catalyst-model-provider": "workspace:*",
+    "@work-shape/catalyst-tool-execution": "workspace:*",
+    "@work-shape/catalyst-usage-governance": "workspace:*",
     "ai": "^6.0.199",
     "fastify": "^5.8.5",
     "zod": "^4.4.3"

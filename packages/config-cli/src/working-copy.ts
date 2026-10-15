@@ -12,7 +12,7 @@ import {
   type AgentConfig,
   type SkillConfig,
   type SkillResourceConfig
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 import { savedInstanceOrigins } from "./credentials";
 import { type ConfigCliEnv, readConfigCliEnv } from "./env";
 import { GUARDRAIL_FILE, readGuardrailFolder, type GuardrailDefinition } from "./guardrail-files";

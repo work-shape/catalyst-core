@@ -1,4 +1,4 @@
-import type { ShippedSkill } from "@vivd-catalyst/core";
+import type { ShippedSkill } from "@work-shape/catalyst-core";
 import generated from "./generated/platform-docs.json" with { type: "json" };
 
 // The product's documentation as a skill: one reference file per page of the platform's docs,

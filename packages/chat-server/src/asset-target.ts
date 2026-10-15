@@ -10,7 +10,7 @@ import {
   type AssetScope,
   type ConfigAssetRecord,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { accessResource, type AssetCall } from "./asset-access";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import {

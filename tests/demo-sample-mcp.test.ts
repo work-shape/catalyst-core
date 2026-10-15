@@ -18,7 +18,7 @@ import {
   MINIMUM_LIMIT,
   outputSchemas,
   utcMonthAnchor
-} from "@vivd-catalyst/demo/sample-mcp";
+} from "@work-shape/catalyst-demo/sample-mcp";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const key = "test-only-sample-mcp-bearer-key-0001";

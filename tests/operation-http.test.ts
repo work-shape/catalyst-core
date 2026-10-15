@@ -1,12 +1,12 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { operationRunSchema, type Operation } from "@vivd-catalyst/api-contract";
+import { operationRunSchema, type Operation } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   IDEMPOTENCY_KEY_MAX_LENGTH,
   asClientInstanceId,
   createPlatformId,
   type Authorizer
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   change,
   clientInstanceId,

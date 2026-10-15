@@ -53,7 +53,7 @@ import {
   type WorkflowStepRunLink,
   type WorkflowTrigger,
   type WorkflowTriggerOutput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // What a definition, a run and a store may say that the contract reads before an engine runs
 // it: datasets, paging, child runs, run keys, labels, schedules, limits and the load of a

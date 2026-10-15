@@ -5,9 +5,15 @@ import {
   moduleConfigKey,
   type ModuleRegistry,
   type ModuleSnapshot
-} from "@vivd-catalyst/core";
-import { resolveModuleSwitches, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { CONNECTION_DRAFT_TOOL_NAME, PLATFORM_ASSET_TOOLS } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import {
+  resolveModuleSwitches,
+  type ClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
+import {
+  CONNECTION_DRAFT_TOOL_NAME,
+  PLATFORM_ASSET_TOOLS
+} from "@work-shape/catalyst-tool-execution";
 import type { ClientInstanceCapability } from "./capabilities";
 import { assembleDataStores, dataStoresModule } from "./data-stores";
 import { assembleKnowledge, knowledgeModule } from "./knowledge";

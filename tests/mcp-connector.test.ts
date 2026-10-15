@@ -1,7 +1,7 @@
 import type { ServerResponse } from "node:http";
 import { getCACertificates, setDefaultCACertificates } from "node:tls";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { connectionConfigSchema } from "@vivd-catalyst/config-schema";
+import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   MCP_CONNECTOR_TYPE,
   MCP_RESULT_MAX_BYTES,
@@ -14,7 +14,7 @@ import {
   createSecretStore,
   loadSecretKeyring,
   openConnectorContext
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   SHARED_CREDENTIAL_SUBJECT,
   asClientInstanceId,
@@ -25,7 +25,7 @@ import {
   type ConnectorOperationDescriptor,
   type ConnectorTypeDefinition,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import { connection } from "./support/connections";
 import {

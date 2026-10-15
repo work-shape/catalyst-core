@@ -3,7 +3,7 @@ import type {
   ApiClient,
   CollaborationWorkspaceWithRole,
   ConversationListItem
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { useCollaborationWorkspacesQuery } from "../api/workspace-queries";
 import { canManageCollaborationWorkspace } from "./collaboration-workspace-selector";
 import {

@@ -6,7 +6,7 @@ import {
   runObservationSchema,
   runCommandResponseSchema,
   startConversationRunResponseSchema
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   type AgentRun,
@@ -22,7 +22,7 @@ import {
   asConversationId,
   asToolCallId,
   requireAuthScope
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import { RunObservationWorkflow } from "../conversations/run-observation-workflow";
 import { RunStartWorkflow } from "../conversations/run-start-workflow";

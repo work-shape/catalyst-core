@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { DATA_STORE_ACTIONS } from "@vivd-catalyst/core";
+import { DATA_STORE_ACTIONS } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus } from "./support/app-instance";
 import { required } from "./support/assertions";

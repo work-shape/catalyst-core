@@ -5,7 +5,7 @@ import {
   DisclosureContent,
   DisclosureTrigger,
   type DisclosureProps
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 
 /**
  * The chat's fold for a run of tool calls. It is the library's Disclosure with the class names

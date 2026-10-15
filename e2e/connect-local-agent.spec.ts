@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { PUBLISHED_CLI_VERSION } from "@vivd-catalyst/api-contract";
+import { PUBLISHED_CLI_VERSION } from "@work-shape/catalyst-api-contract";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 

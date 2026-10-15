@@ -5,7 +5,7 @@ import {
   pastedCandidates,
   readConnectionDraft,
   type ApprovalSurface
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 const INJECTION = '<img src=x onerror="alert(1)"> [click](javascript:alert(2))';

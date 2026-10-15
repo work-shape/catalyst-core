@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { connectionConfigSchema } from "@vivd-catalyst/config-schema";
+import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   CONNECTION_CREDENTIAL_WORDS,
   CONNECTION_MAX_ACCEPTED_OPERATIONS,
@@ -9,8 +9,8 @@ import {
   type ConnectionOperationConfig,
   type ConnectorTypeRegistry,
   type JsonObject
-} from "@vivd-catalyst/core";
-import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 
 // The agent's draft of the tools of a REST API, as a card in the conversation (CS-5c). The agent
 // reads a vendor's API description and declares the operations; this tool checks them as a save

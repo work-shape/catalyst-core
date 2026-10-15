@@ -5,11 +5,11 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describeApiReference } from "@vivd-catalyst/api-contract";
+import { describeApiReference } from "@work-shape/catalyst-api-contract";
 
 const require = createRequire(import.meta.url);
 const document = JSON.parse(
-  readFileSync(require.resolve("@vivd-catalyst/api-contract/openapi.json"), "utf8")
+  readFileSync(require.resolve("@work-shape/catalyst-api-contract/openapi.json"), "utf8")
 );
 const directory = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -51,7 +51,7 @@ page(
     order: 0
   },
   [
-    `This is the reference of release ${reference.version}, written from the \`openapi.json\` that the package \`@vivd-catalyst/api-contract\` ships. A running instance serves the reference of the operations it runs itself at \`/api/v1/docs\`, and the document behind it at \`/api/v1/openapi.json\`. Both ask for a signed-in person or an access token.`,
+    `This is the reference of release ${reference.version}, written from the \`openapi.json\` that the package \`@work-shape/catalyst-api-contract\` ships. A running instance serves the reference of the operations it runs itself at \`/api/v1/docs\`, and the document behind it at \`/api/v1/openapi.json\`. Both ask for a signed-in person or an access token.`,
     reference.overview
   ]
 );

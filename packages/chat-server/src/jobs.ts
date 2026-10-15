@@ -8,7 +8,7 @@ import {
   defineSchedule,
   type JobSchedule,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { completeAccountDeletion, recordAccountDeletionStalled } from "./account-deletion";
 import { createConnectionDiscoveryJobs } from "./connection-jobs";
 import { ConversationWorkflow } from "./conversations/conversation-workflow";

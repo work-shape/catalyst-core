@@ -13,7 +13,7 @@ import type {
   ChatMessage,
   Conversation,
   ModelProviderContinuationCheckpoint
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { collaborationWorkspaces } from "./workspaces";
 
 export const conversations = pgTable(

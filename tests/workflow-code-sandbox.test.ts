@@ -3,13 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { JsonObject, WorkflowCodeOutcome } from "@vivd-catalyst/core";
+import type { JsonObject, WorkflowCodeOutcome } from "@work-shape/catalyst-core";
 import {
   DockerWorkspaceCommandProcessExecutor,
   createDockerRunInvocation,
   type WorkspaceCommandProcessInput
-} from "@vivd-catalyst/tool-execution";
-import { createCodeSandbox } from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-tool-execution";
+import { createCodeSandbox } from "@work-shape/catalyst-workflows";
 
 // What a container gives a code step: nothing but its script and its input. No network, no
 // variable of the platform, no path of the host but its own directory, and limits of memory

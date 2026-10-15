@@ -14,7 +14,7 @@ import {
   Page,
   PageHeader,
   SkeletonList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { AreaFrame, useAreaTitleFocus } from "../area-frame";
 import { agentKind } from "../build-area/agent-kind";
 import type { BuildAssetStart } from "../build-area/build-asset-kind";

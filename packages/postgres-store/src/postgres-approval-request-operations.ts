@@ -6,7 +6,7 @@ import {
   type ApprovalRequest,
   type ApprovalRequestStore,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { requireClaimedAgentRun } from "./postgres-agent-run-worker-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { mapApprovalRequest } from "./rows";

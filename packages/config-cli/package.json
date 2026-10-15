@@ -4,7 +4,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
+    "url": "https://github.com/work-shape/catalyst",
     "directory": "packages/config-cli"
   },
   "type": "module",
@@ -48,9 +48,9 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.13.1",
-    "@vivd-catalyst/api-client": "workspace:*",
-    "@vivd-catalyst/api-contract": "workspace:*",
-    "@vivd-catalyst/asset-schemas": "workspace:*",
+    "@work-shape/catalyst-api-client": "workspace:*",
+    "@work-shape/catalyst-api-contract": "workspace:*",
+    "@work-shape/catalyst-asset-schemas": "workspace:*",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }

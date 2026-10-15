@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineProvider } from "@vivd-catalyst/core";
+import { defineProvider } from "@work-shape/catalyst-core";
 import type { MailProviderInstance } from "../types";
 import { CaptureMailTransport } from "./capture-transport";
 

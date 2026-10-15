@@ -6,7 +6,7 @@ import {
   type AuthenticatedUser,
   type OperationAuthorization,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   SERVICE_PRINCIPALS_ACTION,
   authorizePrincipalAdministration

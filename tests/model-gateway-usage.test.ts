@@ -7,7 +7,7 @@ import {
   type ModelProviderConfig,
   type ModelUsageEvent,
   type UsageCostConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   ModelProviderError,
   createModelGateway,
@@ -21,8 +21,8 @@ import {
   type ModelCall,
   type ModelCompletion,
   type ModelAdapterStreamEvent
-} from "@vivd-catalyst/model-provider";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-model-provider";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./support/fake-clock";
 import { ALL_MODEL_CAPABILITIES, silentTestLogger } from "./support/model-gateway";
 import { createTestInstance } from "./support/test-instance";

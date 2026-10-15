@@ -6,7 +6,7 @@ import {
   type UsageRateCardConfig,
   type UsageRateCardTokenRatesConfig,
   isBilledAsFast
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /** The fields of a usage event that its cost is settled from. */
 export type UsageCostEvent = Pick<

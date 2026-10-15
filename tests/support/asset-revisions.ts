@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ClientInstanceId, ConfigAssetStore } from "@vivd-catalyst/core";
+import type { ClientInstanceId, ConfigAssetStore } from "@work-shape/catalyst-core";
 import type { TestCallInput, TestOperationName } from "./operations";
 
 const assetParamsSchema = z.object({ kind: z.string(), name: z.string() });

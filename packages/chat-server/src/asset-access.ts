@@ -12,7 +12,7 @@ import {
   type OperationAuthorization,
   type OperationRunId,
   type ServedFileSetAsset
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import type { AssetSetIssue } from "./asset-set";

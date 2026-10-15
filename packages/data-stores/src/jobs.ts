@@ -20,7 +20,7 @@ import {
   type JobSchedule,
   type PlatformStores,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   appliedMigrationIssue,
   dataStoreDefinitionSchema,

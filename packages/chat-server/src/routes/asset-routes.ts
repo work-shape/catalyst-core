@@ -1,9 +1,9 @@
-import { ASSET_SYNC_BODY_MAX_BYTES, apiOperations } from "@vivd-catalyst/api-contract";
+import { ASSET_SYNC_BODY_MAX_BYTES, apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   asCollaborationWorkspaceId,
   isAuthenticatedServicePrincipal,
   type OperationResource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../asset-files";
 import {
   assetWriteEvent,

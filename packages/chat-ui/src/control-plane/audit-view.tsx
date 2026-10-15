@@ -5,7 +5,7 @@ import type {
   AuditActivityActor,
   AuditActivityTarget,
   AuditEvent
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Banner,
@@ -24,7 +24,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import { formatDateTime } from "./locale-format";
 

@@ -1,5 +1,5 @@
 import { Check, Clipboard } from "lucide-react";
-import { Button, InlineError } from "@vivd-catalyst/ui";
+import { Button, InlineError } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import type { SecretCopyState, SecretField } from "./api-access-model";
 

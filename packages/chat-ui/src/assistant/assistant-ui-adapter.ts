@@ -5,8 +5,8 @@ import {
   type JsonObject,
   type MessageCitation,
   type WebSource
-} from "@vivd-catalyst/core";
-import type { AgentRunProjection, DraftAttachment, Message } from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-core";
+import type { AgentRunProjection, DraftAttachment, Message } from "@work-shape/catalyst-api-client";
 import {
   readCompatibleAssistantFinalRunId,
   readCompatibleAssistantContextCompacted,

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
-import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
+import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useApp } from "../apps/app-data";

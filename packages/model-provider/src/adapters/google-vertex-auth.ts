@@ -5,7 +5,7 @@ import {
   providerCheckResultOfStatus,
   type ProviderCheckContext,
   type ProviderCheckResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   ModelProviderError,
   modelProviderErrorKindForStatus,

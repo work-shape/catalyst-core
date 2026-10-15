@@ -3,11 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { configAssetReferencesSchema, toolGroupSchema } from "@vivd-catalyst/api-contract";
-import { agentToolReferences } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { TOOL_GROUPS } from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { configAssetReferencesSchema, toolGroupSchema } from "@work-shape/catalyst-api-contract";
+import { agentToolReferences } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { TOOL_GROUPS } from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 

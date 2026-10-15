@@ -2,7 +2,7 @@ import {
   appErrorCodeSchema,
   rateLimitedDetailsSchema,
   type ApiErrorCode
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import { z } from "zod";
 
 /**

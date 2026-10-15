@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
-import { createApiClient, type SafeConfig } from "@vivd-catalyst/api-client";
-import { ConversationRetentionWorkflow } from "@vivd-catalyst/chat-server";
+import { createApiClient, type SafeConfig } from "@work-shape/catalyst-api-client";
+import { ConversationRetentionWorkflow } from "@work-shape/catalyst-server";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -9,7 +9,7 @@ import {
   type ClientInstanceId,
   type Conversation,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import {

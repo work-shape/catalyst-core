@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { DataStoreRecord, JobControl, PlatformStores } from "@vivd-catalyst/core";
+import type { DataStoreRecord, JobControl, PlatformStores } from "@work-shape/catalyst-core";
 import { pruneCallRecords } from "./calls";
 import { readStoreConditions } from "./provisioning";
 import type { DataStoreRuntime } from "./runtime";

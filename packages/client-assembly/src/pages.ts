@@ -1,5 +1,5 @@
-import { pageBuildCommandFile } from "@vivd-catalyst/app-build";
-import { assetRepoCommandFile } from "@vivd-catalyst/asset-repo";
+import { pageBuildCommandFile } from "@work-shape/catalyst-app-build";
+import { assetRepoCommandFile } from "@work-shape/catalyst-asset-repo";
 import {
   createAssetRepoJobs,
   createSandboxAssetRepo,
@@ -10,7 +10,7 @@ import {
   createSandboxPageBuild,
   deriveAppContentKey,
   type ChatServerOptions
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   AppError,
   resolveOptionalSecret,
@@ -21,14 +21,14 @@ import {
   type ObjectStorage,
   type PlatformStores,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   PageSaveToolOptions,
   WorkspaceCommandProcessExecutor,
   WorkspaceCommandService
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import type { ClientInstanceEnv } from "./env";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createFilesStore,
   FILES_STORE_PATH,

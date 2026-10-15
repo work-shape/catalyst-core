@@ -1,26 +1,29 @@
 import { addTestRoute, createTestInstance } from "./support/test-instance";
 
 import { describe, expect, it, vi } from "vitest";
-import { createInProcessRateLimiter, type ChatServerOptions } from "@vivd-catalyst/chat-server";
-import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
+import { createInProcessRateLimiter, type ChatServerOptions } from "@work-shape/catalyst-server";
+import { STANDALONE_AUTH_SOURCE } from "@work-shape/catalyst-auth";
 import {
   AppError,
   StoreBackedAuditRecorder,
   asClientInstanceId,
   createModuleRegistry,
   type AuthenticatedUser
-} from "@vivd-catalyst/core";
-import { platformModules } from "@vivd-catalyst/client-assembly";
+} from "@work-shape/catalyst-core";
+import { platformModules } from "@work-shape/catalyst-client-assembly";
 
-import { createClientBranding, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import {
+  createClientBranding,
+  parseClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import {
   CaptureMailTransport,
   MailjetTransport,
   TemplateMailSender,
   renderMail,
   type MailSenderIdentity
-} from "@vivd-catalyst/mail";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-mail";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { createTestConfig } from "./support/fixtures";
 import { createMissingRuntime, createUnusedModelProvider } from "./support/chat-server-run-harness";
 import { eventually } from "./support/assertions";

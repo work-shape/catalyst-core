@@ -4,9 +4,9 @@ import {
   appInterfacePath,
   type AssetSummary,
   type ConfigAssetRevision
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   AppDeleteDialog,
   appDraftIsAhead,
@@ -41,7 +41,7 @@ import {
   workspaceRouteFromPath,
   workspaceRouteNavigation,
   workspaceRoutePath
-} from "@vivd-catalyst/chat-ui/apps";
+} from "@work-shape/catalyst-chat-ui/apps";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Apps area: its addresses, what a reader is offered by the rights they hold, and what

@@ -12,7 +12,7 @@ import {
   type ConversationId,
   type ManagedFileId,
   type MessageId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 let databaseUrl: string;
 beforeAll(async () => {

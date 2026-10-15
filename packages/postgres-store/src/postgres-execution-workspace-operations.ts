@@ -32,7 +32,7 @@ import {
   asExecutionWorkspaceId,
   asWorkspaceCommandId,
   createPlatformId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { withdrawQueuedJobs } from "./jobs/store";
 import { platformJobs } from "./schema/jobs";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";

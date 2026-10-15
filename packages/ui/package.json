@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/ui",
+  "name": "@work-shape/catalyst-ui",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/ui"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { GUARDRAIL_EVENTS } from "@vivd-catalyst/core";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
-import { guardrailRunSentence, type GuardrailRunFacts } from "@vivd-catalyst/chat-ui/build-area";
+import { GUARDRAIL_EVENTS } from "@work-shape/catalyst-core";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import {
+  guardrailRunSentence,
+  type GuardrailRunFacts
+} from "@work-shape/catalyst-chat-ui/build-area";
 
 // When a guardrail runs and what it does, in one line (Felix, 2026-10-14): built from its
 // event, filter, check, outcome and scope, in English and German, with no event id in it.

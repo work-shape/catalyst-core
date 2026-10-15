@@ -1,4 +1,4 @@
-import type { LocaleCode, Message } from "@vivd-catalyst/api-client";
+import type { LocaleCode, Message } from "@work-shape/catalyst-api-client";
 import { formatMoment, formatTimeOfDay, formatWeekday } from "../control-plane/locale-format";
 import type { TranslationContextValue } from "../i18n";
 

@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AppError, asClientInstanceId } from "@vivd-catalyst/core";
+import { AppError, asClientInstanceId } from "@work-shape/catalyst-core";
 import {
   DeterministicModelProvider,
   OPENAI_RESPONSES_STRING_MAX_CHARS,
   OpenAiCompatibleChatProvider,
   type ModelAdapterStreamEvent
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { ServerSentEventDataLineParser } from "../packages/model-provider/src/openai-compatible-stream";
 
 describe("OpenAI-compatible model provider", () => {

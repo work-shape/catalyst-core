@@ -4,7 +4,7 @@ import {
   NAMESPACE_PREFIX_MIN_LENGTH,
   NAMESPACE_PREFIX_PATTERN,
   type PlatformAction
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 import { operationDenialError } from "./operation-denial";
 import { personalApiKeyCovers, personalApiKeyNamesAction } from "./personal-api-keys";

@@ -1,4 +1,4 @@
-import { parseAppActionOperationName } from "@vivd-catalyst/core";
+import { parseAppActionOperationName } from "@work-shape/catalyst-core";
 import type { AgentConfig } from "./schemas";
 
 export interface MissingAgentReference {

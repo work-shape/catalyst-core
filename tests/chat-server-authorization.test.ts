@@ -8,9 +8,9 @@ import {
   asCollaborationWorkspaceId,
   asUserId,
   type AuthenticatedUser
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { createTestConfig, createTestUser, seedConversationMessage } from "./support/fixtures";
 import { createMissingRuntime, createUnusedModelProvider } from "./support/chat-server-run-harness";
 

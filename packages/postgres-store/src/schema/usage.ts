@@ -18,7 +18,7 @@ import type {
   ModelUsageEvent,
   ModelUsageEventStatus,
   ProviderRegion
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { productUsers } from "./users";
 import { collaborationWorkspaces } from "./workspaces";
 

@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/postgres-connector",
+  "name": "@work-shape/catalyst-postgres-connector",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/postgres-connector"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,7 +34,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/core": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
     "postgres": "^3.4.9",
     "zod": "^4.4.3"
   },

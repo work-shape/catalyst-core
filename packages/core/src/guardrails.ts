@@ -1,4 +1,7 @@
-import { GUARDRAIL_NAME_MAX_LENGTH, GUARDRAIL_NAME_PATTERN } from "@vivd-catalyst/asset-schemas";
+import {
+  GUARDRAIL_NAME_MAX_LENGTH,
+  GUARDRAIL_NAME_PATTERN
+} from "@work-shape/catalyst-asset-schemas";
 import type { AssetScope } from "./asset-kinds";
 import type { GuardrailEvent } from "./guardrail-events";
 import type { ClientInstanceId } from "./ids";

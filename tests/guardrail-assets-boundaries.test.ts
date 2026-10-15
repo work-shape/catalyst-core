@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createGuardrailAssetKind } from "@vivd-catalyst/chat-server";
-import { PLATFORM_EVENT_ALLOW } from "@vivd-catalyst/core";
-import { askBeforeEvents } from "@vivd-catalyst/tool-execution";
+import { createGuardrailAssetKind } from "@work-shape/catalyst-server";
+import { PLATFORM_EVENT_ALLOW } from "@work-shape/catalyst-core";
+import { askBeforeEvents } from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import { setupAppInstance } from "./support/app-instance";
 import { IBAN, guardedEvents, ibanPattern, noIban } from "./support/guardrails";

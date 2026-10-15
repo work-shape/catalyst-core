@@ -13,7 +13,7 @@ import {
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
   type ConfigAssetStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import * as repo from "./postgres-asset-repo-operations";
 import {
   insertInitialAgentAvailability,

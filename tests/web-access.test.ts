@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   findModelToolMaterializationIssues,
   materializeModelTools
-} from "@vivd-catalyst/agent-runtime";
+} from "@work-shape/catalyst-agent-runtime";
 
 import {
   AppError,
@@ -16,12 +16,12 @@ import {
   unknownToJsonValue,
   type AgentConfig,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   getModelProviderConfigs,
   parseClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   createWebFetchTool,
   DirectWebFetcher,
@@ -30,7 +30,7 @@ import {
   type WebFetchHttpRequest,
   isBlockedIpAddress,
   validateWebFetchUrl
-} from "@vivd-catalyst/web-access";
+} from "@work-shape/catalyst-web-access";
 
 describe("web access direct fetch", () => {
   it("extracts bounded text and source metadata from allowed HTML pages", async () => {

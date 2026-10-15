@@ -1,4 +1,4 @@
-import { isJsonObject, type JsonObject } from "@vivd-catalyst/core";
+import { isJsonObject, type JsonObject } from "@work-shape/catalyst-core";
 
 /**
  * The answer format of a call as Claude on Bedrock takes it: `output_config.format` with a JSON

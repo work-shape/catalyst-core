@@ -1,5 +1,5 @@
 import { PanelLeft } from "lucide-react";
-import { type SafeConfig } from "@vivd-catalyst/api-client";
+import { type SafeConfig } from "@work-shape/catalyst-api-client";
 import type { ReactNode } from "react";
 import {
   Banner,
@@ -10,7 +10,7 @@ import {
   CardTitle,
   cn,
   IconButton
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { AgentSelector, type AgentChipDisplay } from "./agent-selector";
 import { useTranslation } from "../i18n";

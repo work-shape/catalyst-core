@@ -4,7 +4,7 @@ import {
   findAgentReferenceIssues,
   resolveLocalizedString,
   type ClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   AGENT_EDITABLE_FIELDS,
   AGENT_MODEL_SETTING_FIELDS,
@@ -18,7 +18,7 @@ import {
   type AgentEditableField,
   type AgentModelSettingField,
   type Namespace
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   configValuesEqual,
   readDefinitionField,

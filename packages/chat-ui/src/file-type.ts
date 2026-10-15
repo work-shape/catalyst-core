@@ -1,4 +1,4 @@
-import type { GenericIconKey } from "@vivd-catalyst/ui";
+import type { GenericIconKey } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "./i18n";
 
 /** The key of a file-type icon in the icon registry of the UI library. */

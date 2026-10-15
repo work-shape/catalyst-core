@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { parseSkillMarkdown, SkillMarkdownError } from "@vivd-catalyst/asset-schemas";
+import { parseSkillMarkdown, SkillMarkdownError } from "@work-shape/catalyst-asset-schemas";
 import { describe, expect, it } from "vitest";
 
 const unnamed = "---\ntitle: Tax review\ndescription: Reviews a tax file.\n---\nRead the file.";

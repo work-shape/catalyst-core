@@ -8,7 +8,7 @@ import {
   type ClientInstanceId,
   type OperationAuthorization,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /** What a write of rights runs on: the instance's stores, which it replaces by a transaction's. */
 interface RightsHeldOptions {

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
-import { createPostgresStores, migrateDatabase } from "@vivd-catalyst/postgres-store";
+import { createPostgresStores, migrateDatabase } from "@work-shape/catalyst-postgres-store";
 
 const defaultTestMigrationsDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),

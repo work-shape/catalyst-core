@@ -1,5 +1,5 @@
-import type { AuditRecorder, StorePage } from "@vivd-catalyst/core";
-import { auditActorFromUser } from "@vivd-catalyst/core";
+import type { AuditRecorder, StorePage } from "@work-shape/catalyst-core";
+import { auditActorFromUser } from "@work-shape/catalyst-core";
 import {
   AppError,
   JobLeaseLostError,
@@ -20,10 +20,10 @@ import {
   getSubjectUserId,
   isAppError,
   readToolResultMetadata
-} from "@vivd-catalyst/core";
-import { PLATFORM_ASSET_TOOLS } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { PLATFORM_ASSET_TOOLS } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
-import { getModelSelectionForConversationTitles } from "@vivd-catalyst/config-schema";
+import { getModelSelectionForConversationTitles } from "@work-shape/catalyst-config-schema";
 import { CollaborationWorkspaceWorkflow } from "../collaboration-workspace-workflow";
 import { attemptConversationDataCleanup } from "../conversation-cleanup";
 import { assertConversationIdle } from "../conversation-idle";

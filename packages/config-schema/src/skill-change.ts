@@ -4,7 +4,7 @@ import {
   type AgentConfig,
   type AgentSkillChangesPolicy,
   type SkillConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   skillConfigSchema,
   skillNameSchema,

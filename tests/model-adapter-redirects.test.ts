@@ -1,11 +1,11 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProvider } from "@vivd-catalyst/core";
+import { createProvider } from "@work-shape/catalyst-core";
 import {
   ModelProviderError,
   modelProviderDefinitions,
   type ModelAdapterFactory
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { conformanceAdapters } from "./support/model-adapter-recordings";
 import { silentTestLogger } from "./support/model-gateway";
 

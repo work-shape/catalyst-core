@@ -39,8 +39,8 @@ client-instance/
 The client object imports platform packages, points at release config, registers tool factories, validates the assembly, and starts the chat API.
 
 ```ts
-import { defineClientInstance } from "@vivd-catalyst/client-assembly";
-import { createDocumentProcessingCapability } from "@vivd-catalyst/document-processing";
+import { defineClientInstance } from "@work-shape/catalyst-client-assembly";
+import { createDocumentProcessingCapability } from "@work-shape/catalyst-document-processing";
 import { lookupOrderToolFactory } from "../tools/lookup-order";
 import { updateTicketToolFactory } from "../tools/update-ticket";
 
@@ -70,7 +70,7 @@ await client.runWorkspaceCommandWorker();
 that is assembled without a capability stops when the release config turns a module of that
 capability on.
 
-The frontend entry calls `renderStandaloneChatApp` from `@vivd-catalyst/chat-ui/shell`. Its `toolActivityLabels` option names a tool in the activity line, and its `labelOverrides` option takes `resourcesCustomerData: { en, de }` to word the heading of the structured data in the resources, which reads "Data" without it.
+The frontend entry calls `renderStandaloneChatApp` from `@work-shape/catalyst-chat-ui/shell`. Its `toolActivityLabels` option names a tool in the activity line, and its `labelOverrides` option takes `resourcesCustomerData: { en, de }` to word the heading of the structured data in the resources, which reads "Data" without it.
 
 Exact APIs may evolve while the platform is still early. The boundary should remain the same: platform packages provide reusable behavior, and the client assembly app provides source-controlled customer choices.
 
@@ -110,4 +110,4 @@ Keep these in platform packages:
 - datasource registry, adapters, guardrails, and generic datasource query tools
 - capability SDK, managed file, conversation attachment, and managed artifact extension surfaces
 
-Reusable capabilities that are not part of the open platform live in capability packages. Document processing (`@vivd-catalyst/document-processing`, part of the paid capabilities and not in the open repository), for example, owns its preprocessing config under `capabilities.documentProcessing`, its document tools, and its document-specific model-context hints while using platform-managed files and conversation attachments.
+Reusable capabilities that are not part of the open platform live in capability packages. Document processing (`@work-shape/catalyst-document-processing`, part of the paid capabilities and not in the open repository), for example, owns its preprocessing config under `capabilities.documentProcessing`, its document tools, and its document-specific model-context hints while using platform-managed files and conversation attachments.

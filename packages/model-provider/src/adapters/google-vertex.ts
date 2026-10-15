@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AppError, defineProvider, secretRef } from "@vivd-catalyst/core";
+import { AppError, defineProvider, secretRef } from "@work-shape/catalyst-core";
 import { createGoogleAccessTokenSource } from "./google-vertex-auth";
 import { GOOGLE_VERTEX_CAPABILITIES, GoogleVertexProvider } from "./google-vertex-provider";
 import type { ModelAdapterFactory } from "../types";

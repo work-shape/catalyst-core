@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { appActionsSchema } from "@vivd-catalyst/api-contract";
+import { appActionsSchema } from "@work-shape/catalyst-api-contract";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus, type AppFile } from "./support/app-instance";
 import { action, setupAppActions, type AppActionsInstance } from "./support/app-actions";

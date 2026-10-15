@@ -1,4 +1,4 @@
-import { getModelProviderConfigs } from "@vivd-catalyst/config-schema";
+import { getModelProviderConfigs } from "@work-shape/catalyst-config-schema";
 import type {
   JobControl,
   JsonObject,
@@ -6,7 +6,7 @@ import type {
   ModelProviderConfig,
   ModelUsageBackfillPosition,
   ModelUsageBackfillTarget
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "./types";
 
 /** Usage events one statement of the backfill reads, in the order they were written in. */

@@ -1,4 +1,4 @@
-import { AppError, type ProviderRegion } from "@vivd-catalyst/core";
+import { AppError, type ProviderRegion } from "@work-shape/catalyst-core";
 import type { GoogleAccessTokenSource } from "./google-vertex-auth";
 import {
   isVertexAnswerMissing,

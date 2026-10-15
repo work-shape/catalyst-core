@@ -1,7 +1,7 @@
 // The messages between a Page and the interface that shows it. The Page's side is written
 // here, without a schema library, because these lines ship in the kit file every Page loads.
 // The interface validates what a Page sends against the schemas of
-// `@vivd-catalyst/api-contract` (`app-bridge.ts`); `tests/app-kit-client.test.ts` holds the
+// `@work-shape/catalyst-api-contract` (`app-bridge.ts`); `tests/app-kit-client.test.ts` holds the
 // two descriptions to each other.
 
 /** Marks a message of this bridge, with the version of its shape. */

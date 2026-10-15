@@ -3,7 +3,7 @@ import type {
   ApiClient,
   LocaleCode,
   StartConversationRunResponse
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import type { ReasoningEffort } from "../workspace/agent-model-selection";
 
 /** The two operations that start an agent run. */

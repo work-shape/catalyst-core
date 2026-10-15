@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { asClientInstanceId } from "@vivd-catalyst/core";
-import { DEFAULT_LIMITS, WORKSPACE_READ_DEFAULT_LINES } from "@vivd-catalyst/tool-execution";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
+import { DEFAULT_LIMITS, WORKSPACE_READ_DEFAULT_LINES } from "@work-shape/catalyst-tool-execution";
 import { jsonObject } from "./support/assertions";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 

@@ -2,10 +2,10 @@ import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { storePageFileSet } from "@vivd-catalyst/chat-server";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { asClientInstanceId, asConversationId } from "@vivd-catalyst/core";
-import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
+import { storePageFileSet } from "@work-shape/catalyst-server";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { asClientInstanceId, asConversationId } from "@work-shape/catalyst-core";
+import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import { createTestConfig, workspaceInfrastructure } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
 

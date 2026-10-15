@@ -1,6 +1,6 @@
 import { callRecordsSetup } from "./calls";
 import { z } from "zod";
-import type { DataStoreCondition, DataStoreRecord } from "@vivd-catalyst/core";
+import type { DataStoreCondition, DataStoreRecord } from "@work-shape/catalyst-core";
 import type { DataStoreRole } from "./credentials";
 import { platformIsSuperuser, writeStoreRoles } from "./roles";
 import { quoteIdentifier, type DataStoreServer } from "./server";

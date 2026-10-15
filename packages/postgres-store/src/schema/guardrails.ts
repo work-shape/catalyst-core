@@ -1,5 +1,5 @@
 import { boolean, index, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
-import type { GuardrailEvent, GuardrailHitOutcome } from "@vivd-catalyst/core";
+import type { GuardrailEvent, GuardrailHitOutcome } from "@work-shape/catalyst-core";
 
 /**
  * One time a guardrail warned, held or blocked. A row names what was checked, by kind, id and

@@ -3,7 +3,7 @@ import type {
   ModelProviderConfig,
   ProviderCreateContext,
   ProviderRegistry
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createModelGateway, type ModelCallGovernance, type ModelGateway } from "./gateway";
 import type { ModelAdapter } from "./types";
 

@@ -2,7 +2,7 @@ export type { ClientInstanceEnv } from "./env";
 export type {
   ConnectorTypeDefinition,
   StructuredDataPublicationReviewer
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 export type {
   ClientInstanceCapability,
   ClientInstanceCapabilityContext,
@@ -53,7 +53,7 @@ export {
   type InstanceWorkflowsParts
 } from "./workflows";
 // What a client that brings a Workflow as a file reads it with, as the engine does.
-export { readWorkflowManifest } from "@vivd-catalyst/workflows";
+export { readWorkflowManifest } from "@work-shape/catalyst-workflows";
 export {
   WORKFLOW_LIST_DESCRIPTION_MAX,
   WORKFLOW_LIST_MAX,
@@ -107,7 +107,7 @@ export {
 
 export { createLogger } from "./logger";
 // For a worker that serves HTTP beside the instance, such as the document worker.
-export { createHttpRuntime } from "@vivd-catalyst/chat-server";
+export { createHttpRuntime } from "@work-shape/catalyst-server";
 export {
   API_KEY_ENV_NAME,
   createLocalApiKey,

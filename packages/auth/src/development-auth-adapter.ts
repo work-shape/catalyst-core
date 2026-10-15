@@ -1,4 +1,8 @@
-import { AppError, FIRST_PARTY_AUTH_SCOPES, type AuthenticatedUser } from "@vivd-catalyst/core";
+import {
+  AppError,
+  FIRST_PARTY_AUTH_SCOPES,
+  type AuthenticatedUser
+} from "@work-shape/catalyst-core";
 import type { AuthAdapter, AuthRequest } from "./types";
 
 export const DEVELOPMENT_AUTH_USER_HEADER = "x-dev-user-id";

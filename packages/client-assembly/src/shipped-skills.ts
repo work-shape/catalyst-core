@@ -1,4 +1,4 @@
-import { seedShippedSkills } from "@vivd-catalyst/chat-server";
+import { seedShippedSkills } from "@work-shape/catalyst-server";
 import {
   WORKFLOW_ASSET_KIND,
   type ClientInstanceId,
@@ -6,8 +6,8 @@ import {
   type ModuleSnapshot,
   type PlatformStores,
   type ShippedSkill
-} from "@vivd-catalyst/core";
-import { workflowAuthoringSkill, workflowsModule } from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-core";
+import { workflowAuthoringSkill, workflowsModule } from "@work-shape/catalyst-workflows";
 import type { ClientInstanceCapability } from "./capabilities";
 import { platformDocsSkill } from "./platform-docs-skill";
 

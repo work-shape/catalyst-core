@@ -8,7 +8,7 @@ import {
   type PlatformStores,
   type RegisteredJobHandler,
   type WorkflowManifest
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { isTimeZone, lastDueWithin, nextDueAfter, parseCron, type CronExpression } from "./cron";
 import type { WorkflowDefinitionRevision, WorkflowDefinitionSource } from "./definition-source";

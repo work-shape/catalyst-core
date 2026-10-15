@@ -11,7 +11,7 @@ import {
   asToolCallId,
   type ApprovalCheckResult,
   readApprovalDecisionMetadata
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 describe("Postgres approval request store", () => {
   it("scopes and bounds reads and atomically allows only one pending transition", async () => {

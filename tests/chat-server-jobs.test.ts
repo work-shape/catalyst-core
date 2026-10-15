@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createChatServerJobs, generateConversationTitleJob } from "@vivd-catalyst/chat-server";
-import { createJobWorker } from "@vivd-catalyst/client-assembly";
-import { asClientInstanceId, asConversationId } from "@vivd-catalyst/core";
+import { createChatServerJobs, generateConversationTitleJob } from "@work-shape/catalyst-server";
+import { createJobWorker } from "@work-shape/catalyst-client-assembly";
+import { asClientInstanceId, asConversationId } from "@work-shape/catalyst-core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import {
   createFailingTestLogger,

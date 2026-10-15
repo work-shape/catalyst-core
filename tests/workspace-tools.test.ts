@@ -4,19 +4,19 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { AGENT_RUN_IDLE_LIMIT_MS } from "@vivd-catalyst/agent-runtime";
+import { AGENT_RUN_IDLE_LIMIT_MS } from "@work-shape/catalyst-agent-runtime";
 import {
   JOB_UNCLAIMED_MS,
   asExecutionWorkspaceId,
   asWorkspaceCommandId,
   type WorkspaceCommand
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   LocalWorkspaceCommandRunner,
   WORKSPACE_COMMAND_NO_WORKER_MESSAGE,
   shapeWorkspaceCommandOutput,
   type WorkspaceCommandTelemetry
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import {
   advanceFakeClockUntilSettled,
   settleOnFakeClock,

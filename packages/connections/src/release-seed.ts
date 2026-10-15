@@ -1,4 +1,7 @@
-import { connectionConfigSchema, type ReleaseConnectionConfig } from "@vivd-catalyst/config-schema";
+import {
+  connectionConfigSchema,
+  type ReleaseConnectionConfig
+} from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   CONNECTION_ASSET_KIND,
@@ -21,7 +24,7 @@ import {
   type JsonObject,
   type PlatformStores,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { AUTH_SCHEME_NONE, connectionOriginOf } from "./connector-context";
 import { createSecretStore, type SecretKeyring } from "./secret-store";
 

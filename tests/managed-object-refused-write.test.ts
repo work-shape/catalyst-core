@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { asClientInstanceId, asUserId, type Logger } from "@vivd-catalyst/core";
+import { asClientInstanceId, asUserId, type Logger } from "@work-shape/catalyst-core";
 import { RecordingByteStore, createTestManagedObjectAccess } from "./support/retention-harness";
 import { createTestInstance } from "./support/test-instance";
 

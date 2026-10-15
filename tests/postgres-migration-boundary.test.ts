@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import postgres from "postgres";
 import { afterEach, describe, expect, inject, it, vi } from "vitest";
-import { createPlatformStore } from "@vivd-catalyst/client-assembly";
-import { migrateDatabase } from "@vivd-catalyst/postgres-store";
+import { createPlatformStore } from "@work-shape/catalyst-client-assembly";
+import { migrateDatabase } from "@work-shape/catalyst-postgres-store";
 import { PostgresFixtures } from "./support/postgres-fixtures";
 import { eventually } from "./support/assertions";
 

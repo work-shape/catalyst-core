@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { vi } from "vitest";
 import { z } from "zod";
-import { createConnectionAssetKind, createOperationCalls } from "@vivd-catalyst/chat-server";
-import { createLogger, resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { createConnectionAssetKind, createOperationCalls } from "@work-shape/catalyst-server";
+import { createLogger, resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   CONNECTION_MAX_PARALLEL_CALLS,
   createConnectionCredentialResolver,
@@ -13,7 +13,7 @@ import {
   egressTargetOfUrl,
   loadSecretKeyring,
   type ConnectionOperationSourceDeps
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   SHARED_CREDENTIAL_SUBJECT,
   SecretNotResolvedError,
@@ -40,8 +40,8 @@ import {
   type OperationOrigin,
   type OperationRun,
   type UserRecord
-} from "@vivd-catalyst/core";
-import { runOperation, type OperationOutcome } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
 import {
   clientInstanceId,
   setupAccessInstance,

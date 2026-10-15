@@ -1,4 +1,4 @@
-import { Badge, Chip } from "@vivd-catalyst/ui";
+import { Badge, Chip } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
 import {

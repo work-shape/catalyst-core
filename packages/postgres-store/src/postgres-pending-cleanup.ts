@@ -5,7 +5,7 @@ import {
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
   type UserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresTransaction } from "./postgres-database";
 
 /**

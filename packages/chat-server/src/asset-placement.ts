@@ -12,7 +12,7 @@ import {
   type InitialAgentAvailability,
   type JsonObject,
   type OperationAuthorization
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import { accessResource, decide, type AssetCall } from "./asset-access";
 import { validateAssetSet, withDefaultAgentName } from "./asset-set";

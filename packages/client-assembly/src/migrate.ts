@@ -1,4 +1,4 @@
-import { migrateDatabase } from "@vivd-catalyst/postgres-store";
+import { migrateDatabase } from "@work-shape/catalyst-postgres-store";
 import type { ClientInstanceEnv } from "./env";
 import { createEnvironmentSecrets, PLATFORM_SECRET_NAMES } from "./infrastructure";
 

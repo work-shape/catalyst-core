@@ -5,7 +5,7 @@ import {
   type DataStoreReference,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 // A named action as the build compiled it, and what the platform does with one at a call: read

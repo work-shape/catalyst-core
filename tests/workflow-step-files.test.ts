@@ -3,13 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_ASSET_KIND, type JsonObject } from "@vivd-catalyst/core";
-import { LocalWorkspaceCommandProcessExecutor } from "@vivd-catalyst/tool-execution";
+import { WORKFLOW_ASSET_KIND, type JsonObject } from "@work-shape/catalyst-core";
+import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
 import {
   WORKFLOW_CODE_FILE_MAX_BYTES,
   WORKFLOW_STEP_FILES_MAX_BYTES,
   createCodeStepJobs
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { readyWorkflows } from "./support/workflow-runs";

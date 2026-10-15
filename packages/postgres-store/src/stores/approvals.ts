@@ -1,7 +1,7 @@
 import { appendApprovalDecision } from "../postgres-conversation-operations";
 import * as approvalRequestOperations from "../postgres-approval-request-operations";
-import { type ApprovalRequestStore, type ApprovalRequest } from "@vivd-catalyst/core";
-import type { ApprovalsStore } from "@vivd-catalyst/core";
+import { type ApprovalRequestStore, type ApprovalRequest } from "@work-shape/catalyst-core";
+import type { ApprovalsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 export function createPostgresApprovalsStore(
   db: PostgresConnection,

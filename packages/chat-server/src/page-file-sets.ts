@@ -21,7 +21,7 @@ import {
   type Page,
   type PlatformStores,
   type UserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { isHtmlContentType } from "./app-content";
 import type { ChatServerOptions } from "./types";
 

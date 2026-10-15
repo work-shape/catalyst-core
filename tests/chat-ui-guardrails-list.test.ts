@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { ShippedGuardrailView } from "@vivd-catalyst/api-client";
+import type { ShippedGuardrailView } from "@work-shape/catalyst-api-client";
 import {
   BuildAssetKindsProvider,
   BuildFrame,
@@ -13,7 +13,7 @@ import {
   type BuildScope,
   type BuildSource,
   type ShippedGuardrailsRead
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { instanceActions, platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

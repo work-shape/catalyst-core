@@ -11,7 +11,7 @@ import {
   type OperationSource,
   type PlatformStores,
   type RegisteredAssetKind
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   KNOWLEDGE_BASE_NAME_MAX_LENGTH,
   KNOWLEDGE_BASE_NAME_PATTERN,

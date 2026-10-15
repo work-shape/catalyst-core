@@ -7,7 +7,7 @@ import {
   asToolCallId,
   createPlatformId,
   type NewOperationRun
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestInstance } from "./support/test-instance";
 
 const clientInstanceId = asClientInstanceId("operation_runs_test");

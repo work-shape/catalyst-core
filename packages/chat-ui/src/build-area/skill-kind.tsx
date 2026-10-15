@@ -1,4 +1,4 @@
-import { Badge, SkillIcon } from "@vivd-catalyst/ui";
+import { Badge, SkillIcon } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { skillConfigToForm, startedSkillForm } from "./skill-form-model";

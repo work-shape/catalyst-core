@@ -1,6 +1,10 @@
 import { z } from "zod";
-import { FOUND_FILE_KINDS, type FoundFile, type ToolExecutionContext } from "@vivd-catalyst/core";
-import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import {
+  FOUND_FILE_KINDS,
+  type FoundFile,
+  type ToolExecutionContext
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 
 // The tools an agent finds what is on the platform with, in every conversation. Each is a
 // projection of an operation of the API, carried out for the person the agent acts for with

@@ -11,7 +11,7 @@ import {
   type OperationTarget,
   type PlatformEventName,
   type PolicyResolution
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   authorizeActor,
   endRun,

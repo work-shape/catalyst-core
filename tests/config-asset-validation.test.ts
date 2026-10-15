@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { AppError } from "@vivd-catalyst/core";
-import { validateConfigAssetBundle } from "@vivd-catalyst/config-schema";
+import { AppError } from "@work-shape/catalyst-core";
+import { validateConfigAssetBundle } from "@work-shape/catalyst-config-schema";
 
 describe("config asset bundle validation", () => {
   it("parses a valid agent and skill bundle", () => {

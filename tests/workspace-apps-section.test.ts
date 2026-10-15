@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { collaborationWorkspaceAgentsSchema } from "@vivd-catalyst/api-contract";
+import { collaborationWorkspaceAgentsSchema } from "@work-shape/catalyst-api-contract";
 import { clientInstanceId } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 

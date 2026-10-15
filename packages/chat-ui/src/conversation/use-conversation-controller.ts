@@ -3,7 +3,7 @@ import type {
   ApiClient,
   ConversationThreadSnapshot,
   RunObservation
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   applyRunObservationToControllerState,
   completeRunObservationStreamInControllerState,

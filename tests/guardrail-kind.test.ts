@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createGuardrailAssetKind, seedReleaseGuardrails } from "@vivd-catalyst/chat-server";
-import type { ReleaseGuardrailConfig } from "@vivd-catalyst/config-schema";
-import { GUARDRAIL_READ_ONLY_REASON, type NewGuardrailHit } from "@vivd-catalyst/core";
+import { createGuardrailAssetKind, seedReleaseGuardrails } from "@work-shape/catalyst-server";
+import type { ReleaseGuardrailConfig } from "@work-shape/catalyst-config-schema";
+import { GUARDRAIL_READ_ONLY_REASON, type NewGuardrailHit } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema, setupAccessInstance } from "./support/access-instance";
 import { assetPageSchema } from "./support/asset-operations";
 import { createTestInstance } from "./support/test-instance";

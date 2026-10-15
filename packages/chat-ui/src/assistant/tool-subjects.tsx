@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import type { SafeConfig } from "@vivd-catalyst/api-client";
+import type { SafeConfig } from "@work-shape/catalyst-api-client";
 import {
   connectionCategory,
   connectionNameOfTool,

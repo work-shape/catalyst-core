@@ -1,10 +1,10 @@
-import type { ClientInstanceCapability } from "@vivd-catalyst/client-assembly";
-import { defineProvider } from "@vivd-catalyst/core";
+import type { ClientInstanceCapability } from "@work-shape/catalyst-client-assembly";
+import { defineProvider } from "@work-shape/catalyst-core";
 import {
   DETERMINISTIC_CAPABILITIES,
   type ModelAdapterFactory,
   type ModelCompletion
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { z } from "zod";
 import { deferred } from "./assertions";
 

@@ -13,8 +13,8 @@ import {
   uiLabelsEn,
   type ChartProps,
   type ChartRow
-} from "@vivd-catalyst/ui";
-import * as chartEngine from "@vivd-catalyst/ui/chart-engine";
+} from "@work-shape/catalyst-ui";
+import * as chartEngine from "@work-shape/catalyst-ui/chart-engine";
 import { scanUiGuard } from "./ui-guard-scan";
 
 const { renderChartSvg } = chartEngine;

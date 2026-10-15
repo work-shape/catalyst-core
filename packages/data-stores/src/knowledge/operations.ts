@@ -2,7 +2,7 @@ import {
   POSTGRES_RESULT_MAX_BYTES,
   POSTGRES_RESULT_MAX_ROWS,
   POSTGRES_STATEMENT_TIMEOUT_MS
-} from "@vivd-catalyst/postgres-connector";
+} from "@work-shape/catalyst-postgres-connector";
 import {
   isAppError,
   KNOWLEDGE_BASE_ACTIONS,
@@ -18,7 +18,7 @@ import {
   type OperationDefinition,
   type OperationResource,
   type OperationSource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { queryInputSchema, rowsSchema, RUN_TIMEOUT_MS } from "../operations";
 import {

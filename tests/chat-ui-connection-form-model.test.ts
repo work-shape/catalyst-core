@@ -11,7 +11,7 @@ import {
   withReviewedOperation,
   withoutOperation,
   type ConnectionFormState
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 
 // What the form of a Connection made on the instance writes. The page holds the state; these
 // make the definitions it saves. None of them carries a key.

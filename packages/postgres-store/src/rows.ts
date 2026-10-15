@@ -46,7 +46,7 @@ import {
   asStructuredDataResourceId,
   asWorkspaceCommandId,
   asWorkspaceAccessRequestId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   approvalRequests,
   agentRunObservations,

@@ -1,5 +1,5 @@
-import type { LocalAgentRuntimeOptions } from "@vivd-catalyst/agent-runtime";
-import type { Logger } from "@vivd-catalyst/core";
+import type { LocalAgentRuntimeOptions } from "@work-shape/catalyst-agent-runtime";
+import type { Logger } from "@work-shape/catalyst-core";
 
 export function createRuntimeFailureReporter(
   logger: Logger

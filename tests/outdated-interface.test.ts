@@ -1,5 +1,5 @@
-import { ApiResponseShapeError, createApiClient } from "@vivd-catalyst/api-client";
-import { UNKNOWN_OPERATION_REASON } from "@vivd-catalyst/api-contract";
+import { ApiResponseShapeError, createApiClient } from "@work-shape/catalyst-api-client";
+import { UNKNOWN_OPERATION_REASON } from "@work-shape/catalyst-api-contract";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { callTestPath, createTestInstance, type TestInstance } from "./support/test-instance";
 import { retiredApiPaths } from "./support/retired-api-paths";

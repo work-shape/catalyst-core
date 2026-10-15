@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { StoreBackedAuditRecorder, type Logger } from "@vivd-catalyst/core";
+import { StoreBackedAuditRecorder, type Logger } from "@work-shape/catalyst-core";
 import {
   ToolRegistry,
   WORKSPACE_EDIT_MAX_EDITS,
   WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS,
   WORKSPACE_WRITE_FILE_MAX_BYTES
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { withTestSql } from "./support/test-sql";
 import { createTestToolRunner } from "./support/tool-runner";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";

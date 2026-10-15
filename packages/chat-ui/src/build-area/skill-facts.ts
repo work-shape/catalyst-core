@@ -1,4 +1,4 @@
-import type { AssetSummary } from "@vivd-catalyst/api-client";
+import type { AssetSummary } from "@work-shape/catalyst-api-client";
 
 /** What a list or a chooser shows of a skill beside its title. */
 export interface SkillFacts {

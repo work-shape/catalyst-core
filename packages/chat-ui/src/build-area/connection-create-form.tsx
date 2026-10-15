@@ -7,7 +7,7 @@ import {
   Step,
   Steps,
   type AddressCheck
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { assetIdFromTitle } from "./build-model";
 import type { BuildNamespace } from "./build-rights";

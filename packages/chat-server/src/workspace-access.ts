@@ -8,7 +8,7 @@ import {
   type CollaborationWorkspaceId,
   type UserRecord,
   type WorkspaceMembershipRole
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "./types";
 
 /**

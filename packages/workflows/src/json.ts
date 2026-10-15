@@ -4,7 +4,7 @@ import {
   workflowDatasetReferenceSchema,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 /** A value that is JSON, as the product's own type names it. */

@@ -5,8 +5,8 @@ import {
   type OperationOrigin,
   type ServicePrincipalRecord,
   type WorkflowRunPrincipal
-} from "@vivd-catalyst/core";
-import { runOperation } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId, grantSchema } from "./access-instance";
 import { fixture, operationOf } from "./connection-operations";
 

@@ -32,7 +32,7 @@ Paste an OpenAI API key into `.env` before using the default demo config. The de
 - The UI is served from a built Vite bundle.
 - A one-shot migration service runs committed Drizzle migrations before the API starts; the API and the workers never migrate.
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
-- You can seed those users explicitly with `pnpm --filter @vivd-catalyst/demo seed:auth`.
+- You can seed those users explicitly with `pnpm --filter @work-shape/catalyst-demo seed:auth`.
 
 Each client has a development Compose file at `docker-compose.yml` and a production-style Compose file at `docker-compose.prod.yml`. The demo stack intentionally avoids premium/restricted capabilities. External deployments can opt into additional capability packages and runtime services without adding those implementations to this repository.
 

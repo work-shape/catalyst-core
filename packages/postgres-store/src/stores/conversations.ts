@@ -13,7 +13,7 @@ import {
   type CreateMessageInput,
   type ModelProviderContinuationCheckpoint,
   type ModelProviderContinuationStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   appendAssistantMessage as appendPostgresAssistantMessage,
   appendMessage as appendPostgresMessage,
@@ -37,7 +37,7 @@ import {
   deleteModelProviderContinuation as deletePostgresModelProviderContinuation,
   getModelProviderContinuation as getPostgresModelProviderContinuation
 } from "../postgres-model-provider-continuation-operations";
-import type { ConversationsStore } from "@vivd-catalyst/core";
+import type { ConversationsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 export function createPostgresConversationsStore(db: PostgresConnection): ConversationsStore {
   return {

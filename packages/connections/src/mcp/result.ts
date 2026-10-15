@@ -4,7 +4,7 @@ import {
   unknownToJsonValue,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { McpRawToolResult } from "./client";
 

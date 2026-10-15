@@ -2,9 +2,9 @@
 // the process and the second one the build: whether it has a capability that ships the
 // `documents` module, and whether that module needs a job kind of the workspace command worker.
 // The release gate's `--resolve-only` may follow.
-import { defineCapability } from "@vivd-catalyst/capability-sdk";
-import { defineClientInstance } from "@vivd-catalyst/client-assembly";
-import { defineModule } from "@vivd-catalyst/core";
+import { defineCapability } from "@work-shape/catalyst-capability-sdk";
+import { defineClientInstance } from "@work-shape/catalyst-client-assembly";
+import { defineModule } from "@work-shape/catalyst-core";
 
 const [name, build] = process.argv.slice(2);
 const documents = defineCapability({

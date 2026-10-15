@@ -5,7 +5,7 @@ import {
   type ChatSessionAuthScope,
   type FirstPartyAuthScope,
   type OperationScope
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 import type {
   AgentRunId,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createToolDisplayPanelAutoShowTracker } from "@vivd-catalyst/chat-ui/tool-display-panel";
+import { createToolDisplayPanelAutoShowTracker } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 
 describe("chat UI tool display panel", () => {
   it("auto-opens each display key once", () => {

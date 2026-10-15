@@ -1,5 +1,5 @@
-import { apiOperations, parseJobStatusList } from "@vivd-catalyst/api-contract";
-import { isAuthenticatedServicePrincipal, isSuperadmin } from "@vivd-catalyst/core";
+import { apiOperations, parseJobStatusList } from "@work-shape/catalyst-api-contract";
+import { isAuthenticatedServicePrincipal, isSuperadmin } from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
 import { JobAdminWorkflow } from "../job-admin-workflow";
 import type { ChatServerOptions } from "../types";

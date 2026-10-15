@@ -1,7 +1,7 @@
 import { FolderInput } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
-import { Button, cn, Dialog, RadioGroup } from "@vivd-catalyst/ui";
+import type { CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
+import { Button, cn, Dialog, RadioGroup } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import {
   CollaborationWorkspaceAvatar,

@@ -7,7 +7,7 @@ import type {
   PlatformStores,
   ToolExecutionContext,
   WorkspaceCommand
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createWorkspaceCommandClient,
   type WorkspaceCommandClient

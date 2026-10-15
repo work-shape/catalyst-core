@@ -7,7 +7,7 @@ import {
   type PlatformStores,
   type WorkflowRun,
   type WorkflowStepRun
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { workflowRunActor } from "./run-identity";
 import { WorkflowStepFailure } from "./step-failure";
 

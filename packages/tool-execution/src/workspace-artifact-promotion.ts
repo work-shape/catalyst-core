@@ -6,7 +6,7 @@ import {
   type PlatformStores,
   type WorkspaceCommandId,
   type WorkspaceFile
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { readPromotedFileArtifacts } from "./workspace-tool-results";
 
 export type WorkspaceArtifactPromotionStore = Pick<PlatformStores, "files" | "executionWorkspaces">;

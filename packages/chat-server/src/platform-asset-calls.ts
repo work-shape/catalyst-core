@@ -1,4 +1,4 @@
-import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   isPageId,
@@ -15,7 +15,7 @@ import {
   type OperationDefinition,
   type PolicyValue,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   PLATFORM_ASSET_LIST_MAX,
   PLATFORM_ASSET_TOOLS,
@@ -24,7 +24,7 @@ import {
   type PlatformAssetPut,
   type PlatformAssetFound,
   type PlatformCallableOperation
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
 import {
   DRAFT_CHANGED_ELSEWHERE,

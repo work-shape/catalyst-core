@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { AgentAvailability, ApiClient } from "@vivd-catalyst/api-client";
-import { completedOutput } from "@vivd-catalyst/api-client";
+import type { AgentAvailability, ApiClient } from "@work-shape/catalyst-api-client";
+import { completedOutput } from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 
 /**

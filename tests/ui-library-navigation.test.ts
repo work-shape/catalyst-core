@@ -35,7 +35,7 @@ import {
   UiRoot,
   uiLabelsDe,
   uiLabelsEn
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 
 function render(element: ReactElement, labels = uiLabelsEn): string {
   return renderToStaticMarkup(createElement(UiRoot, { mode: "light", labels }, element));

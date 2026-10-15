@@ -6,8 +6,8 @@ import {
   type AssetSummary,
   type ConfigAssetRevision,
   type PlatformContext
-} from "@vivd-catalyst/api-contract";
-import type { OperationOutcome } from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-contract";
+import type { OperationOutcome } from "@work-shape/catalyst-api-client";
 import { ConfigApiError, type ConfigApi } from "./api";
 import { readAssetSource } from "./asset-sources";
 import { runFollowCommand } from "./follow-commands";

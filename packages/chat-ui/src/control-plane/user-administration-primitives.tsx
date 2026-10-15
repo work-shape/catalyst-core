@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { AdministeredUser } from "@vivd-catalyst/api-client";
-import { Avatar, Badge, FormNotice as LibraryFormNotice } from "@vivd-catalyst/ui";
+import type { AdministeredUser } from "@work-shape/catalyst-api-client";
+import { Avatar, Badge, FormNotice as LibraryFormNotice } from "@work-shape/catalyst-ui";
 import type { FormNoticeState } from "./user-administration-model";
 import { useTranslation } from "../i18n";
 

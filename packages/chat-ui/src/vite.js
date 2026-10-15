@@ -6,8 +6,8 @@ import { readChatUiEnv } from "./env.js";
 import {
   createClientBranding,
   loadClientInstanceConfigFromFile
-} from "@vivd-catalyst/config-schema";
-import { createThemeTokens, serializeThemeRule } from "@vivd-catalyst/ui/theme";
+} from "@work-shape/catalyst-config-schema";
+import { createThemeTokens, serializeThemeRule } from "@work-shape/catalyst-ui/theme";
 
 const DEFAULT_FAVICON_PUBLIC_PATH = "/favicon.svg";
 const DEFAULT_CLIENT_CONFIG_PATH = "config/app.yaml";

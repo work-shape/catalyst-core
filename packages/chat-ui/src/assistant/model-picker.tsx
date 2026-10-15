@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { cn, LevelMeter, Popover, PopoverContent, PopoverTrigger } from "@vivd-catalyst/ui";
+import { cn, LevelMeter, Popover, PopoverContent, PopoverTrigger } from "@work-shape/catalyst-ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { modelDisplayLabel } from "../model-label";
 import { useTranslation, type TranslationKey } from "../i18n";

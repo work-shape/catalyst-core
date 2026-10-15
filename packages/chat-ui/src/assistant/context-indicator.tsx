@@ -1,4 +1,4 @@
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@vivd-catalyst/ui";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 
 export function ContextIndicator({

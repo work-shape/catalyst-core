@@ -1,6 +1,6 @@
 import { totalmem } from "node:os";
-import { AppError, type Logger, type ModuleSnapshot } from "@vivd-catalyst/core";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { AppError, type Logger, type ModuleSnapshot } from "@work-shape/catalyst-core";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import type { ClientInstanceEnv } from "./env";
 
 // The command worker starts every sandbox of an instance: the containers of agent commands,

@@ -5,8 +5,8 @@ import {
   type DryRunGuardrailResponse,
   type TestGuardrailRequest,
   type TestGuardrailResponse
-} from "@vivd-catalyst/api-contract";
-import { guardrailConfigSchema } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-api-contract";
+import { guardrailConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   GUARDRAIL_ASSET_KIND,
@@ -19,7 +19,7 @@ import {
   type GuardrailFields,
   type GuardrailFilter,
   type GuardrailOutcome
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { AssetCall } from "./asset-access";
 import { storedRevisionFields } from "./asset-guardrail-events";
 import type { AssetWorkflow } from "./asset-workflow";

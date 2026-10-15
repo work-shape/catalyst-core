@@ -6,8 +6,8 @@ import {
   type RuntimeCallContext,
   asConversationId,
   authContextFromUser
-} from "@vivd-catalyst/core";
-import { resolveConfigLocale } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-core";
+import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
 import type { ChatServerOptions } from "./types";
 
 /** An empty path segment still matches a route, so a handler names what is missing. */

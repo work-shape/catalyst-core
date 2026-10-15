@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { z } from "zod";
-import type { PageFile } from "@vivd-catalyst/app-build";
+import type { PageFile } from "@work-shape/catalyst-app-build";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/app-build");
 
@@ -29,7 +29,7 @@ export function pageBuildCommandFromSource(): Promise<string> {
       platform: "node",
       format: "esm",
       external: Object.keys(manifest.dependencies).filter(
-        (name) => !name.startsWith("@vivd-catalyst/")
+        (name) => !name.startsWith("@work-shape/catalyst-")
       ),
       logLevel: "silent"
     });

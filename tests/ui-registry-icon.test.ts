@@ -7,14 +7,14 @@ import {
   UiRoot,
   genericIcons,
   uiLabelsEn
-} from "@vivd-catalyst/ui";
-import { UiGallery } from "@vivd-catalyst/ui/gallery";
+} from "@work-shape/catalyst-ui";
+import { UiGallery } from "@work-shape/catalyst-ui/gallery";
 import {
   contrastRatio,
   createThemeTokens,
   DEFAULT_THEME_INPUTS,
   parseHexColor
-} from "@vivd-catalyst/ui/theme";
+} from "@work-shape/catalyst-ui/theme";
 
 // The file-type icons of the icon registry and the registry's gallery entry. The registry's own
 // resolution order is held in ui-flow.test.ts.

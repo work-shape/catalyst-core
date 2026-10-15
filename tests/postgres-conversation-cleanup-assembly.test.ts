@@ -2,15 +2,15 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { ClientInstanceCapability } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import type { ClientInstanceCapability } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   asConversationId,
   type ClientInstanceId,
   type ConversationId,
   type PlatformStores
-} from "@vivd-catalyst/core";
-import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
+} from "@work-shape/catalyst-core";
+import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import { jsonObject, required, text } from "./support/assertions";
 import { workspaceInfrastructure } from "./support/fixtures";
 import {

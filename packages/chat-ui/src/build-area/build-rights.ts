@@ -1,4 +1,4 @@
-import type { ApiUser, PlatformContext } from "@vivd-catalyst/api-client";
+import type { ApiUser, PlatformContext } from "@work-shape/catalyst-api-client";
 
 /** The right that reads every agent and skill of the instance. */
 const INSTANCE_READ_PERMISSION = "config_assets.read";

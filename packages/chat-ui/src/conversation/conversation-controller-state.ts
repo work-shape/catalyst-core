@@ -6,12 +6,12 @@ import type {
   ConversationThreadSnapshot,
   Message,
   RunObservation
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   applyAgentRunObservation,
   type AgentRunProjection as CoreAgentRunProjection,
   type RunObservation as CoreRunObservation
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 export type ConversationSnapshotStatus = "loading" | "ready" | "not_found" | "error";
 export type ConversationConnectionStatus =

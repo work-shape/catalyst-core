@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DATA_STORE_ASSET_KIND, DATA_STORE_MANIFEST_FILE } from "@vivd-catalyst/core";
+import { DATA_STORE_ASSET_KIND, DATA_STORE_MANIFEST_FILE } from "@work-shape/catalyst-core";
 import { setupNamespaceHolder } from "./support/asset-operations";
 import { clientInstanceId as accessInstanceId, skill } from "./support/access-instance";
 import { z } from "zod";

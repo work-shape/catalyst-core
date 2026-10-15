@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { isAppError } from "@vivd-catalyst/core";
-import { clientInstanceConfigSchema } from "@vivd-catalyst/config-schema";
+import { isAppError } from "@work-shape/catalyst-core";
+import { clientInstanceConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   assertSandboxMemoryFitsHost,
   sandboxMemoryNeeded,
   sandboxMemoryTerms
-} from "@vivd-catalyst/client-assembly";
+} from "@work-shape/catalyst-client-assembly";
 
 // The check a command worker makes before it starts: the sandboxes that can run at once must
 // fit the memory of its host. Each kind of sandbox is one term, slots times memory.

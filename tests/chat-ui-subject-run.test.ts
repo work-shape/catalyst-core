@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
-import { assetToolSentence } from "@vivd-catalyst/chat-ui/asset-tool-lines";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { assetToolSentence } from "@work-shape/catalyst-chat-ui/asset-tool-lines";
 import {
   assetPageRoute,
   opensInRun,
@@ -8,7 +8,7 @@ import {
   standingAssetOpen,
   subjectOpenedInRun,
   type SubjectRunPart
-} from "@vivd-catalyst/chat-ui/subject-run";
+} from "@work-shape/catalyst-chat-ui/subject-run";
 
 const { t } = createTranslationContext("en");
 const de = createTranslationContext("de").t;

@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { lstat, open, opendir } from "node:fs/promises";
 import { join } from "node:path";
-import { fileSetPathIssue } from "@vivd-catalyst/core";
+import { fileSetPathIssue } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { PAGE_BUILD_ERROR_CODES } from "./errors";
 import {

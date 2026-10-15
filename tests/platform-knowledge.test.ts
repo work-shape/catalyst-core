@@ -8,9 +8,9 @@ import {
   createPlatformTools,
   platformDocsSkill,
   platformModules
-} from "@vivd-catalyst/client-assembly";
-import { createModuleRegistry } from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-client-assembly";
+import { createModuleRegistry } from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 // What an agent knows of the platform comes in three layers: the rules every agent gets, and,

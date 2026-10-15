@@ -4,8 +4,8 @@ import {
   createOperationCalls,
   type ChatServerOptions,
   type OperationCalls
-} from "@vivd-catalyst/chat-server";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-server";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createAuthorizer,
   knowledgeOperationNamesOf,
@@ -20,15 +20,15 @@ import {
   type ModuleSnapshot,
   type PlatformStores,
   type ToolOperationRunner
-} from "@vivd-catalyst/core";
-import type { ModelGateway } from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-core";
+import type { ModelGateway } from "@work-shape/catalyst-model-provider";
 import { conversationToolNames } from "./conversation-offer";
 import {
   createBoundedDataToolSource,
   createToolOperationRunner,
   registerToolOperations,
   type ToolRegistry
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 
 export interface InstanceOperationCallsInput {
   clientInstanceId: ClientInstanceId;

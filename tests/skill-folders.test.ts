@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
-import { createSkillChangePreview, type SkillChangeOperation } from "@vivd-catalyst/config-schema";
+import { ApprovalRequestWorkflow } from "@work-shape/catalyst-server";
+import {
+  createSkillChangePreview,
+  type SkillChangeOperation
+} from "@work-shape/catalyst-config-schema";
 import {
   StoreBackedAuditRecorder,
   asAgentRunId,
@@ -11,12 +14,12 @@ import {
   asToolCallId,
   type AuthenticatedUser,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   ToolRegistry,
   createReadSkillTool,
   createSkillSourceVersion
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { accessOf } from "./support/access";
 import { agent } from "./support/access-instance";
 import { required } from "./support/assertions";

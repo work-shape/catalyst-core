@@ -3,7 +3,7 @@ import {
   type AccessResource,
   type ActorAccess,
   type ConfigAssetRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import type { AssetWorkflowOptions } from "./types";
 

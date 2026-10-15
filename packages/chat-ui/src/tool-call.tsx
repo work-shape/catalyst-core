@@ -1,8 +1,8 @@
 import { CheckCircle2, ChevronRight, CircleAlert, Wrench } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
-import { cn, ConnectionIcon, Spinner } from "@vivd-catalyst/ui";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import { cn, ConnectionIcon, Spinner } from "@work-shape/catalyst-ui";
 import { useConnectionToolSubject, type ConnectionToolSubject } from "./assistant/tool-subjects";
 import { ApprovalRequestCard } from "./approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "./approvals/approval-request-model";

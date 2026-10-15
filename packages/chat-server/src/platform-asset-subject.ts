@@ -9,7 +9,7 @@ import {
   type Conversation,
   type ConversationSubject,
   type OperationAuthorization
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { AssetWorkflow } from "./asset-workflow";
 import type { AssetWorkflowOptions } from "./types";
 

@@ -8,7 +8,7 @@ import {
   type ClientInstanceId,
   type ConfigAssetMutation,
   type ConfigAssetStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { assetCheckouts, assetRepoBundles } from "./schema";
 

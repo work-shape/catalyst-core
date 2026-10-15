@@ -1,5 +1,5 @@
-import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-client";
-import type { BuildAsset } from "@vivd-catalyst/chat-ui/build-area";
+import type { ConnectionDetail, ConnectionTestResult } from "@work-shape/catalyst-api-client";
+import type { BuildAsset } from "@work-shape/catalyst-chat-ui/build-area";
 
 // The answers of `connections.get` and `connections.test` the Connection page is built
 // against, one per state the page names. The unit test hands them to the page. The browser spec

@@ -1,4 +1,4 @@
-import { compileJsonSchema } from "@vivd-catalyst/connections";
+import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   WORKFLOW_DATASET_KEY,
   isAppError,
@@ -22,7 +22,7 @@ import {
   type WorkflowStepRunCall,
   type WorkflowStepRunEnd,
   type WorkflowTriggerOutput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   WORKFLOW_CODE_ERRORS,
   WORKFLOW_CODE_STEP_EFFECT,

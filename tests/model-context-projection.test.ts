@@ -12,7 +12,7 @@ import {
   type ChatMessage,
   type JsonObject,
   type ToolExecutionResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
@@ -21,8 +21,8 @@ import {
   projectAgentVisibleHistory,
   selectRecentCompleteHistory
 } from "../packages/agent-runtime/src/model-context-projection";
-import { modelContentImages, modelContentText } from "@vivd-catalyst/model-provider";
-import { workspacePreviewImagesInputSchema } from "@vivd-catalyst/tool-execution";
+import { modelContentImages, modelContentText } from "@work-shape/catalyst-model-provider";
+import { workspacePreviewImagesInputSchema } from "@work-shape/catalyst-tool-execution";
 
 describe("model context projection", () => {
   it("round-trips assistant web sources and citations through message metadata", () => {

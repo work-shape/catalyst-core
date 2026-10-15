@@ -20,7 +20,7 @@ import {
   type ConnectionConfig,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 // The definition of a Connection as a revision holds it. Every object is strict: a field this

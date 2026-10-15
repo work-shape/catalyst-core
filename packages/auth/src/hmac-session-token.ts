@@ -10,7 +10,7 @@ import {
   type DelegatedActor,
   type ISODateString,
   asClientInstanceId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { AuthAdapter, AuthRequest, AuthRequestHeaders } from "./types";
 
 /**

@@ -1,4 +1,8 @@
-import { WORKFLOW_ASSET_KIND, WORKFLOW_RUN_JOB_KINDS, defineModule } from "@vivd-catalyst/core";
+import {
+  WORKFLOW_ASSET_KIND,
+  WORKFLOW_RUN_JOB_KINDS,
+  defineModule
+} from "@work-shape/catalyst-core";
 import { WORKFLOW_CODE_JOB_KIND, WORKFLOW_CODE_SWEEP_JOB_KIND } from "./step-job";
 
 /** The operations of the API that belong to the module. Each is off where the module is. */

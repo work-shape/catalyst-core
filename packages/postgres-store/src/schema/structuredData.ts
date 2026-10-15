@@ -1,5 +1,5 @@
 import { integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import type { StructuredDataResourceRecord } from "@vivd-catalyst/core";
+import type { StructuredDataResourceRecord } from "@work-shape/catalyst-core";
 import { conversations } from "./conversations";
 
 export const structuredDataResources = pgTable(

@@ -6,8 +6,8 @@ import {
   operationPathParamNames,
   type Operation,
   type OperationPathParamName
-} from "@vivd-catalyst/api-contract";
-import { hasExplicitCredentials } from "@vivd-catalyst/auth";
+} from "@work-shape/catalyst-api-contract";
+import { hasExplicitCredentials } from "@work-shape/catalyst-auth";
 import {
   AppError,
   authContextFromUser,
@@ -33,7 +33,7 @@ import {
   type PolicyTarget,
   type StorePage,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {

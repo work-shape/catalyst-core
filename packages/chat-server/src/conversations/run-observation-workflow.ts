@@ -1,4 +1,4 @@
-import { auditActorFromUser, projectAgentRun } from "@vivd-catalyst/core";
+import { auditActorFromUser, projectAgentRun } from "@work-shape/catalyst-core";
 import {
   AppError,
   type AgentRun,
@@ -17,7 +17,7 @@ import {
   getSubjectUserId,
   withoutAssistantProviderContinuation,
   readAssistantFinalMetadata
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "../types";
 import { ConversationWorkflow } from "./conversation-workflow";
 

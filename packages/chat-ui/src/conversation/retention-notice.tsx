@@ -1,6 +1,6 @@
 import { Clock } from "lucide-react";
-import type { SafeConfig } from "@vivd-catalyst/api-client";
-import { Banner } from "@vivd-catalyst/ui";
+import type { SafeConfig } from "@work-shape/catalyst-api-client";
+import { Banner } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { retentionWarningDate, retentionWarningText } from "./retention-warning";
 

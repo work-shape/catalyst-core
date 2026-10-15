@@ -7,7 +7,7 @@ import {
   type ActorAccess,
   type ConfigAssetRecord,
   type OperationDefinition
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { DataStoreRuntime } from "./runtime";
 import type { PublishedStore } from "./verbs";

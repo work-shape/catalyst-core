@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   NO_APP_RIGHTS,
   pageAppChoice,
@@ -9,7 +9,7 @@ import {
   UpdateAppDialogView,
   type AppRights,
   type AppsHost
-} from "@vivd-catalyst/chat-ui/apps";
+} from "@work-shape/catalyst-chat-ui/apps";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 const { t } = createTranslationContext("en");

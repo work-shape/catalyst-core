@@ -13,7 +13,7 @@ import {
   type ConnectorContext,
   type EgressGrant,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { egressTargetOfUrl, isSameEgressOrigin } from "../egress";
 import {

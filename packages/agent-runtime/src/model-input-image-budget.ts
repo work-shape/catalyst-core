@@ -2,7 +2,7 @@ import {
   modelContentImages,
   type ModelContentPart,
   type ModelMessage
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { omitModelVisibleImages } from "./model-visible-artifacts";
 
 type ModelImagePart = Extract<ModelContentPart, { type: "image" }>;

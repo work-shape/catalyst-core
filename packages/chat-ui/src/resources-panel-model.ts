@@ -2,7 +2,7 @@ import type {
   ConversationResourceListItem,
   LocaleCode,
   StructuredDataResourceResponse
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import type { ResourcesPanelPreference } from "./workspace-utils";
 
 export const RESOURCE_SECTION_ORDER = [

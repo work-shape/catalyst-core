@@ -5,18 +5,18 @@ import {
   StoreBackedAuditRecorder,
   type JobWorker,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
   type ClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   createConsoleWorkspaceCommandTelemetry,
   createWorkspaceCommandJobs,
   LocalWorkspaceCommandRunner
-} from "@vivd-catalyst/tool-execution";
-import { assetRepoCommitJob, assetRepoSweepJob, pageBundleJob } from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-tool-execution";
+import { assetRepoCommitJob, assetRepoSweepJob, pageBundleJob } from "@work-shape/catalyst-server";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
@@ -46,7 +46,7 @@ import {
   WORKFLOW_CODE_SWEEP_JOB_KIND,
   createCodeStepJobs,
   workflowsModule
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceWorkspaceCommandWorkerInput {

@@ -5,13 +5,13 @@ import {
   createConnectionOperationSource,
   createConnectionToolSource,
   fingerprintOperation
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import type {
   ConnectionCatalog,
   ConnectorOperationDescriptor,
   JsonValue
-} from "@vivd-catalyst/core";
-import { connectionCallSentence } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
+import { connectionCallSentence } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import {
   DEFAULT_LIMITS,

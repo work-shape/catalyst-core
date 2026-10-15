@@ -1,5 +1,9 @@
-import { type ChatMessage, type JsonObject, readUserMessageMetadata } from "@vivd-catalyst/core";
-import type { ModelMessage } from "@vivd-catalyst/model-provider";
+import {
+  type ChatMessage,
+  type JsonObject,
+  readUserMessageMetadata
+} from "@work-shape/catalyst-core";
+import type { ModelMessage } from "@work-shape/catalyst-model-provider";
 
 const MAX_TITLE_SOURCE_CHARS = 800;
 

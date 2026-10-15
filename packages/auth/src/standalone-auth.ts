@@ -11,7 +11,7 @@ import {
   FIRST_PARTY_AUTH_SCOPES,
   type AuthenticatedUser,
   type ClientInstanceId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   authAccounts,
   authSessions,

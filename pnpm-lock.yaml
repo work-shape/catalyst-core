@@ -35,22 +35,22 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.2
         version: 6.0.2(vite@8.0.16(@types/node@24.13.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
-      '@vivd-catalyst/app-build':
+      '@work-shape/catalyst-app-build':
         specifier: workspace:*
         version: link:packages/app-build
-      '@vivd-catalyst/app-kit':
+      '@work-shape/catalyst-app-kit':
         specifier: workspace:*
         version: link:packages/app-kit
-      '@vivd-catalyst/asset-repo':
+      '@work-shape/catalyst-asset-repo':
         specifier: workspace:*
         version: link:packages/asset-repo
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:packages/core
-      '@vivd-catalyst/postgres-store':
+      '@work-shape/catalyst-postgres-store':
         specifier: workspace:*
         version: link:packages/postgres-store
-      '@vivd-catalyst/quality-config':
+      '@work-shape/catalyst-quality-config':
         specifier: workspace:*
         version: link:packages/quality-config
       drizzle-kit:
@@ -98,30 +98,30 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
         version: 1.32.1(zod@4.4.3)
-      '@vivd-catalyst/api-client':
+      '@work-shape/catalyst-api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@vivd-catalyst/chat-ui':
+      '@work-shape/catalyst-chat-ui':
         specifier: workspace:*
         version: link:../../packages/chat-ui
-      '@vivd-catalyst/client-assembly':
-        specifier: workspace:*
-        version: link:../../packages/client-assembly
-      '@vivd-catalyst/config-schema':
-        specifier: workspace:*
-        version: link:../../packages/config-schema
-      '@vivd-catalyst/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@vivd-catalyst/tool-sdk':
-        specifier: workspace:*
-        version: link:../../packages/tool-sdk
-      '@vivd-catalyst/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       '@work-shape/catalyst-cli':
         specifier: workspace:*
         version: link:../../packages/config-cli
+      '@work-shape/catalyst-client-assembly':
+        specifier: workspace:*
+        version: link:../../packages/client-assembly
+      '@work-shape/catalyst-config-schema':
+        specifier: workspace:*
+        version: link:../../packages/config-schema
+      '@work-shape/catalyst-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@work-shape/catalyst-tool-sdk':
+        specifier: workspace:*
+        version: link:../../packages/tool-sdk
+      '@work-shape/catalyst-ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       lucide-react:
         specifier: ^1.17.0
         version: 1.17.0(react@19.2.7)
@@ -168,10 +168,10 @@ importers:
 
   packages/agent-runtime:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/model-provider':
+      '@work-shape/catalyst-model-provider':
         specifier: workspace:*
         version: link:../model-provider
     devDependencies:
@@ -187,7 +187,7 @@ importers:
 
   packages/api-client:
     dependencies:
-      '@vivd-catalyst/api-contract':
+      '@work-shape/catalyst-api-contract':
         specifier: workspace:*
         version: link:../api-contract
       zod:
@@ -206,7 +206,7 @@ importers:
 
   packages/api-contract:
     dependencies:
-      '@vivd-catalyst/asset-schemas':
+      '@work-shape/catalyst-asset-schemas':
         specifier: workspace:*
         version: link:../asset-schemas
       zod:
@@ -234,7 +234,7 @@ importers:
       '@tanstack/router-generator':
         specifier: 1.167.41
         version: 1.167.41
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
       esbuild:
@@ -262,7 +262,7 @@ importers:
       '@tanstack/react-router':
         specifier: 1.170.16
         version: 1.170.16(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@vivd-catalyst/ui':
+      '@work-shape/catalyst-ui':
         specifier: workspace:*
         version: link:../ui
       react:
@@ -336,7 +336,7 @@ importers:
 
   packages/auth:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
       better-auth:
@@ -361,13 +361,13 @@ importers:
 
   packages/capability-sdk:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/data-source':
+      '@work-shape/catalyst-data-source':
         specifier: workspace:*
         version: link:../data-source
-      '@vivd-catalyst/tool-sdk':
+      '@work-shape/catalyst-tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
     devDependencies:
@@ -389,34 +389,34 @@ importers:
       '@fastify/multipart':
         specifier: ^9.3.0
         version: 9.4.0
-      '@vivd-catalyst/api-contract':
+      '@work-shape/catalyst-api-contract':
         specifier: workspace:*
         version: link:../api-contract
-      '@vivd-catalyst/app-build':
+      '@work-shape/catalyst-app-build':
         specifier: workspace:*
         version: link:../app-build
-      '@vivd-catalyst/asset-repo':
+      '@work-shape/catalyst-asset-repo':
         specifier: workspace:*
         version: link:../asset-repo
-      '@vivd-catalyst/auth':
+      '@work-shape/catalyst-auth':
         specifier: workspace:*
         version: link:../auth
-      '@vivd-catalyst/config-schema':
+      '@work-shape/catalyst-config-schema':
         specifier: workspace:*
         version: link:../config-schema
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/mail':
+      '@work-shape/catalyst-mail':
         specifier: workspace:*
         version: link:../mail
-      '@vivd-catalyst/model-provider':
+      '@work-shape/catalyst-model-provider':
         specifier: workspace:*
         version: link:../model-provider
-      '@vivd-catalyst/tool-execution':
+      '@work-shape/catalyst-tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
-      '@vivd-catalyst/usage-governance':
+      '@work-shape/catalyst-usage-governance':
         specifier: workspace:*
         version: link:../usage-governance
       ai:
@@ -441,7 +441,7 @@ importers:
 
   packages/chat-standalone:
     dependencies:
-      '@vivd-catalyst/chat-ui':
+      '@work-shape/catalyst-chat-ui':
         specifier: workspace:*
         version: link:../chat-ui
       react:
@@ -520,16 +520,16 @@ importers:
       '@univerjs/ui':
         specifier: 0.25.1
         version: 0.25.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rxjs@7.8.2)
-      '@vivd-catalyst/api-client':
+      '@work-shape/catalyst-api-client':
         specifier: workspace:*
         version: link:../api-client
-      '@vivd-catalyst/config-schema':
+      '@work-shape/catalyst-config-schema':
         specifier: workspace:*
         version: link:../config-schema
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/ui':
+      '@work-shape/catalyst-ui':
         specifier: workspace:*
         version: link:../ui
       ai:
@@ -587,7 +587,7 @@ importers:
 
   packages/chat-widget:
     dependencies:
-      '@vivd-catalyst/chat-ui':
+      '@work-shape/catalyst-chat-ui':
         specifier: workspace:*
         version: link:../chat-ui
       react:
@@ -615,70 +615,70 @@ importers:
 
   packages/client-assembly:
     dependencies:
-      '@vivd-catalyst/agent-runtime':
+      '@work-shape/catalyst-agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
-      '@vivd-catalyst/api-client':
+      '@work-shape/catalyst-api-client':
         specifier: workspace:*
         version: link:../api-client
-      '@vivd-catalyst/api-contract':
+      '@work-shape/catalyst-api-contract':
         specifier: workspace:*
         version: link:../api-contract
-      '@vivd-catalyst/app-build':
+      '@work-shape/catalyst-app-build':
         specifier: workspace:*
         version: link:../app-build
-      '@vivd-catalyst/asset-repo':
+      '@work-shape/catalyst-asset-repo':
         specifier: workspace:*
         version: link:../asset-repo
-      '@vivd-catalyst/auth':
+      '@work-shape/catalyst-auth':
         specifier: workspace:*
         version: link:../auth
-      '@vivd-catalyst/capability-sdk':
+      '@work-shape/catalyst-capability-sdk':
         specifier: workspace:*
         version: link:../capability-sdk
-      '@vivd-catalyst/chat-server':
-        specifier: workspace:*
-        version: link:../chat-server
-      '@vivd-catalyst/config-schema':
+      '@work-shape/catalyst-config-schema':
         specifier: workspace:*
         version: link:../config-schema
-      '@vivd-catalyst/connections':
+      '@work-shape/catalyst-connections':
         specifier: workspace:*
         version: link:../connections
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/data-source':
+      '@work-shape/catalyst-data-source':
         specifier: workspace:*
         version: link:../data-source
-      '@vivd-catalyst/data-stores':
+      '@work-shape/catalyst-data-stores':
         specifier: workspace:*
         version: link:../data-stores
-      '@vivd-catalyst/mail':
+      '@work-shape/catalyst-mail':
         specifier: workspace:*
         version: link:../mail
-      '@vivd-catalyst/model-provider':
+      '@work-shape/catalyst-model-provider':
         specifier: workspace:*
         version: link:../model-provider
-      '@vivd-catalyst/object-storage':
+      '@work-shape/catalyst-object-storage':
         specifier: workspace:*
         version: link:../object-storage
-      '@vivd-catalyst/postgres-store':
+      '@work-shape/catalyst-postgres-store':
         specifier: workspace:*
         version: link:../postgres-store
-      '@vivd-catalyst/tool-execution':
+      '@work-shape/catalyst-server':
+        specifier: workspace:*
+        version: link:../chat-server
+      '@work-shape/catalyst-tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
-      '@vivd-catalyst/tool-sdk':
+      '@work-shape/catalyst-tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
-      '@vivd-catalyst/usage-governance':
+      '@work-shape/catalyst-usage-governance':
         specifier: workspace:*
         version: link:../usage-governance
-      '@vivd-catalyst/web-access':
+      '@work-shape/catalyst-web-access':
         specifier: workspace:*
         version: link:../web-access
-      '@vivd-catalyst/workflows':
+      '@work-shape/catalyst-workflows':
         specifier: workspace:*
         version: link:../workflows
       dotenv:
@@ -716,13 +716,13 @@ importers:
       '@types/node':
         specifier: ^24.13.1
         version: 24.13.1
-      '@vivd-catalyst/api-client':
+      '@work-shape/catalyst-api-client':
         specifier: workspace:*
         version: link:../api-client
-      '@vivd-catalyst/api-contract':
+      '@work-shape/catalyst-api-contract':
         specifier: workspace:*
         version: link:../api-contract
-      '@vivd-catalyst/asset-schemas':
+      '@work-shape/catalyst-asset-schemas':
         specifier: workspace:*
         version: link:../asset-schemas
       tsup:
@@ -734,10 +734,10 @@ importers:
 
   packages/config-schema:
     dependencies:
-      '@vivd-catalyst/asset-schemas':
+      '@work-shape/catalyst-asset-schemas':
         specifier: workspace:*
         version: link:../asset-schemas
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
       re2js:
@@ -762,13 +762,13 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
         version: 1.32.1(zod@4.4.3)
-      '@vivd-catalyst/config-schema':
+      '@work-shape/catalyst-config-schema':
         specifier: workspace:*
         version: link:../config-schema
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/web-access':
+      '@work-shape/catalyst-web-access':
         specifier: workspace:*
         version: link:../web-access
       ajv:
@@ -790,7 +790,7 @@ importers:
 
   packages/core:
     dependencies:
-      '@vivd-catalyst/asset-schemas':
+      '@work-shape/catalyst-asset-schemas':
         specifier: workspace:*
         version: link:../asset-schemas
       zod:
@@ -809,10 +809,10 @@ importers:
 
   packages/data-source:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/tool-sdk':
+      '@work-shape/catalyst-tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
       postgres:
@@ -834,13 +834,13 @@ importers:
 
   packages/data-stores:
     dependencies:
-      '@vivd-catalyst/connections':
+      '@work-shape/catalyst-connections':
         specifier: workspace:*
         version: link:../connections
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/postgres-connector':
+      '@work-shape/catalyst-postgres-connector':
         specifier: workspace:*
         version: link:../postgres-connector
       zod:
@@ -871,7 +871,7 @@ importers:
       '@astrojs/check':
         specifier: ^0.9.9
         version: 0.9.9(prettier@3.9.6)(typescript@6.0.3)
-      '@vivd-catalyst/api-contract':
+      '@work-shape/catalyst-api-contract':
         specifier: workspace:*
         version: link:../api-contract
       typescript:
@@ -895,7 +895,7 @@ importers:
 
   packages/mail:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -914,7 +914,7 @@ importers:
 
   packages/model-provider:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -939,7 +939,7 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: 3.1072.0
         version: 3.1072.0
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -958,7 +958,7 @@ importers:
 
   packages/postgres-connector:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
       postgres:
@@ -980,7 +980,7 @@ importers:
 
   packages/postgres-store:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
       drizzle-orm:
@@ -1035,16 +1035,16 @@ importers:
 
   packages/tool-execution:
     dependencies:
-      '@vivd-catalyst/config-schema':
+      '@work-shape/catalyst-config-schema':
         specifier: workspace:*
         version: link:../config-schema
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/document-execution':
+      '@work-shape/catalyst-document-execution':
         specifier: workspace:*
         version: link:../document-execution
-      '@vivd-catalyst/tool-sdk':
+      '@work-shape/catalyst-tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
       xlsx:
@@ -1066,7 +1066,7 @@ importers:
 
   packages/tool-sdk:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -1128,7 +1128,7 @@ importers:
 
   packages/usage-governance:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -1144,10 +1144,10 @@ importers:
 
   packages/web-access:
     dependencies:
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/tool-sdk':
+      '@work-shape/catalyst-tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
       zod:
@@ -1166,13 +1166,13 @@ importers:
 
   packages/workflows:
     dependencies:
-      '@vivd-catalyst/connections':
+      '@work-shape/catalyst-connections':
         specifier: workspace:*
         version: link:../connections
-      '@vivd-catalyst/core':
+      '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@vivd-catalyst/tool-execution':
+      '@work-shape/catalyst-tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
       zod:

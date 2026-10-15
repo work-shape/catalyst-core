@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { cn } from "@vivd-catalyst/ui";
+import { cn } from "@work-shape/catalyst-ui";
 import { useAttachmentContentContext } from "./attachment-content";
 import {
   ConversationFileDownloadButton,

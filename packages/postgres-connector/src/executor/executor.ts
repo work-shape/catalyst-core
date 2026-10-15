@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { JsonObject, ScopedSecretResolver } from "@vivd-catalyst/core";
+import type { JsonObject, ScopedSecretResolver } from "@work-shape/catalyst-core";
 import { describePostgres, type PostgresDescribeResult } from "./describe";
 import { PostgresExecutorError, toPostgresExecutorError } from "./errors";
 import {

@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
-import { DocsAddressProvider } from "@vivd-catalyst/ui";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import { DocsAddressProvider } from "@work-shape/catalyst-ui";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
@@ -26,7 +26,7 @@ import {
   type BuildList,
   type BuildLocation,
   type BuildSource
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import {
   instanceActions,
   legalNamespace,

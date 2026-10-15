@@ -4,13 +4,13 @@ import {
   isUnknownOperationResponse,
   type Asset,
   type AssetSummary
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   ApiError,
   createApiClient,
   type ApiClient,
   type OperationInput
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 
 export class ConfigApiError extends Error {
   readonly status: number;

@@ -18,7 +18,7 @@ import {
   type ConnectorTestStatus,
   type OperationResource,
   type SecretState
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { connectionCallLimits } from "./call";
 import { connectionOperationStatus, type ConnectionOperationState } from "./catalog";
 import {

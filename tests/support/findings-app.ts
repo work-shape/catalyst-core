@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 import { expect } from "vitest";
-import type { WorkflowAssetKind } from "@vivd-catalyst/chat-server";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
-import { loadSecretKeyring } from "@vivd-catalyst/connections";
+import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import { loadSecretKeyring } from "@work-shape/catalyst-connections";
 import {
   DATA_STORE_ASSET_KIND,
   type CollaborationWorkspaceId,
@@ -11,9 +11,9 @@ import {
   type JsonObject,
   type Logger,
   type ModuleSnapshot
-} from "@vivd-catalyst/core";
-import { createDataStores, type DataStores } from "@vivd-catalyst/data-stores";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { createDataStores, type DataStores } from "@work-shape/catalyst-data-stores";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import { clientInstanceId } from "./access-instance";
 import { action, setupAppActions, type AppActionsInstance } from "./app-actions";
 import { expectStatus, type AppFile } from "./app-instance";

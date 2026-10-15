@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { createConnectionAssetKind } from "@vivd-catalyst/chat-server";
-import { createEgressChecker } from "@vivd-catalyst/connections";
+import { createConnectionAssetKind } from "@work-shape/catalyst-server";
+import { createEgressChecker } from "@work-shape/catalyst-connections";
 import {
   createConnectorTypeRegistry,
   type ConnectorTypeDefinition,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   clientInstanceId,
   setupAccessInstance,

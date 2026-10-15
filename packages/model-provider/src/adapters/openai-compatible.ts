@@ -5,7 +5,7 @@ import {
   secretRef,
   type ProviderCheckContext,
   type ProviderCheckResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   OpenAiCompatibleChatProvider,
   openAiCompatibleCapabilities

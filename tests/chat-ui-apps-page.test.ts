@@ -1,8 +1,8 @@
 import { createElement, type ReactNode } from "react";
-import type { AssetSummary } from "@vivd-catalyst/api-client";
+import type { AssetSummary } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
-import { AppsPageView, NO_APP_RIGHTS, type AppRights } from "@vivd-catalyst/chat-ui/apps";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { AppsPageView, NO_APP_RIGHTS, type AppRights } from "@work-shape/catalyst-chat-ui/apps";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Apps page: one card per App of the open workspace, and what a card shows and offers by

@@ -7,7 +7,7 @@ import {
   ProviderRegistry,
   type Logger,
   type ModelProviderConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   MODEL_PROVIDER_MESSAGE_MAX_CHARS,
   ModelProviderError,
@@ -22,7 +22,7 @@ import {
   type ModelCapabilities,
   type ModelCompletion,
   type ModelCompletionStreamEvent
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { createFakeSecrets } from "./support/fixtures";
 import { ALL_MODEL_CAPABILITIES, createRecordingGovernance } from "./support/model-gateway";
 import { eventually } from "./support/assertions";

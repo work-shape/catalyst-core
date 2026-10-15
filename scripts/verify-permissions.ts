@@ -22,7 +22,7 @@
 // old release after it.
 import { pathToFileURL } from "node:url";
 import postgres, { type Sql } from "postgres";
-import { deriveEffectiveServiceGrants } from "@vivd-catalyst/auth";
+import { deriveEffectiveServiceGrants } from "@work-shape/catalyst-auth";
 import {
   LEGACY_PERMISSION_ACTIONS,
   asApiCredentialId,
@@ -36,8 +36,8 @@ import {
   type ApiAccessStore,
   type AuthenticatedIdentity,
   type PermissionGrant
-} from "@vivd-catalyst/core";
-import { createPostgresStores } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { createPostgresStores } from "@work-shape/catalyst-postgres-store";
 
 // ---------------------------------------------------------------------------------------------
 // The frozen copy: `packages/core/src/permissions.ts` and `deriveEffectiveServiceGrants` in

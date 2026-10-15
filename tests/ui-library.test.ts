@@ -3,9 +3,9 @@ import { fileURLToPath } from "node:url";
 import { createElement, Fragment, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import * as library from "@vivd-catalyst/ui";
-import { galleryGroups, UiGallery, type GallerySectionId } from "@vivd-catalyst/ui/gallery";
-import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
+import * as library from "@work-shape/catalyst-ui";
+import { galleryGroups, UiGallery, type GallerySectionId } from "@work-shape/catalyst-ui/gallery";
+import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@work-shape/catalyst-ui/theme";
 
 const { Dialog, Drawer, HoverCard, HoverCardContent, HoverCardTrigger, IconButton, UiRoot } =
   library;

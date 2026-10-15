@@ -1,4 +1,4 @@
-import { AppError, asClientInstanceId } from "@vivd-catalyst/core";
+import { AppError, asClientInstanceId } from "@work-shape/catalyst-core";
 import type {
   AgentConfig,
   ClientInstanceConfig,

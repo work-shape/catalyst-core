@@ -16,7 +16,7 @@ import {
   type JobsStore,
   type JsonObject,
   type PruneEndedJobsResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 import { jobWorkerReports, platformJobs } from "../schema/jobs";
 import { productUsers } from "../schema/users";

@@ -7,7 +7,7 @@ import {
   DisclosureContent,
   DisclosureTrigger,
   Spinner
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import { usePageConversationId } from "./page-host";

@@ -3,8 +3,8 @@ import {
   createConnectionCredentialResolver,
   createSecretStore,
   type SecretKeyring
-} from "@vivd-catalyst/connections";
-import type { ClientInstanceId, ConnectionsStore, SecretBinding } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-connections";
+import type { ClientInstanceId, ConnectionsStore, SecretBinding } from "@work-shape/catalyst-core";
 
 /** The two roles of a store: the one its rows are reached as, and the one that changes its schema. */
 export type DataStoreRole = "app" | "migration";

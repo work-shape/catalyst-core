@@ -1,6 +1,6 @@
 import { paginate, pageScope } from "../http/paging";
-import { DEFAULT_LIST_LIMIT, apiOperations } from "@vivd-catalyst/api-contract";
-import { createSafeConfigView } from "@vivd-catalyst/config-schema";
+import { DEFAULT_LIST_LIMIT, apiOperations } from "@work-shape/catalyst-api-contract";
+import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
 import { agentConnections } from "../agent-connections";
 import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
 import { accessResource } from "../asset-access";
@@ -18,7 +18,7 @@ import {
   type AuthenticatedUser,
   type OperationExecutionContext,
   type OperationResource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   CollaborationWorkspaceWorkflow,
   type WorkspaceChangeCall

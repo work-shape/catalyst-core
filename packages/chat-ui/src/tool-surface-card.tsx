@@ -1,7 +1,7 @@
 import { Database, LayoutDashboard, PanelRightOpen } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND, type LocaleCode } from "@vivd-catalyst/core";
-import { Button, cn } from "@vivd-catalyst/ui";
+import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND, type LocaleCode } from "@work-shape/catalyst-core";
+import { Button, cn } from "@work-shape/catalyst-ui";
 import {
   isToolDisplayPayload,
   ToolDisplayWidgetNode,

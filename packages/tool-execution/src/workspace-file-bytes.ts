@@ -8,7 +8,7 @@ import {
   type UpsertWorkspaceFileInput,
   type WorkspaceCommandId,
   type WorkspaceFile
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   emitWorkspaceCommandTelemetry,
   type WorkspaceCommandTelemetry

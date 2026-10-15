@@ -10,8 +10,8 @@ import {
   type OperationOrigin,
   type PolicyValue,
   type WorkflowRunPrincipal
-} from "@vivd-catalyst/core";
-import { runOperation } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { required } from "./support/assertions";
 import { clientInstanceId, finding, useDataStoreInstance } from "./support/data-store-instance";
 

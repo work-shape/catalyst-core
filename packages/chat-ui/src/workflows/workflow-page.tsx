@@ -1,4 +1,4 @@
-import { Banner, Breadcrumb } from "@vivd-catalyst/ui";
+import { Banner, Breadcrumb } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import { useStartRun } from "./start-run";

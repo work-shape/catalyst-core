@@ -1,18 +1,21 @@
-import type { ClientInstanceCapabilityModels } from "@vivd-catalyst/capability-sdk";
+import type { ClientInstanceCapabilityModels } from "@work-shape/catalyst-capability-sdk";
 import {
   AppError,
   type ClientInstanceId,
   type ModelBindingConfig,
   type ModelProviderConfig,
   type PlatformStores
-} from "@vivd-catalyst/core";
-import { type ClientInstanceConfig, getModelProviderConfigs } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-core";
+import {
+  type ClientInstanceConfig,
+  getModelProviderConfigs
+} from "@work-shape/catalyst-config-schema";
 import {
   createInstanceModelGateway,
   unbilledModelProviderIds,
   type ModelGateway
-} from "@vivd-catalyst/model-provider";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-model-provider";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import type { InstanceInfrastructure } from "./infrastructure";
 
 /** The model gateway as a capability sees it: calls for the capability's own purposes. */

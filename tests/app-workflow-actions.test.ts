@@ -5,8 +5,8 @@ import {
   createJobWorker,
   resolveInstanceModules,
   type InstanceWorkflows
-} from "@vivd-catalyst/client-assembly";
-import type { JobWorker, Logger, ModuleSnapshot } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-client-assembly";
+import type { JobWorker, Logger, ModuleSnapshot } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import {
   action,

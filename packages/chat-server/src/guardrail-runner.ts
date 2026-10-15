@@ -21,7 +21,7 @@ import {
   type RuntimeCallContext,
   SHIPPED_GUARDRAILS,
   getRuntimeSubjectUserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
   compileGuardrailPattern,
@@ -30,7 +30,7 @@ import {
   type ClientInstanceConfig,
   type GuardrailPattern,
   type ReleaseGuardrailConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   modelBindingRefOf,
   reasoningEffortTheModelTakes,

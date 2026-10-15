@@ -8,7 +8,7 @@ import {
   asClientInstanceId,
   asUserId,
   type DataStoreRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { stepRunsSchema } from "./support/workflow-instance";

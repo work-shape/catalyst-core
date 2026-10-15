@@ -10,7 +10,7 @@ import {
   Section,
   SegmentedControl,
   SegmentedControlItem
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { DocsReference } from "../docs-links";
 import { useTranslation } from "../i18n";
 import { AssetLanguageProvider } from "./asset-form-fields";

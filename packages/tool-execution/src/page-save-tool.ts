@@ -11,8 +11,8 @@ import {
   type PageBuildIssue,
   type ToolExecutionContext,
   type ToolHandlerResult
-} from "@vivd-catalyst/core";
-import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import type { PageAppCalls } from "./page-app-tool";
 import { failed, normalizeWorkspaceDirectory } from "./workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./workspace-tools/dependencies";

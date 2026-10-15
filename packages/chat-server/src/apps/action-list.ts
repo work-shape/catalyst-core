@@ -4,12 +4,12 @@ import {
   type AppActionUnavailable,
   type AppActions,
   type AppMode
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   compiledActionsOf,
   declaredDataStoresOf,
   type CompiledAppAction
-} from "@vivd-catalyst/app-build";
+} from "@work-shape/catalyst-app-build";
 import {
   AppError,
   CONNECTION_ACTIONS,
@@ -26,7 +26,7 @@ import {
   type ConnectionExposure,
   type DataStoreReference,
   type OperationAuthorization
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { decide } from "../asset-access";
 import type { ResolvedChatServerOptions } from "../types";

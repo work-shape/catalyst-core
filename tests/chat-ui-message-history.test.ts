@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { fromThreadMessageLike } from "@assistant-ui/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { AgentRunProjection, Message } from "@vivd-catalyst/api-client";
+import type { AgentRunProjection, Message } from "@work-shape/catalyst-api-client";
 import {
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createToolResultMetadata
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
 import { AssistantSourcePart } from "../packages/chat-ui/src/assistant/assistant-source-part";
 

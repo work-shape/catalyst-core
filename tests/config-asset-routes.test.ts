@@ -12,7 +12,7 @@ import {
   HmacSessionTokenAuthAdapter,
   HmacSessionTokenIssuer,
   IdentityResolvingAuthAdapter
-} from "@vivd-catalyst/auth";
+} from "@work-shape/catalyst-auth";
 
 import {
   AppError,
@@ -21,11 +21,11 @@ import {
   type AgentConfig,
   type AgentRuntime,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { findConfigAssetAgentValidationIssues } from "../packages/client-assembly/src/assembly-validation";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 

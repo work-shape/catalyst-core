@@ -1,4 +1,4 @@
-import type { ApprovalRequestView, LocaleCode } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView, LocaleCode } from "@work-shape/catalyst-api-client";
 import type { TranslationKey } from "../i18n";
 
 /** The lists of the Inbox. */

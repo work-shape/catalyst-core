@@ -1,4 +1,4 @@
-import type { UsageSummary } from "@vivd-catalyst/api-client";
+import type { UsageSummary } from "@work-shape/catalyst-api-client";
 import type { TranslationContextValue, TranslationKey } from "../i18n";
 
 const PURPOSE_LABELS: Record<string, TranslationKey> = {

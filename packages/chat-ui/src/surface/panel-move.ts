@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
-import { moveFrom, restingLeft } from "@vivd-catalyst/ui";
+import { moveFrom, restingLeft } from "@work-shape/catalyst-ui";
 
 /**
  * A panel at the right of the conversation, the surface or the Resources card, changes the

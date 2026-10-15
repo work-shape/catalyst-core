@@ -1,7 +1,7 @@
 import { ArrowLeft, Code, Plug } from "lucide-react";
 import { useRef, useState } from "react";
-import type { ConnectionDetail } from "@vivd-catalyst/api-client";
-import { Banner, Button, ConfirmDialog, Dialog, IconButton } from "@vivd-catalyst/ui";
+import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
+import { Banner, Button, ConfirmDialog, Dialog, IconButton } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import type { BuildCreateDialogProps } from "./build-asset-kind";
 import { assetIdFromTitle } from "./build-model";

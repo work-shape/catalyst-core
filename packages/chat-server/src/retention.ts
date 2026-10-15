@@ -1,4 +1,4 @@
-import type { Logger } from "@vivd-catalyst/core";
+import type { Logger } from "@work-shape/catalyst-core";
 import {
   type Conversation,
   type ExpireConversationResult,
@@ -6,7 +6,7 @@ import {
   type ManagedFileId,
   createPlatformId,
   isAppError
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   attemptConversationDataCleanup,
   retryPendingConversationCleanup,

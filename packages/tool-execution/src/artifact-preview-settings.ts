@@ -1,4 +1,4 @@
-import { DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH } from "@vivd-catalyst/core";
+import { DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH } from "@work-shape/catalyst-core";
 
 const PREVIEW_IMAGES_SETTINGS_PREFIX = "preview-images-v1:";
 const MAX_SELECTOR_VALUES = 40;

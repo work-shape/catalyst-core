@@ -18,7 +18,7 @@ import {
   type JsonValue,
   type Logger,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { holdsSecret } from "./call";
 import { buildConnectionCatalog } from "./catalog";
 import { readConnection, type StoredConnection } from "./connection-reads";

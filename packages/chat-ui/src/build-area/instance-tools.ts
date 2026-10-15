@@ -2,7 +2,7 @@ import type {
   AgentToolReference,
   ConfigAssetReferences,
   ToolGroupName
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { isConnectionToolName, type ConnectionToolsRead } from "./connection-tools";
 
 // The tools of an agent's Tools section as the page shows them: one row per package ("Paket"),

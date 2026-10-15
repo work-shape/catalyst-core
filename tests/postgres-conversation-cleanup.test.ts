@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConversationRetentionWorkflow } from "@vivd-catalyst/chat-server";
+import { ConversationRetentionWorkflow } from "@work-shape/catalyst-server";
 import { createConversationCleanupFixture } from "./support/conversation-cleanup-fixture";
 import { testRequest } from "./support/operations";
 import { usePostgresSuite } from "./support/postgres-suite";

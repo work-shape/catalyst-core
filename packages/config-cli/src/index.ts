@@ -2,7 +2,7 @@ import { realpathSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
-import { RELEASE_VERSION } from "@vivd-catalyst/api-contract";
+import { RELEASE_VERSION } from "@work-shape/catalyst-api-contract";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
 import { operationHelpText, runOperationCommand } from "./operation-commands";

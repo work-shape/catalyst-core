@@ -1,11 +1,11 @@
 import { expect } from "vitest";
-import { egressConfigSchema } from "@vivd-catalyst/config-schema";
+import { egressConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   createEgressChecker,
   type EgressAllowEntry,
   type EgressResolvedAddress
-} from "@vivd-catalyst/connections";
-import { AppError, type EgressTarget } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-connections";
+import { AppError, type EgressTarget } from "@work-shape/catalyst-core";
 
 // What the tests of the egress checker share: a checker over a list and a resolver of fixed
 // answers, and the one way a refusal is read.

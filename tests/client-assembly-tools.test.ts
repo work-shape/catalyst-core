@@ -1,9 +1,9 @@
 import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { createToolDefinitions } from "@vivd-catalyst/client-assembly";
-import { defineConfiguredTool, defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { createToolDefinitions } from "@work-shape/catalyst-client-assembly";
+import { defineConfiguredTool, defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 
 describe("client assembly configured tools", () => {
   it("creates executable tools from release-config parameters", () => {

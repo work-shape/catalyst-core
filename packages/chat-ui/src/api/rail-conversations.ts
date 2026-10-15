@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type QueryClient
 } from "@tanstack/react-query";
-import type { ApiClient, ConversationListItem } from "@vivd-catalyst/api-client";
+import type { ApiClient, ConversationListItem } from "@work-shape/catalyst-api-client";
 import { PERSONAL_DEFAULT_CONVERSATION_LIST, workspaceQueryKeys } from "./workspace-query-keys";
 
 /**

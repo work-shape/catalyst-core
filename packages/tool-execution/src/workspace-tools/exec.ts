@@ -10,8 +10,8 @@ import {
   type WorkspaceHandle,
   getRuntimeSubjectUserId,
   isAppError
-} from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import type { WorkspaceCommandHandle, WorkspaceCommandResult } from "../workspace-command-client";
 import {
   emitWorkspaceCommandTelemetry,

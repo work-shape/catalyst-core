@@ -1,9 +1,9 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
-import { UiRoot, uiLabelsEn } from "@vivd-catalyst/ui";
+import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 
 /** Tests take the chat UI's translation provider from here. */
-export { TranslationProvider } from "@vivd-catalyst/chat-ui";
+export { TranslationProvider } from "@work-shape/catalyst-chat-ui";
 
 /**
  * Renders chat UI the way the product does: inside a `UiRoot`. Library components that open an

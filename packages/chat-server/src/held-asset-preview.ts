@@ -1,4 +1,4 @@
-import { createSkillRevisionPreview, skillConfigSchema } from "@vivd-catalyst/config-schema";
+import { createSkillRevisionPreview, skillConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   INSTANCE_ASSET_SCOPE,
   asCollaborationWorkspaceId,
@@ -14,7 +14,7 @@ import {
   type JsonValue,
   type ModuleSnapshot,
   type Namespace
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { accessResource } from "./asset-access";
 

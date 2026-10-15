@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { createInstanceConnections, resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import {
+  createInstanceConnections,
+  resolveInstanceModules
+} from "@work-shape/catalyst-client-assembly";
 import {
   egressTargetOfUrl,
   pinnedLookup,
   platformStoreTargetsOf
-} from "@vivd-catalyst/connections";
-import { AppError, asClientInstanceId, type Logger } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-connections";
+import { AppError, asClientInstanceId, type Logger } from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import { checkerOf, denied, https } from "./support/egress";
 import { createTestConfig } from "./support/fixtures";

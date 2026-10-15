@@ -22,7 +22,7 @@ import {
   type WorkspaceMembership,
   type WorkspaceMembershipRole,
   type WorkspaceVisibility
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import { withRightsHeld } from "./rights-held";
 import type { ChatServerOptions } from "./types";

@@ -8,7 +8,7 @@ import {
   type JobWorker,
   type PlatformStores,
   type WorkspaceCommand
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createWorkspaceCommandClient,
   createWorkspaceCommandJobs,
@@ -18,8 +18,8 @@ import {
   type WorkspaceCommandJobsOptions,
   type WorkspaceCommandProcessExecutor,
   type WorkspaceCommandProcessInput
-} from "@vivd-catalyst/tool-execution";
-import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
+} from "@work-shape/catalyst-tool-execution";
+import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import { afterEach } from "vitest";
 import { deferred, required } from "./assertions";
 import type { useJobExecutorHarness } from "./job-executor-harness";

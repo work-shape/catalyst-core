@@ -8,7 +8,7 @@ import {
   type AgentRuntimeObserveOptions,
   type ChatMessage,
   type ISODateString
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 type AgentRuntimeEventDraft = AgentRuntimeEvent extends infer TEvent
   ? TEvent extends AgentRuntimeEvent

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createSkillChangePreview, type SkillChangeOperation } from "@vivd-catalyst/config-schema";
-import { createSkillSourceVersion } from "@vivd-catalyst/tool-execution";
+import {
+  createSkillChangePreview,
+  type SkillChangeOperation
+} from "@work-shape/catalyst-config-schema";
+import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
 import { accessOf } from "./support/access";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import {

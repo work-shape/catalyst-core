@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
-import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import {
+  createSafeConfigView,
+  parseClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import {
   createEnvironmentSecretResolver,
   isSecretName,
   resolveOptionalSecret,
   SecretNotResolvedError
-} from "@vivd-catalyst/core";
-import { createDataSourceRegistry } from "@vivd-catalyst/data-source";
+} from "@work-shape/catalyst-core";
+import { createDataSourceRegistry } from "@work-shape/catalyst-data-source";
 import { replayServiceAccountKey } from "./support/model-adapter-recordings";
 import { createTestInstanceOnSecrets } from "./support/test-instance";
 

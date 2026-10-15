@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { InstanceModule } from "@vivd-catalyst/api-client";
+import type { InstanceModule } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Banner,
@@ -11,7 +11,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../i18n";
 import { moduleTexts } from "../../module-texts";
 import { OperatorManaged } from "../operator-managed";

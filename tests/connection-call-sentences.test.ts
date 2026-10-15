@@ -8,12 +8,12 @@ import {
   connectionUseDeniedSentence,
   operationDenialError,
   type ConnectionCallReason
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   ConnectionCallSlots,
   callConnectionOperation,
   readConnection
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import { DEFAULT_LIMITS, agentOrigin, fixture, operationOf } from "./support/connection-operations";
 
 // What a failed call of a Connection operation tells its caller: a sentence for people that

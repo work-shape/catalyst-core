@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { AppActions } from "@vivd-catalyst/api-client";
+import type { AppActions } from "@work-shape/catalyst-api-client";
 import {
   ToolChip,
   ToolGroup,

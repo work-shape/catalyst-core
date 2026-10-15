@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "./chat-ui-render-harness";
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
 import { ApprovalRequestCardView } from "../packages/chat-ui/src/approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "../packages/chat-ui/src/approvals/approval-request-model";
@@ -13,7 +13,7 @@ import {
   createCompletedAssistantWorkIndices,
   createVisibleFinalAssistantPartIndices
 } from "../packages/chat-ui/src/assistant/assistant-work-grouping";
-import { TranslationProvider, createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { TranslationProvider, createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import { InboxItemView, type InboxItemActions } from "../packages/chat-ui/src/inbox";
 
 const skillChangePreview = {

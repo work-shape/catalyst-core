@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { GuardrailHitView, LocaleCode } from "@vivd-catalyst/api-client";
+import type { GuardrailHitView, LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
@@ -12,7 +12,7 @@ import {
   type BuildListedKind,
   type BuildSource,
   type GuardrailSource
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createPlatformId, type JsonValue, type OperationOrigin } from "@vivd-catalyst/core";
+import { createPlatformId, type JsonValue, type OperationOrigin } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import {
   hangingAt,

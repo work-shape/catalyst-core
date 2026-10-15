@@ -20,9 +20,9 @@ import {
   SIGNED_GET_URL_MAX_TTL_SECONDS,
   type Logger,
   type ObjectStorage
-} from "@vivd-catalyst/core";
-import { objectStorageProviderDefinitions } from "@vivd-catalyst/object-storage";
-import { DEFAULT_WORKSPACE_FILE_OBJECT_KEY_FACTORY } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { objectStorageProviderDefinitions } from "@work-shape/catalyst-object-storage";
+import { DEFAULT_WORKSPACE_FILE_OBJECT_KEY_FACTORY } from "@work-shape/catalyst-tool-execution";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { startS3Mock, type S3Mock } from "./support/s3-mock";
 

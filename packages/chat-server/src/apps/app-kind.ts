@@ -1,4 +1,4 @@
-import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 
 export { APP_ASSET_KIND };
 
@@ -7,7 +7,7 @@ import {
   compiledActionsOf,
   declaredDataStoresOf,
   declaredExternalHostsOf
-} from "@vivd-catalyst/app-build";
+} from "@work-shape/catalyst-app-build";
 import {
   CONNECTION_ASSET_KIND,
   DATA_STORE_ACTIONS,
@@ -20,7 +20,7 @@ import {
   type ClientInstanceId,
   type JsonObject,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   readDefinitionName,

@@ -14,7 +14,7 @@ import {
   type PageId,
   type PagesStore,
   type ServedFileSet
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { publishedRevisions } from "./postgres-config-asset-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { configAssetRevisions, configAssets } from "./schema/configAssets";

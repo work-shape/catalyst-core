@@ -2,8 +2,8 @@ import {
   defineClientInstance,
   type ClientInstanceCapability,
   type ConnectorTypeDefinition
-} from "@vivd-catalyst/client-assembly";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-client-assembly";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
 import { demoTools } from "../tools";
 

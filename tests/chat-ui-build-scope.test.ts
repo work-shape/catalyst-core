@@ -11,7 +11,7 @@ import {
   type BuildAssetRow,
   type BuildScope,
   type BuildSource
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { instanceActions, platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

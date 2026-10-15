@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { asClientInstanceId, type OperationOrigin } from "@vivd-catalyst/core";
-import { runOperation } from "@vivd-catalyst/tool-execution";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { asClientInstanceId, type OperationOrigin } from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { required } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { json, startRestTestServer, type RestTestServer } from "./support/rest-test-server";

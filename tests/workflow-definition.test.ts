@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_MAX_BLOCK_DEPTH, isAppError } from "@vivd-catalyst/core";
-import { createWorkflowFolderSource, parseWorkflowManifest } from "@vivd-catalyst/workflows";
+import { WORKFLOW_MAX_BLOCK_DEPTH, isAppError } from "@work-shape/catalyst-core";
+import { createWorkflowFolderSource, parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { WORKFLOW_FIXTURES } from "./support/workflow-instance";
 
 // The loader of Workflow definitions: a folder per Workflow with `workflow.yaml`, the shape a

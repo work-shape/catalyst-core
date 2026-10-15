@@ -11,7 +11,7 @@ import {
   NativeProcessError,
   renderPdfPage,
   runNativeProcess
-} from "@vivd-catalyst/document-execution";
+} from "@work-shape/catalyst-document-execution";
 
 const tempDirectories: string[] = [];
 

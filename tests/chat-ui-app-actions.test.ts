@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from "react";
-import type { AppAction, Asset, OperationRunResource } from "@vivd-catalyst/api-client";
+import type { AppAction, Asset, OperationRunResource } from "@work-shape/catalyst-api-client";
 import {
   ActionTestDialogView,
   appActionInputStart,
@@ -16,14 +16,14 @@ import {
   readAppActionInput,
   type AppActionsRead,
   type AppToolsRead
-} from "@vivd-catalyst/chat-ui/apps";
+} from "@work-shape/catalyst-chat-ui/apps";
 import {
   OperationRunDetail,
   operationRunHref,
   operationRunOfSearch,
   operationRunsHref,
   OperationRunsTable
-} from "@vivd-catalyst/chat-ui/operations";
+} from "@work-shape/catalyst-chat-ui/operations";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

@@ -4,7 +4,7 @@ import {
   RELEASE_VERSION,
   configAssetReferencesSchema,
   platformContextSchema
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   SCOPES_HEADER,
   SERVICE_HEADER,

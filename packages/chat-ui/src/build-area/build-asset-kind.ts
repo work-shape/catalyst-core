@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode, Ref } from "react";
-import type { Asset, AssetSummary } from "@vivd-catalyst/api-client";
-import type { AvatarKind, GenericIconKey } from "@vivd-catalyst/ui";
+import type { Asset, AssetSummary } from "@work-shape/catalyst-api-client";
+import type { AvatarKind, GenericIconKey } from "@work-shape/catalyst-ui";
 import type {
   AssetFileEntry,
   AssetFileRead,

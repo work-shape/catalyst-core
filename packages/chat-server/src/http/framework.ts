@@ -1,4 +1,4 @@
-import type { HttpRuntime } from "@vivd-catalyst/core";
+import type { HttpRuntime } from "@work-shape/catalyst-core";
 import type { FastifyInstance } from "fastify";
 import type { Route } from "./route";
 

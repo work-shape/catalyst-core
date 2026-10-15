@@ -5,7 +5,7 @@ import {
   POSTGRES_RESULT_MAX_ROWS,
   POSTGRES_STATEMENT_TIMEOUT_MS,
   PostgresExecutorError
-} from "@vivd-catalyst/postgres-connector";
+} from "@work-shape/catalyst-postgres-connector";
 import {
   AppError,
   DATA_STORE_ACTIONS,
@@ -29,7 +29,7 @@ import {
   type OperationDefinition,
   type OperationExecutionContext,
   type OperationSource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { ensureCallRecords, keyedCall, readRecordedCall } from "./calls";
 import { catalogTarget, readTables, rowsOf } from "./catalog";

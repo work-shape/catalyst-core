@@ -1,5 +1,5 @@
-import type { PlatformContext } from "@vivd-catalyst/api-client";
-import { LEGACY_PERMISSION_ACTIONS, isPermission } from "@vivd-catalyst/core";
+import type { PlatformContext } from "@work-shape/catalyst-api-client";
+import { LEGACY_PERMISSION_ACTIONS, isPermission } from "@work-shape/catalyst-core";
 
 export type Namespaces = PlatformContext["namespaces"];
 

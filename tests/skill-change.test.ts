@@ -6,8 +6,8 @@ import {
   SKILL_CHANGE_MAX_CONTENT,
   SKILL_CHANGE_MAX_RESOURCES,
   type SkillChangeOperation
-} from "@vivd-catalyst/config-schema";
-import type { SkillConfig } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-config-schema";
+import type { SkillConfig } from "@work-shape/catalyst-core";
 
 const skill: SkillConfig = {
   name: "review",

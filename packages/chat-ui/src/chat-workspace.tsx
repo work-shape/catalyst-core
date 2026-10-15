@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { cn, DocsAddressProvider, SkipLink, Spinner, UiRoot, useExit } from "@vivd-catalyst/ui";
-import { DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
+import { cn, SkipLink, Spinner, UiRoot, useExit } from "@work-shape/catalyst-ui";
+import { DocsAddressProvider } from "@work-shape/catalyst-ui";
+import { DEFAULT_THEME_INPUTS } from "@work-shape/catalyst-ui/theme";
 import { startNewAgent } from "./agents/agents-model";
 import { AgentsPage } from "./agents/agents-page";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
@@ -64,7 +65,7 @@ const WorkflowSamples = lazy(async () => {
 });
 // The gallery of the shared UI library is its own chunk, loaded only when its route is opened.
 const UiGallery = lazy(async () => {
-  const { UiGallery: Gallery } = await import("@vivd-catalyst/ui/gallery");
+  const { UiGallery: Gallery } = await import("@work-shape/catalyst-ui/gallery");
   return { default: Gallery };
 });
 

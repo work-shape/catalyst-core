@@ -1,13 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { vi } from "vitest";
 import { z } from "zod";
-import { egressTargetOfUrl } from "@vivd-catalyst/connections";
+import { egressTargetOfUrl } from "@work-shape/catalyst-connections";
 import type {
   ConnectionCredential,
   ConnectorContext,
   ConnectorTypeDefinition,
   JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { withTestSql } from "./test-sql";
 
 // The Connector type of the Connection tests. It reaches nothing by itself: it records what

@@ -6,8 +6,8 @@ import {
   defineJobHandler,
   defineJobKind,
   type Logger
-} from "@vivd-catalyst/core";
-import { createPostgresJobWorker, createPostgresStores } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { createPostgresJobWorker, createPostgresStores } from "@work-shape/catalyst-postgres-store";
 import { z } from "zod";
 
 const silent: Logger = {

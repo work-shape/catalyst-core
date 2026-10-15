@@ -11,9 +11,9 @@ import {
   type Message,
   type SafeConfig,
   type StartConversationRunResponse
-} from "@vivd-catalyst/api-client";
-import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
-import type { ThemeInputs } from "@vivd-catalyst/ui/theme";
+} from "@work-shape/catalyst-api-client";
+import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
+import type { ThemeInputs } from "@work-shape/catalyst-ui/theme";
 import { useApprovalPendingCountQuery } from "../approvals/approval-request-api";
 import {
   startApprovalRevision,
@@ -1449,11 +1449,11 @@ const NO_RUN_PROJECTIONS: Readonly<Record<string, AgentRunProjection>> = {};
 // The code a run is failed with when no worker took it within its queue limit.
 const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";
 
-// The codes a run is failed with when it stood still while it waited for a tool (`@vivd-catalyst/core`).
+// The codes a run is failed with when it stood still while it waited for a tool (`@work-shape/catalyst-core`).
 const RUN_TOOL_SILENT_CODE = "AGENT_RUN_TOOL_SILENT";
 const RUN_COMMAND_NOT_TAKEN_CODE = "AGENT_RUN_COMMAND_NOT_TAKEN";
 
-// The code a run is failed with when its model has no price on the rate card (`@vivd-catalyst/core`).
+// The code a run is failed with when its model has no price on the rate card (`@work-shape/catalyst-core`).
 const MODEL_NOT_PRICED_CODE = "MODEL_NOT_PRICED";
 
 /**

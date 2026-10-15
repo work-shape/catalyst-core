@@ -1,5 +1,5 @@
-import type { ArtifactPreviewJobRecord, JobId, JobWorker, Logger } from "@vivd-catalyst/core";
-import { createPostgresJobWorker, type PostgresStores } from "@vivd-catalyst/postgres-store";
+import type { ArtifactPreviewJobRecord, JobId, JobWorker, Logger } from "@work-shape/catalyst-core";
+import { createPostgresJobWorker, type PostgresStores } from "@work-shape/catalyst-postgres-store";
 import { withTestSql as withSql } from "./support/test-sql";
 import {
   createTestInstance,
@@ -24,7 +24,7 @@ import {
   LibreOfficeArtifactPreviewRenderer,
   SPREADSHEET_PREVIEW_MAX_CELLS,
   createArtifactPreviewSettingsHash
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 
 import {
   ARTIFACT_PREVIEW_MAX_PAGES,
@@ -35,7 +35,7 @@ import {
   type ManagedFileRecord,
   StoreBackedAuditRecorder,
   asClientInstanceId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 const workers: JobWorker[] = [];
 

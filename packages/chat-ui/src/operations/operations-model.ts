@@ -1,5 +1,5 @@
-import type { LocaleCode, OperationRunResource } from "@vivd-catalyst/api-client";
-import type { BadgeTone } from "@vivd-catalyst/ui";
+import type { LocaleCode, OperationRunResource } from "@work-shape/catalyst-api-client";
+import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../i18n";
 import { workspaceRoutePath } from "../routes";
 

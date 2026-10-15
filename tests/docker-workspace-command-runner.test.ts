@@ -13,7 +13,7 @@ import {
   type ClientInstanceId,
   type Conversation,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 import {
   createDockerRunInvocation,
@@ -29,8 +29,8 @@ import {
   type ProcessResult,
   type WorkspaceCommandProcessExecutor,
   type WorkspaceCommandProcessInput
-} from "@vivd-catalyst/tool-execution";
-import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
+} from "@work-shape/catalyst-tool-execution";
+import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 
 const cleanupDirectories: string[] = [];
 

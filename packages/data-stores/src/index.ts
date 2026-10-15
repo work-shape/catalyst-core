@@ -1,4 +1,4 @@
-import type { SecretKeyring } from "@vivd-catalyst/connections";
+import type { SecretKeyring } from "@work-shape/catalyst-connections";
 import {
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
@@ -22,7 +22,7 @@ import {
   type PlatformStores,
   type RegisteredAssetKind,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createDataStoreCredentials } from "./credentials";
 import {
   DATA_STORE_NAME_MAX_LENGTH,

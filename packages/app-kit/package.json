@@ -1,5 +1,5 @@
 {
-  "name": "@vivd-catalyst/app-kit",
+  "name": "@work-shape/catalyst-app-kit",
   "version": "0.7.0",
   "private": true,
   "license": "UNLICENSED",
@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.16",
-    "@vivd-catalyst/ui": "workspace:*",
+    "@work-shape/catalyst-ui": "workspace:*",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },

@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import type { SafeConfig } from "@vivd-catalyst/api-client";
+import type { SafeConfig } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
 import {
   agentListStatus,
@@ -13,8 +13,11 @@ import {
   workspaceRouteFromPath,
   workspaceRoutePath,
   type AgentsPageProps
-} from "@vivd-catalyst/chat-ui/agents";
-import { clearBuildStartRequest, requestedBuildStart } from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/agents";
+import {
+  clearBuildStartRequest,
+  requestedBuildStart
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Agents page: its address, its row in the rail, and what a card shows of an agent to a

@@ -3,8 +3,8 @@ import {
   createSkillChangePreview,
   type SkillChangeOperation,
   type SkillConfig
-} from "@vivd-catalyst/config-schema";
-import { createSkillSourceVersion } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-config-schema";
+import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import {
   clientInstanceId,

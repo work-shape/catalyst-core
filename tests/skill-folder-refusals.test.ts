@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { JsonObject } from "@vivd-catalyst/core";
+import type { JsonObject } from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import {
   GUIDE,

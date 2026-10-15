@@ -1,6 +1,6 @@
 import type { z } from "zod";
-import type { ToolExecutionContext, ToolHandlerResult } from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import type { ToolExecutionContext, ToolHandlerResult } from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import {
   WORKSPACE_WRITE_FILE_MAX_BYTES,
   workspaceWriteFileInputJsonSchema,

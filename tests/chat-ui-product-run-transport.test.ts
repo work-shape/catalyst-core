@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StartConversationRunResponse } from "@vivd-catalyst/api-client";
+import type { StartConversationRunResponse } from "@work-shape/catalyst-api-client";
 import {
   ProductConversationRunTransport,
   startProductConversationRun

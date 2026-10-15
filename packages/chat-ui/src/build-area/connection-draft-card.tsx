@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { Braces } from "lucide-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
-import type { ApiClient, AssetSummary } from "@vivd-catalyst/api-client";
-import { Button, Card, FormNotice, IconTile } from "@vivd-catalyst/ui";
+import type { ApiClient, AssetSummary } from "@work-shape/catalyst-api-client";
+import { Button, Card, FormNotice, IconTile } from "@work-shape/catalyst-ui";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useTranslation } from "../i18n";
 import type { WorkspaceRoute } from "../routes";

@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
   createPlatformAssetCalls,
   createSandboxAssetRepo,
   type AssetRepoCommitRunner
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   asAgentRunId,
   asConversationId,
@@ -19,13 +19,13 @@ import {
   type CentralPolicySetting,
   type ToolExecutionContext,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   createPageSaveAsAppTool,
   createPageSaveTool,
   LocalWorkspaceCommandProcessExecutor,
   WorkspaceCommandService
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { assetRepoCommandFromSource } from "./support/asset-repo";

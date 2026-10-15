@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
-import { asUserId } from "@vivd-catalyst/core";
+import { asUserId } from "@work-shape/catalyst-core";
 import { clientInstanceId, grantSchema, setupAccessInstance } from "./support/access-instance";
 import { holdTransaction, settled } from "./support/postgres-concurrency-harness";
 import { fileTestDatabaseUrl } from "./support/test-database";

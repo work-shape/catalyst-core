@@ -8,7 +8,7 @@ import {
   type HeldRight,
   type PermissionGrant,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { assetRight, type PrincipalRightsOptions } from "./principal-rights";
 
 /** What a person's rights are read from: the rows, and the workspaces to tell their own one. */

@@ -1,11 +1,11 @@
-import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
+import { STANDALONE_AUTH_SOURCE } from "@work-shape/catalyst-auth";
 import {
   AppError,
   type AuditActor,
   type LocaleCode,
   type RuntimeCallContext,
   type UserRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ResolvedChatServerOptions } from "./types";
 
 export const PASSWORD_RESET_VALID_MINUTES = 60;

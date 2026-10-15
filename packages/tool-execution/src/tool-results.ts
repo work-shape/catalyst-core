@@ -2,7 +2,7 @@ import {
   type JsonObject,
   type ToolExecutionErrorCode,
   type ToolHandlerFailureResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 export function failed(
   code: ToolExecutionErrorCode,

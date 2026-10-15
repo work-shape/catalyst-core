@@ -1,4 +1,4 @@
-import type { GenericIconKey } from "@vivd-catalyst/ui";
+import type { GenericIconKey } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../i18n";
 import type { WorkspaceRouteView } from "./workspace-route";
 

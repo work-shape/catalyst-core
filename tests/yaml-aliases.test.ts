@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parsePageManifest } from "@vivd-catalyst/app-build/build";
-import { parseSkillManifest, skillConfigSchema } from "@vivd-catalyst/config-schema";
-import { yamlValueIssue } from "@vivd-catalyst/core";
-import { readWorkflowManifest } from "@vivd-catalyst/workflows";
+import { parsePageManifest } from "@work-shape/catalyst-app-build/build";
+import { parseSkillManifest, skillConfigSchema } from "@work-shape/catalyst-config-schema";
+import { yamlValueIssue } from "@work-shape/catalyst-core";
+import { readWorkflowManifest } from "@work-shape/catalyst-workflows";
 
 // A YAML reader answers an alias as the object its anchor made, so a few hundred bytes of
 // nested aliases are a value that doubles with each level for whatever walks it as a tree.

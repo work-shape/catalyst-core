@@ -1,10 +1,10 @@
 {
-  "name": "@vivd-catalyst/asset-schemas",
+  "name": "@work-shape/catalyst-asset-schemas",
   "version": "0.7.0",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
+    "url": "https://github.com/work-shape/catalyst",
     "directory": "packages/asset-schemas"
   },
   "type": "module",

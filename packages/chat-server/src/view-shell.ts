@@ -1,4 +1,4 @@
-import { VIEW_SHELL, VIEW_SHELL_MESSAGES } from "@vivd-catalyst/api-contract";
+import { VIEW_SHELL, VIEW_SHELL_MESSAGES } from "@work-shape/catalyst-api-contract";
 
 // The shell: the document every generated view is framed in. A view is a `srcdoc` frame, and a
 // content policy cannot stop a document from navigating its own frame to another host, with

@@ -1,10 +1,10 @@
 {
-  "name": "@vivd-catalyst/api-client",
+  "name": "@work-shape/catalyst-api-client",
   "version": "0.7.0",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
+    "url": "https://github.com/work-shape/catalyst",
     "directory": "packages/api-client"
   },
   "type": "module",
@@ -39,7 +39,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/api-contract": "workspace:*",
+    "@work-shape/catalyst-api-contract": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

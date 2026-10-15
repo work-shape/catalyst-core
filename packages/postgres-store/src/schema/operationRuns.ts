@@ -24,7 +24,7 @@ import type {
   OperationRunStatus,
   OperationRunUsage,
   OperationTarget
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * One row per call of a registered operation. No foreign key to `conversations`: a run of an

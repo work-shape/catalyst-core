@@ -23,7 +23,7 @@ import {
   ObjectNotFound,
   readObjectBytes,
   type ObjectStorage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 import {
   createWorkspaceCommandClient,
@@ -32,8 +32,8 @@ import {
   putWorkspaceFile,
   WorkspaceCommandService,
   type WorkspaceCommandTelemetry
-} from "@vivd-catalyst/tool-execution";
-import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
+} from "@work-shape/catalyst-tool-execution";
+import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 
 const cleanupDirectories: string[] = [];

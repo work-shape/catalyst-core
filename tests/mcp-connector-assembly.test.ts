@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { connectionConfigSchema, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { openConnectorContext } from "@vivd-catalyst/connections";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import {
+  connectionConfigSchema,
+  parseClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
+import { openConnectorContext } from "@work-shape/catalyst-connections";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { startMcpTestServer, tool, type McpTestServer } from "./support/mcp-test-server";

@@ -1,5 +1,5 @@
-import { AppError, assetScopesEqual, type ActorAccess } from "@vivd-catalyst/core";
-import { ASSET_SYNC_ITEM_MAX_BYTES } from "@vivd-catalyst/api-contract";
+import { AppError, assetScopesEqual, type ActorAccess } from "@work-shape/catalyst-core";
+import { ASSET_SYNC_ITEM_MAX_BYTES } from "@work-shape/catalyst-api-contract";
 import { z } from "zod";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import { definitionsByName, definitionsOf, type AssetSet } from "./asset-set";

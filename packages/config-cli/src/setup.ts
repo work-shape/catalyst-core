@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
-import { RELEASE_VERSION } from "@vivd-catalyst/api-contract";
+import { RELEASE_VERSION } from "@work-shape/catalyst-api-contract";
 import { ApiKeyExchangeError, createConfigApi } from "./api";
 import {
   type ConfigCommandOptions,

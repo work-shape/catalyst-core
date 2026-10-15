@@ -9,7 +9,7 @@ import {
   uiLabelsDe,
   type CodeBlockProps,
   type CodeFileProps
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 
 // CodeBlock shows the text of a file, read-only. Every test here fails without the component:
 // the library did not export it.

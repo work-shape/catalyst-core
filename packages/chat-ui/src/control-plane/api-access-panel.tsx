@@ -10,7 +10,7 @@ import type {
   ServicePrincipalDetail,
   ServicePrincipalPermission,
   UpdateServicePrincipalRequest
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Banner,
@@ -33,7 +33,7 @@ import {
   TableHeader,
   TableRow,
   Textarea
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import {
   constrainCredentialScopes,
   copyStateFor,

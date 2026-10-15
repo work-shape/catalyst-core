@@ -1,4 +1,4 @@
-import { guardrailConfigSchema, guardrailNameSchema } from "@vivd-catalyst/config-schema";
+import { guardrailConfigSchema, guardrailNameSchema } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   DATA_STORE_ASSET_KIND,
@@ -22,7 +22,7 @@ import {
   type GuardrailConfig,
   type GuardrailFilter,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { readDefinitionField, type WorkflowAssetKind } from "./shared";
 
 const AGENT_ASSET_KIND = "agent";

@@ -4,7 +4,7 @@ import {
   ApiKeyAccessTokenExchange,
   CompositeAuthAdapter,
   HmacServiceAccessTokenAuthAdapter
-} from "@vivd-catalyst/auth";
+} from "@work-shape/catalyst-auth";
 import {
   clientInstanceId,
   recordAuthAdapter,

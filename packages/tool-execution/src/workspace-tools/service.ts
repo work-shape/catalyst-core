@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { ToolExecutionContext, ToolHandlerResult } from "@vivd-catalyst/core";
+import type { ToolExecutionContext, ToolHandlerResult } from "@work-shape/catalyst-core";
 import type {
   workspaceEditFileInputSchema,
   workspaceEditFileOutputSchema,

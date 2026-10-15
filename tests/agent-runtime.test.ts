@@ -26,11 +26,14 @@ import {
   type RuntimeCallContext,
   type ToolOperationRunner,
   type ToolExecutionResult
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./support/fake-clock";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { createTestToolRunner } from "./support/tool-runner";
-import { LocalAgentRuntime, type LocalAgentRunFailureReport } from "@vivd-catalyst/agent-runtime";
+import {
+  LocalAgentRuntime,
+  type LocalAgentRunFailureReport
+} from "@work-shape/catalyst-agent-runtime";
 import {
   OPENAI_RESPONSES_STRING_MAX_CHARS,
   OpenAiCompatibleChatProvider,
@@ -39,10 +42,10 @@ import {
   modelContentText,
   type ModelCompletionStreamEvent,
   type ModelMessage
-} from "@vivd-catalyst/model-provider";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-model-provider";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import {
   createAssistantToolCallsMetadata,
   createModelVisibleToolOutput,

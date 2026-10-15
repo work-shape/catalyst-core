@@ -31,7 +31,7 @@ import {
   type RegisteredJobHandler,
   type RuntimeCallContext,
   type StartAgentRunInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { setTimeout as delay } from "node:timers/promises";
 import { readUserAttachmentManifest } from "./model-context-projection";
 import { LocalAgentRuntime, type LocalAgentRuntimeOptions } from "./local-agent-runtime";

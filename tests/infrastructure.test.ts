@@ -1,22 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
-import { apiErrorResponseSchema } from "@vivd-catalyst/api-contract";
+import { apiErrorResponseSchema } from "@work-shape/catalyst-api-contract";
 import {
   INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS,
   type InfrastructureEntry
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   createJobWorker,
   createSandbox,
   createSandboxCheckJobs
-} from "@vivd-catalyst/client-assembly";
-import { getClientInstanceId } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-client-assembly";
+import { getClientInstanceId } from "@work-shape/catalyst-config-schema";
 import {
   legacyPermissionFor,
   PROVIDER_CHECK_TIMEOUT_MS,
   runProviderCheck,
   type SecretResolver
-} from "@vivd-catalyst/core";
-import { MailjetTransport } from "@vivd-catalyst/mail";
+} from "@work-shape/catalyst-core";
+import { MailjetTransport } from "@work-shape/catalyst-mail";
 import { createFakeSecrets } from "./support/fixtures";
 import { asCaller } from "./support/route-callers";
 import { getTestJobs } from "./support/test-instance";

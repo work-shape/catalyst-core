@@ -1,5 +1,5 @@
 import { and, eq, ilike, inArray, like, or, sql, type SQLWrapper } from "drizzle-orm";
-import type { ConfigAssetRecord, ConfigAssetStore } from "@vivd-catalyst/core";
+import type { ConfigAssetRecord, ConfigAssetStore } from "@work-shape/catalyst-core";
 import { containsPattern, prefixPattern } from "./like-pattern";
 import { publishedColumns, publishedRevisions } from "./postgres-config-asset-operations";
 import type { PostgresConnection } from "./postgres-database";

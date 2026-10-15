@@ -52,7 +52,7 @@ import {
   type UpdateConversationAttachmentInput,
   type WriteArtifactPreviewManifestInput,
   createPlatformId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   lockActiveConversation,
   requireActiveConversationLock,

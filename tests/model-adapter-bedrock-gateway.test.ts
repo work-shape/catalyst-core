@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ModelProviderError, type ModelCallStreamEvent } from "@vivd-catalyst/model-provider";
+import { ModelProviderError, type ModelCallStreamEvent } from "@work-shape/catalyst-model-provider";
 import {
   BEDROCK_TEST_ACCOUNT_ID,
   answerWith,

@@ -7,8 +7,8 @@ import {
   OUTSIDE_SCHEMA_MAX_REFS,
   OUTSIDE_SCHEMA_PATTERN_MAX_CHARS,
   fingerprintOperation
-} from "@vivd-catalyst/connections";
-import { type ConnectorOperationDescriptor } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-connections";
+import { type ConnectorOperationDescriptor } from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import {
   auditEvents,

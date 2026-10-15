@@ -12,7 +12,7 @@ import {
   GUARDRAIL_OUTCOMES,
   type GuardrailConfig,
   type GuardrailEvent
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { GUARDRAIL_PATTERN_MAX_CHARS, guardrailPatternError } from "./guardrail-pattern";
 
 // A model reads the instruction on every check. Ten times the longest rule written so far; a

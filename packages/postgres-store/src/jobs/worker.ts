@@ -19,7 +19,7 @@ import {
   type ModuleSnapshot,
   type PlatformStores,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   claimJobs,
   connectionOf,

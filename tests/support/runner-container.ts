@@ -6,7 +6,7 @@ import {
   RUNNER_USER_ID,
   type ProcessResult,
   type RunnerUser
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 
 /**
  * The container sandbox as a deployment configures it, for the tests that need a Docker engine

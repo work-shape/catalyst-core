@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ApiError } from "@vivd-catalyst/api-client";
+import { ApiError } from "@work-shape/catalyst-api-client";
 import {
   furtherGrantKinds,
   grantsNameWorkspaces,
@@ -7,7 +7,7 @@ import {
   type GrantKind
 } from "../../access/access-model";
 import type { GrantChoices } from "../../access/grants-tab";
-import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from "@vivd-catalyst/ui";
+import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from "@work-shape/catalyst-ui";
 import { CheckTab, GrantsTab, NamespacesTab } from "../../access";
 import {
   useAccessMutations,
@@ -16,7 +16,7 @@ import {
   usePermissionGrantsQuery
 } from "../../access/access-queries";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { listAll } from "@vivd-catalyst/api-client";
+import { listAll } from "@work-shape/catalyst-api-client";
 import {
   useAdministeredCollaborationWorkspacesQuery,
   useConfigAssetsOverviewQuery,

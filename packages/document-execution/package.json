@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/document-execution",
+  "name": "@work-shape/catalyst-document-execution",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/document-execution"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {

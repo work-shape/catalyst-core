@@ -2,13 +2,13 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { clientBrandingSchema } from "@vivd-catalyst/api-contract";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { clientBrandingSchema } from "@work-shape/catalyst-api-contract";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   createClientBranding,
   createSafeConfigView,
   loadClientInstanceConfigFromFile
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 
 const baseConfig = [
   "version: 1",

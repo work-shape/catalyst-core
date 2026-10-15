@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   loadClientInstanceConfigFromFile,
   resolveModelBinding
-} from "@vivd-catalyst/config-schema";
-import { unbilledModelProviderIds } from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-config-schema";
+import { unbilledModelProviderIds } from "@work-shape/catalyst-model-provider";
 
 // The demo runs under a spend budget, and a call to a model without a price on the rate card
 // is refused under one. Config validation asks a price only of the models agents start on, so

@@ -1,12 +1,12 @@
-import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@vivd-catalyst/chat-server";
-import { HTTP_API_CONNECTOR_TYPE } from "@vivd-catalyst/connections";
+import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@work-shape/catalyst-server";
+import { HTTP_API_CONNECTOR_TYPE } from "@work-shape/catalyst-connections";
 import {
   SUBJECT_TOOL_PREFIX,
   type ConnectorTypeRegistry,
   type ConversationOfferSource,
   type ModuleSnapshot,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   PAGE_SAVE_AS_APP_TOOL_NAME,
   PAGE_SAVE_TOOL_NAME,
@@ -17,8 +17,8 @@ import {
   createPlatformDiscoveryTools,
   ToolRegistry,
   type PlatformAssetBinding
-} from "@vivd-catalyst/tool-execution";
-import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-tool-execution";
+import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import {
   PLATFORM_MODULE_TOOL_NAMES,
   PLATFORM_ORIENTATION,

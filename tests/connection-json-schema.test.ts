@@ -7,8 +7,8 @@ import {
   compileJsonSchema,
   isJsonSchemaWithinBounds,
   jsonSchemaAsZod
-} from "@vivd-catalyst/connections";
-import type { JsonObject, JsonValue } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-connections";
+import type { JsonObject, JsonValue } from "@work-shape/catalyst-core";
 
 // The JSON Schema an outside system may have written: what is compiled at all and what
 // compiling one leaves behind.

@@ -13,7 +13,7 @@ import type {
   CollaborationWorkspace,
   Conversation,
   WorkspaceMembership
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { productUsers } from "./users";
 
 export const collaborationWorkspaces = pgTable(

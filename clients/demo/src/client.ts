@@ -1,4 +1,4 @@
-import { defineClientInstance } from "@vivd-catalyst/client-assembly";
+import { defineClientInstance } from "@work-shape/catalyst-client-assembly";
 import { demoTools } from "../tools";
 
 export default defineClientInstance({

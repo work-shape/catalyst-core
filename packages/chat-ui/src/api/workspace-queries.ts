@@ -18,7 +18,7 @@ import {
   type LocaleCode,
   type RunObservation,
   type StartConversationRunResponse
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { approvalRequestQueryKeys } from "../approvals/approval-request-api";
 import { refreshRailConversations, updateRailConversations } from "./rail-conversations";
 import { PERSONAL_DEFAULT_CONVERSATION_LIST, workspaceQueryKeys } from "./workspace-query-keys";

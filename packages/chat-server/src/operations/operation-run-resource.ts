@@ -2,8 +2,8 @@ import {
   APP_ASSET_KIND,
   apiOperations,
   type OperationRunResource
-} from "@vivd-catalyst/api-contract";
-import type { ClientInstanceId, ConfigAssetStore, OperationRun } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-contract";
+import type { ClientInstanceId, ConfigAssetStore, OperationRun } from "@work-shape/catalyst-core";
 import { appTitleOf } from "../apps/action-source";
 
 /** Where a run is read. Its page in the interface replaces this once it exists. */

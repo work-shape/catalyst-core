@@ -3,13 +3,13 @@ import {
   parseSkillMarkdown,
   skillConfigSchema,
   SKILL_SUMMARY_MAX_LENGTH
-} from "@vivd-catalyst/asset-schemas";
-import { createSkillSourceVersion } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-asset-schemas";
+import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
 import {
   skillConfigToForm,
   skillFacts,
   skillFormToConfig
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 
 // A skill's `summary`: the sentence for people, from the skill file to the row that shows it.
 

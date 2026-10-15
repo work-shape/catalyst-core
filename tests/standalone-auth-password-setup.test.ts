@@ -3,8 +3,8 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance } from "./support/test-instance";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { hashPassword } from "../packages/auth/node_modules/better-auth/dist/crypto/index.mjs";
-import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@vivd-catalyst/auth";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@work-shape/catalyst-auth";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
 
 import postgres from "postgres";
 

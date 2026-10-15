@@ -1,9 +1,9 @@
 // An Agent Run worker in a process of its own, for the test that kills one. It executes every
 // run by storing one piece of the reply and then never ending. Started with the database and
 // the client instance in its environment.
-import { createAgentRunJobs } from "@vivd-catalyst/agent-runtime";
-import { createPostgresJobWorker, createPostgresStores } from "@vivd-catalyst/postgres-store";
-import { AppError, asClientInstanceId, asUserId, type Logger } from "@vivd-catalyst/core";
+import { createAgentRunJobs } from "@work-shape/catalyst-agent-runtime";
+import { createPostgresJobWorker, createPostgresStores } from "@work-shape/catalyst-postgres-store";
+import { AppError, asClientInstanceId, asUserId, type Logger } from "@work-shape/catalyst-core";
 
 const silent: Logger = {
   debug() {},

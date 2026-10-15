@@ -4,8 +4,8 @@ import type {
   CreateAdministeredUserRequest,
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
-} from "@vivd-catalyst/api-client";
-import { PERMISSIONS, ROLE_DEFAULT_PERMISSIONS, type Permission } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-client";
+import { PERMISSIONS, ROLE_DEFAULT_PERMISSIONS, type Permission } from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../i18n";
 
 /** Auth source id of the standalone Better Auth adapter; only those identities have passwords. */

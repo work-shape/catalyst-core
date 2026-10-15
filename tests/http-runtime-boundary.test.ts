@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import type { Logger } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import type { Logger } from "@work-shape/catalyst-core";
 import { CONDITION_WAIT_MS } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import {

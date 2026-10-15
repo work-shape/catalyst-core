@@ -1,5 +1,5 @@
 import { and, eq, sql as drizzleSql } from "drizzle-orm";
-import type { ClientInstanceId, JsonObject } from "@vivd-catalyst/core";
+import type { ClientInstanceId, JsonObject } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { modelUsageMaintenance } from "./schema";
 

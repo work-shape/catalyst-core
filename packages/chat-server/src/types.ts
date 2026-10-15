@@ -1,9 +1,9 @@
-import type { JobRetry, PlatformStores } from "@vivd-catalyst/core";
+import type { JobRetry, PlatformStores } from "@work-shape/catalyst-core";
 import type {
   ApiKeyAccessTokenExchange,
   HmacSessionTokenIssuer,
   StandaloneAuthRuntime
-} from "@vivd-catalyst/auth";
+} from "@work-shape/catalyst-auth";
 import type {
   AgentRuntime,
   AssetBuildClient,
@@ -15,7 +15,7 @@ import type {
   ManagedArtifactId,
   ModuleSnapshot,
   ObjectStorage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   AuditRecorder,
   ApprovalRequestHandlerRegistry,
@@ -24,12 +24,15 @@ import type {
   OperationRegistry,
   PlatformEventEmitter,
   RateLimiter
-} from "@vivd-catalyst/core";
-import type { OperationApprovalRequests, RunOperationDeps } from "@vivd-catalyst/tool-execution";
-import type { AuthAdapter } from "@vivd-catalyst/auth";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
-import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-core";
+import type {
+  OperationApprovalRequests,
+  RunOperationDeps
+} from "@work-shape/catalyst-tool-execution";
+import type { AuthAdapter } from "@work-shape/catalyst-auth";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import type { CapturedMail, MailSender } from "@work-shape/catalyst-mail";
+import type { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import type {
   AgentToolReference,
   ConfigAssetValidationRefs,
@@ -69,7 +72,7 @@ export interface OperationCalls {
 }
 
 export interface ChatServerOptions {
-  logger: import("@vivd-catalyst/core").Logger;
+  logger: import("@work-shape/catalyst-core").Logger;
   /**
    * The approval kinds of the instance. The server adds `operation_call`, the kind a call that
    * waits for another person is decided on.

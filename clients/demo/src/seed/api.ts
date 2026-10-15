@@ -15,7 +15,7 @@ import {
   type PermissionGrantRow,
   type ServicePrincipalDetail,
   type UpdateNamespaceRequest
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 
 /** What the seed sets on a person. A password only where the person signs in with one. */
 interface SeedUserInput {

@@ -1,4 +1,4 @@
-import type { LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
+import type { LocaleCode, SafeConfig } from "@work-shape/catalyst-api-client";
 import type { TranslationContextValue } from "../i18n";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

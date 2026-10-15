@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 import { describe, expect, it, vi } from "vitest";
-import { platformContextSchema } from "@vivd-catalyst/api-contract";
+import { platformContextSchema } from "@work-shape/catalyst-api-contract";
 import { setupConnectionInstance } from "./support/connections";
 
 // The statements of one request, as `chat-server-conversation-list-statements.test.ts` counts

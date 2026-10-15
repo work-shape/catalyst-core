@@ -1,5 +1,5 @@
 import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { AuditEvent } from "@vivd-catalyst/core";
+import type { AuditEvent } from "@work-shape/catalyst-core";
 
 export const auditEvents = pgTable(
   "audit_events",

@@ -3,7 +3,7 @@ import {
   NAMESPACE_PREFIX_PATTERN,
   type OperationScope,
   type PlatformAction
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 import { createApiCredentialId, createApiCredentialSecretMaterial } from "./api-access";
 import { AppError } from "./errors";
 import type { ApiCredentialId, ClientInstanceId, UserId } from "./ids";

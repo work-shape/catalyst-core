@@ -1,4 +1,4 @@
-import { Badge, Button, List, ListRow, SkeletonList } from "@vivd-catalyst/ui";
+import { Badge, Button, List, ListRow, SkeletonList } from "@work-shape/catalyst-ui";
 import { formatMomentShort } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import type { WorkflowRunList } from "./workflow-data";

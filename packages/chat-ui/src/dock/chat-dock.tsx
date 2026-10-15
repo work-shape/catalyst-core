@@ -1,6 +1,6 @@
 import type { AnimationEvent, CSSProperties, ReactNode } from "react";
 import { Maximize2, MessageSquare, PanelRight, X } from "lucide-react";
-import { Button, cn, CountBadge, IconButton, SurfaceHeader } from "@vivd-catalyst/ui";
+import { Button, cn, CountBadge, IconButton, SurfaceHeader } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 
 /**

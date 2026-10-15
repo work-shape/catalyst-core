@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
@@ -14,8 +14,8 @@ import {
   type AuthenticatedUser,
   type DataStoreOperationVerb,
   type JsonObject
-} from "@vivd-catalyst/core";
-import { runOperation } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { eventually, required } from "./support/assertions";
 import {
   clientInstanceId,

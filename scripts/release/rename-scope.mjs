@@ -22,7 +22,14 @@ const NEW_PREFIX = "@work-shape/catalyst-";
 const ASSEMBLY_TARGETS = {
   [`${OLD_SCOPE}/demo`]: "@work-shape/catalyst-demo",
   [`${OLD_SCOPE}/musterbau`]: "@work-shape/deployment-musterbau",
-  [`${OLD_SCOPE}/catalyst-deployment`]: "@work-shape/deployment-catalyst"
+  [`${OLD_SCOPE}/catalyst-deployment`]: "@work-shape/deployment-catalyst",
+  [`${OLD_SCOPE}/exampletax`]: "@work-shape/deployment-exampletax"
+};
+
+// Package-name changes only; directory moves and package folds belong to step D.
+const PACKAGE_TARGETS = {
+  ...ASSEMBLY_TARGETS,
+  [`${OLD_SCOPE}/chat-server`]: "@work-shape/catalyst-server"
 };
 
 const SKIPPED_DIRECTORIES = new Set([
@@ -56,7 +63,7 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 const NAME_END = "(?![A-Za-z0-9_-])";
 const assemblyPattern = new RegExp(
-  `(${Object.keys(ASSEMBLY_TARGETS).map(escapeRegExp).join("|")})${NAME_END}`,
+  `(${Object.keys(PACKAGE_TARGETS).map(escapeRegExp).join("|")})${NAME_END}`,
   "gu"
 );
 // A package name, or the `*` of a glob such as a pnpm filter or a tsconfig path.
@@ -71,7 +78,7 @@ function rewrite(text) {
     return replacement;
   };
   const rewritten = text
-    .replace(assemblyPattern, (match) => bump(ASSEMBLY_TARGETS[match]))
+    .replace(assemblyPattern, (match) => bump(PACKAGE_TARGETS[match]))
     .replace(namePattern, () => bump(NEW_PREFIX));
   return { rewritten, count };
 }

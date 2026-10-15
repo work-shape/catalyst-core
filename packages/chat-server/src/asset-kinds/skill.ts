@@ -4,8 +4,8 @@ import {
   skillConfigSchema,
   skillPortabilityIssues,
   type ClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
-import { AppError, defineAssetKind } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-config-schema";
+import { AppError, defineAssetKind } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   SKILL_MANIFEST_FILE,

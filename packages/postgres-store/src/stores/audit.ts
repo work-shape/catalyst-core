@@ -1,10 +1,10 @@
-import type { StorePage } from "@vivd-catalyst/core";
+import type { StorePage } from "@work-shape/catalyst-core";
 import {
   type AuditEvent,
   type AuditEventInput,
   type AuditEventStore,
   type ClientInstanceId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   appendAuditEvent as appendPostgresAuditEvent,
   deleteAuditEventsOlderThan as deletePostgresAuditEventsOlderThan,

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createInstanceWorkflows, createJobWorker } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { asUserId, type JobWorker } from "@vivd-catalyst/core";
-import { createSampleMcpServer } from "@vivd-catalyst/demo/sample-mcp";
+import { createInstanceWorkflows, createJobWorker } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { asUserId, type JobWorker } from "@work-shape/catalyst-core";
+import { createSampleMcpServer } from "@work-shape/catalyst-demo/sample-mcp";
 import { required } from "./support/assertions";
 import { runJobs, statuses } from "./support/connection-discovery-world";
 import { createTestConfig } from "./support/fixtures";

@@ -1,13 +1,13 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   PageSaveCardView,
   pageBuildingSurface,
   pageBuildingSurfaceRendering,
   readPageSave,
   type PageSave
-} from "@vivd-catalyst/chat-ui/pages";
+} from "@work-shape/catalyst-chat-ui/pages";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // A Page from the agent's first save on, and a Page that became an App: the place the surface

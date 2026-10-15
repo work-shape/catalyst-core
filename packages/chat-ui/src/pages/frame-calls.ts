@@ -5,7 +5,7 @@ import {
   type AppBridgeHostMessage,
   type AppBridgePageMessage,
   type AppWorkflowRun
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 
 // The calls a frame asks the interface to make. The frame holds no credential and can reach
 // nothing but the interface, so each call is made here, with the session of the person who

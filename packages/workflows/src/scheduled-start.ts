@@ -5,7 +5,7 @@ import {
   type ClientInstanceId,
   type PlatformStores,
   type WorkflowRun
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { WorkflowDefinitionRevision } from "./definition-source";
 import { principalActor } from "./run-identity";

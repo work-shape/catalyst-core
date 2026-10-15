@@ -1,7 +1,7 @@
 import { format, inspect } from "node:util";
 import { describe, expect, it, vi } from "vitest";
-import { createLogger } from "@vivd-catalyst/client-assembly";
-import { connectionConfigSchema, egressConfigSchema } from "@vivd-catalyst/config-schema";
+import { createLogger } from "@work-shape/catalyst-client-assembly";
+import { connectionConfigSchema, egressConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   EGRESS_RESOLUTION_FAILURE_TTL_MS,
   EGRESS_RESOLUTION_TTL_MS,
@@ -9,7 +9,7 @@ import {
   egressTargetOfUrl,
   openConnectorContext,
   type EgressAllowEntry
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   LOG_REDACTION,
   connectionCallReasonOf,
@@ -17,7 +17,7 @@ import {
   type ConnectionCredentialResolver,
   type EgressChecker,
   type EgressTarget
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { checkerOf, denied, https, unresolved, type Dns } from "./support/egress";
 import { required } from "./support/assertions";
 import { connection } from "./support/connections";

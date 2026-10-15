@@ -9,7 +9,7 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { ServicePrincipalRecord } from "@vivd-catalyst/core";
+import type { ServicePrincipalRecord } from "@work-shape/catalyst-core";
 import { productUsers } from "./users";
 
 export const servicePrincipals = pgTable(

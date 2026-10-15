@@ -1,12 +1,12 @@
 import { fromThreadMessageLike } from "@assistant-ui/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Message } from "@vivd-catalyst/api-client";
+import type { Message } from "@work-shape/catalyst-api-client";
 import {
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createToolResultMetadata
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import { ApprovalDecisionLine } from "../packages/chat-ui/src/approvals/approval-decision-line";
 import {

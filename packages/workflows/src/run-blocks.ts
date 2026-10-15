@@ -4,7 +4,7 @@ import {
   type PlatformStores,
   type WorkflowRun,
   type WorkflowStepRun
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { workflowCodeJobKind, workflowStepJobKind } from "./step-job";
 
 /** What the engine does to the step runs of a run, or of one block of it, that ends. */

@@ -1,4 +1,4 @@
-import { AppError, type ConversationId } from "@vivd-catalyst/core";
+import { AppError, type ConversationId } from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "./types";
 
 /**

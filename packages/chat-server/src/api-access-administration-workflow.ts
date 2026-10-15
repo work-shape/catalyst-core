@@ -1,4 +1,7 @@
-import type { ApiCredentialScope, ServicePrincipalPermission } from "@vivd-catalyst/api-contract";
+import type {
+  ApiCredentialScope,
+  ServicePrincipalPermission
+} from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   isAuthenticatedServicePrincipal,
@@ -15,7 +18,7 @@ import {
   type OperationExecutionContext,
   type RuntimeCallContext,
   type ServicePrincipalRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { recordGovernanceAccess } from "./governance-actions";
 import {
   authorizeGivingToPrincipal,

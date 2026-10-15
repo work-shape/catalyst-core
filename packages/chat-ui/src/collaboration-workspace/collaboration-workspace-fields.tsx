@@ -1,7 +1,7 @@
 import { Ban, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
-import type { ConversationListItem } from "@vivd-catalyst/api-client";
-import { cn, Input, RadioGroup, useScrollEdgeFade } from "@vivd-catalyst/ui";
+import type { ConversationListItem } from "@work-shape/catalyst-api-client";
+import { cn, Input, RadioGroup, useScrollEdgeFade } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
   collaborationWorkspaceAccentAttributes,

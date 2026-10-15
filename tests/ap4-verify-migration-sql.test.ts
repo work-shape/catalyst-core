@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import postgres from "postgres";
 import { afterEach, describe, expect, inject, it } from "vitest";
-import { migrateDatabase } from "@vivd-catalyst/postgres-store";
+import { migrateDatabase } from "@work-shape/catalyst-postgres-store";
 import { migrationsUntil } from "./support/migrations-until";
 import { PostgresFixtures } from "./support/postgres-fixtures";
 

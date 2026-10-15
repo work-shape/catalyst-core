@@ -1,4 +1,4 @@
-import { AppError, createPlatformId } from "@vivd-catalyst/core";
+import { AppError, createPlatformId } from "@work-shape/catalyst-core";
 import {
   isModelFunctionTool,
   modelContentText,

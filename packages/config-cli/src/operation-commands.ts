@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { z } from "zod";
-import { apiOperations, type Operation } from "@vivd-catalyst/api-contract";
-import type { ApiClient } from "@vivd-catalyst/api-client";
+import { apiOperations, type Operation } from "@work-shape/catalyst-api-contract";
+import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { ConfigApiError, redactSecret, toConfigApiError, type ConfigApi } from "./api";
 import { formatRefusal } from "./asset-output";
 import {

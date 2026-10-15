@@ -6,7 +6,7 @@ import {
   type WorkspaceHandle,
   type WorkspaceHandleResolver,
   getRuntimeSubjectUserId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /** The conversation of a call and its workspace, when it has one. */
 interface ExistingWorkspaceLookup {

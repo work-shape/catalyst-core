@@ -4,7 +4,7 @@ import {
   ApiResponseShapeError,
   createApiClient,
   type ApiClient
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   getCurrentUserWithinDeadline,
   threadQueryRetry,

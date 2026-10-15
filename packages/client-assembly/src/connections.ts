@@ -13,7 +13,7 @@ import {
   seedReleaseConnections,
   type ReleaseSeedResult,
   type SecretKeyring
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   createConnectorTypeRegistry,
   type ClientInstanceId,
@@ -28,14 +28,14 @@ import {
   type OperationSource,
   type PlatformStores,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   combineDataToolSources,
   createAppActionToolSource,
   requestConnectionDiscovery,
   type ChatServerOptions
-} from "@vivd-catalyst/chat-server";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-server";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { readClientInstanceEnv } from "./env";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
 

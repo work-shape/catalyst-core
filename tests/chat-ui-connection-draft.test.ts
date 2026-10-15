@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { createApiClient } from "@vivd-catalyst/api-client";
+import { createApiClient } from "@work-shape/catalyst-api-client";
 import {
   ConnectionCreateFlow,
   ConnectionDraftCard,
@@ -12,7 +12,7 @@ import {
   readConnectionDraft,
   type ConnectionDraft,
   type ConnectionSource
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { connectionAsset, connectionDetail } from "./chat-ui-connection-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

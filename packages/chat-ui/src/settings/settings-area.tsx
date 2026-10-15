@@ -1,6 +1,13 @@
 import { ChevronsUpDown, Lock } from "lucide-react";
-import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
-import { Button, EmptyState, Page, Picker, SubRail, type SubRailGroup } from "@vivd-catalyst/ui";
+import type { CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
+import {
+  Button,
+  EmptyState,
+  Page,
+  Picker,
+  SubRail,
+  type SubRailGroup
+} from "@work-shape/catalyst-ui";
 import { AreaFrame, useAreaTitleFocus } from "../area-frame";
 import { BuildNavigationProvider } from "../build-area/build-route";
 import { CollaborationWorkspaceAvatar } from "../collaboration-workspace/collaboration-workspace-avatar";

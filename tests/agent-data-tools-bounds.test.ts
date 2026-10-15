@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { describeAgentDataTools } from "@vivd-catalyst/agent-runtime";
-import { createOperationRegistry, type OperationCall } from "@vivd-catalyst/core";
+import { describeAgentDataTools } from "@work-shape/catalyst-agent-runtime";
+import { createOperationRegistry, type OperationCall } from "@work-shape/catalyst-core";
 import {
   DataToolSourceBusyError,
   createBoundedDataToolSource,
   createToolOperationRunner,
   executeApprovedOperation
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import {
   ECHO,
   WRITE,

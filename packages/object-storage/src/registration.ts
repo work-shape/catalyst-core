@@ -1,4 +1,4 @@
-import type { ObjectStorage, ProviderDefinition } from "@vivd-catalyst/core";
+import type { ObjectStorage, ProviderDefinition } from "@work-shape/catalyst-core";
 import { filesystemObjectStorageProvider } from "./adapters/filesystem";
 import { s3ObjectStorageProvider } from "./adapters/s3";
 

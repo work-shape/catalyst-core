@@ -4,8 +4,8 @@ import {
   apiOperations,
   issueSessionTokenRequestSchema,
   operationPathParamNames
-} from "@vivd-catalyst/api-contract";
-import { PERSONAL_API_KEY_ACTIONS } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-contract";
+import { PERSONAL_API_KEY_ACTIONS } from "@work-shape/catalyst-core";
 import { errorSchema } from "./support/access-instance";
 import { testOperations, type TestOperationName } from "./support/operations";
 import {

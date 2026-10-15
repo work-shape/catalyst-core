@@ -30,7 +30,7 @@ import {
   ASSET_SYNC_ITEM_MAX_BYTES,
   RELEASE_VERSION,
   UNKNOWN_OPERATION_REASON
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -41,7 +41,7 @@ import {
   HmacSessionTokenAuthAdapter,
   HmacSessionTokenIssuer,
   IdentityResolvingAuthAdapter
-} from "@vivd-catalyst/auth";
+} from "@work-shape/catalyst-auth";
 
 import {
   AppError,
@@ -52,9 +52,9 @@ import {
   type AgentRuntime,
   type JsonObject,
   type RuntimeCallContext
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createScriptedInstanceModelGateway,
   type FakeModelProvider as ModelProvider
@@ -63,8 +63,8 @@ import {
   GuardrailRunner,
   createAuditingEventEmitter,
   createGuardrailAssetKind
-} from "@vivd-catalyst/chat-server";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-server";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import {
   STATE_FILENAME,
   canonicalBundleFiles,

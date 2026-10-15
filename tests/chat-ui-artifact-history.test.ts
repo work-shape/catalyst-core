@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { Message } from "@vivd-catalyst/api-client";
+import type { Message } from "@work-shape/catalyst-api-client";
 import {
   asManagedArtifactId,
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createToolResultMetadata
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
-import { readToolActionLabel, readToolDetailSections } from "@vivd-catalyst/chat-ui/tool-call";
+import {
+  readToolActionLabel,
+  readToolDetailSections
+} from "@work-shape/catalyst-chat-ui/tool-call";
 import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
   readSurfacedToolArtifactRefs,

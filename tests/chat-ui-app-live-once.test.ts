@@ -1,10 +1,10 @@
 import { createElement } from "react";
-import type { AppAction } from "@vivd-catalyst/api-client";
+import type { AppAction } from "@work-shape/catalyst-api-client";
 import {
   appActionLiveOnceOffered,
   AppActionsView,
   type AppActionsLiveOnce
-} from "@vivd-catalyst/chat-ui/apps";
+} from "@work-shape/catalyst-chat-ui/apps";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

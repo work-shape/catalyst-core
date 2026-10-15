@@ -7,10 +7,10 @@ import {
   isRegisteredOperation,
   type ApiOperationName,
   type Operation
-} from "@vivd-catalyst/api-contract";
-import { HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
-import { platformModules } from "@vivd-catalyst/client-assembly";
-import { createModuleRegistry, type PlatformAction } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-api-contract";
+import { HmacSessionTokenIssuer } from "@work-shape/catalyst-auth";
+import { platformModules } from "@work-shape/catalyst-client-assembly";
+import { createModuleRegistry, type PlatformAction } from "@work-shape/catalyst-core";
 import {
   FIRST_PARTY_AUTH_SCOPES,
   INSTANCE_ACTIONS,

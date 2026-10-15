@@ -1,6 +1,6 @@
 import { createElement, createRef, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { ConfigAssetReferences, LocaleCode } from "@vivd-catalyst/api-client";
+import type { ConfigAssetReferences, LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   AgentEditor,
   agentConfigToForm,
@@ -15,7 +15,7 @@ import {
   type BuildAsset,
   type BuildAssetEditorProps,
   type BuildWriteOutcome
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 const noop = () => undefined;

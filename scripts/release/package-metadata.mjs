@@ -34,7 +34,7 @@ export const MIT_PACKAGE_DIRS = PACKAGE_GROUPS.filter(({ license }) => license =
   ({ dirs }) => dirs
 );
 const REGISTRY = "https://registry.npmjs.org/";
-const REPOSITORY_URL = "git+https://github.com/vivd-solutions/vivd-catalyst.git";
+const REPOSITORY_URL = "https://github.com/work-shape/catalyst";
 const NODE_ENGINE = ">=22";
 
 // Packages under packages/ that are not published, with the reason.
@@ -147,7 +147,9 @@ export function withPublishMetadata(dir, manifest) {
   const next = {
     ...manifest,
     license: group.license,
-    repository: { type: "git", url: REPOSITORY_URL, directory: `packages/${dir}` },
+    repository: MIT_PACKAGE_DIRS.includes(dir)
+      ? { type: "git", url: REPOSITORY_URL, directory: `packages/${dir}` }
+      : undefined,
     sideEffects: "sideEffects" in override ? override.sideEffects : false,
     engines: { node: NODE_ENGINE },
     files: override.files ?? ["dist"],

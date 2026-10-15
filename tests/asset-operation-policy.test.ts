@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { operationRunSchema } from "@vivd-catalyst/api-contract";
-import type { CentralPolicySetting, PlatformEventEmitter } from "@vivd-catalyst/core";
+import { operationRunSchema } from "@work-shape/catalyst-api-contract";
+import type { CentralPolicySetting, PlatformEventEmitter } from "@work-shape/catalyst-core";
 import { agent, clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import { setupNamespaceHolder, type NamespaceHolderInstance } from "./support/asset-operations";
 import { getTestJobs } from "./support/test-instance";

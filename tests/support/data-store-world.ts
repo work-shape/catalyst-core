@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 import { afterEach, expect } from "vitest";
 import { z } from "zod";
-import { loadSecretKeyring } from "@vivd-catalyst/connections";
+import { loadSecretKeyring } from "@work-shape/catalyst-connections";
 import {
   DATA_STORE_ASSET_KIND,
   DATA_STORE_MANIFEST_FILE,
@@ -17,8 +17,8 @@ import {
   type JsonObject,
   type Logger,
   type OperationExecutionContext
-} from "@vivd-catalyst/core";
-import { createDataStores, type DataStores } from "@vivd-catalyst/data-stores";
+} from "@work-shape/catalyst-core";
+import { createDataStores, type DataStores } from "@work-shape/catalyst-data-stores";
 import { accessOf } from "./access";
 import { eventually, required } from "./assertions";
 import { useJobExecutorHarness } from "./job-executor-harness";

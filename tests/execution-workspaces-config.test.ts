@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyWorkspaceRunnerImageEnvOverride } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { applyWorkspaceRunnerImageEnvOverride } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 
 describe("execution workspaces config", () => {
   it("defaults to disabled execution workspaces", () => {

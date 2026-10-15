@@ -1,4 +1,4 @@
-import type { PlatformAction } from "@vivd-catalyst/core";
+import type { PlatformAction } from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../i18n";
 
 type Translate = TranslationContextValue["t"];

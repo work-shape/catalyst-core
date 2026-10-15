@@ -7,13 +7,13 @@ import {
   type LocaleCode,
   type RuntimeCallContext,
   type StartAgentRunInput
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   isModelProviderContinuationRejected,
   withStorableToolInput,
   type ModelCompletion,
   type ModelMessage
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import type { RunState } from "../run-state";
 import { createSystemInstructions } from "../system-instructions";
 import {

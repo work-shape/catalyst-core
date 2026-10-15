@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { seedShippedSkills } from "@vivd-catalyst/chat-server";
+import { seedShippedSkills } from "@work-shape/catalyst-server";
 import {
   createConfigAssetSource,
   platformDocsSkill,
   type ClientInstanceCapability
-} from "@vivd-catalyst/client-assembly";
-import { asClientInstanceId, type ShippedSkill } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-client-assembly";
+import { asClientInstanceId, type ShippedSkill } from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 

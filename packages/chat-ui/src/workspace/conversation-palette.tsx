@@ -1,7 +1,7 @@
 import { SquarePen } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { ApiClient, ConversationListItem } from "@vivd-catalyst/api-client";
-import { CommandPalette, type CommandPaletteGroup } from "@vivd-catalyst/ui";
+import type { ApiClient, ConversationListItem } from "@work-shape/catalyst-api-client";
+import { CommandPalette, type CommandPaletteGroup } from "@work-shape/catalyst-ui";
 import { useConversationSearchQuery } from "../api/conversation-search-query";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { workspaceShortcutLabel } from "./workspace-shortcuts";

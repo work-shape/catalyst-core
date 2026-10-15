@@ -2,7 +2,7 @@ import { beforeAllWithPostgres as beforeAll } from "./postgres-hooks";
 import { fileTestDatabaseUrl } from "./test-database";
 import postgres from "postgres";
 import { afterAll, afterEach } from "vitest";
-import { asClientInstanceId, type ClientInstanceId } from "@vivd-catalyst/core";
+import { asClientInstanceId, type ClientInstanceId } from "@work-shape/catalyst-core";
 import { required } from "./assertions";
 import {
   databaseUrlFor,

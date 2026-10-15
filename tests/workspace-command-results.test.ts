@@ -1,4 +1,4 @@
-import { asWorkspaceCommandId } from "@vivd-catalyst/core";
+import { asWorkspaceCommandId } from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 

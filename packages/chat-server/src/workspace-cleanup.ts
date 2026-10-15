@@ -5,7 +5,7 @@ import {
   type ExecutionWorkspaceCleanupStore,
   type ExecutionWorkspaceDeletionSummary,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ChatServerOptions, ExecutionWorkspaceCleanupJobOptions } from "./types";
 
 export interface ExecutionWorkspaceCleanupRunSummary {

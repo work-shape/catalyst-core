@@ -12,11 +12,11 @@ import {
   type ToolExecutionContext,
   type ToolExecutionRequest,
   type ToolOperationRunner
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { createTestToolRunner } from "./support/tool-runner";
-import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
-import { createReadSkillTool, ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
+import { createReadSkillTool, ToolRegistry } from "@work-shape/catalyst-tool-execution";
 
 const supportSkill = {
   name: "support_review",

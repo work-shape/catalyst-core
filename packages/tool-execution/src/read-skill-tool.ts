@@ -1,12 +1,12 @@
 import { z } from "zod";
-import type { ConfigAssetSource, ConversationOfferSource } from "@vivd-catalyst/core";
+import type { ConfigAssetSource, ConversationOfferSource } from "@work-shape/catalyst-core";
 import { createSkillSourceVersion } from "./skill-source-version";
 import {
   defineTool,
   toolFailed,
   toolSuccess,
   type AnyToolDefinition
-} from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-tool-sdk";
 
 const skillNameSchema = z
   .string()

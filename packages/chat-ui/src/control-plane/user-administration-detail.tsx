@@ -6,7 +6,7 @@ import type {
   AdministeredUserIdentity,
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
@@ -18,7 +18,7 @@ import {
   Input,
   KeyValue,
   KeyValueList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { MaskedPasswordInput, UserFields } from "./user-administration-fields";
 import {
   STANDALONE_AUTH_SOURCE,

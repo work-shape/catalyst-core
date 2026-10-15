@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createAssetKindRegistry,
   defineAssetKind,
   findNamespaceOfAssetName,
   type AssetValidationContext,
   type RegisteredAssetKind
-} from "@vivd-catalyst/core";
-import { createAgentAssetKind, createSkillAssetKind } from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-core";
+import { createAgentAssetKind, createSkillAssetKind } from "@work-shape/catalyst-server";
 
 // A third kind as a later slice would write it: everything it is stands in this one
 // definition, and nothing outside it names the kind.

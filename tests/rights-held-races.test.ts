@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ChatServerOptions } from "@vivd-catalyst/chat-server";
-import { asUserId, type PlatformStores } from "@vivd-catalyst/core";
+import type { ChatServerOptions } from "@work-shape/catalyst-server";
+import { asUserId, type PlatformStores } from "@work-shape/catalyst-core";
 import { clientInstanceId, setupAccessInstance } from "./support/access-instance";
 import { settled } from "./support/postgres-concurrency-harness";
 import { fileTestDatabaseUrl } from "./support/test-database";

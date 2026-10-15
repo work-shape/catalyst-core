@@ -1,4 +1,4 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 
 /** The cache name of the one conversation list a session without workspaces has. */
 export const PERSONAL_DEFAULT_CONVERSATION_LIST = "personal-default";

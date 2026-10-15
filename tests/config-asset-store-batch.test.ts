@@ -5,8 +5,8 @@ import {
   createPlatformId,
   type ConfigAssetMutation,
   type PlatformStores
-} from "@vivd-catalyst/core";
-import { ASSET_RELEASE_SYNC_MAX_ITEMS } from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-core";
+import { ASSET_RELEASE_SYNC_MAX_ITEMS } from "@work-shape/catalyst-api-contract";
 import { createTestInstance } from "./support/test-instance";
 
 // What one write of the store answers and costs: the revisions it gave, the check it runs

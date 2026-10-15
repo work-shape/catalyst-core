@@ -1,5 +1,5 @@
 import { describeWithoutMessage } from "./error-without-message";
-import type { DatabaseReadiness, Logger } from "@vivd-catalyst/core";
+import type { DatabaseReadiness, Logger } from "@work-shape/catalyst-core";
 import { readMigrationState, type Queries } from "./migrations";
 
 /**

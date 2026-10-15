@@ -1,4 +1,4 @@
-import type { ThemeMode } from "@vivd-catalyst/ui/theme";
+import type { ThemeMode } from "@work-shape/catalyst-ui/theme";
 
 export type ResolvedThemeMode = ThemeMode;
 export type ThemeModePreference = ResolvedThemeMode | "system";

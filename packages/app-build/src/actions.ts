@@ -4,7 +4,7 @@ import {
   readYamlData,
   type JsonObject,
   type JsonValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   APP_ACTION_DESCRIPTION_MAX_CHARS,

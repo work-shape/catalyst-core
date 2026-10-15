@@ -5,14 +5,14 @@ import {
   callConnectionOperation,
   openConnectorContext,
   readConnection
-} from "@vivd-catalyst/connections";
+} from "@work-shape/catalyst-connections";
 import {
   AppError,
   connectionCallError,
   connectionCallReasonOf,
   type JsonValue
-} from "@vivd-catalyst/core";
-import { OPERATION_INPUT_MAX_DEPTH } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { OPERATION_INPUT_MAX_DEPTH } from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId } from "./support/access-instance";
 import { connection } from "./support/connections";
 import { captureProcessOutput, dumpDatabaseText, findLeak } from "./support/test-connector";

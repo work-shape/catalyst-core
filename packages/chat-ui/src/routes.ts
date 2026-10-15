@@ -1,4 +1,4 @@
-import { appInterfacePath, type AppMode } from "@vivd-catalyst/api-client";
+import { appInterfacePath, type AppMode } from "@work-shape/catalyst-api-client";
 
 /** The areas of the interface: what a route shows. */
 export type WorkspaceRouteView =

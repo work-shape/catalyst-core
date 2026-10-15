@@ -4,15 +4,15 @@ import {
   type ClientInstanceId,
   type GuardrailEvent,
   type PlatformEventEmitter
-} from "@vivd-catalyst/core";
-import { GuardrailRunner, createAuditingEventEmitter } from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-core";
+import { GuardrailRunner, createAuditingEventEmitter } from "@work-shape/catalyst-server";
 import {
   parseClientInstanceConfig,
   type ClientInstanceConfig,
   type ReleaseGuardrailConfig
-} from "@vivd-catalyst/config-schema";
-import type { ModelCompletion } from "@vivd-catalyst/model-provider";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-config-schema";
+import type { ModelCompletion } from "@work-shape/catalyst-model-provider";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { clientInstanceId as accessInstanceId } from "./access-instance";
 import { createTestConfig } from "./fixtures";
 import {

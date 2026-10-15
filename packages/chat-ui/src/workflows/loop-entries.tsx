@@ -8,7 +8,7 @@ import {
   SegmentedControlItem,
   SkeletonList,
   TargetBadge
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { FailureBanner } from "./failure-banner";
 import { useLoopEntries, type LoopEntriesRead } from "./workflow-data";

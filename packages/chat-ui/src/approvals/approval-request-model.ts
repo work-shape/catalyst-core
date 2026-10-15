@@ -1,10 +1,10 @@
-import type { ApprovalRequestView, LocaleCode, Message } from "@vivd-catalyst/api-client";
+import type { ApprovalRequestView, LocaleCode, Message } from "@work-shape/catalyst-api-client";
 import {
   APPROVAL_EXECUTIONS,
   approvalRevisionOwner,
   readApprovalDecisionMetadata,
   type ApprovalExecution
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../i18n";
 
 /** Display kind a tool result carries to render its Approval Request inline in the thread. */

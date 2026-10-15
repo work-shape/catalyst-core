@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import type { StructuredDataResourceResponse } from "@vivd-catalyst/api-client";
-import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND } from "@vivd-catalyst/core";
-import { Spinner } from "@vivd-catalyst/ui";
+import type { StructuredDataResourceResponse } from "@work-shape/catalyst-api-client";
+import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND } from "@work-shape/catalyst-core";
+import { Spinner } from "@work-shape/catalyst-ui";
 import { useAttachmentContentContext } from "./attachment-content";
 import { useOpenConversationFile } from "./conversation-file-presentation";
 import { useTranslation } from "./i18n";

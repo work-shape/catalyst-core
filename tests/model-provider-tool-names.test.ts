@@ -7,15 +7,15 @@ import {
   asConversationId,
   asToolCallId,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import {
   OpenAiCompatibleChatProvider,
   type ModelAdapterStreamEvent,
   type ModelCompletion,
   type ModelMessage
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { createTestToolRunner } from "./support/tool-runner";
 
 type Api = "chat_completions" | "responses";

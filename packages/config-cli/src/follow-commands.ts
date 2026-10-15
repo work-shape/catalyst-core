@@ -1,4 +1,4 @@
-import { MAX_LIST_LIMIT, type ApprovalRequestView } from "@vivd-catalyst/api-contract";
+import { MAX_LIST_LIMIT, type ApprovalRequestView } from "@work-shape/catalyst-api-contract";
 import type { ConfigApi } from "./api";
 import type { ConfigCommandOptions } from "./command-support";
 

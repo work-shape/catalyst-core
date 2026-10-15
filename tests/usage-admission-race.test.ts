@@ -5,8 +5,8 @@ import {
   type ClientInstanceId,
   type ModelCallAdmission,
   type UsageRateCardConfig
-} from "@vivd-catalyst/core";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+} from "@work-shape/catalyst-core";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { required } from "./support/assertions";
 import { usePostgresSuite } from "./support/postgres-suite";
 import { createTestInstance } from "./support/test-instance";

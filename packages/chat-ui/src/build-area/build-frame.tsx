@@ -26,7 +26,7 @@ import {
   SkeletonList,
   SkeletonPage,
   SubRail
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { holdLeaveGuard } from "../leave-guard";

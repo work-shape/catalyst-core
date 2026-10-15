@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-catalyst/core";
+import { AppError } from "@work-shape/catalyst-core";
 
 /** The lists a Namespace may restrict its agents to. `null` lifts a restriction. */
 export interface NamespaceListsCommand {

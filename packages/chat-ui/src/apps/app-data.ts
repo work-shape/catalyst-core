@@ -10,7 +10,7 @@ import {
   type AssetSummary,
   type ConfigAssetRevision,
   type OperationOutcome
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { PendingApprovalError } from "../build-area/build-refusals";

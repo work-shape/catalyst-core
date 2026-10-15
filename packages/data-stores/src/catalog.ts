@@ -2,7 +2,7 @@ import type {
   PostgresExecutor,
   PostgresQueryResult,
   PostgresTarget
-} from "@vivd-catalyst/postgres-connector";
+} from "@work-shape/catalyst-postgres-connector";
 import {
   AppError,
   type DataStoreColumn,
@@ -10,7 +10,7 @@ import {
   type DataStoreRows,
   type DataStoreScalarType,
   type DataStoreTable
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 // What a store's database says of itself, in the product's own words: the tables of the

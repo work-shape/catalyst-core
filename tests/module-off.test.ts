@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { defineCapability } from "@vivd-catalyst/capability-sdk";
-import { createJobWorker, resolveInstanceModules } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { defineCapability } from "@work-shape/catalyst-capability-sdk";
+import { createJobWorker, resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   asClientInstanceId,
   createModuleRegistry,
@@ -11,8 +11,8 @@ import {
   defineModule,
   type JsonObject,
   type Logger
-} from "@vivd-catalyst/core";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig, setTestAgent } from "./support/fixtures";
 import { registeredTestOperations } from "./support/operations";

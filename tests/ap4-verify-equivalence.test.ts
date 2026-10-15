@@ -1,6 +1,6 @@
 import postgres, { type Sql } from "postgres";
 import { afterEach, describe, expect, inject, it } from "vitest";
-import { deriveEffectiveServiceGrants } from "@vivd-catalyst/auth";
+import { deriveEffectiveServiceGrants } from "@work-shape/catalyst-auth";
 import {
   ACTIONS,
   PERMISSIONS,
@@ -14,8 +14,8 @@ import {
   type AccessResource,
   type AuthenticatedIdentity,
   type PermissionGrant
-} from "@vivd-catalyst/core";
-import { migrateDatabase } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { migrateDatabase } from "@work-shape/catalyst-postgres-store";
 import * as pre from "./support/ap4-verify/pre-ap4-permissions";
 import { migrationsUntil } from "./support/migrations-until";
 import { PostgresFixtures } from "./support/postgres-fixtures";

@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { createAppActionToolSource } from "@vivd-catalyst/chat-server";
-import { createConnectionToolSource } from "@vivd-catalyst/connections";
-import { APP_ACTION_INPUT_MAX_BYTES } from "@vivd-catalyst/core";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { createAppActionToolSource } from "@work-shape/catalyst-server";
+import { createConnectionToolSource } from "@work-shape/catalyst-connections";
+import { APP_ACTION_INPUT_MAX_BYTES } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus } from "./support/app-instance";
 import {

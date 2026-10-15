@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createLogger } from "@vivd-catalyst/client-assembly";
-import { AppError } from "@vivd-catalyst/core";
+import { createLogger } from "@work-shape/catalyst-client-assembly";
+import { AppError } from "@work-shape/catalyst-core";
 import { addTestRoute, createTestInstance } from "./support/test-instance";
 import { createTestConfig } from "./support/fixtures";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";

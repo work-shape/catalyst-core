@@ -1,4 +1,4 @@
-import { APP_ERROR_STATUS_CODES, type AppErrorCode } from "@vivd-catalyst/asset-schemas";
+import { APP_ERROR_STATUS_CODES, type AppErrorCode } from "@work-shape/catalyst-asset-schemas";
 
 export { APP_ERROR_STATUS_CODES, type AppErrorCode };
 

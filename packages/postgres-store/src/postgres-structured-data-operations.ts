@@ -3,7 +3,7 @@ import {
   createPlatformId,
   type StructuredDataResourceRecord,
   type StructuredDataStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapStructuredDataResource } from "./rows";
 import { structuredDataResources } from "./schema";

@@ -5,7 +5,7 @@ import {
   DropdownMenuCopyItem,
   DropdownMenuTrigger,
   IconButton
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "./i18n";
 
 /**

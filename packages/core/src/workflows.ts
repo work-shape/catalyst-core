@@ -7,7 +7,7 @@ import type { OperationEffect } from "./operations";
 
 // The names and shapes of a Workflow that more than one package reads: the asset kind, the
 // parsed `workflow.yaml`, a run and its step runs, who a run acts as, and what its jobs and
-// its operations are called. The engine is in `@vivd-catalyst/workflows`.
+// its operations are called. The engine is in `@work-shape/catalyst-workflows`.
 
 /** The asset kind of a Workflow. Spec: events-workflows-and-guardrails.md, build order EW-5. */
 export const WORKFLOW_ASSET_KIND = "workflow";

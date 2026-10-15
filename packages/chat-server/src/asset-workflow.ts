@@ -16,7 +16,7 @@ import {
   type OperationAuthorization,
   type OperationOrigin,
   type PolicyTarget
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { afterRemove, afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
 import { AssetDraftWorkflow } from "./asset-draft-workflow";
 import type { AssetFileInput } from "./asset-files";

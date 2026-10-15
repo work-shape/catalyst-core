@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ASSET_GET_FILES_MAX_BYTES, ASSET_PUT_FILES_MAX_BYTES } from "@vivd-catalyst/core";
+import { ASSET_GET_FILES_MAX_BYTES, ASSET_PUT_FILES_MAX_BYTES } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import {
   appFiles,

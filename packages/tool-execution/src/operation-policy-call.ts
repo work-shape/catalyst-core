@@ -7,7 +7,7 @@ import {
   type PolicyInput,
   type PolicyResolution,
   type PolicyValue
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   approvalAskedBy,
   askBeforeEvents,

@@ -9,9 +9,9 @@ import {
   type Context,
   type ReactNode
 } from "react";
-import type { LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
+import type { LocaleCode, SafeConfig } from "@work-shape/catalyst-api-client";
 import { readBrowserLocale } from "../i18n";
-import type { ThemeInputs } from "@vivd-catalyst/ui/theme";
+import type { ThemeInputs } from "@work-shape/catalyst-ui/theme";
 import {
   readSystemThemeMode,
   resolveThemeModePreference,

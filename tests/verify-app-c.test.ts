@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   appBridgePageMessageSchema,
   appBridgeHostMessageSchema
-} from "@vivd-catalyst/api-contract";
-import type { PageBuildResult } from "@vivd-catalyst/app-build";
-import { buildPage } from "@vivd-catalyst/app-build/build";
+} from "@work-shape/catalyst-api-contract";
+import type { PageBuildResult } from "@work-shape/catalyst-app-build";
+import { buildPage } from "@work-shape/catalyst-app-build/build";
 import { pageFiles } from "./support/page-build";
 
 // Verifier's repros for PR 69 (APP-13, APP-14, APP-15), against the owning spec

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ConfigAssetRecord } from "@vivd-catalyst/core";
+import type { ConfigAssetRecord } from "@work-shape/catalyst-core";
 import {
   agent,
   clientInstanceId,

@@ -5,7 +5,7 @@ import {
   type ConfirmConnectCodeRequest,
   type ConnectCode,
   type CreatePersonalApiKeyRequest
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Banner,
   Button,
@@ -18,7 +18,7 @@ import {
   PageHeader,
   Section,
   SkeletonList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import {
   useConnectCodeQuery,
   useOwnApiKeyMutations,

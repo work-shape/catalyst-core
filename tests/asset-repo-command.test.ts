@@ -12,7 +12,7 @@ import {
   ASSET_REPO_REPOSITORY_DIRECTORY,
   treeRefusal,
   type TreeEntry
-} from "@vivd-catalyst/asset-repo";
+} from "@work-shape/catalyst-asset-repo";
 import {
   commitFolder,
   materialise,

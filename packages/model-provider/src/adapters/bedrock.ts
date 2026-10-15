@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AppError, defineProvider, secretRef } from "@vivd-catalyst/core";
+import { AppError, defineProvider, secretRef } from "@work-shape/catalyst-core";
 import {
   BEDROCK_CAPABILITIES,
   BEDROCK_REGION,

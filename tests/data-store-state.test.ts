@@ -5,7 +5,7 @@ import {
   asClientInstanceId,
   createPlatformId,
   type AuthenticatedUser
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { accessOf } from "./support/access";
 import { eventually, required } from "./support/assertions";
 import { init, manifest, useDataStoreWorld } from "./support/data-store-world";

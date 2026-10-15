@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { compiledActionsOf } from "@vivd-catalyst/app-build";
-import { buildPage } from "@vivd-catalyst/app-build/build";
+import { compiledActionsOf } from "@work-shape/catalyst-app-build";
+import { buildPage } from "@work-shape/catalyst-app-build/build";
 import { pageFiles } from "./support/page-build";
 
 // The docs page an agent reads before it writes an App's actions. Every example on it is built

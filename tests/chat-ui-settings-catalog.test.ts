@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ApiUser, CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
-import { createTranslationContext, type SettingsViewer } from "@vivd-catalyst/chat-ui";
-import type { WorkspaceRoute } from "@vivd-catalyst/chat-ui/shell";
-import { administration } from "@vivd-catalyst/chat-ui/admin";
+import type { ApiUser, CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
+import { createTranslationContext, type SettingsViewer } from "@work-shape/catalyst-chat-ui";
+import type { WorkspaceRoute } from "@work-shape/catalyst-chat-ui/shell";
+import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import { workspaceRouteFromPath } from "../packages/chat-ui/src/routes";
 import {
   firstAdministrationRoute,

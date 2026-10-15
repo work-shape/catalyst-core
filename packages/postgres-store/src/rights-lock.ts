@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { AppError, userInDeletionError, type ClientInstanceId } from "@vivd-catalyst/core";
+import { AppError, userInDeletionError, type ClientInstanceId } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { productUsers } from "./schema";
 

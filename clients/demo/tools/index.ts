@@ -1,4 +1,4 @@
-import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
+import type { ToolAssemblyDefinition } from "@work-shape/catalyst-tool-sdk";
 import { weatherForecastToolFactory } from "./weather-forecast";
 import { workflowSummaryToolFactory } from "./workflow-summary";
 

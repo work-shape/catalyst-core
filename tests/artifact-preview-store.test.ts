@@ -12,7 +12,7 @@ import {
   type ManagedArtifactRecord,
   type ManagedFileRecord,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 describe("artifact preview store adapters", () => {
   it("ensures one deterministic attachment preview source in Postgres", async () => {

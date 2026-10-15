@@ -13,7 +13,7 @@ import {
   type ConfigAssetMutation,
   type ConfigAssetRevisionRecord,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   applySkillChange,
@@ -24,7 +24,7 @@ import {
   skillChangeOperationsSchema,
   skillConfigSchema,
   skillNameSchema
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 import {
   applyValidatedConfigAssetMutations,
   type ConfigAssetWriterOptions

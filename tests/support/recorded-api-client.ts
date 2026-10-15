@@ -1,5 +1,5 @@
-import { createApiClient, type ApiClient } from "@vivd-catalyst/api-client";
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { createApiClient, type ApiClient } from "@work-shape/catalyst-api-client";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 
 /** One call a client made, by the operation of the catalog its request names. */
 export interface RecordedApiCall {

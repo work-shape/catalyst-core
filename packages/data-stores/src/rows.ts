@@ -1,5 +1,5 @@
-import type { PostgresParameter } from "@vivd-catalyst/postgres-connector";
-import { AppError, DATA_STORE_PREVIEW_ROW_LIMIT, type JsonObject } from "@vivd-catalyst/core";
+import type { PostgresParameter } from "@work-shape/catalyst-postgres-connector";
+import { AppError, DATA_STORE_PREVIEW_ROW_LIMIT, type JsonObject } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { catalogTarget, readTables } from "./catalog";
 import { quoteIdentifier } from "./server";

@@ -9,7 +9,7 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { PermissionGrant } from "@vivd-catalyst/core";
+import type { PermissionGrant } from "@work-shape/catalyst-core";
 
 /**
  * Who may do an action on a scope. `scope_id` is a workspace id or an asset id and is null for

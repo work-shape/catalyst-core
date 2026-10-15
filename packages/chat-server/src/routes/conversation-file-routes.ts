@@ -1,4 +1,4 @@
-import { apiOperations, type ArtifactPreviewResponse } from "@vivd-catalyst/api-contract";
+import { apiOperations, type ArtifactPreviewResponse } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_KIND,
@@ -14,7 +14,7 @@ import {
   type ArtifactPreviewStore,
   type ConversationAttachment,
   type ManagedArtifactRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam } from "../request-context";

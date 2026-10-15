@@ -1,5 +1,5 @@
-import type { LocaleCode } from "@vivd-catalyst/api-client";
-import { formatSkillMarkdown, skillResourceMediaTypeForPath } from "@vivd-catalyst/core";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import { formatSkillMarkdown, skillResourceMediaTypeForPath } from "@work-shape/catalyst-core";
 import type { AssetFileEntry, AssetFileRead, AssetFileWrite } from "../api/asset-writes";
 
 /** The file that holds a skill's instructions. */

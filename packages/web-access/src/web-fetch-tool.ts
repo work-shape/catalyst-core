@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import {
   DirectWebFetcher,
   type WebFetchInput,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
 

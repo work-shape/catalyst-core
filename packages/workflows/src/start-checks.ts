@@ -1,11 +1,11 @@
-import { compileJsonSchema } from "@vivd-catalyst/connections";
+import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import type {
   ApiAccessStore,
   ClientInstanceId,
   OperationRegistry,
   WorkflowManifest,
   WorkflowRun
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { indexWorkflowSteps, type WorkflowDefinitionIssue } from "./definition";
 import { secretOperationSteps } from "./operation-step";
 

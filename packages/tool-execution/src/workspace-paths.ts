@@ -1,6 +1,6 @@
 import { resolve, sep } from "node:path";
 import { posix as posixPath } from "node:path";
-import type { JsonObject } from "@vivd-catalyst/core";
+import type { JsonObject } from "@work-shape/catalyst-core";
 
 export interface WorkspacePathLimits {
   maxPathLength: number;

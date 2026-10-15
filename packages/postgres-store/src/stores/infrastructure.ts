@@ -3,7 +3,7 @@ import {
   PROVIDER_CHECK_ERROR_CLASSES,
   type InfrastructureCheckOutcome,
   type InfrastructureCheckStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 import { infrastructureCheckState } from "../schema";
 

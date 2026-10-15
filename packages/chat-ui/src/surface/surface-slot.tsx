@@ -16,7 +16,7 @@ import {
   SplitHandle,
   SurfaceFrame,
   useExit
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import { readStoredSurfaceWidth, writeStoredSurfaceWidth } from "../workspace-utils";

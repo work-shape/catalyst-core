@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   agentConfigSchema,
   createSafeConfigView,
   parseClientInstanceConfig
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 
 describe("agent presentation config", () => {
   it("resolves the optional agent description independently of the welcome subtitle", () => {

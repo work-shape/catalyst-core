@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Progress, type ProgressProps } from "@vivd-catalyst/ui";
+import { Progress, type ProgressProps } from "@work-shape/catalyst-ui";
 
 // Progress is a bar for "so many of so many". Every test here fails without the component:
 // the library did not export it.

@@ -36,10 +36,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # The docs package and the packages it reads the API reference from.
-      - run: pnpm --filter "@vivd-catalyst/docs..." build
+      - run: pnpm --filter "@work-shape/catalyst-docs..." build
       # Crawls the built site under its base path. A broken link, asset, anchor, sitemap entry
       # or search index stops the publish.
-      - run: pnpm --filter @vivd-catalyst/docs check:site
+      - run: pnpm --filter @work-shape/catalyst-docs check:site
       # CLOUDFLARE_PAGES_TOKEN is an API token with the single permission
       # "Account / Cloudflare Pages / Edit". It cannot edit DNS.
       - name: Upload to Cloudflare Pages

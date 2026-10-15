@@ -7,9 +7,9 @@ import {
   ApiKeyAccessTokenExchange,
   CompositeAuthAdapter,
   HmacServiceAccessTokenAuthAdapter
-} from "@vivd-catalyst/auth";
-import { approvalRequestViewSchema, operationRunSchema } from "@vivd-catalyst/api-contract";
-import { createGuardrailAssetKind } from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-auth";
+import { approvalRequestViewSchema, operationRunSchema } from "@work-shape/catalyst-api-contract";
+import { createGuardrailAssetKind } from "@work-shape/catalyst-server";
 import { runCli } from "@work-shape/catalyst-cli";
 import { testOperations } from "./support/operations";
 import {

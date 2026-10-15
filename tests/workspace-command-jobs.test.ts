@@ -1,19 +1,19 @@
 import { mkdir, readdir, utimes } from "node:fs/promises";
 import { join } from "node:path";
-import { AGENT_RUN_IDLE_LIMIT_MS } from "@vivd-catalyst/agent-runtime";
+import { AGENT_RUN_IDLE_LIMIT_MS } from "@work-shape/catalyst-agent-runtime";
 import {
   JOB_UNCLAIMED_MS,
   JOB_WORKER_CHECK_INTERVAL_MS,
   type PlatformStores,
   type WorkspaceCommand
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   WORKSPACE_COMMAND_CANCELLATION_CHECK_INTERVAL_MS,
   WORKSPACE_COMMAND_HEARTBEAT_MS,
   WORKSPACE_COMMAND_LEASE_MS,
   WORKSPACE_COMMAND_NO_WORKER_MESSAGE,
   createWorkspaceCommandClient
-} from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-tool-execution";
 import { describe, expect, it, vi } from "vitest";
 import { required, waitUntil } from "./support/assertions";
 import {

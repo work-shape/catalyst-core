@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/capability-sdk",
+  "name": "@work-shape/catalyst-capability-sdk",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/capability-sdk"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,9 +34,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/data-source": "workspace:*",
-    "@vivd-catalyst/tool-sdk": "workspace:*"
+    "@work-shape/catalyst-core": "workspace:*",
+    "@work-shape/catalyst-data-source": "workspace:*",
+    "@work-shape/catalyst-tool-sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.1",

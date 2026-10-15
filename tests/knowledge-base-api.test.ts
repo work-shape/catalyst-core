@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { describeAgentDataTools } from "@vivd-catalyst/agent-runtime";
+import { describeAgentDataTools } from "@work-shape/catalyst-agent-runtime";
 import {
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
@@ -11,7 +11,7 @@ import {
   asUserId,
   knowledgeQueryOperationName,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import {
   clientInstanceId,

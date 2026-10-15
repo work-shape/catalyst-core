@@ -4,7 +4,7 @@ import {
   MODEL_EMBEDDING_MAX_DIMENSIONS,
   MODEL_USAGE_TIERS,
   REASONING_EFFORTS
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { localizedStringSchema } from "./localization";
 
 /**

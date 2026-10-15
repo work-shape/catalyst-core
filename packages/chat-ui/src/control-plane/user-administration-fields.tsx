@@ -1,6 +1,6 @@
 import { useState, type FocusEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { Button, Input, Select } from "@vivd-catalyst/ui";
+import { Button, Input, Select } from "@work-shape/catalyst-ui";
 import {
   ACCESS_LEVEL_OPTIONS,
   generatePassword,

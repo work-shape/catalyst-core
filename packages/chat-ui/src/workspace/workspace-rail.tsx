@@ -1,6 +1,6 @@
 import { Blocks, PanelLeft, Plus, Search, Settings, SquarePen } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
-import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
+import type { ConversationListItem, SafeConfig } from "@work-shape/catalyst-api-client";
 import {
   Avatar,
   Button,
@@ -12,7 +12,7 @@ import {
   Sidebar,
   Skeleton,
   useSidebarCollapsed
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import type { RailApp } from "../apps/rail-apps";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";

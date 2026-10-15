@@ -1,4 +1,4 @@
-import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   PAGE_FILE_SET_HELD_KEY,
@@ -10,7 +10,7 @@ import {
   type FileSetId,
   type OperationBeforeEvent,
   type Page
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { AssetCall } from "../asset-access";
 import type { PageRevisionOrigin } from "../asset-draft-workflow";
 import { fileSetWriteEvent } from "../asset-guardrail-events";

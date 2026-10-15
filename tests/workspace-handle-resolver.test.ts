@@ -7,8 +7,8 @@ import {
   type ExecutionWorkspace,
   type ExecutionWorkspaceMetadataStore,
   type ToolExecutionContext
-} from "@vivd-catalyst/core";
-import { createExecutionWorkspaceHandleResolver } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { createExecutionWorkspaceHandleResolver } from "@work-shape/catalyst-tool-execution";
 import { describe, expect, it, vi } from "vitest";
 
 function createFixture() {

@@ -1,5 +1,5 @@
-import { administration } from "@vivd-catalyst/chat-ui/admin";
-import { renderStandaloneChatApp } from "@vivd-catalyst/chat-ui/shell";
+import { administration } from "@work-shape/catalyst-chat-ui/admin";
+import { renderStandaloneChatApp } from "@work-shape/catalyst-chat-ui/shell";
 import "./styles.css";
 
 renderStandaloneChatApp({

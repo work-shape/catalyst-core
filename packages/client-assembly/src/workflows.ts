@@ -4,8 +4,8 @@ import {
   type OperationCalls,
   type RouteRegistration,
   type WorkflowListEntry
-} from "@vivd-catalyst/chat-server";
-import { AppError, type JobSchedule, type RegisteredJobHandler } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-server";
+import { AppError, type JobSchedule, type RegisteredJobHandler } from "@work-shape/catalyst-core";
 import {
   codeStepIssues,
   createWorkflowEngine,
@@ -17,7 +17,7 @@ import {
   workflowsModule,
   type WorkflowDefinitionSource,
   type WorkflowEngineOptions
-} from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-workflows";
 import type { ModuleAssemblyParts, ModuleSeam } from "./module-assembly";
 import {
   createWorkflowAssetDefinitions,

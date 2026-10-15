@@ -14,7 +14,7 @@ import {
   type WorkspaceExpectedOutput,
   type WorkspaceFile,
   isJsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { DEFAULT_LIMITS, type WorkspaceCommandServiceLimits } from "./workspace-tool-schemas";
 import {
   normalizeWorkspaceDirectory as normalizeWorkspaceDirectoryPath,

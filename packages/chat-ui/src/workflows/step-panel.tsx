@@ -21,7 +21,7 @@ import {
   TargetBadge,
   type FlowGraphGroup,
   type FlowGraphNode
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { formatMoment } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { FailureBanner } from "./failure-banner";

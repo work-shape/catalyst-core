@@ -12,7 +12,7 @@ import {
   createApiAccessAuthorityKey,
   createApiAccessRevealController
 } from "../packages/chat-ui/src/control-plane/api-access-reveal-controller";
-import { canManageApiAccess, canViewAdministrationPanel } from "@vivd-catalyst/chat-ui/admin";
+import { canManageApiAccess, canViewAdministrationPanel } from "@work-shape/catalyst-chat-ui/admin";
 
 describe("API access model", () => {
   it("maps only current service-principal grants to credential scopes", () => {

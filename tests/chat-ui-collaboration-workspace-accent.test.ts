@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { workspaceAccentColorSchema } from "@vivd-catalyst/api-contract";
-import { WORKSPACE_ACCENT_COLORS } from "@vivd-catalyst/core";
+import { workspaceAccentColorSchema } from "@work-shape/catalyst-api-contract";
+import { WORKSPACE_ACCENT_COLORS } from "@work-shape/catalyst-core";
 import {
   collaborationWorkspaceAccentAttributes,
   collaborationWorkspaceAccentColors,

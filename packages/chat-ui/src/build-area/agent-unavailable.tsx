@@ -1,5 +1,5 @@
-import type { Asset } from "@vivd-catalyst/api-client";
-import { Banner } from "@vivd-catalyst/ui";
+import type { Asset } from "@work-shape/catalyst-api-client";
+import { Banner } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { useModuleName } from "../module-texts";
 import type { AgentFormState } from "./asset-form-model";

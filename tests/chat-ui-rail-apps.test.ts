@@ -1,8 +1,8 @@
 import { createElement, type ComponentProps } from "react";
-import type { AssetSummary, LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
-import { safeConfigSchema } from "@vivd-catalyst/api-contract";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
-import { createSafeConfigView } from "@vivd-catalyst/config-schema";
+import type { AssetSummary, LocaleCode, SafeConfig } from "@work-shape/catalyst-api-client";
+import { safeConfigSchema } from "@work-shape/catalyst-api-contract";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
 import { describe, expect, it } from "vitest";
 import {
   parseAppOpens,
@@ -10,7 +10,7 @@ import {
   RAIL_APPS_LIMIT,
   withAppOpen,
   WorkspaceRail
-} from "@vivd-catalyst/chat-ui/apps";
+} from "@work-shape/catalyst-chat-ui/apps";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { createTestConfig } from "./support/fixtures";
 

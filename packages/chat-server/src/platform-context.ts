@@ -2,7 +2,7 @@ import {
   PUBLISHED_CLI_VERSION,
   RELEASE_VERSION,
   type PlatformContext
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import {
   ASSET_GET_FILES_MAX_BYTES,
   ASSET_PUT_FILES_MAX_BYTES,
@@ -21,7 +21,7 @@ import {
   type AssetKindActions,
   type AuthenticatedIdentity,
   type OperationScope
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "./types";
 import { listedWorkflowActions, workflowOf } from "./workflow-listing";
 

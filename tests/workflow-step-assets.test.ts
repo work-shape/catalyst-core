@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { WORKFLOW_ASSET_KIND, type WorkflowManifest } from "@vivd-catalyst/core";
-import { parseWorkflowManifest } from "@vivd-catalyst/workflows";
+import { WORKFLOW_ASSET_KIND, type WorkflowManifest } from "@work-shape/catalyst-core";
+import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import { publishedDefinitions, type WorkflowFixture } from "./support/workflow-instance";
 import { notifyClients, readyWorkflows, start, stepRunsOf } from "./support/workflow-runs";

@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/tool-execution",
+  "name": "@work-shape/catalyst-tool-execution",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/tool-execution"
-  },
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -39,10 +34,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/config-schema": "workspace:*",
-    "@vivd-catalyst/document-execution": "workspace:*",
-    "@vivd-catalyst/tool-sdk": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
+    "@work-shape/catalyst-config-schema": "workspace:*",
+    "@work-shape/catalyst-document-execution": "workspace:*",
+    "@work-shape/catalyst-tool-sdk": "workspace:*",
     "xlsx": "0.18.5",
     "zod": "^4.4.3"
   },

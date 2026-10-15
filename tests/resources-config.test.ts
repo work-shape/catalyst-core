@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   createSafeConfigView,
   parseClientInstanceConfig,
   resolveModuleSwitches
-} from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-config-schema";
 
 describe("resources config", () => {
   it("enables conversation resources by default", () => {

@@ -5,8 +5,8 @@ import {
   ApiKeyAccessTokenExchange,
   HmacServiceAccessTokenAuthAdapter,
   IdentityResolvingAuthAdapter
-} from "@vivd-catalyst/auth";
-import { asClientInstanceId, requireAuthScope } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-auth";
+import { asClientInstanceId, requireAuthScope } from "@work-shape/catalyst-core";
 
 const secret = "a-test-service-access-token-secret-with-enough-length";
 

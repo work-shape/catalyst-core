@@ -6,8 +6,8 @@ import {
   InfrastructureWorkflow,
   logProviderCheckChange,
   type InfrastructureEntry
-} from "@vivd-catalyst/chat-server";
-import { getClientInstanceId, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+} from "@work-shape/catalyst-server";
+import { getClientInstanceId, type ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createEnvironmentSecretResolver,
   createProvider,
@@ -28,11 +28,11 @@ import {
   type RegisteredJobHandler,
   type RegisteredProviderDefinition,
   type SecretResolver
-} from "@vivd-catalyst/core";
-import { mailProviderDefinitions } from "@vivd-catalyst/mail";
-import { modelProviderDefinitions } from "@vivd-catalyst/model-provider";
-import { objectStorageProviderDefinitions } from "@vivd-catalyst/object-storage";
-import { sandboxProviderDefinitions } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import { mailProviderDefinitions } from "@work-shape/catalyst-mail";
+import { modelProviderDefinitions } from "@work-shape/catalyst-model-provider";
+import { objectStorageProviderDefinitions } from "@work-shape/catalyst-object-storage";
+import { sandboxProviderDefinitions } from "@work-shape/catalyst-tool-execution";
 import type { ClientInstanceEnv } from "./env";
 
 /**

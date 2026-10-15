@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { readWorkflowManifest } from "@vivd-catalyst/client-assembly";
+import { readWorkflowManifest } from "@work-shape/catalyst-client-assembly";
 import {
   CONNECTION_KIND,
   WORKFLOWS_MODULE,

@@ -3,7 +3,7 @@ import {
   type ConversationOffer,
   type ConversationSubject,
   type LocaleCode
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 /**
  * The platform's rules, the opening of every agent's system prompt. They ship with the release

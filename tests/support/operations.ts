@@ -10,7 +10,7 @@ import {
   listQuerySchema,
   timestampSchema,
   type BuildApiPathOptions
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 
 // The sign-in library's mount, the worker's private transport and routes a test adds itself
 // are not catalog operations.

@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { useId } from "react";
-import { Button, Field, IconButton, Input, RadioGroup } from "@vivd-catalyst/ui";
+import { Button, Field, IconButton, Input, RadioGroup } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
   CONNECTION_AUTH_CHOICES,

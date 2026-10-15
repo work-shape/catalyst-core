@@ -1,4 +1,4 @@
-import type { SafeConfigConnection } from "@vivd-catalyst/config-schema";
+import type { SafeConfigConnection } from "@work-shape/catalyst-config-schema";
 import type { ChatServerOptions } from "./types";
 
 /**

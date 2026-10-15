@@ -1,6 +1,6 @@
 import { code, type HighlightOptions, type HighlightResult } from "@streamdown/code";
 import { useEffect, useState } from "react";
-import type { CodeToken } from "@vivd-catalyst/ui";
+import type { CodeToken } from "@work-shape/catalyst-ui";
 
 /**
  * The one highlighter of the interface: the Shiki plugin the chat's Markdown draws its code

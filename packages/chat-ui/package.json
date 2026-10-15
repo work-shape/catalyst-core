@@ -1,12 +1,7 @@
 {
-  "name": "@vivd-catalyst/chat-ui",
+  "name": "@work-shape/catalyst-chat-ui",
   "version": "0.7.0",
   "license": "UNLICENSED",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
-    "directory": "packages/chat-ui"
-  },
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -84,10 +79,10 @@
     "@univerjs/sheets-drawing": "0.25.1",
     "@univerjs/sheets-drawing-ui": "0.25.1",
     "@univerjs/ui": "0.25.1",
-    "@vivd-catalyst/api-client": "workspace:*",
-    "@vivd-catalyst/config-schema": "workspace:*",
-    "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/ui": "workspace:*",
+    "@work-shape/catalyst-api-client": "workspace:*",
+    "@work-shape/catalyst-config-schema": "workspace:*",
+    "@work-shape/catalyst-core": "workspace:*",
+    "@work-shape/catalyst-ui": "workspace:*",
     "ai": "^6.0.199",
     "echarts": "6.1.0",
     "exceljs": "4.4.0",

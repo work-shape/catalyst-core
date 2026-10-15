@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { seedShippedSkills } from "@vivd-catalyst/chat-server";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import { seedShippedSkills } from "@work-shape/catalyst-server";
+import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 

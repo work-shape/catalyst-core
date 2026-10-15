@@ -1,5 +1,5 @@
 import { posix as posixPath } from "node:path";
-import { resolveUploadFileContent } from "@vivd-catalyst/capability-sdk";
+import { resolveUploadFileContent } from "@work-shape/catalyst-capability-sdk";
 import {
   AppError,
   asConversationAttachmentId,
@@ -18,12 +18,12 @@ import {
   type PlatformFileStore,
   readObjectBytes,
   type ObjectStorage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type {
   ClientInstanceAttachmentHandler,
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
-import { EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE } from "@vivd-catalyst/tool-execution";
+import { EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE } from "@work-shape/catalyst-tool-execution";
 
 const WORKSPACE_SOURCE_ATTACHMENT_KIND = "workspace_source";
 const WORKSPACE_SOURCE_METADATA_SOURCE = "execution_workspace_source";

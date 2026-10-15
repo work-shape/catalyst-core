@@ -4,7 +4,7 @@ import {
   normalizeAuthenticatedUser,
   type AuthenticatedIdentity,
   type UserStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { AuthAdapter, AuthRequest } from "./types";
 
 export interface IdentityResolvingAuthAdapterOptions {

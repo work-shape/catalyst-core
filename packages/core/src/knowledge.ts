@@ -1,4 +1,4 @@
-import type { AgentConfig } from "@vivd-catalyst/asset-schemas";
+import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
 import type { ActorAccess } from "./permissions";
 import type { DataStoreRows, DataStoreStatement } from "./data-stores";
@@ -9,7 +9,7 @@ import type { ISODateString } from "./time";
 // The names and shapes of a Knowledge Base that more than one package reads: the asset kind,
 // the operations of one Knowledge Base, the one agent tool over all of an agent's, the port a
 // backend answers through and what the platform keeps of the last check. The kind itself is
-// in `@vivd-catalyst/data-stores`, beside its only backend so far, the Data Store.
+// in `@work-shape/catalyst-data-stores`, beside its only backend so far, the Data Store.
 // Spec: data-stores-and-knowledge-bases.md, Knowledge Base on top, Retrieval methods,
 // Assigning knowledge bases to an agent.
 //

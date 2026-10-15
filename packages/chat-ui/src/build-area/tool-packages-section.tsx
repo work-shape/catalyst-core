@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Asset, ConfigAssetReferences, ToolGroupName } from "@vivd-catalyst/api-client";
+import type { Asset, ConfigAssetReferences, ToolGroupName } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
   cn
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { connectionCategory } from "../connection-facts";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useModuleName } from "../module-texts";

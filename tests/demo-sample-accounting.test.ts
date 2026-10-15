@@ -3,13 +3,13 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
+import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
 import {
   compileJsonSchema,
   MCP_CALL_TIMEOUT_MS,
   MCP_RESULT_MAX_BYTES
-} from "@vivd-catalyst/connections";
-import { isJsonObject, unknownToJsonValue } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-connections";
+import { isJsonObject, unknownToJsonValue } from "@work-shape/catalyst-core";
 import {
   ACCOUNTING_DEFAULT_PAGE_SIZE,
   ACCOUNTING_MAXIMUM_PAGE_SIZE,
@@ -18,7 +18,7 @@ import {
   connectSampleMcpClient,
   createSampleMcpServer,
   SIZE_GROUPS
-} from "@vivd-catalyst/demo/sample-mcp";
+} from "@work-shape/catalyst-demo/sample-mcp";
 import { required } from "./support/assertions";
 import {
   clientIdsOf,

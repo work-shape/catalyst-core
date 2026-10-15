@@ -16,7 +16,7 @@ import {
   INTERRUPTED_RUN_ERROR,
   type OperationRun,
   type OperationRunStore
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
 import type { PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";

@@ -4,7 +4,7 @@ import {
   reasonForEvent,
   type AuditEvent,
   type AuditActor
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 let sequence = 0;
 

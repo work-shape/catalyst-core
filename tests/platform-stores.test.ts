@@ -4,7 +4,7 @@ import {
   asConversationId,
   type ClientInstanceId,
   type PlatformStores
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { usePostgresSuite } from "./support/postgres-suite";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 

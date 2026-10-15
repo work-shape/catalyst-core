@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-client";
+import type { ConnectionDetail, ConnectionTestResult } from "@work-shape/catalyst-api-client";
 import {
   ConnectionCreateFlow,
   DISCOVERY_WAIT_MS,
@@ -14,7 +14,7 @@ import {
   type ConnectCalls,
   type ConnectMemory,
   type ConnectionSource
-} from "@vivd-catalyst/chat-ui/build-area";
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { connectionDetail } from "./chat-ui-connection-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

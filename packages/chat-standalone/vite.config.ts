@@ -1,6 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { vivdCatalystChatUiPlugin } from "@vivd-catalyst/chat-ui/vite";
+import { vivdCatalystChatUiPlugin } from "@work-shape/catalyst-chat-ui/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({

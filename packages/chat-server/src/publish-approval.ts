@@ -14,7 +14,7 @@ import {
   type OperationOrigin,
   type PagesStore,
   type PlatformAction
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { APP_ACTIONS, APP_ASSET_KIND } from "./apps/app-kind";
 import type { AssetTarget } from "./asset-target";

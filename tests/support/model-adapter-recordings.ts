@@ -9,12 +9,12 @@ import {
   type ModelProviderConfig,
   type ProviderCheckResult,
   type SecretResolver
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   modelProviderDefinitions,
   type ModelAdapter,
   type ModelAdapterFactory
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 import { bedrockChunk } from "./bedrock-event-stream";
 import { silentTestLogger } from "./model-gateway";
 

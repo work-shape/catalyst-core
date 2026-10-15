@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { AssetRepoCommitRunner } from "@vivd-catalyst/chat-server";
-import { isOperationRunId, isPageId, readObjectBytes } from "@vivd-catalyst/core";
+import type { AssetRepoCommitRunner } from "@work-shape/catalyst-server";
+import { isOperationRunId, isPageId, readObjectBytes } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import {
   appFiles,

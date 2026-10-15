@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { collaborationWorkspaceAgentsSchema } from "@vivd-catalyst/api-contract";
-import type { AgentAvailability } from "@vivd-catalyst/core";
+import { collaborationWorkspaceAgentsSchema } from "@work-shape/catalyst-api-contract";
+import type { AgentAvailability } from "@work-shape/catalyst-core";
 import {
   SCOPES_HEADER,
   clientInstanceId,

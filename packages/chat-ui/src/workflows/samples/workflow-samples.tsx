@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
-import { UiRoot, type UiRootProps } from "@vivd-catalyst/ui";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import { UiRoot, type UiRootProps } from "@work-shape/catalyst-ui";
 import { TranslationProvider } from "../../i18n";
 import { uiLabelsFor } from "../../ui-labels";
 import type { WorkspaceRoute } from "../../workspace/workspace-route";

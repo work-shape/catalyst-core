@@ -2,7 +2,7 @@ import type {
   PostgresChangeInput,
   PostgresChangeStatements,
   PostgresTarget
-} from "@vivd-catalyst/postgres-connector";
+} from "@work-shape/catalyst-postgres-connector";
 import {
   AppError,
   type DataStoreOperationVerb,
@@ -11,7 +11,7 @@ import {
   type OperationChangeClass,
   type OperationEffect,
   type OperationResource
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { z } from "zod";
 import { claimCall, recordCall, type KeyedCall } from "./calls";
 import type { DataStoreDefinition } from "./definition";

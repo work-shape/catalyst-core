@@ -11,7 +11,7 @@ import {
   type JsonObject,
   type PlatformEventContext,
   type PlatformEventEmitter
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { GuardrailCallContext, GuardrailRunner } from "../guardrail-runner";
 
 const AUDIT_STATUSES: readonly AuditEventStatus[] = ["success", "failed", "denied"];

@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Checkbox, Field, Input, Select } from "@vivd-catalyst/ui";
+import { Checkbox, Field, Input, Select } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import {
   PERSONAL_KEY_EXPIRY_DAYS,

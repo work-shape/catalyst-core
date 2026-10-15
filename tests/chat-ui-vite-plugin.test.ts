@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { vivdCatalystChatUiPlugin } from "@vivd-catalyst/chat-ui/vite";
+import { vivdCatalystChatUiPlugin } from "@work-shape/catalyst-chat-ui/vite";
 
 const cleanupDirectories: string[] = [];
 

@@ -5,7 +5,7 @@ import {
   CONNECTION_NAME_PATTERN,
   type ConnectionExposure,
   type ConnectionHealth
-} from "@vivd-catalyst/asset-schemas";
+} from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindSchema, AssetValidationIssue } from "./asset-kinds";
 import { AppError } from "./errors";
 import { createPlatformId, type ClientInstanceId } from "./ids";

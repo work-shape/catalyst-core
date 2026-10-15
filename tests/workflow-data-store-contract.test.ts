@@ -1,7 +1,10 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { platformModules } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig, resolveModuleSwitches } from "@vivd-catalyst/config-schema";
-import { connectionExposureDenial } from "@vivd-catalyst/connections";
+import { platformModules } from "@work-shape/catalyst-client-assembly";
+import {
+  parseClientInstanceConfig,
+  resolveModuleSwitches
+} from "@work-shape/catalyst-config-schema";
+import { connectionExposureDenial } from "@work-shape/catalyst-connections";
 import {
   ACTIONS,
   CONNECTION_EXPOSURES,
@@ -92,9 +95,9 @@ import {
   type WorkflowStepType,
   type WorkflowTrigger,
   type WorkflowTriggerKind
-} from "@vivd-catalyst/core";
-import { dataStoresModule, knowledgeModule } from "@vivd-catalyst/data-stores";
-import { workflowsModule } from "@vivd-catalyst/workflows";
+} from "@work-shape/catalyst-core";
+import { dataStoresModule, knowledgeModule } from "@work-shape/catalyst-data-stores";
+import { workflowsModule } from "@work-shape/catalyst-workflows";
 import { createTestConfig } from "./support/fixtures";
 
 // The names two lines of work build on side by side: Workflows and Data Stores. Each test

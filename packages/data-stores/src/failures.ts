@@ -1,5 +1,5 @@
-import { PostgresExecutorError } from "@vivd-catalyst/postgres-connector";
-import { AppError, type AppErrorCode } from "@vivd-catalyst/core";
+import { PostgresExecutorError } from "@work-shape/catalyst-postgres-connector";
+import { AppError, type AppErrorCode } from "@work-shape/catalyst-core";
 
 // What a failure of a store's database is told as. The database's own message can quote a row
 // value, so none is passed on: a failure is a fixed sentence for its SQLSTATE, with the code.

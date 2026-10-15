@@ -4,6 +4,8 @@
 // only and names no host.
 
 export const APP_KIT_PACKAGE = "@work-shape/catalyst-app-kit";
+// Stored Page source keeps the import names used before the package scope changed.
+const LEGACY_APP_KIT_PACKAGE = ["@vivd", "catalyst/app-kit"].join("-");
 
 /**
  * Every kit version this release can build against. A release that ships a kit version adds it
@@ -46,6 +48,10 @@ export const KIT_RUNTIME_PATH = "/app-runtime/kit";
 
 /** The kit file each import name is answered from. */
 const KIT_IMPORT_FILES: Readonly<Record<string, string>> = {
+  [LEGACY_APP_KIT_PACKAGE]: KIT_CLIENT_FILE,
+  [`${LEGACY_APP_KIT_PACKAGE}/ui`]: "ui.js",
+  [`${LEGACY_APP_KIT_PACKAGE}/charts`]: "charts.js",
+  [`${LEGACY_APP_KIT_PACKAGE}/router`]: "router.js",
   [APP_KIT_PACKAGE]: KIT_CLIENT_FILE,
   [`${APP_KIT_PACKAGE}/ui`]: "ui.js",
   [`${APP_KIT_PACKAGE}/charts`]: "charts.js",
@@ -58,7 +64,9 @@ const KIT_IMPORT_FILES: Readonly<Record<string, string>> = {
 };
 
 /** The names a Page may import that are not its own files. */
-export const KIT_IMPORT_NAMES: readonly string[] = Object.keys(KIT_IMPORT_FILES);
+export const KIT_IMPORT_NAMES: readonly string[] = Object.keys(KIT_IMPORT_FILES).filter(
+  (name) => name !== LEGACY_APP_KIT_PACKAGE && !name.startsWith(`${LEGACY_APP_KIT_PACKAGE}/`)
+);
 
 /** The address of one file of a kit version. */
 export function kitFilePath(kitVersion: string, file: string): string {

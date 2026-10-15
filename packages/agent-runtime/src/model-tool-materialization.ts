@@ -7,12 +7,12 @@ import {
   type DataToolSource,
   type ToolDescriptor,
   type WebAccessConfig
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   type ModelCapabilities,
   type ModelTool
-} from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-model-provider";
 
 export interface ModelToolRegistryView {
   listDescriptorsForAgent(toolNames: readonly string[]): ToolDescriptor[];

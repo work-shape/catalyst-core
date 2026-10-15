@@ -17,7 +17,7 @@ import {
   asCollaborationWorkspaceId,
   asConversationId,
   createPlatformId
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig, seedConversationMessage } from "./support/fixtures";
 import { createMultipartFilePayload } from "./support/chat-server-attachment-harness";
 

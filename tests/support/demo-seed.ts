@@ -9,22 +9,22 @@ import {
   listAll,
   signInForSessionFetch,
   type ApiClient
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   createPageBundleJobs,
   createSandboxPageBuild,
   type PageBuildRunner
-} from "@vivd-catalyst/chat-server";
+} from "@work-shape/catalyst-server";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile
-} from "@vivd-catalyst/config-schema";
-import type { JobWorker, Logger } from "@vivd-catalyst/core";
-import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
-import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
-import { LocalWorkspaceCommandProcessExecutor } from "@vivd-catalyst/tool-execution";
-import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
-import { checkAsset, checkedAssetId } from "@vivd-catalyst/chat-ui/access";
+} from "@work-shape/catalyst-config-schema";
+import type { JobWorker, Logger } from "@work-shape/catalyst-core";
+import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
+import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
+import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
+import type { ToolAssemblyDefinition } from "@work-shape/catalyst-tool-sdk";
+import { checkAsset, checkedAssetId } from "@work-shape/catalyst-chat-ui/access";
 import {
   SEED_EMAIL_SUFFIX,
   checkQuestions,
@@ -37,7 +37,7 @@ import {
   workflowCheckQuestions,
   type CheckReason,
   type SeedReport
-} from "@vivd-catalyst/demo/seed";
+} from "@work-shape/catalyst-demo/seed";
 import { pageBuildCommandFromSource } from "./page-build";
 import { createTestInstance, getTestRuntime } from "./test-instance";
 

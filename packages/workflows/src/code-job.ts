@@ -7,8 +7,8 @@ import {
   type WorkflowCodeOutcome,
   type WorkflowStepRunLog,
   type WorkflowStepRunRef
-} from "@vivd-catalyst/core";
-import type { WorkspaceCommandProcessExecutor } from "@vivd-catalyst/tool-execution";
+} from "@work-shape/catalyst-core";
+import type { WorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
 import { createCodeSandbox, type CodeSandboxOptions } from "./code-sandbox";
 import { WORKFLOW_CODE_ERRORS } from "./code-step";
 import { WORKFLOW_STEP_DATA_MAX_BYTES } from "./limits";

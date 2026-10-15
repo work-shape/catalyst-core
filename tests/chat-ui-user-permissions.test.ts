@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { AdministeredUser } from "@vivd-catalyst/api-client";
-import { resolveEffectivePermissions, type Permission } from "@vivd-catalyst/core";
+import type { AdministeredUser } from "@work-shape/catalyst-api-client";
+import { resolveEffectivePermissions, type Permission } from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import {
   USER_PERMISSIONS,

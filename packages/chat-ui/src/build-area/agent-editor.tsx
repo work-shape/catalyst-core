@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import type {
   AdministeredCollaborationWorkspace,
   ConfigAssetReferences
-} from "@vivd-catalyst/api-client";
+} from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
@@ -19,7 +19,7 @@ import {
   SkillIcon,
   Switch,
   Textarea
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { modelDisplayLabel } from "../model-label";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";

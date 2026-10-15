@@ -2,9 +2,9 @@ import {
   createJobWorker,
   createSandbox,
   createSandboxCheckJobs
-} from "@vivd-catalyst/client-assembly";
-import { getClientInstanceId } from "@vivd-catalyst/config-schema";
-import { JOB_WORKER_SILENT_MS } from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-client-assembly";
+import { getClientInstanceId } from "@work-shape/catalyst-config-schema";
+import { JOB_WORKER_SILENT_MS } from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
 import { required } from "./support/assertions";
 import {

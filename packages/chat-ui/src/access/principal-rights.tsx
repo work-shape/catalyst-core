@@ -1,6 +1,6 @@
 import { Box, Plus } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
-import type { AssetSummary } from "@vivd-catalyst/api-client";
+import type { AssetSummary } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Banner,
@@ -20,7 +20,7 @@ import {
   RegistryIcon,
   Section,
   SkeletonList
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import {
   grantableResources,
   principalGrantFailure,

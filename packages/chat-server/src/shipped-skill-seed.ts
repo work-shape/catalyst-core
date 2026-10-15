@@ -1,4 +1,4 @@
-import { skillConfigSchema } from "@vivd-catalyst/config-schema";
+import { skillConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   createPlatformId,
@@ -10,7 +10,7 @@ import {
   type JsonObject,
   type PlatformStores,
   type ShippedSkill
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { configValuesEqual, readDefinitionField } from "./asset-kinds/shared";
 
 // The seed of the skills that ship with the platform. When the API process starts it makes the

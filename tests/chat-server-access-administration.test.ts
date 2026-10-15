@@ -8,9 +8,9 @@ import {
   createAuthorizer,
   type AuthenticatedUser,
   type UserRole
-} from "@vivd-catalyst/core";
-import { ToolRegistry } from "@vivd-catalyst/tool-execution";
-import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+} from "@work-shape/catalyst-core";
+import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import {
   SERVICE_HEADER,
   agent,

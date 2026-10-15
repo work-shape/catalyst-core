@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { agentConfigSchema } from "@vivd-catalyst/config-schema";
-import { assetSchema } from "@vivd-catalyst/api-contract";
-import { createLogger } from "@vivd-catalyst/client-assembly";
+import { agentConfigSchema } from "@work-shape/catalyst-config-schema";
+import { assetSchema } from "@work-shape/catalyst-api-contract";
+import { createLogger } from "@work-shape/catalyst-client-assembly";
 import {
   asClientInstanceId,
   isJsonObject,
   unknownToJsonValue,
   type JsonObject
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";

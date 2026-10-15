@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createWorkspaceToolDefinitions } from "@vivd-catalyst/tool-execution";
+import { createWorkspaceToolDefinitions } from "@work-shape/catalyst-tool-execution";
 import { createTestInstance } from "./support/test-instance";
 
 describe("workspace tool definitions", () => {

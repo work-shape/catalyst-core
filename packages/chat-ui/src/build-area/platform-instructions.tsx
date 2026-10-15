@@ -1,5 +1,10 @@
-import type { ConfigAssetReferences } from "@vivd-catalyst/api-client";
-import { CodeBlock, Disclosure, DisclosureContent, DisclosureTrigger } from "@vivd-catalyst/ui";
+import type { ConfigAssetReferences } from "@work-shape/catalyst-api-client";
+import {
+  CodeBlock,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 
 type Instructions = NonNullable<ConfigAssetReferences["platformInstructions"]>;

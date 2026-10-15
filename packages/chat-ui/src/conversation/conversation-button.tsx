@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
 import { Clock, FolderInput, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
+import type { ConversationListItem, SafeConfig } from "@work-shape/catalyst-api-client";
 import {
   Button,
   cn,
@@ -13,7 +13,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger
-} from "@vivd-catalyst/ui";
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../i18n";
 import { retentionWarningDate, retentionWarningText } from "./retention-warning";
 

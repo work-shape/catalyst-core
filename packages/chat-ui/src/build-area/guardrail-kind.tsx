@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Badge } from "@vivd-catalyst/ui";
+import { Badge } from "@work-shape/catalyst-ui";
 import type {
   BuildAssetViewProps,
   BuildListedKind,

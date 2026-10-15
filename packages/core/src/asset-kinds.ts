@@ -1,4 +1,4 @@
-import { isStorableText } from "@vivd-catalyst/asset-schemas";
+import { isStorableText } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 import type { CollaborationWorkspaceId } from "./ids";
 import type { LocaleCode } from "./localization";

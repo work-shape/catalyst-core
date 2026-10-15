@@ -9,8 +9,8 @@ import { createServer as createHttpsServer } from "node:https";
 import type { Socket } from "node:net";
 import { TLSSocket } from "node:tls";
 import { z } from "zod";
-import { createEgressChecker, type EgressAllowEntry } from "@vivd-catalyst/connections";
-import { AppError, type JsonObject, type Logger } from "@vivd-catalyst/core";
+import { createEgressChecker, type EgressAllowEntry } from "@work-shape/catalyst-connections";
+import { AppError, type JsonObject, type Logger } from "@work-shape/catalyst-core";
 
 // An MCP server over Streamable HTTP, in this process, for the tests of the `mcp` Connector
 // type. It is written by hand and shares no code with the client it tests: it speaks the

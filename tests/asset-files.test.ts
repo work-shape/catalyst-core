@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { APP_BUILD_WAIT_MS, ASSET_PUT_BODY_LIMIT_BYTES } from "@vivd-catalyst/chat-server";
-import { ASSET_PUT_FILES_MAX_BYTES, isFileSetId } from "@vivd-catalyst/core";
+import { APP_BUILD_WAIT_MS, ASSET_PUT_BODY_LIMIT_BYTES } from "@work-shape/catalyst-server";
+import { ASSET_PUT_FILES_MAX_BYTES, isFileSetId } from "@work-shape/catalyst-core";
 import { SERVICE_HEADER, clientInstanceId, errorSchema } from "./support/access-instance";
 import {
   appFiles,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { resolveTrustedOrigins } from "../packages/client-assembly/src/auth";
 
 describe("client instance standalone auth trusted origins", () => {

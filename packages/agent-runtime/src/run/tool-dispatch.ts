@@ -4,8 +4,8 @@ import type {
   RuntimeCallContext,
   StartAgentRunInput,
   ToolExecutionResult
-} from "@vivd-catalyst/core";
-import type { ModelMessage, ModelToolCall } from "@vivd-catalyst/model-provider";
+} from "@work-shape/catalyst-core";
+import type { ModelMessage, ModelToolCall } from "@work-shape/catalyst-model-provider";
 import { executeToolCall } from "../tool-call-execution";
 import { isUnofferedDataToolCall } from "../model-tool-materialization";
 import {

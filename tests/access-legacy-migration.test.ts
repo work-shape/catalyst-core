@@ -1,6 +1,6 @@
 import postgres, { type Sql } from "postgres";
 import { afterEach, describe, expect, inject, it } from "vitest";
-import { deriveEffectiveServiceGrants } from "@vivd-catalyst/auth";
+import { deriveEffectiveServiceGrants } from "@work-shape/catalyst-auth";
 import {
   LEGACY_LIST_GRANTOR,
   PERMISSIONS,
@@ -10,8 +10,8 @@ import {
   asUserId,
   createAuthorizer,
   legacyGrantRows
-} from "@vivd-catalyst/core";
-import { migrateDatabase } from "@vivd-catalyst/postgres-store";
+} from "@work-shape/catalyst-core";
+import { migrateDatabase } from "@work-shape/catalyst-postgres-store";
 import {
   frozenHasPermission,
   frozenLegacyFunctions,

@@ -1,5 +1,12 @@
-import { AppError, type AssetValidationIssue, type ConfigAssetRecord } from "@vivd-catalyst/core";
-import { findDefaultAgentReferenceIssues, findDuplicates } from "@vivd-catalyst/config-schema";
+import {
+  AppError,
+  type AssetValidationIssue,
+  type ConfigAssetRecord
+} from "@work-shape/catalyst-core";
+import {
+  findDefaultAgentReferenceIssues,
+  findDuplicates
+} from "@work-shape/catalyst-config-schema";
 import {
   configValuesEqual,
   readDefinitionName,

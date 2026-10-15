@@ -7,9 +7,9 @@ import { defineConfig } from "tsup";
  * fails the release when another package reaches the bundle.
  */
 const BUNDLED_WORKSPACE_PACKAGES = [
-  "@vivd-catalyst/asset-schemas",
-  "@vivd-catalyst/api-contract",
-  "@vivd-catalyst/api-client"
+  "@work-shape/catalyst-asset-schemas",
+  "@work-shape/catalyst-api-contract",
+  "@work-shape/catalyst-api-client"
 ];
 
 export default defineConfig({

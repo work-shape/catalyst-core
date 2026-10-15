@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { createTestFetch, type TestInstance } from "./support/test-instance";
 import { world, runJobs } from "./support/connection-discovery-world";
 import { generateTestSecret } from "./support/test-connector";

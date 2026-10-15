@@ -8,7 +8,7 @@ import {
   type JobSchedule,
   type PlatformStores,
   type RegisteredJobHandler
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 
 // Run data is bounded. A run and its step runs stay as long as the instance keeps its audit
 // events: status, times, counts and error codes. The values they carry do not: the inputs and

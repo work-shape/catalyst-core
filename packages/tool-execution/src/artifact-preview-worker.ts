@@ -22,7 +22,7 @@ import {
   type RegisteredJobHandler,
   readObjectBytes,
   type ObjectStorage
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import { readArtifactPreviewSettingsHash } from "./artifact-preview-settings";
 import {
   LibreOfficeArtifactPreviewRenderer,

@@ -3,7 +3,7 @@ import type {
   ConnectionStateRecord,
   ConnectionsStore,
   StoredSecretRecord
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "../postgres-database";
 import { connectionState, secrets } from "../schema";
 

@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import type { HttpRuntime } from "@vivd-catalyst/core";
+import type { HttpRuntime } from "@work-shape/catalyst-core";
 
 /**
  * What the runtime needs from the server it wraps. A service hands its web framework's server

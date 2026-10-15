@@ -4,7 +4,7 @@ import {
   type CollaborationWorkspace,
   type CollaborationWorkspaceStore,
   type WorkspaceInDeletion
-} from "@vivd-catalyst/core";
+} from "@work-shape/catalyst-core";
 import {
   lockWorkspaceForHardDelete,
   notInDeletion,

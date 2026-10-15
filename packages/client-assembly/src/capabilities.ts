@@ -8,4 +8,4 @@ export type {
   ClientInstanceManagedObjectReader,
   ClientInstanceManagedObjectReaderContribution,
   ManagedObjectAccessFactory
-} from "@vivd-catalyst/capability-sdk";
+} from "@work-shape/catalyst-capability-sdk";
