@@ -1,7 +1,5 @@
 import {
   AppError,
-  INSTANCE_ASSET_SCOPE,
-  asCollaborationWorkspaceId,
   asUserId,
   findNamespaceOfAssetName,
   getSubjectUserId,
@@ -24,7 +22,13 @@ import { resolveConfigLocale } from "@vivd-catalyst/config-schema";
 import { accessResource, decide, type AssetCall } from "./asset-access";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
-import { notFound, requireActive, type AssetAddress, type AssetTarget } from "./asset-target";
+import {
+  notFound,
+  requireActive,
+  scopeOf,
+  type AssetAddress,
+  type AssetTarget
+} from "./asset-target";
 import type { AssetWorkflowOptions } from "./types";
 
 /** How many assets a list reads where its caller names no page. */
@@ -444,12 +448,6 @@ function pointersOf(kind: WorkflowAssetKind, asset: ConfigAssetRecord) {
     draftRevision: asset.revision,
     ...(published === undefined ? {} : { publishedRevision: published })
   };
-}
-
-export function scopeOf(workspaceId: string | undefined): AssetScope {
-  return workspaceId === undefined
-    ? INSTANCE_ASSET_SCOPE
-    : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(workspaceId) };
 }
 
 /** Whether the asset has a revision its users are served. */

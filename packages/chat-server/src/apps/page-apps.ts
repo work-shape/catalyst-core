@@ -14,8 +14,7 @@ import {
 import type { AssetCall } from "../asset-access";
 import type { PageRevisionOrigin } from "../asset-draft-workflow";
 import { fileSetWriteEvent } from "../asset-guardrail-events";
-import { scopeOf } from "../asset-read-workflow";
-import { recordAssetEvent } from "../asset-target";
+import { recordAssetEvent, scopeOf } from "../asset-target";
 import { AssetWorkflow } from "../asset-workflow";
 import type { AssetWorkflowOptions } from "../types";
 import { appConfigOf } from "./app-kind";

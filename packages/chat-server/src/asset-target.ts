@@ -1,5 +1,8 @@
 import {
   AppError,
+  INSTANCE_ASSET_SCOPE,
+  asCollaborationWorkspaceId,
+  assetScopesEqual,
   assetNameIssue,
   auditActorFromIdentity,
   type AccessResource,
@@ -43,6 +46,45 @@ export interface AssetTarget {
   resource: AccessResource;
   /** The address the target was read for. */
   address: AssetAddress;
+}
+
+export function scopeOf(workspaceId: string | undefined): AssetScope {
+  return workspaceId === undefined
+    ? INSTANCE_ASSET_SCOPE
+    : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(workspaceId) };
+}
+
+/** Resolves a name once, keeping another owner's row out of the requested scope. */
+export async function resolveAssetTarget(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
+  kind: WorkflowAssetKind,
+  address: AssetAddress
+): Promise<AssetTarget> {
+  const scope = scopeOf(address.workspaceId);
+  const row =
+    address.name === ""
+      ? undefined
+      : await options.configAssets.store.getConfigAsset({
+          clientInstanceId: options.clientInstanceId,
+          kind: kind.kind,
+          name: address.name
+        });
+  // A deleted asset keeps its row, its revisions and the deny rows on it, so its history and
+  // its name are decided with the same id as before the delete. A row of another scope is
+  // not this call's asset: its id is no part of what the right is decided on.
+  const asset = row && assetScopesEqual(row.scope, scope) ? row : undefined;
+  return {
+    kind,
+    name: address.name,
+    scope,
+    ...(asset ? { asset } : {}),
+    elsewhere: row !== undefined && asset === undefined,
+    ...(row !== undefined && asset === undefined
+      ? { other: { id: row.id, scope: row.scope } }
+      : {}),
+    resource: accessResource(kind.kind, address.name, scope, asset?.id),
+    address
+  };
 }
 
 export function requireActive(target: AssetTarget): ConfigAssetRecord & { config: JsonObject } {
