@@ -2,13 +2,13 @@ import {
   AppError,
   isAuthenticatedServicePrincipal,
   operationDenialError,
-  requireHeldRights,
   type ActorAccess,
   type ApiAccessStore,
   type AuthenticatedIdentity,
   type ServicePrincipalRecord
 } from "@vivd-catalyst/core";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
+import { requireHeldRightsWithin } from "./held-rights-within";
 import { RELEASE_KEY, principalRights, type PrincipalRightsOptions } from "./principal-rights";
 
 /** What the check reads: the principals of one instance by name, and the rights they hold. */
@@ -58,7 +58,9 @@ export async function requireWorkflowRunAs(
       message: `The Workflow '${input.workflow}' acts as '${principal.displayLabel}', which holds '${RELEASE_KEY}'. No Workflow runs as a principal that releases config, so nobody publishes it`
     });
   }
-  requireHeldRights(caller.access, rights, { lends: { label: principal.displayLabel } });
+  await requireHeldRightsWithin(options, caller.access, rights, {
+    lends: { label: principal.displayLabel }
+  });
   return principal;
 }
 

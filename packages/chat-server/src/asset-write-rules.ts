@@ -281,7 +281,8 @@ export function accessOfSyncCredential(
       access.require(action, resource);
     },
     holdsGrantAt: (action, scopeKinds) =>
-      action !== RELEASE_ACTION && access.holdsGrantAt(action, scopeKinds)
+      action !== RELEASE_ACTION && access.holdsGrantAt(action, scopeKinds),
+    denials: (action) => access.denials(action)
   };
 }
 
