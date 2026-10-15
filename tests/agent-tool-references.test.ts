@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { configAssetReferencesSchema, toolGroupSchema } from "@vivd-catalyst/api-contract";
@@ -6,7 +9,7 @@ import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { TOOL_GROUPS } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { createTestConfig } from "./support/fixtures";
-import { createTestInstance } from "./support/test-instance";
+import { createTestInstance, getTestExecution } from "./support/test-instance";
 
 // What the agent page reads about the tools it offers (TOOLS-1): each tool's title, summary,
 // group, icon and effect from its registered definition, and the module whose switch governs
@@ -94,6 +97,57 @@ describe("the tools the agent page is told of", () => {
       }),
       { name: "unknown.tool" }
     ]);
+  });
+
+  // The agent page shows a tool without a title by its id, and one without a group among the
+  // instance's own: a tool the platform ships carries both, so neither happens to it.
+  it("has a title and a group on every tool the platform ships", async () => {
+    const workspaceObjectRoot = await mkdtemp(join(tmpdir(), "catalyst-tool-references-"));
+    // Everything that adds tools is on, so that the registry holds every tool of the platform.
+    const config = createTestConfig({
+      executionWorkspaces: { enabled: true },
+      workspaceObjectRoot,
+      webAccess: { enabled: true, fetch: { enabled: true } }
+    });
+    config.administration.agentConfiguration.agentSkillChanges.enabled = true;
+    config.modules.apps = { enabled: true };
+    config.modules.assetManagement = { enabled: true };
+    config.modules.connections = { enabled: true };
+    config.infrastructure.objectStorage.files = {
+      provider: "filesystem",
+      root: join(workspaceObjectRoot, "files")
+    };
+    const assembly = await createTestInstance({
+      // The apps module signs what serves a Page with a key from this name.
+      execution: {
+        config,
+        tools: [],
+        env: { CHAT_SESSION_TOKEN_SECRET: "tool-references-test-".repeat(2) }
+      }
+    }).then(getTestExecution);
+    try {
+      const tools = assembly.localAgentRuntimeOptions.toolRegistry.listDefined();
+      expect(tools.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining([
+          "show_view",
+          "page.save",
+          "workspace.exec",
+          "structured_data.publish",
+          "web_fetch",
+          "read_skill",
+          "propose_skill_change",
+          "platform.assets.put",
+          "platform.connections.draft_tools"
+        ])
+      );
+      const untold = tools
+        .filter((tool) => !tool.title?.en || !tool.title.de || !tool.group)
+        .map((tool) => tool.name);
+      expect(untold).toEqual([]);
+    } finally {
+      await assembly.close();
+      await rm(workspaceObjectRoot, { recursive: true, force: true });
+    }
   });
 
   it("knows the same groups on both sides of the API", () => {
