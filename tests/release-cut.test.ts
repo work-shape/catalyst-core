@@ -9,7 +9,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { checkCurrentVersion, cut } from "../scripts/release/cut.mjs";
 import { repoRoot } from "../scripts/release/changelog.mjs";
@@ -226,10 +226,10 @@ describe("release:cut", () => {
 
   it("requires a companion and refuses current version drift before editing", () => {
     const core = fixture();
-    const companion = fixture("0.6.0");
+    const companion = fixture("0.1.0");
     expect(() => cut(["0.8.0"], core)).toThrow("--root");
     expect(() => cut(["0.8.0", "--root", companion], core)).toThrow(
-      "must share one current version"
+      "Core and capabilities must share one current version; found 0.7.0, 0.1.0."
     );
     for (const root of [core, companion]) {
       expect(git(root, "status", "--porcelain")).toBe("");
@@ -345,31 +345,23 @@ if (!staged.includes("package.json")) process.exit(1);
   );
 });
 
-const companionRoot = resolve(repoRoot, "../capabilities");
-
 describe("real repository release versions", () => {
-  // A standalone core checkout has no private companion. In the two-repo workspace both run.
-  for (const roots of [[repoRoot], [repoRoot, companionRoot]]) {
-    it.skipIf(roots.length === 2 && !existsSync(join(companionRoot, "package.json")))(
-      `checks ${roots.length === 2 ? "both real repositories" : "real core"} without writes`,
-      () => {
-        const snapshot = () =>
-          roots.map((root) => ({
-            head: git(root, "rev-parse", "HEAD"),
-            status: git(root, "status", "--porcelain"),
-            manifests: git(root, "ls-files", "*package.json")
-              .split("\n")
-              .map((path) => read(root, path))
-          }));
-        const before = snapshot();
-        const current = JSON.parse(read(repoRoot, "package.json")).version;
-        expect(current).toEqual(expect.any(String));
-        expect(checkCurrentVersion(roots)).toBe(current);
-        // Audit all tracked manifests, including private tooling and repository roots.
-        for (const repository of before)
-          for (const text of repository.manifests) expect(JSON.parse(text).version).toBe(current);
-        expect(snapshot()).toEqual(before);
-      }
-    );
-  }
+  // Paired PRs land core first. Cross-repository equality is a cut precondition,
+  // covered with fixtures above, not a dependency on capabilities main in core CI.
+  it("checks real core without writes", () => {
+    const snapshot = () => ({
+      head: git(repoRoot, "rev-parse", "HEAD"),
+      status: git(repoRoot, "status", "--porcelain"),
+      manifests: git(repoRoot, "ls-files", "*package.json")
+        .split("\n")
+        .map((path) => read(repoRoot, path))
+    });
+    const before = snapshot();
+    const current = JSON.parse(read(repoRoot, "package.json")).version;
+    expect(current).toEqual(expect.any(String));
+    expect(checkCurrentVersion([repoRoot])).toBe(current);
+    // Audit all tracked manifests, including private tooling and the repository root.
+    for (const text of before.manifests) expect(JSON.parse(text).version).toBe(current);
+    expect(snapshot()).toEqual(before);
+  });
 });
