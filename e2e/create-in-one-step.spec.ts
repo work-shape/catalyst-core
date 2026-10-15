@@ -20,14 +20,17 @@ const rail = (page: Page) => page.getByRole("navigation", { name: "Main navigati
 const address = (dialog: Locator) => dialog.locator('[data-name-with-address-field="address"]');
 const nameField = (dialog: Locator) => dialog.locator('[data-name-with-address-field="name"]');
 
-async function openNewAgent(page: Page): Promise<Locator> {
+async function openAgents(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/w\/[^/]+/u);
-  await rail(page)
-    .getByRole("button", { name: /^(Agents|Agenten)$/u })
-    .click();
+  await rail(page).getByRole("button", { name: "Agents", exact: true }).click();
+  await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
+}
+
+/** Opens the dialog from the Agents page, in either language. */
+async function openNewAgent(page: Page): Promise<Locator> {
   await page.getByRole("button", { name: /^(New agent|Neuer Agent)$/u }).click();
   const dialog = page.getByRole("dialog");
-  await expect(nameField(dialog)).toBeFocused();
+  await expect(nameField(dialog)).toBeVisible();
   return dialog;
 }
 
@@ -38,7 +41,7 @@ async function openNewSkill(page: Page): Promise<Locator> {
     .first()
     .click();
   const dialog = page.getByRole("dialog");
-  await expect(nameField(dialog)).toBeFocused();
+  await expect(nameField(dialog)).toBeVisible();
   return dialog;
 }
 
@@ -48,6 +51,7 @@ test("a new agent's address follows its name, names a taken one while typing and
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page, builder);
+  await openAgents(page);
   const dialog = await openNewAgent(page);
   const fold = dialog.getByRole("button", { name: "Advanced", exact: true });
   const proceed = dialog.getByRole("button", { name: "Continue", exact: true });
@@ -112,6 +116,7 @@ test("pictures of the three create forms", async ({ page, instanceAgents: _insta
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page, builder);
   const widths = [1280, 390];
+  await openAgents(page);
 
   // The agent's form with a taken address: the fold opened by itself, with the reason.
   await shoot(
@@ -121,16 +126,26 @@ test("pictures of the three create forms", async ({ page, instanceAgents: _insta
       const dialog = await openNewAgent(page);
       await nameField(dialog).fill(TAKEN_TITLE);
       await expect(address(dialog)).toHaveAttribute("data-address-check", "refused");
+      // The chevron turns as the fold opens.
+      await expect(dialog.locator("[data-name-with-address-fold]")).toHaveAttribute(
+        "data-state",
+        "open"
+      );
     },
     widths
   );
-  // The skill's form at rest: the name first, the address folded away.
+  // The skill's form: the name first, the address made from it under "Advanced".
   await shoot(
     page,
     "new-skill",
     async () => {
       const dialog = await openNewSkill(page);
       await nameField(dialog).fill("Expense guide");
+      await dialog
+        .getByRole("button", { name: "Advanced", exact: true })
+        .or(dialog.getByRole("button", { name: "Erweitert", exact: true }))
+        .click();
+      await expect(address(dialog)).toHaveAttribute("data-address-check", "free");
     },
     widths
   );

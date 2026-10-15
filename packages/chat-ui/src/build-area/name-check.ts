@@ -34,9 +34,12 @@ export function addressCheckOf(
     : { state: "unchecked" };
 }
 
-/** A create waits while the address is checked and stops at a refused one. */
+/**
+ * A refused address stops the create. One still being checked does not, so the button does
+ * not flicker while the person types; a create sent before the answer meets the instance's.
+ */
 export function addressBlocksCreate(check: AddressCheck): boolean {
-  return check.state === "checking" || check.state === "refused";
+  return check.state === "refused";
 }
 
 /**

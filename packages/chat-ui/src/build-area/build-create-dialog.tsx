@@ -32,7 +32,7 @@ export interface BuildCreateStart {
 /**
  * Starts a new asset: its name, and under "Advanced" its address with the Namespace it is
  * named in. The address follows the name until the reader changes it, and is checked as it
- * changes; Continue waits for the check and stops at a refused address. Only the Namespaces
+ * changes; Continue stops at a refused address. Only the Namespaces
  * the reader may write in are offered, and the choice of none only to somebody who may write
  * anywhere. A kind that starts in its workspace says where the asset will be available, and
  * lets whoever may change that choose every workspace instead. A kind that names what its

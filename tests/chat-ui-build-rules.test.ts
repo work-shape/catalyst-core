@@ -82,7 +82,7 @@ describe("the address of a new asset", () => {
       state: "unchecked"
     });
 
-    expect(addressBlocksCreate({ state: "checking" })).toBe(true);
+    expect(addressBlocksCreate({ state: "checking" })).toBe(false);
     expect(addressBlocksCreate({ state: "refused", reason: "taken" })).toBe(true);
     expect(addressBlocksCreate({ state: "free" })).toBe(false);
     expect(addressBlocksCreate({ state: "unchecked" })).toBe(false);
