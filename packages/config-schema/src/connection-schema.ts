@@ -8,6 +8,7 @@ import {
   CONNECTION_OPERATION_NAME_MAX_LENGTH,
   CONNECTION_OPERATION_NAME_PATTERN,
   CONNECTION_REFUSALS,
+  CONNECTION_SCOPE_RESERVED,
   CONNECTION_SECRET_HANDLE_PATTERN,
   CONNECTOR_TYPE_PATTERN,
   EGRESS_PROTOCOLS,
@@ -259,27 +260,8 @@ const operationDeclarationShape = {
   path: z.string().min(1).max(2_048).optional(),
   pathParams: declaredParametersSchema.optional(),
   query: declaredParametersSchema.optional(),
-  /**
-   * The data scope by dimension, such as `{ mandant: { input: clientNumber, output:
-   * items[].number } }`. The shape is read now so that SCOPE-2 needs no new one; until then
-   * the Connection kind refuses the key at save (SCOPE-0).
-   */
-  scope: z
-    .record(
-      z.string().regex(/^[a-z][a-z0-9_]{0,31}$/u, {
-        message: "A scope dimension is a lower-case name, such as mandant"
-      }),
-      z
-        .object({
-          input: declaredParameterNameSchema.optional(),
-          output: z.string().min(1).max(128).optional()
-        })
-        .strict()
-        .refine((dimension) => dimension.input !== undefined || dimension.output !== undefined, {
-          message: "A scope dimension names its input, its output or both"
-        })
-    )
-    .optional()
+  /** Reserved until the call path enforces data scope, whatever value was supplied. */
+  scope: z.never({ error: CONNECTION_SCOPE_RESERVED }).optional()
 };
 
 const connectionOperationSchema = z
