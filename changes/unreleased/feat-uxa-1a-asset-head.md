@@ -16,3 +16,6 @@ section: Changed
   reader's own) instead of a second "Arbeitsbereich"/"Instanz" chip.
 - UI library: `PageHeader`'s detail name and `ListRow`'s title wrap to two lines, `CardTitle`
   takes `clamp`, and `DropdownMenuCopyItem` copies a text and says so in place.
+
+- Header actions stay within the screen at phone widths, including the German Workflow
+  header: the shared header wraps them so its Copy ID menu stays reachable.
