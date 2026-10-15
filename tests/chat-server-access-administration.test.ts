@@ -433,7 +433,7 @@ describe("who may write a grant, and what a grant may say", () => {
       t.kai.id,
       "permissions.effective",
       { query: { holderKind: "service_principal", holderId: "sp_missing" } },
-      t.forbidden("users.manage", "no_grant")
+      t.forbidden("service_principals.manage", "no_grant")
     );
     await t.expectRefused(
       t.admin.id,
