@@ -48,6 +48,7 @@ import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
 import type { ConnectionToolChoice } from "./connection-tools";
 import { heldToolCount, toolPackages } from "./instance-tools";
+import { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 import { ToolPackagesSection } from "./tool-packages-section";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import { PlatformInstructions } from "./platform-instructions";
@@ -171,6 +172,8 @@ export function AgentEditor({
     state.setOutcome(answer);
     return answer;
   };
+  // What the agent's read reported unavailable, as far as the last save left it named.
+  const unavailable = savedAgentUnavailable(frame.asset, state.baseline);
   const skillsByName = new Map(skillChoice.options.map((skill) => [skill.name, skill]));
 
   const sections: AssetSection[] = [
@@ -395,6 +398,7 @@ export function AgentEditor({
             skillNames: form.skillNames,
             locale,
             connections: connectionTools.read,
+            unavailable: unavailable?.unavailableTools?.map((tool) => tool.name) ?? [],
             isOtherSource: isAppToolName
           })
         ) + form.toolNames.filter(isAppToolName).length,
@@ -409,6 +413,7 @@ export function AgentEditor({
             selected={form.toolNames}
             skillNames={form.skillNames}
             connectionTools={connectionTools}
+            unavailable={unavailable?.unavailableTools ?? []}
             isOtherSource={isAppToolName}
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
@@ -476,6 +481,7 @@ export function AgentEditor({
         form.description[locale].trim() || form.description[locale === "de" ? "en" : "de"].trim()
       }
       badges={isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
+      notices={<AgentUnavailableNotices status={unavailable} />}
       headActions={
         <>
           {defaultError ? <FormNotice tone="error">{defaultError}</FormNotice> : null}

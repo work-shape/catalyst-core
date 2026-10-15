@@ -334,15 +334,31 @@ export async function createClientInstanceExecutionAssembly(
   const jobRetries = capabilityContributions.flatMap(
     (contribution) => contribution.jobRetries ?? []
   );
-  const assetSource = createConfigAssetSource({ store: store.configAssets, clientInstanceId });
   const references = createConfigAssetReferences(config, modelProviders);
   const { validationRefs } = references;
-  // A write is refused for an agent it adds or changes that names a tool of a module that is
-  // off. A stored agent that still names one starts and runs without it, and does not stand in
-  // the way of a write to another agent or a skill.
-  const validateAgents = (agents: AgentConfig[], changed: AgentConfig[]) => [
+  validationRefs.isToolAvailable = (agent, name) =>
+    findConfigAssetAgentValidationIssues(config, [{ ...agent, toolNames: [name] }], (binding) =>
+      modelGateway.capabilities(binding)
+    ).length === 0;
+  const assetSource = createConfigAssetSource({
+    store: store.configAssets,
+    clientInstanceId,
+    references: { ...validationRefs, offToolModule: (name) => modules.offModuleOf("tool", name) },
+    onUnavailable(
+      agentName,
+      { unavailableTools, unavailableSkills, unavailableModels, chatAvailable }
+    ) {
+      logger.warn(
+        { agentName, unavailableTools, unavailableSkills, unavailableModels, chatAvailable },
+        "Stored agent references unavailable items"
+      );
+    }
+  });
+  // Writes check changed agents strictly. Unavailable references of an unchanged stored
+  // agent do not stand in the way of repairing another agent or writing a skill.
+  const validateAgents = (_agents: AgentConfig[], changed: AgentConfig[]) => [
     ...findModuleOffToolIssues(modules, changed),
-    ...findConfigAssetAgentValidationIssues(config, agents, (binding) =>
+    ...findConfigAssetAgentValidationIssues(config, changed, (binding) =>
       modelGateway.capabilities(binding)
     )
   ];
@@ -495,6 +511,7 @@ export async function createClientInstanceExecutionAssembly(
 
   const assets = await assetSource.getSnapshot();
   validateConfigAssetBundle({
+    stored: true,
     agents: assets.agents,
     skills: assets.skills,
     defaultAgentName: assets.defaultAgentName,
@@ -507,15 +524,6 @@ export async function createClientInstanceExecutionAssembly(
       enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
     }
   });
-
-  const agentIssues = findConfigAssetAgentValidationIssues(config, assets.agents, (binding) =>
-    modelGateway.capabilities(binding)
-  );
-  if (agentIssues.length) {
-    throw new AppError("VALIDATION_FAILED", "Client instance assembly is invalid", {
-      issues: agentIssues.map((message) => ({ message }))
-    });
-  }
 
   return {
     logger,

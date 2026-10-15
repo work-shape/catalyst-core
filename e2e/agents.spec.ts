@@ -173,6 +173,103 @@ test("a builder is led from a card to the agent's page in Studio", async ({
   await expect(card(page, OTHER_AGENT)).toBeVisible();
 });
 
+// A stored agent can name a tool, a skill and a model the instance no longer has (SA-0).
+// Writes refuse such a reference, so the read of the real API is served with them and with the
+// fields the server then adds. The builder repairs the agent, and the page says it can chat.
+test("a builder reads what of an agent is unavailable, repairs it and is told it can chat", async ({
+  page,
+  // The test stores an agent of its own, which every picker would offer meanwhile.
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const agentName = "unavailable_e2e_agent";
+  const agentUrl = agentPath(agentName);
+  await signIn(page, builder);
+  const template: { config: Record<string, unknown> } = await (
+    await page.request.get(agentPath("research_assistant"))
+  ).json();
+  const stored = await requestWithOrigin(page, "put", agentUrl, {
+    data: {
+      expectedRevision: await assetBaseRevision(page, agentUrl),
+      config: {
+        ...template.config,
+        name: agentName,
+        displayName: { en: "Unavailable test agent", de: "Nicht-verfügbar-Testagent" },
+        toolNames: [],
+        skillNames: []
+      }
+    }
+  });
+  expect(stored.ok(), await stored.text()).toBe(true);
+  try {
+    await page.route(
+      ({ pathname }) => pathname === `/api/v1/assets/agent/${agentName}`,
+      async (route) => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const response = await route.fetch();
+        const body: { config: Record<string, unknown> } = await response.json();
+        // The agent names the retired model in place of the instance's provider.
+        const { modelProviderId: _provider, ...config } = body.config;
+        await route.fulfill({
+          response,
+          json: {
+            ...body,
+            config: {
+              ...config,
+              modelBindingId: "retired-model",
+              toolNames: ["crm.lookup"],
+              skillNames: ["tax-old"]
+            },
+            chatAvailable: false,
+            unavailableTools: [{ name: "crm.lookup", reason: "unknown_tool" }],
+            unavailableSkills: [{ name: "tax-old", reason: "unknown_skill" }],
+            unavailableModels: [
+              { name: "retired-model", field: "modelBindingId", reason: "unknown_model" }
+            ]
+          }
+        });
+      }
+    );
+    await page.goto(`/build/agents/${agentName}`);
+    const form = page.locator("form");
+    const notice = form.locator("[data-agent-chat-unavailable]");
+    const line = form.locator("[data-agent-unavailable]");
+    await expect(notice).toContainText("This agent cannot chat");
+    await expect(notice).toContainText("Nobody can chat with it until its model is changed.");
+    await expect(line).toHaveText(
+      "Not available: crm.lookup (tool does not exist on this instance), " +
+        "tax-old (skill does not exist on this instance), " +
+        "retired-model (model does not exist on this instance)"
+    );
+
+    // The repair: another model, and the tool and the skill removed.
+    await form.locator("#model select").first().selectOption("primary");
+    await form
+      .locator('[data-unavailable-option="crm.lookup"]')
+      .getByRole("button", { name: "Remove" })
+      .click();
+    await form
+      .locator("#skills li", { hasText: "tax-old" })
+      .getByRole("button", { name: /Remove/u })
+      .click();
+    await form.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(notice).toHaveCount(0);
+    await expect(line).toHaveCount(0);
+    const saved: { config: unknown } = await (await page.request.get(agentUrl)).json();
+    expect(saved.config).toMatchObject({
+      modelBindingId: "primary",
+      toolNames: [],
+      skillNames: []
+    });
+  } finally {
+    const deleted = await requestWithOrigin(page, "post", `${agentUrl}/delete`, {
+      data: { expectedRevision: await assetRevision(page, agentUrl) }
+    });
+    expect(deleted.ok(), await deleted.text()).toBe(true);
+  }
+});
+
 test("a builder who renames an agent in Studio finds the new name on its card", async ({
   page,
   // The probe agent is offered in every workspace while it exists, so the tests that count

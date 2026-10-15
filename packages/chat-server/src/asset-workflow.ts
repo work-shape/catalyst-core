@@ -513,7 +513,7 @@ export class AssetWorkflow {
       principalId: call.actor.id
     });
     const drafted = (set: AssetSet) => withDefinition(set, kind.kind, name ?? "", prepared);
-    const found = findAssetSetIssues(kinds, drafted(view.set));
+    const found = findAssetSetIssues(kinds, drafted(view.set), view.set);
     const ofDefinition = view.complete
       ? found.issues
       : findIssuesOfChange(

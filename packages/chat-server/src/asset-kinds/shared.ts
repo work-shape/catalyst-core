@@ -1,3 +1,4 @@
+import type { StoredAgentReferences } from "@vivd-catalyst/config-schema";
 import type {
   ActorAccess,
   AssetScope,
@@ -15,7 +16,7 @@ import type {
 } from "@vivd-catalyst/core";
 
 /** What an agent or skill definition may refer to on this instance. */
-export interface ConfigAssetValidationRefs {
+export interface ConfigAssetValidationRefs extends StoredAgentReferences {
   modelProviderIds: string[];
   modelBindingIds: string[];
   modelBindings: Array<{ id: string; model: string; label?: string }>;

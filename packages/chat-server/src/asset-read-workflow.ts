@@ -1,3 +1,4 @@
+import { agentConfigSchema, resolveStoredAgentReferences } from "@vivd-catalyst/config-schema";
 import {
   AppError,
   asUserId,
@@ -147,7 +148,10 @@ export class AssetReadWorkflow {
     const namespace = findNamespaceOfAssetName(namespaces, asset.name);
     // Resolve only after authorization, from the revision the caller is allowed to read.
     const runsAs = await target.kind.readRunsAs?.(content.config);
+    const agentStatus =
+      target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
     return {
+      ...(agentStatus ?? {}),
       id: asset.id,
       kind: asset.kind,
       name: asset.name,
@@ -163,6 +167,22 @@ export class AssetReadWorkflow {
       ...(availability ? { availability } : {}),
       updatedAt: asset.updatedAt
     };
+  }
+
+  private async agentStatus(config: unknown) {
+    const assets = await this.options.configAssets.store.listActiveConfigAssets({
+      clientInstanceId: this.options.clientInstanceId,
+      withoutSkillResources: true
+    });
+    const { agent: _effective, ...status } = resolveStoredAgentReferences(
+      agentConfigSchema.parse(config),
+      assets.filter((asset) => asset.kind === "skill").map((asset) => asset.name),
+      {
+        ...this.options.configAssets.validationRefs,
+        offToolModule: (name) => this.options.modules.offModuleOf("tool", name)
+      }
+    );
+    return status;
   }
 
   /** One page of the history, newest first. It stays readable after its asset is deleted. */

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { ConfigAssetReferences, ToolGroupName } from "@vivd-catalyst/api-client";
+import type { Asset, ConfigAssetReferences, ToolGroupName } from "@vivd-catalyst/api-client";
 import {
   Badge,
   Button,
@@ -78,6 +78,7 @@ export function ToolPackagesSection({
   selected,
   skillNames,
   connectionTools,
+  unavailable = [],
   isOtherSource,
   disabled,
   onChange
@@ -89,6 +90,8 @@ export function ToolPackagesSection({
   selected: readonly string[];
   skillNames: readonly string[];
   connectionTools: ConnectionToolChoice;
+  /** The tools the stored agent names that this instance cannot run, with the reason. */
+  unavailable?: NonNullable<Asset["unavailableTools"]>;
   /** A name a later group of the section shows: a tool of an App. */
   isOtherSource(name: string): boolean;
   disabled?: boolean;
@@ -106,6 +109,7 @@ export function ToolPackagesSection({
     skillNames,
     locale,
     connections: connectionTools.read,
+    unavailable: unavailable.map((tool) => tool.name),
     isOtherSource
   });
   const face = (item: ToolPackageView): PackageFace => {
@@ -141,7 +145,7 @@ export function ToolPackagesSection({
       )
     };
   };
-  const stale = (references?.moduleOffTools ?? []).filter((tool) => selected.includes(tool.name));
+  const stale = unavailable.filter((tool) => selected.includes(tool.name));
   const connections = connectionToolsView(connectionTools.read, selected);
   const removeName = disabled
     ? undefined
@@ -189,7 +193,9 @@ export function ToolPackagesSection({
             >
               <ToolChip toolName={tool.name} remove={removeName} />
               <span className="text-caption text-muted-foreground">
-                {t("configToolModuleOff", { module: moduleName(tool.module) })}
+                {tool.reason === "module_off"
+                  ? t("configToolModuleOff", { module: moduleName(tool.module) })
+                  : t("configToolUnknown")}
               </span>
             </li>
           ))}

@@ -272,6 +272,7 @@ describe("platform.references.get", () => {
     enabledToolNames: ["known.tool", "second.tool"],
     // No code of this instance registers them, so they are listed by their names alone.
     tools: [{ name: "known.tool" }, { name: "second.tool" }],
+    unavailableTools: [],
     moduleOffTools: []
   };
   const refused = { status: 403, code: "FORBIDDEN" };
