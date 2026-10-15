@@ -11,7 +11,7 @@ import {
 } from "@vivd-catalyst/core";
 import { clearLiveOnceSwitches } from "./asset-after-write";
 import { z } from "zod";
-import { readDefinitionName } from "./asset-kinds/shared";
+import { configValuesEqual, readDefinitionName } from "./asset-kinds/shared";
 import {
   definitionsByName,
   findAssetSetIssues,
@@ -300,9 +300,19 @@ async function checkBatch(
   stopIfRefused(unplaced);
   stopIfRefused(writeIssues(() => found.validateWrite(stored.set)));
 
+  const acceptedByName = definitionsByName(found.accepted);
   const changed = await findChangedAgentRefusals(options, call.access, stored.set, found.accepted, {
     names: ready()
-      .filter((entry) => entry.kind.kind === "agent" && entry.item.type === "put")
+      .filter(
+        (entry) =>
+          entry.kind.kind === "agent" &&
+          entry.item.type === "put" &&
+          (purpose === "check" ||
+            !configValuesEqual(
+              storedByName("agent").get(entry.name),
+              acceptedByName("agent").get(entry.name)
+            ))
+      )
       .map((entry) => entry.name),
     scope:
       input.workspaceId === undefined
@@ -316,7 +326,6 @@ async function checkBatch(
     if (!entry || entry.refusal) throw error;
     entry.refusal = toRefusal(error);
   }
-  const acceptedByName = definitionsByName(found.accepted);
   for (const entry of ready()) {
     if (entry.item.type !== "put" || entry.refusal) continue;
     entry.refusal = refusalOf(() =>

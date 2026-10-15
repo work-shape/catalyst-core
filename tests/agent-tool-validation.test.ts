@@ -55,7 +55,17 @@ describe("agent tool references on the target instance", () => {
     expect(validation.body).toContain(`unavailable tool '${toolName}' in instructions line 1`);
     for (const operation of ["assets.sync_check", "assets.sync"] as const) {
       const refused = await asService(t, operation, {
-        payload: { items: [putAgent(config.name, config, 1)] }
+        payload: {
+          items: [
+            putAgent(
+              config.name,
+              operation === "assets.sync"
+                ? { ...config, instructions: `${config.instructions} Again.` }
+                : config,
+              1
+            )
+          ]
+        }
       });
       expect(refused.statusCode, refused.body).toBe(422);
       expect(refused.body).toContain(`unavailable tool '${toolName}'`);
