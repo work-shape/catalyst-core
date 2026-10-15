@@ -20,7 +20,9 @@ import {
  * transparent rather than painting a colour over it, so it needs no knowledge
  * of the surface behind it and works unchanged in light and dark themes.
  */
-const SCROLL_EDGE_FADE_HEIGHT = "1rem";
+/** The height of the fade, in rem. */
+export const SCROLL_EDGE_FADE_REM = 1;
+const SCROLL_EDGE_FADE_HEIGHT = `${SCROLL_EDGE_FADE_REM}rem`;
 
 export interface ScrollEdgeOverflow {
   /** Content is hidden above the top edge, or left of the left edge of a sideways scroll. */
@@ -105,10 +107,10 @@ export function useScrollEdgeFade<Element extends HTMLElement>(
     const observer = new ResizeObserver(syncOverflow);
     observer.observe(node);
     // Content taller than the container changes the scroll height without
-    // resizing the container itself, so watch the content box too: every child, because a
-    // container may hold more than its content, such as the sidebar's faded edges.
-    for (const child of node.children) {
-      observer.observe(child);
+    // resizing the container itself, so watch the content box too.
+    const content = node.firstElementChild;
+    if (content) {
+      observer.observe(content);
     }
     return () => observer.disconnect();
   }, [syncOverflow, revision]);

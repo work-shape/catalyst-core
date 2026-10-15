@@ -94,12 +94,19 @@ export function NavItem({
       link={link}
       className={classes}
       aria-current={selected ? "page" : undefined}
+      data-nav-item={withTrailing ? undefined : ""}
       {...props}
     >
       {content}
     </LinkSlot>
   ) : (
-    <button type={type} className={classes} aria-current={selected ? "true" : undefined} {...props}>
+    <button
+      type={type}
+      className={classes}
+      aria-current={selected ? "true" : undefined}
+      data-nav-item={withTrailing ? undefined : ""}
+      {...props}
+    >
       {content}
     </button>
   );
@@ -112,6 +119,7 @@ export function NavItem({
           fill,
           className
         )}
+        data-nav-item=""
       >
         {item}
         <span

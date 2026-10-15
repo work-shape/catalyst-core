@@ -417,9 +417,10 @@ test("the collapsed rail keeps the search and New chat, and no entry for a list 
   await expect(navigation.locator("[aria-current]")).toHaveCount(0);
 });
 
-// Fails without the faded edge taking the pointer: a row next to unseen under the rail's bottom
+// Fails without faded rows giving up the pointer: a row next to unseen under the rail's bottom
 // fade lit up under it and opened the tooltip of its menu beside the row above, the last in sight.
-test("a row under the rail's faded edge takes no pointer, and opens no tooltip beside the row above", async ({
+// Fails as well with a strip over the whole fade: a row wholly in sight at the edge lost its click.
+test("a row under the rail's faded edge takes no pointer, and a row in sight at that edge takes the click", async ({
   page
 }) => {
   test.setTimeout(120_000);
@@ -437,20 +438,45 @@ test("a row under the rail's faded edge takes no pointer, and opens no tooltip b
   if (!box) {
     throw new Error("The rail's list has no box");
   }
+  const bottom = box.y + box.height;
+  const x = box.x + box.width - 30;
   const rowAt = (y: number) =>
     page.evaluate(
       ({ x, y }) =>
-        document.elementFromPoint(x, y)?.closest('[data-testid="conversation-row"]')?.textContent ??
-        null,
-      { x: box.x + box.width - 30, y }
+        document.elementFromPoint(x, y)?.closest("[data-nav-item]")?.textContent ?? null,
+      { x, y }
+    );
+  /** Scrolls the first row below `edge` to `edge`: its top, or with `by: "bottom"` its bottom. */
+  const scrollRowTo = (edge: number, by: "top" | "bottom") =>
+    body.evaluate(
+      (node, { edge, by }) => {
+        for (const row of node.querySelectorAll('[data-testid="conversation-row"]')) {
+          const rect = row.getBoundingClientRect();
+          if (rect[by] > edge) {
+            node.scrollTop += rect[by] - edge;
+            return row.textContent ?? "";
+          }
+        }
+        throw new Error("No row below the edge");
+      },
+      { edge, by }
     );
 
-  // Over the fade the pointer meets no row; just above it, the row in sight.
-  expect(await rowAt(box.y + box.height - 4)).toBeNull();
-  expect(await rowAt(box.y + box.height - 24)).not.toBeNull();
-  await page.mouse.move(box.x + box.width - 30, box.y + box.height - 4);
+  // A row whose top lies 6 px above the edge is next to unseen: the pointer meets no item there
+  // and opens no tooltip.
+  await scrollRowTo(bottom - 6, "top");
+  await expect.poll(() => rowAt(bottom - 3)).toBeNull();
+  await page.mouse.move(x, bottom - 3);
   await page.waitForTimeout(500);
   await expect(page.getByRole("tooltip")).toHaveCount(0);
+
+  // A row whose bottom lies on the edge is wholly in sight, its lower half in the fade: it takes
+  // the pointer there too, and a click 12 px above the edge opens it.
+  const title = await scrollRowTo(bottom, "bottom");
+  await expect.poll(() => rowAt(bottom - 12)).toBe(title);
+  // The mouse itself, not a locator's click, which would scroll the row clear of the edge.
+  await page.mouse.click(box.x + 60, bottom - 12);
+  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
 });
 
 // Fails with the shield: the file then held the shield's path and no orange field.

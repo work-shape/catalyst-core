@@ -4,10 +4,11 @@ import {
   useState,
   useSyncExternalStore,
   type HTMLAttributes,
-  type ReactNode
+  type ReactNode,
+  type RefObject
 } from "react";
 import { cn } from "../cn";
-import { scrollEdgeFadeStyle, useScrollEdgeFade } from "../scroll-edge-fade";
+import { SCROLL_EDGE_FADE_REM, scrollEdgeFadeStyle, useScrollEdgeFade } from "../scroll-edge-fade";
 import { OverlayScope } from "../ui-root";
 import { NavCollapsedContext, NavGroupLabelPinnedContext } from "./sidebar-collapsed";
 
@@ -76,6 +77,7 @@ export function Sidebar({
     setLabelPinned(pinned);
   };
   const fadeAbove = body.overflow.above && !labelPinned;
+  useFadedItems(body.ref, fadeAbove, body.overflow.below);
 
   const frame = (
     <nav
@@ -103,15 +105,13 @@ export function Sidebar({
         // scrolls with the list and does not lengthen the page.
         // The room under the last item is that between two groups, so the last item scrolls
         // clear of the footer's line.
-        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4"
+        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4 [&_[data-faded]]:pointer-events-none"
       >
         {/* The room above the first group is the content's, not the body's: a pinned group
             label lies over it, at the very top of what scrolls. */}
-        {fadeAbove ? <FadedEdge edge="top" /> : null}
         <NavGroupLabelPinnedContext value>
           <div className="flex flex-col gap-4 pt-2">{children}</div>
         </NavGroupLabelPinnedContext>
-        {body.overflow.below ? <FadedEdge edge="bottom" /> : null}
       </div>
       {footer === undefined ? null : (
         // A line ends the scrolling body, so its last item does not read as part of the footer.
@@ -136,23 +136,45 @@ export function Sidebar({
 }
 
 /**
- * Lies over an edge of the body while that edge fades, as high as the fade. What scrolls under
- * it is next to unseen, so it takes the pointer from it: a row there would light up and open its
- * tooltip beside the row above it, the last one in sight. The wheel still scrolls the body.
+ * Marks `data-faded` on each item that lies wholly in a fading edge of the body, or beyond it.
+ * Such an item is next to unseen, so it takes no pointer: it would light up under it and open
+ * its menu's tooltip beside the item next to it, the last one in sight. An item with any part
+ * clear of the fade is in sight and keeps the pointer.
  */
-function FadedEdge({ edge }: { edge: "top" | "bottom" }) {
-  return (
-    <div
-      aria-hidden="true"
-      data-sidebar-faded-edge={edge}
-      className={cn(
-        "sticky z-(--layer-sticky-header) h-4",
-        // A sticky edge keeps clear of the body's padding; the bottom one reaches over the room
-        // under the last item to stand on the body's edge.
-        edge === "top" ? "top-0 -mb-4" : "-bottom-4 -mt-4"
-      )}
-    />
-  );
+function useFadedItems(body: RefObject<HTMLElement | null>, above: boolean, below: boolean) {
+  useEffect(() => {
+    const node = body.current;
+    if (!node || (!above && !below) || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const fade = SCROLL_EDGE_FADE_REM * rem;
+    // The body without its fading edges: an item that meets none of it is wholly faded.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          entry.target.toggleAttribute("data-faded", !entry.isIntersecting);
+        }
+      },
+      { root: node, rootMargin: `${above ? -fade : 0}px 0px ${below ? -fade : 0}px 0px` }
+    );
+    const observeItems = () => {
+      for (const item of node.querySelectorAll("[data-nav-item]")) {
+        observer.observe(item);
+      }
+    };
+    observeItems();
+    // Items come and go as the list loads; observing one twice does nothing.
+    const additions = new MutationObserver(observeItems);
+    additions.observe(node, { childList: true, subtree: true });
+    return () => {
+      additions.disconnect();
+      observer.disconnect();
+      for (const item of node.querySelectorAll("[data-faded]")) {
+        item.removeAttribute("data-faded");
+      }
+    };
+  }, [body, above, below]);
 }
 
 /**
