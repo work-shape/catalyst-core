@@ -303,19 +303,33 @@
 }
 
 /* The one scrollbar of everything that scrolls: thin, no track, a thumb mixed from the theme's
-   muted text colour where the element stands. The thumb holds 3:1 against the background and the
-   card in both default modes at rest (70%) and a little more over a hovered area (80%); the
-   width does not change. Feature code styles no scrollbar; the
-   library hides one with `[scrollbar-width:none]`. The rule stands in the components layer:
-   above a vendor stylesheet an application layers over the base, below the utilities. */
+   muted text colour where the element stands. Like an overlay scrollbar, the thumb shows only
+   while the pointer is over its scroll area, or the area itself holds the keyboard focus; a
+   screen without hover always shows it. The thumb holds 3:1 against the background, the card
+   and the raised surface in both default modes (80%). Only the thumb's colour changes, never the
+   bar's width, so the room a scroll area keeps for it (`scrollbar-gutter`) stays the same and
+   nothing moves. Feature code styles no scrollbar; the library hides one with
+   `[scrollbar-width:none]`. The rule stands in the components layer: above a vendor stylesheet
+   an application layers over the base, below the utilities. */
 @layer components {
   * {
+    --scrollbar-thumb: color-mix(in srgb, var(--muted-foreground) 80%, transparent);
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 70%, transparent) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 
-  *:hover {
-    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 80%, transparent) transparent;
+  /* The older pseudo-elements would draw a narrower bar in Chromium, but Chromium does not
+     repaint them when the pointer enters the area, only once it scrolls. The standard
+     properties it repaints at once. */
+  @media (hover: hover) {
+    * {
+      scrollbar-color: transparent transparent;
+    }
+
+    *:hover,
+    *:focus-visible {
+      scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
   }
 
   /* A browser without `scrollbar-color` gets the same scrollbar from the older rules. */
@@ -333,13 +347,19 @@
     ::-webkit-scrollbar-thumb {
       border: 2px solid transparent;
       border-radius: 9999px;
-      background: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
-      background-clip: content-box;
+      background: var(--scrollbar-thumb) content-box;
     }
 
-    :hover::-webkit-scrollbar-thumb {
-      background: color-mix(in srgb, var(--muted-foreground) 80%, transparent);
-      background-clip: content-box;
+    @media (hover: hover) {
+      ::-webkit-scrollbar-thumb {
+        background-color: transparent;
+      }
+
+      :hover::-webkit-scrollbar-thumb,
+      :focus-visible::-webkit-scrollbar-thumb,
+      ::-webkit-scrollbar-thumb:active {
+        background-color: var(--scrollbar-thumb);
+      }
     }
   }
 }

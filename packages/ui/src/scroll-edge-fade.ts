@@ -105,10 +105,10 @@ export function useScrollEdgeFade<Element extends HTMLElement>(
     const observer = new ResizeObserver(syncOverflow);
     observer.observe(node);
     // Content taller than the container changes the scroll height without
-    // resizing the container itself, so watch the content box too.
-    const content = node.firstElementChild;
-    if (content) {
-      observer.observe(content);
+    // resizing the container itself, so watch the content box too: every child, because a
+    // container may hold more than its content, such as the sidebar's faded edges.
+    for (const child of node.children) {
+      observer.observe(child);
     }
     return () => observer.disconnect();
   }, [syncOverflow, revision]);

@@ -75,6 +75,7 @@ export function Sidebar({
     }
     setLabelPinned(pinned);
   };
+  const fadeAbove = body.overflow.above && !labelPinned;
 
   const frame = (
     <nav
@@ -95,10 +96,7 @@ export function Sidebar({
       {header === undefined ? null : <div className="shrink-0 px-2">{header}</div>}
       <div
         ref={body.ref}
-        style={scrollEdgeFadeStyle({
-          above: body.overflow.above && !labelPinned,
-          below: body.overflow.below
-        })}
+        style={scrollEdgeFadeStyle({ above: fadeAbove, below: body.overflow.below })}
         onScroll={onBodyScroll}
         data-sidebar-body=""
         // Positioned, so that what an item places absolutely or hides for screen readers
@@ -109,9 +107,11 @@ export function Sidebar({
       >
         {/* The room above the first group is the content's, not the body's: a pinned group
             label lies over it, at the very top of what scrolls. */}
+        {fadeAbove ? <FadedEdge edge="top" /> : null}
         <NavGroupLabelPinnedContext value>
           <div className="flex flex-col gap-4 pt-2">{children}</div>
         </NavGroupLabelPinnedContext>
+        {body.overflow.below ? <FadedEdge edge="bottom" /> : null}
       </div>
       {footer === undefined ? null : (
         // A line ends the scrolling body, so its last item does not read as part of the footer.
@@ -132,6 +132,26 @@ export function Sidebar({
         frame
       )}
     </NavCollapsedContext>
+  );
+}
+
+/**
+ * Lies over an edge of the body while that edge fades, as high as the fade. What scrolls under
+ * it is next to unseen, so it takes the pointer from it: a row there would light up and open its
+ * tooltip beside the row above it, the last one in sight. The wheel still scrolls the body.
+ */
+function FadedEdge({ edge }: { edge: "top" | "bottom" }) {
+  return (
+    <div
+      aria-hidden="true"
+      data-sidebar-faded-edge={edge}
+      className={cn(
+        "sticky z-(--layer-sticky-header) h-4",
+        // A sticky edge keeps clear of the body's padding; the bottom one reaches over the room
+        // under the last item to stand on the body's edge.
+        edge === "top" ? "top-0 -mb-4" : "-bottom-4 -mt-4"
+      )}
+    />
   );
 }
 

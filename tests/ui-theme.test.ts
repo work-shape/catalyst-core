@@ -178,31 +178,27 @@ describe("UI theme contrast", () => {
   });
 
   it.each(modes)(
-    "keeps the scrollbar thumb of the %s default theme at 3:1 on page, card and raised surface, at rest and hovered",
+    "keeps the scrollbar thumb of the %s default theme at 3:1 on page, card and raised surface where it shows",
     async (mode) => {
       const stylesheet = await readFile(stylesheetPath, "utf8");
-      // The `*` rule gives the thumb at rest; `*:hover` gives it over a hovered scroll area.
-      const share = (selector: string) => {
-        const rule = new RegExp(
-          `\\n  ${selector.replace("*", "\\*")} \\{[^}]*scrollbar-color: color-mix\\(in srgb, var\\(--muted-foreground\\) (\\d+)%, transparent\\)`,
-          "u"
-        ).exec(stylesheet);
-        return Number(rule?.[1]) / 100;
-      };
+      // One colour gives the thumb wherever it shows: over its area, focused, dragged.
+      const share =
+        Number(
+          /--scrollbar-thumb: color-mix\(in srgb, var\(--muted-foreground\) (\d+)%, transparent\)/u.exec(
+            stylesheet
+          )?.[1]
+        ) / 100;
       const tokens = createThemeTokens(schemaInputs[mode], mode);
-      const thumbs = { rest: share("*"), hover: share("*:hover") };
       const muted = flatten(parseColor(tokens["--muted-foreground"]), undefined);
       const ratios: Record<string, number> = {};
       for (const surfaceToken of ["--background", "--card", "--popover"] as const) {
         const surface = flatten(parseColor(tokens[surfaceToken]), undefined);
-        for (const [state, alpha] of Object.entries(thumbs)) {
-          const thumb = flatten({ ...muted, a: alpha }, surface);
-          ratios[`${state} on ${surfaceToken}`] = contrastRatio(thumb, surface);
-        }
+        const thumb = flatten({ ...muted, a: share }, surface);
+        ratios[surfaceToken] = contrastRatio(thumb, surface);
       }
 
-      expect(thumbs.hover).toBeGreaterThan(thumbs.rest);
-      expect(Object.keys(ratios)).toHaveLength(6);
+      expect(share).toBeGreaterThan(0);
+      expect(Object.keys(ratios)).toHaveLength(3);
       expect(Object.entries(ratios).filter(([, ratio]) => ratio < 3)).toEqual([]);
     }
   );

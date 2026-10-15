@@ -417,6 +417,42 @@ test("the collapsed rail keeps the search and New chat, and no entry for a list 
   await expect(navigation.locator("[aria-current]")).toHaveCount(0);
 });
 
+// Fails without the faded edge taking the pointer: a row next to unseen under the rail's bottom
+// fade lit up under it and opened the tooltip of its menu beside the row above, the last in sight.
+test("a row under the rail's faded edge takes no pointer, and opens no tooltip beside the row above", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1280, height: 400 });
+  await signIn(page, member);
+  const workspace = await createWorkspace(page, `Rail fade ${Date.now()}`);
+  await createListedConversations(page, workspace.id, 10, "Faded edge");
+  await page.goto(`/w/${encodeURIComponent(workspace.id)}`);
+  const navigation = rail(page);
+  await expect(navigation.getByTestId("conversation-row")).toHaveCount(10);
+  const body = navigation.locator("[data-sidebar-body]");
+  // The list runs on below the rail's edge.
+  expect(await body.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(64);
+  const box = await body.boundingBox();
+  if (!box) {
+    throw new Error("The rail's list has no box");
+  }
+  const rowAt = (y: number) =>
+    page.evaluate(
+      ({ x, y }) =>
+        document.elementFromPoint(x, y)?.closest('[data-testid="conversation-row"]')?.textContent ??
+        null,
+      { x: box.x + box.width - 30, y }
+    );
+
+  // Over the fade the pointer meets no row; just above it, the row in sight.
+  expect(await rowAt(box.y + box.height - 4)).toBeNull();
+  expect(await rowAt(box.y + box.height - 24)).not.toBeNull();
+  await page.mouse.move(box.x + box.width - 30, box.y + box.height - 4);
+  await page.waitForTimeout(500);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+});
+
 // Fails with the shield: the file then held the shield's path and no orange field.
 test("the application's favicon is the Catalyst mark", async ({ page }) => {
   await page.goto("/");
