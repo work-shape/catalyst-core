@@ -145,7 +145,10 @@ function listFilter(input: Parameters<ApprovalRequestStore["countApprovalRequest
       : sql`${approvalRequests.origin}->>'conversationId' = ${input.conversationId}`,
     input.payloadKey === undefined
       ? undefined
-      : sql`jsonb_exists(${approvalRequests.payload}, ${input.payloadKey})`
+      : sql`jsonb_exists(${approvalRequests.payload}, ${input.payloadKey})`,
+    input.subjectContains === undefined
+      ? undefined
+      : sql`${approvalRequests.payload} @> ${JSON.stringify({ subject: input.subjectContains })}::jsonb`
   );
 }
 

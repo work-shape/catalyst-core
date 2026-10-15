@@ -418,9 +418,10 @@ describe("a Page made an App from its conversation", () => {
       builds: { build: () => Promise.reject(new Error("not built here")) },
       apps: calls
     });
+    const call = { conversationId: asConversationId(conversationId) };
     const toolFloors = async () => ({
-      create: await saveAsApp.policyFloor?.({ conversationId: asConversationId(conversationId) }),
-      draft: await pageSave.policyFloor?.({ conversationId: asConversationId(conversationId) })
+      create: await saveAsApp.policyFloor?.(call, { page: "quote", name: "quote", title: "Quote" }),
+      draft: await pageSave.policyFloor?.(call, { name: "quote", directory: "quote" })
     });
     try {
       // Nothing set: the tools' own mode stands. A conversation about no App writes no App.

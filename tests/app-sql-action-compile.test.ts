@@ -61,6 +61,85 @@ const errorsOf = async (result: Promise<PageBuildResult>) => {
 const faultsOf = (text: string) => errorsOf(page(listed(), { "actions/list.sql": text }));
 
 describe("the statement files of a Page", () => {
+  it("reserves the scope parameter for SCOPE-1/2 in reading and changing actions", async () => {
+    for (const effect of ["reading", "changing"]) {
+      const statement =
+        effect === "reading"
+          ? "select $scope from findings"
+          : "insert into findings (mandant_nr) values ($scope)";
+      expect(
+        await errorsOf(
+          page(
+            { ...store, actions: [{ name: "list", file: "actions/list.sql", effect }] },
+            { "actions/list.sql": `-- @param scope text\n${statement}` }
+          )
+        )
+      ).toEqual([
+        {
+          file: "actions/list.sql",
+          code: "action_invalid",
+          line: 1,
+          message: expect.stringMatching(/'scope' is reserved.*SCOPE-1\/2/u)
+        }
+      ]);
+    }
+  });
+
+  it.each(["scope", "scope_all"])(
+    "refuses $viewer.%s with the later slice named, even when viewer is declared",
+    async (name) => {
+      // Declaring viewer defeats the old undeclared-parameter error. Removing the new
+      // guard then builds this statement, so the test proves the reservation itself.
+      expect(
+        await faultsOf(`-- @param viewer text\nselect $viewer.${name}('mandant') from findings`)
+      ).toEqual([
+        {
+          file: "actions/list.sql",
+          code: "action_invalid",
+          line: 2,
+          message: expect.stringMatching(
+            new RegExp(`'\\$viewer\\.${name}' is reserved.*SCOPE-1.*SCOPE-2`, "u")
+          )
+        }
+      ]);
+    }
+  );
+
+  it("refuses the dropped $viewer.groups instead of compiling it as a caller parameter", async () => {
+    expect(await faultsOf("-- @param viewer text\nselect $viewer.groups from findings")).toEqual([
+      {
+        file: "actions/list.sql",
+        code: "action_invalid",
+        line: 2,
+        message: expect.stringMatching(/'\$viewer\.groups' was dropped by SCOPE-0.*SCOPE-1/u)
+      }
+    ]);
+  });
+
+  it("keeps scope names in SQL text, comments and identifiers, and permits ordinary Mandant parameters", async () => {
+    const action = await compiled(
+      [
+        "-- @param mandant_nr text",
+        "-- @param viewer text",
+        "-- @param scope_key text optional",
+        "select '$viewer.scope', '$viewer.scope_all', '$viewer.groups',",
+        '  "$viewer.scope" as quoted, amount$viewer.scope as identifier,',
+        "  $$ $viewer.scope_all $$ as literal, $tag$ $viewer.groups $tag$ as tagged,",
+        "  $viewer.scope_extra, $viewer.scope_all_extra, $viewer.groups_extra, $scope_key",
+        "from findings -- $viewer.scope('mandant')",
+        "/* $viewer.scope_all('mandant') and $viewer.groups */",
+        "where mandant_nr = $mandant_nr"
+      ].join("\n")
+    );
+    expect(action.parameters.map(({ name }) => name)).toEqual([
+      "mandant_nr",
+      "viewer",
+      "scope_key"
+    ]);
+    expect(action.statement).toContain("where mandant_nr = $1");
+    expect(action.statement).toContain("$2.scope_extra");
+  });
+
   it("are compiled into the manifest with positions for names, and no statement file is a file of the built Page", async () => {
     const built = await page(listed("list_findings"), {
       "actions/list_findings.sql": [

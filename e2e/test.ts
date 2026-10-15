@@ -97,6 +97,19 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["superadmin manages config assets with validation and conflict protection"]
   },
   {
+    name: "drafted-connection-that-is-new",
+    reason:
+      "Chromium's own log line: the card of the agent's draft reads the Connection of its id, " +
+      "for a new id the instance answers 404 and the card opens the New connection dialog, " +
+      "which the test asserts.",
+    matches: requestAnswered(404),
+    path: /^\/api\/v1\/assets\/connection\/e2e-draft-new-/u,
+    tests: ["en", "de"].map(
+      (locale) =>
+        `${locale}: the agent's draft is a card that opens the approval list, and only the approval saves it`
+    )
+  },
+  {
     name: "asset-that-is-not-there",
     reason:
       "Chromium's own log line: the test opens the address of an agent that does not exist, " +
@@ -104,6 +117,17 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     matches: requestAnswered(404),
     path: /^\/api\/v1\/assets\/agent\/not_an_agent$/u,
     tests: ["Studio opens on a list, and a list and an asset each have an address"]
+  },
+  {
+    name: "asset-of-another-owner",
+    reason:
+      "Chromium's own log line: Studio is set to the instance while the Data Store is a " +
+      "workspace's, so its page asks the instance first, gets 404, and finds it in the workspace.",
+    matches: requestAnswered(404),
+    path: /^\/api\/v1\/assets\/data_store\/team-[0-9a-f]{6}$/u,
+    tests: [
+      "a workspace's Data Store opens from the Working on line and by its address after Studio was set to another owner"
+    ]
   },
   {
     name: "refused-asset-in-build",

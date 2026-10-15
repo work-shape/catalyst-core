@@ -23,6 +23,10 @@ export function registerOperationRunRoutes(route: Route, options: ResolvedChatSe
       throw new AppError("NOT_FOUND", "Operation run not found");
     }
     if (!isCallerOf(run, identity)) {
+      // A personal key follows only its owner's calls, never another person's evidence.
+      if (!isAuthenticatedServicePrincipal(identity) && identity.keyScopes !== undefined) {
+        throw new AppError("NOT_FOUND", "Operation run not found");
+      }
       access.require("audit.view", { kind: "operation_run", workspaceId: run.workspaceId });
     }
     return toOperationRunResource(run, await readOperationRunApps(apps, [run]));

@@ -11,6 +11,7 @@ import {
   createWorkflowEngine,
   noWorkflowStepFiles,
   workflowDefinitionStartIssues,
+  workflowRunPrincipal,
   workflowStartIssues,
   workflowStepFileIssues,
   workflowsModule,
@@ -143,11 +144,14 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     });
     const entries: WorkflowListEntry[] = [];
     for (const { id, assetId, name, description, revisionId, definition, files } of published) {
+      // One read of the principal answers both whether a run can start and whom it acts as.
+      const principal = definition.ok
+        ? await workflowRunPrincipal(stores.apiAccess, clientInstanceId, definition.manifest)
+        : undefined;
       const reasons = definition.ok
         ? [
             ...(await workflowStartIssues(definition.manifest, {
-              clientInstanceId,
-              principals: stores.apiAccess,
+              principal,
               registry: operationCalls.registry
             })),
             // A script that is missing or refused, as a start says it. The files of an asset
@@ -167,6 +171,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
         runnable: reasons.length === 0,
         reasons,
         ...(definition.ok ? { inputs: definition.manifest.inputs } : {}),
+        ...(principal ? { runsAs: principal.displayLabel } : {}),
         ...(lastRun ? { lastRun } : {})
       });
     }

@@ -238,7 +238,45 @@ describe("an http_api Connection made on the instance", () => {
     expect(JSON.stringify(await w.runs())).not.toContain(key);
   });
 
-  it("refuses at save a method other than GET, the effect changing, a credential header and the reserved scope", async () => {
+  it("refuses every operation scope value at save and in release config with SCOPE-2", async () => {
+    const w = await world();
+    for (const scope of [
+      { mandant: { input: "clientId", output: "items[].number" } },
+      {},
+      null,
+      false,
+      "mandant"
+    ]) {
+      const operation = { ...openItems, scope };
+      const response = await w.put(w.definition({ operations: [operation] }), null);
+      expect(response.statusCode, response.body).toBe(422);
+      expect(JSON.stringify(errorSchema.parse(response.json()).error)).toContain("SCOPE-2");
+      const { enabled: _enabled, ...releaseOperation } = operation;
+      expect(() =>
+        parseClientInstanceConfig({
+          ...createTestConfig(),
+          connections: {
+            source: {
+              connectorType: "http_api",
+              authScheme: "none",
+              settings: { baseUrl: "https://api.example.test" },
+              operations: [releaseOperation]
+            }
+          }
+        })
+      ).toThrow(/scope.*SCOPE-2/u);
+    }
+    expect(
+      await w.instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name: NAME
+      })
+    ).toBeUndefined();
+    expect((await w.put(w.definition({ operations: [openItems] }), null)).statusCode).toBe(200);
+  });
+
+  it("refuses at save a method other than GET, the effect changing and a credential header", async () => {
     const w = await world();
     const refusedBy = async (config: Record<string, unknown>) => {
       const response = await w.put(config, null);
@@ -263,11 +301,6 @@ describe("an http_api Connection made on the instance", () => {
         "credential_in_settings"
       );
     }
-    const scoped = {
-      ...openItems,
-      scope: { mandant: { input: "clientId", output: "items[].number" } }
-    };
-    expect(await refusedBy(w.definition({ operations: [scoped] }))).toContain("SCOPE-2");
     expect(
       await refusedBy(w.definition({ operations: [{ ...declared, path: "/clients/{clientId}" }] }))
     ).toContain("{clientId}");

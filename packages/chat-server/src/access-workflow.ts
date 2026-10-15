@@ -46,8 +46,7 @@ type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
 type GrantWriteContext = Pick<OperationExecutionContext, "correlationId" | "access">;
 
 /**
- * The right every operation here asks for. The two grant writes ask it themselves, of a user's
- * row; a service principal's row is written under `SERVICE_PRINCIPALS_ACTION`.
+ * Administration of people requires this right. Principal rows use `SERVICE_PRINCIPALS_ACTION`.
  */
 const MANAGE_ACTION = "users.manage";
 /** What a credential carries to change, and to read, service principals. */
@@ -78,7 +77,7 @@ interface NamespaceListsCommand {
 
 /**
  * Grants and Namespaces as an instance administrator writes them. The right itself,
- * `users.manage`, is the `requires` of the reads and the Namespace writes. The two grant
+ * `users.manage`, guards reads of other people and the Namespace writes. The two grant
  * writes check it themselves for a user's row, with the rule that a superadmin's rows are a
  * superadmin's alone. What is written is narrower than what the table holds. For a user: the
  * actions of `GRANTABLE_ACTION_SCOPES`, each at its scope kinds. For a service principal, under
@@ -359,6 +358,13 @@ export class AccessWorkflow {
       page?: StorePage;
     }
   ): Promise<PermissionGrant[]> {
+    // Without user administration, only an explicitly principal-scoped list is readable.
+    if (!access.authorize(MANAGE_ACTION).allowed && filter.holderKind === "service_principal") {
+      access.require(SERVICE_PRINCIPALS_ACTION);
+      requireAuthScope(actor, API_ACCESS_READ_SCOPE);
+    } else {
+      access.require(MANAGE_ACTION);
+    }
     return this.options.stores.access.listGrants({
       clientInstanceId: this.options.clientInstanceId,
       ...filter,
@@ -376,6 +382,10 @@ export class AccessWorkflow {
     access: ActorAccess,
     input: { holderKind: "user" | "service_principal"; holderId: string }
   ): Promise<{ holderActive: boolean; items: AccessEntry[] }> {
+    // A person always reads their own rights. Other people remain behind user administration.
+    if (input.holderKind === "user" && input.holderId !== actor.id) {
+      access.require(MANAGE_ACTION);
+    }
     const holder = await this.findHolder(actor, access, input);
     const persisted = await this.options.stores.access.loadPersistedAccess({
       clientInstanceId: this.options.clientInstanceId,

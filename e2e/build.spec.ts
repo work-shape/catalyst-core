@@ -578,7 +578,17 @@ test("an agent's availability and the default agent are changed by the asset ope
     const personal = page.getByRole("checkbox", { name: "Personal workspaces" });
     await expect(everywhere).toBeChecked();
 
-    // The availability is saved by the asset operation, whose call is an Operation Run.
+    // The availability is saved through the page's one save bar, by the asset operation,
+    // whose call is an Operation Run. The agent itself did not change and is not written.
+    const agentWrites: string[] = [];
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (request.method() === "PUT" && path === new URL(agentPath(name)).pathname) {
+        agentWrites.push(request.url());
+      }
+    });
+    const saveBar = page.getByRole("button", { name: "Save changes", exact: true });
+    await expect(saveBar).toHaveCount(0);
     await selected.click();
     await personal.click();
     const saved = page.waitForResponse(
@@ -586,7 +596,7 @@ test("an agent's availability and the default agent are changed by the asset ope
         response.request().method() === "PUT" &&
         new URL(response.url()).pathname === `/api/v1/assets/agent/${name}/availability`
     );
-    await page.getByRole("button", { name: "Save availability", exact: true }).click();
+    await saveBar.click();
     const answer = await saved;
     expect(answer.status()).toBe(200);
     expect(answer.headers()["operation-run-id"]).toBeTruthy();
@@ -595,9 +605,8 @@ test("an agent's availability and the default agent are changed by the asset ope
       personalWorkspaces: true,
       collaborationWorkspaceIds: []
     });
-    await expect(
-      page.getByRole("button", { name: "Save availability", exact: true })
-    ).toBeDisabled();
+    await expect(saveBar).toHaveCount(0);
+    expect(agentWrites).toEqual([]);
     expect(field(await (await page.request.get(agentPath(name))).json(), "availability")).toEqual({
       mode: "selected",
       personalWorkspaces: true,

@@ -9,11 +9,13 @@ import {
   WorkflowRunsPageView,
   WorkflowsPageView,
   cancelOffered,
+  listedToReader,
   runListRefreshMs,
   runRefreshMs,
   startFormOf,
   startOffered,
   toWorkflow,
+  toDraftWorkflowListItem,
   toWorkflowListItem,
   toWorkflowRun,
   toWorkflowStepRun,
@@ -260,6 +262,38 @@ describe("the list of Workflows", () => {
     expect(markup).toContain('href="/w/cw_1/workflows/notify-clients/runs"');
   });
 
+  it("lists a draft never published to who may write Workflows, opening on its page (NAV-2)", () => {
+    const draft = toDraftWorkflowListItem({
+      name: "first-draft",
+      title: "First draft",
+      updatedAt: "2026-10-12T09:00:00.000Z"
+    });
+    expect(listedToReader(draft, { write: true })).toBe(true);
+    expect(listedToReader(draft, { write: false })).toBe(false);
+    expect(listedToReader(toWorkflowListItem(summary), { write: false })).toBe(true);
+    const markup = render(
+      createElement(WorkflowsPageView, {
+        workspaceId: "cw_1",
+        list: {
+          rows: [draft],
+          failed: false,
+          hasMore: false,
+          loadingMore: false,
+          loadMore: noop,
+          retry: noop
+        },
+        now,
+        runsAvailable: true,
+        onOpenRoute: noop,
+        onStart: noop
+      })
+    );
+    expect(markup).toContain("First draft");
+    expect(markup).toContain(t("workflows.draft.unpublished"));
+    expect(markup).toContain('href="/w/cw_1/workflows/first-draft"');
+    expect(markup).not.toContain(t("workflows.startNow"));
+  });
+
   it("warns that a Workflow cannot be started, but not one that only runs on its schedule", () => {
     const issue = (code: string) => ({ code, message: "Refused." });
     const scheduled = render(listPage([{ ...summary, reasons: [issue("no_manual_trigger")] }]));
@@ -334,6 +368,17 @@ describe("the page of a Workflow", () => {
     expect(markup).toContain('href="/w/cw_1/workflows/notify-clients/runs"');
     // The drawing is a region of its own, named after the Workflow.
     expect(markup).toContain('data-testid="workflow-canvas"');
+  });
+
+  it("says in its head whom every run acts as, by the account's label", () => {
+    const named = toWorkflow(
+      { name: "notify-clients", config: definition, publishedRevision: 3 },
+      { mayStart: true, runsAs: "Monthly close" }
+    );
+    expect(render(page({ workflow: named }))).toContain("Runs as Monthly close");
+    expect(render(page({ workflow: named }), "de")).toContain("Läuft als Monthly close");
+    // Without a label the head names no account: never the definition's own name of it.
+    expect(render(page())).not.toContain("Runs as");
   });
 
   it("offers neither a start nor the runs where the instance runs no Workflow", () => {

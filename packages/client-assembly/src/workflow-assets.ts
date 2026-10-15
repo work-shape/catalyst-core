@@ -1,5 +1,6 @@
 import {
   createWorkflowLiveCheck,
+  type PublishReach,
   type WorkflowAssetKind,
   type WorkflowRunAsOptions
 } from "@vivd-catalyst/chat-server";
@@ -13,6 +14,7 @@ import {
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   defineAssetKind,
+  parseConnectionOperationName,
   type ClientInstanceId,
   type ConfigAssetRecord,
   type ConfigAssetStore,
@@ -21,12 +23,14 @@ import {
 } from "@vivd-catalyst/core";
 import {
   WORKFLOW_MANIFEST_MAX_BYTES,
+  indexWorkflowSteps,
   parseWorkflowManifest,
   replaceScheduleJob,
   stepFileBytes,
   workflowDefinitionRefusal,
   workflowStepFileIssues,
   workflowStepFilesRefusal,
+  workflowRunPrincipal,
   type WorkflowDefinitionResult,
   type WorkflowDefinitionRevision,
   type WorkflowDefinitionSource,
@@ -136,6 +140,7 @@ export function createWorkflowAssetKind(
         write: WORKFLOW_ACTIONS.write,
         delete: WORKFLOW_ACTIONS.delete,
         publish: WORKFLOW_ACTIONS.publish,
+        approve: WORKFLOW_ACTIONS.approve,
         use: WORKFLOW_ACTIONS.use
       },
       lifecycle: "draft_published",
@@ -170,6 +175,12 @@ export function createWorkflowAssetKind(
           : { description: workflow.manifest.description })
       })
     }),
+    async readRunsAs(config) {
+      const runAs = runAsOfConfigSchema.safeParse(config).data?.manifest.runAs;
+      if (typeof runAs !== "string") return undefined;
+      const principal = await workflowRunPrincipal(options.apiAccess, clientInstanceId, { runAs });
+      return principal?.displayLabel;
+    },
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,
@@ -178,10 +189,48 @@ export function createWorkflowAssetKind(
     assertInteractiveDeleteAllowed: () => undefined,
     onPublish: ({ stores, replaced, config }) => reschedule(stores, replaced, config),
     onRemove: ({ stores, published }) => reschedule(stores, published, undefined),
+    publishReach: workflowPublishReach,
     authorizeLive: createWorkflowLiveCheck(
       options,
       (config) => runAsOfConfigSchema.safeParse(config).data?.manifest.runAs
     )
+  };
+}
+
+/**
+ * What a Workflow revision reaches beside the live one: its steps that call an operation, new
+ * or changed, the Connections those calls go through and the principal a run acts as.
+ */
+function workflowPublishReach(next: JsonObject, live: JsonObject | undefined): PublishReach {
+  const manifestOf = (config: JsonObject | undefined) => {
+    const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
+    return parsed.ok ? parsed.manifest : undefined;
+  };
+  const stepsOf = (manifest: ReturnType<typeof manifestOf>) =>
+    manifest ? [...indexWorkflowSteps(manifest).values()].map(({ step }) => step) : [];
+  const manifest = manifestOf(next);
+  const before = new Map(stepsOf(manifestOf(live)).map((step) => [step.id, JSON.stringify(step)]));
+  const calls = stepsOf(manifest).flatMap((step) => (step.type === "operation" ? [step] : []));
+  return {
+    calls: calls.flatMap((step) => {
+      const then = before.get(step.id);
+      if (then === JSON.stringify(step)) return [];
+      return [
+        {
+          label: step.name,
+          operation: step.operation,
+          change: then === undefined ? ("new" as const) : ("changed" as const)
+        }
+      ];
+    }),
+    hostsAdded: [],
+    connections: [
+      ...new Set(
+        calls.flatMap((step) => parseConnectionOperationName(step.operation)?.connection ?? [])
+      )
+    ],
+    dataStores: [],
+    ...(manifest ? { runAs: manifest.runAs } : {})
   };
 }
 

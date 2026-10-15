@@ -29,6 +29,8 @@ import {
   STATE_FILENAME,
   WorkingCopyValidationError,
   readManifest,
+  readManifestIfPresent,
+  resolveInstance,
   readStateFile,
   readWorkingCopy,
   writeStateFile,
@@ -56,6 +58,8 @@ export interface ConfigCommandOptions {
   env?: Readonly<Record<string, string | undefined>>;
   stdout?: (text: string) => void;
   stderr?: (text: string) => void;
+  /** Asks the person at the terminal. Absent where nobody can be asked. */
+  prompt?: (question: string) => Promise<string>;
 }
 
 export function canonicalBundleFiles(bundle: WorkingCopyBundle): Map<string, string> {
@@ -532,6 +536,15 @@ export async function connectApi(
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
     ...(bound.workspace === undefined ? {} : { workspaceId: bound.workspace })
   });
+}
+
+/** The selected instance and the workspace its working copy is bound to. */
+export async function openInstance(
+  options: ConfigCommandOptions
+): Promise<{ api: ConfigApi; workspace: string | undefined }> {
+  const manifest = await readManifestIfPresent(resolveWorkingDir(options));
+  const instance = await resolveInstance(manifest, options);
+  return { api: await connectApi(instance.url, options), workspace: instance.workspace };
 }
 
 export function assetHash(contents: string): string {

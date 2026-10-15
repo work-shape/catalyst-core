@@ -29,6 +29,18 @@ catalyst config validate
 catalyst config push
 ```
 
+## Follow a held call
+
+A publish that waits for approval exits 3 and prints its Operation Run id. Follow it with:
+
+```sh
+catalyst operation show <run-id>
+catalyst requests
+catalyst requests --withdraw <request-id>
+```
+
+`operation show` prints the status, decision and any failure; add `--json` for the full record. It exits 3 while awaiting a decision, 1 for a failed, denied or expired run, and 0 otherwise. `requests` lists your requests in every state, including the decision; `--json` prints the list as JSON. Withdrawal needs a personal key with an asset write or delete scope (`config_assets:write`). Reading your own runs, listing and counting your own requests uses the `me:read` scope every personal key carries. Another person's run is not found, and their requests cannot be listed or withdrawn through your key.
+
 ## Log in
 
 On an instance with the module `personalApiKeys` on, a person logs the tool in with a key of their own:
@@ -87,6 +99,8 @@ catalyst agent revert tax-vat --to 2 --if-revision 4
 catalyst agent delete tax-vat --if-revision 5
 ```
 
+`catalyst app publish` and `catalyst workflow publish` ask before they publish and need your answer in a terminal; `--yes` publishes nothing. When approval is required, the command ends with exit code `3` and the request id, including for an admin's key. An instance approver can approve it in the Inbox ([Guardrails](/manage/guardrails/#publishing-needs-an-instance-admins-approval)). A CLI answer never supplies that approval.
+
 `--from` takes the forms of the working copy: an `.agent.yaml` or any YAML or JSON definition, a skill's folder with its `SKILL.md`, or the folder of a kind whose revisions hold files, such as an App. A write names the revision it was made against with `--if-revision`, or `new` to create; read it with `show` or `history`. `discard-draft`, `set-availability` and `set-default` complete the list; `catalyst --help` shows each with its options. `--json` prints the instance's answer as it came.
 
 Guardrails have four commands of their own beside `put`:
@@ -107,6 +121,48 @@ Refused by the instance (HTTP 403 FORBIDDEN): Missing the right 'agent.write'
 ```
 
 The exit code is 0 when the call was applied, 1 when it was refused or failed, 2 when the command line was wrong and nothing was sent, and 3 when the call waits for another person's approval and has changed nothing yet.
+
+## Workflows, checks and lists
+
+These commands call the existing API operations with the same key and checks. They print readable YAML by default; add `--json` for JSON. Paginated lists read every page and print the combined items.
+
+```sh
+catalyst workflow test month-end --from test-input.json  # {"input":{"month":"2026-10"}}
+catalyst workflow runs month-end
+catalyst workflow run <run-id>
+catalyst workflow steps <run-id>
+catalyst workflow cancel <run-id>
+catalyst guardrail hits no-iban
+catalyst knowledge-base check accounts
+catalyst data-store describe reporting
+catalyst data-store used-by reporting
+catalyst app actions offers
+catalyst keys list
+catalyst instance workspaces
+```
+
+`workflow test` tests the saved draft and simulates changing steps. Its optional `--from <file|->` reads the JSON request body (`{"input": {...}}`); without it, the body is `{}`. It starts a run and returns its current state; use `run` and `steps` to read progress. `cancel` cancels the run you name. These commands do not start a live Workflow.
+
+`app actions` without a name lists actions of the published Apps you may read; with a name it reads that App's draft if you may write it, otherwise its published revision. `keys list` lists your own key metadata, never secrets. `instance workspaces` uses `instance.workspaces.list`: the Shared Workspaces for agent availability, requiring `config_assets:write` and `agent.write`. It is not the list of your workspace memberships.
+
+`guardrail hits` preserves the API's counts and `hasMore`; `data-store used-by` preserves hidden counts and `truncated`, and `app actions` preserves `truncated`. These bounded responses are not paginated lists. All commands accept `--instance` and `--dir` as above, and use the same exit codes, including 3 for a held change.
+
+## Catalog operations and Connections
+
+`call` sends any operation in the CLI's API catalog through the same client and server checks. Input is a JSON object with the API client's `params`, `query` and `body` fields. Use `--from <file>` or `--from -` for stdin; without `--from`, it reads piped stdin or uses `{}` at a terminal. Output is JSON, with the exit codes above. A held call prints `status: pending_approval` and its run, and exits 3.
+
+```sh
+catalyst call assets.get --from request.json
+printf '%s' '{"params":{"kind":"agent","name":"assistant"}}' | catalyst call assets.get
+catalyst connection secret set reporting < /path/to/secret
+catalyst connection test reporting
+catalyst connection discover reporting
+catalyst connection tools
+```
+
+`connection secret set <name>` reads stdin or asks at a terminal with echo disabled. The hidden prompt accepts one line; Enter submits it. Send multi-line secrets, such as PEM keys, through stdin (`catalyst connection secret set reporting < key.pem`). It accepts no secret argument, removes one final line ending from stdin, and prints only the secret state and version. It reads the current version before writing; a concurrent replacement is refused. A key without the required scope or right gets the same refusal as the API.
+
+For multipart operations, the JSON input's `file` names a local upload path. Binary responses print JSON with `contentType` and `base64`; streaming operations print one JSON event per line.
 
 ## The key
 

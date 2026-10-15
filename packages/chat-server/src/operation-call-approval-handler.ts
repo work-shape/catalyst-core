@@ -14,8 +14,10 @@ import {
   type ApprovalRequestHandler,
   type ApprovalRequestOutcome,
   type ApprovalRequestStore,
+  type ApprovalTransactionStores,
   type AuthenticatedUser,
   type ClientInstanceId,
+  type ConfigAssetStore,
   type JsonObject,
   type JsonValue,
   type OperationDenial,
@@ -36,6 +38,18 @@ import {
 } from "@vivd-catalyst/tool-execution";
 import { HELD_ASSET_OPERATION, type HeldAssetPreviewer } from "./held-asset-preview";
 import { executeApprovedOperationCallJob } from "./job-kinds";
+import type { HeldCallApprovalKind } from "./held-call-kind";
+import { PUBLISH_APPROVAL_KINDS } from "./publish-approval";
+
+/**
+ * The approval kinds of a call that waits for another person: `operation_call`, and the kinds
+ * of a held call that its operation names (`approval` of the definition), such as a publish.
+ * Each is decided and executed alike; they differ in who decides and in what the item shows.
+ */
+export const HELD_CALL_APPROVAL_KINDS: readonly string[] = [
+  OPERATION_CALL_APPROVAL_KIND,
+  ...PUBLISH_APPROVAL_KINDS
+];
 
 /**
  * The largest input a call may have to be held for an approval, as JSON. The input is kept in
@@ -80,6 +94,8 @@ const payloadSchema = z.object({
   operation: z.string().min(1),
   effect: z.enum(["reading", "changing"]),
   input: z.unknown().optional(),
+  /** What the call is about, as `approval` of its operation froze it when it was held. */
+  subject: z.record(z.string(), z.json()).optional(),
   /** Set once the request ended: the input and how the person was signed in are gone. */
   inputRemoved: z.literal(true).optional(),
   actor: z.object({
@@ -121,29 +137,38 @@ export interface OperationCallApprovalOptions {
   users: Pick<UserStore, "getUser">;
   /** Describes the asset a held `assets.put` saves. Without it such a call is shown as any other. */
   assetPreview?: HeldAssetPreviewer;
+  /** Where a kind reads what its request is about, outside a decision. */
+  configAssets: Pick<ConfigAssetStore, "getConfigAsset">;
 }
 
 /**
  * The approval kind of a call that waits for another person: `operation_call`. Approving
  * records the decision and enqueues the job that executes the frozen call once, as the person
  * who made it and with the approver recorded as who decided. Nothing of the call runs in the
- * request that approves it. Whoever holds `operations.approve` decides, the caller included.
+ * request that approves it. Whoever holds `operations.approve` decides, the caller included;
+ * for a kind of held call, whoever holds its own right.
  *
  * Inside a decision the handler reads and writes through the stores of the decision's
  * transaction alone, so a decision holds one connection however many are made at once.
  */
 export function createOperationCallApprovalHandler(
-  options: OperationCallApprovalOptions
+  options: OperationCallApprovalOptions,
+  held?: HeldCallApprovalKind
 ): ApprovalRequestHandler {
   const { clientInstanceId } = options;
   /** The runs as the decision's transaction sees them. */
   const runsOf = (context: ApprovalRequestContext): OperationRunStore =>
     context.transaction?.operationRuns ?? options.deps().runs;
+  /** The assets as the decision's transaction sees them. */
+  const storesOf = (
+    context: ApprovalRequestContext
+  ): Pick<ApprovalTransactionStores, "configAssets"> =>
+    context.transaction ?? { configAssets: options.configAssets };
   const runIdOf = (payload: JsonObject) => payloadSchema.pick({ runId: true }).safeParse(payload);
 
   return {
-    kind: OPERATION_CALL_APPROVAL_KIND,
-    requiredPermission: "operations.approve",
+    kind: held?.kind ?? OPERATION_CALL_APPROVAL_KIND,
+    requiredPermission: held?.requiredPermission ?? "operations.approve",
     validate(payload) {
       return toJsonObject(parsePayload(payload));
     },
@@ -157,10 +182,20 @@ export function createOperationCallApprovalHandler(
         call.operation === HELD_ASSET_OPERATION
           ? await options.assetPreview?.(unknownToJsonValue(call.input), context.viewer)
           : undefined;
-      return toJsonObject({ ...previewOf(call), ...(asset ? { asset } : {}) });
+      // What the call is about, while it waits.
+      const review =
+        held && call.subject && context.status === "pending"
+          ? await held.review(call.subject, context.viewer?.inList ?? false)
+          : undefined;
+      return toJsonObject({
+        ...previewOf(call),
+        ...(asset ? { asset } : {}),
+        ...(review ? { review } : {})
+      });
     },
     async isStale(payload, context) {
-      const { runId } = parsePayload(payload);
+      const call = parsePayload(payload);
+      const { runId } = call;
       const run = await runsOf(context).get({ clientInstanceId, id: runId });
       if (!run) {
         // A call whose run is gone was deleted with its conversation or its retention.
@@ -178,6 +213,19 @@ export function createOperationCallApprovalHandler(
       }
       if (run.status !== "pending_approval") {
         return { result: refusedResult(runId, run.error ?? WAITS_NO_MORE) };
+      }
+      const moved =
+        held && call.subject
+          ? await held.moved(call.subject, storesOf(context).configAssets)
+          : undefined;
+      if (moved) {
+        // Nothing of it is approved any more: the call ends refused with the request.
+        await refuseWaitingOperation(
+          run.id,
+          { kind: "policy", operation: run.operation, reason: "approval_stale" },
+          { clientInstanceId, runs: runsOf(context), now: options.deps().now }
+        );
+        return { result: refusedResult(runId, { code: "CONFLICT", message: moved }) };
       }
       return false;
     },
@@ -245,11 +293,12 @@ export function minimizedOperationCallPayload(payload: JsonObject): JsonObject {
   if (!parsed.success) {
     return { inputRemoved: true };
   }
-  const { runId, operation, effect, actor, origin, workspaceId, expiresAt } = parsed.data;
+  const { runId, operation, effect, actor, origin, workspaceId, expiresAt, subject } = parsed.data;
   return toJsonObject({
     runId,
     operation,
     effect,
+    ...(subject ? { subject } : {}),
     actor: { id: actor.id, label: actor.label },
     origin,
     ...(workspaceId ? { workspaceId } : {}),
@@ -312,9 +361,11 @@ const HELD_CALLS_LOCKED_RETRY_MS = 200;
  */
 export async function endHeldOperationCalls(
   options: HeldOperationCallEnderOptions,
-  filter: Pick<
-    Parameters<ApprovalRequestStore["listApprovalRequests"]>[0],
-    "conversationId" | "requestedById"
+  filter: Partial<
+    Pick<
+      Parameters<ApprovalRequestStore["listApprovalRequests"]>[0],
+      "conversationId" | "requestedById" | "kinds" | "subjectContains"
+    >
   >,
   reason: { denial: OperationDenial; message: string }
 ): Promise<number> {
@@ -324,9 +375,9 @@ export async function endHeldOperationCalls(
   for (;;) {
     const held = await approvals.listApprovalRequests({
       clientInstanceId,
-      kinds: [OPERATION_CALL_APPROVAL_KIND],
-      status: "pending",
+      kinds: HELD_CALL_APPROVAL_KINDS,
       ...filter,
+      status: "pending",
       page: { limit: HELD_CALLS_END_PAGE_SIZE }
     });
     let endedOfPage = 0;
@@ -376,7 +427,10 @@ export async function endHeldOperationCalls(
   }
 }
 
-export interface ApprovedOperationCallExecutorOptions extends OperationCallApprovalOptions {
+export interface ApprovedOperationCallExecutorOptions extends Pick<
+  OperationCallApprovalOptions,
+  "clientInstanceId" | "deps" | "users"
+> {
   approvals: Pick<ApprovalRequestStore, "getApprovalRequest" | "transitionApprovedApprovalRequest">;
 }
 
@@ -399,7 +453,7 @@ export async function executeApprovedOperationCall(
   const request = await options.approvals.getApprovalRequest({ clientInstanceId, requestId });
   if (
     !request ||
-    request.kind !== OPERATION_CALL_APPROVAL_KIND ||
+    !HELD_CALL_APPROVAL_KINDS.includes(request.kind) ||
     request.status !== "approved" ||
     approvalExecutionOf(request) !== "queued"
   ) {
@@ -609,6 +663,10 @@ function inputFields(input: JsonValue): [string, JsonValue][] {
 export interface OperationApprovalFilerOptions {
   clientInstanceId: ClientInstanceId;
   creator: ApprovalRequestCreator;
+  /** Where the request a newer one replaces is ended. */
+  approvals: HeldOperationCallEnderOptions["approvals"];
+  /** The kinds of held call, by which a newer request tells the one it replaces. */
+  held: readonly HeldCallApprovalKind[];
 }
 
 /**
@@ -620,10 +678,23 @@ export function createOperationApprovalFiler(
   options: OperationApprovalFilerOptions
 ): OperationApprovalRequests {
   return {
-    async request({ run, call, heldInput, runtime, expiresAt, policySource }) {
+    async request({ run, call, heldInput, runtime, expiresAt, policySource, approval }) {
       const { actor, origin } = call;
       if (isAuthenticatedServicePrincipal(actor)) {
         return undefined;
+      }
+      const kind = approval?.kind ?? OPERATION_CALL_APPROVAL_KIND;
+      const held = options.held.find((entry) => entry.kind === kind);
+      if (held && approval?.subject) {
+        // The newer request about the same thing replaces the one that still waits.
+        await endHeldOperationCalls(
+          options,
+          { kinds: [kind], subjectContains: held.subjectKey(approval.subject) },
+          {
+            denial: { kind: "policy", operation: run.operation, reason: "approval_stale" },
+            message: "A newer request about the same replaced this one."
+          }
+        );
       }
       const input = unknownToJsonValue(call.input);
       if (Buffer.byteLength(JSON.stringify(input)) > HELD_OPERATION_INPUT_MAX_BYTES) {
@@ -640,6 +711,7 @@ export function createOperationApprovalFiler(
         effect: run.effect,
         input,
         ...(heldInput ? { heldInput } : {}),
+        ...(approval?.subject ? { subject: approval.subject } : {}),
         actor: {
           id: actor.id,
           label: actor.displayLabel,
@@ -677,7 +749,7 @@ export function createOperationApprovalFiler(
           actor,
           { correlationId: call.correlationId, runFence: runtime.runFence },
           {
-            kind: OPERATION_CALL_APPROVAL_KIND,
+            kind,
             // The name of the operation. The Inbox words the item in the reader's language.
             summary: run.operation,
             payload: toJsonObject(payload),

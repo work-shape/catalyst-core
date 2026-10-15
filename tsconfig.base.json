@@ -20,6 +20,7 @@
     "skipLibCheck": true,
     "strict": true,
     "paths": {
+      "@work-shape/catalyst-cli": ["packages/config-cli/src/index.ts"],
       "@vivd-catalyst/agent-runtime": ["packages/agent-runtime/src/index.ts"],
       "@vivd-catalyst/app-kit/client": ["packages/app-kit/src/client.ts"],
       "@vivd-catalyst/app-kit/protocol": ["packages/app-kit/src/protocol.ts"],

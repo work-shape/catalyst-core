@@ -171,8 +171,12 @@ export async function setAssetAvailability(
   return availability;
 }
 
-/** Where a write asks a new agent to start: everywhere, or in the shared workspace it names. */
-export type AvailableIn = "all" | { workspaceId: string };
+/**
+ * Where a write asks a new agent to start: everywhere, in the shared workspace it names, or
+ * nowhere. The API offers the first two; `nowhere` is the agent's own first save in a
+ * conversation, whose agent waits for a person to make it available (NAV-2).
+ */
+export type AvailableIn = "all" | "nowhere" | { workspaceId: string };
 
 /** What a write did that its caller should know and that did not refuse it. */
 export interface AssetWarning {
@@ -216,6 +220,9 @@ export async function initialAgentPlacement(
   }
   if (input.setsDefault) {
     return { initialAgentAvailability: "all", warnings: [] };
+  }
+  if (input.availableIn === "nowhere") {
+    return { initialAgentAvailability: "hidden", warnings: [] };
   }
   if (input.availableIn === "all") {
     // Asked without a resource, so only an entry at instance scope answers.

@@ -1,13 +1,7 @@
 import { compileJsonSchema } from "@vivd-catalyst/connections";
-import type {
-  ApiAccessStore,
-  ClientInstanceId,
-  OperationRegistry,
-  WorkflowManifest
-} from "@vivd-catalyst/core";
+import type { OperationRegistry, WorkflowManifest, WorkflowRun } from "@vivd-catalyst/core";
 import { indexWorkflowSteps, type WorkflowDefinitionIssue } from "./definition";
 import { secretOperationSteps } from "./operation-step";
-import { workflowRunPrincipal } from "./run-identity";
 
 // What keeps a published definition from being started by hand, asked without starting it.
 // The start refuses for the same things under the same codes, one at a time; a list of the
@@ -51,8 +45,8 @@ export function workflowDefinitionStartIssues(
 export async function workflowStartIssues(
   manifest: WorkflowManifest,
   instance: {
-    clientInstanceId: ClientInstanceId;
-    principals: Pick<ApiAccessStore, "findServicePrincipalByName">;
+    /** The principal the definition runs as, as `workflowRunPrincipal` answers it. */
+    principal: WorkflowRun["principal"] | undefined;
     registry: Pick<OperationRegistry, "resolve">;
   }
 ): Promise<WorkflowStartIssue[]> {
@@ -82,12 +76,7 @@ export async function workflowStartIssues(
     });
   }
   issues.push(...(await secretOperationSteps(manifest, instance.registry)));
-  const principal = await workflowRunPrincipal(
-    instance.principals,
-    instance.clientInstanceId,
-    manifest
-  );
-  if (!principal) {
+  if (!instance.principal) {
     issues.push({
       code: "principal_inactive",
       message: `The instance has no active service principal named '${manifest.runAs}', which the Workflow '${manifest.id}' runs as`,

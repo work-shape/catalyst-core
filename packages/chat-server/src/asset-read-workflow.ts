@@ -141,6 +141,8 @@ export class AssetReadWorkflow {
       this.revisionContent(target, asset, address)
     ]);
     const namespace = findNamespaceOfAssetName(namespaces, asset.name);
+    // Resolve only after authorization, from the revision the caller is allowed to read.
+    const runsAs = await target.kind.readRunsAs?.(content.config);
     return {
       id: asset.id,
       kind: asset.kind,
@@ -152,6 +154,7 @@ export class AssetReadWorkflow {
         ? { publishedRevision: content.contentRevision }
         : pointersOf(target.kind, asset)),
       ...content,
+      ...(runsAs === undefined ? {} : { runsAs }),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
       updatedAt: asset.updatedAt
