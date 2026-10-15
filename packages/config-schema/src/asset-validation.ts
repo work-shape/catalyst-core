@@ -14,6 +14,8 @@ import {
 } from "./reference-validation";
 
 export function validateConfigAssetBundle(input: {
+  /** Stored references are resolved by the runtime; writes always use strict validation. */
+  stored?: boolean;
   agents: unknown[];
   skills: unknown[];
   defaultAgentName?: string;
@@ -39,11 +41,13 @@ export function validateConfigAssetBundle(input: {
       agentNames: agents.map((agent) => agent.name),
       defaultAgentName: input.defaultAgentName
     }).map(toValidationIssue),
-    ...findAgentReferenceIssues({
-      agents,
-      skillNames: skills.map((skill) => skill.name),
-      refs: input.refs
-    }).map(toValidationIssue)
+    ...(input.stored
+      ? []
+      : findAgentReferenceIssues({
+          agents,
+          skillNames: skills.map((skill) => skill.name),
+          refs: input.refs
+        }).map(toValidationIssue))
   );
 
   if (issues.length > 0) {

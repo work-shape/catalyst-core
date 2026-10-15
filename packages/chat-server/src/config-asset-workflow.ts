@@ -92,6 +92,10 @@ export function configAssetReferences(
   const enabledToolNames = refs.enabledToolNames.filter(
     (toolName) => options.modules.offModuleOf("tool", toolName) === undefined
   );
+  const unavailableTools = refs.enabledToolNames.flatMap((name) => {
+    const module = options.modules.offModuleOf("tool", name);
+    return module === undefined ? [] : [{ name, module, reason: "module_off" as const }];
+  });
   return {
     ...refs,
     // Shown read-only on an agent's page, as the agent gets them.
@@ -105,11 +109,9 @@ export function configAssetReferences(
       : {}),
     enabledToolNames,
     tools: offeredToolReferences(options, enabledToolNames),
-    // An agent that still names one shows it as unavailable and can drop it.
-    moduleOffTools: refs.enabledToolNames.flatMap((name) => {
-      const module = options.modules.offModuleOf("tool", name);
-      return module === undefined ? [] : [{ name, module }];
-    })
+    unavailableTools,
+    // Compatibility for the agent editor until it consumes unavailableTools.
+    moduleOffTools: unavailableTools.map(({ name, module }) => ({ name, module }))
   };
 }
 

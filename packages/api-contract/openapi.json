@@ -21536,6 +21536,27 @@
           "availability": {
             "$ref": "#/components/schemas/AgentAvailability"
           },
+          "unavailableTools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnavailableTool"
+            }
+          },
+          "unavailableSkills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnavailableSkill"
+            }
+          },
+          "unavailableModels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnavailableModel"
+            }
+          },
+          "chatAvailable": {
+            "type": "boolean"
+          },
           "updatedAt": {
             "$ref": "#/components/schemas/Timestamp"
           }
@@ -23115,6 +23136,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AgentToolReference"
+            }
+          },
+          "unavailableTools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnavailableTool"
             }
           },
           "moduleOffTools": {
@@ -28997,6 +29024,87 @@
           "input",
           "result",
           "modelOutput"
+        ]
+      },
+      "UnavailableModel": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "modelProviderId",
+              "modelBindingId",
+              "userSelectableModelBindingIds"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "const": "unknown_model"
+          }
+        },
+        "required": [
+          "name",
+          "field",
+          "reason"
+        ]
+      },
+      "UnavailableSkill": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "const": "unknown_skill"
+          }
+        },
+        "required": [
+          "name",
+          "reason"
+        ]
+      },
+      "UnavailableTool": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "const": "module_off"
+              },
+              "module": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "reason",
+              "module"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "const": "unknown_tool"
+              }
+            },
+            "required": [
+              "name",
+              "reason"
+            ]
+          }
         ]
       },
       "UpdateAdministeredUserRequest": {

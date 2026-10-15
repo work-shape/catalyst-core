@@ -158,8 +158,8 @@ export function loadReferableAssets(
  *
  * The change is read against the view, which leaves assets out. The view has issues of its
  * own, because what it keeps may refer to what it leaves out: those are not the change's and
- * are not told, and a reference the changed definition carried already is among them, so a
- * write is never refused for a reference it only keeps. An issue that arises only because of
+ * are not told. A changed agent is checked strictly even for references it kept from its
+ * stored definition. An issue that arises only because of
  * an asset the caller may not read, in the view or in the stored set as a whole, is told as
  * one sentence that names nothing.
  */
@@ -174,10 +174,10 @@ export function findIssuesOfChange(
   const key = (issue: AssetSetIssue) => JSON.stringify([issue.message, issue.path?.map(String)]);
   const keysOf = (issues: readonly AssetSetIssue[]) => new Set(issues.map(key));
   const before = new Map<string, number>();
-  for (const issue of findAssetSetIssues(kinds, view.set).issues) {
+  for (const issue of findAssetSetIssues(kinds, view.set, view.set).issues) {
     before.set(key(issue), (before.get(key(issue)) ?? 0) + 1);
   }
-  const ofChange = findAssetSetIssues(kinds, change(view.set)).issues.filter((issue) => {
+  const ofChange = findAssetSetIssues(kinds, change(view.set), view.set).issues.filter((issue) => {
     if (issue.assetKind !== undefined && issue.assetName !== undefined) {
       // An issue of one definition is the change's when the change writes that definition.
       return changed.has(assetKey(issue.assetKind, issue.assetName));
@@ -188,12 +188,16 @@ export function findIssuesOfChange(
   });
   // What the change is refused for with nothing but readable assets around it is the
   // caller's to hear. Every other issue is there because of an asset the caller may not read.
-  const amongReadable = keysOf(findAssetSetIssues(kinds, change(view.readable)).issues);
+  const amongReadable = keysOf(
+    findAssetSetIssues(kinds, change(view.readable), view.readable).issues
+  );
   const told = ofChange.filter((issue) => amongReadable.has(key(issue)));
   const toldKeys = keysOf(told);
   const untold =
     told.length < ofChange.length ||
-    findAssetSetIssues(kinds, change(stored)).issues.some((issue) => !toldKeys.has(key(issue)));
+    findAssetSetIssues(kinds, change(stored), stored).issues.some(
+      (issue) => !toldKeys.has(key(issue))
+    );
   return untold ? [...told, { message: UNREAD_ASSET_ISSUE }] : told;
 }
 

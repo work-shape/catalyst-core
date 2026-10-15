@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { agentAvailabilitySchema, configAssetConfigSchema } from "./configuration";
+import {
+  agentAvailabilitySchema,
+  configAssetConfigSchema,
+  unavailableToolSchema,
+  unavailableSkillSchema,
+  unavailableModelSchema
+} from "./configuration";
 import { timestampSchema } from "./shared";
 
 /** How many puts and deletes one `assets.sync` call may carry. */
@@ -166,6 +172,12 @@ export const assetSchema = z.object({
    * out where none is stored: such an asset is hidden in every workspace.
    */
   availability: agentAvailabilitySchema.optional(),
+  /** Only on agent reads. The stored config stays intact; these references cannot run. */
+  unavailableTools: z.array(unavailableToolSchema).optional(),
+  unavailableSkills: z.array(unavailableSkillSchema).optional(),
+  unavailableModels: z.array(unavailableModelSchema).optional(),
+  /** False when the primary model is unavailable; no model is substituted. */
+  chatAvailable: z.boolean().optional(),
   updatedAt: timestampSchema
 });
 

@@ -317,6 +317,10 @@ describe("a module that is off", () => {
       params: { kind: "agent", name: "test_agent" }
     });
     expect(kept.statusCode).toBe(200);
+    expect(kept.json()).toMatchObject({
+      chatAvailable: true,
+      unavailableTools: [{ name: TOOL, reason: "module_off", module: "documents" }]
+    });
     expect(kept.json<{ config: JsonObject }>().config).toMatchObject({
       displayName: "Stored Agent",
       toolNames: [TOOL]

@@ -87,11 +87,13 @@ export const INVALID_ASSET_SET_MESSAGE = "Config asset bundle is invalid";
  * What a set would have to change before it can be written, read from the registered kinds
  * and from nothing else. The order is fixed: every kind's schema and name issues in
  * registration order, then doubled names, then the instance default, then each kind's own
- * reference checks.
+ * reference checks. With `stored`, kinds can tolerate unavailable references of unchanged
+ * definitions; without it every definition counts as changed.
  */
 export function findAssetSetIssues(
   kinds: readonly WorkflowAssetKind[],
-  set: AssetSet
+  set: AssetSet,
+  stored?: AssetSet
 ): {
   issues: AssetSetIssue[];
   accepted: AssetSet;
@@ -147,7 +149,7 @@ export function findAssetSetIssues(
     };
   };
   for (const { reading } of readings) {
-    issues.push(...reading.validate(context()).map(plainIssue));
+    issues.push(...reading.validate(context(stored)).map(plainIssue));
   }
   return {
     issues,
@@ -189,7 +191,7 @@ export function validateAssetSet(
   set: AssetSet,
   stored?: AssetSet
 ): AssetSet {
-  const found = findAssetSetIssues(kinds, set);
+  const found = findAssetSetIssues(kinds, set, stored);
   if (found.issues.length > 0) {
     throw new AppError("VALIDATION_FAILED", INVALID_ASSET_SET_MESSAGE, { issues: found.issues });
   }
