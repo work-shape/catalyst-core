@@ -1,91 +1,118 @@
-import { createElement, type ReactElement } from "react";
+import { createElement, createRef } from "react";
 import { describe, expect, it } from "vitest";
-import { AgentAvailabilityEditor } from "@vivd-catalyst/chat-ui/build-area";
+import {
+  AgentEditor,
+  agentConfigToForm,
+  type AgentAvailabilityChoice,
+  type BuildAssetEditorProps
+} from "@vivd-catalyst/chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
-function render(element: ReactElement): string {
-  return renderToStaticMarkup(
-    createElement(TranslationProvider, { children: null, locale: "en" }, element)
+// Where an agent can be chosen: a section of the agent's page, named once by its heading and
+// saved with the agent through the page's save bar (AGENT-AVAIL-1).
+
+const noop = () => undefined;
+const config = {
+  name: "assistant",
+  displayName: "Assistant",
+  instructions: "Help the user.",
+  toolNames: [],
+  skillNames: [],
+  initialPrompts: []
+};
+const workspaces = [
+  { id: "ws_sales", name: "Sales", createdAt: "2026-06-27T00:00:00.000Z" },
+  { id: "ws_legal", name: "Legal", createdAt: "2026-06-27T00:00:00.000Z" }
+];
+
+function frame(): BuildAssetEditorProps {
+  return {
+    page: { ref: createRef<HTMLDivElement>(), above: null, shown: noop },
+    asset: {
+      id: "asset_agent",
+      kind: "agent",
+      name: config.name,
+      scope: { kind: "instance" },
+      revision: 3,
+      config,
+      updatedAt: "2026-10-08T10:00:00.000Z"
+    },
+    start: undefined,
+    canWrite: true,
+    instanceWrite: true,
+    back: null,
+    actions: null,
+    notice: null,
+    onUnsavedChange: noop,
+    save: async () => ({ ok: true })
+  };
+}
+
+function availabilitySection(
+  availability: Partial<AgentAvailabilityChoice>,
+  isDefault = false
+): string {
+  const markup = renderToStaticMarkup(
+    createElement(TranslationProvider, {
+      locale: "en",
+      children: createElement(AgentEditor, {
+        frame: frame(),
+        initialForm: agentConfigToForm(config),
+        isDefault,
+        references: undefined,
+        editableAgentFields: [],
+        canManageAgentModels: false,
+        skillChoice: { options: [], onSearch: noop },
+        availability: {
+          saved: undefined,
+          workspaces,
+          save: async () => undefined,
+          ...availability
+        }
+      })
+    })
   );
+  return /<section[^>]*id="availability">.*?<\/section>/u.exec(markup)?.[0] ?? "";
 }
 
 describe("agent availability", () => {
-  const workspaces = [
-    { id: "ws_sales", name: "Sales", createdAt: "2026-06-27T00:00:00.000Z" },
-    { id: "ws_legal", name: "Legal", createdAt: "2026-06-27T00:00:00.000Z" }
-  ];
-  const stored = async () => undefined;
-
-  it("offers personal and shared workspaces for a selectively available agent", () => {
-    const markup = render(
-      createElement(AgentAvailabilityEditor, {
-        availability: {
-          mode: "selected",
-          personalWorkspaces: true,
-          collaborationWorkspaceIds: ["ws_legal"]
-        },
-        isDefault: false,
-        workspaces,
-        mutating: false,
-        onSave: stored
-      })
-    );
-
-    expect(markup).toContain("Available in");
-    expect(markup).toContain("Personal workspaces");
-    expect(markup).toContain("Sales");
-    expect(markup).toContain("Legal");
-    expect(markup).not.toContain("ws_legal");
-    expect(markup.match(/type="checkbox"[^>]*checked=""/g)).toHaveLength(2);
-    expect(markup).toContain("Save availability");
-    expect(markup).not.toContain("not available in any workspace");
+  it("is a section of the agent's page, named once, with no save of its own", () => {
+    const section = availabilitySection({
+      saved: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: ["ws_legal"] }
+    });
+    // The heading names it; the choice under it is named for a screen reader only.
+    expect(section.match(/>Available in</gu)).toHaveLength(2);
+    expect(section).toContain('class="sr-only">Available in<');
+    expect(section).toContain("Personal workspaces");
+    expect(section).toContain("Sales");
+    expect(section).toContain("Legal");
+    expect(section).not.toContain("ws_legal");
+    expect(section.match(/type="checkbox"[^>]*checked=""/gu)).toHaveLength(2);
+    expect(section).not.toContain("Save availability");
+    expect(section).not.toContain("not available in any workspace");
   });
 
   it("locks the default agent to all workspaces and explains why", () => {
-    const markup = render(
-      createElement(AgentAvailabilityEditor, {
-        availability: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] },
-        isDefault: true,
-        workspaces,
-        mutating: false,
-        onSave: stored
-      })
+    const section = availabilitySection(
+      { saved: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] } },
+      true
     );
-
-    expect(markup).toMatch(/<div role="radiogroup"[^>]*data-disabled=""/u);
-    expect(markup).toContain('disabled=""');
-    expect(markup).toContain("The default agent is always available in all workspaces.");
-    expect(markup).not.toContain("Save availability");
+    expect(section).toMatch(/<div role="radiogroup"[^>]*data-disabled=""/u);
+    expect(section).toContain("The default agent is always available in all workspaces.");
   });
 
   it("warns that an agent without any selection is hidden", () => {
-    const markup = render(
-      createElement(AgentAvailabilityEditor, {
-        availability: undefined,
-        isDefault: false,
-        workspaces: [],
-        mutating: false,
-        onSave: stored
-      })
-    );
-
-    expect(markup).toContain("There are no shared workspaces yet.");
-    expect(markup).toContain("this agent is not available in any workspace");
+    const section = availabilitySection({ workspaces: [] });
+    expect(section).toContain("There are no shared workspaces yet.");
+    expect(section).toContain("this agent is not available in any workspace");
   });
 
   it("says why the shared workspaces could not be listed", () => {
-    const markup = render(
-      createElement(AgentAvailabilityEditor, {
-        availability: undefined,
-        isDefault: false,
-        workspaces: [],
-        workspacesError: "The workspaces could not be read.",
-        mutating: false,
-        onSave: stored
-      })
-    );
-
-    expect(markup).toContain("The workspaces could not be read.");
-    expect(markup).not.toContain("There are no shared workspaces yet.");
+    const section = availabilitySection({
+      workspaces: [],
+      workspacesError: "The workspaces could not be read."
+    });
+    expect(section).toContain("The workspaces could not be read.");
+    expect(section).not.toContain("There are no shared workspaces yet.");
   });
 });

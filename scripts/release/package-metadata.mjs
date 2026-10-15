@@ -53,9 +53,20 @@ export const UNPUBLISHED = {
 const OVERRIDES = {
   // The OpenAPI document of the release, for consumers that are not written in TypeScript.
   "api-contract": { files: ["dist", "openapi.json"] },
-  // Ships src/ so Tailwind `@source` scanning and the `./vite` and `./styles.css` exports
-  // work from node_modules. Imports CSS and Univer facades for their side effects.
-  "chat-ui": { files: ["dist", "src"], sideEffects: undefined },
+  // Tailwind scans dist/ in published packages. Keep only the unbuilt stylesheet and Vite
+  // entry with its helpers; workspace development still resolves the full local source.
+  // Imports CSS and Univer facades for their side effects.
+  "chat-ui": {
+    files: [
+      "dist",
+      "src/styles.css",
+      "src/vite.js",
+      "src/vite.d.ts",
+      "src/content-policy.js",
+      "src/env.js"
+    ],
+    sideEffects: undefined
+  },
   // Ships src/ for the same Tailwind scanning and for its `./styles.css` export. Its
   // JavaScript imports no CSS and has no side effects.
   ui: { files: ["dist", "src"] },

@@ -378,7 +378,7 @@ describe("Workspace pages of Settings", () => {
     const markup = membersView(sharedCollaborationWorkspace);
 
     expect(markup).toContain("mara@example.com");
-    expect(markup).toContain('aria-label="Rolle von Mara Ruiz"');
+    expect(markup).toContain('aria-label="Mitgliedschaft von Mara Ruiz"');
     expect(markup).toContain('aria-label="Mara Ruiz entfernen"');
     expect(markup).not.toContain('aria-label="Felix Pahlke entfernen"');
   });
@@ -397,7 +397,7 @@ describe("Workspace pages of Settings", () => {
       { currentUserId: "user_3" }
     );
 
-    expect(markup).not.toContain('aria-label="Rolle von Mara Ruiz"');
+    expect(markup).not.toContain('aria-label="Mitgliedschaft von Mara Ruiz"');
     expect(markup).toContain("Besitzer");
     expect(markup).toContain('aria-label="Mara Ruiz entfernen"');
     expect(markup).not.toContain('aria-label="Felix Pahlke entfernen"');

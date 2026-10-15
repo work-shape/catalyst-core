@@ -15,6 +15,11 @@ export interface RadioOption<Value extends string = string> {
 export interface RadioGroupProps<Value extends string = string> {
   /** What is being chosen. It names the group. */
   label: ReactNode;
+  /**
+   * The heading the group sits under says the label already: it names the group for a screen
+   * reader and is not shown again.
+   */
+  labelHidden?: boolean;
   /** One line under the options. */
   hint?: ReactNode;
   options: readonly RadioOption<Value>[];
@@ -33,6 +38,7 @@ export interface RadioGroupProps<Value extends string = string> {
 /** One choice out of a few. The arrow keys move the choice, Tab leaves the group. */
 export function RadioGroup<Value extends string = string>({
   label,
+  labelHidden = false,
   hint,
   options,
   onValueChange,
@@ -57,7 +63,7 @@ export function RadioGroup<Value extends string = string>({
       }}
       {...props}
     >
-      <span id={labelId} className="text-label">
+      <span id={labelId} className={labelHidden ? "sr-only" : "text-label"}>
         {label}
       </span>
       {options.map((option, index) => {

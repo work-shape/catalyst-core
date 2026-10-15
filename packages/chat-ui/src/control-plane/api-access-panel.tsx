@@ -19,6 +19,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Checkbox,
   Dialog,
   EmptyState,
   Input,
@@ -40,6 +41,9 @@ import {
   expiryInputToIso,
   isCredentialActive,
   optionalTrimmedValue,
+  PERMISSION_WORDS,
+  SCOPE_LABELS,
+  SERVICE_PRINCIPAL_PERMISSION_OPTIONS,
   scopesAllowedByPermissions,
   type RecordedSecretCopy
 } from "./api-access-model";
@@ -154,6 +158,12 @@ export function ApiAccessPanel({
             <CardContent className="p-2 pt-1">
               {loading ? (
                 <SkeletonList rows={3} className="px-2" />
+              ) : !may.principals ? (
+                // The list is answered only to a holder of `service_principals.manage`: a holder
+                // of `api_access.manage` alone is told why it shows none, not that there are none.
+                <EmptyState layout="inline" icon={<ShieldCheck aria-hidden="true" />}>
+                  {t("apiAccessPrincipalsForbidden")}
+                </EmptyState>
               ) : principals.length === 0 ? (
                 <EmptyState
                   layout="inline"
@@ -344,7 +354,7 @@ function PrincipalDetail({
       <CardContent className="grid gap-5 p-4 pt-0">
         <div className="flex flex-wrap gap-2">
           {principal.permissions.map((permission) => (
-            <Badge key={permission}>{permission}</Badge>
+            <Badge key={permission}>{t(PERMISSION_WORDS[permission].label)}</Badge>
           ))}
           {principal.permissions.length === 0 ? (
             <span className="text-xs text-muted-foreground">{t("apiAccessNoGrants")}</span>
@@ -397,7 +407,9 @@ function PrincipalDetail({
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {credential.scopes?.length ? (
-                            credential.scopes.map((scope) => <Badge key={scope}>{scope}</Badge>)
+                            credential.scopes.map((scope) => (
+                              <Badge key={scope}>{t(SCOPE_LABELS[scope])}</Badge>
+                            ))
                           ) : (
                             <span className="text-xs text-muted-foreground">
                               {t("apiAccessInheritsGrants")}
@@ -554,33 +566,20 @@ function GrantFields({
   return (
     <fieldset className="grid gap-2">
       <legend className="text-sm font-medium">{t("apiAccessGrants")}</legend>
-      {(["config_assets.read", "config_assets.release"] as const).map((permission) => (
-        <label key={permission} className="flex items-start gap-2 rounded-md border p-3 text-sm">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            checked={permissions.includes(permission)}
-            onChange={(event) =>
-              onChange(
-                event.target.checked
-                  ? [...permissions, permission]
-                  : permissions.filter((item) => item !== permission)
-              )
-            }
-          />
-          <span>
-            <span className="block font-medium">
-              {permission === "config_assets.read"
-                ? t("apiAccessReadGrant")
-                : t("apiAccessReleaseGrant")}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {permission === "config_assets.read"
-                ? t("apiAccessReadGrantDescription")
-                : t("apiAccessReleaseGrantDescription")}
-            </span>
-          </span>
-        </label>
+      {SERVICE_PRINCIPAL_PERMISSION_OPTIONS.map(({ permission }) => (
+        <Checkbox
+          key={permission}
+          label={t(PERMISSION_WORDS[permission].label)}
+          description={t(PERMISSION_WORDS[permission].description)}
+          checked={permissions.includes(permission)}
+          onCheckedChange={(checked) =>
+            onChange(
+              checked
+                ? [...permissions, permission]
+                : permissions.filter((item) => item !== permission)
+            )
+          }
+        />
       ))}
     </fieldset>
   );
@@ -663,20 +662,14 @@ function CredentialForm({
       <fieldset className="grid gap-2">
         <legend className="text-sm font-medium">{t("apiAccessScopes")}</legend>
         {allowedScopes.map((scope) => (
-          <label key={scope} className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={scopes.includes(scope)}
-              onChange={(event) =>
-                setScopes(
-                  event.target.checked
-                    ? [...scopes, scope]
-                    : scopes.filter((item) => item !== scope)
-                )
-              }
-            />
-            {scope}
-          </label>
+          <Checkbox
+            key={scope}
+            label={t(SCOPE_LABELS[scope])}
+            checked={scopes.includes(scope)}
+            onCheckedChange={(checked) =>
+              setScopes(checked ? [...scopes, scope] : scopes.filter((item) => item !== scope))
+            }
+          />
         ))}
       </fieldset>
       <div className="flex justify-end gap-2">

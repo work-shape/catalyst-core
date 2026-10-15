@@ -1,5 +1,6 @@
 export { CheckTab } from "./check-tab";
 export { assetKindLabelKey } from "./grant-words";
+export { actionLabel } from "./right-words";
 export { GrantsTab } from "./grants-tab";
 export { NamespacesTab } from "./namespaces-tab";
 export {
@@ -32,5 +33,6 @@ export {
   principalGrantViews,
   principalHref,
   principalOfSearch,
+  readerHolds,
   resourceHolders
 } from "./principal-grants-model";

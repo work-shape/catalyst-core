@@ -32,18 +32,15 @@ export function UserPermissionOverview({
             <TableHead className="sticky left-0 z-10 bg-muted px-4 text-caption font-medium">
               {t("userRightsOverviewUser")}
             </TableHead>
-            {USER_PERMISSIONS.map((permission) => {
-              const copy = userPermissionCopy(permission);
-              return (
-                <TableHead
-                  key={permission}
-                  scope="col"
-                  className="min-w-28 max-w-36 px-3 py-2 text-center align-bottom whitespace-normal"
-                >
-                  {copy ? t(copy.label) : permission}
-                </TableHead>
-              );
-            })}
+            {USER_PERMISSIONS.map((permission) => (
+              <TableHead
+                key={permission}
+                scope="col"
+                className="min-w-28 max-w-36 px-3 py-2 text-center align-bottom whitespace-normal"
+              >
+                {t(userPermissionCopy(permission).label)}
+              </TableHead>
+            ))}
           </TableRow>
         </TableHeader>
         <TableBody>

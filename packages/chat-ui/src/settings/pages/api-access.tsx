@@ -3,11 +3,16 @@ import { useEffect, useState } from "react";
 import { listAll, type ServicePrincipalDetail } from "@vivd-catalyst/api-client";
 import { Banner, Section } from "@vivd-catalyst/ui";
 import { loadFailure } from "../../access/access-model";
-import { usePrincipalGrantMutations, usePrincipalGrantsQuery } from "../../access/access-queries";
+import {
+  useEffectivePermissionsQuery,
+  usePrincipalGrantMutations,
+  usePrincipalGrantsQuery
+} from "../../access/access-queries";
 import {
   principalGrantKinds,
   principalGrantViews,
-  principalOfSearch
+  principalOfSearch,
+  readerHolds
 } from "../../access/principal-grants-model";
 import { PrincipalRights } from "../../access/principal-rights";
 import {
@@ -108,7 +113,8 @@ export function ApiAccessPage() {
       onClearRevealedCredential={clearRevealedCredential}
     />
   );
-  return config.modules.personalApiKeys?.enabled ? (
+  // Every person's own keys are listed to a holder of `api_access.manage` alone.
+  return config.modules.personalApiKeys?.enabled && may.keys ? (
     <>
       {panel}
       <PersonalKeysOnInstance />
@@ -118,9 +124,9 @@ export function ApiAccessPage() {
   );
 }
 
-/** Every person's own API keys, revoked here by a holder of the page. */
+/** Every person's own API keys, revoked here by a holder of `api_access.manage`. */
 function PersonalKeysOnInstance() {
-  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const api = { apiBaseUrl, authScope, client };
   const keysQuery = useInstancePersonalApiKeysQuery({ ...api, enabled: true });
@@ -128,7 +134,6 @@ function PersonalKeysOnInstance() {
     ...api,
     heldMessage: t("apiAccessWaitsForApproval")
   });
-  const canRevoke = canManageApiAccess(user);
 
   return (
     <Section
@@ -147,7 +152,7 @@ function PersonalKeysOnInstance() {
           loading={keysQuery.isPending}
           showOwner
           revoking={revoke.isPending}
-          onRevoke={canRevoke ? (key) => revoke.mutateAsync(key.id) : undefined}
+          onRevoke={(key) => revoke.mutateAsync(key.id)}
         />
       )}
     </Section>
@@ -183,8 +188,14 @@ function PrincipalRightsOnInstance({
   const resources = resourceQueries.flatMap((query) => query.data ?? []);
   const workspacesQuery = useAdministeredCollaborationWorkspacesQuery({ ...api, enabled: true });
   const workspaces = workspacesQuery.data ?? [];
-  // Who gave a right is named for a reader who is shown the users.
-  const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: canManageUsers(user) });
+  // Who gave a right is named only for a reader who may read users. Everyone may read
+  // their own entries, so the dialog offers only what they hold.
+  const readsUsers = canManageUsers(user);
+  const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: readsUsers });
+  const ownRightsQuery = useEffectivePermissionsQuery({
+    ...api,
+    holderId: user.id
+  });
   const mutations = usePrincipalGrantMutations({ ...api, principalId: principal.id });
   const failure = loadFailure(grantsQuery.error);
 
@@ -214,6 +225,7 @@ function PrincipalRightsOnInstance({
         failed: resourceQueries.some((query) => Boolean(query.error))
       }}
       workspaces={workspaces}
+      holds={(action, asset) => readerHolds(ownRightsQuery.data, action, asset)}
       onGive={(right) => mutations.give.mutateAsync(right)}
       onRemove={(grantId) => mutations.remove.mutateAsync(grantId)}
     />

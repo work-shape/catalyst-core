@@ -120,6 +120,31 @@ Refused by the instance (HTTP 403 FORBIDDEN): Missing the right 'agent.write'
 
 The exit code is 0 when the call was applied, 1 when it was refused or failed, 2 when the command line was wrong and nothing was sent, and 3 when the call waits for another person's approval and has changed nothing yet.
 
+## Workflows, checks and lists
+
+These commands call the existing API operations with the same key and checks. They print readable YAML by default; add `--json` for JSON. Paginated lists read every page and print the combined items.
+
+```sh
+catalyst workflow test month-end --from test-input.json  # {"input":{"month":"2026-10"}}
+catalyst workflow runs month-end
+catalyst workflow run <run-id>
+catalyst workflow steps <run-id>
+catalyst workflow cancel <run-id>
+catalyst guardrail hits no-iban
+catalyst knowledge-base check accounts
+catalyst data-store describe reporting
+catalyst data-store used-by reporting
+catalyst app actions offers
+catalyst keys list
+catalyst instance workspaces
+```
+
+`workflow test` tests the saved draft and simulates changing steps. Its optional `--from <file|->` reads the JSON request body (`{"input": {...}}`); without it, the body is `{}`. It starts a run and returns its current state; use `run` and `steps` to read progress. `cancel` cancels the run you name. These commands do not start a live Workflow.
+
+`app actions` without a name lists actions of the published Apps you may read; with a name it reads that App's draft if you may write it, otherwise its published revision. `keys list` lists your own key metadata, never secrets. `instance workspaces` uses `instance.workspaces.list`: the Shared Workspaces for agent availability, requiring `config_assets:write` and `agent.write`. It is not the list of your workspace memberships.
+
+`guardrail hits` preserves the API's counts and `hasMore`; `data-store used-by` preserves hidden counts and `truncated`, and `app actions` preserves `truncated`. These bounded responses are not paginated lists. All commands accept `--instance` and `--dir` as above, and use the same exit codes, including 3 for a held change.
+
 ## Catalog operations and Connections
 
 `call` sends any operation in the CLI's API catalog through the same client and server checks. Input is a JSON object with the API client's `params`, `query` and `body` fields. Use `--from <file>` or `--from -` for stdin; without `--from`, it reads piped stdin or uses `{}` at a terminal. Output is JSON, with the exit codes above. A held call prints `status: pending_approval` and its run, and exits 3.

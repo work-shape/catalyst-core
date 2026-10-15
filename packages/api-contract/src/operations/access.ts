@@ -64,7 +64,8 @@ export const accessOperations = {
     tag: "Access",
     auth: "user",
     scope: "user_admin:read",
-    requires: ["users.manage"],
+    // Holder-specific authorization is checked by the handler.
+    requires: [],
     effect: "reading",
     query: listPermissionGrantsQuerySchema,
     response: page(permissionGrantSchema, ["holderId", "id"], false),
@@ -79,7 +80,8 @@ export const accessOperations = {
     tag: "Access",
     auth: "user",
     scope: "user_admin:read",
-    requires: ["users.manage"],
+    // Holder-specific authorization is checked by the handler.
+    requires: [],
     effect: "reading",
     query: effectivePermissionsQuerySchema,
     response: json(effectivePermissionsSchema),
