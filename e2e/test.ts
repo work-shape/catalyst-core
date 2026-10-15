@@ -483,8 +483,8 @@ function isAllowed(text: string, address: string, testTitle: string): boolean {
 }
 
 /**
- * How long a test waits for the instance's Namespaces and grants. Longer than the longest
- * test that holds them.
+ * The budget for one holder of the instance state, also used to reclaim an abandoned lock.
+ * Acquisition allows one such budget per worker that may already be queued.
  */
 const ACCESS_STATE_WAIT_MS = 180_000;
 
@@ -513,7 +513,9 @@ export async function takeTurn(
   baseURL: string | undefined
 ): Promise<() => Promise<void>> {
   const lock = join(tmpdir(), `catalyst-e2e-${name}-${(baseURL ?? "").replace(/\W+/gu, "-")}`);
-  const waitUntil = Date.now() + ACCESS_STATE_WAIT_MS;
+  // Each worker may already have a test in the queue. Full parallel repeats must be allowed
+  // to wait for those tests; the age at which an abandoned lock is removed stays unchanged.
+  const waitUntil = Date.now() + ACCESS_STATE_WAIT_MS * base.info().config.workers;
   for (;;) {
     try {
       await mkdir(lock);
@@ -583,8 +585,8 @@ export const test = base.extend<{
         await release();
       }
     },
-    // The wait for another spec is not the test's own time.
-    { timeout: ACCESS_STATE_WAIT_MS + 10_000 }
+    // takeTurn bounds the queue wait by the worker count, outside the test's own timeout.
+    { timeout: 0 }
   ],
   /**
    * Asked for by a test that asserts the whole list of agents a member is offered, by count or
@@ -651,13 +653,17 @@ export const test = base.extend<{
     { timeout: 2 * ACCESS_STATE_WAIT_MS + 10_000 }
   ],
   /**
-   * Asked for by a test that puts a Connection or a Guardrail of origin `release` into the
-   * store by hand. An API process that starts makes the stored release Connections and
-   * Guardrails equal to its release config and deletes such a row, so a spec that starts an API
-   * takes the same turn while it starts (`takeTurn("release-connections", …)`).
+   * Asked for by every test that creates Connections (through the UI too), reads their whole
+   * list, or plants a Guardrail of origin `release`. Connections belong to the instance, so
+   * unique names and separate workspaces do not isolate an empty-list or rights assertion.
+   * Hold the turn until the test has removed its assets and grants. An API process that starts
+   * also reconciles release assets, so it takes the same turn while starting
+   * (`takeTurn("release-connections", …)`).
    */
   releaseConnections: [
-    async ({ baseURL }, use) => {
+    // Every Connection writer takes access first. An access holder must not sit behind a
+    // queue of editor tests while holding a lock that other rights tests need.
+    async ({ baseURL, accessState: _accessState }, use) => {
       const release = await takeTurn("release-connections", baseURL);
       try {
         await use();
@@ -665,7 +671,8 @@ export const test = base.extend<{
         await release();
       }
     },
-    { timeout: ACCESS_STATE_WAIT_MS + 10_000 }
+    // takeTurn bounds the queue wait by the worker count, outside the test's own timeout.
+    { timeout: 0 }
   ],
   pageErrors: [
     async ({ context }, use, testInfo) => {

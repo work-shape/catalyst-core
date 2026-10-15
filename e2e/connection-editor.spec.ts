@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Locator, Page, Request } from "@playwright/test";
@@ -37,7 +38,9 @@ const WORDS: Record<Locale, { newConnection: string; discard: string; draft: str
 let sampleServer: ChildProcess | undefined;
 const sampleKey = randomBytes(24).toString("base64url");
 
-test.beforeAll(async () => {
+// Connections and the sample server's port are instance-wide. Keep the same turn as the
+// list/rights specs through setup, every UI write and cleanup, including parallel repeats.
+test.beforeEach(async ({ releaseConnections: _releaseConnections }) => {
   sampleServer = spawn(process.execPath, ["clients/demo/dist/sample-mcp-server.js"], {
     env: {
       ...process.env,
@@ -61,8 +64,14 @@ test.beforeAll(async () => {
     .toBe(200);
 });
 
-test.afterAll(() => {
-  sampleServer?.kill("SIGTERM");
+test.afterEach(async () => {
+  const server = sampleServer;
+  sampleServer = undefined;
+  if (server && server.exitCode === null && server.signalCode === null) {
+    const exited = once(server, "exit");
+    server.kill("SIGTERM");
+    await exited;
+  }
 });
 
 /** Pictures of what stands now, light, at 1280 and at 390; the page is not reloaded. */
@@ -114,10 +123,12 @@ function recordWrites(page: Page, id: string): string[] {
 async function removeConnection(page: Page, id: string): Promise<void> {
   const url = `${apiBaseUrl}/api/v1/assets/connection/${id}`;
   const found = await page.request.get(url);
-  if (!found.ok()) return;
-  await requestWithOrigin(page, "post", `${url}/delete`, {
+  if (found.status() === 404) return;
+  expect(found.ok(), `Read Connection before cleanup: ${found.status()}`).toBe(true);
+  const removed = await requestWithOrigin(page, "post", `${url}/delete`, {
     data: { expectedRevision: await assetRevision(page, url) }
   });
+  expect(removed.ok(), `Delete Connection during cleanup: ${removed.status()}`).toBe(true);
 }
 
 for (const locale of LOCALES) {
