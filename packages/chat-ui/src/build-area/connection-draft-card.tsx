@@ -100,7 +100,8 @@ export function ConnectionDraftCard({ draft }: { draft: ConnectionDraft }) {
   const { name } = draft.connection;
   const existing = useQuery({
     queryKey: ["connection-draft-target", name],
-    queryFn: () => (host ? host.connectionOf(name) : Promise.resolve(undefined)),
+    // A query answers no `undefined`: no Connection of the id is `null`.
+    queryFn: async () => (host ? ((await host.connectionOf(name)) ?? null) : null),
     enabled: host !== undefined
   });
   // The agent's title names only a new Connection: an existing one goes by its own, and the id
