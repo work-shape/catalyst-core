@@ -231,8 +231,8 @@ test("Studio lists the Guardrails with when each runs, and a Guardrail's page sh
   }
 });
 
-// GR-PUB-1: the guardrail the platform ships stands above the list, on, with its switch for an
-// instance admin. Switching it off asks first. The test cancels: every spec file runs against
+// GR-PUB-1: the guardrail the platform ships is the first row of the list, under its search and
+// scope, on, with its switch for an instance admin. Switching it off asks first. The test cancels: every spec file runs against
 // the same instance, and the switch is the instance's. Switching itself is held by the server
 // tests (`tests/publish-approval-guardrail.test.ts`).
 test("Studio shows the guardrail the platform ships, on, and asks before it is switched off", async ({
@@ -245,9 +245,28 @@ test("Studio shows the guardrail the platform ships, on, and asks before it is s
   expect(signedIn.ok()).toBe(true);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/build/guardrails");
-  const shipped = page.getByRole("region", { name: "Shipped with the platform" });
-  await expect(shipped).toContainText("Publishing needs an instance admin's approval");
+  const list = page.getByRole("list", { name: "Guardrails", exact: true });
+  const shipped = list
+    .getByRole("listitem")
+    .filter({ hasText: "Publishing needs an instance admin's approval" });
+  await expect(shipped).toContainText("Shipped with the platform");
   await expect(shipped).toContainText("Needs approval");
+  await expect(shipped).toContainText("On, as the platform ships it.");
+  // It is a row of the one list, which stands under the search, and the list is not empty.
+  await expect(list.getByRole("listitem").first()).toContainText(
+    "Publishing needs an instance admin's approval"
+  );
+  const search = page.getByRole("searchbox", { name: "Search guardrails" });
+  const searchBox = await search.boundingBox();
+  const rowBox = await shipped.boundingBox();
+  expect(searchBox && rowBox && searchBox.y < rowBox.y).toBe(true);
+  await expect(page.getByText(/^Nothing in .* yet\.$/u)).toHaveCount(0);
+  // The search narrows it as it narrows every row.
+  await search.fill("no guardrail is called this");
+  await expect(shipped).toHaveCount(0);
+  await search.fill("publishing");
+  await expect(shipped).toBeVisible();
+  await search.fill("");
   const toggle = shipped.getByRole("switch");
   await expect(toggle).toHaveAttribute("aria-checked", "true");
   await expect(toggle).toBeEnabled();

@@ -1,31 +1,33 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { ConfigAssetReferences, ToolGroupName } from "@vivd-catalyst/api-client";
 import {
   Badge,
   Button,
   Checkbox,
-  Chip,
   ConnectionIcon,
   Disclosure,
   DisclosureContent,
   DisclosureTrigger,
   IconTile,
-  Picker,
-  PickerButton,
+  List,
+  ListRow,
   RegistryIcon,
-  SkeletonChips,
+  SkeletonList,
+  Switch,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
+  cn
 } from "@vivd-catalyst/ui";
 import { connectionCategory } from "../connection-facts";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useModuleName } from "../module-texts";
 import { connectionToolsView, type ConnectionToolChoice } from "./connection-tools";
 import {
+  packageSwitchState,
   setPackageTools,
   toolPackages,
   type InstanceToolView,
@@ -54,22 +56,21 @@ const PACKAGE_TEXTS: Record<
   }
 };
 
-/** What a chip, its panel and its picker row show of one package, own tool or Connection. */
+/** What a row shows of one package, own tool or Connection. */
 interface PackageFace {
   title: string;
   text?: string;
-  /** The icon inside the chip. */
-  chipIcon: ReactNode;
-  /** The icon on its tile, in the panel and the picker. */
-  tile: ReactNode;
+  /** The icon on its tile. `on` while the agent holds one of its tools. */
+  tile(on: boolean): ReactNode;
 }
 
 /**
- * The tools of an agent, as its Skills are: a chip per package ("Paket") it uses, per own tool
- * of this instance and per Connection, and a picker that adds the others with all their tools
- * on. A chip shows how many of its tools are on while only some are; it opens a panel with its
- * tools as check boxes, the ones the agent holds because of something else as included. The
- * ids, effects and packages stand under "Technical details".
+ * The tools of an agent as one row per package ("Paket") of the platform, then per own tool of
+ * this instance and per Connection, those it uses none of too. A row shows its icon, name and
+ * sentence, how many of its tools are on, and a switch that turns all of them on or off, mixed
+ * while only some are; its chevron folds out its tools, each with a check box, the ones the
+ * agent holds because of something else as included. The ids, effects and packages stand under
+ * "Technical details".
  */
 export function ToolPackagesSection({
   references,
@@ -97,7 +98,7 @@ export function ToolPackagesSection({
   const moduleName = useModuleName();
   if (loading) {
     // Before the references arrive no tool's package is known, and a tool would show by its id.
-    return <SkeletonChips data-tool-loading="" />;
+    return <SkeletonList rows={6} data-tool-loading="" />;
   }
   const items = toolPackages({
     references,
@@ -113,97 +114,73 @@ export function ToolPackagesSection({
       return {
         title: t(texts.title),
         text: t(texts.text),
-        chipIcon: <RegistryIcon name={texts.icon} family="tool" />,
-        tile: (
-          <IconTile accent>
+        tile: (on) => (
+          <IconTile accent={on}>
             <RegistryIcon name={texts.icon} family="tool" />
           </IconTile>
         )
       };
     }
     if (item.connection) {
-      const category = connectionCategory(item.connection.connectorType);
+      const { service, connectorType } = item.connection;
       return {
         title: item.title ?? item.connection.name,
-        chipIcon: (
-          <RegistryIcon name={item.connection.service} fallback={category} family="service" />
-        ),
-        tile: <ConnectionIcon service={item.connection.service} category={category} />
+        tile: () => (
+          <ConnectionIcon service={service} category={connectionCategory(connectorType)} />
+        )
       };
     }
     const icon = item.tools[0]?.icon;
     return {
       title: item.title ?? item.key,
       ...(item.summary ? { text: item.summary } : {}),
-      chipIcon: <RegistryIcon name={icon} family="tool" />,
-      tile: (
-        <IconTile accent>
+      tile: (on) => (
+        <IconTile accent={on}>
           <RegistryIcon name={icon} family="tool" />
         </IconTile>
       )
     };
   };
-  const active = items.filter((item) => item.heldCount > 0);
-  const offered = items.filter((item) => item.heldCount === 0 && item.choosable.length > 0);
   const stale = (references?.moduleOffTools ?? []).filter((tool) => selected.includes(tool.name));
   const connections = connectionToolsView(connectionTools.read, selected);
   const removeName = disabled
     ? undefined
     : (toolName: string) => onChange(toggleToolName(selected, toolName, false));
-
-  const pickerGroups = (
-    [
-      ["package", t("configToolsPickerPackages")],
-      ["own", t("configToolGroupInstance")],
-      ["connection", t("connections.kind")]
-    ] as const
-  )
-    .map(([kind, heading]) => ({
-      heading,
-      options: offered
-        .filter((item) => item.kind === kind)
-        .map((item) => {
-          const { title, text, tile } = face(item);
-          return {
-            value: item.key,
-            label: title,
-            ...(text ? { description: text } : {}),
-            keywords: item.tools.map((tool) => tool.name).join(" "),
-            leading: tile,
-            trailing: (
-              <Badge size="sm">
-                {item.tools.length === 1
-                  ? t("configToolsCountOne")
-                  : t("configToolsCount", { count: item.tools.length })}
-              </Badge>
-            )
-          };
-        })
-    }))
-    .filter((group) => group.options.length > 0);
+  const rows = (kind: ToolPackageView["kind"], label: string) => {
+    const of = items.filter((item) => item.kind === kind);
+    return of.length === 0 ? null : (
+      <List aria-label={label}>
+        {of.map((item) => (
+          <PackageRow
+            key={item.key}
+            item={item}
+            face={face(item)}
+            selected={selected}
+            disabled={disabled}
+            link={item.connection ? connectionTools.place?.(item.connection.name) : undefined}
+            onChange={onChange}
+          />
+        ))}
+      </List>
+    );
+  };
+  const subheading = (kind: ToolPackageView["kind"], label: string) =>
+    items.some((item) => item.kind === kind) ? (
+      <h3 className="mt-2 text-caption text-muted-foreground">{label}</h3>
+    ) : null;
 
   return (
-    <div className="grid min-w-0 gap-3" data-tool-group="packages">
-      {active.length === 0 ? (
-        <p className="text-body text-muted-foreground">{t("configToolsNone")}</p>
-      ) : (
-        <ul aria-label={t("configTools")} className="flex flex-wrap gap-2">
-          {active.map((item) => (
-            <li key={item.key} data-tool-package={item.key}>
-              <PackageChip
-                item={item}
-                face={face(item)}
-                selected={selected}
-                disabled={disabled}
-                link={item.connection ? connectionTools.place?.(item.connection.name) : undefined}
-                onChange={onChange}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="grid min-w-0 gap-1" data-tool-group="packages">
+      {items.length === 0 ? (
+        <p className="text-body text-muted-foreground">{t("configNoTools")}</p>
+      ) : null}
+      {rows("package", t("configToolsPackages"))}
+      {subheading("own", t("configToolGroupInstance"))}
+      {rows("own", t("configToolGroupInstance"))}
+      {subheading("connection", t("connections.kind"))}
+      {rows("connection", t("connections.kind"))}
       {stale.length > 0 ? (
-        <ul aria-label={t("configUnavailableSelections")} className="grid gap-2">
+        <ul aria-label={t("configUnavailableSelections")} className="mt-2 grid gap-2">
           {stale.map((tool) => (
             <li
               key={tool.name}
@@ -219,7 +196,7 @@ export function ToolPackagesSection({
         </ul>
       ) : null}
       {connections.unchecked.length > 0 ? (
-        <ul aria-label={t("connections.toolsHeld")} className="grid gap-2">
+        <ul aria-label={t("connections.toolsHeld")} className="mt-2 grid gap-2">
           {connections.unchecked.map((toolName) => (
             <li
               key={toolName}
@@ -239,7 +216,7 @@ export function ToolPackagesSection({
         </ul>
       ) : null}
       {connections.unavailable.length > 0 ? (
-        <div className="grid gap-2" data-tool-group="unavailable">
+        <div className="mt-2 grid gap-2" data-tool-group="unavailable">
           <p className="text-caption text-muted-foreground">
             {t("connections.toolsUnavailableText")}
           </p>
@@ -255,38 +232,13 @@ export function ToolPackagesSection({
           </ul>
         </div>
       ) : null}
-      {!disabled && pickerGroups.length > 0 ? (
-        <div>
-          <Picker
-            multiple
-            search
-            wrapDescriptions
-            className="w-120"
-            label={t("configToolsAdd")}
-            options={pickerGroups}
-            value={[]}
-            onValueChange={(keys) => {
-              const added = offered.find((item) => keys.includes(item.key));
-              if (added) {
-                onChange(setPackageTools(selected, added, true));
-              }
-            }}
-          >
-            <PickerButton
-              label={t("configTools")}
-              placeholder={t("configToolsAdd")}
-              value={undefined}
-            />
-          </Picker>
-        </div>
-      ) : null}
       {items.length > 0 ? <TechnicalDetails items={items} faces={face} /> : null}
     </div>
   );
 }
 
-/** One chip, and the panel it opens with its tools. */
-function PackageChip({
+/** One row, and the tools it folds out. */
+function PackageRow({
   item,
   face,
   selected,
@@ -302,111 +254,87 @@ function PackageChip({
   onChange(selected: string[]): void;
 }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   const total = item.tools.length;
-  const choosableOn = item.choosable.filter((name) => selected.includes(name)).length;
-  const allOn = choosableOn === item.choosable.length;
-  const remove = () => {
-    setOpen(false);
-    onChange(setPackageTools(selected, item, false));
-  };
+  const state = packageSwitchState(item, selected);
   return (
-    <Chip
-      leading={face.chipIcon}
-      trailing={item.heldCount < total ? `${item.heldCount}/${total}` : undefined}
-      // What the agent holds because of something else cannot be removed here.
-      onRemove={disabled || choosableOn === 0 ? undefined : remove}
-      popover={{
-        open,
-        onOpenChange: setOpen,
-        className: "w-90",
-        content: (
-          <div className="grid min-w-0 gap-4" data-tool-panel={item.key}>
-            <div className="flex min-w-0 items-start gap-3">
-              {face.tile}
-              <div className="grid min-w-0 gap-0.5">
-                <span className="text-label">{face.title}</span>
-                {face.text ? (
-                  <span className="text-caption text-muted-foreground">{face.text}</span>
-                ) : null}
-              </div>
-            </div>
-            {/* An own tool is one tool: the chip already names it. */}
-            {item.kind === "own" ? null : (
-              <div role="group" aria-label={face.title} className="grid min-w-0 gap-3">
-                {item.tools.map((tool) =>
-                  tool.includedBecause ? (
-                    <IncludedTool key={tool.name} tool={tool} />
-                  ) : (
-                    <Checkbox
-                      key={tool.name}
-                      data-package-tool={tool.name}
-                      checked={selected.includes(tool.name)}
-                      disabled={disabled}
-                      label={tool.title}
-                      description={
-                        tool.summary ? (
-                          <span className="line-clamp-2">{tool.summary}</span>
-                        ) : undefined
-                      }
-                      onCheckedChange={(checked) =>
-                        onChange(toggleToolName(selected, tool.name, checked))
-                      }
-                    />
-                  )
-                )}
-              </div>
+    <ListRow
+      data-tool-package={item.key}
+      // The row that is folded out and its tools read as one.
+      className="rounded-md data-[state=open]:bg-muted"
+      expandable
+      leading={face.tile(item.heldCount > 0)}
+      title={face.title}
+      description={face.text}
+      descriptionWraps
+      actionsVisible
+      actions={
+        <span className="flex items-center gap-3">
+          <span
+            data-tool-count=""
+            className={cn(
+              "text-caption tabular-nums",
+              item.heldCount === 0
+                ? "text-muted-foreground"
+                : item.heldCount === total
+                  ? "text-success-soft-foreground"
+                  : "font-semibold text-primary-soft-foreground"
             )}
-            {disabled && !link ? null : (
-              <div className="-mx-4 -mb-4 flex flex-wrap items-center justify-between gap-2 border-t px-2 py-2">
-                {disabled || choosableOn === 0 ? (
-                  <span />
-                ) : (
-                  <Button variant="ghost" size="sm" onClick={remove}>
-                    {t(item.kind === "package" ? "configToolsRemovePackage" : "configToolsRemove")}
-                  </Button>
-                )}
-                <span className="flex items-center gap-1">
-                  {link ? (
-                    <Button asChild variant="ghost" size="sm">
-                      <a
-                        href={link.href}
-                        onClick={(event) => {
-                          if (
-                            event.button === 0 &&
-                            !event.metaKey &&
-                            !event.ctrlKey &&
-                            !event.shiftKey &&
-                            !event.altKey
-                          ) {
-                            event.preventDefault();
-                            link.open();
-                          }
-                        }}
-                      >
-                        {t("connections.toolsOpenConnection")}
-                      </a>
-                    </Button>
-                  ) : null}
-                  {disabled || item.kind === "own" ? null : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={allOn}
-                      onClick={() => onChange(setPackageTools(selected, item, true))}
-                    >
-                      {t("configToolsAllOn")}
-                    </Button>
-                  )}
-                </span>
-              </div>
-            )}
-          </div>
-        )
-      }}
+          >
+            {item.heldCount}/{total}
+          </span>
+          <Switch
+            aria-label={t("configToolsGroupSwitch", { group: face.title })}
+            checked={state === "on"}
+            mixed={state === "mixed"}
+            disabled={disabled || item.choosable.length === 0}
+            onCheckedChange={(on) => onChange(setPackageTools(selected, item, on))}
+          />
+        </span>
+      }
     >
-      {face.title}
-    </Chip>
+      <div role="group" aria-label={face.title} className="grid min-w-0 gap-3 pl-9">
+        {item.tools.map((tool) =>
+          tool.includedBecause ? (
+            <IncludedTool key={tool.name} tool={tool} />
+          ) : (
+            <Checkbox
+              key={tool.name}
+              data-package-tool={tool.name}
+              checked={selected.includes(tool.name)}
+              disabled={disabled}
+              label={tool.title}
+              description={
+                tool.summary ? <span className="line-clamp-2">{tool.summary}</span> : undefined
+              }
+              onCheckedChange={(checked) => onChange(toggleToolName(selected, tool.name, checked))}
+            />
+          )
+        )}
+        {link ? (
+          <span>
+            <Button asChild variant="ghost" size="sm">
+              <a
+                href={link.href}
+                onClick={(event) => {
+                  if (
+                    event.button === 0 &&
+                    !event.metaKey &&
+                    !event.ctrlKey &&
+                    !event.shiftKey &&
+                    !event.altKey
+                  ) {
+                    event.preventDefault();
+                    link.open();
+                  }
+                }}
+              >
+                {t("connections.toolsOpenConnection")}
+              </a>
+            </Button>
+          </span>
+        ) : null}
+      </div>
+    </ListRow>
   );
 }
 
