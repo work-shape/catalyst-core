@@ -138,8 +138,9 @@ export type WorkflowStepTarget = "live" | "test" | "dry_run";
 /** One thing the instance refuses a start for: its code and its own sentence. */
 export interface WorkflowStartIssue {
   code: string;
-  /** The instance's own sentence, which it writes in English. */
+  /** The instance's fallback sentence, which it writes in English. */
   message: string;
+  principalDisplayLabel?: string;
 }
 
 export type WorkflowRunStatus =

@@ -378,9 +378,26 @@ describe("the page of a Workflow", () => {
   });
 
   it("shows no id, no operation name and no file name of the definition", () => {
-    const markup = render(page());
-    for (const internal of ["connection.crm", "check.py", "summary.md", "workflow-runner"]) {
-      expect(markup).not.toContain(internal);
+    for (const locale of ["en", "de"] as const) {
+      const blocked = {
+        ...workflow,
+        refusedFor: [
+          {
+            code: "principal_inactive",
+            message: "The internal account workflow-runner is disabled.",
+            principalDisplayLabel: "Booking checks"
+          }
+        ]
+      };
+      const markup = render(page({ workflow: blocked }), locale);
+      for (const internal of ["connection.crm", "check.py", "summary.md", "workflow-runner"]) {
+        expect(markup).not.toContain(internal);
+      }
+      expect(markup).toContain(
+        locale === "de"
+          ? "Das technische Konto „Booking checks“ ist deaktiviert."
+          : "The technical account “Booking checks” is disabled."
+      );
     }
   });
 

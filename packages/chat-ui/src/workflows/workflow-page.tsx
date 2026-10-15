@@ -205,8 +205,8 @@ export function WorkflowPageView({
 }
 
 /**
- * Says that the instance accepts no start of this Workflow now, and each reason in the
- * instance's own words: the Workflow is shown as it is defined, and its start is switched off.
+ * Says why this Workflow cannot start now. Account reasons use the reader's language and
+ * the account's display label; other issues keep the instance's diagnostic sentence.
  */
 function NotRunnableBanner({ issues }: { issues: readonly WorkflowStartIssue[] }) {
   const { t } = useTranslation();
@@ -217,7 +217,13 @@ function NotRunnableBanner({ issues }: { issues: readonly WorkflowStartIssue[] }
       <p>{t(notBuilt ? "workflows.notRunnable.title" : "workflows.notRunnable.refused")}</p>
       <ul className="list-disc pl-5">
         {issues.map((issue, position) => (
-          <li key={`${String(position)}:${issue.code}`}>{issue.message}</li>
+          <li key={`${String(position)}:${issue.code}`}>
+            {issue.code === "principal_inactive"
+              ? issue.principalDisplayLabel === undefined
+                ? t("workflows.notRunnable.accountUnavailable")
+                : t("workflows.notRunnable.accountDisabled", { name: issue.principalDisplayLabel })
+              : issue.message}
+          </li>
         ))}
       </ul>
     </Banner>

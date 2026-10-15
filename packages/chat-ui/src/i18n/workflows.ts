@@ -3,6 +3,9 @@ import { defineTranslations } from "./translation-area";
 /** Workflows: their list, what one does, its runs, and one run with its steps. */
 export const workflows = defineTranslations({
   en: {
+    "workflows.notRunnable.accountDisabled": "The technical account “{name}” is disabled.",
+    "workflows.notRunnable.accountUnavailable":
+      "The technical account for this workflow is unavailable.",
     "workflows.liveOnce.again": "Run live once again",
     "workflows.liveOnce.used": "Ran live in your test run of {time}.",
     "workflows.simulated.wouldAskConfirmation":
@@ -297,6 +300,9 @@ export const workflows = defineTranslations({
     "workflows.unavailable": "This workflow is not available to you."
   },
   de: {
+    "workflows.notRunnable.accountDisabled": "Das technische Konto „{name}“ ist deaktiviert.",
+    "workflows.notRunnable.accountUnavailable":
+      "Das technische Konto für diesen Workflow ist nicht verfügbar.",
     "workflows.liveOnce.again": "Noch einmal live ausführen",
     "workflows.liveOnce.used": "Lief live in deinem Testlauf vom {time}.",
     "workflows.simulated.wouldAskConfirmation":

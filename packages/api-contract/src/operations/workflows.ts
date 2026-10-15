@@ -182,6 +182,8 @@ export const listWorkflowStepRunsQuerySchema = listQuerySchema.extend({
  * `principal_inactive`). A later engine may name further codes.
  */
 export const workflowStartIssueSchema = z.object({
+  /** The technical account’s display label, when it still exists. */
+  principalDisplayLabel: z.string().optional(),
   code: z.string(),
   /** A sentence of the product. Never a value of a run. */
   message: z.string(),

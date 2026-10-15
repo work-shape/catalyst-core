@@ -118,6 +118,7 @@ const MONTH_INPUTS = {
 function instance(
   answers: {
     stepRunPages?: readonly { items: readonly unknown[]; nextCursor?: string }[];
+    startIssues?: { code: string; message: string; principalDisplayLabel?: string }[];
   } = {}
 ) {
   let page = 0;
@@ -142,7 +143,7 @@ function instance(
               definitionRevisionId: "rev_7",
               actions: ["workflow.read", "workflow.use"],
               runnable: false,
-              reasons: [NOT_BUILT],
+              reasons: answers.startIssues ?? [NOT_BUILT],
               lastRun: { id: "wfr_0", status: "failed", startedAt: "2026-10-11T09:00:00.000Z" }
             }
           ]
@@ -324,6 +325,18 @@ describe("the Workflow screens over the engine of an instance", () => {
     });
   });
 
+  it("keeps the technical account label through the list and detail mappings", async () => {
+    const issue = {
+      code: "principal_inactive",
+      message: "The account is disabled.",
+      principalDisplayLabel: "Booking checks"
+    };
+    const { source } = instance({ startIssues: [issue] });
+    const list = await source.listWorkflows("cw_1", { limit: 50, cursor: undefined }, signal);
+    expect(list.items.find(({ id }) => id === "month-end")?.refusedFor).toEqual([issue]);
+    expect((await source.getWorkflow("cw_1", "month-end", signal))?.refusedFor).toEqual([issue]);
+  });
+
   it("starts and cancels through the client, and reads a cancel that waits for the going call", async () => {
     const { source, calls } = instance();
     expect((await source.runs?.start("open-invoices", { month: "2026-09" }))?.id).toBe("wfr_1");
@@ -385,7 +398,8 @@ describe("a Workflow the instance accepts no start of", () => {
     );
     expect(markup).toContain(t("workflows.notRunnable.refused"));
     expect(markup).not.toContain(t("workflows.notRunnable.title"));
-    expect(markup).toContain("The instance has no active principal");
+    expect(markup).toContain(t("workflows.notRunnable.accountUnavailable"));
+    expect(markup).not.toContain("The instance has no active principal");
   });
 
   it("shows no start, switched off or not, to a reader who may not start", () => {
