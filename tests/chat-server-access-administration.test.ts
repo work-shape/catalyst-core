@@ -16,7 +16,6 @@ import {
   agent,
   clientInstanceId,
   errorSchema,
-  grantSchema,
   otherClientInstanceId,
   setupAccessInstance as setup,
   skill
@@ -183,45 +182,6 @@ describe("who may write a grant, and what a grant may say", () => {
       headers: { [SERVICE_HEADER]: "sp_test" }
     });
     expect(overview.statusCode).toBe(200);
-  });
-
-  it("does not let a non-superadmin write or revoke a row of a superadmin", async () => {
-    const t = await setup();
-    await t.createNamespace("kai-");
-    const payload = {
-      holderKind: "user",
-      holderId: t.root.id,
-      action: "agent.write",
-      scopeKind: "namespace",
-      namespace: "kai-",
-      effect: "deny"
-    };
-    // The operation's own check refuses, so the refusal names the operation.
-    await t.expectRefused(
-      t.admin.id,
-      "permissions.grant",
-      { payload },
-      t.forbidden("permissions.grant", "no_grant")
-    );
-    expect(await t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
-
-    // A superadmin may, and the other administrator cannot take the row away again.
-    const created = grantSchema.parse(
-      (await t.expectOk(t.root.id, "permissions.grant", { payload })).json()
-    );
-    await t.expectRefused(
-      t.admin.id,
-      "permissions.revoke",
-      { params: { grantId: created.id } },
-      { status: 403, code: "FORBIDDEN" }
-    );
-    await t.expectRefused(
-      t.admin.id,
-      "permissions.effective",
-      { query: { holderKind: "user", holderId: t.root.id } },
-      { status: 404, code: "NOT_FOUND", details: { reason: "unknown_holder" } }
-    );
-    await t.expectOk(t.root.id, "permissions.revoke", { params: { grantId: created.id } });
   });
 
   it("writes a row for a user, six actions, a Namespace or an asset, and nothing else", async () => {

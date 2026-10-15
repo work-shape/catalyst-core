@@ -249,6 +249,12 @@ A switch is stored as grants for the whole instance, one per action the right st
 
 Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin role, changes another Superadmin, deletes a user, or switches "Manage API access" and "Manage agent model settings" on or off.
 
+"Manage users" does not let you hand out more than you hold. Giving a person a role, a switch or a grant asks whether you hold every right it carries, at the place it is given. Writing a deny, and taking one away, ask the same of the right the deny names. Nobody gives a right to themselves, and nobody writes or lifts a grant of their own, even one they already hold.
+
+A deny of yours counts wherever it lies. If you are denied a right on one agent, you cannot give that right for a whole Namespace, a workspace or the instance that contains the agent, and you cannot give a role that carries it: the person would hold what you are refused. Give it on single assets outside the deny instead, or ask someone without the deny. The refusal names the asset only if you may read it.
+
+Changing a person's account asks whether you hold every right the person holds: their role, their switches, their grants and the Shared Workspaces they are a member of. Their own Personal Workspace does not count. This covers the name and email, the password, a sign-in, the status, the role, the switches and the tool rights, and it holds for a person who is switched off as well, since switching them on is a change too. The check runs again as the change is written, so a role or a grant the person was given in the meantime counts. So a person with "Manage users" and nothing else can change only people who hold nothing beyond their Personal Workspace. Where a personal API key makes the call, its scopes count too. A refusal names the first right that is missing.
+
 "Approve skill changes" also lets a person decide an action that waits for an approval.
 
 One right is on no switch. Pushing a release with `catalyst config push` needs `config_assets.release`, and only a Service Principal can hold it. See [API keys and Service Principals](#api-keys-and-service-principals).
@@ -257,7 +263,7 @@ Managing Service Principals, `service_principals.manage`, is on no switch either
 
 Chatting is not on this list. Which conversations you see depends on the Collaboration Workspaces you are a member of and on whether a conversation is private, and not on one of these rights. The one exception is a Superadmin, who can enter every Shared Workspace.
 
-The Users page has one more field, **Tool rights**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field.
+The Users page has one more field, **Tool rights**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field. A reference follows the same rule as a right: you give it only if you hold it yourself, never to yourself, and the references a person holds count when you change their account.
 
 ## Grants
 

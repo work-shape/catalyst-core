@@ -459,7 +459,7 @@ describe("user administration: who may change a user", () => {
     expect(await fixture.user(userId)).toMatchObject({ status: "disabled" });
   });
 
-  it("keeps the rules a superadmin is refused by: self, the last superadmin, release rights", async () => {
+  it("keeps the rules a superadmin is refused by: self, inactive caller, release rights", async () => {
     const fixture = await createFixture();
     const self = await fixture.server.call("users.delete", {
       params: { userId: fixture.users.superadmin.id },
@@ -484,10 +484,9 @@ describe("user administration: who may change a user", () => {
     });
     expect(missing.statusCode).toBe(404);
 
-    // The rule exists for a race: the caller is disabled after their right was checked. Here
-    // that happens as the operation reads the users, so the other superadmin is the last
-    // active one when the deletion is decided.
-    fixture.beforeUsersAreListed(async () => {
+    // The caller is disabled after admission, before the transaction that re-checks and
+    // marks. The fresh check refuses the caller, preserving the last active superadmin.
+    fixture.beforeNextTransaction(async () => {
       await fixture.store.users.updateUser({
         clientInstanceId: fixture.clientInstanceId,
         userId: asUserId(fixture.users.superadmin.id),
@@ -498,14 +497,37 @@ describe("user administration: who may change a user", () => {
       params: { userId: fixture.users.other.id },
       headers: as.superadmin
     });
-    expect(last.statusCode).toBe(422);
-    expect(errorOf(last).message).toBe("At least one active superadmin must remain");
+    expect(last.statusCode).toBe(403);
+    expect(errorOf(last).code).toBe("FORBIDDEN");
     expect(await fixture.user(fixture.users.other.id)).toMatchObject({ status: "active" });
     // Both refusals are the operation's own answer, so each run failed and names the code.
     expect((await fixture.runs("users.delete")).map((run) => run.error?.code)).toEqual([
       "VALIDATION_FAILED",
-      "VALIDATION_FAILED"
+      "FORBIDDEN"
     ]);
+  });
+
+  it("keeps the last active superadmin when the signed-in caller's stored account disappeared", async () => {
+    const fixture = await createFixture();
+    // The store also admits identities vouched for by sign-in without a stored holder.
+    // Such a caller is not evidence of another active superadmin in the instance.
+    fixture.beforeNextTransaction(async () => {
+      await fixture.store.workspaces.deletePersonalWorkspaceForUser({
+        clientInstanceId: fixture.clientInstanceId,
+        userId: asUserId(fixture.users.superadmin.id)
+      });
+      await fixture.store.users.deleteUser({
+        clientInstanceId: fixture.clientInstanceId,
+        userId: asUserId(fixture.users.superadmin.id)
+      });
+    });
+    const last = await fixture.server.call("users.delete", {
+      params: { userId: fixture.users.other.id },
+      headers: as.superadmin
+    });
+    expect(last.statusCode).toBe(422);
+    expect(errorOf(last).message).toBe("At least one active superadmin must remain");
+    expect(await fixture.user(fixture.users.other.id)).toMatchObject({ status: "active" });
   });
 });
 
@@ -674,14 +696,14 @@ async function createFixture() {
     }
   };
   const transport = new CaptureMailTransport();
-  // What runs before the next read of all users, once: a change that races the operation.
+  // What runs before the next transaction, once: a change after operation admission.
   let raced: (() => Promise<void>) | undefined;
-  const listUsersNow = store.users.listUsers.bind(store.users);
-  store.users.listUsers = async (input) => {
+  const transaction = store.transaction.bind(store);
+  store.transaction = async (fn) => {
     const run = raced;
     raced = undefined;
     await run?.();
-    return listUsersNow(input);
+    return transaction(fn);
   };
   const server = await createTestInstance({
     server: {
@@ -737,7 +759,7 @@ async function createFixture() {
     passwords,
     transport,
     audit,
-    beforeUsersAreListed(change: () => Promise<void>) {
+    beforeNextTransaction(change: () => Promise<void>) {
       raced = change;
     },
     get passwordWrites() {

@@ -17,6 +17,7 @@ import {
 import { keysetFilter } from "./paging";
 import type { PostgresConnection } from "./postgres-database";
 import { mapPersonalApiKey } from "./rows";
+import { lockRights } from "./rights-lock";
 import { apiConnectCodes, apiCredentials, productUsers } from "./schema";
 
 /** How long an expired connect code is kept before a new start drops it. */
@@ -60,6 +61,8 @@ export async function createPersonalApiKey(
   input: CreatePersonalApiKeyInput
 ): Promise<CreatedPersonalApiKey> {
   return db.transaction(async (tx) => {
+    // A key is issued under the rights lock of its owner, before the owner's own key lock.
+    await lockRights(tx, { clientInstanceId: input.clientInstanceId, userId: input.ownerUserId });
     await requireBelowKeyCap(tx, input);
     return insertPersonalApiKey(tx, input);
   });
@@ -231,24 +234,28 @@ export async function approveConnectCode(
   db: PostgresConnection,
   input: Input<"approveConnectCode">
 ): Promise<ConnectCodeRecord | undefined> {
-  const [row] = await db
-    .update(apiConnectCodes)
-    .set({
-      approvedAt: sql`now()`,
-      ownerUserId: input.ownerUserId,
-      keyName: input.name,
-      keyScopes: input.scopes,
-      keyExpiresAt: new Date(input.keyExpiresAt)
-    })
-    .where(
-      and(
-        eq(apiConnectCodes.clientInstanceId, input.clientInstanceId),
-        eq(apiConnectCodes.userCodeHash, input.userCodeHash),
-        gt(apiConnectCodes.expiresAt, sql`now()`),
-        isNull(apiConnectCodes.approvedAt)
+  // Confirming a code decides the scopes of the key it becomes: under the rights lock.
+  const [row] = await db.transaction(async (tx) => {
+    await lockRights(tx, { clientInstanceId: input.clientInstanceId, userId: input.ownerUserId });
+    return tx
+      .update(apiConnectCodes)
+      .set({
+        approvedAt: sql`now()`,
+        ownerUserId: input.ownerUserId,
+        keyName: input.name,
+        keyScopes: input.scopes,
+        keyExpiresAt: new Date(input.keyExpiresAt)
+      })
+      .where(
+        and(
+          eq(apiConnectCodes.clientInstanceId, input.clientInstanceId),
+          eq(apiConnectCodes.userCodeHash, input.userCodeHash),
+          gt(apiConnectCodes.expiresAt, sql`now()`),
+          isNull(apiConnectCodes.approvedAt)
+        )
       )
-    )
-    .returning();
+      .returning();
+  });
   return row ? mapConnectCode(row) : undefined;
 }
 

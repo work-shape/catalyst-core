@@ -237,7 +237,7 @@ export interface AccessInstance {
   forbidden(action: string, reason: string): Refusal;
   /** Written by the administrator. */
   createNamespace(prefix: string, lists?: Record<string, unknown>): Promise<AccessResponse>;
-  /** Written by the administrator. Returns the grant id. */
+  /** Written by the administrator, or for the administrator by the superadmin. Returns the id. */
   grant(
     holderId: string,
     action: string,
@@ -392,7 +392,9 @@ export async function setupAccessInstance(
     scope: { namespace: string } | { assetId: string } | { workspaceId: string },
     effect: "allow" | "deny" = "allow"
   ) => {
-    const response = await expectOk(admin.id, "permissions.grant", {
+    // Nobody writes a row of their own, so the superadmin writes the administrator's.
+    const writer = holderId === admin.id ? root.id : admin.id;
+    const response = await expectOk(writer, "permissions.grant", {
       payload: {
         holderKind: "user",
         holderId,

@@ -661,12 +661,22 @@ describe("client instance app vertical slice", () => {
     });
     const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
     try {
-      for (const restrictedEntry of [
-        "api_access.manage",
-        "!api_access.manage",
-        "agent_models.manage",
-        "!agent_models.manage"
-      ]) {
+      // A user who holds a right only a superadmin gives is changed by nobody else at all: the
+      // admin does not hold every right of the account (RIGHTS-1b).
+      for (const held of ["api_access.manage", "agent_models.manage"]) {
+        const holder = await app.stores.users.createUser({
+          clientInstanceId,
+          displayLabel: "Holder",
+          roles: ["user"],
+          permissions: [held]
+        });
+        const refused = await app.call("users.update", {
+          params: { userId: holder.id },
+          payload: { displayLabel: "Renamed" }
+        });
+        expect(refused.json()).toMatchObject({ error: { details: { action: held } } });
+      }
+      for (const restrictedEntry of ["!api_access.manage", "!agent_models.manage"]) {
         const managedUser = await app.stores.users.createUser({
           clientInstanceId,
           displayLabel: "Managed user",

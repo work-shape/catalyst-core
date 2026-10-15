@@ -144,6 +144,7 @@ export interface UserStore {
    */
   markUserDeletionRequested(input: DeleteUserInput): Promise<boolean>;
   deleteUser(input: DeleteUserInput): Promise<UserRecord>;
+  /** Creates or edits a mapping on this user; CONFLICT identity_already_linked for another owner. */
   upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord>;
   deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord>;
   getUserModelPreference(input: UserModelPreferenceInput): Promise<UserModelPreference | undefined>;
