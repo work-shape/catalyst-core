@@ -28,10 +28,18 @@ export const dataStores = defineTranslations({
       "No data stores yet. A data store is a database the platform hosts, in which apps and workflows keep their rows. A person with the right to create data stores adds one through the CLI or the API.",
     "dataStores.kind": "Data stores",
     "dataStores.kindSingular": "Data store",
+    "dataStores.draftUnpublished": "Draft · not published",
+    "dataStores.draftUnpublishedText":
+      "This Data Store has no published revision yet, so it has no database. Publishing creates it and applies these migrations.",
+    "dataStores.draftMigrationsTitle": "Draft migrations",
+    "dataStores.draftMigrationsDescription": "What publishing applies, in this order.",
+    "dataStores.draftMigrationsEmpty": "The draft has no migration.",
     "dataStores.lastMigration": "Last migration",
     "dataStores.missing": "There is no data store with the id {name}.",
     "dataStores.nearLimit":
       "This store is at 80 percent of its size limit or above. Over the limit it refuses new rows and still answers reads.",
+    "dataStores.new": "New data store",
+    "dataStores.newPrompt": "Build a new data store that holds ",
     "dataStores.nextMigration": "Next migration",
     "dataStores.notReachable": "The tables show once the store is ready.",
     "dataStores.refused": "You may not read this store.",
@@ -141,10 +149,19 @@ export const dataStores = defineTranslations({
       "Noch keine Datenspeicher. Ein Datenspeicher ist eine Datenbank der Plattform, in der Apps und Workflows ihre Zeilen ablegen. Wer das Recht hat, Datenspeicher anzulegen, legt ihn über die CLI oder die API an.",
     "dataStores.kind": "Datenspeicher",
     "dataStores.kindSingular": "Datenspeicher",
+    "dataStores.draftUnpublished": "Entwurf · nicht veröffentlicht",
+    "dataStores.draftUnpublishedText":
+      "Dieser Datenspeicher hat noch keine veröffentlichte Revision und darum keine Datenbank. Beim Veröffentlichen wird sie angelegt, und diese Migrationen werden angewendet.",
+    "dataStores.draftMigrationsTitle": "Migrationen des Entwurfs",
+    "dataStores.draftMigrationsDescription":
+      "Was beim Veröffentlichen angewendet wird, in dieser Reihenfolge.",
+    "dataStores.draftMigrationsEmpty": "Der Entwurf hat keine Migration.",
     "dataStores.lastMigration": "Letzte Migration",
     "dataStores.missing": "Es gibt keinen Datenspeicher mit der Kennung {name}.",
     "dataStores.nearLimit":
       "Dieser Speicher hat 80 Prozent seiner Größengrenze erreicht oder überschritten. Über der Grenze nimmt er keine neuen Zeilen an und beantwortet weiterhin Lesezugriffe.",
+    "dataStores.new": "Neuer Datenspeicher",
+    "dataStores.newPrompt": "Bau einen neuen Datenspeicher, der ",
     "dataStores.nextMigration": "Nächste Migration",
     "dataStores.notReachable": "Die Tabellen erscheinen, sobald der Speicher bereit ist.",
     "dataStores.refused": "Du darfst diesen Speicher nicht lesen.",

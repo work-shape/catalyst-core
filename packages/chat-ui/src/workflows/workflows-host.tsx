@@ -19,6 +19,12 @@ export interface WorkflowsHost {
    * conversation. Absent where no conversation can be started, such as over samples.
    */
   editWithAgent?(workflow: string): Promise<void>;
+  /**
+   * "New workflow": opens the dock on the list with a new conversation with an agent that builds
+   * assets and `prompt` in its composer; nothing is created until its first save. Absent where
+   * no such agent is offered or the reader may write no Workflow.
+   */
+  startNew?(prompt: string): void;
 }
 
 const WorkflowsHostContext = createContext<WorkflowsHost | undefined>(undefined);
