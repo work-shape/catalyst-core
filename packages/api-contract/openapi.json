@@ -609,6 +609,11 @@
             "sessionToken": [
               "conversation:read"
             ]
+          },
+          {
+            "accessToken": [
+              "me:read"
+            ]
           }
         ],
         "parameters": [
@@ -697,6 +702,11 @@
           {
             "sessionToken": [
               "conversation:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "me:read"
             ]
           }
         ],
@@ -965,6 +975,11 @@
           {
             "sessionToken": [
               "conversation:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
             ]
           }
         ],
@@ -14280,6 +14295,11 @@
             "accessToken": [
               "governance:read"
             ]
+          },
+          {
+            "accessToken": [
+              "me:read"
+            ]
           }
         ],
         "parameters": [
@@ -22203,6 +22223,9 @@
                 "compactThresholdTokens": {
                   "type": "number"
                 },
+                "buildsAssets": {
+                  "type": "boolean"
+                },
                 "welcomeMessage": {
                   "type": "string"
                 },
@@ -27605,6 +27628,9 @@
                 },
                 "compactThresholdTokens": {
                   "type": "number"
+                },
+                "buildsAssets": {
+                  "type": "boolean"
                 },
                 "welcomeMessage": {
                   "type": "string"

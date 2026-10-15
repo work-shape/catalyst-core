@@ -197,10 +197,12 @@ interface OperationDefinitionBase<Input, Output> {
    * A floor of one call, where it depends on where the call came from and not on the operation
    * alone: a tool an agent is given for the subject of its conversation stands for an operation
    * on that asset. Asked with the policy, and again before a call that waited is executed. The
-   * stricter of it and `policyFloor` holds.
+   * stricter of it and `policyFloor` holds. It is told the call's input, which can name the
+   * asset the call writes.
    */
   policyFloorOf?(
-    origin: OperationOrigin
+    origin: OperationOrigin,
+    input: unknown
   ): PolicyValue | undefined | Promise<PolicyValue | undefined>;
   /**
    * The answer holds a secret that is shown once, such as a new key. The run keeps no output,

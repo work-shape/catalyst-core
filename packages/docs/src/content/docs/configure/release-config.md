@@ -1199,6 +1199,18 @@ dataStores:
 - `sizeLimit` is the most one store may hold, as a whole number of `MB` or `GB`. A store's own `sizeLimit` in `store.yaml` names less and never more. At the limit no rows are added and reading keeps working. Every insert reads the size of the database before it writes and after, and is rolled back where it passed the limit: no row that is kept lies beyond it, and the files exceed it only by what the inserts of one moment wrote, under 256 MiB for rows alone. Default `5GB`.
 - `poolMaxConnections` is the most connections one process holds to one store at once, between 1 and 10. Default 5.
 
+### Build rules for data scope (SCOPE-0)
+
+Prepare stores and their readers for a later per-person filter by client (Mandant):
+
+- Give every per-client table a `NOT NULL` column for the client key, for example `mandant_nr`, including findings, snapshots, open items and run history. Aggregate views group by that column.
+- A Workflow that copies data from an outside system writes the client key on every row. Per-client work runs as child runs keyed by the client, and aggregates keep the key.
+- Every `http_api` operation whose path or result is per client takes the client as a named parameter and returns the client key on every item.
+- App `sql` reads use those per-client tables. Do not put a structured Knowledge Base with free SQL on these stores.
+- Until the filter exists, everyone who can use the App sees every client the Connection's outside account sees. Limit that account in the outside system to the agreed clients.
+
+App SQL validation refuses the parameter name `scope` and the bindings `$viewer.scope` and `$viewer.scope_all`; they are reserved for the later data-scope slices. The binding `$viewer.groups` is refused too. Use an ordinary parameter such as `mandant_nr` for now. These rules do not filter anything per person yet.
+
 ## Config Is Not A Secret Store
 
 Release config may reference secrets, but it must not contain secret values.

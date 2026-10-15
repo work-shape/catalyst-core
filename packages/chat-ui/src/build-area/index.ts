@@ -74,9 +74,12 @@ export {
 } from "./build-create-request";
 export {
   buildScopes,
+  buildWorkspaceName,
   mayCreateAgents,
   resolveBuildRights,
+  readLastBuildScope,
   resolveBuildScope,
+  showOwnerInStudio,
   type BuildScope
 } from "./build-rights";
 export {

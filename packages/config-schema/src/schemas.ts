@@ -773,6 +773,8 @@ function isTimeZoneName(name: string): boolean {
 }
 
 export const clientInstanceConfigSchema = z.object({
+  /** Reserved until row-level data scope is enforced; never silently discard it. */
+  scopes: z.never({ error: "'scopes' is reserved for data scope (SCOPE-1)" }).optional(),
   version: z.literal(1).default(1),
   clientInstance: z.object({
     id: z.string().min(1),

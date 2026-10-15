@@ -412,7 +412,8 @@ function ChatWorkspaceContent({
             ? { id: activeWorkspace.id, name: activeWorkspace.name }
             : undefined,
           showRoute: model.route.showRoute,
-          editWithAgent: model.workflows.editWithAgent
+          editWithAgent: model.workflows.editWithAgent,
+          ...(model.workflows.startNew ? { startNew: model.workflows.startNew } : {})
         }
       : undefined;
   const connectionDraft = connectionDraftHost({

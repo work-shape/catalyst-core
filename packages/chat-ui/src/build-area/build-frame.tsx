@@ -28,7 +28,7 @@ import {
   SubRail
 } from "@vivd-catalyst/ui";
 import { formatDateTime } from "../control-plane/locale-format";
-import { useTranslation } from "../i18n";
+import { useTranslation, type TranslationKey } from "../i18n";
 import { holdLeaveGuard } from "../leave-guard";
 import {
   isEditableKind,
@@ -61,7 +61,7 @@ import {
   type VisibleBuildKind
 } from "./build-model";
 import { useBuildNavigation } from "./build-route";
-import { buildScopeValue, buildScopes, type BuildScope } from "./build-rights";
+import { buildScopeValue, buildScopes, buildWorkspaceName, type BuildScope } from "./build-rights";
 import { scrollPageToTop } from "./build-scroll";
 
 /** The commands the CLI entry names, in the order a person runs them. */
@@ -71,6 +71,15 @@ const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst 
 type ListView = BuildListFilter;
 
 const firstListView: ListView = { text: "", namespace: undefined };
+
+/** The kinds an agent's first save creates, with the words of their New button and prompt. */
+const BUILT_WITH_AGENT: Readonly<
+  Record<string, { label: TranslationKey; prompt: TranslationKey } | undefined>
+> = {
+  agent: { label: "configNewAgent", prompt: "configNewAgentPrompt" },
+  skill: { label: "configNewSkill", prompt: "configNewSkillPrompt" },
+  data_store: { label: "dataStores.new", prompt: "dataStores.newPrompt" }
+};
 
 /** The value of the Namespace filter that narrows nothing. */
 const ALL_NAMESPACES = "";
@@ -493,7 +502,7 @@ function BuildList({
   const scope = source.scoped?.(entry.kind) ? source.scope : undefined;
   const scopes = scope && source.chooseScope ? buildScopes(source.rights) : [];
   const workspaceName = (id: string) =>
-    source.rights.workspaces.find((candidate) => candidate.id === id)?.name ?? id;
+    buildWorkspaceName(source.rights, id, t("build.scopePersonal"));
   const scopeName = (of: BuildScope) =>
     of.kind === "instance" ? t("build.scopeInstance") : workspaceName(of.workspaceId);
   // A Namespace is a prefix among the instance's own assets alone.
@@ -504,8 +513,17 @@ function BuildList({
   // A kind that only lists has no asset to start and no CLI entry, and a page only to show one.
   const editable = isEditableKind(entry) ? entry : undefined;
   const opens = opensAssets(entry);
+  // Where an agent builds assets, "New" of a kind it creates opens it in the dock: its first
+  // save creates the asset (NAV-2). Elsewhere a kind starts its asset in its dialog.
+  const withAgent = source.buildWithAgent ? BUILT_WITH_AGENT[entry.kind] : undefined;
+  const { buildWithAgent } = source;
   const newButton =
-    editable && state.canCreate ? (
+    state.canCreate && withAgent && buildWithAgent ? (
+      <Button onClick={() => buildWithAgent(t(withAgent.prompt))}>
+        <Plus aria-hidden="true" />
+        {t(withAgent.label)}
+      </Button>
+    ) : editable && state.canCreate ? (
       <Button onClick={onNew}>
         <Plus aria-hidden="true" />
         {t(editable.newLabel)}
