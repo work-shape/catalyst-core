@@ -285,47 +285,36 @@ describe("what a discovery takes from an outside system", () => {
     expect(JSON.stringify(audited)).not.toMatch(/field_|\^a\$/u);
   });
 
-  // Fails without the change: every schema of an answer was compiled in one turn of the
-  // process, which answered no request for as long as that took.
   it("gives the process a turn before each operation of an answer", async () => {
     const w = world();
     const instance = await w.start();
     const count = CONNECTION_DISCOVERY_MAX_OPERATIONS;
-    let turns = 0;
-    let counting = true;
-    const turn = () => {
-      turns += 1;
-      if (counting) setImmediate(turn);
-    };
-    /** The turn of the process in which each operation was first read, in order. */
-    const readInTurn: number[] = [];
+    let completedChecks = 0;
+    const startedAfter: number[] = [];
     w.connector.discover = () =>
       Promise.resolve(
-        Array.from({ length: count }, (_unused, index) =>
-          listedOperation(`tool_${index}`, {
-            inputSchema: {
-              type: "object",
-              // Each schema is its own, so each one is compiled. It is read once when the
-              // answer is measured, all in one turn, and again when it is compiled.
-              get properties() {
-                readInTurn.push(turns);
-                return { [`field_${index}`]: { type: "string" } };
-              }
-            }
-          })
-        )
+        Array.from({ length: count }, (_unused, index) => listedOperation(`tool_${index}`))
       );
-    setImmediate(turn);
-    try {
-      expect(await discoverDirectly(w)).toMatchObject({
-        status: "discovered",
-        operationCount: count
-      });
-    } finally {
-      counting = false;
-    }
-    // No two operations were compiled in the same turn.
-    expect(new Set(readInTurn).size).toBeGreaterThanOrEqual(count);
+
+    expect(
+      await discoverDirectly(w, undefined, {
+        schemaChecker: {
+          check: () => Promise.resolve([]),
+          close: () => Promise.resolve(),
+          async refusalOf() {
+            startedAfter.push(completedChecks);
+            // A worker reply yields, but two replies can precede a setImmediate counter's
+            // next tick. Control each reply instead: discovery must await this turn before
+            // it starts the next operation, even when the runner is busy.
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            completedChecks += 1;
+            return undefined;
+          }
+        }
+      })
+    ).toMatchObject({ status: "discovered", operationCount: count });
+    expect(startedAfter).toEqual(Array.from({ length: count }, (_unused, index) => index));
+    expect(completedChecks).toBe(count);
     expect(required((await storedState(instance)).catalog).entries).toHaveLength(count);
   });
 
