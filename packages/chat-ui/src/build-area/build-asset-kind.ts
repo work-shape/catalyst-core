@@ -4,7 +4,7 @@ import type { AvatarKind, GenericIconKey } from "@vivd-catalyst/ui";
 import type { AvailableIn, CheckName } from "../api/asset-writes";
 import type { TranslationKey } from "../i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
-import type { BuildNamespace } from "./build-rights";
+import type { BuildNamespace, BuildScope } from "./build-rights";
 
 /** One asset as a list shows it: what the instance says of it without its content. */
 export type BuildAssetRow = AssetSummary;
@@ -100,6 +100,35 @@ export interface BuildCreateDialogProps {
   onCreated(name: string, then?: () => void): void;
 }
 
+/** What the reader narrows a list by, as its leading rows are handed it. */
+export interface BuildListLeadFilter {
+  /** What the reader typed, once they paused. */
+  text: string;
+  namespace: string | undefined;
+  /** The scope the list shows, for a kind that is listed per scope. */
+  scope: BuildScope | undefined;
+}
+
+/** One row a kind adds before the assets of its list. It looks as theirs do and opens nothing. */
+export interface BuildListLeadRow {
+  key: string;
+  title: string;
+  /** The lines under the title, read whole. */
+  description: ReactNode;
+  /** After the title, as an asset's scope and badges are. */
+  chips?: ReactNode;
+  /** Always shown at the row's end, such as a switch. */
+  actions?: ReactNode;
+}
+
+/** The rows a kind adds before the assets of its list. */
+export interface BuildListLead {
+  /** Absent while they are read. */
+  rows: readonly BuildListLeadRow[] | undefined;
+  /** What went wrong reading or changing them, shown where a list error is. */
+  error?: ReactNode;
+}
+
 /** What every kind of the Build area names: its rail item and its list. */
 interface BuildKindBase {
   /** The asset kind, as the server stores it. */
@@ -132,10 +161,14 @@ interface BuildKindBase {
    */
   RowLine?: ComponentType<{ asset: BuildAssetRow }>;
   /**
-   * What the list shows above its rows, with rows and without: such as the guardrails the
-   * release ships, which are no asset of the list.
+   * Rows the list shows before the assets', in the same list under its search and filters:
+   * such as the guardrails the release ships, which are no asset of the list. It is handed what
+   * the reader narrows the list by and hands the list the rows that match.
    */
-  ListHead?: ComponentType;
+  ListLead?: ComponentType<{
+    filter: BuildListLeadFilter;
+    children(lead: BuildListLead): ReactNode;
+  }>;
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
 }

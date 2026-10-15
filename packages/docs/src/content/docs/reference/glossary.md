@@ -73,7 +73,7 @@ A fixed sequence of steps the platform runs without a conversation, started by h
 
 ## Connection
 
-The access to one outside system, today always a remote MCP server. It holds the address and, stored encrypted, one key for everyone who may use it. Agents call the operations it offers once a person has accepted them. In the interface: **Studio > Connections** (German: **Studio › Verbindungen**).
+The access to one outside system: a remote MCP server, or a REST interface read by GET (`http_api`). It holds the address and, stored encrypted, one key for everyone who may use it. Agents call the operations it offers once a person has accepted them. In the interface: **Studio > Connections** (German: **Studio › Verbindungen**).
 
 ## Data Store
 
