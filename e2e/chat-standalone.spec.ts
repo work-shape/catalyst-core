@@ -3235,7 +3235,8 @@ test("Studio opens on a list, and a list and an asset each have an address", asy
   await page.getByRole("button", { name: "New skill", exact: true }).first().click();
   const newSkill = page.getByRole("dialog", { name: "New skill", exact: true });
   await newSkill.getByRole("textbox", { name: /^Title/u }).fill("Workflow review");
-  await expect(newSkill.getByRole("textbox", { name: /^Id/u })).toHaveValue("workflow_review");
+  await newSkill.getByRole("button", { name: "Advanced", exact: true }).click();
+  await expect(newSkill.getByRole("textbox", { name: /^Address/u })).toHaveValue("workflow_review");
   await newSkill.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(newSkill).toBeHidden();
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
