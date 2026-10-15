@@ -19,8 +19,7 @@ import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile
 } from "@vivd-catalyst/config-schema";
-import { unknownToJsonValue, type JobWorker, type Logger } from "@vivd-catalyst/core";
-import { buildConnectionCatalog } from "@vivd-catalyst/connections";
+import { type JobWorker, type Logger } from "@vivd-catalyst/core";
 import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
 import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
 import { LocalWorkspaceCommandProcessExecutor } from "@vivd-catalyst/tool-execution";
@@ -245,34 +244,6 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
         ...input.env
       }
     });
-    // No outside server runs in this fixture. Give configured Connections the catalog that
-    // discovery would accept so agent references resolve before the seed pushes them.
-    for (const [name, connection] of Object.entries(config.connections)) {
-      const asset = await instance.stores.configAssets.getConfigAsset({
-        clientInstanceId: getClientInstanceId(config),
-        kind: "connection",
-        name
-      });
-      if (!asset) continue;
-      await instance.stores.connections.putConnectionState({
-        clientInstanceId: getClientInstanceId(config),
-        connectionAssetId: asset.id,
-        health: "ok",
-        catalog: unknownToJsonValue(
-          buildConnectionCatalog({
-            discovered: connection.operations.map((operation) => ({
-              name: operation.name,
-              description: operation.name,
-              inputSchema: { type: "object" },
-              proposedEffect: operation.effect
-            })),
-            accepted: connection.operations.map((operation) => ({ ...operation, enabled: true })),
-            previous: undefined,
-            now: new Date().toISOString()
-          })
-        )
-      });
-    }
     const runtime = await getTestRuntime(instance);
     const fetchImpl: typeof fetch = (resource, init) => runtime.fetch(new Request(resource, init));
 

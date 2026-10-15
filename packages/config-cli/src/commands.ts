@@ -404,13 +404,15 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
       : ` ${formatCount(guardrails, "guardrail")} ${guardrails === 1 ? "is" : "are"} checked by the instance when a push writes ${guardrails === 1 ? "it" : "them"}.`;
   try {
     if (items.length > 0 || bundle.defaultAgentName !== undefined) {
-      await checkSyncOnThisRelease(api, {
+      const checked = await checkSyncOnThisRelease(api, {
         ...batchScope(instance),
         items,
         ...(bundle.defaultAgentName === undefined
           ? {}
           : { defaultAgentName: bundle.defaultAgentName })
       });
+      for (const warning of checked.warnings ?? [])
+        writeOutput(options, `Warning: ${warning.message}`);
     }
     writeOutput(options, `Valid: ${formatCounts({ ...bundle, guardrails: [] })}.${unchecked}`);
     return 0;

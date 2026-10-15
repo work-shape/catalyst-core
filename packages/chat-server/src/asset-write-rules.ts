@@ -30,7 +30,8 @@ import {
   findAgentUserSelectableModelIssues
 } from "@vivd-catalyst/config-schema";
 import {
-  findUnavailableAgentToolRefusals,
+  findAgentToolValidation,
+  type AgentToolWarning,
   type AgentToolValidationTargets
 } from "./agent-tool-validation";
 import { agentModelSettingValue } from "./asset-kinds/agent";
@@ -611,12 +612,9 @@ export interface ChangedAgentRefusal {
 }
 
 /**
- * The live tool references of submitted agents, then the user-selectable models and
- * Namespace limits of agents the write adds or changes.
- * Answers every refusal with its agent, and the Namespaces of the instance, which the kind's
- * own editing policy reads next.
- * A Namespace's lists bind every writer, an instance administrator and the release sync
- * included. They only restrict: a null list allows everything, an empty one nothing.
+ * Checks submitted agents' tool references and changed agents' models and Namespace limits.
+ * Returns refusals, callability warnings and the Namespaces for the kind's editing policy.
+ * Namespace lists bind every writer; null allows everything and an empty list nothing.
  */
 export async function findChangedAgentRefusals(
   options: AssetWorkflowOptions,
@@ -624,13 +622,14 @@ export async function findChangedAgentRefusals(
   stored: AssetSet,
   validated: AssetSet,
   toolTargets: AgentToolValidationTargets
-): Promise<{ namespaces: Namespace[]; modelIssues: string[]; refusals: ChangedAgentRefusal[] }> {
+): Promise<{
+  namespaces: Namespace[];
+  modelIssues: string[];
+  refusals: ChangedAgentRefusal[];
+  warnings: AgentToolWarning[];
+}> {
   const changed = changedAgents(stored, validated);
-  const refusals: ChangedAgentRefusal[] = await findUnavailableAgentToolRefusals(
-    options,
-    validated,
-    toolTargets
-  );
+  const { refusals, warnings } = await findAgentToolValidation(options, validated, toolTargets);
   // An agent's list of user-selectable models must name eligible bindings whenever it is
   // written. Unchanged lists are not re-checked, so a binding that later disappears or stops
   // being agent-selectable never blocks other edits; such ids are ignored at read time.
@@ -660,7 +659,7 @@ export async function findChangedAgentRefusals(
     const error = namespace && namespaceListRefusal(access, namespace, agent);
     if (error) refusals.push({ agentName: agent.name, error });
   }
-  return { namespaces, modelIssues, refusals };
+  return { namespaces, modelIssues, refusals, warnings };
 }
 
 /** Throws the first refusal of `findChangedAgentRefusals`: the model issues before the lists. */
@@ -670,7 +669,7 @@ export async function assertChangedAgentsAllowed(
   stored: AssetSet,
   validated: AssetSet,
   toolTargets: AgentToolValidationTargets
-): Promise<Namespace[]> {
+): Promise<{ namespaces: Namespace[]; warnings: AgentToolWarning[] }> {
   const found = await findChangedAgentRefusals(options, access, stored, validated, toolTargets);
   if (found.modelIssues.length > 0) {
     throw invalidAssetSet(found.modelIssues);
@@ -679,7 +678,7 @@ export async function assertChangedAgentsAllowed(
   if (refusal) {
     throw refusal.error;
   }
-  return found.namespaces;
+  return { namespaces: found.namespaces, warnings: found.warnings };
 }
 
 function invalidAssetSet(issues: readonly string[]): AppError {
@@ -778,22 +777,22 @@ export async function writeIssuesOf(
   found: ReturnType<typeof findAssetSetIssues>,
   withinOwners: () => void,
   toolTargets: AgentToolValidationTargets
-): Promise<AssetSetIssue[]> {
+): Promise<{ issues: AssetSetIssue[]; warnings: AgentToolWarning[] }> {
   try {
     const issues = found.validateWrite(stored);
-    if (issues.length > 0) return issues;
+    if (issues.length > 0) return { issues, warnings: [] };
     withinOwners();
-    const { refusals } = await findChangedAgentRefusals(
+    const { refusals, warnings } = await findChangedAgentRefusals(
       options,
       access,
       stored,
       found.accepted,
       toolTargets
     );
-    return refusals.flatMap(({ error }) => errorIssues(error));
+    return { issues: refusals.flatMap(({ error }) => errorIssues(error)), warnings };
   } catch (error) {
     if (isAppError(error) && error.code === "VALIDATION_FAILED") {
-      return errorIssues(error);
+      return { issues: errorIssues(error), warnings: [] };
     }
     throw error;
   }

@@ -7,42 +7,46 @@ export interface AgentToolReferenceLocation {
   location: string;
 }
 
-// Inline code must hold a whole dotted identifier (optionally followed by an empty call).
-const DOTTED_TOOL_NAME = /^[a-z][a-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)+(?:\(\))?$/u;
-// Common document/code filenames are ambiguous identifiers, so do not infer tools from them.
-const FILE_EXTENSION =
-  /\.(?:md|txt|json|ya?ml|csv|tsv|xlsx?|docx?|pptx?|pdf|html?|css|[cm]?[jt]sx?|py|sh|sql|png|jpe?g|svg|webp|zip)$/iu;
+// These suffixes name files or hosts rather than tools, even in a tool namespace.
+const NON_TOOL_SUFFIX =
+  /\.(?:md|txt|json|ya?ml|csv|tsv|xlsx?|docx?|pptx?|pdf|html?|css|[cm]?[jt]sx?|py|sh|sql|xml|log|toml|ini|env|gz|tar|png|jpe?g|svg|webp|zip|com|org|net|io|de|co|uk|eu|dev|app|ai|info|biz|edu|gov|me|us|at|ch|fr|nl|it|es|ca|au|cloud|online|site|test|localhost)$/iu;
 
 /**
- * Lists every toolNames entry and explicit inline-code tool identifier in instructions.
- * Bare prose, paths, URLs, wildcards, file names and fenced code are not tool declarations.
- * Lines are one-based within the instructions string, rather than the containing YAML file.
+ * Lists toolNames and dotted instruction tokens in the instance's tool namespaces.
+ * Lines are one-based within instructions. Skills are never scanned.
  */
 export function agentToolReferenceLocations(
-  agent: Pick<AgentConfig, "toolNames" | "instructions">
+  agent: Pick<AgentConfig, "toolNames" | "instructions">,
+  enabledToolNames: readonly string[]
 ): AgentToolReferenceLocation[] {
+  const namespaces = new Set([
+    ...enabledToolNames.map((name) => name.split(".")[0]),
+    "connection",
+    "app",
+    "data_store"
+  ]);
   const references = agent.toolNames.map((name, index) => ({
     name,
     location: `toolNames[${index}]`
   }));
-  let fence: { marker: string; length: number } | undefined;
   for (const [index, line] of agent.instructions.split(/\r?\n/u).entries()) {
-    const delimiter = /^ {0,3}(`{3,}|~{3,})/u.exec(line)?.[1];
-    if (delimiter !== undefined) {
-      if (fence === undefined) {
-        fence = { marker: delimiter[0] ?? "", length: delimiter.length };
-      } else if (delimiter[0] === fence.marker && delimiter.length >= fence.length) {
-        fence = undefined;
-      }
-      continue;
-    }
-    if (fence !== undefined) continue;
+    // Remove whole addresses and paths before matching, so their dotted parts never leak in.
+    const prose = line.replace(
+      /(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s<>`]+|[\w.+-]+@[\w.-]+|(?:[\w.-]*[\/\\])+[^\s<>`]+/giu,
+      " "
+    );
     const seen = new Set<string>();
-    for (const match of line.matchAll(/(?<![`\\])`([^`]+)`(?!`)/gu)) {
-      const identifier = match[1];
-      if (identifier === undefined || !DOTTED_TOOL_NAME.test(identifier)) continue;
-      const name = identifier.replace(/\(\)$/u, "");
-      if (FILE_EXTENSION.test(name) || seen.has(name)) continue;
+    for (const match of prose.matchAll(
+      /(?<![\w.@-])([a-z][a-z0-9_-]*(?:\.[A-Za-z0-9_][A-Za-z0-9_-]*)+)(?![\w@-]|\.\*)/gu
+    )) {
+      const name = match[1];
+      if (
+        name === undefined ||
+        !namespaces.has(name.split(".")[0]) ||
+        NON_TOOL_SUFFIX.test(name) ||
+        seen.has(name)
+      )
+        continue;
       seen.add(name);
       references.push({ name, location: `instructions line ${index + 1}` });
     }
@@ -54,12 +58,12 @@ export function agentToolReferenceLocations(
 export function findAgentToolReferenceIssues(input: {
   agents: readonly AgentConfig[];
   enabledToolNames: readonly string[];
-  /** The synchronous schema pass defers data tools to the instance's live sources. */
+  /** The synchronous schema pass defers dynamic tools to the instance's asset set. */
   deferDataTools?: boolean;
 }): string[] {
   const enabled = new Set(input.enabledToolNames);
   return input.agents.flatMap((agent) => {
-    const references = agentToolReferenceLocations(agent);
+    const references = agentToolReferenceLocations(agent, input.enabledToolNames);
     const missing = input.deferDataTools
       ? new Set(
           findMissingAgentToolReferences(

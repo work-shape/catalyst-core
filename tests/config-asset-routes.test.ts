@@ -1152,7 +1152,7 @@ describe("config asset admin routes", () => {
     const token = await mintToken(fixture.server);
     const response = await request(fixture.server, token, "assets.validate", {
       params: { kind: "agent" },
-      payload: { config: agentConfig("Help.\nUse `page.save_as_app`.") }
+      payload: { config: agentConfig("Help.\nUse known.missing.") }
     });
     expect(response.statusCode, response.body).toBe(200);
     expect(response.json()).toMatchObject({
@@ -1160,7 +1160,7 @@ describe("config asset admin routes", () => {
       issues: expect.arrayContaining([
         {
           message:
-            "Agent 'assistant' references unavailable tool 'page.save_as_app' in instructions line 2"
+            "Agent 'assistant' references unavailable tool 'known.missing' in instructions line 2"
         }
       ])
     });

@@ -58,6 +58,25 @@ describe("config asset bundle validation", () => {
     ).toContain(issue);
   });
 
+  it.each([
+    "Use page.missing, (page.missing); page.missing!",
+    "Use `page.missing()`.",
+    "```text\npage.missing\n```"
+  ])("checks dotted tokens with punctuation and in code: %s", (instructions) => {
+    expect(
+      issueMessages(
+        validationError({
+          agents: [agent({ instructions })],
+          skills: [],
+          defaultAgentName: "assistant",
+          refs: refs()
+        })
+      )
+    ).toContainEqual(
+      expect.stringContaining("unavailable tool 'page.missing' in instructions line")
+    );
+  });
+
   it("accepts enabled instruction tools without requiring them in toolNames", () => {
     expect(() =>
       validateConfigAssetBundle({
@@ -71,23 +90,36 @@ describe("config asset bundle validation", () => {
     ).not.toThrow();
   });
 
-  it("does not interpret prose, paths, URLs, files or fenced examples as tool references", () => {
+  it("ignores non-tool namespaces, paths, URLs, emails, filenames and domain endings", () => {
     expect(() =>
       validateConfigAssetBundle({
         agents: [
           agent({
             instructions: [
-              "page.save_as_app is prose, as is example.com.",
+              "ordinary.prose is prose, as is page.com.",
               "Read `config.yaml`, `report.pdf`, `src/main.ts`, `https://example.com` and `toolNames`.",
-              "A pattern `page.*` and an argument `page.save_as_app({})` are not identifiers.",
+              "A pattern `page.*` is not an identifier; page.md and page.example.de are files or domains.",
+              "Read /page.missing, ./page.missing, C:\\page.missing, page.missing/path and person@page.missing.",
+              "Visit https://page.missing, https://example.com/page.missing and www.page.missing.",
               "```ts",
-              "const name = `page.save_as_app`;",
+              "const name = `ordinary.prose`;",
               "```",
               "Use `search` and `read_skill`."
             ].join("\n")
           })
         ],
         skills: [],
+        defaultAgentName: "assistant",
+        refs: refs()
+      })
+    ).not.toThrow();
+  });
+
+  it("does not scan skills for tool names", () => {
+    expect(() =>
+      validateConfigAssetBundle({
+        agents: [agent()],
+        skills: [{ ...skill(), content: "Use page.missing and connection.absent.lookup." }],
         defaultAgentName: "assistant",
         refs: refs()
       })
@@ -307,7 +339,7 @@ function refs() {
     modelProviderIds: ["provider-1"],
     modelBindingIds: ["binding-1"],
     fastModeModelBindingIds: [],
-    enabledToolNames: ["search", "read_skill"]
+    enabledToolNames: ["search", "read_skill", "page.save"]
   };
 }
 

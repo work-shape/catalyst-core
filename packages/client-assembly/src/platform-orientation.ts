@@ -62,5 +62,12 @@ export const PLATFORM_INSTRUCTIONS: PlatformInstructions = {
  * which no release names and which an agent holds only where its definition lists them.
  */
 export function agentListableToolNames(enabledByRelease: Iterable<string>): string[] {
-  return [...new Set([...enabledByRelease, ...PLATFORM_TOOL_NAMES, ...PLATFORM_MODULE_TOOL_NAMES])];
+  const enabled = new Set(enabledByRelease);
+  // The conversation offers both Page tools whenever its folder can be written.
+  const pages = enabled.has("workspace.write_file")
+    ? [PAGE_SAVE_TOOL_NAME, PAGE_SAVE_AS_APP_TOOL_NAME]
+    : [];
+  return [
+    ...new Set([...enabled, ...PLATFORM_TOOL_NAMES, ...PLATFORM_MODULE_TOOL_NAMES, ...pages])
+  ];
 }

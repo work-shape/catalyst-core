@@ -1,10 +1,16 @@
 import {
   agentConfigSchema,
-  agentToolReferenceLocations,
-  findAgentToolReferenceIssues
+  connectionConfigSchema,
+  agentToolReferenceLocations
 } from "@vivd-catalyst/config-schema";
-import { AppError, type OperationListScope } from "@vivd-catalyst/core";
-import { readDefinitionName } from "./asset-kinds/shared";
+import { compiledActionsOf } from "@vivd-catalyst/app-build";
+import {
+  AppError,
+  appActionOperationName,
+  connectionOperationName,
+  type OperationListScope
+} from "@vivd-catalyst/core";
+import { readDefinitionField, readDefinitionName } from "./asset-kinds/shared";
 import { definitionsOf, type AssetSet, INVALID_ASSET_SET_MESSAGE } from "./asset-set";
 import type { AssetWorkflowOptions } from "./types";
 
@@ -14,12 +20,20 @@ export interface AgentToolValidationTargets {
   scope: OperationListScope;
 }
 
-/** Check explicit references against the enabled registry and the live data-tool sources. */
-export async function findUnavailableAgentToolRefusals(
+export interface AgentToolWarning {
+  code: string;
+  message: string;
+}
+
+/** Existence comes from the proposed asset set; live discovery only decides warnings. */
+export async function findAgentToolValidation(
   options: AssetWorkflowOptions,
   validated: AssetSet,
   { names: agentNames, scope }: AgentToolValidationTargets
-): Promise<{ agentName: string; error: AppError }[]> {
+): Promise<{
+  refusals: { agentName: string; error: AppError }[];
+  warnings: AgentToolWarning[];
+}> {
   const agents = definitionsOf(validated, "agent").flatMap((definition) =>
     agentNames.includes(readDefinitionName(definition) ?? "")
       ? [agentConfigSchema.parse(definition)]
@@ -28,7 +42,9 @@ export async function findUnavailableAgentToolRefusals(
   const refs = options.configAssets.validationRefs;
   const names = [
     ...new Set(
-      agents.flatMap((agent) => agentToolReferenceLocations(agent).map(({ name }) => name))
+      agents.flatMap((agent) =>
+        agentToolReferenceLocations(agent, refs.enabledToolNames).map(({ name }) => name)
+      )
     )
   ];
   const dataNames = names.filter((name) => !refs.enabledToolNames.includes(name));
@@ -36,17 +52,51 @@ export async function findUnavailableAgentToolRefusals(
     dataNames.length === 0
       ? []
       : ((await options.configAssets.dataTools?.describe(dataNames, scope)) ?? []);
-  const offered = new Set([...refs.enabledToolNames, ...dataTools.map(({ name }) => name)]);
-  return agents.flatMap((agent) => {
-    const enabledToolNames = agentToolReferenceLocations(agent)
-      .map(({ name }) => name)
+  const existing = new Set(refs.enabledToolNames);
+  for (const definition of definitionsOf(validated, "connection")) {
+    const connection = connectionConfigSchema.parse(definition);
+    for (const operation of connection.operations) {
+      existing.add(connectionOperationName(connection.name, operation.name));
+    }
+  }
+  for (const definition of definitionsOf(validated, "app")) {
+    const name = readDefinitionName(definition);
+    if (name === undefined) continue;
+    for (const action of compiledActionsOf(readDefinitionField(definition, "manifest"))) {
+      existing.add(appActionOperationName(name, action.name));
+    }
+  }
+  // Other dynamic tool sources retain their own existence check.
+  for (const { name } of dataTools) {
+    if (!isStoredDataTool(name)) existing.add(name);
+  }
+  const callable = new Set([...refs.enabledToolNames, ...dataTools.map(({ name }) => name)]);
+  const warnings: AgentToolWarning[] = [];
+  const refusals = agents.flatMap((agent) => {
+    const references = agentToolReferenceLocations(agent, refs.enabledToolNames);
+    const issues = references
       .filter(
-        (name) =>
-          offered.has(name) &&
-          refs.offToolModule?.(name) === undefined &&
-          refs.isToolAvailable?.(agent, name) !== false
+        ({ name }) =>
+          !existing.has(name) ||
+          (!isStoredDataTool(name) &&
+            (refs.offToolModule?.(name) !== undefined ||
+              refs.isToolAvailable?.(agent, name) === false))
+      )
+      .map(
+        ({ name, location }) =>
+          `Agent '${agent.name}' references unavailable tool '${name}' in ${location}`
       );
-    const issues = findAgentToolReferenceIssues({ agents: [agent], enabledToolNames });
+    for (const { name } of references) {
+      if (
+        existing.has(name) &&
+        (!callable.has(name) ||
+          refs.offToolModule?.(name) !== undefined ||
+          refs.isToolAvailable?.(agent, name) === false) &&
+        !warnings.some((warning) => warning.message === warningMessage(agent.name, name))
+      ) {
+        warnings.push({ code: "tool_not_callable", message: warningMessage(agent.name, name) });
+      }
+    }
     return issues.length === 0
       ? []
       : [
@@ -58,4 +108,13 @@ export async function findUnavailableAgentToolRefusals(
           }
         ];
   });
+  return { refusals, warnings };
+}
+
+function warningMessage(agent: string, name: string): string {
+  return `Agent '${agent}' references tool '${name}' which exists but is not callable now`;
+}
+
+function isStoredDataTool(name: string): boolean {
+  return name.startsWith("connection.") || name.startsWith("app.");
 }

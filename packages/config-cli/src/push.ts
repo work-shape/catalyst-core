@@ -219,6 +219,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
       )
     );
     writeOutput(options, `Pushed ${formatCounts(pushed)}, version ${result.version}.`);
+    for (const warning of result.warnings) writeOutput(options, `Warning: ${warning.message}`);
     if (result.hiddenAgentNames?.length) {
       writeOutput(
         options,
@@ -256,7 +257,7 @@ async function syncBatch(
   try {
     // Asked first: an instance of an earlier release has no check, and says so here before
     // anything is written under rules this CLI does not expect.
-    await checkSyncOnThisRelease(api, batch);
+    const checked = await checkSyncOnThisRelease(api, batch);
     const outcome = await api.syncAssets(batch);
     if (outcome.status === "pending_approval") {
       writeError(
@@ -265,7 +266,16 @@ async function syncBatch(
       );
       return undefined;
     }
-    return outcome.output;
+    const warnings = [...(checked.warnings ?? []), ...outcome.output.warnings];
+    return {
+      ...outcome.output,
+      warnings: warnings.filter(
+        (warning, index) =>
+          warnings.findIndex(
+            (other) => other.code === warning.code && other.message === warning.message
+          ) === index
+      )
+    };
   } catch (error) {
     const refusal = error instanceof ConfigApiError ? readRefusedBatch(error) : undefined;
     if (!refusal) {
@@ -612,9 +622,9 @@ export function readRefusedBatch(error: ConfigApiError): RefusedBatch | undefine
  * Asks the instance whether it would apply the batch. An instance that does not know the
  * check is of an earlier release, whose sync does not write a release as this CLI sends it.
  */
-export async function checkSyncOnThisRelease(api: ConfigApi, batch: SyncBatch): Promise<void> {
+export async function checkSyncOnThisRelease(api: ConfigApi, batch: SyncBatch) {
   try {
-    await api.checkSync(batch);
+    return await api.checkSync(batch);
   } catch (error) {
     if (error instanceof ConfigApiError && isMissingCheck(error)) {
       throw new Error(

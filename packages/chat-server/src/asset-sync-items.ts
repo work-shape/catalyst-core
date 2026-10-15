@@ -206,7 +206,8 @@ export function leftByItems(
   access: ActorAccess,
   storedByName: (kind: string) => Map<string, unknown>,
   entries: readonly ReadyItem[],
-  set: AssetSet
+  set: AssetSet,
+  principalId?: string
 ): AssetSet {
   /** Per kind: what the batch leaves under each name it carries, nothing for a delete. */
   const carried = new Map<string, Map<string, { definition: unknown } | undefined>>();
@@ -220,7 +221,8 @@ export function leftByItems(
         : {
             definition: preparedUpsert(access, "sync", entry.kind, {
               current: storedByName(entry.kind.kind).get(entry.name),
-              next: entry.item.config
+              next: entry.item.config,
+              ...(principalId === undefined ? {} : { principalId })
             })
           }
     );

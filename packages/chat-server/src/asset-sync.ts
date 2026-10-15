@@ -9,7 +9,8 @@ import {
   type ConfigAssetMutation,
   type PolicyTarget
 } from "@vivd-catalyst/core";
-import { clearLiveOnceSwitches } from "./asset-after-write";
+import type { AgentToolWarning } from "./agent-tool-validation";
+import { afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
 import { z } from "zod";
 import { configValuesEqual, readDefinitionName } from "./asset-kinds/shared";
 import {
@@ -116,9 +117,9 @@ export async function checkAssetSync(
   options: AssetWorkflowOptions,
   call: AssetCall,
   input: AssetSyncInput
-): Promise<{ valid: true }> {
-  await checkBatch(options, withSyncCredential(call, input), input, "check");
-  return { valid: true };
+) {
+  const { warnings } = await checkBatch(options, withSyncCredential(call, input), input, "check");
+  return { valid: true as const, ...(warnings.length > 0 ? { warnings } : {}) };
 }
 
 /**
@@ -131,6 +132,7 @@ function withSyncCredential(call: AssetCall, input: AssetSyncInput): AssetCall {
 
 /** A batch every check accepted, with what the store is asked to write for it. */
 interface CheckedBatch {
+  warnings: AgentToolWarning[];
   planned: PlannedItem[];
   ready: ReadyItem[];
   storedDefault: string | null;
@@ -241,7 +243,8 @@ async function checkBatch(
   const stored = await loadStoredAssets(options);
   const storedByName = definitionsByName(stored.set);
   /** The set as the batch would leave it. */
-  const withItems = (set: AssetSet) => leftByItems(call.access, storedByName, ready(), set);
+  const withItems = (set: AssetSet) =>
+    leftByItems(call.access, storedByName, ready(), set, call.actor.id);
   let candidate = withItems(stored.set);
   const storedDefault = stored.state.defaultAgentName ?? null;
   if (
@@ -360,6 +363,7 @@ async function checkBatch(
   // Asked here as well as by the writer, so that a check of the batch refuses it too.
   assertDefaultOwnedByInstance(kinds.kinds, mutations, stored.assets);
   return {
+    warnings: changed.warnings,
     planned,
     ready: ready(),
     storedDefault,
@@ -478,6 +482,16 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
     const id = result.assetIds[assetKey(entry.kind.kind, entry.name)];
     if (!entry.absent && entry.item.type === "put") {
       await clearLiveOnceSwitches(options, call, entry.kind, entry.name, id);
+      const mutation = mutations.find(
+        (item) =>
+          item.type === "upsert" && item.kind === entry.kind.kind && item.name === entry.name
+      );
+      if (mutation?.type === "upsert") {
+        await afterWrite(options, call, entry, {
+          previous: entry.asset?.config,
+          config: mutation.config
+        });
+      }
     }
   }
   return {
@@ -487,7 +501,7 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
       options,
       ready.filter((entry) => !entry.absent)
     )),
-    warnings: []
+    warnings: checked.warnings
   };
 }
 
