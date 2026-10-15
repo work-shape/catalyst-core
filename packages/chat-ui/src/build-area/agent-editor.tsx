@@ -47,7 +47,8 @@ import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
 import type { ConnectionToolChoice } from "./connection-tools";
-import { withImpliedTools } from "./instance-tools";
+import { heldToolCount, toolPackages } from "./instance-tools";
+import { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 import { ToolPackagesSection } from "./tool-packages-section";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import { PlatformInstructions } from "./platform-instructions";
@@ -152,7 +153,9 @@ export function AgentEditor({
     setSaving(true);
     const saved: BuildWriteOutcome =
       frame.asset === undefined || changedFields > 0
-        ? await frame.save(editedAgentConfig(form, frame.asset?.config))
+        ? await frame.save(
+            editedAgentConfig(form, frame.asset?.config, references?.enabledToolNames)
+          )
         : { ok: true };
     if (saved.ok) {
       state.markSaved();
@@ -169,6 +172,8 @@ export function AgentEditor({
     state.setOutcome(answer);
     return answer;
   };
+  // What the agent's read reported unavailable, as far as the last save left it named.
+  const unavailable = savedAgentUnavailable(frame.asset, state.baseline);
   const skillsByName = new Map(skillChoice.options.map((skill) => [skill.name, skill]));
 
   const sections: AssetSection[] = [
@@ -384,11 +389,22 @@ export function AgentEditor({
     {
       id: "tools",
       label: t("configTools"),
-      count: withImpliedTools(form.toolNames, form.skillNames).length,
+      // The tools that are on: what the rows add up to, and the Apps' tools after them.
+      count:
+        heldToolCount(
+          toolPackages({
+            references,
+            selected: form.toolNames,
+            skillNames: form.skillNames,
+            locale,
+            connections: connectionTools.read,
+            unavailable: unavailable?.unavailableTools?.map((tool) => tool.name) ?? [],
+            isOtherSource: isAppToolName
+          })
+        ) + form.toolNames.filter(isAppToolName).length,
       refusalField: "tools",
       description: t("configToolsDescription"),
-      // The packages, this instance's own tools and the Connections as chips, as the Skills
-      // above; then the Apps.
+      // A row per package, per own tool of this instance and per Connection; then the Apps.
       body: (
         <>
           <ToolPackagesSection
@@ -397,6 +413,7 @@ export function AgentEditor({
             selected={form.toolNames}
             skillNames={form.skillNames}
             connectionTools={connectionTools}
+            unavailable={unavailable?.unavailableTools ?? []}
             isOtherSource={isAppToolName}
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
@@ -464,6 +481,7 @@ export function AgentEditor({
         form.description[locale].trim() || form.description[locale === "de" ? "en" : "de"].trim()
       }
       badges={isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
+      notices={<AgentUnavailableNotices status={unavailable} />}
       headActions={
         <>
           {defaultError ? <FormNotice tone="error">{defaultError}</FormNotice> : null}

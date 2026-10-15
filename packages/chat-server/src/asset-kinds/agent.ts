@@ -54,24 +54,36 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).
       owners: ["instance", "workspace"],
-      validate: (context, agents) => [
-        ...findAgentReferenceIssues({
-          agents,
-          skillNames: context
-            .definitions("skill")
-            .flatMap((skill) => readDefinitionName(skill) ?? []),
-          refs: options.validationRefs
-        }).map((message) => ({ message })),
-        ...missingKnowledgeBaseIssues(context, agents)
-      ],
+      validate(context, agents) {
+        const changed = agents.filter((agent) => context.changes("agent", agent.name));
+        const skillNames = context
+          .definitions("skill")
+          .flatMap((skill) => readDefinitionName(skill) ?? []);
+        return [
+          ...findAgentReferenceIssues({
+            agents: changed,
+            skillNames,
+            refs: options.validationRefs
+          }).map((message) => ({ message })),
+          // Deleting a skill an unchanged agent still lists remains a refused write.
+          ...agents
+            .filter((agent) => !context.changes("agent", agent.name))
+            .flatMap((agent) =>
+              agent.skillNames
+                .filter((name) => context.changes("skill", name) && !skillNames.includes(name))
+                .map((name) => ({
+                  message: `Agent '${agent.name}' references missing skill '${name}'`
+                }))
+            ),
+          ...missingKnowledgeBaseIssues(context, agents)
+        ];
+      },
       validateWrite(context, agents) {
-        assertSpendBudgetPricingCoverage(options.config, [...agents]);
-        return (
-          options.validateAgents?.(
-            [...agents],
-            agents.filter((agent) => context.changes("agent", agent.name))
-          ) ?? []
-        ).map((message) => ({ message }));
+        const changed = agents.filter((agent) => context.changes("agent", agent.name));
+        assertSpendBudgetPricingCoverage(options.config, changed);
+        return (options.validateAgents?.([...agents], changed) ?? []).map((message) => ({
+          message
+        }));
       },
       summarize: (agent, locale = defaultLocale) => {
         const description = resolveLocalizedString(agent.description, locale, defaultLocale);

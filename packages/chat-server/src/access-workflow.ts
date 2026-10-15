@@ -3,7 +3,6 @@ import {
   userInDeletionError,
   asUserId,
   auditActorFromUser,
-  hasAuthScope,
   requireAuthScope,
   isAuthenticatedServicePrincipal,
   isGrantableAction,
@@ -13,7 +12,6 @@ import {
   moduleOffError,
   isSuperadmin,
   listAccessEntries,
-  operationDenialError,
   type AccessEntry,
   type AccessHolder,
   type ActorAccess,
@@ -22,6 +20,7 @@ import {
   type OperationAuthorization,
   type OperationExecutionContext,
   type GrantScopeAsset,
+  type HeldRight,
   type JsonObject,
   type Namespace,
   type NamespaceUsage,
@@ -30,27 +29,42 @@ import {
   type StorePage,
   type UserRecord
 } from "@vivd-catalyst/core";
+import { SERVICE_PRINCIPALS_ACTION } from "./api-access-administration-workflow";
 import {
-  SERVICE_PRINCIPALS_ACTION,
-  authorizePrincipalAdministration
-} from "./api-access-administration-workflow";
-import { assetRight, authorizeGivingToPrincipal } from "./principal-rights";
+  authorizePrincipalHolderWrite,
+  holderNotAdministrable,
+  mayManageHolder,
+  ownRowRefusal,
+  requireAuthorized,
+  requireManageableHolder,
+  seesPrincipals
+} from "./grant-holder-rules";
+import { authorizeHeldRightsWithin } from "./held-rights-within";
+import { rightAtScope, scopeAssets } from "./person-rights";
+import {
+  assetRight,
+  authorizeGivingToPrincipal,
+  type PrincipalRightsOptions
+} from "./principal-rights";
+import { namespaceLists, type NamespaceListsCommand } from "./namespace-lists";
+import { withRightsHeld } from "./rights-held";
 import type { ChatServerOptions } from "./types";
 
 type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
 /**
- * A grant write asks again what its `authorize` asked, of the same answer on the caller's
- * rights: `access` is the call's one snapshot and is not read anew. What is read anew is the
- * holder. The check is repeated so the write refuses by itself, whoever calls it.
+ * A grant write asks again what its `authorize` asked, under the rights locks and with the
+ * caller's rights and the holder read anew (`withRightsHeld`), so the write refuses by itself,
+ * whoever calls it, and nothing changes what it read before it commits.
  */
 type GrantWriteContext = Pick<OperationExecutionContext, "correlationId" | "access">;
+/** The call as a write sees it under the rights locks. */
+type HeldGrantCall = GrantWriteContext & { actor: AuthenticatedUser };
 
 /**
  * Administration of people requires this right. Principal rows use `SERVICE_PRINCIPALS_ACTION`.
  */
 const MANAGE_ACTION = "users.manage";
-/** What a credential carries to change, and to read, service principals. */
-const API_ACCESS_WRITE_SCOPE = "api_access:write";
+/** What a credential carries to read service principals. */
 const API_ACCESS_READ_SCOPE = "api_access:read";
 const GRANT_OPERATION = "permissions.grant";
 const REVOKE_OPERATION = "permissions.revoke";
@@ -68,11 +82,6 @@ interface GrantCommand {
   scopeId?: string;
   namespace?: string;
   effect: PermissionGrant["effect"];
-}
-
-interface NamespaceListsCommand {
-  allowedToolNames?: string[] | null;
-  allowedModelBindingIds?: string[] | null;
 }
 
 /**
@@ -109,9 +118,9 @@ export class AccessWorkflow {
     if (!right.allowed) {
       return { allowed: false, action: MANAGE_ACTION, reason: right.reason };
     }
-    return command.holderKind === "user"
-      ? this.authorizeUserHolderWrite(actor, operation, command.holderId)
-      : { allowed: true };
+    if (command.holderKind !== "user") return { allowed: true };
+    if (command.holderId === actor.id) return ownRowRefusal(operation);
+    return this.authorizeUserHolderWrite(actor, operation, command.holderId);
   }
 
   /**
@@ -170,9 +179,22 @@ export class AccessWorkflow {
     context: GrantWriteContext,
     command: GrantCommand
   ): Promise<PermissionGrant> {
-    if (command.holderKind === "service_principal") {
-      return this.grantToPrincipal(actor, context, command);
-    }
+    const userId = command.holderKind === "user" ? command.holderId : undefined;
+    const grant = await this.whileRightsHeld(actor, context, userId, async (held, now) => {
+      requireAuthorized(await held.authorizeGrant(now.actor, now.access, GRANT_OPERATION, command));
+      return command.holderKind === "service_principal"
+        ? held.grantToPrincipal(now.actor, now, command)
+        : held.grantToUser(now.actor, now, command);
+    });
+    await this.record(actor, context, "permission.granted", grant.id, grantAuditMetadata(grant));
+    return grant;
+  }
+
+  private async grantToUser(
+    actor: AuthenticatedUser,
+    context: GrantWriteContext,
+    command: GrantCommand
+  ): Promise<PermissionGrant> {
     if (command.holderKind !== "user") {
       throw refused(
         "invalid_scope",
@@ -199,16 +221,24 @@ export class AccessWorkflow {
         `'${command.action}' cannot be granted at the scope kind '${command.scopeKind}'`
       );
     }
-    const scope = await this.grantScope(command);
+    const { scope, right } = await this.grantScope(command);
     const holder = await this.findUser(command.holderId);
     if (!holder) {
       throw new AppError("NOT_FOUND", "User not found", { reason: "unknown_holder" });
     }
     // Asked before the policy by `authorizeGrant`, and again here on the holder as it is now.
     requireManageableHolder(actor, holder);
+    if (holder.id === actor.id) requireAuthorized(ownRowRefusal(GRANT_OPERATION));
+    // The rule of no escalation, for an allow and a deny alike: a deny is written only by a
+    // holder of what it refuses, as an allow is given only by one.
+    requireAuthorized(
+      await authorizeHeldRightsWithin(this.rightsOptions(), context.access, [right], {
+        gives: { label: holder.displayLabel }
+      })
+    );
     // The store refuses the same for a deletion requested after this read.
     if (holder.status === "deleting") throw userInDeletionError();
-    const grant = await this.options.stores.access.createGrant({
+    return this.options.stores.access.createGrant({
       clientInstanceId: this.options.clientInstanceId,
       holderKind: "user",
       holderId: holder.id,
@@ -217,8 +247,6 @@ export class AccessWorkflow {
       ...scope,
       grantedBy: asUserId(actor.id)
     });
-    await this.record(actor, context, "permission.granted", grant.id, grantAuditMetadata(grant));
-    return grant;
   }
 
   /**
@@ -274,12 +302,15 @@ export class AccessWorkflow {
       });
     }
     requireAuthorized(
-      authorizeGivingToPrincipal({ actor, access: context.access }, principal, [
-        assetRight(action, asset)
-      ])
+      await authorizeGivingToPrincipal(
+        this.rightsOptions(),
+        { actor, access: context.access },
+        principal,
+        [assetRight(action, asset)]
+      )
     );
     // The store refuses the same for a principal deleted after this read.
-    const grant = await this.options.stores.access.createGrant({
+    return this.options.stores.access.createGrant({
       clientInstanceId: this.options.clientInstanceId,
       holderKind: "service_principal",
       holderId: principal.id,
@@ -289,11 +320,36 @@ export class AccessWorkflow {
       scopeId: asset.id,
       grantedBy: asUserId(actor.id)
     });
-    await this.record(actor, context, "permission.granted", grant.id, grantAuditMetadata(grant));
-    return grant;
   }
 
   async revoke(
+    actor: AuthenticatedUser,
+    context: GrantWriteContext,
+    grantId: string
+  ): Promise<PermissionGrant> {
+    // Read before the locks only to name the user they hold; read again under them.
+    const named = await this.options.stores.access.getGrant({
+      clientInstanceId: this.options.clientInstanceId,
+      grantId
+    });
+    const userId = named?.holderKind === "user" ? named.holderId : undefined;
+    const revoked = await this.whileRightsHeld(actor, context, userId, async (held, now) => {
+      requireAuthorized(
+        await held.authorizeRevoke(now.actor, now.access, REVOKE_OPERATION, grantId)
+      );
+      return held.revokeNow(now.actor, now, grantId);
+    });
+    await this.record(
+      actor,
+      context,
+      "permission.revoked",
+      revoked.id,
+      grantAuditMetadata(revoked)
+    );
+    return revoked;
+  }
+
+  private async revokeNow(
     actor: AuthenticatedUser,
     context: GrantWriteContext,
     grantId: string
@@ -309,6 +365,8 @@ export class AccessWorkflow {
       const holder = await this.findUser(existing.holderId);
       if (holder) {
         requireManageableHolder(actor, holder);
+        if (existing.effect === "deny")
+          await this.requireMayLiftDeny(actor, context, existing, holder);
       }
     }
     if (existing.holderKind === "service_principal") {
@@ -331,14 +389,26 @@ export class AccessWorkflow {
     if (!revoked) {
       throw new AppError("NOT_FOUND", "Grant not found");
     }
-    await this.record(
-      actor,
-      context,
-      "permission.revoked",
-      revoked.id,
-      grantAuditMetadata(revoked)
-    );
     return revoked;
+  }
+
+  /** `withRightsHeld` for a grant write: the workflow on the transaction's stores. */
+  private whileRightsHeld<Result>(
+    actor: AuthenticatedUser,
+    context: GrantWriteContext,
+    userId: string | undefined,
+    change: (held: AccessWorkflow, now: HeldGrantCall) => Promise<Result>
+  ): Promise<Result> {
+    return withRightsHeld(
+      this.options,
+      { actor, access: context.access, ...(userId === undefined ? {} : { userId }) },
+      ({ options, actor: current, access }) =>
+        change(new AccessWorkflow(options), {
+          correlationId: context.correlationId,
+          access,
+          actor: current
+        })
+    );
   }
 
   /**
@@ -409,7 +479,7 @@ export class AccessWorkflow {
     context: AccessCallContext,
     command: { prefix: string; displayName: string } & NamespaceListsCommand
   ): Promise<Namespace> {
-    const lists = this.namespaceLists(command);
+    const lists = namespaceLists(this.options.configAssets.validationRefs, command);
     const namespace = await this.options.stores.access.createNamespace({
       clientInstanceId: this.options.clientInstanceId,
       prefix: command.prefix,
@@ -439,7 +509,7 @@ export class AccessWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       prefix: command.prefix,
       ...(command.displayName === undefined ? {} : { displayName: command.displayName }),
-      ...this.namespaceLists(command)
+      ...namespaceLists(this.options.configAssets.validationRefs, command)
     });
     if (!namespace) {
       throw new AppError("NOT_FOUND", "Namespace not found");
@@ -482,17 +552,24 @@ export class AccessWorkflow {
     return namespace;
   }
 
-  private async grantScope(
-    command: GrantCommand
-  ): Promise<Pick<PermissionGrant, "scopeKind" | "scopeId" | "namespace">> {
+  /** Where a person's row is written, with the right it gives there as the rule asks it. */
+  private async grantScope(command: GrantCommand): Promise<{
+    scope: Pick<PermissionGrant, "scopeKind" | "scopeId" | "namespace">;
+    right: HeldRight;
+  }> {
+    const { action } = command;
     if (command.scopeKind === "namespace") {
       if (command.namespace === undefined || command.scopeId !== undefined) {
         throw refused("invalid_scope", "A Namespace grant names a prefix and no scope id");
       }
-      return { scopeKind: "namespace", namespace: command.namespace };
+      return {
+        scope: { scopeKind: "namespace", namespace: command.namespace },
+        right: { action, resource: { name: command.namespace } }
+      };
     }
     if (command.scopeKind === "asset") {
-      return { scopeKind: "asset", scopeId: (await this.grantableAsset(command)).id };
+      const asset = await this.grantableAsset(command);
+      return { scope: { scopeKind: "asset", scopeId: asset.id }, right: assetRight(action, asset) };
     }
     if (command.scopeKind === "workspace") {
       if (command.scopeId === undefined || command.namespace !== undefined) {
@@ -500,11 +577,38 @@ export class AccessWorkflow {
       }
       // The store refuses a workspace that is not a Shared Workspace of this instance, under
       // the lock that keeps a row from appearing while the workspace is deleted.
-      return { scopeKind: "workspace", scopeId: command.scopeId };
+      return {
+        scope: { scopeKind: "workspace", scopeId: command.scopeId },
+        right: { action, resource: { workspaceId: command.scopeId } }
+      };
     }
     throw refused(
       "invalid_scope",
       "A grant can be written for a Namespace, one asset or one workspace only"
+    );
+  }
+
+  /**
+   * Removing a person's deny gives back what it refused, so it asks what giving asks: never
+   * one's own, and only by a holder of the action where the row refuses it.
+   */
+  private async requireMayLiftDeny(
+    actor: AuthenticatedUser,
+    context: GrantWriteContext,
+    row: PermissionGrant,
+    holder: UserRecord
+  ): Promise<void> {
+    if (holder.id === actor.id) requireAuthorized(ownRowRefusal(REVOKE_OPERATION));
+    const assets = await scopeAssets(this.rightsOptions(), [row]);
+    requireAuthorized(
+      await authorizeHeldRightsWithin(
+        this.rightsOptions(),
+        context.access,
+        [rightAtScope(row, assets)],
+        {
+          gives: { label: holder.displayLabel }
+        }
+      )
     );
   }
 
@@ -522,37 +626,6 @@ export class AccessWorkflow {
       throw refused("invalid_scope", "The asset is not an active asset of the action's kind");
     }
     return asset;
-  }
-
-  /** An entry of a list must exist on this instance: an enabled tool, a known model binding. */
-  private namespaceLists(command: NamespaceListsCommand): NamespaceListsCommand {
-    const refs = this.options.configAssets.validationRefs;
-    const unknownTool = command.allowedToolNames?.find(
-      (name) => !refs.enabledToolNames.includes(name)
-    );
-    if (unknownTool !== undefined) {
-      throw new AppError("VALIDATION_FAILED", `'${unknownTool}' is not an enabled tool`, {
-        reason: "unknown_tool",
-        toolName: unknownTool
-      });
-    }
-    const unknownBinding = command.allowedModelBindingIds?.find(
-      (id) => !refs.modelBindingIds.includes(id)
-    );
-    if (unknownBinding !== undefined) {
-      throw new AppError("VALIDATION_FAILED", `'${unknownBinding}' is not a model binding`, {
-        reason: "unknown_model_binding",
-        modelBindingId: unknownBinding
-      });
-    }
-    return {
-      ...(command.allowedToolNames === undefined
-        ? {}
-        : { allowedToolNames: unique(command.allowedToolNames) }),
-      ...(command.allowedModelBindingIds === undefined
-        ? {}
-        : { allowedModelBindingIds: unique(command.allowedModelBindingIds) })
-    };
   }
 
   private async findHolder(
@@ -628,6 +701,10 @@ export class AccessWorkflow {
     return { hiddenUserIds, scopeAssets: new Map(assets.map((asset) => [asset.id, asset])) };
   }
 
+  private rightsOptions(): PrincipalRightsOptions {
+    return { clientInstanceId: this.options.clientInstanceId, access: this.options.stores.access };
+  }
+
   private async findUser(userId: string): Promise<UserRecord | undefined> {
     const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
@@ -672,69 +749,6 @@ function refused(reason: string, message: string): AppError {
 }
 
 /**
- * No right is missing that the caller could be given, so the refusal names the operation and
- * its text says who writes the row.
- */
-function holderNotAdministrable(operation: string, message: string): OperationAuthorization {
-  return { allowed: false, action: operation, reason: "holder_not_administrable", message };
-}
-
-/** Whom the list of service principals is shown to, and so the rows they hold. */
-function seesPrincipals(actor: AuthenticatedUser, access: ActorAccess): boolean {
-  return (
-    access.authorize(SERVICE_PRINCIPALS_ACTION).allowed &&
-    hasAuthScope(actor, API_ACCESS_READ_SCOPE)
-  );
-}
-
-/**
- * Who writes a service principal's grant row: whoever administers service principals, by that
- * one check and no second rule. The credential is asked what the operations that administer
- * principals ask of it, so a key issued for managing users writes no row for a principal.
- */
-function authorizePrincipalHolderWrite(
-  actor: AuthenticatedUser,
-  access: ActorAccess,
-  operation: string
-): OperationAuthorization {
-  const administration = authorizePrincipalAdministration({ actor, access }, operation);
-  if (!administration.allowed) {
-    return administration;
-  }
-  return hasAuthScope(actor, API_ACCESS_WRITE_SCOPE)
-    ? { allowed: true }
-    : {
-        allowed: false,
-        // The right is held. What is missing is a scope of the credential, and it is named.
-        action: `auth_scope:${API_ACCESS_WRITE_SCOPE}`,
-        reason: "no_grant",
-        message: `Missing auth scope '${API_ACCESS_WRITE_SCOPE}'`
-      };
-}
-
-function requireAuthorized(authorization: OperationAuthorization): void {
-  if (!authorization.allowed) {
-    throw operationDenialError({
-      kind: "forbidden",
-      action: authorization.action,
-      reason: authorization.reason,
-      ...(authorization.message === undefined ? {} : { message: authorization.message })
-    });
-  }
-}
-
-/** A caller who is not a superadmin writes no row for a holder who is one. */
-function mayManageHolder(actor: AuthenticatedUser, holder: UserRecord): boolean {
-  return !isSuperadmin(holder) || isSuperadmin(actor);
-}
-
-function requireManageableHolder(actor: AuthenticatedUser, holder: UserRecord): void {
-  if (!mayManageHolder(actor, holder)) {
-    throw new AppError("FORBIDDEN", "Only superadmins can manage superadmin users");
-  }
-}
-
-/**
  * Holder kind and id, action and scope; for a service principal's row the principal under the
  * key its other audit events carry, and the asset as the scope id. No name of another user
  * leaves through the audit log.
@@ -760,8 +774,4 @@ function namespaceAuditMetadata(namespace: Namespace): JsonObject {
     restrictsTools: namespace.allowedToolNames !== undefined,
     restrictsModels: namespace.allowedModelBindingIds !== undefined
   };
-}
-
-function unique(values: string[] | null): string[] | null {
-  return values === null ? null : [...new Set(values)];
 }

@@ -99,6 +99,7 @@ export function AssetEditorShell({
   description,
   badges,
   headActions,
+  notices,
   sections,
   missingTranslations,
   control,
@@ -115,6 +116,8 @@ export function AssetEditorShell({
   badges?: ReactNode;
   /** Actions of the kind before the frame's own, such as making an agent the default. */
   headActions?: ReactNode;
+  /** What the kind tells of the asset before its sections, such as what of it cannot run. */
+  notices?: ReactNode;
   sections: readonly AssetSection[];
   /** With it the page has texts per language: how many are still empty in each one. */
   missingTranslations?: LocalizedPair<number>;
@@ -223,6 +226,7 @@ export function AssetEditorShell({
             {readOnlyReason ?? t("build.readOnly")} <DocsReference to="buildReadOnly" />
           </Banner>
         )}
+        {notices}
         {missingTranslations ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <span className="text-label text-muted-foreground">{t("build.textsIn")}</span>

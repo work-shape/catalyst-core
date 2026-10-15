@@ -103,7 +103,6 @@ export async function fixture(guardrails?: Record<string, unknown>) {
       { type: "setDefaultAgent", agentName: agent.name }
     ]
   });
-  const source = createConfigAssetSource({ store: store.configAssets, clientInstanceId });
   const validationRefs = {
     modelProviderIds: getModelProviderConfigs(config).map((provider) => provider.id),
     modelBindingIds: [],
@@ -112,6 +111,11 @@ export async function fixture(guardrails?: Record<string, unknown>) {
     reasoningEfforts: [],
     enabledToolNames: ["read_skill", "propose_skill_change"]
   };
+  const source = createConfigAssetSource({
+    store: store.configAssets,
+    clientInstanceId,
+    references: validationRefs
+  });
   const handler = createSkillChangeApprovalHandler({
     config,
     clientInstanceId,

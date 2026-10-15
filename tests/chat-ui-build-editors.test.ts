@@ -83,6 +83,11 @@ interface AgentInput {
   started?: AgentFormState;
   frame?: Partial<BuildAssetEditorProps>;
   references?: Partial<ConfigAssetReferences>;
+  /** What the stored agent's read reports it names and the instance cannot run. */
+  status?: Pick<
+    BuildAsset,
+    "unavailableTools" | "unavailableSkills" | "unavailableModels" | "chatAvailable"
+  >;
   editableAgentFields?: string[];
   canManageAgentModels?: boolean;
   onMakeDefault?: () => Promise<string | undefined>;
@@ -96,7 +101,7 @@ function agentPage(input: AgentInput = {}): string {
       frame: frame({
         ...(input.started
           ? { start: { name: input.started.name, title: "" } }
-          : { asset: storedAsset("agent", config) }),
+          : { asset: { ...storedAsset("agent", config), ...input.status } }),
         ...input.frame
       }),
       initialForm: input.started ?? agentConfigToForm(config),
@@ -169,21 +174,35 @@ describe("agent page", () => {
   it("shows a tool of a module that is off as selected, unavailable and removable", () => {
     const markup = agentPage({
       config: { modelProviderId: "azure-eu", toolNames: ["read_skill", "documents.read"] },
-      references: {
-        enabledToolNames: ["read_skill"],
-        moduleOffTools: [
-          { name: "documents.read", module: "documents" },
-          { name: "documents.search", module: "documents" }
-        ]
+      references: { enabledToolNames: ["read_skill"] },
+      status: {
+        chatAvailable: true,
+        unavailableTools: [{ name: "documents.read", reason: "module_off", module: "documents" }]
       },
       editableAgentFields: ["toolNames"]
     });
+    const tools = section(markup, "tools");
 
-    expect(markup).toContain('data-unavailable-option="documents.read"');
-    expect(markup).toContain("Not available: the module Documents is off. Remove it to save.");
-    expect(section(markup, "tools")).toContain('aria-label="Remove"');
-    // A tool of the module that the agent does not name is not shown at all.
-    expect(markup).not.toContain("documents.search");
+    expect(tools).toContain('data-unavailable-option="documents.read"');
+    expect(tools).toContain("Not available: the module Documents is off. Remove it to save.");
+    expect(tools).toContain('aria-label="Remove"');
+    expect(tools).not.toContain('data-tool-package="own:documents.read"');
+  });
+
+  it("shows a tool the instance does not have as unavailable and removable, not as its own", () => {
+    const tools = section(
+      agentPage({
+        config: { toolNames: ["read_skill", "crm.lookup"] },
+        references: { enabledToolNames: ["read_skill"] },
+        status: { unavailableTools: [{ name: "crm.lookup", reason: "unknown_tool" }] },
+        editableAgentFields: ["toolNames"]
+      }),
+      "tools"
+    );
+
+    expect(tools).toContain('data-unavailable-option="crm.lookup"');
+    expect(tools).toContain("Not available: this instance has no such tool. Remove it to save.");
+    expect(tools).not.toContain('data-tool-package="own:crm.lookup"');
   });
 
   it("keeps a tool the agent names and the reader was not told of", () => {

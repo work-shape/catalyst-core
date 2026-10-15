@@ -24,6 +24,7 @@ import {
   type StorePage
 } from "@vivd-catalyst/core";
 import { recordGovernanceAccess } from "./governance-actions";
+import { withRightsHeld } from "./rights-held";
 import type { ChatServerOptions } from "./types";
 
 /** Where the interface confirms a connect code; the CLI prints it after the instance address. */
@@ -84,12 +85,13 @@ export class PersonalApiKeysWorkflow {
     context: ChangeContext,
     fields: PersonalApiKeyFields
   ): Promise<CreatedPersonalApiKey> {
-    const checked = this.requireIssuable(context.access, fields);
-    const created = await this.options.stores.personalApiKeys.createPersonalApiKey({
-      clientInstanceId: this.options.clientInstanceId,
-      ownerUserId: asUserId(context.actor.id),
-      ...checked
-    });
+    const created = await this.whileRightsHeld(context, (held, access) =>
+      held.options.stores.personalApiKeys.createPersonalApiKey({
+        clientInstanceId: this.options.clientInstanceId,
+        ownerUserId: asUserId(context.actor.id),
+        ...held.requireIssuable(access, fields)
+      })
+    );
     await this.recordKeyChange(context, "api_access.personal_key_created", created.key);
     return created;
   }
@@ -166,14 +168,20 @@ export class PersonalApiKeysWorkflow {
   ): Promise<{ confirmed: true }> {
     // An unknown code is told first: nothing about the scopes matters for it.
     await this.getConnectCode(userCode);
-    const checked = this.requireIssuable(context.access, fields);
-    const code = await this.options.stores.personalApiKeys.approveConnectCode({
-      clientInstanceId: this.options.clientInstanceId,
-      userCodeHash: await this.userCodeHash(userCode),
-      ownerUserId: asUserId(context.actor.id),
-      name: checked.name,
-      scopes: checked.scopes,
-      keyExpiresAt: checked.expiresAt
+    const userCodeHash = await this.userCodeHash(userCode);
+    const { checked, code } = await this.whileRightsHeld(context, async (held, access) => {
+      const issuable = held.requireIssuable(access, fields);
+      return {
+        checked: issuable,
+        code: await held.options.stores.personalApiKeys.approveConnectCode({
+          clientInstanceId: this.options.clientInstanceId,
+          userCodeHash,
+          ownerUserId: asUserId(context.actor.id),
+          name: issuable.name,
+          scopes: issuable.scopes,
+          keyExpiresAt: issuable.expiresAt
+        })
+      };
     });
     if (!code) throw connectCodeNotFound();
     await context.audit.record({
@@ -247,6 +255,21 @@ export class PersonalApiKeysWorkflow {
    * holds now somewhere it reaches, and an expiry within a year. A scope the caller holds
    * nowhere would issue a key that can do nothing; it is refused with the right it names.
    */
+  /**
+   * `withRightsHeld` for issuing a key: what the key may name is asked of the owner's rights
+   * now, under the rights locks of the owner, on the transaction's stores.
+   */
+  private whileRightsHeld<Result>(
+    context: ChangeContext,
+    change: (held: PersonalApiKeysWorkflow, access: ActorAccess) => Promise<Result>
+  ): Promise<Result> {
+    return withRightsHeld(
+      this.options,
+      { actor: context.actor, access: context.access, userId: context.actor.id },
+      ({ options, access }) => change(new PersonalApiKeysWorkflow(options), access)
+    );
+  }
+
   private requireIssuable(access: ActorAccess, fields: PersonalApiKeyFields): PersonalApiKeyFields {
     const scopes = requirePersonalApiKeyScopes(fields.scopes);
     requirePersonalApiKeyExpiry(fields.expiresAt);

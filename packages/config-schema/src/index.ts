@@ -16,3 +16,5 @@ export * from "./localization";
 export * from "./development-auth";
 
 export * from "./skill-change";
+
+export * from "./stored-agent-references";

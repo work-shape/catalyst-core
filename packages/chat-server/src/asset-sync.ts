@@ -294,7 +294,7 @@ async function checkBatch(
     stopIfRefused(placeIssues(tellable, ready()));
   }
 
-  const found = findAssetSetIssues(kinds.kinds, candidate);
+  const found = findAssetSetIssues(kinds.kinds, candidate, stored.set);
   const unplaced = placeIssues(found.issues, ready());
   stopIfRefused(unplaced);
   stopIfRefused(writeIssues(() => found.validateWrite(stored.set)));

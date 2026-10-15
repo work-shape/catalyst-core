@@ -334,6 +334,21 @@ export const agentToolReferenceSchema = z.object({
   module: z.string().optional()
 });
 
+/** Why a stored agent cannot use a reference on this instance. */
+export const unavailableToolSchema = z.discriminatedUnion("reason", [
+  z.object({ name: z.string(), reason: z.literal("module_off"), module: z.string() }),
+  z.object({ name: z.string(), reason: z.literal("unknown_tool") })
+]);
+export const unavailableSkillSchema = z.object({
+  name: z.string(),
+  reason: z.literal("unknown_skill")
+});
+export const unavailableModelSchema = z.object({
+  name: z.string(),
+  field: z.enum(["modelProviderId", "modelBindingId", "userSelectableModelBindingIds"]),
+  reason: z.literal("unknown_model")
+});
+
 /** What a definition may refer to on this instance: its models, efforts and tools. */
 export const configAssetReferencesSchema = z.object({
   modelProviderIds: z.array(z.string()),
@@ -355,6 +370,8 @@ export const configAssetReferencesSchema = z.object({
    * Tools the instance enables whose module is off. No agent can use one. An agent that
    * still names one shows it as unavailable, so it can be removed.
    */
+  unavailableTools: z.array(unavailableToolSchema).optional(),
+  /** @deprecated Use unavailableTools. Kept for existing agent editors. */
   moduleOffTools: z.array(z.object({ name: z.string(), module: z.string() })).optional(),
   /**
    * What the platform tells every agent before its own instructions, read-only: the rules

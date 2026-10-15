@@ -1,4 +1,5 @@
 export { AgentEditor, type AgentAvailabilityChoice } from "./agent-editor";
+export { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 export { AssetEditorShell } from "./asset-editor-shell";
 export { PlatformInstructionsBody } from "./platform-instructions";
 export { FieldRefusals } from "./asset-form-fields";
@@ -10,7 +11,8 @@ export type {
   BuildAssetKind,
   BuildAssetRow,
   BuildKind,
-  BuildListedKind
+  BuildListedKind,
+  BuildListLeadFilter
 } from "./build-asset-kind";
 export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
 export { type BuildAssetRead, type BuildList, type BuildSource } from "./build-data";
@@ -38,7 +40,7 @@ export { dataStoreKindOn } from "./data-store-kind";
 export { GuardrailPage } from "./guardrail-page";
 export { guardrailRunSentence, type GuardrailRunFacts } from "./guardrail-sentence";
 export type { GuardrailSource, ShippedGuardrailsRead } from "./guardrail-source";
-export { ShippedGuardrails } from "./shipped-guardrails";
+export { ShippedGuardrailsLead } from "./shipped-guardrails";
 export { dataStoreStateView, formatDataStoreSize } from "./data-store-model";
 export { DataStoreValueDialog } from "./data-store-rows";
 export type {
@@ -60,7 +62,13 @@ export type {
 } from "./knowledge-base-source";
 export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
 export { toggleToolName } from "./tool-group";
-export { setPackageTools, toolPackages, withImpliedTools } from "./instance-tools";
+export {
+  heldToolCount,
+  packageSwitchState,
+  setPackageTools,
+  toolPackages,
+  withImpliedTools
+} from "./instance-tools";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export { addressBlocksCreate, addressCheckOf } from "./name-check";
 export {

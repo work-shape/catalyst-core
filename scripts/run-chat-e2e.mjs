@@ -2,13 +2,21 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
-import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
+const repoPathParts = repoRoot.split(sep);
+const worktreeIndex = repoPathParts.lastIndexOf(".worktrees");
+const e2eWorktree =
+  process.env.CATALYST_WORKTREE ??
+  (worktreeIndex >= 0 ? repoPathParts[worktreeIndex + 1] : undefined);
+const composeArgs = ["compose", "-f", "clients/demo/docker-compose.yml"];
+let composeOverrideDir;
 
 const requiredBuilds = [
   ["packages/asset-schemas", "build"],
@@ -174,6 +182,8 @@ Environment:
   E2E_UI_PORT           UI port, default 5273
   E2E_POSTGRES_PORT     Postgres host port, default 55433
   E2E_COMPOSE_PROJECT   Docker Compose project name, default agent-chat-e2e
+  CATALYST_WORKTREE     Label the Postgres container and volume for lane/tidy;
+                        inferred from the repository's .worktrees/<name> path otherwise
   E2E_EXTERNAL_POSTGRES=1  Use the empty Postgres already listening on E2E_POSTGRES_PORT
                         (user, password and database agent_chat); start no container
   E2E_DATABASE_URL      Database URL for the run, default
@@ -231,29 +241,35 @@ async function startPostgres() {
     console.log(`\n[e2e] using the Postgres provided on ${e2eHost}:${e2ePostgresPort}`);
     return;
   }
+  if (e2eWorktree) {
+    composeOverrideDir = await mkdtemp(resolve(tmpdir(), "catalyst-e2e-compose-"));
+    const overridePath = resolve(composeOverrideDir, "worktree.json");
+    // Compose accepts JSON as YAML. Escape dollars so interpolation preserves the exact label.
+    const labels = { "catalyst.worktree": e2eWorktree.replaceAll("$", () => "$$") };
+    await writeFile(
+      overridePath,
+      JSON.stringify({
+        services: { postgres: { labels } },
+        volumes: { "postgres-data": { labels } }
+      })
+    );
+    composeArgs.push("-f", overridePath);
+  }
   const composeEnv = {
     ...process.env,
     COMPOSE_PROJECT_NAME: e2eComposeProject,
     POSTGRES_HOST_PORT: e2ePostgresPort
   };
-  await run(
-    "docker",
-    ["compose", "-f", "clients/demo/docker-compose.yml", "down", "-v", "--remove-orphans"],
-    {
-      cwd: repoRoot,
-      env: composeEnv,
-      label: "docker compose down"
-    }
-  );
-  await run(
-    "docker",
-    ["compose", "-f", "clients/demo/docker-compose.yml", "up", "-d", "--wait", "postgres"],
-    {
-      cwd: repoRoot,
-      env: composeEnv,
-      label: "docker compose up postgres"
-    }
-  );
+  await run("docker", [...composeArgs, "down", "-v", "--remove-orphans"], {
+    cwd: repoRoot,
+    env: composeEnv,
+    label: "docker compose down"
+  });
+  await run("docker", [...composeArgs, "up", "-d", "--wait", "postgres"], {
+    cwd: repoRoot,
+    env: composeEnv,
+    label: "docker compose up postgres"
+  });
 }
 
 // The API never migrates when it starts, so the runner takes the explicit step first.
@@ -525,24 +541,26 @@ async function cleanup() {
   }
   if (options.keep) {
     console.log("\n[e2e] keeping docker stack because --keep-stack/E2E_KEEP_STACK is set");
+    if (composeOverrideDir) {
+      await rm(composeOverrideDir, { recursive: true, force: true });
+    }
     return;
   }
 
-  await run(
-    "docker",
-    ["compose", "-f", "clients/demo/docker-compose.yml", "down", "-v", "--remove-orphans"],
-    {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        COMPOSE_PROJECT_NAME: e2eComposeProject,
-        POSTGRES_HOST_PORT: e2ePostgresPort
-      },
-      label: "docker compose cleanup"
-    }
-  ).catch((error) => {
+  await run("docker", [...composeArgs, "down", "-v", "--remove-orphans"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      COMPOSE_PROJECT_NAME: e2eComposeProject,
+      POSTGRES_HOST_PORT: e2ePostgresPort
+    },
+    label: "docker compose cleanup"
+  }).catch((error) => {
     console.error(`[e2e] cleanup failed: ${error.message}`);
   });
+  if (composeOverrideDir) {
+    await rm(composeOverrideDir, { recursive: true, force: true });
+  }
 }
 
 async function stopChild(child) {

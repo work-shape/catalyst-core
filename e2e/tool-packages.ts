@@ -1,40 +1,38 @@
-import type { Locator, Page } from "@playwright/test";
+import type { Locator } from "@playwright/test";
 import { expect } from "./test";
 
-// The Tools section of an agent's page: a chip per package, per own tool and per Connection, a
-// picker that adds the others, and a panel per chip with its tools (TOOLS-1).
+// The Tools section of an agent's page: a row per package, per own tool and per Connection, with
+// how many of its tools are on, a switch for all of them and its tools folded below (TOOLS-1).
 
-/** The chip of a package (`package:<group>`), own tool (`own:<tool>`) or Connection. */
-export const toolChip = (tools: Locator, key: string) =>
+/** The row of a package (`package:<group>`), own tool (`own:<tool>`) or Connection. */
+export const toolRow = (tools: Locator, key: string) =>
   tools.locator(`[data-tool-package="${key}"]`);
 
-/** Adds what the picker offers under `label`, with all its tools on. */
-export async function addToolPackage(page: Page, tools: Locator, label: string): Promise<void> {
-  await tools.getByRole("button", { name: /^(Tools|Werkzeuge): / }).click();
-  const picker = page.getByRole("dialog");
-  await picker.getByRole("option", { name: label }).first().click();
-  await page.keyboard.press("Escape");
-  await expect(picker).toBeHidden();
+/**
+ * The switch of a row, which turns all its tools on or off. It can be partly on, so assistive
+ * technology reads it as a tri-state check box.
+ */
+export const toolRowSwitch = (tools: Locator, key: string) =>
+  toolRow(tools, key).getByRole("checkbox", { name: /^(All tools of|Alle Werkzeuge von) /u });
+
+/** Turns all tools of a row on or off with its switch. */
+export async function switchToolPackage(tools: Locator, key: string, on: boolean): Promise<void> {
+  const control = toolRowSwitch(tools, key);
+  await control.click();
+  await expect(control).toHaveAttribute("aria-checked", on ? "true" : "false");
 }
 
-/** Opens a chip's panel and answers it. */
-export async function openToolPackage(page: Page, tools: Locator, key: string): Promise<Locator> {
-  const panel = page.locator(`[data-tool-panel="${key}"]`);
-  await toolChip(tools, key).locator("button[aria-haspopup]").click();
-  await expect(panel).toBeVisible();
-  return panel;
+/** Folds a row's tools out and answers the row. */
+export async function openToolPackage(tools: Locator, key: string): Promise<Locator> {
+  const row = toolRow(tools, key);
+  await row.locator("button[aria-expanded=false]").click();
+  await expect(row.getByRole("group")).toBeVisible();
+  return row;
 }
 
-/** Closes the open panel. */
-export async function closeToolPackage(page: Page): Promise<void> {
-  await page.keyboard.press("Escape");
-  await expect(page.locator("[data-tool-panel]")).toHaveCount(0);
-}
-
-/** Removes a chip and every tool of it the agent can drop. */
-export async function removeToolPackage(tools: Locator, key: string): Promise<void> {
-  await toolChip(tools, key)
-    .getByRole("button", { name: /^(Remove|Entfernen)$/u })
-    .click();
-  await expect(toolChip(tools, key)).toHaveCount(0);
+/** Folds a row's tools away. */
+export async function closeToolPackage(tools: Locator, key: string): Promise<void> {
+  const row = toolRow(tools, key);
+  await row.locator("button[aria-expanded=true]").click();
+  await expect(row.getByRole("group")).toHaveCount(0);
 }

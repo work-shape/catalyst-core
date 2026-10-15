@@ -109,6 +109,9 @@ describe("the tools that find what is on the platform", () => {
   ) {
     const config = createTestConfig({
       toolNames,
+      // A skill reader listed by the agent must be enabled by the release. Platform-held
+      // agents also receive it through their conversation offer.
+      tools: toolNames.includes("read_skill") ? [{ name: "read_skill" }] : [],
       // A Page is saved from an Execution Workspace, so Pages need them.
       executionWorkspaces: { enabled: pages },
       developmentAuth: {

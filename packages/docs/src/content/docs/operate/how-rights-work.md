@@ -41,7 +41,7 @@ description: Who may do what in Workshape Catalyst, explained from the start. Ro
 <figcaption>An action passes these layers from top to bottom, and any layer can stop it. Layers 4 and 5 exist for the actions on the full path, which the section on the path lists.</figcaption>
 </figure>
 
-This page explains the rights system to a reader who has never seen it. It says what exists today. The last section lists what does not exist yet. For the exact rules of the Access page, see [Rights for one person or asset](/operate/rights-and-namespaces/).
+This page explains the rights system to a reader who has never seen it. For the exact rules of the Access page, see [Rights for one person or asset](/operate/rights-and-namespaces/).
 
 Three words come up on every screen, so here they are once.
 
@@ -249,6 +249,12 @@ A switch is stored as grants for the whole instance, one per action the right st
 
 Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin role, changes another Superadmin, deletes a user, or switches "Manage API access" and "Manage agent model settings" on or off.
 
+"Manage users" does not let you hand out more than you hold. Giving a person a role, a switch or a grant asks whether you hold every right it carries, at the place it is given. Writing a deny, and taking one away, ask the same of the right the deny names. Nobody gives a right to themselves, and nobody writes or lifts a grant of their own, even one they already hold.
+
+A deny of yours counts wherever it lies. If you are denied a right on one agent, you cannot give that right for a whole Namespace, a workspace or the instance that contains the agent, and you cannot give a role that carries it: the person would hold what you are refused. Give it on single assets outside the deny instead, or ask someone without the deny. The refusal names the asset only if you may read it.
+
+Changing a person's account asks whether you hold every right the person holds: their role, their switches, their grants and the Shared Workspaces they are a member of. Their own Personal Workspace does not count. This covers the name and email, the password, a sign-in, the status, the role, the switches and the tool rights, and it holds for a person who is switched off as well, since switching them on is a change too. The check runs again as the change is written, so a role or a grant the person was given in the meantime counts. So a person with "Manage users" and nothing else can change only people who hold nothing beyond their Personal Workspace. Where a personal API key makes the call, its scopes count too. A refusal names the first right that is missing.
+
 "Approve skill changes" also lets a person decide an action that waits for an approval.
 
 One right is on no switch. Pushing a release with `catalyst config push` needs `config_assets.release`, and only a Service Principal can hold it. See [API keys and Service Principals](#api-keys-and-service-principals).
@@ -257,13 +263,13 @@ Managing Service Principals, `service_principals.manage`, is on no switch either
 
 Chatting is not on this list. Which conversations you see depends on the Collaboration Workspaces you are a member of and on whether a conversation is private, and not on one of these rights. The one exception is a Superadmin, who can enter every Shared Workspace.
 
-The Users page has one more field, **Tool rights**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field.
+The Users page has one more field, **Tool rights**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field. A reference follows the same rule as a right: you give it only if you hold it yourself, never to yourself, and the references a person holds count when you change their account.
 
 ## Grants
 
 A role and a single right always apply to the whole instance. A grant is for everything narrower. It says five things:
 
-| Part | Choices today |
+| Part | Choices |
 | --- | --- |
 | Who | One person. A Service Principal gets its grants on the API access page. |
 | Kind | Agents, or skills. Connections and Workflows too, where their modules are on. |
@@ -271,7 +277,7 @@ A role and a single right always apply to the whole instance. A grant is for eve
 | Where | For agents and skills: what one Shared Workspace owns, or one existing asset. For Connections and Workflows: one existing item. Rows written before in a Namespace stay until they are revoked. |
 | Effect | Allow, or deny. |
 
-So the answer to "can rights only be given to single people" is yes, today. A grant names one person or one Service Principal. There are no groups, and a role cannot hold a grant.
+So the answer to "can rights only be given to single people" is yes. A grant names one person or one Service Principal. There are no groups, and a role cannot hold a grant.
 
 **Deny wins.** A deny on an asset beats every allow, including the one from the Admin role. Use it for the one agent that even administrators should not change by accident. A deny has limits of its own, which [Rights for one person or asset](/operate/rights-and-namespaces/#grants) lists.
 
@@ -471,8 +477,6 @@ Three things about the order are worth knowing.
 
 ### Which actions take the whole path
 
-Not every part of the product is on the full path yet.
-
 - **All 12 steps:** every tool call of an agent. Reading, saving, deleting and reverting agents and skills in Studio and through the asset API, and the release push. Writing or revoking a grant, and creating, changing or deleting a Namespace. Creating, changing and deleting a user, and changing a user's sign-in identities, password or invitation. Creating and changing a Service Principal, and creating and revoking an API key. The retry of a background job.
 - **Steps 1 to 4, a simpler input check and step 7:** everything else, for example conversations, workspaces, the lists of grants and Namespaces, the default agent, the **Available in** setting, usage and the audit log. These calls are refused the same way for a missing sign-in, module, scope or right. They have no policy step, cannot wait for an approval and leave no Operation Run.
 
@@ -496,7 +500,7 @@ There is an older, separate approval that works without the policy. An agent can
 
 A [guardrail](#guardrails) can also send a call to the Inbox: a call it answers with "needs approval" waits there like a call the policy holds.
 
-Agents and approvals do not go together yet. A run cannot pause for a person and continue later. So the instance refuses to start with a tool of the release whose calls would need an approval or a confirmation. Such a tool states `allow` or `deny`, unless the instance default for its kind of action already is one of the two.
+A run cannot pause for a person and continue later. So the instance refuses to start with a tool of the release whose calls would need an approval or a confirmation. Such a tool states `allow` or `deny`, unless the instance default for its kind of action already is one of the two.
 
 ### Guardrails
 
@@ -618,7 +622,7 @@ Then a person with "Manage API access" creates an **API key** for it and picks t
 
 Nobody gives a Service Principal more than they hold themselves. Giving it a right, switching it back on and issuing it a key each ask whether the person holds every right the Service Principal would act with. Where a personal API key makes the call, its scopes count too. A refusal names the first right that is missing, and the asset only where the person may read it. Taking a right away and switching a Service Principal off ask nothing of it.
 
-A Service Principal has no role. Whoever manages Service Principals can allow one to use a single named resource they may use themselves, such as one Connection: a grant with the holder kind `service_principal`, a use right, and that one asset as scope. The use rights are `connection.use`, `workflow.use`, and `data_store.read`, `data_store.insert` and `data_store.execute` for the rows of a Data Store, each where its module is on. No other grant can be written for one: no right that writes, publishes, deletes or manages, no workspace, Namespace or instance scope, and no deny. A Service Principal never writes a grant, also not for itself. Disabling a Service Principal leaves its grants recorded and without effect. The interface does not offer these grants yet; they are written through `POST /api/v1/instance/access/grants`.
+A Service Principal has no role. Whoever manages Service Principals can allow one to use a single named resource they may use themselves, such as one Connection: a grant with the holder kind `service_principal`, a use right, and that one asset as scope. The use rights are `connection.use`, `workflow.use`, and `data_store.read`, `data_store.insert` and `data_store.execute` for the rows of a Data Store, each where its module is on. No other grant can be written for one: no right that writes, publishes, deletes or manages, no workspace, Namespace or instance scope, and no deny. A Service Principal never writes a grant, also not for itself. Disabling a Service Principal leaves its grants recorded and without effect. The interface does not offer these grants; they are written through `POST /api/v1/instance/access/grants`.
 
 A release push reaches every agent and skill of the instance and is not held back by the editing limits of the interface. It is still bound by the tool and model lists of a Namespace and by a deny on an asset. See [config assets](/configure/config-assets/#permissions).
 
@@ -638,13 +642,3 @@ A release push reaches every agent and skill of the instance and is not held bac
 | See what was called, by whom, and what was refused | Settings > Instance > Operations | View audit log |
 | See who changed which right | Settings > Instance > Audit | View audit log |
 | Switch a feature on or off, set the policy | Release config, then a deploy | The operator |
-
-## What the system does not have yet
-
-- **Groups and teams.** A grant names one person or one Service Principal. Nothing gives a right to a group.
-- **Custom roles.** The three roles are fixed. The Rights card on the Users page shows which rights a person has by role, and nothing edits what a role carries.
-- **Company sign-in with group mapping.** People are not signed in through a company identity provider with its groups.
-- **Grants on the whole instance, and grants for other kinds.** The **New right** dialog writes a grant on one agent, skill, Connection or Workflow, on the agents or skills a Shared Workspace owns, or the right to publish a Shared Workspace's guardrails. A right on the whole instance comes only from a role or from the Users page. Grants written before in a Namespace, or on a Shared Workspace for Connections, keep applying until they are revoked. Writing, deleting and approving a Connection stay with the Admin role. Data Stores and Apps have no grant for a person.
-- **Policy settings for administrators.** The instance can already resolve a policy value per action, per Namespace, per workspace and per kind of asset. Nothing stores such settings and no screen edits them. Today the policy is two instance-wide defaults and the mode a tool states. An administrator cannot set "saving in `tax-` needs an approval" in the interface.
-- **An agent that waits for a person.** A run cannot pause for a confirmation or an approval and continue.
-- **One path for everything.** Conversations, workspaces and the other areas named [above](#which-actions-take-the-whole-path) are checked for sign-in, module, scope and right, without policy and without an Operation Run.
