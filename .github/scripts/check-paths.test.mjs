@@ -1,22 +1,25 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { selectChecks } from "./check-paths.mjs";
+import { browserDependencyPaths, selectChecks } from "./check-paths.mjs";
 
 test("PRs select checks from the union of their changed paths", () => {
   assert.deepEqual(selectChecks(["packages/chat-ui/src/chat.css"]), {
     code: true,
     browser: true,
-    images: false
+    images: true
   });
   assert.deepEqual(selectChecks(["packages/chat-server/src/index.ts"]), {
     code: true,
     browser: true,
-    images: false
+    images: true
   });
   assert.deepEqual(selectChecks(["packages/core/src/index.ts"]), {
     code: true,
-    browser: false,
-    images: false
+    browser: true,
+    images: true
   });
   assert.deepEqual(
     selectChecks([
@@ -37,6 +40,71 @@ test("PRs select checks from the union of their changed paths", () => {
   assert.equal(selectChecks(["tests/fixtures/e2e-app.yaml"]).browser, true);
   assert.equal(selectChecks(["e2e/chat.spec.ts"]).browser, true);
   assert.equal(selectChecks(["packages/ui/src/old.ts", "README.md"]).browser, true);
+});
+
+test("browser and isolated image builds follow the current workspace dependency closure", () => {
+  for (const path of browserDependencyPaths()) {
+    assert.deepEqual(
+      selectChecks([`${path}src/new-import.ts`]),
+      {
+        code: true,
+        browser: true,
+        images: true
+      },
+      path
+    );
+  }
+  for (const name of [
+    "auth",
+    "api-contract",
+    "app-build",
+    "model-provider",
+    "tool-execution",
+    "mail",
+    "usage-governance",
+    "asset-schemas",
+    "client-assembly",
+    "api-client",
+    "config-schema",
+    "tool-sdk"
+  ]) {
+    assert.equal(selectChecks([`packages/${name}/src/index.ts`]).browser, true, name);
+  }
+  assert.deepEqual(selectChecks(["packages/registry-canary/src/index.ts"]), {
+    code: true,
+    browser: false,
+    images: false
+  });
+});
+
+test("new transitive dependencies are discovered from manifests, including cycles and dev/peer/optional edges", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "check-paths-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const manifests = {
+    "clients/demo": { name: "@vivd-catalyst/demo", dependencies: { direct: "workspace:*" } },
+    "packages/chat-server": {
+      name: "@vivd-catalyst/chat-server",
+      devDependencies: { builder: "workspace:*" }
+    },
+    "packages/direct": {
+      name: "direct",
+      optionalDependencies: { transitive: "workspace:*", external: "1.0.0" }
+    },
+    "packages/transitive": { name: "transitive", peerDependencies: { direct: "workspace:*" } },
+    "packages/builder": { name: "builder" },
+    "packages/unrelated": { name: "unrelated" }
+  };
+  for (const [path, manifest] of Object.entries(manifests)) {
+    mkdirSync(join(root, path), { recursive: true });
+    writeFileSync(join(root, path, "package.json"), JSON.stringify(manifest));
+  }
+  assert.deepEqual(browserDependencyPaths(root).sort(), [
+    "clients/demo/",
+    "packages/builder/",
+    "packages/chat-server/",
+    "packages/direct/",
+    "packages/transitive/"
+  ]);
 });
 
 test("shared configuration, unknown paths and non-PR events always run everything", () => {

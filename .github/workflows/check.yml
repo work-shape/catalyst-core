@@ -3,11 +3,12 @@
 # - Opening, pushing, reopening and marking a PR ready do not start hosted checks.
 # - Dispatches, main pushes and release tags run in full, including draft branches.
 # - Docs-only: packages/docs/**, changes/** and *.md outside packages/*/src/** run
-#   docs and changes, plus the small selection/required-result jobs.
+#   docs, format and changes, plus the small selection/required-result jobs.
 # - Other changes run build, static, docs, four test shards, upgrade/compatibility,
-#   and release packaging. Browser tests additionally need packages/{ui,chat-ui,
-#   chat-server}/**, clients/demo/**, e2e/** or tests/fixtures/**.
-# - Images additionally need docker/**, any Dockerfile, package.json or lockfile.
+#   and release packaging. Browser tests additionally need clients/demo, chat-server
+#   or any of their transitive workspace dependencies, e2e/** or tests/fixtures/**.
+# - Images additionally need a demo/server dependency change, docker/**, any
+#   Dockerfile, package.json or lockfile (including source-only import changes).
 # - Workflows/actions/scripts, quality-config, any lockfile or config file, root
 #   configuration and unknown paths select EVERYTHING (even inside a docs PR).
 # - Pushes to main and release tags always select EVERYTHING.
@@ -67,6 +68,8 @@ jobs:
           build: "false"
       - name: Changes
         run: pnpm check:changes
+      - name: Format
+        run: pnpm format:check
   build:
     needs: paths
     if: needs.paths.outputs.code == 'true'
@@ -109,8 +112,6 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node packages/quality-config/baseline-guard.mjs "$BASE" "$HEAD"
-      - name: Format
-        run: pnpm format:check
       - name: Lint
         run: pnpm lint
       - name: Package types
@@ -341,7 +342,7 @@ jobs:
           retention-days: 7
   browser:
     needs: [paths, browser-shard]
-    if: ${{ !cancelled() && needs.paths.result == 'success' }}
+    if: ${{ always() && needs.paths.result == 'success' }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 2
     steps:
@@ -353,7 +354,8 @@ jobs:
           if [ "$SELECTED" = true ]; then test "$SHARDS" = success
           else test "$SHARDS" = skipped; fi
   check:
-    needs: [paths, changes, build, static, docs, tests, upgrade, release, images, browser]
+    needs:
+      [paths, changes, build, static, docs, tests, upgrade, release, images, browser-shard, browser]
     if: ${{ always() && (github.event_name != 'pull_request' || github.event.label.name == 'ci') }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 2
@@ -363,4 +365,4 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
-          echo "$RESULTS" | jq -e '.paths.result == "success" and .changes.result == "success" and .docs.result == "success"'
+          echo "$RESULTS" | jq -e '.paths.result == "success" and .changes.result == "success" and .docs.result == "success" and .browser.result == "success"'

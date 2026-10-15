@@ -1,6 +1,42 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+/** Read manifests before installation; include build-time and optional workspace dependencies. */
+export function browserDependencyPaths(root = fileURLToPath(new URL("../../", import.meta.url))) {
+  const packages = new Map();
+  for (const group of ["packages", "clients"]) {
+    for (const directory of readdirSync(join(root, group))) {
+      const path = `${group}/${directory}/`;
+      const manifest = join(root, path, "package.json");
+      if (existsSync(manifest)) {
+        const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+        packages.set(pkg.name, { path, ...pkg });
+      }
+    }
+  }
+  const paths = new Set();
+  const visit = (name) => {
+    const pkg = packages.get(name);
+    if (!pkg || paths.has(pkg.path)) return;
+    paths.add(pkg.path);
+    for (const dependency of Object.keys({
+      ...pkg.dependencies,
+      ...pkg.devDependencies,
+      ...pkg.peerDependencies,
+      ...pkg.optionalDependencies
+    }))
+      visit(dependency);
+  };
+  for (const name of ["@vivd-catalyst/demo", "@vivd-catalyst/chat-server"]) {
+    if (!packages.has(name)) throw new Error(`Missing browser workspace: ${name}`);
+    visit(name);
+  }
+  return [...paths];
+}
+
+const browserPaths = browserDependencyPaths();
 
 /** Conservative job selection: unknown paths and shared configuration run everything. */
 export function selectChecks(files, event = "pull_request") {
@@ -25,17 +61,18 @@ export function selectChecks(files, event = "pull_request") {
       (!isDocs(file) && !/^(?:packages|clients|tests|e2e|docker)\//u.test(file))
   );
   if (everything) return full;
+  const affectsBrowserWorkspace = (file) =>
+    !isDocs(file) && browserPaths.some((path) => file.startsWith(path));
   return {
     code: files.some((file) => !isDocs(file) || isManifest(file)),
     browser: files.some(
       (file) =>
-        !isDocs(file) &&
-        /^(?:packages\/(?:ui|chat-ui|chat-server)\/|clients\/demo\/|e2e\/|tests\/fixtures\/)/u.test(
-          file
-        )
+        affectsBrowserWorkspace(file) ||
+        (!isDocs(file) && /^(?:e2e\/|tests\/fixtures\/)/u.test(file))
     ),
     images: files.some(
       (file) =>
+        affectsBrowserWorkspace(file) ||
         file.startsWith("docker/") ||
         /(^|\/)Dockerfile(?:[.-]|$)|\.Dockerfile$/u.test(file) ||
         isManifest(file) ||
