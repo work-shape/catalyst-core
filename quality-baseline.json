@@ -124,7 +124,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/chat-ui",
-      "count": 27,
+      "count": 26,
       "owner": "G-5c"
     },
     {
