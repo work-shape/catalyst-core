@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
   FormNotice,
@@ -17,6 +18,7 @@ import {
   PageHeader,
   SkeletonPage
 } from "@vivd-catalyst/ui";
+import { CopyIdItem } from "../copy-id-item";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { usePageShown } from "./asset-editor-shell";
 import type {
@@ -485,7 +487,7 @@ function LoadedAssetPage({
               <History aria-hidden="true" />
               {t("build.history")}
             </Button>
-            {canDelete && conflict !== "deleted" ? (
+            {conflict === "deleted" ? null : (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <IconButton label={t("build.assetActions")} variant="outline" size="sm">
@@ -493,15 +495,22 @@ function LoadedAssetPage({
                   </IconButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    icon={<Trash2 aria-hidden="true" />}
-                    onSelect={() => setDeleteOpen(true)}
-                  >
-                    {t("configDelete")}
-                  </DropdownMenuItem>
+                  <CopyIdItem id={stored.name} />
+                  {canDelete ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        tone="danger"
+                        icon={<Trash2 aria-hidden="true" />}
+                        onSelect={() => setDeleteOpen(true)}
+                      >
+                        {t("configDelete")}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : null}
+            )}
           </>
         }
         notice={

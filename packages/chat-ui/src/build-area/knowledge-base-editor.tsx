@@ -155,6 +155,7 @@ export function KnowledgeBaseEditor({
     <AssetEditorShell
       frame={frame}
       title={form.title.trim() || form.name}
+      description={form.description.trim()}
       sections={sections}
       control={{
         changes: countChangedFields(form, state.baseline),

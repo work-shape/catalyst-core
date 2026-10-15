@@ -460,6 +460,9 @@ export function AgentEditor({
         form.displayName[locale === "de" ? "en" : "de"].trim() ||
         form.name
       }
+      description={
+        form.description[locale].trim() || form.description[locale === "de" ? "en" : "de"].trim()
+      }
       badges={isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
       headActions={
         <>

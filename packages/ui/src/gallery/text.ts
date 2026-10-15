@@ -106,6 +106,8 @@ export interface GalleryText
   menuEdit: string;
   menuDuplicate: string;
   menuCopyLink: string;
+  menuCopyId: string;
+  menuIdCopied: string;
   menuRunNow: string;
   menuRunNowReason: string;
   menuLock: string;
@@ -321,6 +323,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     menuEdit: "Edit",
     menuDuplicate: "Duplicate",
     menuCopyLink: "Copy link",
+    menuCopyId: "Copy ID",
+    menuIdCopied: "ID copied",
     menuRunNow: "Run now",
     menuRunNowReason: "A run is still in progress.",
     menuLock: "Lock",
@@ -571,6 +575,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     menuEdit: "Bearbeiten",
     menuDuplicate: "Duplizieren",
     menuCopyLink: "Link kopieren",
+    menuCopyId: "ID kopieren",
+    menuIdCopied: "ID kopiert",
     menuRunNow: "Jetzt ausführen",
     menuRunNowReason: "Ein Lauf ist noch nicht abgeschlossen.",
     menuLock: "Sperren",

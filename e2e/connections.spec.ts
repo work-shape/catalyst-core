@@ -199,16 +199,18 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
     await test.step("a Connection the store holds shows as a row with its chips", async () => {
       await plantConnection(connection);
       await page.reload();
-      // A row says what the Connection is, not its id: the id stands on the Connection's page.
+      // A row says what the Connection is, not its id: "Copy ID" on its page offers the id.
       const rowLink = page.locator(`a[href="/build/connections/${connection.name}"]`);
       const row = list.getByRole("listitem").filter({ has: rowLink });
       await expect(row).toContainText("Client records");
       await expect(row).not.toContainText(connection.name);
       // The explanation stands above the rows as it stood above the empty list.
       await expect(main.getByText(DESCRIPTION_EN, { exact: true })).toBeVisible();
-      for (const chip of ["mcp", "Instance", "Enabled"]) {
+      for (const chip of ["mcp", "Enabled"]) {
         await expect(row.getByText(chip, { exact: true })).toBeVisible();
       }
+      // One chip says whose a row is, and only a workspace's: an instance Connection has none.
+      await expect(row.getByText("Instance", { exact: true })).toHaveCount(0);
       // Where it comes from is no chip: every Connection comes from release config so far.
       await expect(row).not.toContainText("Release config");
       // The row opens the Connection's page, and the list shows nothing of the definition.
@@ -234,9 +236,10 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
         .getByRole("list", { name: "Verbindungen", exact: true })
         .getByRole("listitem")
         .filter({ has: rowLink });
-      for (const chip of ["mcp", "Instanz", "Aktiv"]) {
+      for (const chip of ["mcp", "Aktiv"]) {
         await expect(germanRow.getByText(chip, { exact: true })).toBeVisible();
       }
+      await expect(germanRow.getByText("Instanz", { exact: true })).toHaveCount(0);
       await page.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
     });
 

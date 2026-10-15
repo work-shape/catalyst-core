@@ -28,6 +28,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuCopyItem,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -303,6 +304,9 @@ function DropdownMenuSamples({ text }: { text: GalleryText }) {
           <DropdownMenuItem icon={<Link aria-hidden="true" />} shortcut="⌘C">
             {text.menuCopyLink}
           </DropdownMenuItem>
+          <DropdownMenuCopyItem value="quarterly-review" copiedLabel={text.menuIdCopied}>
+            {text.menuCopyId}
+          </DropdownMenuCopyItem>
           <DropdownMenuItem
             icon={<Play aria-hidden="true" />}
             disabledReason={text.menuRunNowReason}
@@ -693,6 +697,7 @@ export const overlaysGallery: GalleryGroup = {
         "DropdownMenuContent",
         "DropdownMenuGroup",
         "DropdownMenuItem",
+        "DropdownMenuCopyItem",
         "DropdownMenuCheckboxItem",
         "DropdownMenuSeparator"
       ],

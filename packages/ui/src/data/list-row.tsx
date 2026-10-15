@@ -97,7 +97,13 @@ export function ListRow({
       <span className="grid min-w-0 flex-1">
         {/* The title comes first: chips that do not fit beside it go to the line below. */}
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className={cn("max-w-full truncate", selected && "font-medium")}>{title}</span>
+          {/* A long title takes a second line, is then cut and reads whole on hover. */}
+          <span
+            className={cn("line-clamp-2 max-w-full wrap-anywhere", selected && "font-medium")}
+            title={typeof title === "string" ? title : undefined}
+          >
+            {title}
+          </span>
           {chips}
         </span>
         {description === undefined ? null : descriptionLeading === undefined ? (

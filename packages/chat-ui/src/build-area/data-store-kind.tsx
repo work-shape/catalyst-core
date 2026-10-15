@@ -108,13 +108,6 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
     rowText: (asset) => asset.description,
     badges: (asset, t) => (
       <>
-        <Chip size="sm">
-          {t(
-            asset.scope.kind === "workspace"
-              ? "dataStores.scopeWorkspace"
-              : "dataStores.scopeInstance"
-          )}
-        </Chip>
         {/* A store never published has no database, so there is no state to read. */}
         {dataStoreNeverPublished(asset) ? (
           <Badge tone="warning" data-data-store-row-draft="">

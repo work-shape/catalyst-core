@@ -345,7 +345,7 @@ function AppCard({
         <div className="flex min-w-0 items-center gap-3">
           <Avatar kind="app" name={name} />
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <CardTitle id={titleId} className="min-w-0 break-words">
+            <CardTitle id={titleId} clamp className="min-w-0">
               {name}
             </CardTitle>
             {/*
@@ -366,13 +366,7 @@ function AppCard({
       <CardContent>
         {/* The list is the one of the open workspace, so no card names it. */}
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
-          {/* The id is part of the App's address: a builder's, as the revision is. */}
-          {/* Both stay reachable above the card's target: the id to copy, the date as a tooltip. */}
-          {builder ? (
-            <CardReachable>
-              <code className="min-w-0 font-mono break-all">{app.name}</code>
-            </CardReachable>
-          ) : null}
+          {/* The date stays reachable above the card's target, as a tooltip. */}
           <CardReachable>
             <time dateTime={app.updatedAt} title={formatDateTime(app.updatedAt, locale)}>
               {t("apps.changed", { when: formatUpdated(app.updatedAt, now, locale) })}
@@ -385,6 +379,7 @@ function AppCard({
           {route ? (
             <CardTarget
               label={t(route.kind === "app" ? "apps.openNamed" : "apps.editNamed", { name })}
+              title={name}
             >
               <RouteLink route={route} variant="primary" onOpen={onOpenRoute}>
                 {t(route.kind === "app" ? "apps.open" : "apps.edit")}

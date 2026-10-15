@@ -45,11 +45,26 @@ export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivEleme
   }
 );
 
-export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
-  function CardTitle({ className, ...props }, ref) {
-    return <h2 ref={ref} className={cn("text-title-sm", className)} {...props} />;
-  }
-);
+export interface CardTitleProps extends HTMLAttributes<HTMLHeadingElement> {
+  /**
+   * The title is an object's name: a long one takes a second line and is then cut. The card's
+   * `CardTarget` reads it whole to a resting pointer.
+   */
+  clamp?: boolean;
+}
+
+export const CardTitle = forwardRef<HTMLHeadingElement, CardTitleProps>(function CardTitle(
+  { className, clamp = false, ...props },
+  ref
+) {
+  return (
+    <h2
+      ref={ref}
+      className={cn("text-title-sm", clamp && "line-clamp-2 wrap-anywhere", className)}
+      {...props}
+    />
+  );
+});
 
 export const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   function CardContent({ className, ...props }, ref) {

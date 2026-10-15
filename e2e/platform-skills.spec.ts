@@ -80,7 +80,12 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.locator("[data-build-read-only]")).toContainText(
         "Ships with the platform and is updated with each release."
       );
-      await expect(page.getByRole("button", { name: "More actions" })).toHaveCount(0);
+      // Its menu offers the id to copy and no Delete.
+      await page.getByRole("button", { name: "More actions" }).click();
+      await expect(page.getByRole("menuitem", { name: "Copy ID" })).toBeVisible();
+      await expect(page.getByRole("menuitem", { name: "Delete" })).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("menu")).toBeHidden();
       await expect(page.getByRole("textbox", { name: /^Title/u })).toHaveAttribute("readonly", "");
       await shot(page, `platform-skill-page-${theme}-1440`);
 

@@ -196,7 +196,7 @@ function WorkflowCard({
         <div className="flex min-w-0 items-center gap-3">
           <Avatar kind="workflow" name={workflow.name} />
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <CardTitle id={titleId} className="min-w-0 break-words">
+            <CardTitle id={titleId} clamp className="min-w-0">
               {workflow.name}
             </CardTitle>
             {workflow.published ? null : (
@@ -240,7 +240,7 @@ function WorkflowCard({
       </CardContent>
       {/* A draft opens on its page, where it is published; it has nothing to start yet. */}
       <CardFooter>
-        <CardTarget label={t("workflows.openNamed", { name: workflow.name })}>
+        <CardTarget label={t("workflows.openNamed", { name: workflow.name })} title={workflow.name}>
           <RouteLink
             route={{ kind: "workflow", ...address }}
             variant="primary"

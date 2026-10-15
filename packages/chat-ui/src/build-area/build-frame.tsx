@@ -665,12 +665,10 @@ function BuildList({
                       ) : RowLine ? (
                         <RowLine asset={asset} />
                       ) : (
-                        <>
-                          <code className="font-mono">{asset.name}</code>
-                          {rowText ? ` · ${rowText}` : null}
-                        </>
+                        rowText || undefined
                       )
                     }
+                    // One chip says whose the asset is: "Personal" alone for the reader's own.
                     chips={
                       <>
                         {asset.scope.kind === "workspace" ? (

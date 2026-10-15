@@ -125,8 +125,9 @@ const LONG_TITLE =
   "Monthly check of every booking against the ledger and the open items of the quarter before it";
 
 // Fails with the head of two lines: under the name stood the kind and the technical id, and a
-// long name or many actions wrapped the head to a second and third row.
-test("the head of every asset page is one row as high as the header, and the id stands once in the first section", async ({
+// long name or many actions wrapped the head to a second and third row. The id is offered by
+// "Copy ID" in the head's menu and stands nowhere on the page (UXA-1a).
+test("the head of every asset page is one row as high as the header, and the id is behind Copy ID", async ({
   page
 }) => {
   test.setTimeout(180_000);
@@ -223,23 +224,21 @@ test("the head of every asset page is one row as high as the header, and the id 
           expect(await middle(button), where).toBe(HEADER / 2);
         }
         if (id !== undefined) {
-          await expect(head, where).not.toContainText(id);
-          const shown = page.locator("[data-asset-identifier]");
-          await expect(shown, where).toHaveCount(1);
-          await expect(shown.locator("code"), where).toHaveText(id);
-          await expect(shown.getByRole("button", { name: "Copy" }), where).toBeVisible();
-          await expect(
-            page.locator("section").first().locator("[data-asset-identifier]")
-          ).toHaveCount(1);
+          await expect(page.locator("[data-page]"), where).not.toContainText(id);
+          await head.getByRole("button", { name: "More actions" }).click();
+          await expect(page.getByRole("menuitem", { name: "Copy ID" }), where).toBeVisible();
+          await page.keyboard.press("Escape");
+          await expect(page.getByRole("menu")).toBeHidden();
         }
       }
     }
 
-    // A name that does not fit is cut and says itself whole in a tooltip.
+    // A name that does not fit takes a second line, is then cut and says itself whole on hover.
     await page.goto(`/build/skills/${skill}`);
     const cut = page.locator('header[data-variant="detail"]').getByRole("heading", { level: 1 });
     await expect(cut).toHaveAttribute("title", LONG_TITLE);
-    expect(await cut.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    expect(await cut.evaluate(lines)).toBe(2);
+    expect(await cut.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   } finally {
     await removeConnection(connection.id);
     await requestWithOrigin(page, "post", `${skillUrl}/delete`, {
@@ -252,7 +251,7 @@ test("the head of every asset page is one row as high as the header, and the id 
 // and the text of its way back. A Connection's head carries History and its menu, so under 768
 // px they go to a second row once they do not fit beside the arrow and the whole name; the row
 // then has its width back and gives way again in the same order.
-test("a narrowing head gives the chips, then the text of the way back, and cuts the name last", async ({
+test("a narrowing head gives the chips, then the text of the way back, and the name gives way last", async ({
   page
 }) => {
   await page.setViewportSize(WIDE);
@@ -283,8 +282,10 @@ test("a narrowing head gives the chips, then the text of the way back, and cuts 
           throw new Error("The head misses a part.");
         }
         const firstLine = chips.getBoundingClientRect().bottom;
+        const line = Number.parseFloat(getComputedStyle(title).lineHeight);
         return {
-          cut: title.scrollWidth > title.clientWidth,
+          // The name gave way: it took a second line or was cut.
+          cut: title.scrollWidth > title.clientWidth || title.scrollHeight > line + 1,
           text: text.getBoundingClientRect().width > 0,
           chips: [...chips.children].filter(
             (chip) => chip.getBoundingClientRect().top < firstLine - 1
@@ -336,6 +337,11 @@ async function signIn(page: Page): Promise<string> {
   await page.goto("/");
   await expect(page).toHaveURL(/\/w\/[^/]+$/u);
   return /\/w\/([^/]+)$/u.exec(page.url())?.[1] ?? "";
+}
+
+/** How many lines an element shows. */
+function lines(element: Element): number {
+  return Math.round(element.clientHeight / Number.parseFloat(getComputedStyle(element).lineHeight));
 }
 
 async function box(

@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
   IconButton
 } from "@vivd-catalyst/ui";
+import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../i18n";
 import { workspaceRouteFromPath, workspaceRoutePath } from "../routes";
 import { useApp, useAppActions } from "./app-data";
@@ -20,7 +21,14 @@ import {
   CopyAppLinkButton,
   CopyAppLinkItem
 } from "./app-header";
-import { APP_START_ROUTE, appBuilder, appDraftShown, appTitle, type AppRights } from "./app-model";
+import {
+  APP_START_ROUTE,
+  appBuilder,
+  appDescription,
+  appDraftShown,
+  appTitle,
+  type AppRights
+} from "./app-model";
 import { AppPreview } from "./app-preview";
 import { AppEditWithAgentAction } from "./app-edit-with-agent";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
@@ -90,6 +98,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
     <>
       <AppViewFrame
         name={name}
+        description={appDescription(record.app?.config)}
         workspace={workspace}
         rights={rights}
         publishedRevision={published}
@@ -131,6 +140,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
 /** Layout 2 for given facts: the head with what this reader may do, and the App under it. */
 export function AppViewFrame({
   name,
+  description,
   app,
   draftShown,
   workspace,
@@ -142,6 +152,8 @@ export function AppViewFrame({
   onDetails
 }: {
   name: string;
+  /** What the App does, in one line after its name. */
+  description?: string;
   /** The id of the App, which its link carries. */
   app: string;
   /** The instance showed this reader the draft: only then is there one to edit. */
@@ -164,6 +176,7 @@ export function AppViewFrame({
       header={
         <AppHeader
           name={name}
+          description={description}
           // The number of a revision is a builder's: whoever uses the App is shown the App.
           state={
             publishedRevision === undefined || !appBuilder(rights) ? undefined : (
@@ -196,6 +209,8 @@ export function AppViewFrame({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
                   <CopyAppLinkItem workspaceId={workspace.id} app={app} />
+                  {/* The id is a builder's, as the number of a revision is. */}
+                  {appBuilder(rights) ? <CopyIdItem id={app} /> : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (

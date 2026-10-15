@@ -23,6 +23,7 @@ import {
   TabsTrigger
 } from "@vivd-catalyst/ui";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
+import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../i18n";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../routes";
@@ -32,6 +33,7 @@ import { AppDraftFiles } from "./app-draft-files";
 import { AppDeleteDialog, AppFrame, AppHeader, NameList } from "./app-header";
 import {
   APP_RIGHT_NAMES,
+  appDescription,
   appDraftRevision,
   appDraftShown,
   appManifestSummary,
@@ -181,6 +183,7 @@ export function AppEdit({ app }: { app: string }) {
     <>
       <AppEditFrame
         name={name}
+        description={appDescription(asset?.config)}
         app={app}
         workspace={workspace}
         rights={rights}
@@ -370,6 +373,7 @@ export function appDraftIsAhead(
  */
 export function AppEditFrame({
   name,
+  description,
   app,
   workspace,
   rights,
@@ -387,7 +391,9 @@ export function AppEditFrame({
   onDelete
 }: {
   name: string;
-  /** The id of the App. With it the head offers "Edit with the agent". */
+  /** What the App does, in one line after its name. */
+  description?: string;
+  /** The id of the App. With it the head offers "Edit with the agent" and "Copy ID". */
   app?: string;
   workspace: AppsWorkspace;
   rights: AppRights;
@@ -445,6 +451,7 @@ export function AppEditFrame({
         <>
           <AppHeader
             name={name}
+            description={description}
             state={
               known ? (
                 <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
@@ -493,6 +500,7 @@ export function AppEditFrame({
                     </IconButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    {app === undefined ? null : <CopyIdItem id={app} />}
                     <DropdownMenuItem icon={<History aria-hidden="true" />} onSelect={onRevisions}>
                       {t("apps.revisions")}
                     </DropdownMenuItem>
