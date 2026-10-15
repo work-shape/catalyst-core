@@ -30,6 +30,26 @@ function isTestOperation(name: string): name is TestOperationName {
 const namesSchema = z.object({ items: z.array(z.object({ name: z.string() })) });
 
 describe("what a personal key reaches", () => {
+  it("refuses Run live once over HTTP for a superadmin's key token, while asset reads still work", async () => {
+    const t = await setup();
+    await t.putAgent(t.root.id, "helper");
+    const { secret } = await t.issue([...PERSONAL_API_KEY_ACTIONS], t.root.id);
+    const headers = await t.tokenFor(secret);
+    const params = { kind: "agent", name: "helper" };
+    const refused = await t.call(t.root.id, "assets.run_live_once", {
+      params,
+      payload: { part: "send", expectedRevision: 1 },
+      headers
+    });
+    expect(refused.statusCode).toBe(403);
+    expect(errorSchema.parse(refused.json()).error).toMatchObject({
+      code: "FORBIDDEN",
+      message: "Run live once needs a person signed in to the app; API keys cannot use it",
+      details: { reason: "user_only" }
+    });
+    await t.expectOk(t.root.id, "assets.get", { params, headers });
+  });
+
   it("is refused on every operation whose scope a key never carries, for a superadmin's widest key", async () => {
     const t = await setup();
     const { secret } = await t.issue([...PERSONAL_API_KEY_ACTIONS], t.root.id);
