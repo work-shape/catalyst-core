@@ -11,7 +11,6 @@ export type {
   BuildAssetRow,
   BuildKind,
   BuildListedKind,
-  BuildListLead,
   BuildListLeadFilter
 } from "./build-asset-kind";
 export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
