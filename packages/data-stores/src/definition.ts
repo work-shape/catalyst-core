@@ -43,6 +43,10 @@ const scopeSchema = z.enum(["instance", "workspace"] satisfies AssetScope["kind"
 const manifestSchema = z.strictObject({
   id: z.string(),
   scope: scopeSchema.optional(),
+  /** Table metadata is not read yet; a data scope must never appear to be enforced. */
+  tables: z
+    .never({ error: "'tables', including table 'scope', is reserved for data scope (SCOPE-1)" })
+    .optional(),
   name: z.string().min(1).max(DATA_STORE_TITLE_MAX_CHARS).optional(),
   description: z.string().max(DATA_STORE_DESCRIPTION_MAX_CHARS).optional(),
   sizeLimit: z
