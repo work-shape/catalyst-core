@@ -762,12 +762,12 @@ describe("chat UI message history projection", () => {
     // The fact sheet steps say what happens, in both languages.
     const step = (toolName: string, locale: "en" | "de") =>
       readToolDisplayProjection({ args: {}, locale, result: undefined, toolName }).title;
-    expect(step("structured_data.publish", "en")).toBe("Updating the fact sheet");
-    expect(step("structured_data.read", "en")).toBe("Reading the fact sheet");
-    expect(step("structured_result.read", "en")).toBe("Reopening an earlier result");
-    expect(step("structured_data.publish", "de")).toBe("Faktenblatt wird aktualisiert");
-    expect(step("structured_data.read", "de")).toBe("Faktenblatt wird gelesen");
-    expect(step("structured_result.read", "de")).toBe("Früheres Ergebnis wird geöffnet");
+    expect(step("structured_data.publish", "en")).toBe("Update the fact sheet");
+    expect(step("structured_data.read", "en")).toBe("Read the fact sheet");
+    expect(step("structured_result.read", "en")).toBe("Reopen an earlier result");
+    expect(step("structured_data.publish", "de")).toBe("Faktenblatt aktualisieren");
+    expect(step("structured_data.read", "de")).toBe("Faktenblatt lesen");
+    expect(step("structured_result.read", "de")).toBe("Früheres Ergebnis öffnen");
 
     expect(
       readToolDisplayProjection({
