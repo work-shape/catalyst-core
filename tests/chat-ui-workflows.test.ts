@@ -2,18 +2,19 @@ import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
-  CancelRunDialog,
   StartDialog,
   WorkflowPageView,
   WorkflowRunPageView,
   WorkflowRunsPageView,
   WorkflowsPageView,
   cancelOffered,
+  listedToReader,
   runListRefreshMs,
   runRefreshMs,
   startFormOf,
   startOffered,
   toWorkflow,
+  toDraftWorkflowListItem,
   toWorkflowListItem,
   toWorkflowRun,
   toWorkflowStepRun,
@@ -260,6 +261,38 @@ describe("the list of Workflows", () => {
     expect(markup).toContain('href="/w/cw_1/workflows/notify-clients/runs"');
   });
 
+  it("lists a draft never published to who may write Workflows, opening on its page (NAV-2)", () => {
+    const draft = toDraftWorkflowListItem({
+      name: "first-draft",
+      title: "First draft",
+      updatedAt: "2026-10-12T09:00:00.000Z"
+    });
+    expect(listedToReader(draft, { write: true })).toBe(true);
+    expect(listedToReader(draft, { write: false })).toBe(false);
+    expect(listedToReader(toWorkflowListItem(summary), { write: false })).toBe(true);
+    const markup = render(
+      createElement(WorkflowsPageView, {
+        workspaceId: "cw_1",
+        list: {
+          rows: [draft],
+          failed: false,
+          hasMore: false,
+          loadingMore: false,
+          loadMore: noop,
+          retry: noop
+        },
+        now,
+        runsAvailable: true,
+        onOpenRoute: noop,
+        onStart: noop
+      })
+    );
+    expect(markup).toContain("First draft");
+    expect(markup).toContain(t("workflows.draft.unpublished"));
+    expect(markup).toContain('href="/w/cw_1/workflows/first-draft"');
+    expect(markup).not.toContain(t("workflows.startNow"));
+  });
+
   it("warns that a Workflow cannot be started, but not one that only runs on its schedule", () => {
     const issue = (code: string) => ({ code, message: "Refused." });
     const scheduled = render(listPage([{ ...summary, reasons: [issue("no_manual_trigger")] }]));
@@ -336,6 +369,17 @@ describe("the page of a Workflow", () => {
     expect(markup).toContain('data-testid="workflow-canvas"');
   });
 
+  it("says in its head whom every run acts as, by the account's label", () => {
+    const named = toWorkflow(
+      { name: "notify-clients", config: definition, publishedRevision: 3 },
+      { mayStart: true, runsAs: "Monthly close" }
+    );
+    expect(render(page({ workflow: named }))).toContain("Runs as Monthly close");
+    expect(render(page({ workflow: named }), "de")).toContain("Läuft als Monthly close");
+    // Without a label the head names no account: never the definition's own name of it.
+    expect(render(page())).not.toContain("Runs as");
+  });
+
   it("offers neither a start nor the runs where the instance runs no Workflow", () => {
     const markup = render(page({ runsAvailable: false }));
     expect(markup).toContain("Notify clients");
@@ -344,9 +388,26 @@ describe("the page of a Workflow", () => {
   });
 
   it("shows no id, no operation name and no file name of the definition", () => {
-    const markup = render(page());
-    for (const internal of ["connection.crm", "check.py", "summary.md", "workflow-runner"]) {
-      expect(markup).not.toContain(internal);
+    for (const locale of ["en", "de"] as const) {
+      const blocked = {
+        ...workflow,
+        refusedFor: [
+          {
+            code: "principal_inactive",
+            message: "The internal account workflow-runner is disabled.",
+            principalDisplayLabel: "Booking checks"
+          }
+        ]
+      };
+      const markup = render(page({ workflow: blocked }), locale);
+      for (const internal of ["connection.crm", "check.py", "summary.md", "workflow-runner"]) {
+        expect(markup).not.toContain(internal);
+      }
+      expect(markup).toContain(
+        locale === "de"
+          ? "Das technische Konto „Booking checks“ ist deaktiviert."
+          : "The technical account “Booking checks” is disabled."
+      );
     }
   });
 
@@ -696,19 +757,6 @@ describe("the page of a run", () => {
     expect(cancelOffered(going, "user_2", READER)).toBe(false);
     expect(cancelOffered(going, "user_2", { ...READER, write: true })).toBe(true);
     expect(cancelOffered(ended, "user_1", { ...READER, write: true })).toBe(false);
-  });
-
-  it("asks once before a run is cancelled, with a way to keep it running", () => {
-    const dialog = (error?: string, locale: "en" | "de" = "en") =>
-      render(
-        createElement(CancelRunDialog, { loading: false, error, onConfirm: noop, onClose: noop }),
-        locale
-      );
-    expect(dialog()).toContain(t("workflows.run.cancelTitle"));
-    expect(dialog()).toContain(t("workflows.run.cancelBody"));
-    expect(dialog()).toContain(t("workflows.run.cancelKeep"));
-    expect(dialog(t("workflows.run.cancelFailed"))).toContain(t("workflows.run.cancelFailed"));
-    expect(dialog(undefined, "de")).toContain(de("workflows.run.cancelKeep"));
   });
 
   const unread = {

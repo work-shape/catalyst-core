@@ -239,13 +239,19 @@ export interface WorkflowSummaryResource {
   actions?: readonly string[];
   /** The published revision's `inputs`: the JSON Schema a start's input is checked against. */
   inputs?: Readonly<Record<string, unknown>>;
+  /** The label of the account every run acts as, where it is active. */
+  runsAs?: string;
   /** The latest run of the Workflow, where it has one. */
   lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
 }
 
 /** The reasons of a summary as the screens hold them: the code and the sentence. */
 function startIssues(summary: WorkflowSummaryResource | undefined): WorkflowStartIssue[] {
-  return (summary?.reasons ?? []).map(({ code, message }) => ({ code, message }));
+  return (summary?.reasons ?? []).map(({ code, message, principalDisplayLabel }) => ({
+    code,
+    message,
+    ...(principalDisplayLabel === undefined ? {} : { principalDisplayLabel })
+  }));
 }
 
 /** Whether the caller may start the Workflow, as its entry of the list says. */
@@ -265,7 +271,8 @@ export function listedOf(summary: WorkflowSummaryResource | undefined): Workflow
       : { revisionId: summary.definitionRevisionId }),
     refusedFor: startIssues(summary),
     mayStart: mayStartOf(summary),
-    startForm: startFormOf(summary?.inputs)
+    startForm: startFormOf(summary?.inputs),
+    ...(summary?.runsAs === undefined ? {} : { runsAs: summary.runsAs })
   };
 }
 
@@ -282,6 +289,8 @@ export interface WorkflowListed {
    * other values than a run accepts.
    */
   startForm?: StartForm;
+  /** The account every run acts as, by its label. */
+  runsAs?: string;
 }
 
 /** A Workflow as a row of the list. */
@@ -308,6 +317,34 @@ export function toWorkflowListItem(summary: WorkflowSummaryResource): WorkflowLi
             ...(lastRun.startedAt === undefined ? {} : { startedAt: lastRun.startedAt })
           }
         })
+  };
+}
+
+/** What a list of Workflow assets says of one, as far as a row of a draft reads it. */
+export interface WorkflowAssetListed {
+  name: string;
+  title: string;
+  description?: string;
+  publishedRevision?: number;
+  updatedAt: string;
+}
+
+/**
+ * A Workflow never published, as a row of the list: the engine names it nowhere, so its asset
+ * does. Nothing starts it until a person publishes it.
+ */
+export function toDraftWorkflowListItem(asset: WorkflowAssetListed): WorkflowListItem {
+  const description = asset.description?.trim();
+  return {
+    id: asset.name,
+    name: asset.title.trim() || nameFromId(asset.name),
+    ...(description ? { description } : {}),
+    published: false,
+    updatedAt: asset.updatedAt,
+    startsByHand: false,
+    refusedFor: [],
+    mayStart: false,
+    startForm: NO_START_FORM
   };
 }
 
@@ -460,7 +497,13 @@ function stepNames(value: unknown, names = new Map<string, string>()): Map<strin
 /** One Workflow from its record: the definition is the record's `config`. */
 export function toWorkflow(
   asset: Pick<Asset, "name" | "config" | "publishedRevision">,
-  { revisionId, refusedFor = [], mayStart = false, startForm = NO_START_FORM }: WorkflowListed = {},
+  {
+    revisionId,
+    refusedFor = [],
+    mayStart = false,
+    startForm = NO_START_FORM,
+    runsAs
+  }: WorkflowListed = {},
   /** The asset's own pointers. The instance names a draft only to who may read it. */
   pointers: Pick<Asset, "draftRevision" | "publishedRevision"> = {}
 ): WorkflowView {
@@ -478,6 +521,7 @@ export function toWorkflow(
     id: asset.name,
     name: text(definition.name) ?? asset.name,
     ...(description === undefined ? {} : { description }),
+    ...(runsAs === undefined ? {} : { runsAs }),
     published: asset.publishedRevision !== undefined,
     ...(revisionId === undefined ? {} : { revisionId }),
     steps,

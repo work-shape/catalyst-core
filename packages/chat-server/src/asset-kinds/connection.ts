@@ -1,4 +1,4 @@
-import { connectionConfigSchema } from "@vivd-catalyst/config-schema";
+import { connectionConfigSchema, connectionNameSchema } from "@vivd-catalyst/config-schema";
 import {
   AppError,
   CONNECTION_ACTIONS,
@@ -202,7 +202,8 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
       nameRule: {
         pattern: CONNECTION_NAME_PATTERN,
         maxLength: CONNECTION_NAME_MAX_LENGTH,
-        description: CONNECTION_NAME_RULE
+        description: CONNECTION_NAME_RULE,
+        schema: connectionNameSchema
       },
       actions: {
         read: CONNECTION_ACTIONS.read,

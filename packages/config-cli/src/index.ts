@@ -1,9 +1,13 @@
 import { realpathSync } from "node:fs";
+import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { RELEASE_VERSION } from "@vivd-catalyst/api-contract";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
+import { operationHelpText, runOperationCommand } from "./operation-commands";
+import { isNamedCommand, namedHelpText, runNamedCommand } from "./named-commands";
+import type { CommandInput } from "./input";
 import type { AssetKindName } from "./command-support";
 import { loginCommand, logoutCommand } from "./login";
 import { isLocalAgentTool, SETUP_USAGE, setupCommand } from "./setup";
@@ -17,6 +21,7 @@ export * from "./working-copy";
 
 export interface CliRuntimeOptions {
   cwd?: string;
+  stdin?: CommandInput;
   fetchImpl?: typeof fetch;
   env?: Readonly<Record<string, string | undefined>>;
   stdout?: (text: string) => void;
@@ -25,6 +30,21 @@ export interface CliRuntimeOptions {
   sleep?: (milliseconds: number) => Promise<void>;
   /** Opens an address in a browser, as `setup` does. Tests pass one that opens nothing. */
   openUrl?: (address: string) => void;
+  /**
+   * Asks the person at the terminal and answers what they typed. Left out, the terminal is
+   * asked where there is one, and nobody where there is none.
+   */
+  prompt?: (question: string) => Promise<string>;
+}
+
+/** Asks the question on standard error and reads one line of standard input. */
+async function askTerminal(question: string): Promise<string> {
+  const terminal = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    return await terminal.question(question);
+  } finally {
+    terminal.close();
+  }
 }
 
 const helpText = `Usage: catalyst config <command> [options]
@@ -92,7 +112,7 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   const stdout = runtime.stdout ?? ((text: string) => process.stdout.write(text));
   const stderr = runtime.stderr ?? ((text: string) => process.stderr.write(text));
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
-    stdout(`${assetHelpText}\n${helpText}`);
+    stdout(`${assetHelpText}\n${operationHelpText}\n${namedHelpText}\n${helpText}`);
     return 0;
   }
   if (argv[0] === "--version") {
@@ -102,11 +122,32 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   if (argv[0] === "login" || argv[0] === "logout" || argv[0] === "setup") {
     return runLoginCommand(argv[0], argv.slice(1), runtime, stdout, stderr);
   }
+  if (isNamedCommand(argv)) {
+    return runNamedCommand(argv, {
+      ...runtime,
+      cwd: runtime.cwd ?? process.cwd(),
+      stdout,
+      stderr
+    });
+  }
+  if (
+    argv[0] === "call" ||
+    (argv[0] === "connection" && ["secret", "test", "discover", "tools"].includes(argv[1] ?? ""))
+  ) {
+    return runOperationCommand(argv, {
+      ...runtime,
+      cwd: runtime.cwd ?? process.cwd(),
+      stdout,
+      stderr
+    });
+  }
   if (argv[0] !== "config") {
+    const prompt = runtime.prompt ?? (process.stdin.isTTY ? askTerminal : undefined);
     return runAssetCommand(argv, {
       cwd: runtime.cwd ?? process.cwd(),
       ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
       ...(runtime.env === undefined ? {} : { env: runtime.env }),
+      ...(prompt === undefined ? {} : { prompt }),
       stdout,
       stderr
     });

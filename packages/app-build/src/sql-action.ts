@@ -41,6 +41,7 @@ const PARAMETER_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/u;
 const WORD = /[\p{L}\p{N}_][\p{L}\p{N}_$]*/uy;
 const DOLLAR_QUOTE = /\$(?:[\p{L}_][\p{L}\p{N}_]*)?\$/uy;
 const PLACEHOLDER = /\$([A-Za-z_][A-Za-z0-9_]*)/uy;
+const VIEWER_SCOPE = /\$viewer\.(scope_all|scope|groups)(?![\p{L}\p{N}_$])/uy;
 const POSITION = /\$\d+/uy;
 
 const NAME = String.raw`[A-Za-z_][A-Za-z0-9_]*|"(?:[^"]|"")+"`;
@@ -236,6 +237,12 @@ function readParameter(
     return { message: `'@${directive}' is no line of a header. A header line is ${form}.` };
   }
   const [name = "", typeName = "", optional, ...further] = rest.split(/\s+/u).filter(Boolean);
+  if (name === "scope") {
+    return {
+      message:
+        "'scope' is reserved for data scope (SCOPE-1/2). Use a named Mandant parameter such as 'mandant_nr' until those slices arrive."
+    };
+  }
   if (!PARAMETER_NAME.test(name)) {
     return {
       message: `'${name}' cannot be the name of a parameter. A name has letters, digits and '_', at most 63, and the line is ${form}.`
@@ -287,6 +294,15 @@ function readSpan(
       return close === -1
         ? { fault: `The text that starts with ${quote[0]} never ends.` }
         : { end: close + quote[0].length, masked: "text" };
+    }
+    const viewerScope = matchAt(VIEWER_SCOPE, sql, index);
+    if (viewerScope !== undefined) {
+      return {
+        fault:
+          viewerScope[1] === "groups"
+            ? "'$viewer.groups' was dropped by SCOPE-0. Viewer data scope arrives with SCOPE-1 as '$viewer.scope' and '$viewer.scope_all'."
+            : `'${viewerScope[0]}' is reserved for viewer data scope (SCOPE-1); scoped Connection operations arrive with SCOPE-2. These slices are not built yet.`
+      };
     }
     const placeholder = matchAt(PLACEHOLDER, sql, index);
     if (placeholder?.[1] !== undefined) {

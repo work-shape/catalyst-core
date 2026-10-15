@@ -229,6 +229,9 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
   ];
 
   try {
+    // The Workflow's page says in its head whom every run acts as: the account's label.
+    await page.goto(`/w/${workspaceId}/workflows/${id}`);
+    await expect(page.getByTestId("workflow-page").getByText(`Runs as ${runAs}`)).toBeVisible();
     await page.goto(`/w/${workspaceId}/workflows`);
     const card = page.getByRole("listitem").filter({ hasText: name });
     const dialog = page.getByRole("dialog", { name: `Start “${name}” now?` });
@@ -332,5 +335,67 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
       );
     }
     await root.context().close();
+  }
+});
+
+test("the Workflow head keeps both actions inside 390 and 1280 in English and German", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  const suffix = randomUUID().slice(0, 8);
+  const id = `head-layout-${suffix}`;
+  const name = "Monthly booking check";
+  const runAs = `${id}-runner`;
+  await signIn(page, superadmin);
+  const principal = await requestWithOrigin(
+    page,
+    "post",
+    `${apiBaseUrl}/api/v1/instance/service-principals`,
+    {
+      data: { name: runAs, displayLabel: "Booking checks" }
+    }
+  );
+  expect(principal.ok(), await principal.text()).toBe(true);
+  await publish(page, { id, name, runAs, mostBookings: 10 });
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+    data: { name: `Head layout ${suffix}` }
+  });
+  expect(created.ok()).toBe(true);
+  const workspaceId = idSchema.parse(await created.json()).id;
+  for (const locale of ["en", "de"]) {
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/w/${workspaceId}/workflows/${id}`);
+      await page.evaluate((value) => localStorage.setItem("vivd-catalyst:locale", value), locale);
+      await page.reload();
+      const head = page
+        .locator("[data-page-head]")
+        .filter({ has: page.getByRole("heading", { name, exact: true }) });
+      await expect(head).toBeVisible();
+      const start = head.getByRole("button", {
+        name: locale === "de" ? "Jetzt starten" : "Start now",
+        exact: true
+      });
+      await expect(start).toBeVisible();
+      if (shotsDir) {
+        await mkdir(shotsDir, { recursive: true });
+        await page.screenshot({
+          path: join(shotsDir, `workflow-head-${width}-${locale}.png`),
+          animations: "disabled"
+        });
+      }
+      const boxes = await head.locator("button").evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const box = button.getBoundingClientRect();
+          return { left: box.left, right: box.right, cut: button.scrollWidth > button.clientWidth };
+        })
+      );
+      expect
+        .soft(
+          boxes.filter((box) => box.left < 0 || box.right > width || box.cut),
+          `${locale} ${width}`
+        )
+        .toEqual([]);
+    }
   }
 });

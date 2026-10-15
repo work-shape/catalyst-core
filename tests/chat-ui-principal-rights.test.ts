@@ -2,6 +2,7 @@ import { createElement } from "react";
 import {
   ApiError,
   type AssetSummary,
+  type EffectivePermissions,
   type PermissionGrantRow,
   type ServicePrincipalDetail
 } from "@vivd-catalyst/api-client";
@@ -15,6 +16,7 @@ import {
   principalHref,
   principalOfSearch,
   PrincipalRights,
+  readerHolds,
   resourceHolders,
   type PrincipalRightsProps
 } from "@vivd-catalyst/chat-ui/access";
@@ -76,6 +78,7 @@ function render(props: Partial<PrincipalRightsProps>, locale: "en" | "de" = "en"
         kinds,
         resources: { items: lookups.assets, failed: false },
         workspaces: lookups.workspaces,
+        holds: () => undefined,
         onGive: never,
         onRemove: never,
         ...props
@@ -158,6 +161,41 @@ describe("the rights a service principal can be given", () => {
     });
     expect(choices.map((asset) => asset.name)).toEqual(["erp"]);
   });
+
+  it("are the ones the reader holds, as the server's evaluator decides over the reader's entries", () => {
+    const [crm, erp] = lookups.assets;
+    if (crm === undefined || erp === undefined) throw new Error("two fixture Connections");
+    const entry = (
+      overrides: Partial<EffectivePermissions["items"][number]>
+    ): EffectivePermissions["items"][number] => ({
+      action: "connection.use",
+      effect: "allow",
+      scopeKind: "instance",
+      source: "role",
+      ...overrides
+    });
+    // An admin holds the right by role, and a deny on one Connection takes it there.
+    const admin: EffectivePermissions = {
+      holderActive: true,
+      items: [
+        entry({}),
+        entry({ effect: "deny", scopeKind: "asset", scopeId: crm.id, source: "grant" })
+      ]
+    };
+    expect(readerHolds(admin, "connection.use", crm)).toBe(false);
+    expect(readerHolds(admin, "connection.use", erp)).toBe(true);
+    expect(readerHolds(admin, "workflow.use", erp)).toBe(false);
+    // A right on one Connection holds there and nowhere else.
+    const member: EffectivePermissions = {
+      holderActive: true,
+      items: [entry({ scopeKind: "asset", scopeId: erp.id, source: "grant" })]
+    };
+    expect(readerHolds(member, "connection.use", erp)).toBe(true);
+    expect(readerHolds(member, "connection.use", crm)).toBe(false);
+    // An inactive reader holds nothing, and a reader whose entries are not known is not judged.
+    expect(readerHolds({ ...admin, holderActive: false }, "connection.use", erp)).toBe(false);
+    expect(readerHolds(undefined, "connection.use", erp)).toBeUndefined();
+  });
 });
 
 describe("the rights of a service principal on its page", () => {
@@ -216,9 +254,11 @@ describe("the rights of a service principal on its page", () => {
   it("says what a right is for when there is none, and offers the first one", () => {
     const markup = render({});
     expect(markup).toContain("A Workflow that runs as it can only call a Connection");
-    expect(markup).toContain("Give this principal a Connection to use");
+    expect(markup).toContain("Give this service principal a Connection to use");
     const german = render({}, "de");
-    expect(german).toContain("Diesem Principal eine Verbindung zur Verwendung geben");
+    expect(german).toContain("Diesem Konto eine Verbindung zum Verwenden geben");
+    expect(german).toContain("Was dieses Technische Konto verwenden darf");
+    expect(german).not.toContain("Principal");
     expect(german).toContain("Rechte auf Ressourcen");
   });
 
@@ -303,7 +343,7 @@ describe("who holds a right on one resource", () => {
         kind: "service_principal",
         id: "spn_1",
         name: "Monthly check",
-        detail: "monthly-check",
+        detail: undefined,
         disabled: true
       }
     ]);

@@ -1,9 +1,10 @@
 import type { ComponentType, ReactNode, Ref } from "react";
 import type { Asset, AssetSummary } from "@vivd-catalyst/api-client";
 import type { AvatarKind, GenericIconKey } from "@vivd-catalyst/ui";
-import type { AvailableIn } from "../api/asset-writes";
+import type { AvailableIn, CheckName } from "../api/asset-writes";
 import type { TranslationKey } from "../i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
+import type { BuildNamespace } from "./build-rights";
 
 /** One asset as a list shows it: what the instance says of it without its content. */
 export type BuildAssetRow = AssetSummary;
@@ -17,6 +18,8 @@ export interface BuildAssetStart {
   name: string;
   /** The name people read. */
   title: string;
+  /** What the asset does, in the reader's language, where its kind's dialog asks. */
+  description?: string;
   /** Where a new asset of a kind that `startsInWorkspace` starts available. */
   availableIn?: AvailableIn;
   /** The definition a copy starts from. A new asset without it starts empty. */
@@ -69,6 +72,34 @@ export interface BuildAssetEditorProps {
   save(config: Record<string, unknown>): Promise<BuildWriteOutcome>;
 }
 
+/**
+ * What the frame hands a kind's own dialog for a new asset, in place of the one that asks for
+ * the name and the id: the Namespaces the reader may name it in, and the writes of the asset.
+ */
+export interface BuildCreateDialogProps {
+  namespaces: readonly BuildNamespace[];
+  /** The reader may name the asset without a Namespace. */
+  mayNameFreely: boolean;
+  /** Asks the instance whether the asset could take the name, as it is typed. */
+  checkName: CheckName;
+  /** Writes the asset's definition: creates it at `null`, else over the revision given. */
+  put(input: {
+    name: string;
+    config: Record<string, unknown>;
+    expectedRevision: number | null;
+  }): Promise<{ revision: number }>;
+  /** Deletes the asset the dialog made, where the reader may (`mayDelete`). */
+  remove(input: { name: string; expectedRevision: number }): Promise<unknown>;
+  /** Whether the reader may delete an asset of the kind in this Namespace, by its prefix. */
+  mayDelete(namespace: string | undefined): boolean;
+  onClose(): void;
+  /**
+   * The asset exists: the frame closes the dialog and opens its page. `then` runs once the
+   * page is open, such as opening the chat beside it.
+   */
+  onCreated(name: string, then?: () => void): void;
+}
+
 /** What every kind of the Build area names: its rail item and its list. */
 interface BuildKindBase {
   /** The asset kind, as the server stores it. */
@@ -88,19 +119,23 @@ interface BuildKindBase {
   /** Rows show an avatar with the name's initials. Without it they show the kind's icon. */
   avatar?: AvatarKind;
   /**
-   * What a row says of an asset where the kind tells more than its icon and the asset's id: its
-   * own mark, where it has one, and the line under the title. A row without a line shows the
-   * title alone.
+   * What a row says of an asset where the kind tells more than its icon: its own mark, where it
+   * has one, and the line under the title. A row without a line shows the title alone. No row
+   * shows the asset's id.
    */
   row?(asset: BuildAssetRow): { leading?: ReactNode; description?: string };
-  /** What a row says after the asset's id, on the same line: such as the asset's description. */
+  /** The line under a row's title: what the asset does, such as its description. */
   rowText?(asset: BuildAssetRow): string | undefined;
   /**
-   * The line under a row's title in the kind's own words, in place of the asset's id and
-   * `rowText`, shown whole: a component, so it may read what the page knows, such as
-   * workspace names.
+   * The line under a row's title in the kind's own words, in place of `rowText`, shown whole:
+   * a component, so it may read what the page knows, such as workspace names.
    */
   RowLine?: ComponentType<{ asset: BuildAssetRow }>;
+  /**
+   * What the list shows above its rows, with rows and without: such as the guardrails the
+   * release ships, which are no asset of the list.
+   */
+  ListHead?: ComponentType;
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
 }
@@ -117,6 +152,8 @@ export interface BuildAssetKind extends BuildKindBase {
   newLabel: TranslationKey;
   /** Names the field of the dialog that asks for the name people read. */
   titleLabel: TranslationKey;
+  /** The dialog's question of what the new asset does. A kind without it asks the name alone. */
+  purposeLabel?: TranslationKey;
   /** The question that confirms a delete, with `{name}`, and the sentence under it. */
   deleteTitle: TranslationKey;
   deleteDescription: TranslationKey;
@@ -126,6 +163,12 @@ export interface BuildAssetKind extends BuildKindBase {
   missingText: TranslationKey;
   /** The body of the asset page, for an existing asset and for a new one. */
   Editor: ComponentType<BuildAssetEditorProps>;
+  /**
+   * The kind's own dialog for a new asset, which makes the asset itself. Without it the frame
+   * asks for the name and the id and opens the `Editor` of a new asset. A copy always takes
+   * the frame's dialog.
+   */
+  CreateDialog?: ComponentType<BuildCreateDialogProps>;
   /**
    * A new asset is available in the shared workspace it is made in: the dialog that starts
    * it says where, and offers every workspace to whoever may change that.
@@ -150,6 +193,12 @@ export interface BuildAssetViewProps {
   asset: BuildAsset;
   /** The kinds the reader sees in Build, for a page that names an asset of another kind. */
   kinds: readonly BuildKind[];
+  /**
+   * Publishes the draft the page shows and reads the asset again: the person's click, never
+   * the agent's. Answers the instance's sentence where it refused. Absent where the asset has no
+   * draft ahead of what is published, or the reader may not publish it.
+   */
+  publish?(): Promise<string | undefined>;
 }
 
 /**

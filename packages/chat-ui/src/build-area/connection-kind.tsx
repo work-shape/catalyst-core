@@ -1,6 +1,7 @@
 import { Badge, Chip, ConnectionIcon } from "@vivd-catalyst/ui";
 import { connectionCategory } from "../connection-facts";
 import type { BuildAsset, BuildAssetKind } from "./build-asset-kind";
+import { ConnectionCreateDialog } from "./connection-create-dialog";
 import { ConnectionAssetEditor } from "./connection-editor";
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 
@@ -15,8 +16,8 @@ function releaseConnectionTitle(asset: Pick<BuildAsset, "config" | "name">): str
 }
 
 /**
- * Connections in Build: a list, "New connection" with the form of a remote MCP server, and
- * the page of one Connection. A row says what the instance tells of the Connection without
+ * Connections in Build: a list, "New connection" with its own dialog for an MCP server or a
+ * REST API, and the page of one Connection. A row says what the instance tells of the Connection without
  * its definition: its icon, what it is for, its connector type, whom it belongs to and
  * whether it is on. No row holds a setting or a reference to a credential.
  */
@@ -38,6 +39,7 @@ export const connectionKind: BuildAssetKind = {
   // A batch of the CLI holds no Connection yet.
   withoutCli: true,
   Editor: ConnectionAssetEditor,
+  CreateDialog: ConnectionCreateDialog,
   // A row shows the icon of the system behind the Connection, on its tile, and what the
   // Connection is for in words. Its id stands on its page.
   row: (asset) => {
@@ -64,13 +66,6 @@ export const connectionKind: BuildAssetKind = {
             <code className="font-mono">{connectorType}</code>
           </Chip>
         ) : null}
-        <Chip size="sm">
-          {t(
-            asset.scope.kind === "workspace"
-              ? "connections.scopeWorkspace"
-              : "connections.scopeInstance"
-          )}
-        </Chip>
         {typeof enabled === "boolean" ? (
           <Badge tone={enabled ? "success" : "neutral"} dot>
             {t(enabled ? "connections.enabled" : "connections.disabled")}

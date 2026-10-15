@@ -160,7 +160,8 @@ test("a member who uses an App is shown the App and a builder its revision", asy
     await expect(builderList).toContainText(PUBLISHED);
   };
   await builderListReady();
-  await expect(builderList).toContainText(appId);
+  // A builder is shown the revision, and no card shows the App's id (UXA-1a).
+  await expect(builderList).not.toContainText(appId);
   await expect(builderList).not.toContainText(WORKSPACE);
   await shoot(page, "apps-list-builder", builderListReady);
 

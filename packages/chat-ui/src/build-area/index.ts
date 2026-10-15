@@ -1,4 +1,4 @@
-export { AgentAvailabilityEditor, AgentEditor } from "./agent-editor";
+export { AgentEditor, type AgentAvailabilityChoice } from "./agent-editor";
 export { AssetEditorShell } from "./asset-editor-shell";
 export { PlatformInstructionsBody } from "./platform-instructions";
 export { FieldRefusals } from "./asset-form-fields";
@@ -15,6 +15,17 @@ export type {
 export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
 export { type BuildAssetRead, type BuildList, type BuildSource } from "./build-data";
 export { BuildFrame } from "./build-frame";
+export * from "./connection-approval-model";
+export { ConnectionApprovalList } from "./connection-approval";
+export * from "./connection-connect";
+export { ConnectionCreateFlow } from "./connection-create-dialog";
+export { openConnectionDraft, readConnectionDraft, type ConnectionDraft } from "./connection-draft";
+export {
+  ConnectionDraftCard,
+  ConnectionDraftCardView,
+  ConnectionDraftHostProvider,
+  connectionDraftHost
+} from "./connection-draft-card";
 export { ConnectionEditor } from "./connection-editor";
 export * from "./connection-form-model";
 export type {
@@ -26,7 +37,8 @@ export type {
 export { dataStoreKindOn } from "./data-store-kind";
 export { GuardrailPage } from "./guardrail-page";
 export { guardrailRunSentence, type GuardrailRunFacts } from "./guardrail-sentence";
-export type { GuardrailSource } from "./guardrail-source";
+export type { GuardrailSource, ShippedGuardrailsRead } from "./guardrail-source";
+export { ShippedGuardrails } from "./shipped-guardrails";
 export { dataStoreStateView, formatDataStoreSize } from "./data-store-model";
 export { DataStoreValueDialog } from "./data-store-rows";
 export type {
@@ -50,6 +62,7 @@ export { connectionToolsView, type ConnectionToolsRead } from "./connection-tool
 export { toggleToolName } from "./tool-group";
 export { setPackageTools, toolPackages, withImpliedTools } from "./instance-tools";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
+export { addressBlocksCreate, addressCheckOf } from "./name-check";
 export {
   PendingApprovalError,
   readBuildRefusal,
@@ -63,9 +76,12 @@ export {
 } from "./build-create-request";
 export {
   buildScopes,
+  buildWorkspaceName,
   mayCreateAgents,
   resolveBuildRights,
+  readLastBuildScope,
   resolveBuildScope,
+  showOwnerInStudio,
   type BuildScope
 } from "./build-rights";
 export {

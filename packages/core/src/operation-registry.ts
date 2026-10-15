@@ -37,6 +37,20 @@ export interface OperationResource extends AccessResource {
 }
 
 /** What an operation's implementation knows about the call it serves. */
+/** Who decides a call that waits for an approval: see `approval` of the definition. */
+export interface OperationApproval {
+  /** The kind of the approval request, such as `app_publish`. */
+  kind: string;
+  /** The instance-level right that decides it, such as `app.approve`. */
+  action: string;
+  /**
+   * What the request is about, frozen when it is filed, such as the revision a publish makes
+   * live and the live one then. The request's kind reads it to show it and to tell whether
+   * it moved.
+   */
+  subject?: JsonObject;
+}
+
 export interface OperationExecutionContext {
   runId: OperationRunId;
   actor: AuthenticatedIdentity;
@@ -197,11 +211,21 @@ interface OperationDefinitionBase<Input, Output> {
    * A floor of one call, where it depends on where the call came from and not on the operation
    * alone: a tool an agent is given for the subject of its conversation stands for an operation
    * on that asset. Asked with the policy, and again before a call that waited is executed. The
-   * stricter of it and `policyFloor` holds.
+   * stricter of it and `policyFloor` holds. It is told the call's input, which can name the
+   * asset the call writes.
    */
   policyFloorOf?(
-    origin: OperationOrigin
+    origin: OperationOrigin,
+    input: unknown
   ): PolicyValue | undefined | Promise<PolicyValue | undefined>;
+  /**
+   * Who decides a call of the operation that waits for an approval, where it is not every
+   * holder of `operations.approve`: the kind its request is filed as, which the approvers'
+   * Inbox lists, and the instance-level right that decides it. A caller who holds that right
+   * answers a guardrail's `require_approval` with their own click in the interface: the run
+   * records them as caller and as approver, and no request is filed. CLI calls never do this.
+   */
+  approval?(input: unknown): OperationApproval | undefined | Promise<OperationApproval | undefined>;
   /**
    * The answer holds a secret that is shown once, such as a new key. The run keeps no output,
    * so a repeated call with the same key answers OUTPUT_NOT_RETAINED and never the secret

@@ -55,6 +55,7 @@ export const apps = defineTranslations({
     "apps.actionTestTitle": "Test “{name}”",
     "apps.actionTestableInDraft": "Can be tested",
     "apps.actions": "Actions",
+    "apps.technicalDetails": "Technical details",
     "apps.actionsEmpty":
       "This app has no actions yet. An action lets the app read from a connection or write to it.",
     "apps.actionsFailed": "The actions could not be loaded.",
@@ -92,7 +93,6 @@ export const apps = defineTranslations({
     "apps.detailsDescription": "Description",
     "apps.detailsFailed": "The details could not be loaded.",
     "apps.detailsHosts": "External hosts",
-    "apps.detailsId": "ID",
     "apps.detailsNone": "None",
     "apps.detailsOf": "Details of {name}",
     "apps.detailsRevision": "What revision {number} uses.",
@@ -160,6 +160,8 @@ export const apps = defineTranslations({
     "apps.publishHosts": "External hosts it calls",
     "apps.publishMissingRight": "You need the right “{right}” to publish.",
     "apps.publishPending": "The change waits for an approval.",
+    "apps.publishWaits":
+      "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is.",
     "apps.publishThisRevision": "Publish this revision",
     "apps.publishTitle": "Publish “{name}”?",
     "apps.published": "Published · revision {number}",
@@ -257,6 +259,7 @@ export const apps = defineTranslations({
     "apps.actionTestTitle": "„{name}“ testen",
     "apps.actionTestableInDraft": "Kann getestet werden",
     "apps.actions": "Aktionen",
+    "apps.technicalDetails": "Technische Details",
     "apps.actionsEmpty":
       "Diese App hat noch keine Aktionen. Mit einer Aktion liest die App über eine Verbindung oder schreibt über sie.",
     "apps.actionsFailed": "Die Aktionen konnten nicht geladen werden.",
@@ -295,7 +298,6 @@ export const apps = defineTranslations({
     "apps.detailsDescription": "Beschreibung",
     "apps.detailsFailed": "Die Details konnten nicht geladen werden.",
     "apps.detailsHosts": "Externe Hosts",
-    "apps.detailsId": "ID",
     "apps.detailsNone": "Keine",
     "apps.detailsOf": "Details zu {name}",
     "apps.detailsRevision": "Was Revision {number} verwendet.",
@@ -367,6 +369,8 @@ export const apps = defineTranslations({
     "apps.publishHosts": "Externe Hosts, die sie aufruft",
     "apps.publishMissingRight": "Zum Veröffentlichen brauchst du das Recht „{right}“.",
     "apps.publishPending": "Die Änderung wartet auf eine Freigabe.",
+    "apps.publishWaits":
+      "Zur Freigabe gesendet. Ein Instanz-Admin entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
     "apps.publishThisRevision": "Diese Revision veröffentlichen",
     "apps.publishTitle": "„{name}“ veröffentlichen?",
     "apps.published": "Veröffentlicht · Revision {number}",

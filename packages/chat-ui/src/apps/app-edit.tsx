@@ -18,10 +18,12 @@ import {
   KeyValueList,
   Tabs,
   TabsContent,
+  TabsDisclosure,
   TabsList,
   TabsTrigger
 } from "@vivd-catalyst/ui";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
+import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../i18n";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../routes";
@@ -31,6 +33,7 @@ import { AppDraftFiles } from "./app-draft-files";
 import { AppDeleteDialog, AppFrame, AppHeader, NameList } from "./app-header";
 import {
   APP_RIGHT_NAMES,
+  appDescription,
   appDraftRevision,
   appDraftShown,
   appManifestSummary,
@@ -47,6 +50,28 @@ import { RevisionsDrawer } from "./revisions-drawer";
 /** The sides of a draft: the App in its frame, its source files, and its named actions. */
 const APP_DRAFT_VIEWS = ["preview", "files", "actions"] as const;
 export type AppDraftView = (typeof APP_DRAFT_VIEWS)[number];
+
+const DETAILS_STORAGE_KEY = "vivd-catalyst:app-technical-details";
+
+/**
+ * Whether the reader last opened the technical details of a draft, its Files and Actions, in
+ * this browser. They start folded: most who shape an App never read its source.
+ */
+function readStoredDetailsOpen(): boolean {
+  try {
+    return window.localStorage.getItem(DETAILS_STORAGE_KEY) === "open";
+  } catch {
+    return false;
+  }
+}
+
+function storeDetailsOpen(open: boolean): void {
+  try {
+    window.localStorage.setItem(DETAILS_STORAGE_KEY, open ? "open" : "folded");
+  } catch {
+    // A browser that refuses storage shows the next draft folded.
+  }
+}
 
 /** The revision a publish names, with what its manifest reaches. */
 interface PublishAsk {
@@ -70,6 +95,7 @@ export function AppEdit({ app }: { app: string }) {
   const writes = useAppWrites(workspace?.id);
   const [turn, setTurn] = useState(0);
   const [view, setView] = useState<AppDraftView>("preview");
+  const [detailsOpen, setDetailsOpen] = useState(readStoredDetailsOpen);
   const [publishAsk, setPublishAsk] = useState<PublishAsk>();
   const [discardOpen, setDiscardOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -78,6 +104,8 @@ export function AppEdit({ app }: { app: string }) {
   const [error, setError] = useState<string>();
   // The outside hosts the shown draft lists that its frame may not call before a publish.
   const [heldBackHosts, setHeldBackHosts] = useState<readonly string[]>([]);
+  // The publish was sent and waits for an approver: the live revision stays until then.
+  const [publishWaits, setPublishWaits] = useState(false);
   // Each save of the draft, also the agent's from the dock, is another revision: the frame asks
   // for its address anew. The first read of the record is the revision the frame starts with.
   const draftNow = record.app ? appDraftRevision(record.app) : undefined;
@@ -120,6 +148,10 @@ export function AppEdit({ app }: { app: string }) {
       await change();
       return true;
     } catch (caught) {
+      if (caught instanceof PendingApprovalError && failure === "publish") {
+        setPublishWaits(true);
+        return true;
+      }
       const refusal = appRefusalText(caught);
       setError(
         caught instanceof PendingApprovalError
@@ -151,6 +183,7 @@ export function AppEdit({ app }: { app: string }) {
     <>
       <AppEditFrame
         name={name}
+        description={appDescription(asset?.config)}
         app={app}
         workspace={workspace}
         rights={rights}
@@ -158,6 +191,14 @@ export function AppEdit({ app }: { app: string }) {
         publishedRevision={published}
         view={view}
         onViewChange={setView}
+        detailsOpen={detailsOpen}
+        onDetailsOpenChange={(open) => {
+          setDetailsOpen(open);
+          storeDetailsOpen(open);
+          if (!open) {
+            setView("preview");
+          }
+        }}
         onBack={backToList}
         onPublish={
           asset && draft !== undefined
@@ -177,6 +218,11 @@ export function AppEdit({ app }: { app: string }) {
           setDeleteOpen(true);
         }}
       >
+        {publishWaits ? (
+          <Banner layout="page" className="shrink-0" data-testid="app-publish-waits">
+            {t("apps.publishWaits")}
+          </Banner>
+        ) : null}
         {/* The preview stays mounted under the other sides, so the App keeps its state. */}
         <div className="size-full" hidden={view !== "preview"}>
           {record.failed ? (
@@ -327,14 +373,17 @@ export function appDraftIsAhead(
  */
 export function AppEditFrame({
   name,
+  description,
   app,
   workspace,
   rights,
   draftRevision,
   publishedRevision,
   view,
+  detailsOpen = false,
   children,
   onViewChange,
+  onDetailsOpenChange,
   onBack,
   onPublish,
   onDiscard,
@@ -342,7 +391,9 @@ export function AppEditFrame({
   onDelete
 }: {
   name: string;
-  /** The id of the App. With it the head offers "Edit with the agent". */
+  /** What the App does, in one line after its name. */
+  description?: string;
+  /** The id of the App. With it the head offers "Edit with the agent" and "Copy ID". */
   app?: string;
   workspace: AppsWorkspace;
   rights: AppRights;
@@ -351,8 +402,11 @@ export function AppEditFrame({
   publishedRevision?: number;
   /** The side that is shown. Left out, the head has no switch. */
   view?: AppDraftView;
+  /** Files and Actions are among the tabs: the technical details are open. */
+  detailsOpen?: boolean;
   children: ReactNode;
   onViewChange?(view: AppDraftView): void;
+  onDetailsOpenChange?(open: boolean): void;
   onBack(): void;
   onPublish?: () => void;
   onDiscard?: () => void;
@@ -364,8 +418,31 @@ export function AppEditFrame({
   const known = rights.write && draftRevision !== undefined;
   const ahead = appDraftIsAhead(draftRevision, publishedRevision);
   const missingRight = known && !rights.publish;
-  // Preview, Files and Actions are views of the one App: tabs under its head.
-  const switchable = known && view !== undefined && onViewChange !== undefined;
+  const shownView = view ?? "preview";
+  // Preview, Files and Actions are views of the one App: tabs under its head. Files and Actions
+  // fold under "Technical details" until a developer role is named (UX audit ruling 3).
+  const tabs =
+    known &&
+    view !== undefined &&
+    onViewChange !== undefined &&
+    onDetailsOpenChange !== undefined ? (
+      <TabsList
+        label={t("pages.view")}
+        end={
+          <TabsDisclosure open={detailsOpen} onOpenChange={onDetailsOpenChange}>
+            {t("apps.technicalDetails")}
+          </TabsDisclosure>
+        }
+      >
+        <TabsTrigger value="preview">{t("pages.preview")}</TabsTrigger>
+        {detailsOpen ? (
+          <>
+            <TabsTrigger value="files">{t("pages.files")}</TabsTrigger>
+            <TabsTrigger value="actions">{t("apps.actions")}</TabsTrigger>
+          </>
+        ) : null}
+      </TabsList>
+    ) : undefined;
   const frame = (
     <AppFrame
       label={t("apps.draftArea", { name })}
@@ -374,6 +451,7 @@ export function AppEditFrame({
         <>
           <AppHeader
             name={name}
+            description={description}
             state={
               known ? (
                 <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
@@ -401,15 +479,7 @@ export function AppEditFrame({
                 </>
               ) : undefined
             }
-            tabs={
-              switchable ? (
-                <TabsList label={t("pages.view")}>
-                  <TabsTrigger value="preview">{t("pages.preview")}</TabsTrigger>
-                  <TabsTrigger value="files">{t("pages.files")}</TabsTrigger>
-                  <TabsTrigger value="actions">{t("apps.actions")}</TabsTrigger>
-                </TabsList>
-              ) : undefined
-            }
+            tabs={tabs}
             primaryAction={
               known ? (
                 <Button
@@ -430,6 +500,7 @@ export function AppEditFrame({
                     </IconButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    {app === undefined ? null : <CopyIdItem id={app} />}
                     <DropdownMenuItem icon={<History aria-hidden="true" />} onSelect={onRevisions}>
                       {t("apps.revisions")}
                     </DropdownMenuItem>
@@ -461,12 +532,12 @@ export function AppEditFrame({
         </>
       }
     >
-      {switchable ? (
-        <TabsContent value={view} className="h-full min-h-0">
+      {tabs === undefined ? (
+        children
+      ) : (
+        <TabsContent value={shownView} className="h-full min-h-0">
           {children}
         </TabsContent>
-      ) : (
-        children
       )}
     </AppFrame>
   );
@@ -474,7 +545,7 @@ export function AppEditFrame({
   // first draw, and a frame that moved into them then would draw its head a second time.
   return (
     <Tabs
-      value={view ?? "preview"}
+      value={shownView}
       onValueChange={(next) =>
         onViewChange?.(APP_DRAFT_VIEWS.find((candidate) => candidate === next) ?? "preview")
       }

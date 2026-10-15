@@ -3,6 +3,9 @@ import { defineTranslations } from "./translation-area";
 /** Workflows: their list, what one does, its runs, and one run with its steps. */
 export const workflows = defineTranslations({
   en: {
+    "workflows.notRunnable.accountDisabled": "The technical account “{name}” is disabled.",
+    "workflows.notRunnable.accountUnavailable":
+      "The technical account for this workflow is unavailable.",
     "workflows.liveOnce.again": "Run live once again",
     "workflows.liveOnce.used": "Ran live in your test run of {time}.",
     "workflows.simulated.wouldAskConfirmation":
@@ -98,7 +101,8 @@ export const workflows = defineTranslations({
       "The draft goes back to the published revision {number}. The discarded revisions are kept.",
     "workflows.draft.discardFailed": "The draft could not be discarded.",
     "workflows.draft.discardTitle": "Discard the draft of “{name}”?",
-    "workflows.draft.pending": "The change waits for an approval.",
+    "workflows.draft.pending":
+      "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is.",
     "workflows.draft.publish": "Publish",
     "workflows.draft.publishBody":
       "Revision {number} becomes the version that runs, by hand and on its schedule.",
@@ -110,7 +114,12 @@ export const workflows = defineTranslations({
     "workflows.edit.failed": "The conversation could not be started.",
     "workflows.edit.refused": "This workflow is not available to you for editing with the agent.",
     "workflows.edit.withAgent": "Edit with the agent",
+    "workflows.moreActions": "More actions",
     "workflows.emptyReadOnly": "No workflows yet. A builder of this workspace can add one.",
+    "workflows.empty":
+      "No workflows yet. Describe one to the agent, and its first save creates it.",
+    "workflows.new": "New workflow",
+    "workflows.newPrompt": "Build a new workflow that ",
     "workflows.failed": "The workflow could not be loaded.",
     "workflows.lastRun": "Last run",
     "workflows.listFailed": "The workflows could not be loaded.",
@@ -268,6 +277,7 @@ export const workflows = defineTranslations({
     "workflows.startForm.tooLong": "Enter at most {limit} characters.",
     "workflows.startForm.tooShort": "Enter at least {limit} characters.",
     "workflows.startNow": "Start now",
+    "workflows.runsAs": "Runs as {account}",
     "workflows.step.agent": "AI agent",
     "workflows.step.changing": "Changes data",
     "workflows.step.code": "Script",
@@ -293,6 +303,9 @@ export const workflows = defineTranslations({
     "workflows.unavailable": "This workflow is not available to you."
   },
   de: {
+    "workflows.notRunnable.accountDisabled": "Das technische Konto „{name}“ ist deaktiviert.",
+    "workflows.notRunnable.accountUnavailable":
+      "Das technische Konto für diesen Workflow ist nicht verfügbar.",
     "workflows.liveOnce.again": "Noch einmal live ausführen",
     "workflows.liveOnce.used": "Lief live in deinem Testlauf vom {time}.",
     "workflows.simulated.wouldAskConfirmation":
@@ -390,7 +403,8 @@ export const workflows = defineTranslations({
       "Der Entwurf geht auf die veröffentlichte Revision {number} zurück. Die verworfenen Revisionen bleiben erhalten.",
     "workflows.draft.discardFailed": "Der Entwurf konnte nicht verworfen werden.",
     "workflows.draft.discardTitle": "Entwurf von „{name}“ verwerfen?",
-    "workflows.draft.pending": "Die Änderung wartet auf eine Freigabe.",
+    "workflows.draft.pending":
+      "Zur Freigabe gesendet. Ein Instanz-Admin entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
     "workflows.draft.publish": "Veröffentlichen",
     "workflows.draft.publishBody":
       "Revision {number} wird die Version, die läuft, von Hand und nach ihrem Zeitplan.",
@@ -403,8 +417,13 @@ export const workflows = defineTranslations({
     "workflows.edit.refused":
       "Dieser Workflow steht dir für die Bearbeitung mit dem Agenten nicht zur Verfügung.",
     "workflows.edit.withAgent": "Mit dem Agenten bearbeiten",
+    "workflows.moreActions": "Weitere Aktionen",
     "workflows.emptyReadOnly":
       "Noch keine Workflows. Wer in diesem Arbeitsbereich bauen darf, kann einen hinzufügen.",
+    "workflows.empty":
+      "Noch keine Workflows. Beschreib dem Agenten einen, und sein erstes Speichern legt ihn an.",
+    "workflows.new": "Neuer Workflow",
+    "workflows.newPrompt": "Bau einen neuen Workflow, der ",
     "workflows.failed": "Der Workflow konnte nicht geladen werden.",
     "workflows.lastRun": "Letzter Lauf",
     "workflows.listFailed": "Die Workflows konnten nicht geladen werden.",
@@ -568,6 +587,7 @@ export const workflows = defineTranslations({
     "workflows.startForm.tooLong": "Gib höchstens {limit} Zeichen ein.",
     "workflows.startForm.tooShort": "Gib mindestens {limit} Zeichen ein.",
     "workflows.startNow": "Jetzt starten",
+    "workflows.runsAs": "Läuft als {account}",
     "workflows.step.agent": "KI-Agent",
     "workflows.step.changing": "Ändert Daten",
     "workflows.step.code": "Skript",

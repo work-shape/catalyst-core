@@ -209,8 +209,27 @@ function storeAsset(name: string): BuildAsset {
   };
 }
 
+/** A store the agent's first save made: a draft and no published revision (NAV-2). */
+function draftAsset(name: string): BuildAsset {
+  const stored = storeAsset(name);
+  return {
+    ...stored,
+    revision: 1,
+    draftRevision: 1,
+    scope: { kind: "workspace", workspaceId: "ws_1" },
+    config: {
+      ...stored.config,
+      migrations: [
+        { number: 1, name: "init", sha256: "0".repeat(64), sql: "create table visits ();" }
+      ]
+    }
+  };
+}
+
 interface RenderInput extends StoreAnswers {
   list?: BuildAssetRow[];
+  /** The page's store as a draft never published, with one migration. */
+  draft?: boolean;
   /** The instance has the module on and the reader may read stores. */
   on?: boolean;
   locale?: LocaleCode;
@@ -224,7 +243,11 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
       { kind: "agent", canCreate: false, canDelete: false },
       ...(input.on === false ? [] : [{ kind: "data_store", canCreate: true, canDelete: true }])
     ],
-    rights: resolveBuildRights({ permissions: ["config_assets.write"] }, context),
+    rights: {
+      ...resolveBuildRights({ permissions: ["config_assets.write"] }, context),
+      // ws_1 is the reader's Personal Workspace.
+      workspaces: [{ id: "ws_1", name: "Mine", member: true, personal: true }]
+    },
     loading: false,
     error: undefined,
     reload: async () => undefined,
@@ -238,11 +261,12 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
     }),
     useAsset: (_kind, name) => ({
       status: "ready",
-      asset: storeAsset(name),
+      asset: input.draft ? draftAsset(name) : storeAsset(name),
       loadedAt: 1,
       reload: async () => "loaded"
     }),
     exists: async () => true,
+    checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
       delete: async () => undefined,
@@ -334,9 +358,12 @@ describe("Data Stores in Build", () => {
     expect(list).toContain(">Visit log<");
     expect(list).toContain("Every visit of a page of the public site.");
     expect(list).toContain('href="/build/data-stores/visit-log"');
+    // One chip says whose a row is: "Personal" alone for the reader's own store.
+    expect(list).toContain(">Personal<");
+    expect(list).not.toContain(">Workspace<");
+    expect(list).not.toContain(">Instance<");
+    expect(list).not.toContain(">visit-log<");
     for (const said of [
-      ">Instance<",
-      ">Workspace<",
       'data-data-store-row-state="ready"',
       "Ready",
       "8 MB",
@@ -380,9 +407,10 @@ describe("Data Stores in Build", () => {
     const page = render({ kindPath: "data-stores", name: "visit-log" });
 
     expect(page).toContain(">Visit log</h1>");
-    // The id stands in the first section with a copy button, and not in the one-row head.
-    expect(page.indexOf("data-asset-identifier")).toBeGreaterThan(page.indexOf("</header>"));
-    expect(page).toMatch(/data-asset-identifier[^]*?>visit-log<\/code>/u);
+    // The head says what the store does after its name; its id is behind "Copy ID".
+    expect(page).toMatch(/data-slot="page-header-description"[^>]*>Every visit of a page/u);
+    expect(page).not.toContain(">visit-log<");
+    expect(page).toContain('aria-label="More actions"');
     expect(page).toContain('data-data-store-state="ready"');
     expect(page).toContain("8 MB of 500 MB");
     expect(page).toContain("0002_add_referrer");
@@ -451,6 +479,33 @@ describe("Data Stores in Build", () => {
     expect(german).toContain("Bereit");
     expect(german).toContain("8 MB von 500 MB");
     expect(german).toContain("etwa 1.240 Zeilen");
+  });
+});
+
+describe("A Data Store never published", () => {
+  it("shows its draft with the migrations a publish applies, and Publish, and reads no state of it", () => {
+    const states = {
+      "visit-log": {
+        status: "failed" as const,
+        message: "Data Store is not available",
+        retry: noop
+      }
+    };
+    for (const locale of ["en", "de"] as const) {
+      const markup = render(
+        { kindPath: "data-stores", name: "visit-log" },
+        { draft: true, states, locale }
+      );
+      expect(markup).toContain("data-data-store-draft");
+      expect(markup).toContain("0001_init.sql");
+      expect(markup).toContain("data-data-store-publish");
+      // Nothing of a database that does not exist yet is shown or said.
+      expect(markup).not.toContain("Data Store is not available");
+      expect(markup).not.toContain("data-data-store-state");
+    }
+    expect(
+      render({ kindPath: "data-stores", name: "visit-log" }, { draft: true, locale: "de" })
+    ).toContain("Entwurf · nicht veröffentlicht");
   });
 });
 

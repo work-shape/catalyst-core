@@ -185,7 +185,7 @@ export const administration = defineTranslations({
     userRightUsersManageDescription: "Create users and change their access and rights.",
     userRights: "Rights",
     userRightsDescription:
-      "The access level sets the defaults. Grant or revoke single rights for this user here.",
+      "The role sets the defaults. Grant or revoke single rights for this user here.",
     userRightsOverview: "Who may do what",
     userRightsOverviewUser: "User"
   },
@@ -376,7 +376,7 @@ export const administration = defineTranslations({
     userRightUsersManageDescription: "Benutzer anlegen sowie Zugriff und Rechte ändern.",
     userRights: "Rechte",
     userRightsDescription:
-      "Die Zugriffsstufe gibt die Rechte vor. Einzelne Rechte kannst du hier für diesen Benutzer vergeben oder entziehen.",
+      "Die Rolle gibt die Rechte vor. Einzelne Rechte kannst du hier für diesen Benutzer vergeben oder entziehen.",
     userRightsOverview: "Wer darf was",
     userRightsOverviewUser: "Benutzer"
   }

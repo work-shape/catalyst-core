@@ -70,7 +70,8 @@ export function createInstanceOperationCalls(
     config,
     modelGateway: input.modelGateway,
     hits: store.guardrails,
-    assets: store.configAssets
+    assets: store.configAssets,
+    shipped: store.guardrails
   });
   const operationCalls = createOperationCalls({
     clientInstanceId,

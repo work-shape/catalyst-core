@@ -10,6 +10,11 @@ export interface CardTargetProps {
    * per language by the caller, such as "Start chat with Kai" or "Trip planner öffnen".
    */
   label: string;
+  /**
+   * What a pointer resting on the card reads, such as the card's whole title where a long one
+   * is cut: text under the target's area shows no tooltip of its own.
+   */
+  title?: string;
   /** The caller's link or button. It takes the props it is given and passes `className` on. */
   children: ReactElement;
 }
@@ -26,11 +31,12 @@ export interface CardTargetProps {
  * a time with its full date as a tooltip or an id to copy, is wrapped in `CardReachable`.
  * A card whose reader has nowhere to go has no target and opens nothing.
  */
-export function CardTarget({ label, children }: CardTargetProps) {
+export function CardTarget({ label, title, children }: CardTargetProps) {
   const pressedAt = useRef<{ x: number; y: number } | undefined>(undefined);
   return (
     <Slot.Root
       aria-label={label}
+      title={title}
       data-card-target=""
       // The stretched area is placed against the card, so the target itself is not positioned.
       className="static cursor-pointer after:absolute after:inset-0 after:rounded-lg after:content-['']"

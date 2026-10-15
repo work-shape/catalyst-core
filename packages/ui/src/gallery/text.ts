@@ -85,6 +85,10 @@ export interface GalleryText
   availabilityAll: string;
   availabilitySelected: string;
   nameHint: string;
+  advanced: string;
+  address: string;
+  addressHint: string;
+  addressTaken: string;
   nameError: string;
   description: string;
   liveChanges: string;
@@ -102,6 +106,8 @@ export interface GalleryText
   menuEdit: string;
   menuDuplicate: string;
   menuCopyLink: string;
+  menuCopyId: string;
+  menuIdCopied: string;
   menuRunNow: string;
   menuRunNowReason: string;
   menuLock: string;
@@ -295,6 +301,10 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     availabilityAll: "All workspaces",
     availabilitySelected: "Selected workspaces",
     nameHint: "Shown in the agent list and in every conversation.",
+    advanced: "Advanced",
+    address: "Address",
+    addressHint: "It cannot be changed later.",
+    addressTaken: "This address is taken. Choose another name or address.",
     nameError: "Enter a name with at least three characters.",
     description: "Description",
     liveChanges: "Live changes",
@@ -313,6 +323,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     menuEdit: "Edit",
     menuDuplicate: "Duplicate",
     menuCopyLink: "Copy link",
+    menuCopyId: "Copy ID",
+    menuIdCopied: "ID copied",
     menuRunNow: "Run now",
     menuRunNowReason: "A run is still in progress.",
     menuLock: "Lock",
@@ -541,6 +553,10 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     availabilityAll: "Allen Workspaces",
     availabilitySelected: "Ausgewählten Workspaces",
     nameHint: "Erscheint in der Agentenliste und in jeder Unterhaltung.",
+    advanced: "Erweitert",
+    address: "Adresse",
+    addressHint: "Sie lässt sich später nicht ändern.",
+    addressTaken: "Diese Adresse ist vergeben. Wähle einen anderen Namen oder eine andere Adresse.",
     nameError: "Gib einen Namen mit mindestens drei Zeichen ein.",
     description: "Beschreibung",
     liveChanges: "Live-Änderungen",
@@ -559,6 +575,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     menuEdit: "Bearbeiten",
     menuDuplicate: "Duplizieren",
     menuCopyLink: "Link kopieren",
+    menuCopyId: "ID kopieren",
+    menuIdCopied: "ID kopiert",
     menuRunNow: "Jetzt ausführen",
     menuRunNowReason: "Ein Lauf ist noch nicht abgeschlossen.",
     menuLock: "Sperren",

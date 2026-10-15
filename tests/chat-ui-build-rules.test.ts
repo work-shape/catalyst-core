@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { addressOf } from "@vivd-catalyst/ui";
 import {
+  addressBlocksCreate,
+  addressCheckOf,
   assetIdFromTitle,
   buildScopes,
   PendingApprovalError,
@@ -31,6 +34,89 @@ describe("Studio ids", () => {
     expect(assetIdFromTitle("")).toBe("");
   });
 });
+
+// UXA-2: a new asset asks for the name, and its address follows it until somebody types one.
+// Fails without the change: the dialogs held the id as a field of its own, checked by nothing
+// before the save.
+describe("the address of a new asset", () => {
+  it("follows the name until it is edited by hand, and then stays as typed", () => {
+    expect(addressOf({ name: "Tax Review" }, assetIdFromTitle)).toBe("tax_review");
+    expect(addressOf({ name: "Tax Review 2026" }, assetIdFromTitle)).toBe("tax_review_2026");
+    const typed = { name: "Tax Review", typedAddress: "tax" };
+    expect(addressOf(typed, assetIdFromTitle)).toBe("tax");
+    expect(addressOf({ ...typed, name: "Steuer-Prüfung" }, assetIdFromTitle)).toBe("tax");
+    // Emptied by hand it stays empty, so it does not jump back while the person retypes it.
+    expect(addressOf({ name: "Tax Review", typedAddress: "" }, assetIdFromTitle)).toBe("");
+  });
+
+  it("names why an address is refused, in the reader's language, and blocks the create", () => {
+    const en = createTranslationContext("en").t;
+    const de = createTranslationContext("de").t;
+    const taken = { ok: true as const, found: refusedName("name_taken") };
+    const invalid = { ok: true as const, found: refusedName("name_invalid") };
+    expect(addressCheckOf(taken, en)).toEqual({
+      state: "refused",
+      reason: "This address is taken. Choose another name or address."
+    });
+    expect(addressCheckOf(taken, de)).toEqual({
+      state: "refused",
+      reason: "Diese Adresse ist vergeben. Wähle einen anderen Namen oder eine andere Adresse."
+    });
+    expect(addressCheckOf(invalid, en)).toMatchObject({
+      state: "refused",
+      reason: expect.stringMatching(/^This address does not work\./u)
+    });
+    expect(addressCheckOf({ ok: true, found: { available: true } }, en)).toEqual({
+      state: "free"
+    });
+    // A refusal of the check itself is the instance's sentence; a lost connection says
+    // nothing of the name, and the create meets the instance's answer.
+    const forbidden = new ApiError(403, "Missing permission agent.write", {
+      error: { code: "FORBIDDEN", message: "Missing permission agent.write" }
+    });
+    expect(addressCheckOf({ ok: false, error: forbidden }, en)).toEqual({
+      state: "refused",
+      reason: "Missing permission agent.write"
+    });
+    expect(addressCheckOf({ ok: false, error: new TypeError("Failed to fetch") }, en)).toEqual({
+      state: "unchecked"
+    });
+
+    expect(addressBlocksCreate({ state: "checking" })).toBe(false);
+    expect(addressBlocksCreate({ state: "refused", reason: "taken" })).toBe(true);
+    expect(addressBlocksCreate({ state: "free" })).toBe(false);
+    expect(addressBlocksCreate({ state: "unchecked" })).toBe(false);
+  });
+
+  it("asks the instance with the name and the owner Studio writes in", async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        calls.push({ url: request.url, body: JSON.parse(await request.text()) });
+        return Response.json({ available: true });
+      }
+    });
+    await expect(
+      createAssetWrites(client).checkName({
+        kind: "agent",
+        name: "tax_review",
+        workspaceId: "cws_team"
+      })
+    ).resolves.toEqual({ available: true });
+    expect(calls).toEqual([
+      {
+        url: "https://chat.example/api/v1/assets/agent/check-name",
+        body: { name: "tax_review", workspaceId: "cws_team" }
+      }
+    ]);
+  });
+});
+
+function refusedName(reason: "name_invalid" | "name_taken") {
+  return { available: false as const, reason, message: "The instance's own sentence" };
+}
 
 describe("Studio rights", () => {
   const rights = (permissions: string[], namespaces: Namespaces = []) =>
@@ -162,7 +248,8 @@ describe("Studio scope", () => {
         ...platformContext([], instanceActions(permissions)),
         workspaces: [
           { ...team, member: true, actions },
-          // A personal workspace is no scope of Studio: what is made there starts hidden.
+          // The reader's Personal Workspace is a scope of Studio beside the others, named
+          // "Personal": what the reader's agent made there is found and changed there.
           {
             id: "cws_mine",
             name: "Mine",
@@ -179,16 +266,23 @@ describe("Studio scope", () => {
 
     expect(member.readsAny).toBe(true);
     expect(member.readsInstance).toBe(false);
-    expect(member.workspaces).toEqual([{ id: "cws_team", name: "Team", member: true }]);
+    expect(member.workspaces).toEqual([
+      { id: "cws_team", name: "Team", member: true },
+      { id: "cws_mine", name: "Mine", member: true, personal: true }
+    ]);
     expect(member.reads("agent")).toBe(true);
     expect(member.may("write", { kind: "agent", workspaceId: "cws_team" })).toBe(true);
     expect(member.may("delete", { kind: "agent", workspaceId: "cws_team" })).toBe(false);
     expect(member.may("write", { kind: "skill", workspaceId: "cws_team" })).toBe(false);
-    expect(member.may("write", { kind: "agent", workspaceId: "cws_mine" })).toBe(false);
+    expect(member.may("write", { kind: "agent", workspaceId: "cws_mine" })).toBe(true);
+    expect(member.may("write", { kind: "agent", workspaceId: "cws_other" })).toBe(false);
     expect(member.may("write", { kind: "agent" })).toBe(false);
     expect(member.mayCreate("agent", "cws_team")).toBe(true);
     expect(member.mayCreate("agent")).toBe(false);
-    expect(buildScopes(member)).toEqual([{ kind: "workspace", workspaceId: "cws_team" }]);
+    expect(buildScopes(member)).toEqual([
+      { kind: "workspace", workspaceId: "cws_team" },
+      { kind: "workspace", workspaceId: "cws_mine" }
+    ]);
     expect(resolveBuildScope(member, undefined, undefined)).toEqual({
       kind: "workspace",
       workspaceId: "cws_team"
@@ -200,7 +294,8 @@ describe("Studio scope", () => {
 
     expect(buildScopes(admin)).toEqual([
       { kind: "instance" },
-      { kind: "workspace", workspaceId: "cws_team" }
+      { kind: "workspace", workspaceId: "cws_team" },
+      { kind: "workspace", workspaceId: "cws_mine" }
     ]);
     expect(resolveBuildScope(admin, undefined, "cws_team")).toEqual({ kind: "instance" });
     expect(resolveBuildScope(admin, "cws_team", undefined)).toEqual({

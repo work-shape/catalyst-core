@@ -6,6 +6,7 @@ import {
   dataStoreStateView,
   formatDataStoreSize
 } from "./data-store-model";
+import { dataStoreNeverPublished } from "./data-store-draft";
 import { DataStorePage } from "./data-store-page";
 import { useDataStoreSource, type DataStoreSource } from "./data-store-source";
 
@@ -107,15 +108,17 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
     rowText: (asset) => asset.description,
     badges: (asset, t) => (
       <>
-        <Chip size="sm">
-          {t(
-            asset.scope.kind === "workspace"
-              ? "dataStores.scopeWorkspace"
-              : "dataStores.scopeInstance"
-          )}
-        </Chip>
-        <DataStoreRowState name={asset.name} useSource={useSource} />
-        <DataStoreRowMeasured name={asset.name} useSource={useSource} />
+        {/* A store never published has no database, so there is no state to read. */}
+        {dataStoreNeverPublished(asset) ? (
+          <Badge tone="warning" data-data-store-row-draft="">
+            {t("dataStores.draftUnpublished")}
+          </Badge>
+        ) : (
+          <>
+            <DataStoreRowState name={asset.name} useSource={useSource} />
+            <DataStoreRowMeasured name={asset.name} useSource={useSource} />
+          </>
+        )}
       </>
     )
   };

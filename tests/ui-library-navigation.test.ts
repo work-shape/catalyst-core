@@ -27,6 +27,7 @@ import {
   type SubRailProps,
   Tabs,
   TabsContent,
+  TabsDisclosure,
   TabsLink,
   TabsList,
   TabsNav,
@@ -67,6 +68,35 @@ describe("navigation, page structure and data components", () => {
     expect(markup.match(/role="tab"/gu)).toHaveLength(2);
     expect(markup).toMatch(/role="tab"[^>]*aria-selected="true"/u);
     expect(markup).toContain('role="tabpanel"');
+  });
+
+  it("sets what stands at the end of a tab row outside the set of tabs", () => {
+    const row = (open: boolean) =>
+      render(
+        createElement(
+          Tabs,
+          { defaultValue: "a" },
+          createElement(
+            TabsList,
+            {
+              label: "Views",
+              end: createElement(TabsDisclosure, { open, onOpenChange() {} }, "Technical details")
+            },
+            createElement(TabsTrigger, { value: "a" }, "First")
+          )
+        )
+      );
+
+    const folded = row(false);
+    const list = /<div[^>]*role="tablist"[^>]*>.*?<\/div>/u.exec(folded)?.[0] ?? "";
+    expect(list).toContain("First");
+    expect(list).not.toContain("Technical details");
+    expect(folded.indexOf("Technical details")).toBeGreaterThan(folded.indexOf("First"));
+    expect(folded).toMatch(
+      /<button type="button" aria-expanded="false"[^>]*><span[^>]*>Technical details/u
+    );
+    expect(row(true)).toMatch(/aria-expanded="true"[^>]*><span[^>]*>Technical details/u);
+    expect(folded).not.toMatch(/role="tab"[^>]*>Technical details/u);
   });
 
   it("reads a tab's count out with its noun, and shows it quiet unless it is told to stand out", () => {
@@ -454,8 +484,11 @@ describe("navigation, page structure and data components", () => {
     expect(head).toMatch(
       /<a href="\/agents"[^>]*data-slot="page-header-back"[^>]*aria-label="WAY"/u
     );
-    // The name is cut last and says itself whole in a tooltip.
-    expect(head).toMatch(/<h1[^>]*class="[^"]*truncate[^"]*"[^>]*title="NAME"[^>]*>NAME<\/h1>/u);
+    // The name gives way last: it takes a second line, is then cut and says itself whole on
+    // hover. Unseen beside it, the name on one line keeps the row's least width.
+    expect(head).toMatch(
+      /<h1[^>]*class="[^"]*line-clamp-2[^"]*"[^>]*title="NAME"[^>]*>NAME<\/h1><span aria-hidden="true" data-name="NAME"/u
+    );
     expect(head).toMatch(/data-slot="page-header-description"[^>]*>ABOUT</u);
     expect(head).toMatch(/shrink-\[1000000000000\][^>]*><div[^>]*data-slot="page-header-chips"/u);
     const list = render(createElement(PageHeader, { title: "NAME", description: "ABOUT" }));

@@ -3235,7 +3235,8 @@ test("Studio opens on a list, and a list and an asset each have an address", asy
   await page.getByRole("button", { name: "New skill", exact: true }).first().click();
   const newSkill = page.getByRole("dialog", { name: "New skill", exact: true });
   await newSkill.getByRole("textbox", { name: /^Title/u }).fill("Workflow review");
-  await expect(newSkill.getByRole("textbox", { name: /^Id/u })).toHaveValue("workflow_review");
+  await newSkill.getByRole("button", { name: "Advanced", exact: true }).click();
+  await expect(newSkill.getByRole("textbox", { name: /^Address/u })).toHaveValue("workflow_review");
   await newSkill.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(newSkill).toBeHidden();
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
@@ -3491,10 +3492,13 @@ test("superadmin manages config assets with validation and conflict protection",
     await openList("Skills");
     // An empty list offers the one button twice: in its head and with its sentence.
     await page.getByRole("button", { name: "New skill", exact: true }).first().click();
-    // The dialog takes the name and makes the id from it.
+    // The dialog takes the name and makes the address from it, under "Advanced".
     const newSkill = page.getByRole("dialog", { name: "New skill", exact: true });
     await newSkill.getByRole("textbox", { name: /^Title/u }).fill("Config E2E skill");
-    await expect(newSkill.getByRole("textbox", { name: /^Id/u })).toHaveValue("config_e2e_skill");
+    await newSkill.getByRole("button", { name: "Advanced", exact: true }).click();
+    await expect(newSkill.getByRole("textbox", { name: /^Address/u })).toHaveValue(
+      "config_e2e_skill"
+    );
     await newSkill.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(fieldControl("Title")).toHaveValue("Config E2E skill");
     await fieldControl("Description").fill("Verifies config asset editing");
@@ -3813,9 +3817,9 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
   };
   const dialog = page.getByRole("dialog", { name: "New user" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Access level").locator('option[value="superadmin"]')).toHaveCount(
-    0
-  );
+  await expect(
+    dialog.getByLabel("Role", { exact: true }).locator('option[value="superadmin"]')
+  ).toHaveCount(0);
   await dialog.getByLabel("Display label").fill(createdUser.displayLabel);
   await dialog.getByLabel("Email").fill(createdUser.email);
   await dialog.getByLabel("Initial password").fill(createdUser.password);

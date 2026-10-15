@@ -143,6 +143,8 @@ export const assetSchema = z.object({
   revision: revisionNumberSchema,
   ...pointerShape,
   config: configAssetConfigSchema,
+  /** The active account's display label for the Workflow revision returned by this read. */
+  runsAs: z.string().optional(),
   /**
    * The revision `config` and `files` are of, for a kind with a draft and a published revision:
    * the draft where the call names none.
@@ -371,6 +373,26 @@ export const validateAssetRequestSchema = z.object({
   config: assetDefinitionSchema,
   workspaceId: workspaceIdSchema
 });
+
+/** A name a create would take, asked before the create. */
+export const checkAssetNameRequestSchema = z.object({
+  // The kind decides empty and long names; NUL uses the definition transport rule.
+  name: nameText(z.string()),
+  workspaceId: workspaceIdSchema
+});
+
+/**
+ * Whether a create would take the name. `name_invalid` breaks the kind's rule for names,
+ * `name_taken` is the id of another asset; `message` says which rule or which id, in English.
+ */
+export const checkAssetNameResponseSchema = z.discriminatedUnion("available", [
+  z.object({ available: z.literal(true) }),
+  z.object({
+    available: z.literal(false),
+    reason: z.enum(["name_invalid", "name_taken"]),
+    message: z.string()
+  })
+]);
 
 export const assetValidationIssueSchema = z.object({
   message: z.string(),

@@ -21,12 +21,16 @@ export const build = defineTranslations({
     "build.copyTitle": "{title} (copy)",
     "build.copyToEdit": "Copy to edit",
     "build.createContinue": "Continue",
-    "build.createId": "Id",
-    "build.createIdHint":
-      "Lowercase letters, digits, underscores and hyphens. It cannot be changed later.",
-    "build.createIdHintNamespace": "The full id will be {id}. It cannot be changed later.",
+    "build.createAdvanced": "Advanced",
+    "build.createAddress": "Address",
+    "build.createAddressHint": "Made from the name. It cannot be changed later.",
+    "build.createAddressHintNamespace":
+      "The full address will be {id}. It cannot be changed later.",
+    "build.addressTaken": "This address is taken. Choose another name or address.",
+    "build.addressInvalid":
+      "This address does not work. Use lowercase letters, digits and _, starting with a letter.",
     "build.createNamespace": "Namespace",
-    "build.createNamespaceHint": "The id starts with the prefix of the Namespace.",
+    "build.createPurpose": "What should it do?",
     "build.createNoNamespace": "No Namespace",
     "build.defaultModel": "Default model",
     "build.discard": "Discard",
@@ -57,6 +61,7 @@ export const build = defineTranslations({
     "build.namespaceAll": "All Namespaces",
     "build.scopeFilter": "Scope",
     "build.scopeInstance": "Instance",
+    "build.scopePersonal": "Personal",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio is not available to you. It opens for people who hold a right on an agent or a skill.",
@@ -148,13 +153,17 @@ export const build = defineTranslations({
     "build.copyTitle": "{title} (Kopie)",
     "build.copyToEdit": "Zum Bearbeiten kopieren",
     "build.createContinue": "Weiter",
-    "build.createId": "Kennung",
-    "build.createIdHint":
-      "Kleinbuchstaben, Ziffern, Unterstriche und Bindestriche. Sie lässt sich später nicht ändern.",
-    "build.createIdHintNamespace":
-      "Die vollständige Kennung lautet {id}. Sie lässt sich später nicht ändern.",
+    "build.createAdvanced": "Erweitert",
+    "build.createAddress": "Adresse",
+    "build.createAddressHint": "Aus dem Namen gebildet. Sie lässt sich später nicht ändern.",
+    "build.createAddressHintNamespace":
+      "Die vollständige Adresse lautet {id}. Sie lässt sich später nicht ändern.",
+    "build.addressTaken":
+      "Diese Adresse ist vergeben. Wähle einen anderen Namen oder eine andere Adresse.",
+    "build.addressInvalid":
+      "Diese Adresse geht so nicht. Nimm Kleinbuchstaben, Ziffern und _, am Anfang einen Buchstaben.",
     "build.createNamespace": "Namespace",
-    "build.createNamespaceHint": "Die Kennung beginnt mit dem Präfix des Namespace.",
+    "build.createPurpose": "Was soll er tun?",
     "build.createNoNamespace": "Kein Namespace",
     "build.defaultModel": "Standardmodell",
     "build.discard": "Verwerfen",
@@ -187,6 +196,7 @@ export const build = defineTranslations({
     "build.namespaceAll": "Alle Namespaces",
     "build.scopeFilter": "Geltungsbereich",
     "build.scopeInstance": "Instanz",
+    "build.scopePersonal": "Persönlich",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio steht dir nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",

@@ -181,7 +181,7 @@ test("anchored overlays sit on the raised surface and answer the keyboard", asyn
   const menu = overlays.getByRole("menu");
   await expectRaised(menu);
   const runNow = menu.getByRole("menuitem", { name: "Run now" });
-  for (const item of ["Edit", "Duplicate", "Copy link", "Run now"]) {
+  for (const item of ["Edit", "Duplicate", "Copy link", "Copy ID", "Run now"]) {
     await page.keyboard.press("ArrowDown");
     await expect(menu.getByRole("menuitem", { name: item })).toBeFocused();
   }

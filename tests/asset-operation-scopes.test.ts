@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { validateConfigAssetBundle } from "@vivd-catalyst/config-schema";
+import { SKILL_NAME_RULE, validateConfigAssetBundle } from "@vivd-catalyst/config-schema";
 import type { AssetScope, CollaborationWorkspaceId } from "@vivd-catalyst/core";
 import {
   SERVICE_HEADER,
@@ -232,6 +232,211 @@ describe("assets.validate", () => {
       { params: { kind: "agent" }, payload: { config: agent("kai-intake") } },
       t.forbidden("agent.read", "no_grant")
     );
+  });
+});
+
+describe("assets.check_name", () => {
+  it("says before a create whether the name breaks the kind's rule or is taken, and writes nothing", async () => {
+    const t = await setupNamespace();
+    const check = async (userId: string, kind: "agent" | "skill", name: string) =>
+      (
+        await t.expectOk(userId, "assets.check_name", { params: { kind }, payload: { name } })
+      ).json();
+
+    expect(await check(t.kai.id, "skill", "kai-guide")).toEqual({ available: true });
+    expect(await t.stored("skill", "kai-guide")).toBeUndefined();
+    // The skill's own rule decides, in the words a refused put uses.
+    expect(await check(t.kai.id, "skill", "kai-two words")).toEqual({
+      available: false,
+      reason: "name_invalid",
+      message: SKILL_NAME_RULE
+    });
+    const put = await t.put(t.kai.id, "agent", "kai-helper");
+    expect(await check(t.kai.id, "agent", "kai-helper")).toEqual({
+      available: false,
+      reason: "name_taken",
+      message: "Config agent 'kai-helper' is not at the revision the call names"
+    });
+    // A fresh create names null, so a deleted asset still reserves its name.
+    const { revision } = z.object({ revision: z.number() }).parse(put.json());
+    await t.expectOk(t.kai.id, "assets.delete", {
+      params: { kind: "agent", name: "kai-helper" },
+      payload: { expectedRevision: revision }
+    });
+    expect(await check(t.kai.id, "agent", "kai-helper")).toMatchObject({
+      available: false,
+      reason: "name_taken"
+    });
+
+    // The right is the one a create asks, in the Namespace the name falls in.
+    await t.expectRefused(
+      t.kai.id,
+      "assets.check_name",
+      { params: { kind: "agent" }, payload: { name: "lena-helper" } },
+      t.forbidden("agent.write", "no_grant")
+    );
+    // The put still refuses what the check refused.
+    await t.expectRefused(
+      t.kai.id,
+      "assets.put",
+      {
+        params: { kind: "skill", name: "kai-two words" },
+        payload: { config: skill("kai-two words"), expectedRevision: null }
+      },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+  });
+
+  it("tells a write-only caller exactly the create refusal for unreadable active and deleted names", async () => {
+    const t = await setupNamespace();
+    const check = (name: string) =>
+      t.call(t.lena.id, "assets.check_name", { params: { kind: "agent" }, payload: { name } });
+    for (const name of ["kai-private", "kai-free"]) {
+      await t.expectRefused(
+        t.lena.id,
+        "assets.check_name",
+        { params: { kind: "agent" }, payload: { name } },
+        t.forbidden("agent.write", "no_grant")
+      );
+    }
+    await t.grant(t.lena.id, "agent.write", { namespace: "kai-" });
+    const workspaceId = await createWorkspace(t, "Confidential workspace");
+    for (const owner of [undefined, workspaceId]) {
+      const name = owner === undefined ? "kai-private" : "kai-private-elsewhere";
+      const scope = owner === undefined ? {} : { workspaceId: owner };
+      const params = { kind: "agent", name };
+      await t.expectOk(t.admin.id, "assets.put", {
+        params,
+        payload: {
+          ...scope,
+          config: agent(name, { displayName: "Confidential title" }),
+          expectedRevision: null
+        }
+      });
+      await t.expectRefused(
+        t.lena.id,
+        "assets.get",
+        { params },
+        t.forbidden("agent.read", "no_grant")
+      );
+      const create = () =>
+        t.expectRefused(
+          t.lena.id,
+          "assets.put",
+          { params, payload: { config: agent(name), expectedRevision: null } },
+          { status: 412, code: "REVISION_CONFLICT" }
+        );
+      const activeCreate = await create();
+      const activeCheck = await check(name);
+      expect(activeCheck.statusCode).toBe(200);
+      expect(activeCheck.json()).toEqual({
+        available: false,
+        reason: "name_taken",
+        message: activeCreate.message
+      });
+      const stored = await t.stored("agent", name);
+      await t.expectOk(t.admin.id, "assets.delete", {
+        params,
+        payload: { ...scope, expectedRevision: stored?.revision }
+      });
+      expect(await create()).toEqual(activeCreate);
+      expect((await check(name)).json()).toEqual(activeCheck.json());
+    }
+    expect((await check("kai-free")).json()).toEqual({ available: true });
+    await t.expectOk(t.lena.id, "assets.put", {
+      params: { kind: "agent", name: "kai-free" },
+      payload: { config: agent("kai-free"), expectedRevision: null }
+    });
+  });
+
+  it("uses creation's name validation and reason, including dot names and unstorable text", async () => {
+    const t = await setupNamespace();
+    for (const name of [".", "..", "", "bad\ud800name"]) {
+      const validation = z
+        .object({ valid: z.literal(false), issues: z.array(z.object({ message: z.string() })) })
+        .parse(
+          (
+            await t.expectOk(t.admin.id, "assets.validate", {
+              params: { kind: "agent" },
+              payload: { config: agent(name) }
+            })
+          ).json()
+        );
+      const answer = await t.expectOk(t.admin.id, "assets.check_name", {
+        params: { kind: "agent" },
+        payload: { name }
+      });
+      expect(answer.json()).toEqual({
+        available: false,
+        reason: "name_invalid",
+        message: validation.issues[0]?.message
+      });
+    }
+    // The check has no extra length rule: an agent may use a long name, while a skill still
+    // refuses a space beyond the old check-only cap with creation's own reason.
+    const longName = "a".repeat(201);
+    expect(
+      (
+        await t.expectOk(t.admin.id, "assets.validate", {
+          params: { kind: "agent" },
+          payload: { config: agent(longName) }
+        })
+      ).json()
+    ).toMatchObject({ valid: true });
+    expect(
+      (
+        await t.expectOk(t.admin.id, "assets.check_name", {
+          params: { kind: "agent" },
+          payload: { name: longName }
+        })
+      ).json()
+    ).toEqual({ available: true });
+    const invalidSkillName = `${longName} `;
+    const invalidSkill = z.object({ issues: z.array(z.object({ message: z.string() })) }).parse(
+      (
+        await t.expectOk(t.admin.id, "assets.validate", {
+          params: { kind: "skill" },
+          payload: { config: skill(invalidSkillName) }
+        })
+      ).json()
+    );
+    expect(
+      (
+        await t.expectOk(t.admin.id, "assets.check_name", {
+          params: { kind: "skill" },
+          payload: { name: invalidSkillName }
+        })
+      ).json()
+    ).toEqual({
+      available: false,
+      reason: "name_invalid",
+      message: invalidSkill.issues[0]?.message
+    });
+    const name = "bad\u0000name";
+    const validateError = await t.expectRefused(
+      t.admin.id,
+      "assets.validate",
+      {
+        params: { kind: "agent" },
+        payload: { config: agent(name) }
+      },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+    const checkError = await t.expectRefused(
+      t.admin.id,
+      "assets.check_name",
+      {
+        params: { kind: "agent" },
+        payload: { name }
+      },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+    const reasons = (details: unknown) =>
+      z
+        .object({ issues: z.array(z.object({ message: z.string() })) })
+        .parse(details)
+        .issues.map(({ message }) => message);
+    expect(reasons(checkError.details)).toEqual(reasons(validateError.details));
   });
 });
 

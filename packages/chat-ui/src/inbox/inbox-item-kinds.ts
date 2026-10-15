@@ -1,4 +1,4 @@
-import { BookOpen, FileText, Zap, type LucideIcon } from "lucide-react";
+import { BookOpen, FileText, LayoutGrid, Workflow, Zap, type LucideIcon } from "lucide-react";
 import { createContext, createElement, useContext, type ComponentType } from "react";
 import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { OperationCallBody } from "../approvals/operation-call-body";
@@ -139,10 +139,40 @@ const operationCall: InboxItemKind = {
 };
 
 /**
+ * A publish of an App or a Workflow that waits for an approver: a held call of `assets.publish`
+ * whose item shows what the version makes live. The approver cannot edit it, so there is no
+ * request for changes.
+ */
+function publishKind(kind: string, label: TranslationKey, icon: LucideIcon): InboxItemKind {
+  return {
+    ...operationCall,
+    kind,
+    label,
+    icon,
+    itemIcon: () => undefined,
+    title: () => undefined,
+    subject(item) {
+      return parseOperationCallPreview(item.preview)?.review?.title;
+    },
+    heading: (_item, t) => t(label),
+    rowDetail: (item) => parseOperationCallPreview(item.preview)?.review?.title,
+    decisions: [
+      { decision: "reject", label: "operations.callDecline" },
+      { decision: "approve", label: "operations.publishApprove" }
+    ]
+  };
+}
+
+/**
  * The item kinds of the platform. This is deliberately not the client widget registry: an item
  * decides a change to the instance, so its body must not be replaceable by a client assembly.
  */
-export const inboxItemKinds: readonly InboxItemKind[] = [skillChange, operationCall];
+export const inboxItemKinds: readonly InboxItemKind[] = [
+  skillChange,
+  operationCall,
+  publishKind("app_publish", "inbox.kindAppPublish", LayoutGrid),
+  publishKind("workflow_publish", "inbox.kindWorkflowPublish", Workflow)
+];
 
 const InboxItemKindsContext = createContext<readonly InboxItemKind[]>(inboxItemKinds);
 

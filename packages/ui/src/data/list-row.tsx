@@ -25,7 +25,7 @@ export interface ListRowProps extends Omit<HTMLAttributes<HTMLLIElement>, "title
   descriptionWraps?: boolean | "always";
   /** A small avatar or icon before the status line, such as the person the line names. */
   descriptionLeading?: ReactNode;
-  /** Chips after the title, such as the scope. */
+  /** Chips after the title, such as the scope. They wrap below a title they do not fit beside. */
   chips?: ReactNode;
   /** When it last changed, at the row's end. */
   time?: ReactNode;
@@ -95,8 +95,15 @@ export function ListRow({
       ) : null}
       {leading === undefined ? null : <span className="flex shrink-0 items-center">{leading}</span>}
       <span className="grid min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className={cn("truncate", selected && "font-medium")}>{title}</span>
+        {/* The title comes first: chips that do not fit beside it go to the line below. */}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          {/* A long title takes a second line, is then cut and reads whole on hover. */}
+          <span
+            className={cn("line-clamp-2 max-w-full wrap-anywhere", selected && "font-medium")}
+            title={typeof title === "string" ? title : undefined}
+          >
+            {title}
+          </span>
           {chips}
         </span>
         {description === undefined ? null : descriptionLeading === undefined ? (

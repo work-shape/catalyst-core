@@ -1,8 +1,8 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
 import { invalidateOfferedAgents } from "../api/agent-placement-mutations";
-import { createAssetWrites, type AvailableIn } from "../api/asset-writes";
+import { createAssetWrites, type AvailableIn, type NameCheckAnswer } from "../api/asset-writes";
 import { usePlatformContextQuery } from "../api/workspace-queries";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useTranslation } from "../i18n";
@@ -12,11 +12,13 @@ import type { BuildAsset, BuildAssetRow } from "./build-asset-kind";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
 import {
   AGENT_ASSET_KIND,
+  buildScopes,
   buildScopeValue,
   readLastBuildScope,
   resolveBuildRights,
   resolveBuildScope,
   storeLastBuildScope,
+  subscribeBuildScope,
   type BuildRights,
   type BuildScope
 } from "./build-rights";
@@ -30,7 +32,7 @@ const BUILD_LIST_PAGE_SIZE = 50;
 /** How many revisions one read of an asset's history asks for. */
 const BUILD_HISTORY_PAGE_SIZE = 50;
 
-/** How long the reader may pause typing before the search asks the instance. */
+/** How long the reader may pause typing before a search or a name check asks the instance. */
 export const BUILD_SEARCH_DELAY_MS = 250;
 
 /** What narrows a list. Both parts are answered by the instance. */
@@ -142,6 +144,8 @@ export interface BuildSource {
    * the instance could not say.
    */
   exists(kind: string, name: string): Promise<boolean | undefined>;
+  /** Whether a new asset of the kind could take the name, where Studio would make it. */
+  checkName(kind: string, name: string): Promise<NameCheckAnswer>;
   writes: BuildWrites;
   /**
    * The owner Studio works in for a kind a workspace can own: lists, reads and writes of such
@@ -152,6 +156,13 @@ export interface BuildSource {
   chooseScope?(scope: BuildScope): void;
   /** Whether the kind's assets are listed, read and written in the scope. */
   scoped?(kind: string): boolean;
+  /**
+   * Opens the dock with a new conversation with an agent that builds assets, `prompt` in its
+   * composer: "New" of a kind it creates goes there instead of its dialog. Its first save makes
+   * the asset owned by the conversation's workspace, the open one: absent where no such agent is
+   * offered, and where the scope is another owner, whose New keeps its dialog (WS-OWN-1a).
+   */
+  buildWithAgent?(prompt: string): void;
 }
 
 /**
@@ -160,7 +171,8 @@ export interface BuildSource {
  * asset. Nothing here reads the whole set of assets.
  */
 export function useBuildSource(): BuildSource {
-  const { apiBaseUrl, authScope, client, user, config, activeWorkspace } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, user, config, activeWorkspace, buildWithAgent } =
+    useSettingsPage();
   const { locale, t } = useTranslation();
   const queryClient = useQueryClient();
   const contextQuery = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
@@ -168,7 +180,11 @@ export function useBuildSource(): BuildSource {
   const rights = useMemo(() => resolveBuildRights(user, context), [context, user]);
   const management = config.features.configAssets;
   const assetsKey = workspaceQueryKeys.assets(apiBaseUrl, authScope);
-  const [chosenScope, setChosenScope] = useState(readLastBuildScope);
+  const chosenScope = useSyncExternalStore(
+    subscribeBuildScope,
+    readLastBuildScope,
+    () => undefined
+  );
   const scope = resolveBuildScope(rights, chosenScope, activeWorkspace?.id);
   const scopedKinds = new Set(
     (context?.kinds ?? [])
@@ -182,6 +198,10 @@ export function useBuildSource(): BuildSource {
     const workspaceId = workspaceOf(kind);
     return workspaceId === undefined ? {} : { workspaceId };
   };
+  /** The other owners Studio offers, where an asset missing in the scope is looked for. */
+  const otherScopes = buildScopes(rights).filter(
+    (other) => buildScopeValue(other) !== buildScopeValue(scope)
+  );
 
   const kinds = useMemo<BuildKindState[]>(() => {
     // The instance's own switches for the two kinds it has always had. A kind that brings no
@@ -232,11 +252,13 @@ export function useBuildSource(): BuildSource {
       : undefined,
     reload: () => contextQuery.refetch(),
     scope,
-    chooseScope: (next) => {
-      storeLastBuildScope(buildScopeValue(next));
-      setChosenScope(buildScopeValue(next));
-    },
+    chooseScope: (next) => storeLastBuildScope(buildScopeValue(next)),
     scoped: (kind) => scopedKinds.has(kind),
+    ...(buildWithAgent !== undefined &&
+    scope.kind === "workspace" &&
+    scope.workspaceId === activeWorkspace?.id
+      ? { buildWithAgent }
+      : {}),
     useList(kind, filter) {
       const text = filter.text.trim();
       const owner = inScope(kind);
@@ -285,6 +307,44 @@ export function useBuildSource(): BuildSource {
         refetchOnReconnect: false,
         retry: false
       });
+      // A page reached by a link, by its address or after a reload names the asset alone,
+      // not its owner. Where Studio is set to an owner that does not have it, the page looks
+      // in the other owners Studio offers and sets Studio to the first that has it, so every
+      // way to the page reads the asset where it is.
+      const missingHere =
+        query.error !== null && !query.isFetching && apiErrorCode(query.error) === "NOT_FOUND";
+      const searched = missingHere && scopedKinds.has(kind) && otherScopes.length > 0;
+      const elsewhere = useQuery({
+        queryKey: ["asset-owner", apiBaseUrl, authScope, kind, buildScopeValue(scope), name],
+        enabled: searched,
+        queryFn: async ({ signal }) => {
+          const found = await Promise.all(
+            otherScopes.map((other) =>
+              client.assets
+                .get({
+                  params: { kind, name },
+                  query: other.kind === "workspace" ? { workspaceId: other.workspaceId } : {},
+                  signal
+                })
+                .then(
+                  () => true,
+                  () => false
+                )
+            )
+          );
+          const owner = otherScopes.find((_, index) => found[index]);
+          return owner === undefined ? null : buildScopeValue(owner);
+        },
+        gcTime: 0,
+        staleTime: Infinity,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        retry: false
+      });
+      const foundIn = elsewhere.data;
+      useEffect(() => {
+        if (typeof foundIn === "string") storeLastBuildScope(foundIn);
+      }, [foundIn]);
       // What was read stays the page's asset while it is read again and after a read that
       // failed: only a newer answer replaces it. The page would otherwise lose what was typed.
       if (query.data) {
@@ -304,7 +364,10 @@ export function useBuildSource(): BuildSource {
       if (query.error && !query.isFetching) {
         const code = apiErrorCode(query.error);
         if (code === "NOT_FOUND") {
-          return { status: "missing" };
+          // Looked for in the other owners: loading until that answers and Studio is set.
+          return searched && !elsewhere.isError && elsewhere.data !== null
+            ? { status: "loading" }
+            : { status: "missing" };
         }
         if (code === "FORBIDDEN") {
           return { status: "refused" };
@@ -322,6 +385,7 @@ export function useBuildSource(): BuildSource {
         () => true,
         (error: unknown) => (apiErrorCode(error) === "NOT_FOUND" ? false : undefined)
       ),
+    checkName: (kind, name) => writes.checkName({ kind, name, ...inScope(kind) }),
     writes: {
       put: (input) =>
         made(writes.put({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),

@@ -9,6 +9,7 @@ import { build } from "./build";
 import { collaborationWorkspace } from "./collaboration-workspace";
 import { common } from "./common";
 import { configAssets } from "./config-assets";
+import { connectionCreate } from "./connection-create";
 import { connections } from "./connections";
 import { conversation } from "./conversation";
 import { dataStores } from "./data-stores";
@@ -22,6 +23,7 @@ import { navigation } from "./navigation";
 import { operations } from "./operations";
 import { pages } from "./pages";
 import { personalApiKeys } from "./personal-api-keys";
+import { rights } from "./rights";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { tools } from "./tools";
@@ -44,6 +46,7 @@ export const translations = combineTranslations(common)
   .and(build)
   .and(collaborationWorkspace)
   .and(configAssets)
+  .and(connectionCreate)
   .and(connections)
   .and(conversation)
   .and(dataStores)
@@ -57,6 +60,7 @@ export const translations = combineTranslations(common)
   .and(operations)
   .and(pages)
   .and(personalApiKeys)
+  .and(rights)
   .and(settings)
   .and(signIn)
   .and(tools)

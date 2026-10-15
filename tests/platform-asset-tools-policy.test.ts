@@ -104,7 +104,37 @@ describe("a policy on assets.put and the agent's save", () => {
       const after = await toolTexts();
       return { events, answer: after.length > before ? after.at(-1) : undefined };
     };
-    return { settings, revision, save };
+    /** The agent's first save of a Workflow in a conversation about nothing: its answer. */
+    const firstSave = async (name: string) => {
+      const fresh = await app.call("conversations.create", { payload: { title: "New" } });
+      const freshId = z.object({ id: z.string() }).parse(fresh.json()).id;
+      const input = {
+        kind: WORKFLOW_ASSET_KIND,
+        name,
+        config: { ...configOf("New"), name, manifest: { ...configOf("New").manifest, id: name } }
+      };
+      const started = await injectStartConversationRun(
+        app,
+        freshId,
+        `/tool platform.assets.put ${JSON.stringify(input)}`
+      );
+      const events = await drainRunEvents(app, freshId, started.run.id);
+      const texts = messagesSchema
+        .parse(
+          (
+            await app.call("conversations.messages.list", { params: { conversationId: freshId } })
+          ).json()
+        )
+        .items.filter((message) => message.role === "tool")
+        .map((message) => message.text);
+      const stored = await app.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: WORKFLOW_ASSET_KIND,
+        name
+      });
+      return { said: `${events}${texts.at(-1) ?? ""}`, stored };
+    };
+    return { settings, revision, save, firstSave };
   }
 
   it.each<[string, CentralPolicySetting]>([
@@ -146,5 +176,18 @@ describe("a policy on assets.put and the agent's save", () => {
     );
     const { answer } = await t.save("Not meant");
     expect(JSON.parse(answer ?? "null")).toEqual({ saved: true, revision: before + 1 });
+  }, 120_000);
+
+  it("holds a first save that would create a Workflow to the setting on assets.put (NAV-2)", async () => {
+    const t = await fixture();
+    t.settings.push({ operation: "assets.put", value: "deny", assetKind: WORKFLOW_ASSET_KIND });
+    const denied = await t.firstSave("year-end");
+    expect(denied.said).toContain("denied by policy");
+    expect(denied.stored).toBeUndefined();
+
+    t.settings.splice(0);
+    const saved = await t.firstSave("year-end");
+    expect(saved.said).toContain('"created":true');
+    expect(saved.stored?.scope).toEqual({ kind: "instance" });
   }, 120_000);
 });

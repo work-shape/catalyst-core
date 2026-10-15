@@ -1,4 +1,5 @@
 import type { CollaborationWorkspaceAgents, SafeConfig } from "@vivd-catalyst/api-client";
+import type { CheckName } from "../api/asset-writes";
 import type { BuildAssetStart } from "../build-area/build-asset-kind";
 import { requestBuildStart } from "../build-area/build-create-request";
 import type { BuildNamespace } from "../build-area/build-rights";
@@ -16,6 +17,8 @@ export interface AgentCreation {
   mayNameFreely: boolean;
   /** The viewer may make a new agent available in every workspace. */
   mayChooseAll: boolean;
+  /** Asks the instance whether a new agent could take the address, as it is typed. */
+  checkName: CheckName;
 }
 
 /** How the list of the open workspace's agents stands. */
@@ -62,4 +65,16 @@ export function startNewAgent(
 /** The list of the agents in Studio. */
 export function agentsStudioRoute(): WorkspaceRoute {
   return buildRouteOfLocation({ kindPath: AGENTS_BUILD_PATH });
+}
+
+/**
+ * The agent a New button starts a conversation with: one that holds the platform's asset tools,
+ * the chosen one where it does. Nothing where no agent here builds assets.
+ */
+export function buildingAgentNameFor(
+  agents: readonly { name: string; buildsAssets?: boolean }[],
+  activeAgentName: string | undefined
+): string | undefined {
+  const building = agents.filter((agent) => agent.buildsAssets === true);
+  return (building.find((agent) => agent.name === activeAgentName) ?? building[0])?.name;
 }

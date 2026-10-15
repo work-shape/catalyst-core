@@ -178,6 +178,7 @@ export function SkillEditor({
     <AssetEditorShell
       frame={{ ...frame, canWrite: editable }}
       title={form.title.trim() || form.name}
+      description={form.summary.trim()}
       badges={badges}
       sections={sections}
       control={{

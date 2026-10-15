@@ -133,6 +133,7 @@ function source(input: SourceInput = {}): BuildSource {
     }),
     useAsset: (kind, name) => input.assets?.[`${kind}/${name}`] ?? { status: "missing" },
     exists: async () => true,
+    checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
       delete: async () => undefined,
@@ -369,7 +370,8 @@ describe("Studio frame", () => {
 
     expect(list).toContain('<option value="workflows" selected="">API access</option>');
     expect(list).toContain(">CRM<");
-    expect(list).toContain('<code class="font-mono">crm</code>');
+    // A row without a line of its kind shows the title alone, never the id.
+    expect(list).not.toContain('<code class="font-mono">crm</code>');
     // Without the right to create, the list has no New button.
     expect(list).not.toContain("New agent");
     expect(page).toContain("workflow body of crm");
@@ -402,16 +404,12 @@ describe("Studio frame", () => {
 
     expect(list).toContain('<option value="connections" selected="">Connections</option>');
     expect(list).toContain(">CRM<");
-    for (const chip of [
-      ">mcp<",
-      ">postgres<",
-      ">Instance<",
-      ">Workspace<",
-      "Enabled",
-      "Disabled"
-    ]) {
+    for (const chip of [">mcp<", ">postgres<", "Enabled", "Disabled"]) {
       expect(list, chip).toContain(chip);
     }
+    // One chip says whose a row is: the frame's, never a second one of the kind.
+    expect(list).not.toContain(">Instance<");
+    expect(list).not.toContain(">Workspace<");
     // Where a Connection comes from is no chip of the row.
     expect(list).not.toContain("Release config");
     expect(list).not.toContain(">Runtime<");
@@ -633,8 +631,8 @@ describe("Studio asset page", () => {
     expect(markup).not.toContain("Add reference");
     expect(markup).not.toContain("Save changes");
     expect(markup).not.toContain('type="submit"');
-    expect(markup).not.toContain('aria-label="More actions"');
-    // History is read by everybody who reads the asset.
+    // History and "Copy ID" are offered to everybody who reads the asset.
+    expect(markup).toContain('aria-label="More actions"');
     expect(markup).toContain("History");
   });
 
@@ -719,7 +717,6 @@ describe("Studio asset page", () => {
     });
 
     expect(markup).not.toContain("data-build-read-only");
-    expect(markup).not.toContain('aria-label="More actions"');
   });
 
   it("shows the sentence of a failed read as the instance said it", () => {

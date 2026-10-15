@@ -79,6 +79,7 @@ describe("the operation catalog", () => {
         "apps.sessions.context  POST /api/v1/app-content-sessions/:pageSessionId/context",
         "apps.sessions.get_workflow_run  POST /api/v1/app-content-sessions/:pageSessionId/workflow-runs/:runId",
         "apps.update_from_page  POST /api/v1/apps/:app/update-from-page",
+        "assets.check_name  POST /api/v1/assets/:kind/check-name",
         "assets.delete  POST /api/v1/assets/:kind/:name/delete",
         "assets.discard_draft  POST /api/v1/assets/:kind/:name/discard-draft",
         "assets.get  GET /api/v1/assets/:kind/:name",
@@ -145,6 +146,8 @@ describe("the operation catalog", () => {
         "docs.get  GET /api/v1/docs",
         "guardrails.dry_run  POST /api/v1/guardrails/:name/dry-run",
         "guardrails.list_hits  GET /api/v1/guardrails/:name/hits",
+        "guardrails.list_shipped  GET /api/v1/guardrails/shipped",
+        "guardrails.switch_shipped  POST /api/v1/guardrails/shipped/:name/switch",
         "guardrails.test  POST /api/v1/guardrails/:name/test",
         "guardrails.unpublish  POST /api/v1/guardrails/:name/unpublish",
         "health.get  GET /health",
@@ -424,7 +427,8 @@ describe("a running instance", () => {
     // asset addresses moved once more, to `/api/v1/assets`, and the list, the check and the
     // sync of assets came with them. Then the Pages of a conversation, and the check of a sync.
     // Then personal API keys and the connect code of the CLI, and the search of the Pages and
-    // files of a workspace.
+    // files of a workspace. Then the check of a new asset's name and the switch of a
+    // guardrail the release ships.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -465,6 +469,8 @@ describe("a running instance", () => {
       "guardrails.test",
       "guardrails.dry_run",
       "guardrails.unpublish",
+      "guardrails.list_shipped",
+      "guardrails.switch_shipped",
       "data_stores.query",
       "data_stores.insert",
       "data_stores.describe",
@@ -506,7 +512,8 @@ describe("a running instance", () => {
       "personal_api_keys.list",
       "personal_api_keys.revoke",
       "workspaces.files.list",
-      "conversations.subject.open"
+      "conversations.subject.open",
+      "assets.check_name"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

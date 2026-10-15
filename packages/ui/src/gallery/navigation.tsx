@@ -31,7 +31,15 @@ import { DocsAddressProvider, DocsLink } from "../navigation/docs-link";
 import { SkipLink } from "../navigation/skip-link";
 import { PageOutline, type PageOutlineItem } from "../navigation/page-outline";
 import { SubRail, type SubRailGroup } from "../navigation/sub-rail";
-import { Tabs, TabsContent, TabsLink, TabsList, TabsNav, TabsTrigger } from "../navigation/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsDisclosure,
+  TabsLink,
+  TabsList,
+  TabsNav,
+  TabsTrigger
+} from "../navigation/tabs";
 import { Page } from "../structure/page";
 import { PageHeader } from "../structure/page-header";
 import { Section } from "../structure/section";
@@ -485,6 +493,8 @@ type WorkspaceTab = "general" | "members" | "requests";
 
 function TabsSamples({ text }: { text: GalleryText }) {
   const [route, setRoute] = useState<WorkspaceTab>("members");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [view, setView] = useState("preview");
   const routes: { id: WorkspaceTab; label: string; count?: number }[] = [
     { id: "general", label: text.tabsGeneral },
     { id: "members", label: text.tabsMembers, count: 12 },
@@ -516,6 +526,30 @@ function TabsSamples({ text }: { text: GalleryText }) {
           <TabsContent value="requests" className="py-4 text-body">
             {text.tabsRequestsBody}
           </TabsContent>
+        </Tabs>
+      </div>
+      <div className="grid gap-2" data-gallery-sample="tabs-folded">
+        <span className="text-caption font-medium text-muted-foreground">{text.tabsFolded}</span>
+        <Tabs value={view} onValueChange={setView}>
+          <TabsList
+            label={text.tabsLabel}
+            end={
+              <TabsDisclosure
+                open={detailsOpen}
+                onOpenChange={(open) => {
+                  setDetailsOpen(open);
+                  if (!open) {
+                    setView("preview");
+                  }
+                }}
+              >
+                {text.tabsDetails}
+              </TabsDisclosure>
+            }
+          >
+            <TabsTrigger value="preview">{text.tabsPreview}</TabsTrigger>
+            {detailsOpen ? <TabsTrigger value="files">{text.tabsFiles}</TabsTrigger> : null}
+          </TabsList>
         </Tabs>
       </div>
       <div className="grid gap-2" data-gallery-sample="tabs-routes">
@@ -649,7 +683,15 @@ export const navigationGallery: GalleryGroup = {
     },
     {
       name: "Tabs",
-      components: ["Tabs", "TabsList", "TabsTrigger", "TabsContent", "TabsNav", "TabsLink"],
+      components: [
+        "Tabs",
+        "TabsList",
+        "TabsTrigger",
+        "TabsContent",
+        "TabsDisclosure",
+        "TabsNav",
+        "TabsLink"
+      ],
       render: (text) => <TabsSamples text={text} />
     },
     {

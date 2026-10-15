@@ -1,8 +1,9 @@
-import type { ApiClient } from "@vivd-catalyst/api-client";
+import { listAll, type ApiClient } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
   listedOf,
+  toDraftWorkflowListItem,
   toWorkflow,
   toWorkflowListItem,
   toWorkflowRun,
@@ -97,11 +98,22 @@ function done<Output>(
 export function createInstanceSource(client: WorkflowsClient, key: string): WorkflowsSource {
   return {
     key,
+    // The engine lists what is published; a Workflow never published is listed from its
+    // asset, as a draft. The screen shows a draft only to who may write Workflows.
     listWorkflows: async (_workspaceId, _query, signal) => {
-      const { items } = await client.workflows.list({ signal });
+      const [{ items }, assets] = await Promise.all([
+        client.workflows.list({ signal }),
+        listAll((paging) =>
+          client.assets.list({ params: { kind: WORKFLOW_ASSET_KIND }, query: paging, signal })
+        )
+      ]);
+      const listed = new Set(items.map((entry) => entry.id));
+      const drafts = assets.filter(
+        (asset) => asset.publishedRevision === undefined && !listed.has(asset.name)
+      );
       return {
-        items: items.map(toWorkflowListItem),
-        // The engine's list is whole in one answer.
+        items: [...items.map(toWorkflowListItem), ...drafts.map(toDraftWorkflowListItem)],
+        // The engine's list is whole in one answer, and the drafts are read to their end.
         nextCursor: undefined
       };
     },
@@ -121,7 +133,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
           config: isRecord(manifest) ? manifest : {},
           publishedRevision: summary === undefined ? undefined : asset.publishedRevision
         },
-        listedOf(summary),
+        summary === undefined ? { ...listedOf(summary), runsAs: asset.runsAs } : listedOf(summary),
         asset
       );
     },

@@ -84,6 +84,24 @@ const ASSET = {
   }
 };
 
+/** One Workflow as the list of its kind names it. */
+function summaryOf(input: {
+  name: string;
+  title: string;
+  description?: string;
+  publishedRevision?: number;
+}) {
+  return {
+    id: `asset_${input.name}`,
+    kind: "workflow",
+    scope: { kind: "instance" },
+    revision: 1,
+    draftRevision: 1,
+    updatedAt: "2026-10-12T09:00:00.000Z",
+    ...input
+  };
+}
+
 /** The published inputs of "Open invoices": one month, as the list names them. */
 const MONTH_INPUTS = {
   type: "object",
@@ -100,6 +118,7 @@ const MONTH_INPUTS = {
 function instance(
   answers: {
     stepRunPages?: readonly { items: readonly unknown[]; nextCursor?: string }[];
+    startIssues?: { code: string; message: string; principalDisplayLabel?: string }[];
   } = {}
 ) {
   let page = 0;
@@ -124,13 +143,21 @@ function instance(
               definitionRevisionId: "rev_7",
               actions: ["workflow.read", "workflow.use"],
               runnable: false,
-              reasons: [NOT_BUILT],
+              reasons: answers.startIssues ?? [NOT_BUILT],
               lastRun: { id: "wfr_0", status: "failed", startedAt: "2026-10-11T09:00:00.000Z" }
             }
           ]
         };
       case "assets.get":
         return ASSET;
+      case "assets.list":
+        // A published Workflow is listed by the engine; one never published only here.
+        return {
+          items: [
+            summaryOf({ name: "month-end", title: "Month end", publishedRevision: 4 }),
+            summaryOf({ name: "first-draft", title: "First draft", description: "Not yet." })
+          ]
+        };
       case "workflows.list_step_runs": {
         const pages = answers.stepRunPages ?? [{ items: [] }];
         const current = pages[Math.min(page, pages.length - 1)];
@@ -149,7 +176,7 @@ function instance(
 }
 
 describe("the Workflow screens over the engine of an instance", () => {
-  it("lists what the engine lists, each Workflow with its latest run", async () => {
+  it("lists what the engine lists, each Workflow with its latest run, and the drafts never published", async () => {
     const { source } = instance();
     const list = await source.listWorkflows("cw_1", { limit: 50, cursor: undefined }, signal);
     expect(list.items).toEqual([
@@ -188,6 +215,18 @@ describe("the Workflow screens over the engine of an instance", () => {
         mayStart: true,
         startForm: { fields: [], unsupported: [] },
         lastRun: { id: "wfr_0", status: "failed", startedAt: "2026-10-11T09:00:00.000Z" }
+      },
+      // Never published: the engine names it nowhere, its asset lists it as a draft (NAV-2).
+      {
+        id: "first-draft",
+        name: "First draft",
+        description: "Not yet.",
+        published: false,
+        updatedAt: "2026-10-12T09:00:00.000Z",
+        startsByHand: false,
+        refusedFor: [],
+        mayStart: false,
+        startForm: { fields: [], unsupported: [] }
       }
     ]);
     expect(list.nextCursor).toBeUndefined();
@@ -211,6 +250,26 @@ describe("the Workflow screens over the engine of an instance", () => {
     });
     expect(workflow.steps.map((step) => step.name)).toEqual(["Start", "Write the summary"]);
     expect(startOffered(workflow)).toBe(false);
+  });
+
+  it("reads the unpublished draft's account label from the asset", async () => {
+    const { client } = recordedApiClient(({ operation }) =>
+      operation === "assets.get"
+        ? {
+            ...ASSET,
+            publishedRevision: undefined,
+            draftRevision: 1,
+            runsAs: "Draft account",
+            config: {
+              ...ASSET.config,
+              manifest: { ...ASSET.config.manifest, runAs: "internal-account-name" }
+            }
+          }
+        : { items: [] }
+    );
+    const source = createInstanceSource(client, "draft-account");
+    const workflow = await source.getWorkflow("cw_1", "month-end", signal);
+    expect(workflow).toMatchObject({ published: false, mayStart: false, runsAs: "Draft account" });
   });
 
   it("holds no start for a Workflow whose entry names the read alone", async () => {
@@ -286,6 +345,18 @@ describe("the Workflow screens over the engine of an instance", () => {
     });
   });
 
+  it("keeps the technical account label through the list and detail mappings", async () => {
+    const issue = {
+      code: "principal_inactive",
+      message: "The account is disabled.",
+      principalDisplayLabel: "Booking checks"
+    };
+    const { source } = instance({ startIssues: [issue] });
+    const list = await source.listWorkflows("cw_1", { limit: 50, cursor: undefined }, signal);
+    expect(list.items.find(({ id }) => id === "month-end")?.refusedFor).toEqual([issue]);
+    expect((await source.getWorkflow("cw_1", "month-end", signal))?.refusedFor).toEqual([issue]);
+  });
+
   it("starts and cancels through the client, and reads a cancel that waits for the going call", async () => {
     const { source, calls } = instance();
     expect((await source.runs?.start("open-invoices", { month: "2026-09" }))?.id).toBe("wfr_1");
@@ -347,7 +418,8 @@ describe("a Workflow the instance accepts no start of", () => {
     );
     expect(markup).toContain(t("workflows.notRunnable.refused"));
     expect(markup).not.toContain(t("workflows.notRunnable.title"));
-    expect(markup).toContain("The instance has no active principal");
+    expect(markup).toContain(t("workflows.notRunnable.accountUnavailable"));
+    expect(markup).not.toContain("The instance has no active principal");
   });
 
   it("shows no start, switched off or not, to a reader who may not start", () => {

@@ -23,11 +23,13 @@ export { SubRail, type SubRailGroup, type SubRailItem, type SubRailProps } from 
 export {
   Tabs,
   TabsContent,
+  TabsDisclosure,
   TabsLink,
   TabsList,
   TabsNav,
   TabsTrigger,
   type TabsContentProps,
+  type TabsDisclosureProps,
   type TabsLinkProps,
   type TabsListProps,
   type TabsNavProps,

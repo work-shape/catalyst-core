@@ -201,6 +201,7 @@ describe("the Agents page", () => {
       mayNameFreely: true,
       mayChooseAll: true,
       startsIn: { workspace: { id: "cws_1", name: "Steuer" }, mayChooseAll: true },
+      checkName: async () => ({ available: true as const }),
       onStart: noop
     };
 

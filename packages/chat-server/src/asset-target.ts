@@ -1,5 +1,9 @@
 import {
   AppError,
+  INSTANCE_ASSET_SCOPE,
+  asCollaborationWorkspaceId,
+  assetScopesEqual,
+  assetNameIssue,
   auditActorFromIdentity,
   type AccessResource,
   type ActorAccess,
@@ -42,6 +46,45 @@ export interface AssetTarget {
   resource: AccessResource;
   /** The address the target was read for. */
   address: AssetAddress;
+}
+
+export function scopeOf(workspaceId: string | undefined): AssetScope {
+  return workspaceId === undefined
+    ? INSTANCE_ASSET_SCOPE
+    : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(workspaceId) };
+}
+
+/** Resolves a name once, keeping another owner's row out of the requested scope. */
+export async function resolveAssetTarget(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
+  kind: WorkflowAssetKind,
+  address: AssetAddress
+): Promise<AssetTarget> {
+  const scope = scopeOf(address.workspaceId);
+  const row =
+    address.name === ""
+      ? undefined
+      : await options.configAssets.store.getConfigAsset({
+          clientInstanceId: options.clientInstanceId,
+          kind: kind.kind,
+          name: address.name
+        });
+  // A deleted asset keeps its row, its revisions and the deny rows on it, so its history and
+  // its name are decided with the same id as before the delete. A row of another scope is
+  // not this call's asset: its id is no part of what the right is decided on.
+  const asset = row && assetScopesEqual(row.scope, scope) ? row : undefined;
+  return {
+    kind,
+    name: address.name,
+    scope,
+    ...(asset ? { asset } : {}),
+    elsewhere: row !== undefined && asset === undefined,
+    ...(row !== undefined && asset === undefined
+      ? { other: { id: row.id, scope: row.scope } }
+      : {}),
+    resource: accessResource(kind.kind, address.name, scope, asset?.id),
+    address
+  };
 }
 
 export function requireActive(target: AssetTarget): ConfigAssetRecord & { config: JsonObject } {
@@ -113,6 +156,31 @@ export function requireFreeName(target: AssetTarget): void {
       { reason: `${target.kind.kind}_id_taken`, kind: target.kind.kind, name: target.name }
     );
   }
+}
+
+/**
+ * A fresh create (`expectedRevision: null`) cannot take any stored name: names are unique
+ * per instance and kind, and deletion keeps the revision. The check asks the same write
+ * right as that create. Its refusal repeats only the submitted kind and name, through the
+ * same generic conflict as a non-reader's create: no title, owner, workspace, revision or
+ * deleted state. Active and deleted names therefore give a non-reader identical answers.
+ * Restoring a deleted asset names its deletion revision; that is not a fresh create.
+ */
+export function nameCheckOf(
+  target: AssetTarget
+):
+  | { available: true }
+  | { available: false; reason: "name_invalid" | "name_taken"; message: string } {
+  const issue = assetNameIssue(target.kind, target.name);
+  if (issue) return { available: false, reason: "name_invalid", message: issue.message };
+  const held = target.elsewhere || currentRevisionOf(target.asset) !== null;
+  return held
+    ? {
+        available: false,
+        reason: "name_taken",
+        message: nameOnlyConflict(target).message
+      }
+    : { available: true };
 }
 
 /**

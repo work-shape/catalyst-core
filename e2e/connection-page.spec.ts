@@ -173,9 +173,8 @@ test("a Connection's page shows its definition, its state in every case and the 
   await page.setViewportSize({ width: 1280, height: widths[1280] });
   const main = page.getByRole("region", { name: "Studio" });
   const health = main.locator("[data-connection-health]");
-  // The one button of the Status section beside the copy button of the id. While a test runs
-  // it shows a spinner and no name.
-  const testButton = main.locator("#status button:not([data-asset-identifier] button)");
+  // The one button of the Status section. While a test runs it shows a spinner and no name.
+  const testButton = main.locator("#status button");
 
   /** The page of a Connection, in the given language. */
   const open = async (
@@ -266,7 +265,8 @@ test("a Connection's page shows its definition, its state in every case and the 
         )
       ).toBeVisible();
       await expect(main.getByText("Instance", { exact: true })).toBeVisible();
-      await expect(main.getByText(reachable.name, { exact: true })).toBeVisible();
+      // Its id is behind "Copy ID" in the head's menu, never on the page.
+      await expect(main.getByText(reachable.name, { exact: true })).toHaveCount(0);
       await expect(main.getByText(ALLOWED_URL)).toBeVisible();
       // A Connection that sends no credential has none to set, and no account anybody shares.
       await expect(main.locator("[data-connection-credential]")).toHaveAttribute(
@@ -278,9 +278,15 @@ test("a Connection's page shows its definition, its state in every case and the 
         main.getByText("The outside system asks for no credential.", { exact: true })
       ).toBeVisible();
       await expect(main.locator("[data-connection-shared]")).toHaveCount(0);
-      // The page writes nothing. Its history is read, and a copy is where an edit starts.
+      // The page writes nothing. Its history is read, its menu offers the id and no Delete, and
+      // a copy is where an edit starts.
       await expect(main.getByRole("textbox")).toHaveCount(0);
-      await expect(main.getByRole("button", { name: /^(Save|More actions|Edit)/u })).toHaveCount(0);
+      await expect(main.getByRole("button", { name: /^(Save|Edit)/u })).toHaveCount(0);
+      await main.getByRole("button", { name: "More actions" }).click();
+      await expect(page.getByRole("menuitem", { name: "Copy ID" })).toBeVisible();
+      await expect(page.getByRole("menuitem", { name: "Delete" })).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("menu")).toBeHidden();
       await expect(main.getByRole("button", { name: "History" })).toBeVisible();
       await expect(main.getByRole("button", { name: "Copy to edit" })).toBeVisible();
       // The operations as the instance judges them against the Connector type.

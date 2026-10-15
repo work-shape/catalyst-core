@@ -1,6 +1,5 @@
 import {
   AppError,
-  assetScopesEqual,
   auditActorFromIdentity,
   findNamespaceOfAssetName,
   isAppError,
@@ -13,7 +12,9 @@ import {
   type AssetRepoWrite,
   type FileSet,
   type JsonObject,
+  type OperationApproval,
   type OperationAuthorization,
+  type OperationOrigin,
   type PolicyTarget
 } from "@vivd-catalyst/core";
 import { afterRemove, afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
@@ -30,7 +31,7 @@ import {
   withoutDefinition,
   type AssetSet
 } from "./asset-set";
-import { accessResource, decide, deleteDecision, type AssetCall } from "./asset-access";
+import { decide, deleteDecision, type AssetCall } from "./asset-access";
 import {
   assetSyncPolicyTargets,
   authorizeAssetSync,
@@ -64,6 +65,7 @@ import {
 } from "./asset-write-rules";
 import {
   assertStoredWritable,
+  nameCheckOf,
   notFound,
   readsTarget,
   recordAssetEvent,
@@ -71,14 +73,18 @@ import {
   requireDeletable,
   requireExpectedRevision,
   requireOwnScope,
+  resolveAssetTarget,
+  scopeOf,
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
 import { initialAgentPlacement, type AvailableIn } from "./asset-placement";
-import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
+import { AssetReadWorkflow } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import { assertReferencesWithinOwners } from "./asset-owner-references";
+import { liveRevision } from "./asset-live-revision";
+import { publishApproval, publishFromAPerson } from "./publish-approval";
 import type { AssetWorkflowOptions } from "./types";
 
 type MutationBatch = Omit<
@@ -124,16 +130,35 @@ export class AssetWorkflow {
   }
 
   /**
-   * The publish right of the kind. A kind without a published revision names none, and a call
-   * on it passes here to be refused for that by the operation itself.
+   * The publish right of the kind and the kind's own check of the revision it makes live. A
+   * kind without a published revision names none, and a call on it passes here to be refused
+   * for that by the operation itself.
    */
   async authorizePublish(
-    access: ActorAccess,
-    address: AssetAddress
+    caller: { actor: AuthenticatedIdentity; access: ActorAccess; origin: OperationOrigin },
+    address: AssetAddress & { revision: number }
   ): Promise<OperationAuthorization> {
+    const { access, origin } = caller;
     const target = await this.target(address);
     const { publish } = target.kind.actions;
-    return publish === undefined ? { allowed: true } : decide(access, publish, target.resource);
+    if (publish === undefined) return { allowed: true };
+    const right = publishFromAPerson(target, origin) ?? decide(access, publish, target.resource);
+    // What the revision lends is asked of the caller now too: a publish that waits for an
+    // approval is filed only where its caller could make it live.
+    if (right.allowed && target.asset?.status === "active") {
+      await liveRevision(this.options, caller, target, address.revision);
+    }
+    return right;
+  }
+
+  /**
+   * Who decides a publish that a guardrail holds: the holders of the kind's `approve` right,
+   * and the caller's own click where they hold it. None for a kind whose publish is not held.
+   */
+  async publishApproval(
+    input: AssetAddress & { revision: number }
+  ): Promise<OperationApproval | undefined> {
+    return publishApproval(await this.target(input), input.revision);
   }
 
   async authorizeDelete(
@@ -519,6 +544,13 @@ export class AssetWorkflow {
     };
   }
 
+  /** Whether a create would take the name, asked with the right a create asks. Writes nothing. */
+  async checkName(call: AssetCall, input: AssetAddress) {
+    const target = await this.target(input);
+    call.access.require(target.kind.actions.write, target.resource);
+    return nameCheckOf(target);
+  }
+
   sync(call: AssetCall, input: AssetSyncInput) {
     return syncAssets(this.options, call, input);
   }
@@ -728,33 +760,8 @@ export class AssetWorkflow {
     return this.options.configAssets.kinds.require(kind);
   }
 
-  private async target(address: AssetAddress): Promise<AssetTarget> {
-    const kind = this.kind(address.kind);
-    const scope = scopeOf(address.workspaceId);
-    const row =
-      address.name === ""
-        ? undefined
-        : await this.options.configAssets.store.getConfigAsset({
-            clientInstanceId: this.options.clientInstanceId,
-            kind: kind.kind,
-            name: address.name
-          });
-    // A deleted asset keeps its row, its revisions and the deny rows on it, so its history and
-    // its name are decided with the same id as before the delete. A row of another scope is
-    // not this call's asset: its id is no part of what the right is decided on.
-    const asset = row && assetScopesEqual(row.scope, scope) ? row : undefined;
-    return {
-      kind,
-      name: address.name,
-      scope,
-      ...(asset ? { asset } : {}),
-      elsewhere: row !== undefined && asset === undefined,
-      ...(row !== undefined && asset === undefined
-        ? { other: { id: row.id, scope: row.scope } }
-        : {}),
-      resource: accessResource(kind.kind, address.name, scope, asset?.id),
-      address
-    };
+  private target(address: AssetAddress): Promise<AssetTarget> {
+    return resolveAssetTarget(this.options, this.kind(address.kind), address);
   }
 }
 

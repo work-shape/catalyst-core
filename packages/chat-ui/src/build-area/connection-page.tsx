@@ -24,7 +24,7 @@ import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { agentKind } from "./agent-kind";
-import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
+import { usePageShown } from "./asset-editor-shell";
 import type { BuildAssetEditorProps, BuildAssetViewProps } from "./build-asset-kind";
 import { useBuildNavigation } from "./build-route";
 import {
@@ -34,6 +34,7 @@ import {
 } from "./connection-editing";
 import { waitsForDiscovery, type DiscoveryWait } from "./connection-form-model";
 import { ConnectionOperations, EditableOperations } from "./connection-operations";
+import { RestToolsSection } from "./connection-rest-tools";
 import type {
   ConnectionHoldersRead,
   ConnectionSource,
@@ -217,9 +218,10 @@ export function ConnectionPage({
 }) {
   const { t } = useTranslation();
   usePageShown(page, "asset");
-  // A Connection made here and not yet read waits for its first discovery.
+  // A Connection made here and not yet read waits for its first discovery. A REST API has none:
+  // its page reads the Connection again for a while after a write.
   const [wait, setWait] = useState<DiscoveryWait | undefined>(() =>
-    editing ? { since: Date.now() } : undefined
+    editing && asset.config.connectorType !== "http_api" ? { since: Date.now() } : undefined
   );
   const read = source.useDetail(asset.name, wait);
   const holders = source.useHolders(asset.id);
@@ -244,7 +246,6 @@ export function ConnectionPage({
       description: t("connections.statusDescription"),
       body: (
         <>
-          <AssetIdentifier name={asset.name} />
           {enabled ? null : (
             <Banner tone="warning" data-connection-disabled="">
               {t("connections.disabledNotice")}
@@ -320,27 +321,43 @@ export function ConnectionPage({
               <SkeletonList rows={3} />
             )
           },
-          ...(editing
+          ...(editing && config.connectorType === "http_api"
             ? [
                 {
-                  id: "discovered",
-                  label: t("connections.discoveredTitle"),
-                  description: t("connections.discoveredDescription"),
-                  count: detail?.discovered.length,
+                  id: "add-tools",
+                  label: t("connectionCreate.addHeading"),
+                  description: t("connectionCreate.addText"),
                   body: (
-                    <DiscoveredTools
-                      name={asset.name}
+                    <RestToolsSection
                       asset={asset}
                       frame={editing}
-                      detail={detail}
-                      waiting={waiting}
                       source={source}
                       written={written}
                     />
                   )
                 }
               ]
-            : []),
+            : editing
+              ? [
+                  {
+                    id: "discovered",
+                    label: t("connections.discoveredTitle"),
+                    description: t("connections.discoveredDescription"),
+                    count: detail?.discovered.length,
+                    body: (
+                      <DiscoveredTools
+                        name={asset.name}
+                        asset={asset}
+                        frame={editing}
+                        detail={detail}
+                        waiting={waiting}
+                        source={source}
+                        written={written}
+                      />
+                    )
+                  }
+                ]
+              : []),
           {
             id: "agents",
             label: t("connections.agentsTitle"),
@@ -372,6 +389,7 @@ export function ConnectionPage({
           variant="detail"
           back={back}
           title={title}
+          description={textOf(config, "description")}
           scope={
             <Chip>
               {t(
@@ -580,7 +598,7 @@ function ConnectionSettings({ config }: { config: Record<string, unknown> }) {
 /**
  * The people and the service principals that were given this Connection by itself. A person is
  * a round avatar with an address; a service principal is a square one with a key, says what it
- * is in words, and opens its own page.
+ * is in words, and opens its own page. Neither is named by an id.
  */
 function ConnectionHolders({
   read,
@@ -639,9 +657,6 @@ function ConnectionHolders({
                   </Badge>
                 ) : null}
               </>
-            }
-            description={
-              holder.detail ? <code className="font-mono">{holder.detail}</code> : undefined
             }
             link={holder.name === undefined ? undefined : <a href={principalHref(holder.id)} />}
           />

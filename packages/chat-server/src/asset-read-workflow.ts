@@ -1,7 +1,5 @@
 import {
   AppError,
-  INSTANCE_ASSET_SCOPE,
-  asCollaborationWorkspaceId,
   asUserId,
   findNamespaceOfAssetName,
   getSubjectUserId,
@@ -24,7 +22,13 @@ import { resolveConfigLocale } from "@vivd-catalyst/config-schema";
 import { accessResource, decide, type AssetCall } from "./asset-access";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
-import { notFound, requireActive, type AssetAddress, type AssetTarget } from "./asset-target";
+import {
+  notFound,
+  requireActive,
+  scopeOf,
+  type AssetAddress,
+  type AssetTarget
+} from "./asset-target";
 import type { AssetWorkflowOptions } from "./types";
 
 /** How many assets a list reads where its caller names no page. */
@@ -141,6 +145,8 @@ export class AssetReadWorkflow {
       this.revisionContent(target, asset, address)
     ]);
     const namespace = findNamespaceOfAssetName(namespaces, asset.name);
+    // Resolve only after authorization, from the revision the caller is allowed to read.
+    const runsAs = await target.kind.readRunsAs?.(content.config);
     return {
       id: asset.id,
       kind: asset.kind,
@@ -152,6 +158,7 @@ export class AssetReadWorkflow {
         ? { publishedRevision: content.contentRevision }
         : pointersOf(target.kind, asset)),
       ...content,
+      ...(runsAs === undefined ? {} : { runsAs }),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
       updatedAt: asset.updatedAt
@@ -441,12 +448,6 @@ function pointersOf(kind: WorkflowAssetKind, asset: ConfigAssetRecord) {
     draftRevision: asset.revision,
     ...(published === undefined ? {} : { publishedRevision: published })
   };
-}
-
-export function scopeOf(workspaceId: string | undefined): AssetScope {
-  return workspaceId === undefined
-    ? INSTANCE_ASSET_SCOPE
-    : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(workspaceId) };
 }
 
 /** Whether the asset has a revision its users are served. */

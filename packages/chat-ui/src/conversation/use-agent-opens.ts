@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { ApiClient, Message } from "@vivd-catalyst/api-client";
+import { showOwnerInStudio } from "../build-area/build-rights";
 import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
 import { lastRunParts, pendingOpen, planOpenMoves, type WatchedRun } from "./open-move";
@@ -30,6 +31,11 @@ export interface AgentOpens {
   pageOf(open: AssetOpen): WorkspaceRoute | undefined;
   /** Notes a run this tab started: only such a run takes the person anywhere. */
   sent(runId: string): void;
+  /**
+   * Notes the list page whose "New" started a conversation: an open of it takes the person on
+   * from there, as from its chat route.
+   */
+  startedFrom(conversationId: string, path: string): void;
 }
 
 /**
@@ -76,6 +82,7 @@ export function useAgentOpens(input: {
   const handledOpens = useRef(new Set<string>());
   const movedRuns = useRef(new Set<string>());
   const movedTo = useRef(new Map<string, Set<string>>());
+  const startedFromPages = useRef(new Map<string, string>());
   const routeRef = useRef(route);
   useLayoutEffect(() => {
     routeRef.current = route;
@@ -93,6 +100,10 @@ export function useAgentOpens(input: {
   const sent = useCallback((runId: string) => {
     sentRuns.current.add(runId);
     liveRuns.current.add(runId);
+  }, []);
+
+  const startedFrom = useCallback((startedConversation: string, path: string) => {
+    startedFromPages.current.set(startedConversation, path);
   }, []);
 
   const pageOf = useCallback(
@@ -115,6 +126,7 @@ export function useAgentOpens(input: {
       liveRuns.current.add(runId);
     }
     const conversationMoves = movedTo.current.get(conversationId) ?? new Set<string>();
+    const newFrom = startedFromPages.current.get(conversationId);
     const plan = planOpenMoves({
       runId,
       opens: opensInRun(parts),
@@ -126,12 +138,14 @@ export function useAgentOpens(input: {
       here: routeRef.current,
       conversationId,
       movedTo: conversationMoves,
+      ...(newFrom === undefined ? {} : { startedFrom: newFrom }),
       movedInRun: movedRuns.current.has(runId)
     });
     for (const key of plan.handled) {
       handledOpens.current.add(key);
     }
     for (const move of plan.moves) {
+      showOwnerOf(move.page, move.owner);
       openPage(move.page, conversationId, { replace: move.replace });
       movedRuns.current.add(runId);
       conversationMoves.add(workspaceRoutePath(move.page));
@@ -165,6 +179,7 @@ export function useAgentOpens(input: {
         }
         onSubjectChanged(conversationId);
       }
+      showOwnerOf(target, open.owner);
       openPage(target, conversationId);
     },
     [client, conversationId, onError, onSubjectChanged, openPage, storedSubject, workspaceId]
@@ -178,5 +193,13 @@ export function useAgentOpens(input: {
       ? undefined
       : pendingOpen({ opens: opensInRun(lastParts), storedSubject, workspaceId, here: route });
 
-  return { pending, goTo, pageOf, sent };
+  return { pending, goTo, pageOf, sent, startedFrom };
+}
+
+/**
+ * A page of Studio reads its asset in Studio's scope: going to one the agent opened sets the
+ * scope to the asset's owner first, so the page finds it where it is.
+ */
+function showOwnerOf(page: WorkspaceRoute, owner: string | undefined): void {
+  if (page.kind === "build-asset") showOwnerInStudio(owner);
 }

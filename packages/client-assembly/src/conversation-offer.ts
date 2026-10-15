@@ -1,6 +1,8 @@
 import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@vivd-catalyst/chat-server";
+import { HTTP_API_CONNECTOR_TYPE } from "@vivd-catalyst/connections";
 import {
   SUBJECT_TOOL_PREFIX,
+  type ConnectorTypeRegistry,
   type ConversationOfferSource,
   type ModuleSnapshot,
   type PlatformStores
@@ -8,6 +10,7 @@ import {
 import {
   PAGE_SAVE_AS_APP_TOOL_NAME,
   PAGE_SAVE_TOOL_NAME,
+  createConnectionDraftTool,
   createPageSaveAsAppTool,
   createPlatformAssetBinding,
   createPlatformAssetTools,
@@ -16,7 +19,11 @@ import {
   type PlatformAssetBinding
 } from "@vivd-catalyst/tool-execution";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
-import { PLATFORM_ORIENTATION, PLATFORM_TOOL_NAMES } from "./platform-orientation";
+import {
+  PLATFORM_MODULE_TOOL_NAMES,
+  PLATFORM_ORIENTATION,
+  PLATFORM_TOOL_NAMES
+} from "./platform-orientation";
 import { offeredSkillNames } from "./shipped-skills";
 
 // What a conversation is offered beyond its agent's definition. An agent holds the platform's
@@ -113,7 +120,15 @@ export async function conversationToolNames(
  * registry that holds them, so the registry is attached when it exists; a run asks for it
  * only after that.
  */
-export function createPlatformTools(input: Pick<ConversationOfferInput, "stores" | "modules">) {
+export function createPlatformTools(
+  input: Pick<ConversationOfferInput, "stores" | "modules"> & {
+    /**
+     * The Connections of the instance, where the module `connections` is on: the agent's draft
+     * of a REST API's tools is checked against their Connector types.
+     */
+    connections?: { connectorTypes: ConnectorTypeRegistry } | undefined;
+  }
+) {
   const attached: { tools?: ToolRegistry } = {};
   const platformAssets: PlatformAssetBinding = createPlatformAssetBinding();
   return {
@@ -130,10 +145,19 @@ export function createPlatformTools(input: Pick<ConversationOfferInput, "stores"
     tools: [
       ...createPlatformDiscoveryTools(platformAssets.calls),
       ...createPlatformAssetTools(platformAssets.calls),
-      createPageSaveAsAppTool(platformAssets.calls)
+      createPageSaveAsAppTool(platformAssets.calls),
+      ...(input.connections
+        ? [
+            createConnectionDraftTool({
+              connectorTypes: input.connections.connectorTypes,
+              connectorType: HTTP_API_CONNECTOR_TYPE
+            })
+          ]
+        : [])
     ],
     conversationOffer: createConversationOffer({
-      ...input,
+      stores: input.stores,
+      modules: input.modules,
       hasTool: (toolName) => attached.tools?.has(toolName) ?? false
     }),
     /**
@@ -152,6 +176,7 @@ export function createPlatformTools(input: Pick<ConversationOfferInput, "stores"
         enabledToolNames: new Set([
           ...enabledByRelease,
           ...PLATFORM_TOOL_NAMES,
+          ...PLATFORM_MODULE_TOOL_NAMES,
           READ_SKILL_TOOL,
           PAGE_SAVE_TOOL_NAME,
           PAGE_SAVE_AS_APP_TOOL_NAME

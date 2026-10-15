@@ -17,7 +17,7 @@ import {
 import type { AssetFileInput } from "./asset-files";
 import { readFileSetFile } from "./page-file-sets";
 import { readDefinitionName } from "./asset-kinds/shared";
-import { scopeOf } from "./asset-read-workflow";
+import { scopeOf } from "./asset-target";
 import type { AssetWorkflowOptions } from "./types";
 
 // The before-events of the asset operations: `asset.before_write` for each asset a call saves

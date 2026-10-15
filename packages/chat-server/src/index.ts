@@ -312,6 +312,7 @@ export type {
   AgentToolReference,
   ConfigAssetValidationRefs,
   PlatformInstructions,
+  PublishReach,
   WorkflowAssetKind
 } from "./asset-kinds/shared";
 

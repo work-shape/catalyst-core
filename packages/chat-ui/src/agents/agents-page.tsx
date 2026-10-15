@@ -132,6 +132,7 @@ export function AgentsPage({
           namespaces={newAgent.namespaces}
           mayNameFreely={newAgent.mayNameFreely}
           startsIn={newAgent.startsIn}
+          checkName={newAgent.checkName}
           onClose={() => setCreating(false)}
           onStart={(start) => {
             setCreating(false);
@@ -169,7 +170,7 @@ function AgentCard({
         <div className="flex min-w-0 items-center gap-3">
           <Avatar kind="agent" name={agent.displayName} icon={<Bot />} />
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <CardTitle id={titleId} className="min-w-0 break-words">
+            <CardTitle id={titleId} clamp className="min-w-0">
               {agent.displayName}
             </CardTitle>
             {isDefault ? <Badge size="sm">{t("configDefaultAgent")}</Badge> : null}
@@ -180,7 +181,10 @@ function AgentCard({
         ) : null}
       </CardHeader>
       <CardFooter className="justify-between">
-        <CardTarget label={t("agents.startChatWith", { name: agent.displayName })}>
+        <CardTarget
+          label={t("agents.startChatWith", { name: agent.displayName })}
+          title={agent.displayName}
+        >
           <Button size="sm" onClick={() => onStartChat(agent.name)}>
             {t("agents.startChat")}
           </Button>

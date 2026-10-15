@@ -322,10 +322,10 @@ export function UserAdministrationPanel({
                         onChange={(event) => toggleRowSelection(user.id, event.target.checked)}
                       />
                     </TableCell>
-                    <TableCell className="px-4">
-                      <button
-                        type="button"
-                        className="flex min-w-0 items-center gap-3 text-left outline-none"
+                    <TableCell className="min-w-64 max-w-80 px-4">
+                      <Button
+                        variant="ghost"
+                        className="h-auto w-full min-w-0 justify-start gap-3 rounded-none px-0 py-0 text-left"
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedUserId(user.id);
@@ -333,12 +333,14 @@ export function UserAdministrationPanel({
                       >
                         <UserAvatar displayLabel={user.displayLabel} />
                         <span className="grid min-w-0 gap-0.5">
-                          <span className="truncate font-medium">{user.displayLabel}</span>
+                          <span className="truncate font-medium" title={user.displayLabel}>
+                            {user.displayLabel}
+                          </span>
                           <span className="truncate text-xs text-muted-foreground">
                             {user.email ?? user.id}
                           </span>
                         </span>
-                      </button>
+                      </Button>
                     </TableCell>
                     <TableCell className="px-4">
                       <Badge appearance="outline">

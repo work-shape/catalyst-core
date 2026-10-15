@@ -1,5 +1,9 @@
 import { ASSET_SYNC_BODY_MAX_BYTES, apiOperations } from "@vivd-catalyst/api-contract";
-import { asCollaborationWorkspaceId, type OperationResource } from "@vivd-catalyst/core";
+import {
+  asCollaborationWorkspaceId,
+  isAuthenticatedServicePrincipal,
+  type OperationResource
+} from "@vivd-catalyst/core";
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../asset-files";
 import {
   assetWriteEvent,
@@ -70,6 +74,13 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.validate(context, input)
   });
 
+  route.operation(apiOperations["assets.check_name"], {
+    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    execute: (input, context) => workflow.checkName(context, input)
+  });
+
   route.operation(apiOperations["assets.get"], {
     authorize: ({ files, ...input }, { access }) =>
       workflow.reads.authorizeGet(access, { ...input, files: files === "true" }),
@@ -93,12 +104,15 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.publish"], {
-    authorize: (input, { access }) => workflow.authorizePublish(access, input),
+    authorize: (input, { actor, access, origin }) =>
+      workflow.authorizePublish({ actor, access, origin }, input),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     beforeEvents: (input) => publishEvents(options, input),
+    // A publish a guardrail holds waits for the holders of the kind's `approve` right.
+    approval: (input) => workflow.publishApproval(input),
     execute: (input, context) => workflow.drafts.publish(context, input)
   });
 
@@ -112,7 +126,17 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.run_live_once"], {
-    authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "write"),
+    authorize: (input, { actor, access }) => {
+      // Never-rule 4: a key held by a local agent cannot make a draft call live.
+      if (isAuthenticatedServicePrincipal(actor) || actor.delegatedActor?.kind === "api_key") {
+        return {
+          allowed: false,
+          reason: "user_only",
+          message: "Run live once needs a person signed in to the app; API keys cannot use it"
+        };
+      }
+      return workflow.authorizeRevisionWrite(access, input, "write");
+    },
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
@@ -120,7 +144,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.drafts.runLiveOnce(context, input)
   });
 
-  // The caller's own switches: whoever may switch one on reads them.
+  // Reading the caller's own switches still asks for the write right on the draft.
   route.operation(apiOperations["assets.list_live_once"], {
     authorize: (input, { access }) => workflow.authorizeWrite(access, input),
     resource: assetResource,
