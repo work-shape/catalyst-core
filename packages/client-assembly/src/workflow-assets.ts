@@ -30,6 +30,7 @@ import {
   workflowDefinitionRefusal,
   workflowStepFileIssues,
   workflowStepFilesRefusal,
+  workflowRunPrincipal,
   type WorkflowDefinitionResult,
   type WorkflowDefinitionRevision,
   type WorkflowDefinitionSource,
@@ -174,6 +175,12 @@ export function createWorkflowAssetKind(
           : { description: workflow.manifest.description })
       })
     }),
+    async readRunsAs(config) {
+      const runAs = runAsOfConfigSchema.safeParse(config).data?.manifest.runAs;
+      if (typeof runAs !== "string") return undefined;
+      const principal = await workflowRunPrincipal(options.apiAccess, clientInstanceId, { runAs });
+      return principal?.displayLabel;
+    },
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,

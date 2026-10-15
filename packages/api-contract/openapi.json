@@ -15775,6 +15775,9 @@
                             },
                             "additionalProperties": {}
                           },
+                          "runsAs": {
+                            "type": "string"
+                          },
                           "actions": {
                             "type": "array",
                             "items": {
@@ -21421,6 +21424,9 @@
           },
           "config": {
             "$ref": "#/components/schemas/ConfigAssetConfig"
+          },
+          "runsAs": {
+            "type": "string"
           },
           "contentRevision": {
             "type": "integer",
