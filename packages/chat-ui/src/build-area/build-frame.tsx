@@ -540,8 +540,9 @@ function BuildList({
 
   // The rows a kind adds come first, in the same list, under the same search and filters.
   const listBody = (lead: BuildListLead) => {
-    const rows = list.rows;
     const leadRows = lead.rows;
+    // Where the assets could not be read, the kind's own rows still show under the list's error.
+    const rows = list.rows ?? (listError && leadRows?.length ? [] : undefined);
     return (
       <>
         {listError}

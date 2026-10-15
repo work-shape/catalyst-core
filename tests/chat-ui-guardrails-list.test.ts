@@ -64,7 +64,11 @@ function guardrail(name: string): BuildAssetRow {
   };
 }
 
-function source(scope: BuildScope, rows: BuildAssetRow[]): BuildSource {
+function source(
+  scope: BuildScope,
+  rows: BuildAssetRow[],
+  listError: string | undefined
+): BuildSource {
   const permissions = ["config_assets.read", "config_assets.write"];
   const context = {
     ...platformContext([], instanceActions(permissions)),
@@ -79,8 +83,8 @@ function source(scope: BuildScope, rows: BuildAssetRow[]): BuildSource {
     error: undefined,
     reload: async () => undefined,
     useList: () => ({
-      rows,
-      error: undefined,
+      rows: listError === undefined ? rows : undefined,
+      error: listError,
       hasMore: false,
       loadingMore: false,
       loadMore: noop,
@@ -103,7 +107,12 @@ function source(scope: BuildScope, rows: BuildAssetRow[]): BuildSource {
 }
 
 function renderList(
-  input: { read?: ShippedGuardrailsRead; scope?: BuildScope; rows?: BuildAssetRow[] } = {},
+  input: {
+    read?: ShippedGuardrailsRead;
+    scope?: BuildScope;
+    rows?: BuildAssetRow[];
+    listError?: string;
+  } = {},
   locale: "en" | "de" = "en"
 ): string {
   return renderToStaticMarkup(
@@ -123,7 +132,7 @@ function renderList(
             }
           },
           createElement(BuildFrame, {
-            source: source(input.scope ?? { kind: "instance" }, input.rows ?? [])
+            source: source(input.scope ?? { kind: "instance" }, input.rows ?? [], input.listError)
           })
         )
       )
@@ -177,6 +186,19 @@ describe("the Guardrails list", () => {
     expect(markup.match(/aria-label="Guardrails"/gu)).toHaveLength(1);
   });
 
+  it("keeps the shipped guardrail and its switch where the instance's own could not be read", () => {
+    const markup = renderList({ listError: "The guardrails could not be loaded." });
+    expect(markup).toContain("The guardrails could not be loaded.");
+    const list = markup.slice(markup.indexOf('aria-label="Guardrails"'));
+    expect(list).toContain("Shipped with the platform");
+    expect(list).toMatch(/role="switch"[^>]*aria-checked="true"/u);
+    // Without a shipped row the failed list shows its error alone, as before.
+    const alone = renderList({ listError: "The guardrails could not be loaded.", read: ready([]) });
+    expect(alone).toContain("The guardrails could not be loaded.");
+    expect(alone).not.toContain('aria-label="Guardrails"');
+    expect(alone).not.toContain("Nothing in Instance yet.");
+  });
+
   it("is empty in a workspace, where the shipped guardrail does not apply", () => {
     const markup = renderList({ scope: { kind: "workspace", workspaceId: TEAM } });
     expect(markup).toContain("Nothing in Team yet.");
@@ -210,9 +232,7 @@ describe("the Guardrails list", () => {
   });
 
   it("waits for the shipped guardrails and says when they could not be read", () => {
-    expect(renderList({ read: { status: "loading" } })).not.toContain(
-      'aria-label="Guardrails"'
-    );
+    expect(renderList({ read: { status: "loading" } })).not.toContain('aria-label="Guardrails"');
     const failed = renderList({
       read: { status: "failed", message: undefined, retry: noop }
     });
