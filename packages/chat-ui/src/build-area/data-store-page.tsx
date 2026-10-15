@@ -34,6 +34,7 @@ import {
   formatDataStoreSize,
   migrationNumber
 } from "./data-store-model";
+import { DataStoreDraftPage, dataStoreNeverPublished } from "./data-store-draft";
 import { ReadState } from "./data-store-read-state";
 import { DataStoreRowsSection } from "./data-store-rows";
 import type { DataStoreSchema, DataStoreSource, DataStoreState } from "./data-store-source";
@@ -58,18 +59,35 @@ function textOf(config: Record<string, unknown>, key: string): string | undefine
  * tables with their columns, and the first rows of one table. The rows are the answer of one
  * preview, so the page holds as many as the instance hands out and never the whole table.
  */
-export function DataStorePage({
+export function DataStorePage(props: BuildAssetViewProps & { source: DataStoreSource }) {
+  const { asset } = props;
+  const title = textOf(asset.config, "title") ?? asset.name;
+  // A store never published has no database yet: its page is the draft's.
+  if (dataStoreNeverPublished(asset)) {
+    return (
+      <DataStoreDraftPage
+        {...props}
+        title={title}
+        description={textOf(asset.config, "description")}
+      />
+    );
+  }
+  return <PublishedDataStorePage {...props} title={title} />;
+}
+
+/** The page of a Data Store with a published revision, and so a database. */
+function PublishedDataStorePage({
   page,
   back,
   asset,
-  source
-}: BuildAssetViewProps & { source: DataStoreSource }) {
+  source,
+  title
+}: BuildAssetViewProps & { source: DataStoreSource; title: string }) {
   const { t } = useTranslation();
   usePageShown(page, "asset");
   const read = source.useStoreState(asset.name);
   const state = read.status === "ready" ? read.data : undefined;
   const view = state ? DATA_STORE_STATE_VIEWS[dataStoreStateView(state)] : undefined;
-  const title = textOf(asset.config, "title") ?? asset.name;
   // The rows of a store are reached while it is ready, so its tables are read only then.
   const reachable = state?.status === "ready";
   const sections: {

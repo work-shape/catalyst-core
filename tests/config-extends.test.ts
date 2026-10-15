@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -7,7 +7,8 @@ import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import {
   createClientBranding,
   createSafeConfigView,
-  loadClientInstanceConfigFromFile
+  loadClientInstanceConfigFromFile,
+  parseClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 
 const baseConfig = [
@@ -41,6 +42,27 @@ async function writeFixtures(files: Record<string, string>): Promise<string> {
 }
 
 describe("config file extends", () => {
+  it("refuses config scopes at parse and file load with SCOPE-1 instead of dropping it", async () => {
+    const root = await writeFixtures({ "app.yaml": baseConfig });
+    try {
+      const base = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
+      for (const scopes of [
+        { mandant: { label: "Mandant", valueType: "text" } },
+        {},
+        null,
+        false
+      ]) {
+        expect(() => parseClientInstanceConfig({ ...base, scopes })).toThrow(/scopes.*SCOPE-1/u);
+        await writeFile(join(root, "app.yaml"), `${baseConfig}scopes: ${JSON.stringify(scopes)}\n`);
+        await expect(loadClientInstanceConfigFromFile(join(root, "app.yaml"))).rejects.toThrow(
+          /scopes.*SCOPE-1/u
+        );
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("deep-merges objects with the extending file winning and replaces arrays wholesale", async () => {
     const root = await writeFixtures({
       "app.base.yaml": baseConfig,

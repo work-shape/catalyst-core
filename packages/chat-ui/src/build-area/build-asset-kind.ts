@@ -183,6 +183,12 @@ export interface BuildAssetViewProps {
   asset: BuildAsset;
   /** The kinds the reader sees in Build, for a page that names an asset of another kind. */
   kinds: readonly BuildKind[];
+  /**
+   * Publishes the draft the page shows and reads the asset again: the person's click, never
+   * the agent's. Answers the instance's sentence where it refused. Absent where the asset has no
+   * draft ahead of what is published, or the reader may not publish it.
+   */
+  publish?(): Promise<string | undefined>;
 }
 
 /**

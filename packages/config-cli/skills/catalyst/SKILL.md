@@ -84,6 +84,10 @@ These commands print readable YAML; add `--json` for JSON. Paginated lists read 
 
 `app actions` without a name lists published Apps' actions; with a name it reads the draft if you may write it, otherwise the published revision. `keys list` reads only your own key metadata, never secrets. `instance workspaces` lists Shared Workspaces for agent availability through `instance.workspaces.list`, requiring `config_assets:write` and `agent.write`; it does not list your memberships. Keep `hasMore`, hidden counts and `truncated` in mind when reading hits, dependencies and actions.
 
+## Follow a held call
+
+A change that exits 3 prints its Operation Run id. Follow it with `catalyst operation show <run-id>` and list your requests with `catalyst requests`. Add `--json` for the full record or list. A held run still exits 3; a failed, denied or expired run exits 1. Withdraw your own request with `catalyst requests --withdraw <id>` only when the person asks; the key needs an asset write or delete scope. Do not send the held change again.
+
 ## Exit codes
 
 - 0: done.
