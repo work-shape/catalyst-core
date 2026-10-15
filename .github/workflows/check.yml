@@ -1,37 +1,165 @@
+# PR selection (git diff from the merge base, including both sides of renames):
+# - Drafts run no jobs; ready_for_review starts the first hosted check.
+# - Docs-only: packages/docs/**, changes/** and *.md outside packages/*/src/** run
+#   docs and changes, plus the small selection/required-result jobs.
+# - Other changes run build, static, docs, four test shards, upgrade/compatibility,
+#   and release packaging. Browser tests additionally need packages/{ui,chat-ui,
+#   chat-server}/**, clients/demo/**, e2e/** or tests/fixtures/**.
+# - Images additionally need docker/**, any Dockerfile, package.json or lockfile.
+# - Workflows/actions/scripts, quality-config, any lockfile or config file, root
+#   configuration and unknown paths select EVERYTHING (even inside a docs PR).
+# - Pushes to main and release tags always select EVERYTHING.
+# Keep `check` as the required aggregate: selected failures/cancellations fail it;
+# intentionally skipped jobs pass. `browser` remains for existing check consumers.
 name: Check
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
+    tags: ["v*"]
 permissions:
   contents: read
-  # The database of the checks is the instance's Postgres image, a package of this repository.
   packages: read
-# A newer push to a pull request cancels the run for the older push, so only its latest commit
-# reports a result. Every run on main finishes: a merge that lands while the previous one is
-# checked must not cancel that check, or a break on main goes unseen. A shared group would still
-# drop a run that waits behind another, so each commit on main is a group of its own.
+# PRs share a group and cancel superseded work. Each main/tag run has its own group,
+# including re-runs, so GitHub cannot discard even a pending main/tag run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  check:
-    # Vitest runs one test file per core but one, so this job gets 8 cores and 32 GB. On a
-    # hosted runner of 4 cores the suite alone took about 26 minutes; 30 cancelled the last step
-    # on every PR.
+  paths:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 3
+    outputs:
+      code: ${{ steps.select.outputs.code }}
+      browser: ${{ steps.select.outputs.browser }}
+      images: ${{ steps.select.outputs.images }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify path selection
+        run: node --test .github/scripts/check-paths.test.mjs
+      - name: Select affected jobs
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/check-paths.mjs
+  changes:
+    needs: paths
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-check
+        with:
+          build: "false"
+      - name: Changes
+        run: pnpm check:changes
+  build:
+    needs: paths
+    if: needs.paths.outputs.code == 'true'
     runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 45
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-check
+        with:
+          build: "false"
+      - name: Build
+        run: pnpm build
+      # Tar preserves executable modes and hidden build files. Never share node_modules
+      # or restore a build from another commit; every consumer uses this run's artifact.
+      - name: Archive build
+        run: find packages clients -mindepth 2 -maxdepth 2 -type d -name dist -print0 | tar --null -T - -czf /tmp/check-build.tgz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: check-build
+          path: /tmp/check-build.tgz
+          compression-level: 0
+          retention-days: 1
+  static:
+    needs: [paths, build]
+    if: needs.paths.outputs.code == 'true'
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-check
+      - name: Baseline counts may only fall
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node packages/quality-config/baseline-guard.mjs "$BASE" "$HEAD"
+      - name: Format
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Package types
+        run: pnpm typecheck:packages
+      - name: Test types
+        run: pnpm typecheck:tests
+      - name: OpenAPI
+        run: pnpm check:openapi
+      - name: Contract
+        run: pnpm check:contract
+      - name: Workspace dependencies
+        run: pnpm check:workspace-deps
+      - name: Migrations
+        run: pnpm check:migrations
+  docs:
+    needs: [paths, build]
+    # Docs-only skips build; a failed code build must still fail the aggregate.
+    if: ${{ !cancelled() && needs.paths.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-check
+        with:
+          build: ${{ needs.paths.outputs.code }}
+      - name: Build docs and their dependencies
+        if: needs.paths.outputs.code != 'true'
+        run: pnpm --filter "@vivd-catalyst/docs..." build
+      - name: Documentation types
+        run: pnpm typecheck:docs
+      - name: Documentation links, assets and search
+        run: pnpm --filter @vivd-catalyst/docs check:site
+  tests:
+    name: tests ${{ matrix.shard }}/4
+    needs: [paths, build]
+    if: needs.paths.outputs.code == 'true'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 9
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-          # The baseline guard needs the history back to where the pull request left its base,
-          # and the compatibility step needs the release tags and their trees.
           fetch-depth: 0
-      # A step and not a service container: the script tries the pull three times, where a
-      # service container fails the job at the first answer like "toomanyrequests".
+      - uses: ./.github/actions/setup-check
       - name: Sign in to the registry
         env:
           TOKEN: ${{ github.token }}
@@ -39,33 +167,49 @@ jobs:
       - name: Database
         timeout-minutes: 5
         run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
-      - name: Baseline counts may only fall
-        if: github.event_name == 'pull_request'
+      - name: Unit and database tests
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: node packages/quality-config/baseline-guard.mjs "$BASE" "$HEAD"
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+          SHARD: ${{ matrix.shard }}
+        run: pnpm exec vitest run --shard="$SHARD/4"
+      - name: Deployment kit tests (once)
+        if: matrix.shard == 1
+        run: pnpm test:deployment-kit
+  upgrade:
+    needs: [paths, build]
+    if: needs.paths.outputs.code == 'true'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 9
+    env:
+      POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # Seconds, before the suite's half hour: a pull request whose migration number main gave
-      # out in the meantime fails here with the steps to renumber. `pnpm check` runs it again.
-      - name: Migrations
-        run: pnpm check:migrations
-      - run: pnpm check
-      # Installs the previous and the oldest supported release from their tags and runs their
-      # database tests against the schema of this commit, on the database started above. The
-      # install reads the pnpm store that setup-node restored and fetches the rest.
-      - name: Released database tests against this schema
-        timeout-minutes: 10
-        run: pnpm test:compatibility
-      # Packs every publishable package, inspects the tarballs and installs them in a scratch
-      # consumer. `pnpm check` built the packages in this job, so the build is not repeated.
-      - name: Packages are fit to publish
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-check
+      - name: Sign in to the registry
+        env:
+          TOKEN: ${{ github.token }}
+        run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
+      - name: Database
         timeout-minutes: 5
+        run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
+      - name: Upgrade from oldest supported release
+        run: pnpm test:upgrade
+      - name: Released database tests against this schema
+        run: pnpm test:compatibility
+  release:
+    needs: [paths, build]
+    if: needs.paths.outputs.code == 'true'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-check
+      - name: Packages are fit to publish
         run: pnpm release:check --skip-build
   # Builds the API and UI images of the demo client in the layout of a deployment's build
   # workspace, where only the client and what it depends on is installed. A package that uses
@@ -78,6 +222,8 @@ jobs:
   # is not root runs commands as itself. Under sudo the worker is root, as in a deployment: it
   # gives the workspace to the runner's fixed user and commands run as that user.
   images:
+    needs: paths
+    if: needs.paths.outputs.images == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     env:
@@ -126,23 +272,19 @@ jobs:
           pnpm exec vitest run
           tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
           -t "in the runner image|gives the workspace"
-  # The whole browser suite, beside the job above, in three shards on runners of their own. It is
-  # not part of `pnpm check`, because it needs a browser and ports of its own; locally it is
-  # `pnpm test:e2e`. Each shard builds, starts its own database and servers and runs a third of
-  # the tests, so no shard sees what another one wrote.
   browser-shard:
-    name: browser ${{ matrix.shard }}/3
-    # Unsharded the suite took 23 to 34 minutes (4 to build and start, the rest for about 370
-    # tests on two workers). A shard builds as long and runs a third of the tests. The longest
-    # shard is set by chat-standalone.spec.ts, whose tests run in order in one worker for about
-    # 15 minutes, so more shards or more cores per shard would not finish sooner. 4 cores give
-    # the two workers Playwright starts on them.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 30
+    name: browser ${{ matrix.shard }}/6
+    needs: [paths, build]
+    if: needs.paths.outputs.browser == 'true'
+    # Individual tests (except explicit serial groups) are spread across six isolated
+    # databases. One worker per shard avoids extra concurrent mutations of shared accounts
+    # and fixed-port beforeAll servers, and splits the former 15-minute standalone file.
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -156,12 +298,7 @@ jobs:
       - name: Database
         timeout-minutes: 5
         run: .github/scripts/start-postgres.sh agent_chat agent_chat agent_chat 55433
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-check
       - name: Installed Playwright version
         id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -172,14 +309,16 @@ jobs:
       # With the cache restored this downloads nothing and only installs the system libraries.
       - name: Chromium and its system libraries
         run: pnpm exec playwright install --with-deps --only-shell chromium
-      # The runner builds what it serves, migrates the database and starts the API and the
+      # The shared build is restored above; the runner migrates and starts the API and the
       # interface itself. A test that fails is tried once more; one that fails twice fails the job.
       - name: Browser suite
         shell: bash
         env:
           E2E_EXTERNAL_POSTGRES: "1"
+          E2E_SKIP_BUILD: "1"
+          E2E_FULLY_PARALLEL: "1"
           SHARD: ${{ matrix.shard }}
-        run: pnpm test:e2e --retries=1 --reporter=list --shard="$SHARD/3" 2>&1 | tee browser-run.log
+        run: pnpm test:e2e --retries=1 --reporter=list --workers=1 --shard="$SHARD/6" 2>&1 | tee browser-run.log
       - name: Keep traces and the server log of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -189,14 +328,28 @@ jobs:
             test-results/
             browser-run.log
           retention-days: 7
-  # One result under the name the suite always reported: it passes when every shard passed.
   browser:
-    needs: browser-shard
-    if: ${{ !cancelled() }}
+    needs: [paths, browser-shard]
+    if: ${{ !cancelled() && needs.paths.result == 'success' }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 2
     steps:
-      - name: Every shard passed
+      - name: Every selected shard passed
         env:
+          SELECTED: ${{ needs.paths.outputs.browser }}
           SHARDS: ${{ needs.browser-shard.result }}
-        run: test "$SHARDS" = success
+        run: |
+          if [ "$SELECTED" = true ]; then test "$SHARDS" = success
+          else test "$SHARDS" = skipped; fi
+  check:
+    needs: [paths, changes, build, static, docs, tests, upgrade, release, images, browser]
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 2
+    steps:
+      - name: Every selected check passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
+          echo "$RESULTS" | jq -e '.paths.result == "success" and .changes.result == "success" and .docs.result == "success"'

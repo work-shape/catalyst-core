@@ -1,0 +1,26 @@
+name: Set up a check consumer
+description: Install from the pnpm cache and optionally restore this run's shared build.
+inputs:
+  build:
+    description: Restore the build artifact produced by this run.
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: 22
+        cache: pnpm
+    - name: Install
+      shell: bash
+      run: pnpm install --frozen-lockfile
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      if: inputs.build == 'true'
+      with:
+        name: check-build
+        path: ${{ runner.temp }}/check-build
+    - name: Restore build
+      if: inputs.build == 'true'
+      shell: bash
+      run: tar -xzf "$RUNNER_TEMP/check-build/check-build.tgz"
