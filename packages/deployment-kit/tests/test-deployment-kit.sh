@@ -1042,21 +1042,21 @@ test_worker_isolation_guards() {
   done
 }
 
-# A customer name may start with a digit. Every command that reads INSTANCE runs under such a
+# An instance name may start with a digit. Every command that reads INSTANCE runs under such a
 # name here, and so do the files a deploy renders for the host.
 test_digit_leading_instance() {
-  local fixture_instance="exampletax"
+  local fixture_instance="123-example"
   local capture="$scratch/digit-capture" host="$scratch/digit-host"
   capture_fixture_deploy "$capture"
-  local root="$capture/workspace" deployment="$capture/workspace/deployment.exampletax"
-  local app_dir=/opt/vivd-catalyst/exampletax commit
+  local root="$capture/workspace" deployment="$capture/workspace/deployment.123-example"
+  local app_dir=/opt/vivd-catalyst/123-example commit
   commit="$(git -C "$deployment" rev-parse HEAD)"
 
   # deploy: host paths, unit names and the dump name carry the instance as it is.
   assert_contains "$capture/ssh-2.command" \
-    "REMOTE_APP_DIR=$app_dir REMOTE_ENV_FILE=/etc/vivd-catalyst/exampletax/app.env"
-  assert_contains "$capture/rsync.log" " $app_dir/deploy/systemd/vivd-catalyst-exampletax-backup.timer "
-  assert_contains "$capture/host$app_dir/deploy/systemd/vivd-catalyst-exampletax-backup.service" \
+    "REMOTE_APP_DIR=$app_dir REMOTE_ENV_FILE=/etc/vivd-catalyst/123-example/app.env"
+  assert_contains "$capture/rsync.log" " $app_dir/deploy/systemd/vivd-catalyst-123-example-backup.timer "
+  assert_contains "$capture/host$app_dir/deploy/systemd/vivd-catalyst-123-example-backup.service" \
     "ExecStart=$app_dir/backup-postgres.sh"
   run_remote_deploy "$capture" "$host" || { cat "$host/output" >&2; fail "remote deploy failed"; }
   assert_contains "$host/output" "All services run the images of staging-2026.10.06-1."
@@ -1069,11 +1069,11 @@ test_digit_leading_instance() {
     > "$host/backup.env"
   local run=(env "PATH=$host/backup-bin:$PATH" "APP_DIR=$host/app" "ENV_FILE=$host/backup.env")
   "${run[@]}" "$capture/host$app_dir/backup-postgres.sh" > "$host/backup-output"
-  grep -Eq '^Backup uploaded: postgres/exampletax-agent_chat-[0-9]{8}T[0-9]{6}Z\.tar \(' \
+  grep -Eq '^Backup uploaded: postgres/123-example-agent_chat-[0-9]{8}T[0-9]{6}Z\.tar \(' \
     "$host/backup-output" || fail "the backup of a digit-leading instance is not named after it"
   # restore accepts that key and goes on to its next refusal.
   expect_failure "${run[@]}" "$capture/host$app_dir/restore-postgres.sh" recover \
-    postgres/exampletax-agent_chat-20261006T021514Z.tar --replace-database not_the_live_database
+    postgres/123-example-agent_chat-20261006T021514Z.tar --replace-database not_the_live_database
   assert_contains "$scratch/failure-output" "must name the live database of this host"
 
   # manifest and publish, on the clean checkout.
@@ -1091,7 +1091,7 @@ test_digit_leading_instance() {
   mkdir -p "$root/platform" "$root/capabilities" "$deployment/deploy/workspace"
   printf "lockfileVersion: '9.0'\n" > "$deployment/deploy/workspace/pnpm-lock.yaml"
   DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
-  assert_contains "$root/pnpm-workspace.yaml" '  - "deployment.exampletax"'
+  assert_contains "$root/pnpm-workspace.yaml" '  - "deployment.123-example"'
   DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" update-refs --help > "$scratch/digit-help"
   assert_contains "$scratch/digit-help" "update-release.sh --deployment-root DIR"
   expect_failure env "DEPLOYMENT_ROOT=$deployment" "$catalyst_deploy" check

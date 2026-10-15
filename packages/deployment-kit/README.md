@@ -32,7 +32,7 @@ Derived from `INSTANCE`:
 | Database backups        | `<instance>-<database>-<timestamp>[-<label>].tar`                |
 | Backup units            | `vivd-catalyst-<instance>-backup.service` and `.timer`           |
 
-`INSTANCE` is lowercase letters, digits and dashes, and may start with a digit (`exampletax`): a
+`INSTANCE` is lowercase letters, digits and dashes, and may start with a digit (`123-example`): a
 directory, a Compose project, a container, a dump and a unit all take such a name. The kit
 derives no database name and no shell variable from it.
 
