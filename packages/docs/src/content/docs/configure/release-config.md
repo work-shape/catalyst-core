@@ -1059,16 +1059,16 @@ The connector type `http_api` reads a REST interface by GET. It has no discovery
 
 ```yaml
 connections:
-  exampledata:
+  accounting_source:
     connectorType: http_api
-    displayName: Exampledata
+    displayName: Accounting source
     settings:
-      baseUrl: https://api.exampledata.com/datevconnect
+      baseUrl: https://accounting.example.com/api
       headers:
         x-client-instance-id: 6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b
       testPath: /health
     authScheme: bearer
-    secret: EXAMPLEDATA_KEY
+    secret: ACCOUNTING_SOURCE_KEY
     operations:
       - name: open_items
         effect: reading

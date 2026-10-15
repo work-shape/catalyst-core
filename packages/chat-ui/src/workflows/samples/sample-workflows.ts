@@ -25,7 +25,11 @@ export interface SampleWorkflow {
   readings: Readonly<Record<string, StepReading>>;
 }
 
-const BOOKINGS: StepReading = { effect: "reading", source: "Bookings", service: "datev" };
+const BOOKINGS: StepReading = {
+  effect: "reading",
+  source: "Bookings",
+  service: "accounting-source"
+};
 
 function trigger(locale: LocaleCode, cron?: string): WorkflowStep {
   return {

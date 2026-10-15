@@ -181,7 +181,7 @@ export interface ConnectionConfig {
   displayName: string;
   description?: string;
   /**
-   * The system behind the Connection, such as `datev`, as a slug (`CONNECTION_SERVICE_PATTERN`).
+   * The system behind the Connection, such as `accounting-source`, as a slug (`CONNECTION_SERVICE_PATTERN`).
    * It only picks an icon; a slug no icon is registered for shows the generic one. No right,
    * egress rule or behaviour reads it.
    */

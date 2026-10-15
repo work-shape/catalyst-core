@@ -71,7 +71,7 @@ Server code of an App's own, beyond these three kinds, is planned and not availa
 ### A `connection` action
 
 ```yaml
-connection: exampledata
+connection: accounting_source
 operation: list_bookings
 effect: reading
 description: The bookings of one client in one month.
@@ -169,14 +169,14 @@ A changing call passes `{ idempotencyKey }`: make the key when the person acts, 
 
 ## A complete example
 
-A dashboard of one ExampleData client: it reads bookings from the Connection `exampledata`, lists findings kept in the Data Store `findings`, adds a finding and starts the Workflow `monthly-check`. Replace the names of the Connection, its operation, the Data Store and the Workflow with those of the instance, and the mapping with the input the operation declares.
+A dashboard of one accounting client: it reads bookings from the Connection `accounting_source`, lists findings kept in the Data Store `findings`, adds a finding and starts the Workflow `monthly-check`. Replace the names of the Connection, its operation, the Data Store and the Workflow with those of the instance, and the mapping with the input the operation declares.
 
 ```yaml title="app.yaml"
-id: exampledata-dashboard
-name: ExampleData dashboard
+id: accounting-dashboard
+name: Accounting dashboard
 kit: 1.4.0
 connections:
-  - exampledata
+  - accounting_source
 dataStores:
   - name: findings
 actions:
@@ -185,7 +185,7 @@ actions:
 ```
 
 ```yaml title="actions/load-bookings.action.yaml"
-connection: exampledata
+connection: accounting_source
 operation: list_bookings
 effect: reading
 description: The bookings of one client in one month.
@@ -320,16 +320,16 @@ function Dashboard() {
 The same call from a plain HTML App, with one action on the Connection.
 
 ```yaml title="app.yaml"
-id: exampledata-bookings
-name: ExampleData bookings
+id: accounting-bookings
+name: Accounting bookings
 kit: 1.4.0
 entry: index.html
 connections:
-  - exampledata
+  - accounting_source
 ```
 
 ```yaml title="actions/load-bookings.action.yaml"
-connection: exampledata
+connection: accounting_source
 operation: list_bookings
 effect: reading
 input:
@@ -346,7 +346,7 @@ input:
 <!doctype html>
 <html>
   <head>
-    <title>ExampleData bookings</title>
+    <title>Accounting bookings</title>
   </head>
   <body>
     <h1>Bookings</h1>
