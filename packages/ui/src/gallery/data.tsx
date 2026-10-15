@@ -6,6 +6,7 @@ import { CodeBlock, type CodeToken } from "../data/code-block";
 import { CommandLine } from "../data/command-line";
 import { CodeFile } from "../data/code-file";
 import { FilterBar } from "../data/filter-bar";
+import { FoldedText } from "../data/folded-text";
 import { KeyValue, KeyValueList, type KeyValueLayout } from "../data/key-value";
 import { List, ListRow, type ListRowSize } from "../data/list-row";
 import { Pagination } from "../data/pagination";
@@ -493,9 +494,14 @@ export const dataGallery: GalleryGroup = {
     },
     {
       name: "KeyValue",
-      components: ["KeyValueList", "KeyValue"],
+      components: ["KeyValueList", "KeyValue", "FoldedText"],
       render: (text) => (
         <div className="grid items-start gap-6 sm:grid-cols-2">
+          <Samples label={text.keyPrompt}>
+            <p className="max-w-80 text-caption text-muted-foreground">
+              <FoldedText>{text.keyPromptValue}</FoldedText>
+            </p>
+          </Samples>
           {keyValueLayouts.map((layout) => (
             <Samples key={layout} label={layout === "inline" ? text.keyInline : text.keyStacked}>
               <KeyValueList layout={layout} className="w-full">

@@ -23,6 +23,42 @@ export interface ApprovalCandidate extends ApprovedOperation {
   request?: { method: string; path: string };
 }
 
+/** Every enum in a path or query parameter's schema, including nested schema branches. */
+export function parameterEnums(declaration: Record<string, unknown> | undefined) {
+  const enums: { location: "pathParams" | "query"; name: string; path: string; values: string }[] =
+    [];
+  for (const location of ["pathParams", "query"] as const) {
+    for (const [name, parameter] of Object.entries(recordOf(declaration?.[location]) ?? {})) {
+      const visit = (value: unknown, path: string) => {
+        if (Array.isArray(value)) {
+          value.forEach((item, index) => visit(item, `${path}[${index}]`));
+          return;
+        }
+        const schema = recordOf(value);
+        if (!schema) return;
+        for (const [key, child] of Object.entries(schema)) {
+          if (key === "enum" && Array.isArray(child)) {
+            enums.push({
+              location,
+              name,
+              path,
+              values: child
+                .map((item) => (typeof item === "string" ? item : JSON.stringify(item)))
+                .join("\n")
+            });
+          } else {
+            // Walk every branch rather than choosing one anyOf/oneOf alternative. Enum
+            // values themselves are data, so their objects are never treated as schemas.
+            visit(child, path ? `${path}.${key}` : key);
+          }
+        }
+      };
+      visit(recordOf(parameter)?.schema, "");
+    }
+  }
+  return enums;
+}
+
 /**
  * An operation as a person reads it: its name in sentence case, such as "List customers" for
  * `list_customers`. The outside system names operations; it gives them no title for people.
@@ -82,13 +118,13 @@ export type PasteIssue =
 export type PasteResult =
   { ok: true; candidates: ApprovalCandidate[] } | { ok: false; issue: PasteIssue };
 
-function recordOf(value: unknown): Record<string, unknown> | undefined {
+export function recordOf(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value))
     : undefined;
 }
 
-function textOf(value: unknown): string | undefined {
+export function textOf(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }
 
@@ -128,20 +164,32 @@ export function pastedCandidates(text: string): PasteResult {
     }
     if (seen.has(name)) return { ok: false, issue: { kind: "duplicate", name } };
     seen.add(name);
-    const declaration = Object.fromEntries(
-      Object.entries(operation).filter(([key]) => !SET_BY_APPROVAL.has(key))
-    );
-    const method = textOf(operation.method) ?? "GET";
-    const path = textOf(operation.path) ?? "";
-    const description = textOf(operation.description);
-    candidates.push({
-      name,
-      title: textOf(operation.title) ?? operationTitle(name),
-      ...(description === undefined ? {} : { description }),
-      effect: operation.effect === "changing" ? "changing" : "reading",
-      request: { method, path },
-      declaration: { ...declaration, method }
-    });
+    candidates.push(declaredCandidate(operation, name));
   }
   return { ok: true, candidates };
+}
+
+/**
+ * The row of one declared operation, pasted or drafted by the agent: its declaration as
+ * written, read as GET and `reading` where it names neither, the only method and effect of
+ * the first cut. What the row and the approval set is not taken from it.
+ */
+export function declaredCandidate(
+  operation: Record<string, unknown>,
+  name: string
+): ApprovalCandidate {
+  const declaration = Object.fromEntries(
+    Object.entries(operation).filter(([key]) => !SET_BY_APPROVAL.has(key))
+  );
+  const method = textOf(operation.method) ?? "GET";
+  const path = textOf(operation.path) ?? "";
+  const description = textOf(operation.description);
+  return {
+    name,
+    title: textOf(operation.title) ?? operationTitle(name),
+    ...(description === undefined ? {} : { description }),
+    effect: operation.effect === "changing" ? "changing" : "reading",
+    request: { method, path },
+    declaration: { ...declaration, method }
+  };
 }

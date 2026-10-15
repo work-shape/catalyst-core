@@ -1,5 +1,6 @@
 import { groupPartByType, type GroupByContext, type PartState } from "@assistant-ui/react";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
+import { CONNECTION_DRAFT_TOOL_NAME, readConnectionDraft } from "../build-area/connection-draft";
 import { readToolDisplayPayloadFromToolResult } from "../domain-ui-widgets";
 import { standingAssetOpen } from "../conversation/subject-run";
 import { PAGE_SAVE_TOOL_NAME, readPageSave } from "../pages/page-save";
@@ -174,6 +175,7 @@ function staysVisibleAfterRun(
     isApprovalRequestToolCall(part) ||
     isPageSaveOutcome(parts, index) ||
     isStandingOpen(part) ||
+    isConnectionDraftCard(part) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
   );
 }
@@ -203,6 +205,22 @@ function isPageSaveOutcome(parts: readonly AssistantPartOutline[], index: number
   return (
     readPageSave({ args: part.args, result: part.result }).state === "built" ||
     !parts.slice(index + 1).some(isPageSaveCall)
+  );
+}
+
+/**
+ * The agent's draft of REST API tools is a result of the run: its card is how the person opens
+ * the approval list, so it stays in the thread. A refused draft folds away with the other steps.
+ */
+function isConnectionDraftCard(part: {
+  type: string;
+  toolName?: string;
+  result?: unknown;
+}): boolean {
+  return (
+    part.type === "tool-call" &&
+    part.toolName === CONNECTION_DRAFT_TOOL_NAME &&
+    readConnectionDraft(part.result) !== undefined
   );
 }
 
@@ -283,7 +301,7 @@ function isStandaloneToolCall(
   if (part.mcp?.app?.resourceUri?.startsWith("ui://")) {
     return true;
   }
-  if (isPageSaveCall(part) || isStandingOpen(part)) {
+  if (isPageSaveCall(part) || isStandingOpen(part) || isConnectionDraftCard(part)) {
     return true;
   }
   return context.toolUIs?.[part.toolName]?.[0]?.standalone ?? false;

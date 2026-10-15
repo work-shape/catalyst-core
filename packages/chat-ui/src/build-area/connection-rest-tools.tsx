@@ -20,6 +20,7 @@ import {
   type ApprovalCandidate,
   type PasteIssue
 } from "./connection-approval-model";
+import { useOpenedConnectionDraft, type ConnectionDraft } from "./connection-draft";
 import { connectionConfigToForm, withApprovedOperations } from "./connection-form-model";
 import type { ConnectionSource } from "./connection-source";
 
@@ -147,13 +148,19 @@ export function readPaste(
 }
 
 /**
- * The page's way to add the tools of a REST API by pasting them: the YAML, then the approval
- * list, then one save of the definition through the page.
+ * The page's way to add the tools of a REST API: pasted, the YAML, then the approval list, then
+ * one save of the definition through the page. With `drafted`, the agent's draft from its card,
+ * it opens at the list, and discarding the draft closes it.
  */
-function PasteToolsDialog({
+function AddToolsDialog({
+  title,
+  drafted,
   onClose,
   approve
 }: {
+  /** The Connection's own title: a draft's intro names it, never the agent's title. */
+  title: string;
+  drafted?: ConnectionDraft;
   onClose(): void;
   /** Saves the approved operations with the surfaces. Answers what refused them, or nothing. */
   approve(
@@ -164,10 +171,12 @@ function PasteToolsDialog({
   const { t } = useTranslation();
   const [text, setText] = useState("");
   const [pasteError, setPasteError] = useState<string>();
-  const [candidates, setCandidates] = useState<ApprovalCandidate[]>();
+  const [candidates, setCandidates] = useState<ApprovalCandidate[] | undefined>(
+    drafted?.operations
+  );
   const [saving, setSaving] = useState(false);
   const [refusals, setRefusals] = useState<string[]>();
-  const approval = useApprovalChoice([]);
+  const approval = useApprovalChoice(drafted?.operations ?? []);
   const chosen = candidates ? selectedCandidates(candidates, approval.choice.selected) : [];
 
   const review = () => {
@@ -200,7 +209,12 @@ function PasteToolsDialog({
       footer={
         candidates ? (
           <>
-            <Button variant="outline" disabled={saving} onClick={() => setCandidates(undefined)}>
+            <Button
+              variant="outline"
+              disabled={saving}
+              data-connection-discard=""
+              onClick={() => (drafted ? onClose() : setCandidates(undefined))}
+            >
               {t("connectionCreate.discard")}
             </Button>
             <Button
@@ -226,13 +240,18 @@ function PasteToolsDialog({
     >
       {candidates ? (
         <div className="grid min-w-0 gap-4">
+          {drafted ? (
+            <p className="text-body text-muted-foreground" data-connection-drafted="">
+              {t("connectionCreate.draftedIntro", { title })}
+            </p>
+          ) : null}
           <ConnectionApprovalList
             candidates={candidates}
             choice={approval.choice}
             onSelectedChange={approval.setSelected}
             onSurfacesChange={approval.setSurfaces}
             declared
-            source={text}
+            {...(drafted ? {} : { source: text })}
             disabled={saving}
           />
           {refusals ? <ApprovalRefusals refusals={refusals} /> : null}
@@ -263,8 +282,8 @@ export function ApprovalRefusals({ refusals }: { refusals: readonly string[] }) 
 
 /**
  * The tools of a REST API on its page: pasted as YAML into the approval list, or drafted by the
- * agent in the chat beside the page, whose YAML is pasted here in turn. Nothing is saved before
- * the person approves.
+ * agent in the chat beside the page, whose card opens the list here with its draft. Nothing is
+ * saved before the person approves.
  */
 export function RestToolsSection({
   asset,
@@ -279,6 +298,7 @@ export function RestToolsSection({
 }) {
   const { t } = useTranslation();
   const [pasting, setPasting] = useState(false);
+  const opened = useOpenedConnectionDraft(asset.name);
   const { config } = asset;
   const title =
     typeof config.displayName === "string" && config.displayName !== ""
@@ -299,9 +319,16 @@ export function RestToolsSection({
             }
           : {})}
       />
-      {pasting ? (
-        <PasteToolsDialog
-          onClose={() => setPasting(false)}
+      {pasting || opened.draft ? (
+        <AddToolsDialog
+          // A draft opened over a paste in progress starts its own dialog.
+          key={opened.draft ? "drafted" : "pasted"}
+          title={title}
+          {...(opened.draft ? { drafted: opened.draft } : {})}
+          onClose={() => {
+            setPasting(false);
+            opened.close();
+          }}
           approve={async (approved, surfaces) => {
             const outcome = await frame.save(
               withApprovedOperations(asset.config, approved, surfaces)

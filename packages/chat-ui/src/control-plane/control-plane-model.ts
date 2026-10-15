@@ -7,7 +7,12 @@ import type {
   SafeConfig
 } from "@vivd-catalyst/api-client";
 import type { AgentCreation } from "../agents/agents-model";
-import { AGENT_ASSET_KIND, mayCreateAgents, resolveBuildRights } from "../build-area/build-rights";
+import {
+  AGENT_ASSET_KIND,
+  CONNECTION_ASSET_KIND,
+  mayCreateAgents,
+  resolveBuildRights
+} from "../build-area/build-rights";
 import {
   buildLocationOfRoute,
   buildRouteOfLocation,
@@ -82,6 +87,11 @@ export interface ControlPlaneModel {
   canViewBuild: boolean;
   /** The viewer may open agents in Build: the Agents page links each agent to its page there. */
   canOpenAgentsInBuild: boolean;
+  /**
+   * The viewer may write a Connection in Build: the card of a drafted REST API's tools opens
+   * its approval list.
+   */
+  mayWriteConnections: boolean;
   /**
    * Present when the viewer may start a new agent in Studio: the Agents page offers it, with
    * the Namespaces its dialog lets the viewer name the agent in.
@@ -259,6 +269,10 @@ export function useControlPlaneModel({
     canViewAdministration: firstAdministrationRoute(catalog, build, viewer) !== undefined,
     canViewBuild,
     canOpenAgentsInBuild: canViewBuild && buildRights.reads(AGENT_ASSET_KIND),
+    mayWriteConnections:
+      canViewBuild &&
+      (buildRights.mayCreate(CONNECTION_ASSET_KIND) ||
+        buildRights.may("write", { kind: CONNECTION_ASSET_KIND })),
     agentCreation:
       canViewBuild && mayCreateAgents(buildRights, config?.features.configAssets)
         ? {

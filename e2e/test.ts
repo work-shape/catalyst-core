@@ -97,6 +97,19 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["superadmin manages config assets with validation and conflict protection"]
   },
   {
+    name: "drafted-connection-that-is-new",
+    reason:
+      "Chromium's own log line: the card of the agent's draft reads the Connection of its id, " +
+      "for a new id the instance answers 404 and the card opens the New connection dialog, " +
+      "which the test asserts.",
+    matches: requestAnswered(404),
+    path: /^\/api\/v1\/assets\/connection\/e2e-draft-new-/u,
+    tests: ["en", "de"].map(
+      (locale) =>
+        `${locale}: the agent's draft is a card that opens the approval list, and only the approval saves it`
+    )
+  },
+  {
     name: "asset-that-is-not-there",
     reason:
       "Chromium's own log line: the test opens the address of an agent that does not exist, " +
