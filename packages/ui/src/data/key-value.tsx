@@ -1,8 +1,7 @@
-import { useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
-import { Button } from "../actions/button";
+import { useId, type HTMLAttributes, type ReactNode } from "react";
 import { cn } from "../cn";
-import { useUiLabels } from "../ui-root";
 import { CopyButton } from "./copy-button";
+import { FoldToggle, useFold } from "./folded-text";
 
 /** `inline` puts the label beside the value; `stacked` puts it above. */
 export type KeyValueLayout = "inline" | "stacked";
@@ -40,7 +39,7 @@ export function KeyValue({
   ...props
 }: KeyValueProps) {
   const valueId = useId();
-  const fold = useFold(foldable);
+  const fold = useFold<HTMLDivElement>(foldable);
   return (
     <div
       className={cn(
@@ -64,69 +63,14 @@ export function KeyValue({
           )}
         </div>
         {fold.long ? (
-          <FoldToggle folded={fold.folded} controls={valueId} onToggle={fold.toggle} />
+          <FoldToggle
+            component="KeyValue"
+            folded={fold.folded}
+            controls={valueId}
+            onToggle={fold.toggle}
+          />
         ) : null}
       </dd>
     </div>
   );
-}
-
-function FoldToggle({
-  folded,
-  controls,
-  onToggle
-}: {
-  folded: boolean;
-  controls: string;
-  onToggle(): void;
-}) {
-  const labels = useUiLabels("KeyValue");
-  return (
-    <Button
-      type="button"
-      variant="link"
-      className="h-auto p-0 text-caption"
-      aria-expanded={!folded}
-      aria-controls={controls}
-      onClick={onToggle}
-    >
-      {folded ? labels.showMore : labels.showLess}
-    </Button>
-  );
-}
-
-/**
- * Folding of a long value. The control shows only when the value is longer than the three
- * lines it folds to, which is measured, because the same text is long in a narrow column and
- * short in a wide one.
- */
-function useFold(foldable: boolean) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [long, setLong] = useState(false);
-  const folded = foldable && !expanded;
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!foldable || !node || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    // Unfolded, the value shows whole and cannot be measured against its fold; it stays long.
-    const measure = () => {
-      if (node.classList.contains("line-clamp-3")) {
-        setLong(node.scrollHeight > node.clientHeight + 1);
-      }
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [foldable]);
-
-  return {
-    ref,
-    folded,
-    long: foldable && long,
-    toggle: () => setExpanded((value) => !value)
-  };
 }

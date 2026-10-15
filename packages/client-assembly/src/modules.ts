@@ -7,7 +7,7 @@ import {
   type ModuleSnapshot
 } from "@vivd-catalyst/core";
 import { resolveModuleSwitches, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { PLATFORM_ASSET_TOOLS } from "@vivd-catalyst/tool-execution";
+import { CONNECTION_DRAFT_TOOL_NAME, PLATFORM_ASSET_TOOLS } from "@vivd-catalyst/tool-execution";
 import type { ClientInstanceCapability } from "./capabilities";
 import { assembleDataStores, dataStoresModule } from "./data-stores";
 import { assembleKnowledge, knowledgeModule } from "./knowledge";
@@ -103,6 +103,8 @@ const connectionsModule = defineModule({
     "connections.list_tools"
   ],
   kinds: ["connection"],
+  // The agent's draft of a REST API's tools checks them against the instance's Connector types.
+  tools: [CONNECTION_DRAFT_TOOL_NAME],
   jobKinds: ["connection.discover"],
   ui: ["build.connections"]
 });

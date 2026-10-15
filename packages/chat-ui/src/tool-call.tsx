@@ -22,6 +22,8 @@ import { ToolArtifactList } from "./artifact-download-card";
 import { useTranslation } from "./i18n";
 import { PageSaveCard } from "./pages/page-card";
 import { PAGE_SAVE_TOOL_NAME } from "./pages/page-save";
+import { CONNECTION_DRAFT_TOOL_NAME, readConnectionDraft } from "./build-area/connection-draft";
+import { ConnectionDraftCard } from "./build-area/connection-draft-card";
 import { useToolDisplayPanel } from "./tool-display-panel";
 import {
   readWorkspacePromotedArtifactsData,
@@ -127,6 +129,15 @@ export function ToolCallPart({
   const opened = standingAssetOpen({ toolName, toolCallId, result, isError });
   if (opened) {
     return <AssetOpenedLine open={opened} />;
+  }
+
+  // The agent's draft of REST API tools: a card whose button opens the approval list.
+  const connectionDraft =
+    toolName === CONNECTION_DRAFT_TOOL_NAME && state === "completed"
+      ? readConnectionDraft(result)
+      : undefined;
+  if (connectionDraft) {
+    return <ConnectionDraftCard draft={connectionDraft} />;
   }
 
   if (approvalRequest) {
@@ -639,6 +650,7 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.assets.validate": "Check the draft",
     "platform.assets.put": "Save the draft",
     "platform.assets.operations": "Look up operations",
+    "platform.connections.draft_tools": "Draft REST API tools",
     read_skill: "Read instructions",
     show_view: "Widget",
     "structured_data.publish": "Save structured data",
@@ -661,6 +673,7 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.assets.validate": "Entwurf prüfen",
     "platform.assets.put": "Entwurf speichern",
     "platform.assets.operations": "Operationen nachschlagen",
+    "platform.connections.draft_tools": "REST-API-Tools entwerfen",
     read_skill: "Anleitung lesen",
     show_view: "Widget",
     "structured_data.publish": "Strukturierte Daten speichern",
