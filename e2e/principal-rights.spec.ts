@@ -49,6 +49,7 @@ test("a superadmin gives a service principal a Connection, is refused one that i
   });
   const crm = planted("Sample CRM");
   const ledger = planted("Sample ledger");
+  const tickets = planted("Sample tickets");
   const label = `Monthly check ${randomUUID().slice(0, 6)}`;
   let principalId: string | undefined;
 
@@ -79,6 +80,7 @@ test("a superadmin gives a service principal a Connection, is refused one that i
   try {
     await plantConnection(crm);
     await plantConnection(ledger);
+    await plantConnection(tickets);
     const created = await requestWithOrigin(
       page,
       "post",
@@ -126,14 +128,14 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await shoot("principal-rights-empty", async () => {
         await rights.evaluate((section) => section.scrollIntoView({ block: "start" }));
         await expect(
-          rights.getByRole("button", { name: "Give this principal a Connection to use" })
+          rights.getByRole("button", { name: "Give this service principal a Connection to use" })
         ).toBeVisible();
       });
     });
 
     await test.step("the dialog offers the Connections and the right the instance names, by keyboard", async () => {
       const first = rights.getByRole("button", {
-        name: "Give this principal a Connection to use"
+        name: "Give this service principal a Connection to use"
       });
       await first.focus();
       await page.keyboard.press("Enter");
@@ -207,7 +209,6 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await expect(service).toHaveCount(1);
       await expect(service).toContainText(label);
       await expect(service).toContainText("Service principal");
-      await expect(service).toContainText(detail.principal.name);
       await shoot("connection-who-may-use-it", async () => {
         await access.scrollIntoViewIfNeeded();
         await expect(service).toBeVisible();
@@ -228,7 +229,7 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await expect(confirm).toHaveCount(0);
       await expect(rows).toHaveCount(0);
       await expect(
-        rights.getByRole("button", { name: "Give this principal a Connection to use" })
+        rights.getByRole("button", { name: "Give this service principal a Connection to use" })
       ).toBeVisible();
     });
 
@@ -250,6 +251,23 @@ test("a superadmin gives a service principal a Connection, is refused one that i
         }
       );
       expect(given.ok()).toBe(true);
+      // The administrator is denied the tickets, so cannot give them to the principal either.
+      const denied = await requestWithOrigin(
+        page,
+        "post",
+        `${apiBaseUrl}/api/v1/instance/access/grants`,
+        {
+          data: {
+            holderKind: "user",
+            holderId: person.id,
+            action: "connection.use",
+            effect: "deny",
+            scopeKind: "asset",
+            scopeId: tickets.id
+          }
+        }
+      );
+      expect(denied.ok(), await denied.text()).toBe(true);
       await page.context().clearCookies();
       await signIn(page, admin);
       await page.goto(`/build/connections/${crm.name}`);
@@ -261,12 +279,158 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       await expect(access.locator('[data-holder-kind="service_principal"]')).toHaveCount(1);
       await expect(access.getByText(label).first()).toBeVisible();
     });
+
+    await test.step("the dialog offers the administrator only what they hold, and says why not the rest", async () => {
+      await openPrincipal();
+      await rights.getByRole("button", { name: "Add right" }).click();
+      await expect(dialog).toBeVisible();
+      // The principal holds the CRM already, the ledger is gone: the tickets are all there is,
+      // and they are not offered.
+      await expect(
+        dialog.getByText(
+          "You do not hold this right on any of these resources yourself, so you cannot give it."
+        )
+      ).toBeVisible();
+      await dialog.getByRole("button", { name: /^Connection:/u }).click();
+      const ticketsOption = page.getByRole("option", { name: /Sample tickets/u });
+      await expect(ticketsOption).toHaveAttribute("aria-disabled", "true");
+      await expect(ticketsOption).toContainText(
+        "You do not hold this right here yourself, so you cannot give it."
+      );
+      await shoot("principal-rights-not-held", async () => {
+        await expect(ticketsOption).toBeVisible();
+      });
+      await page.keyboard.press("Escape");
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(dialog).toHaveCount(0);
+    });
   } finally {
     if (principalId !== undefined) {
       await removeServicePrincipal(principalId);
     }
     await removeGrantsOn(crm.id);
+    await removeGrantsOn(tickets.id);
     await removeConnection(crm.id);
+    await removeConnection(tickets.id);
     await removeConnection(ledger.id);
+  }
+});
+
+test("a principal manager without user administration gives only rights they hold", async ({
+  page,
+  accessState: _accessState,
+  releaseConnections: _releaseConnections
+}) => {
+  test.setTimeout(120_000);
+  const crm: PlantedConnection = {
+    id: `cfga_${randomUUID()}`,
+    name: `e2e_${randomUUID().slice(0, 8)}`,
+    displayName: "Restricted register",
+    url: ALLOWED_URL,
+    authScheme: "none"
+  };
+  let principalId: string | undefined;
+  const manager = {
+    email: "e2e-principal-manager@example.test",
+    password: "e2e-principal-manager-password"
+  };
+  await signIn(page, manager);
+  const person: { id: string } = await (await page.request.get(`${apiBaseUrl}/api/v1/me`)).json();
+  await page.context().clearCookies();
+  await signIn(page, superadmin);
+  try {
+    await plantConnection(crm);
+    const created = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/instance/service-principals`,
+      { data: { displayLabel: "Review automation", permissions: ["config_assets.read"] } }
+    );
+    expect(created.ok()).toBe(true);
+    const detail: { principal: { id: string } } = await created.json();
+    principalId = detail.principal.id;
+    expect(
+      (
+        await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/access/grants`, {
+          data: {
+            holderKind: "user",
+            holderId: person.id,
+            action: "connection.use",
+            effect: "deny",
+            scopeKind: "asset",
+            scopeId: crm.id
+          }
+        })
+      ).ok()
+    ).toBe(true);
+    await page.context().clearCookies();
+    await signIn(page, manager);
+    expect(
+      (
+        await page.request.get(
+          `${apiBaseUrl}/api/v1/instance/access/effective?holderKind=user&holderId=${person.id}`
+        )
+      ).status()
+    ).toBe(200);
+    expect(
+      (
+        await page.request.get(
+          `${apiBaseUrl}/api/v1/instance/access/grants?holderKind=service_principal&holderId=${principalId}`
+        )
+      ).status()
+    ).toBe(200);
+    const refused = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/instance/access/grants`,
+      {
+        data: {
+          holderKind: "service_principal",
+          holderId: principalId,
+          action: "connection.use",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: crm.id
+        }
+      }
+    );
+    expect(refused.status()).toBe(403);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    for (const locale of ["de", "en"]) {
+      await page.goto("/");
+      await page.evaluate(
+        (language) => window.localStorage.setItem("vivd-catalyst:locale", language),
+        locale
+      );
+      await page.goto(`/settings/instance/api-access?principal=${principalId}`);
+      const rights = page.locator("[data-principal-rights]");
+      await expect(rights.getByRole("button").first()).toBeVisible();
+      await rights.getByRole("button").first().click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      await dialog
+        .getByRole("button", { name: locale === "de" ? /^Verbindung:/u : /^Connection:/u })
+        .click();
+      const option = page.getByRole("option", { name: /Restricted register/u });
+      await expect(option).toHaveAttribute("aria-disabled", "true");
+      await expect(option).toContainText(
+        locale === "de"
+          ? "Du hast dieses Recht hier selbst nicht"
+          : "You do not hold this right here yourself"
+      );
+      if (shotsDir) {
+        await mkdir(shotsDir, { recursive: true });
+        await page.screenshot({
+          path: join(shotsDir, `principal-manager-grant-dialog-${locale}-1280.png`),
+          animations: "disabled"
+        });
+      }
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+    }
+  } finally {
+    if (principalId) await removeServicePrincipal(principalId);
+    await removeGrantsOn(crm.id);
+    await removeConnection(crm.id);
   }
 });

@@ -4023,8 +4023,8 @@ function unlistedInHelp(skill: string, help: string): string[] {
       }
     } else if (second === "" || second.startsWith("-")) {
       problems.push(`command '${first}' in: ${command}`);
-    } else if (!listed(second)) {
-      // Any other first word is a kind; its second word is a verb of every kind.
+    } else if (!listed(second) && !listed(`${first} ${second}`)) {
+      // A shared kind verb or a named operation such as `workflow runs`.
       problems.push(`'${first} ${second}' in: ${command}`);
     }
   }
@@ -4046,13 +4046,14 @@ describe("the Catalyst skill the CLI ships", () => {
     // The check sees a command, a verb and an option the CLI does not have.
     expect(
       unlistedInHelp(
-        "Run `catalyst init` and `catalyst agent rename x`, then `catalyst config sync --all`.",
+        "Run `catalyst init` and `catalyst agent rename x`, then `catalyst config sync --all` and `catalyst agent hits x`.",
         help
       )
     ).toEqual([
       "command 'init' in: catalyst init",
       "'agent rename' in: catalyst agent rename x",
       "command 'config sync' in: catalyst config sync --all",
+      "'agent hits' in: catalyst agent hits x",
       "option '--all'"
     ]);
   });

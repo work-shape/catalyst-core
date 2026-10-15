@@ -201,7 +201,8 @@ export function useControlPlaneModel({
           catalog,
           build,
           viewer,
-          workspacesReady: collaborationWorkspacesReady
+          workspacesReady: collaborationWorkspacesReady,
+          platformReady: !platformQuery.isPending
         })
       : undefined;
   const canViewUiLibrary = canViewAdministrationPanel(user);

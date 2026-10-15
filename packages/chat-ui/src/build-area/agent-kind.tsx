@@ -12,7 +12,7 @@ import { useTranslation } from "../i18n";
 import { useAppToolsRead } from "../apps/app-tools-group";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { apiErrorMessage } from "../workspace-utils";
-import { AgentAvailabilityEditor, AgentEditor } from "./agent-editor";
+import { AgentEditor } from "./agent-editor";
 import { agentConfigToForm, startedAgentForm } from "./asset-form-model";
 import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
 import { AGENT_ASSET_KIND } from "./build-rights";
@@ -156,30 +156,30 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
           : undefined
       }
       availability={
-        asset && instanceWrite ? (
-          <AgentAvailabilityEditor
-            availability={availability}
-            isDefault={isDefault}
-            workspaces={administeredWorkspacesQuery.data ?? []}
-            workspacesError={
-              administeredWorkspacesQuery.error
+        asset && instanceWrite
+          ? {
+              saved: availability,
+              workspaces: administeredWorkspacesQuery.data ?? [],
+              workspacesError: administeredWorkspacesQuery.error
                 ? apiErrorMessage(administeredWorkspacesQuery.error, undefined)
-                : undefined
+                : undefined,
+              save: (next) =>
+                placement.setAgentAvailability
+                  .mutateAsync({
+                    name: asset.name,
+                    assetId: asset.id,
+                    loaded: availability,
+                    ...next
+                  })
+                  .then(
+                    (saved) => {
+                      setAvailability(saved);
+                      return undefined;
+                    },
+                    (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
+                  )
             }
-            mutating={placement.setAgentAvailability.isPending}
-            onSave={(next) =>
-              placement.setAgentAvailability
-                .mutateAsync({ name: asset.name, assetId: asset.id, loaded: availability, ...next })
-                .then(
-                  (saved) => {
-                    setAvailability(saved);
-                    return undefined;
-                  },
-                  (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
-                )
-            }
-          />
-        ) : undefined
+          : undefined
       }
     />
   );

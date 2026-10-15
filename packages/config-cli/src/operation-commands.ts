@@ -174,7 +174,11 @@ export async function runOperationCommand(argv: readonly string[], base: Options
 }
 
 /** The catalog chooses the existing client method; the server chooses whether it may run. */
-async function call(api: ConfigApi, operation: Operation, input: CallInput): Promise<unknown> {
+export async function call(
+  api: ConfigApi,
+  operation: Operation,
+  input: CallInput
+): Promise<unknown> {
   const invoke = (client: ApiClient, idempotencyKey?: string): unknown => {
     let method: unknown = client;
     for (const segment of operation.id.split("."))
@@ -195,13 +199,27 @@ function isMethod(value: unknown): value is (input: CallInput) => unknown {
   return typeof value === "function";
 }
 
-async function printCall(options: Options, operation: Operation, result: unknown): Promise<number> {
+export async function printCall(
+  options: Options,
+  operation: Operation,
+  result: unknown,
+  format?: (value: unknown) => string
+): Promise<number> {
+  const render = format ?? ((value: unknown) => JSON.stringify(value, null, 2));
   if (isRecord(result) && operation.accepted) {
     if (result.status === "pending_approval") {
-      writeOutput(options, JSON.stringify({ status: result.status, run: result.run }, null, 2));
+      if (format === undefined) {
+        writeOutput(options, render({ status: result.status, run: result.run }));
+      } else {
+        const id = isRecord(result.run) ? result.run.id : "unknown";
+        writeError(
+          options,
+          `Waits for an approval on the instance; nothing has changed yet (Operation Run ${id}).`
+        );
+      }
       return 3;
     }
-    writeOutput(options, JSON.stringify(result.output ?? null, null, 2));
+    writeOutput(options, render(result.output ?? null));
   } else if (result instanceof Blob) {
     writeOutput(
       options,
@@ -217,7 +235,7 @@ async function printCall(options: Options, operation: Operation, result: unknown
       throw toConfigApiError(error);
     }
   } else {
-    writeOutput(options, JSON.stringify(result ?? null, null, 2));
+    writeOutput(options, render(result ?? null));
   }
   return 0;
 }

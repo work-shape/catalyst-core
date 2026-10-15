@@ -21,7 +21,8 @@ const CONSUMER_SET = [
 // Installed next to them for its bin only; it has no module entry to import.
 const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000;
-// chat-ui and ui ship src/ next to dist/ for Tailwind scanning. chat-server ships the pinned
+// ui ships src/ next to dist/ for Tailwind scanning; chat-ui scans dist/ and ships only its
+// unbuilt stylesheet and Vite helpers beside it. chat-server ships the pinned
 // view runtime it serves, about 230 kB packed, its own code, about 150 kB packed, and every
 // released App Kit version, about 385 kB packed each, most of it the chart engine; 1.3.0 is about
 // 450 kB, because the library it bundles gained the flow canvas, and 1.4.0, which drops the
@@ -31,13 +32,10 @@ const MAX_TARBALL_BYTES = 300_000;
 // stop the growth before the limit moves again. postgres-store ships its migrations with one
 // schema snapshot each, about 9 kB packed per migration; 69 migrations are 620 kB, 82 are 814 kB
 // (2026-10-14, the Knowledge Base migration).
-// Raised chat-ui to 1.3 MB on 2026-10-14 for the guardrail pages of EW-6a, the Studio scope
-// filter and workspace owners of WS-OWN-1a, Connect a local agent of CONNECT-1a, the tool chips
-// of TOOLS-1, Knowledge Bases of KB-1, the New connection dialog of CS-5a and the agent's opens
-// and first saves of NAV-2; src/ and dist/ both count each line. Raised to 1.31 MB on
-// 2026-10-15 for the name check of UXA-2's create forms, 232 bytes over.
+// chat-ui dropped its duplicate TypeScript source on 2026-10-15; Tailwind scans the compiled
+// components in published packages and the original source during workspace development.
 const MAX_TARBALL_BYTES_BY_DIR = {
-  "chat-ui": 1_310_000,
+  "chat-ui": 1_300_000,
   ui: 500_000,
   // Raised on 2026-10-14 for App Kit 1.4.0 and the guardrail assets of EW-6a. Follow-up
   // KIT-SHARE-1: vendored App Kit versions share React and the chart engine; then lower the

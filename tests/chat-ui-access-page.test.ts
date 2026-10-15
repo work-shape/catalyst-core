@@ -212,9 +212,9 @@ describe("Grants tab", () => {
     const markup = render(grantsTab({ grants: [namespaceGrant, second, orphanedDeny] }));
     expect(markup.split('data-testid="grant-row"')).toHaveLength(3);
     // The verbs come in the page's order, whatever order the rows were written in.
-    expect(markup.indexOf("Read agents")).toBeLessThan(markup.indexOf("Write agents"));
+    expect(markup.indexOf("View agents")).toBeLessThan(markup.indexOf("Edit agents"));
     // A deny says so in words and carries its own mark; colour is not the only difference.
-    expect(markup).toContain("Denied: Read agents");
+    expect(markup).toContain("Denied: View agents");
     expect(markup).toContain('data-effect="deny"');
     expect(markup).toContain('data-effect="allow"');
   });
@@ -229,13 +229,14 @@ describe("Grants tab", () => {
     ]);
   });
 
-  it("names an asset by its id when the server leaves the name out", () => {
+  it("says of an asset the server leaves unnamed that the reader cannot see it, never its id", () => {
     const unnamed: PermissionGrantRow = {
       ...orphanedDeny,
       scopeAsset: { kind: "agent", active: true }
     };
     const markup = render(grantsTab({ grants: [unnamed] }));
-    expect(markup).toContain("Asset asset-gone");
+    expect(markup).toContain("An asset you cannot see");
+    expect(markup).not.toContain("asset-gone");
     expect(markup).not.toContain("Asset no longer exists");
   });
 
@@ -707,9 +708,11 @@ describe("what the dialogs send", () => {
     expect(named).toContain("Connection crm");
     expect(named).toContain("Use connections");
     expect(named).toContain("Workspace Team");
-    expect(named).toContain("Read connections");
+    expect(named).toContain("View connections");
     // Without the workspaces the row names the workspace by its id.
-    expect(render(grantsTab({ grants: [inWorkspace] }))).toContain("Workspace ws-1");
+    const unnamed = render(grantsTab({ grants: [inWorkspace] }));
+    expect(unnamed).toContain("A workspace you cannot see");
+    expect(unnamed).not.toContain("ws-1");
     // A new agent or skill right names a workspace, so the page loads the workspaces; so it does
     // for a Connection right written on a workspace before NS-0, listed by the workspace's name.
     expect(grantsNameWorkspaces(["connection"], [])).toBe(true);

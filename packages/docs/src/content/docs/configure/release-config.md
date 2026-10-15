@@ -1059,16 +1059,16 @@ The connector type `http_api` reads a REST interface by GET. It has no discovery
 
 ```yaml
 connections:
-  exampledata:
+  accounting_source:
     connectorType: http_api
-    displayName: Exampledata
+    displayName: Accounting source
     settings:
-      baseUrl: https://api.exampledata.com/datevconnect
+      baseUrl: https://accounting.example.com/api
       headers:
         x-client-instance-id: 6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b
       testPath: /health
     authScheme: bearer
-    secret: EXAMPLEDATA_KEY
+    secret: ACCOUNTING_SOURCE_KEY
     operations:
       - name: open_items
         effect: reading
@@ -1199,17 +1199,17 @@ dataStores:
 - `sizeLimit` is the most one store may hold, as a whole number of `MB` or `GB`. A store's own `sizeLimit` in `store.yaml` names less and never more. At the limit no rows are added and reading keeps working. Every insert reads the size of the database before it writes and after, and is rolled back where it passed the limit: no row that is kept lies beyond it, and the files exceed it only by what the inserts of one moment wrote, under 256 MiB for rows alone. Default `5GB`.
 - `poolMaxConnections` is the most connections one process holds to one store at once, between 1 and 10. Default 5.
 
-### Build rules for data scope (SCOPE-0)
+### Build rules for data scope
 
 Prepare stores and their readers for a later per-person filter by client (Mandant):
 
-- Give every per-client table a `NOT NULL` column for the client key, for example `mandant_nr`, including findings, snapshots, open items and run history. Aggregate views group by that column.
-- A Workflow that copies data from an outside system writes the client key on every row. Per-client work runs as child runs keyed by the client, and aggregates keep the key.
-- Every `http_api` operation whose path or result is per client takes the client as a named parameter and returns the client key on every item.
-- App `sql` reads use those per-client tables. Do not put a structured Knowledge Base with free SQL on these stores.
-- Until the filter exists, everyone who can use the App sees every client the Connection's outside account sees. Limit that account in the outside system to the agreed clients.
+- Give every per-client table a `NOT NULL` column for the client key, named consistently across the store (for example `mandant_nr`), including findings, snapshots, open items and run history. Aggregate views group by that column.
+- A Workflow that copies data from an outside system writes the client key on every row. Design per-client work as child runs keyed by the client, and keep the key in aggregates. Child runs are not available yet; do not replace them with an unkeyed cross-client run.
+- Every `http_api` operation whose path or result is per client takes the client as a named parameter and returns the client key on every item. Keep a mapping table when source ids and client keys differ.
+- App `sql` reads use those per-client tables. Do not put a structured Knowledge Base with free SQL on these stores. Named queries are not available yet.
+- Until the filter exists, say who an App or Workflow is for when it serves only part of the firm. Everyone in that audience must be allowed to see every client the Connection's outside account sees. Limit that account in the outside system to the agreed clients.
 
-App SQL validation refuses the parameter name `scope` and the bindings `$viewer.scope` and `$viewer.scope_all`; they are reserved for the later data-scope slices. The binding `$viewer.groups` is refused too. Use an ordinary parameter such as `mandant_nr` for now. These rules do not filter anything per person yet.
+Table `scope` in `store.yaml`, config `scopes` and operation declaration `scope` are reserved and refused at save. App SQL validation refuses the parameter name `scope` and the bindings `$viewer.scope` and `$viewer.scope_all`; they are reserved for the later data-scope slices. The binding `$viewer.groups` is refused too. Use an ordinary parameter such as `mandant_nr` for now. These rules do not filter anything per person yet.
 
 ## Config Is Not A Secret Store
 

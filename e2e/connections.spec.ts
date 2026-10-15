@@ -250,8 +250,8 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       await expect(page.getByRole("listbox")).toHaveCount(0);
       await dialog.getByRole("radio", { name: "Connections", exact: true }).check();
       // A Connection is read or used through a grant; writing and deleting stay with the role.
-      await expect(dialog.getByLabel("Read", { exact: true })).toBeVisible();
-      await expect(dialog.getByLabel("Write", { exact: true })).toHaveCount(0);
+      await expect(dialog.getByLabel("View", { exact: true })).toBeVisible();
+      await expect(dialog.getByLabel("Edit", { exact: true })).toHaveCount(0);
       await expect(dialog.getByLabel("Delete", { exact: true })).toHaveCount(0);
       // A new Connection right has one place, one Connection, so there is no place to choose:
       // no workspace owns a Connection, and a Namespace is no longer offered.
@@ -291,9 +291,10 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       await dialog.getByRole("button", { name: "Create right" }).click();
       await expect(dialog).toBeHidden();
 
-      const grantRow = page.getByTestId("grant-row").filter({ hasText: connection.name });
-      await expect(grantRow).toContainText("E2E Connections");
-      await expect(grantRow).toContainText(`Connection ${connection.name}`);
+      // The row names the Connection by its title, never by its id.
+      const grantRow = page.getByTestId("grant-row").filter({ hasText: "E2E Connections" });
+      await expect(grantRow).toContainText("Connection Client records");
+      await expect(grantRow).not.toContainText(connection.name);
       await expect(grantRow.locator('[data-effect="allow"]')).toHaveText("Use connections");
     });
 
@@ -460,7 +461,7 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
         await page.getByRole("tab", { name: /^Rights/u }).click();
         const row = page
           .getByTestId("grant-row")
-          .filter({ hasText: "E2E Connections", hasNotText: connection.name });
+          .filter({ hasText: `Workspace ${workspace.name}` });
         await expect(row).toContainText(`Workspace ${workspace.name}`);
         await expect(row).not.toContainText(workspace.id);
         await row.getByRole("button", { name: /^Actions for the right of/u }).click();

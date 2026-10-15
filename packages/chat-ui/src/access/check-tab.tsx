@@ -39,7 +39,8 @@ import {
   type CheckedKind,
   type LoadFailure
 } from "./access-model";
-import { assetKindLabelKey, verbLabelKeys } from "./grant-words";
+import { assetKindLabelKey } from "./grant-words";
+import { verbLabel } from "./right-words";
 
 /** From this many entries on, a picker of the check shows its search field. */
 const PICKER_SEARCH_FROM_COUNT = 8;
@@ -83,7 +84,7 @@ function decidedBy(action: CheckedAction, t: Translate): string {
     ? row
     : t("access.decidedByDenyThrough", {
         deny: row,
-        action: t(verbLabelKeys[action.deniedThrough])
+        action: verbLabel(action.deniedThrough, t)
       });
 }
 
@@ -424,7 +425,7 @@ function CheckResult({
           <TableBody>
             {actions.map((action) => (
               <TableRow key={action.verb} data-testid="check-row" data-verb={action.verb}>
-                <TableCell>{t(verbLabelKeys[action.verb])}</TableCell>
+                <TableCell>{verbLabel(action.verb, t)}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Badge tone={action.allowed ? "success" : "danger"}>

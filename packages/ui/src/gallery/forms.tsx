@@ -318,15 +318,19 @@ export const formsGallery: GalleryGroup = {
               }
             ]}
           />
-          <RadioGroup
-            variant="plain"
-            label={text.availability}
-            defaultValue="all"
-            options={[
-              { value: "all", label: text.availabilityAll },
-              { value: "selected", label: text.availabilitySelected }
-            ]}
-          />
+          <section className="grid gap-2" aria-label={text.availability}>
+            <h3 className="text-title-sm">{text.availability}</h3>
+            <RadioGroup
+              variant="plain"
+              label={text.availability}
+              labelHidden
+              defaultValue="all"
+              options={[
+                { value: "all", label: text.availabilityAll },
+                { value: "selected", label: text.availabilitySelected }
+              ]}
+            />
+          </section>
           <RadioGroup
             variant="plain"
             label={text.disabled}

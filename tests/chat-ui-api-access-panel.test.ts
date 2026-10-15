@@ -62,11 +62,14 @@ describe("API access panel", () => {
     );
 
     expect(markup).toContain("API access");
-    expect(markup).toContain("Machine identities are managed separately from users.");
+    expect(markup).toContain("Accounts for the CLI and automation, managed apart from users.");
     expect(markup).toContain("Catalyst CLI");
     expect(markup).toContain("CI production");
     expect(markup).toContain("cat_live_abc123");
-    expect(markup).toContain("config_assets:read");
+    // The principal's keys and the key's scopes are named in words, never by their ids.
+    expect(markup).toContain("View configuration");
+    expect(markup).toContain("Push configuration releases");
+    expect(markup).not.toContain("config_assets");
     expect(markup).toContain("Created");
     expect(markup).toContain("Expires");
     expect(markup).toContain("Last used");
@@ -96,18 +99,18 @@ describe("API access panel", () => {
     );
 
     expect(markup).toContain("API-Zugang");
-    expect(markup).toContain("Noch keine Service Principals");
+    expect(markup).toContain("Noch keine Technischen Konten");
     expect(markup).not.toContain("never-rendered");
   });
 
-  it("keeps API access inspectable but hides mutation controls from view-only managers", () => {
+  it("tells a reader who may not see the service principals why none are listed", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
         { children: null, locale: "en" },
         createElement(ApiAccessPanel, {
-          may: { principals: false, keys: false },
-          principals: [detail],
+          may: { principals: false, keys: true },
+          principals: [],
           loading: false,
           mutating: false,
           onCreatePrincipal: noopResult,
@@ -122,8 +125,8 @@ describe("API access panel", () => {
       )
     );
 
-    expect(markup).toContain("Catalyst CLI");
-    expect(markup).toContain("config_assets:release");
+    expect(markup).toContain("You may not see the service principals.");
+    expect(markup).not.toContain("No service principals yet");
     expect(markup).not.toContain("Create service principal");
     expect(markup).not.toContain("Create API key");
     expect(markup).not.toContain(">Edit<");

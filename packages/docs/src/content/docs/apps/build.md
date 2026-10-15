@@ -9,14 +9,13 @@ An App is a Page that is kept. An agent writes the Page's files in its execution
 
 A quick Page may show data the agent wrote into it. Live data comes through named actions: one file per action in the folder `actions/`, which the build compiles into the manifest. The browser calls an action by its name and nothing else: it never calls a Connection, a Data Store or a Workflow directly, and it never holds a key.
 
-## Preparing data scope (SCOPE-0)
+## Preparing data scope
 
-- Give every per-Mandant table a `NOT NULL` Mandant column, named consistently across the store (for example `mandant_nr`). A Workflow copying source data writes it on every row. Keep the key in aggregates and run history.
-- Design per-Mandant work as child runs keyed by the Mandant (EW-13). Child runs are not available yet; do not replace them with an unkeyed cross-Mandant run.
-- Every `http_api` operation for Mandant data takes the Mandant as a named parameter and returns it on every item. Keep a mapping table when source ids and Mandant numbers differ.
-- App SQL reads use the per-Mandant tables; aggregate views group by the Mandant column. Do not expose these stores through a free-SQL Knowledge Base. Named queries wait for DS-6a.
-- Reserved at save: table `scope` in `store.yaml` and config `scopes` (SCOPE-1), operation declaration `scope` (SCOPE-2), and SQL `$viewer.scope` and `$viewer.scope_all` (SCOPE-1). `$viewer.groups` is dropped and refused; the SQL parameter name `scope` is reserved too. These names grant no data access today.
-- State the demo's audience explicitly. Until data scope is enforced, every person in that audience must be allowed to see every Mandant the shared source credential can read.
+Follow the [build rules for data scope](/configure/release-config/#build-rules-for-data-scope).
+
+- Read per-Mandant tables and group aggregates by the Mandant column.
+- Keep Mandant data out of a free-SQL Knowledge Base.
+- Say who an App is for when it serves only part of the firm. Everyone in that audience must be allowed to see every Mandant the shared source credential can read.
 
 ## The folder
 
@@ -71,7 +70,7 @@ Server code of an App's own, beyond these three kinds, is planned and not availa
 ### A `connection` action
 
 ```yaml
-connection: exampledata
+connection: accounting_source
 operation: list_bookings
 effect: reading
 description: The bookings of one client in one month.
@@ -169,14 +168,14 @@ A changing call passes `{ idempotencyKey }`: make the key when the person acts, 
 
 ## A complete example
 
-A dashboard of one ExampleData client: it reads bookings from the Connection `exampledata`, lists findings kept in the Data Store `findings`, adds a finding and starts the Workflow `monthly-check`. Replace the names of the Connection, its operation, the Data Store and the Workflow with those of the instance, and the mapping with the input the operation declares.
+A dashboard for one client of an accounting data source: it reads bookings from the Connection `accounting_source`, lists findings kept in the Data Store `findings`, adds a finding and starts the Workflow `monthly-check`. Replace the names of the Connection, its operation, the Data Store and the Workflow with those of the instance, and the mapping with the input the operation declares.
 
 ```yaml title="app.yaml"
-id: exampledata-dashboard
-name: ExampleData dashboard
+id: accounting-dashboard
+name: Accounting dashboard
 kit: 1.4.0
 connections:
-  - exampledata
+  - accounting_source
 dataStores:
   - name: findings
 actions:
@@ -185,7 +184,7 @@ actions:
 ```
 
 ```yaml title="actions/load-bookings.action.yaml"
-connection: exampledata
+connection: accounting_source
 operation: list_bookings
 effect: reading
 description: The bookings of one client in one month.
@@ -320,16 +319,16 @@ function Dashboard() {
 The same call from a plain HTML App, with one action on the Connection.
 
 ```yaml title="app.yaml"
-id: exampledata-bookings
-name: ExampleData bookings
+id: accounting-bookings
+name: Accounting bookings
 kit: 1.4.0
 entry: index.html
 connections:
-  - exampledata
+  - accounting_source
 ```
 
 ```yaml title="actions/load-bookings.action.yaml"
-connection: exampledata
+connection: accounting_source
 operation: list_bookings
 effect: reading
 input:
@@ -346,7 +345,7 @@ input:
 <!doctype html>
 <html>
   <head>
-    <title>ExampleData bookings</title>
+    <title>Accounting bookings</title>
   </head>
   <body>
     <h1>Bookings</h1>
