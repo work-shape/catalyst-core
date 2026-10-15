@@ -6,10 +6,10 @@ import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
 // Verifier's test for CARD-1 (PR 53). A card that opens as a whole lays its target's area over
-// everything in the card that is not a control. The App card still offers two things that only
-// a pointer reaches: the full date of the change as the title of its time, and the App's id,
-// which a builder reads and copies. Fails at 3f2b2482: the point of the time and of the id is
-// the target's, so the date never shows and the id cannot be selected.
+// everything in the card that is not a control. The App card still offers a thing that only a
+// pointer reaches: the full date of the change as the title of its time. Fails at 3f2b2482: the
+// point of the time is the target's, so the date never shows. The App's id left the card with
+// UXA-1a; a pointer resting on the card reads its whole name.
 
 const admin = { email: "e2e-apps@example.test", password: "e2e-apps-password" };
 const idSchema = z.object({ id: z.string() });
@@ -23,7 +23,7 @@ async function signIn(page: Page, person: { email: string; password: string }): 
   expect((await page.request.get(`${apiOrigin}/api/v1/me`)).ok()).toBe(true);
 }
 
-test("the time and the id on a card that opens as a whole stay the pointer's", async ({
+test("the time on a card that opens as a whole stays the pointer's, and the card reads its name", async ({
   page
 }, testInfo) => {
   const attempt = testInfo.repeatEachIndex * 10 + testInfo.retry;
@@ -54,17 +54,16 @@ test("the time and the id on a card that opens as a whole stay the pointer's", a
   const card = page.getByRole("listitem").filter({ hasText: appName }).locator("[data-card]");
   await expect(card.locator("[data-card-target]")).toHaveCount(1);
 
-  for (const [what, element] of [
-    ["time", card.locator("time")],
-    ["id", card.getByText(appId, { exact: true })]
-  ] as const) {
-    const hit = await element.evaluate((node) => {
-      const box = node.getBoundingClientRect();
-      const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-      return top !== null && node.contains(top);
-    });
-    expect.soft(hit, `the ${what} is under the pointer`).toBe(true);
-  }
+  const time = card.locator("time");
+  const hit = await time.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return top !== null && node.contains(top);
+  });
+  expect(hit, "the time is under the pointer").toBe(true);
+  await expect(card).not.toContainText(appId);
+  // The title is under the target's area: the target reads the whole name to a resting pointer.
+  await expect(card.locator("[data-card-target]")).toHaveAttribute("title", appName);
 });
 
 // Round 2 (c013a285). CardTarget keeps where a press began and drops the next click that lands

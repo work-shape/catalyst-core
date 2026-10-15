@@ -180,7 +180,10 @@ function AgentCard({
         ) : null}
       </CardHeader>
       <CardFooter className="justify-between">
-        <CardTarget label={t("agents.startChatWith", { name: agent.displayName })}>
+        <CardTarget
+          label={t("agents.startChatWith", { name: agent.displayName })}
+          title={agent.displayName}
+        >
           <Button size="sm" onClick={() => onStartChat(agent.name)}>
             {t("agents.startChat")}
           </Button>

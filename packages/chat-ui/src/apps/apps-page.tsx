@@ -379,6 +379,7 @@ function AppCard({
           {route ? (
             <CardTarget
               label={t(route.kind === "app" ? "apps.openNamed" : "apps.editNamed", { name })}
+              title={name}
             >
               <RouteLink route={route} variant="primary" onOpen={onOpenRoute}>
                 {t(route.kind === "app" ? "apps.open" : "apps.edit")}

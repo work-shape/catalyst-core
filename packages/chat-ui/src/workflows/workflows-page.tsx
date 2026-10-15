@@ -240,7 +240,7 @@ function WorkflowCard({
       </CardContent>
       {/* A draft opens on its page, where it is published; it has nothing to start yet. */}
       <CardFooter>
-        <CardTarget label={t("workflows.openNamed", { name: workflow.name })}>
+        <CardTarget label={t("workflows.openNamed", { name: workflow.name })} title={workflow.name}>
           <RouteLink
             route={{ kind: "workflow", ...address }}
             variant="primary"

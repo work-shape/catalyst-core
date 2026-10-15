@@ -21,10 +21,13 @@ const idSchema = z.object({ id: z.string() });
 const NAME = "Quarterly reconciliation of every open booking in the ledger";
 const WHAT = "Checks every booking against the ledger before the quarter closes.";
 
-/** The name shows on at most two lines, says itself whole on hover, and stays in its box. */
-async function expectNameFits(name: Locator, where: string): Promise<void> {
+/**
+ * The name shows on at most two lines and stays in its box, and what the pointer rests on says
+ * it whole: the name itself, or the card's target that lies over it.
+ */
+async function expectNameFits(name: Locator, hover: Locator, where: string): Promise<void> {
   await expect(name, where).toBeVisible();
-  await expect(name, where).toHaveAttribute("title", NAME);
+  await expect(hover, where).toHaveAttribute("title", NAME);
   const shown = await name.evaluate((element) => ({
     lines: Math.round(
       element.clientHeight / Number.parseFloat(getComputedStyle(element).lineHeight)
@@ -121,7 +124,7 @@ test("a sixty-character name wraps, is then cut and reads whole, beside the dock
       await page.goto(at("/build/skills"));
       await docked();
       const row = page.getByRole("listitem").filter({ has: page.getByTitle(NAME) });
-      await expectNameFits(row.getByTitle(NAME), `skills row at ${look}`);
+      await expectNameFits(row.getByTitle(NAME), row.getByTitle(NAME), `skills row at ${look}`);
       await expect(row).toContainText(WHAT);
       await expect(row).not.toContainText(skill);
       await shoot(page, `skills-list-${look}`);
@@ -130,21 +133,28 @@ test("a sixty-character name wraps, is then cut and reads whole, beside the dock
       await page.goto(at(`/build/skills/${skill}`));
       await docked();
       const head = page.locator('header[data-variant="detail"]');
-      await expectNameFits(head.getByRole("heading", { level: 1 }), `skill head at ${look}`);
+      const name = head.getByRole("heading", { level: 1 });
+      await expectNameFits(name, name, `skill head at ${look}`);
       await expect(page.locator("[data-page]")).not.toContainText(skill);
       await shoot(page, `skill-head-${look}`);
 
       // The App's card and its head.
       await page.goto(at(`/w/${workspaceId}/apps`));
       await docked();
-      const card = page.getByRole("heading", { level: 2, name: NAME });
-      await expectNameFits(card, `app card at ${look}`);
+      // A card's title is under the area of its target, which reads the whole name.
+      const card = page.locator("[data-card]").filter({ hasText: WHAT });
+      await expectNameFits(
+        card.getByRole("heading", { level: 2, name: NAME }),
+        card.locator("[data-card-target]"),
+        `app card at ${look}`
+      );
       await expect(page.getByText(app, { exact: true })).toHaveCount(0);
       await shoot(page, `apps-list-${look}`);
       await page.goto(at(`/w/${workspaceId}/apps/${app}`));
       await docked();
       const appHead = page.locator('header[data-variant="detail"]');
-      await expectNameFits(appHead.getByRole("heading", { level: 1 }), `app head at ${look}`);
+      const appName = appHead.getByRole("heading", { level: 1 });
+      await expectNameFits(appName, appName, `app head at ${look}`);
       await shoot(page, `app-head-${look}`);
     }
 

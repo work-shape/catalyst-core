@@ -47,25 +47,22 @@ export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivEleme
 
 export interface CardTitleProps extends HTMLAttributes<HTMLHeadingElement> {
   /**
-   * The title is an object's name: a long one takes a second line, is then cut and reads
-   * whole on hover.
+   * The title is an object's name: a long one takes a second line and is then cut. The card's
+   * `CardTarget` reads it whole to a resting pointer.
    */
   clamp?: boolean;
 }
 
 export const CardTitle = forwardRef<HTMLHeadingElement, CardTitleProps>(function CardTitle(
-  { className, clamp = false, children, ...props },
+  { className, clamp = false, ...props },
   ref
 ) {
   return (
     <h2
       ref={ref}
       className={cn("text-title-sm", clamp && "line-clamp-2 wrap-anywhere", className)}
-      title={clamp && typeof children === "string" ? children : undefined}
       {...props}
-    >
-      {children}
-    </h2>
+    />
   );
 });
 
