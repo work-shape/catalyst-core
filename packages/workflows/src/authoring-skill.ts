@@ -329,14 +329,13 @@ You are given tools that are bound to the Workflow this conversation is about.
 Tell the person what you changed, in a few plain sentences, and that the change is a draft
 until they publish it.
 
-## Preparing data scope (SCOPE-0)
+## Preparing data scope
 
-- Give every per-Mandant table a \`NOT NULL\` Mandant column, named consistently across the store (for example \`mandant_nr\`). A Workflow copying source data writes it on every row. Keep the key in aggregates and run history.
-- Design per-Mandant work as child runs keyed by the Mandant (EW-13). Child runs are not available yet; do not replace them with an unkeyed cross-Mandant run.
-- Every \`http_api\` operation for Mandant data takes the Mandant as a named parameter and returns it on every item. Keep a mapping table when source ids and Mandant numbers differ.
-- App SQL reads use the per-Mandant tables; aggregate views group by the Mandant column. Do not expose these stores through a free-SQL Knowledge Base. Named queries wait for DS-6a.
-- Reserved at save: table \`scope\` in \`store.yaml\` and config \`scopes\` (SCOPE-1), operation declaration \`scope\` (SCOPE-2), and SQL \`$viewer.scope\` and \`$viewer.scope_all\` (SCOPE-1). \`$viewer.groups\` is dropped and refused; the SQL parameter name \`scope\` is reserved too. These names grant no data access today.
-- State the demo's audience explicitly. Until data scope is enforced, every person in that audience must be allowed to see every Mandant the shared source credential can read.
+Follow the build rules for data scope in the platform docs: \`references/configure/release-config.md\` in \`platform-docs\`.
+
+- Write the Mandant key on every copied row and keep it in aggregates and run history.
+- Design per-Mandant work as child runs keyed by the Mandant. Child runs are not available yet; do not replace them with an unkeyed cross-Mandant run.
+- Say who a Workflow is for when it serves only part of the firm. Everyone in that audience must be allowed to see every Mandant the shared source credential can read.
 
 ## What a manifest is
 
