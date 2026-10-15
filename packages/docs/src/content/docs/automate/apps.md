@@ -31,7 +31,7 @@ After that, changes you ask for in the same chat go into the App's draft by them
 
 ## Try it safely
 
-Open **Apps** in the main rail and the App, then **Edit** ("Bearbeiten"). The draft has three tabs: **Preview**, **Files** and **Actions** ("Aktionen").
+Open **Apps** in the main rail and the App, then **Edit** ("Bearbeiten"). The draft opens on its **Preview**. **Technical details** ("Technische Details") beside it shows two more tabs, **Files** and **Actions** ("Aktionen"); your browser keeps them open until you fold them again.
 
 In a draft, nothing changes for real:
 

@@ -11,7 +11,7 @@ test("tabs and the segmented control follow the keyboard, and route tabs are lin
   const root = await openGallery(page, "Navigation");
 
   const tabs = root.locator('[data-gallery-entry="Tabs"]');
-  const tabList = tabs.getByRole("tablist");
+  const tabList = tabs.getByRole("tablist").first();
   await tabList.getByRole("tab", { name: "General" }).focus();
   await page.keyboard.press("ArrowRight");
   await expect(tabList.getByRole("tab", { name: /Members/u })).toHaveAttribute(
@@ -63,8 +63,15 @@ test("a tab row does not scroll vertically, and the selected tab's underline end
   const tabs = root.locator('[data-gallery-entry="Tabs"]');
   const rows = [
     {
-      row: tabs.getByRole("tablist"),
-      selected: tabs.getByRole("tablist").locator('[role="tab"][aria-selected="true"]')
+      row: tabs.getByRole("tablist").first(),
+      selected: tabs.getByRole("tablist").first().locator('[role="tab"][aria-selected="true"]')
+    },
+    {
+      // With an `end`, the line is the row's around the tabs and what stands after them.
+      row: tabs.locator('[data-gallery-sample="tabs-folded"] div:has(> [role="tablist"])'),
+      selected: tabs.locator(
+        '[data-gallery-sample="tabs-folded"] [role="tab"][aria-selected="true"]'
+      )
     },
     {
       row: tabs.locator('[data-gallery-sample="tabs-routes"]').getByRole("navigation"),

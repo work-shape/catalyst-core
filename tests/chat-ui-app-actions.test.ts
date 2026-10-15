@@ -113,7 +113,7 @@ const rowOf = (markup: string, name: string) =>
   markup.split("<tr").find((row) => row.includes(`data-app-action="${name}"`)) ?? "";
 
 describe("the Actions side of a draft", () => {
-  it("is the third side of the draft beside Preview and Files", () => {
+  it("is the third side of the draft beside Preview and Files, under Technical details", () => {
     const head = render(
       createElement(AppEditFrame, {
         name: "Orders",
@@ -122,8 +122,10 @@ describe("the Actions side of a draft", () => {
         draftRevision: 4,
         publishedRevision: 3,
         view: "actions",
+        detailsOpen: true,
         children: null,
         onViewChange: noop,
+        onDetailsOpenChange: noop,
         onBack: noop
       })
     );

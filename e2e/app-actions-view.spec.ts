@@ -209,9 +209,19 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     const draft = page.getByTestId("app-edit");
     const actions = draft.locator("[data-app-actions]");
     const row = (name: string) => draft.locator(`[data-app-action="${name}"]`);
-    /** Opens the Actions side of a draft: the third side beside Preview and Files. */
+    const technicalDetails = draft.getByRole("button", {
+      name: /^(Technical details|Technische Details)$/u
+    });
+    /**
+     * Opens the Actions side of a draft: the third side beside Preview and Files, under
+     * Technical details, which this browser remembers once they were opened.
+     */
     const openActions = async (id: string) => {
       await page.goto(draftPath(id));
+      await expect(technicalDetails).toBeVisible();
+      if ((await technicalDetails.getAttribute("aria-expanded")) === "false") {
+        await technicalDetails.click();
+      }
       await draft.getByRole("tab", { name: /^(Actions|Aktionen)$/u }).click();
       await expect(actions).toBeVisible();
     };
