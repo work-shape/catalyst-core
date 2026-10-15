@@ -7,8 +7,8 @@ import { expect, test } from "./test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 
 // The skill editor's folder in Studio: a file is uploaded into a folder, a new script is
-// written in place, a file is replaced and one deleted, and a file the instance refuses is
-// named by its path. Each save is read back over the API byte for byte.
+// written in place, a file is replaced and one deleted, and a file the instance refuses, a
+// text file too, is named by its path. Each save is read back over the API byte for byte.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 /** Where the pictures of the editor go. Unset, none is taken. */
@@ -78,6 +78,8 @@ async function addFile(
   choice: "Upload file" | "New file",
   upload?: { name: string; mimeType: string; buffer: Buffer }
 ): Promise<void> {
+  // The menu of the file added before has closed.
+  await expect(page.getByRole("menu")).toHaveCount(0);
   await page.getByRole("button", { name: `Add a file to ${folderName}/` }).click();
   if (upload === undefined) {
     await page.getByRole("menuitem", { name: choice }).click();
@@ -206,6 +208,22 @@ test("a skill's files are uploaded, written, replaced and deleted, and a refused
 
     held = await folder(page);
     expect([...held.files.keys()]).toEqual(["SKILL.md", "assets/form.pdf"]);
+
+    // A text file is checked as every other file: a Git LFS pointer is refused by its path.
+    await addFile(page, "references", "Upload file", {
+      name: "pointer.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from("version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 12\n")
+    });
+    const pointer = page.waitForResponse(
+      (response) => response.request().method() === "PUT" && response.url() === skillPath
+    );
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect((await pointer).status()).toBe(422);
+    await expect(page.locator("#files [data-field-refusal]")).toHaveText(
+      "references/pointer.md is a Git LFS pointer, not the file itself. Upload the file itself."
+    );
+    expect((await folder(page)).revision).toBe(held.revision);
   } finally {
     await removeSkill(page);
   }

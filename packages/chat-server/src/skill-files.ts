@@ -222,6 +222,72 @@ function requireStorableSkillFile(file: SkillFileInput): void {
   }
 }
 
+/** A file a folder keeps from the revision before, known by its index: its path and size. */
+interface KeptSkillFile {
+  path: string;
+  bytes: number;
+}
+
+/**
+ * Refuses the folder a write leaves: the files it sends, each for its path and what it is, and
+ * with the files it keeps from the revision before, the set for its limits, for a path that is
+ * in it twice and for a path that is a file and a folder at once. A folder write keeps no file;
+ * a write of the config alone keeps the files its index names, which were checked when they
+ * were written.
+ */
+function requireSkillFolder(sent: readonly SkillFileInput[], kept: readonly KeptSkillFile[]): void {
+  const all = [...sent.map((file) => ({ path: file.path, bytes: file.bytes.byteLength })), ...kept];
+  if (all.length > SKILL_MAX_FILES) {
+    throw refusal(
+      "skill_too_many_files",
+      `The skill has ${all.length} files. A skill holds at most ${SKILL_MAX_FILES} (SKILL_MAX_FILES).`,
+      { cap: "SKILL_MAX_FILES", limit: SKILL_MAX_FILES, actual: all.length }
+    );
+  }
+  const total = all.reduce((sum, file) => sum + file.bytes, 0);
+  if (total > SKILL_MAX_BYTES) {
+    throw refusal(
+      "skill_too_large",
+      `The files of the skill have ${total} bytes. A skill holds at most ${SKILL_MAX_BYTES} (SKILL_MAX_BYTES).`,
+      { cap: "SKILL_MAX_BYTES", limit: SKILL_MAX_BYTES, actual: total }
+    );
+  }
+  for (const file of sent) requireStorableSkillFile(file);
+  const seen = new Set<string>();
+  for (const { path } of all) {
+    const key = path.toLowerCase();
+    if (seen.has(key)) {
+      throw refusal(
+        "skill_path_duplicate",
+        `The file '${path}' is in the skill twice. Paths that differ in case alone count as one.`,
+        { path }
+      );
+    }
+    seen.add(key);
+    if (key.endsWith(`/${SKILL_MANIFEST_FILE.toLowerCase()}`)) {
+      throw refusal(
+        "skill_path_invalid",
+        `The file '${path}' cannot be a file of a skill: '${SKILL_MANIFEST_FILE}' is the one file at the root of a skill.`,
+        { path }
+      );
+    }
+  }
+  // A path that is the folder of another one is two things at one place.
+  for (const { path } of all) {
+    const segments = path.split("/");
+    for (let depth = 1; depth < segments.length; depth += 1) {
+      const folder = segments.slice(0, depth).join("/");
+      if (seen.has(folder.toLowerCase())) {
+        throw refusal(
+          "skill_path_duplicate",
+          `The file '${path}' lies below '${folder}', which is a file of the skill itself. A path is a file or a folder and not both.`,
+          { path, folder }
+        );
+      }
+    }
+  }
+}
+
 /** What the files of a write are read into. */
 export interface SkillFilesReading {
   /** The config the files make: the instructions and the text resources. No index yet. */
@@ -241,48 +307,7 @@ export interface SkillFilesReading {
  * kept as its bytes.
  */
 export function readSkillFiles(name: string, files: readonly SkillFileInput[]): SkillFilesReading {
-  if (files.length > SKILL_MAX_FILES) {
-    throw refusal(
-      "skill_too_many_files",
-      `The skill has ${files.length} files. A skill holds at most ${SKILL_MAX_FILES} (SKILL_MAX_FILES).`,
-      { cap: "SKILL_MAX_FILES", limit: SKILL_MAX_FILES, actual: files.length }
-    );
-  }
-  const total = files.reduce((sum, file) => sum + file.bytes.byteLength, 0);
-  if (total > SKILL_MAX_BYTES) {
-    throw refusal(
-      "skill_too_large",
-      `The files of the skill have ${total} bytes. A skill holds at most ${SKILL_MAX_BYTES} (SKILL_MAX_BYTES).`,
-      { cap: "SKILL_MAX_BYTES", limit: SKILL_MAX_BYTES, actual: total }
-    );
-  }
-  const seen = new Set<string>();
-  for (const file of files) {
-    requireStorableSkillFile(file);
-    const key = file.path.toLowerCase();
-    if (seen.has(key)) {
-      throw refusal(
-        "skill_path_duplicate",
-        `The file '${file.path}' is in the skill twice. Paths that differ in case alone count as one.`,
-        { path: file.path }
-      );
-    }
-    seen.add(key);
-  }
-  // A path that is the folder of another one is two things at one place.
-  for (const file of files) {
-    const segments = file.path.toLowerCase().split("/");
-    for (let depth = 1; depth < segments.length; depth += 1) {
-      const folder = segments.slice(0, depth).join("/");
-      if (seen.has(folder)) {
-        throw refusal(
-          "skill_path_duplicate",
-          `The file '${file.path}' lies below '${folder}', which is a file of the skill itself. A path is a file or a folder and not both.`,
-          { path: file.path }
-        );
-      }
-    }
-  }
+  requireSkillFolder(files, []);
   const manifest = files.find((file) => file.path === SKILL_MANIFEST_FILE);
   if (!manifest) {
     throw refusal(
@@ -299,13 +324,6 @@ export function readSkillFiles(name: string, files: readonly SkillFileInput[]): 
     const { path, bytes } = file;
     const [folder, ...below] = path.split("/");
     const text = textOf(bytes);
-    if (path.toLowerCase().endsWith(`/${SKILL_MANIFEST_FILE.toLowerCase()}`)) {
-      throw refusal(
-        "skill_path_invalid",
-        `The file '${path}' cannot be a file of a skill: '${SKILL_MANIFEST_FILE}' is the one file at the root of a skill.`,
-        { path }
-      );
-    }
     const inScripts = below.length > 0 && folder === SKILL_SCRIPTS_FOLDER;
     const extension = /\.([A-Za-z0-9]+)$/u.exec(path)?.[1]?.toLowerCase();
     if (
@@ -462,14 +480,19 @@ function skillFileIndexOfConfig(config: unknown): SkillFileEntry[] {
  * What a write of the config alone keeps of the revision before it: the further frontmatter
  * of its `SKILL.md` where the write says nothing of it, since a caller that does not know
  * those keys must not lose them, and the index of the files where that revision has a file
- * set. A write that sends `frontmatter`, an empty one too, has said what it is.
+ * set. A write that sends `frontmatter`, an empty one too, has said what it is. It refuses the
+ * folder the write leaves for what a write of the whole folder is refused for.
  */
 export function withCarriedSkillParts(
   config: JsonObject,
   before: unknown,
   beforeHasFiles: boolean
 ): JsonObject {
-  const indexed = withSkillFileIndex(config, beforeHasFiles ? skillFileIndexOfConfig(before) : []);
+  const index = beforeHasFiles ? skillFileIndexOfConfig(before) : [];
+  // The folder the write leaves is checked as a write of the whole folder is: the config's own
+  // files, `SKILL.md` and the text resources, beside the files it keeps.
+  requireSkillFolder(skillFilesOfConfig(config), index);
+  const indexed = withSkillFileIndex(config, index);
   if ("frontmatter" in indexed) return indexed;
   const kept = z.object({ frontmatter: z.record(z.string(), z.json()) }).safeParse(before);
   return kept.success && Object.keys(kept.data.frontmatter).length > 0

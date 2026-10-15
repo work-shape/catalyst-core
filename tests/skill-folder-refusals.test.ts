@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import type { JsonObject } from "@vivd-catalyst/core";
 import { required } from "./support/assertions";
 import {
@@ -235,5 +236,69 @@ describe("what a skill's folder may not hold", () => {
       required((await get(world)).files).find(({ path }) => path === "references/abbreviations.txt")
         ?.text
     ).toBe(notes);
+  });
+
+  it("refuses a write of the config for what a write of the folder is refused for, the files it keeps counted", async () => {
+    const world = await start();
+    const written = await put(world, {
+      files: [
+        { path: "SKILL.md", text: SKILL_MD },
+        { path: "references/a.md", text: GUIDE },
+        { path: "references/b.md", text: GUIDE },
+        { path: "assets/form.pdf", base64: PDF.toString("base64") }
+      ],
+      expectedRevision: null
+    });
+    expect(written.statusCode, written.body).toBe(200);
+    const read = await get(world, false);
+    const { revision } = read;
+    // The config as a caller sends it: its index is the instance's to write.
+    const { files: _index, ...config } = z.record(z.string(), z.json()).parse(read.config);
+    const refused = async (resources: JsonObject[]) =>
+      (await refusal(put(world, { config: { ...config, resources }, expectedRevision: revision })))
+        .details;
+    const resource = (path: string, content: string) => ({
+      path,
+      mediaType: path.endsWith(".md") ? "text/markdown" : "text/plain",
+      content
+    });
+
+    expect(
+      await refused([resource("assets/large.txt", "x".repeat(2 * 1024 * 1024 + 1))])
+    ).toMatchObject({
+      reason: "skill_file_too_large",
+      path: "assets/large.txt",
+      limit: 2 * 1024 * 1024,
+      actual: 2 * 1024 * 1024 + 1
+    });
+    expect(
+      await refused([
+        resource(
+          "references/pointer.md",
+          "version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 12\n"
+        )
+      ])
+    ).toMatchObject({ reason: "skill_file_lfs_pointer", path: "references/pointer.md" });
+    // A resource renamed below another one: a path that is a file and a folder at once.
+    expect(
+      await refused([resource("references/a.md", GUIDE), resource("references/a.md/b.md", GUIDE)])
+    ).toMatchObject({
+      reason: "skill_path_duplicate",
+      path: "references/a.md/b.md",
+      folder: "references/a.md"
+    });
+    // The files beside the config that the write keeps are in the folder it leaves.
+    expect(await refused([resource("assets/form.pdf/notes.md", GUIDE)])).toMatchObject({
+      reason: "skill_path_duplicate",
+      path: "assets/form.pdf/notes.md",
+      folder: "assets/form.pdf"
+    });
+
+    expect((await get(world, false)).revision).toBe(revision);
+    const taken = await put(world, {
+      config: { ...config, resources: [resource("references/a.md", "# A\n")] },
+      expectedRevision: revision
+    });
+    expect(taken.statusCode, taken.body).toBe(200);
   });
 });

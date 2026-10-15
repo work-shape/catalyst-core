@@ -52,6 +52,8 @@ interface RefusalDetails {
   namespace?: string;
   /** The file of a folder a refusal names. */
   path?: string;
+  /** The file a refused path lies below, where a path is a file and a folder at once. */
+  folder?: string;
   /** The limit a refusal names, and what the write had of it. */
   limit?: number;
   actual?: number;
@@ -86,11 +88,16 @@ function folderRefusal(
   const path = details.path ?? "";
   const size = (bytes: number | undefined) =>
     bytes === undefined ? "" : formatFileBytes(bytes, locale);
+  // A size just over its limit reads as the limit once rounded: it is told in bytes then.
+  const over = (actual: number | undefined, limit: number | undefined) =>
+    actual !== undefined && size(actual) === size(limit)
+      ? `${new Intl.NumberFormat(locale).format(actual)} B`
+      : size(actual);
   switch (details.reason) {
     case "skill_file_too_large":
       return t("skillFiles.refusedTooLarge", {
         path,
-        size: size(details.actual),
+        size: over(details.actual, details.limit),
         limit: size(details.limit)
       });
     case "skill_too_many_files":
@@ -101,7 +108,7 @@ function folderRefusal(
     case "skill_too_large":
     case "files_too_large":
       return t("skillFiles.refusedTotal", {
-        size: size(details.actual),
+        size: over(details.actual, details.limit),
         limit: size(details.limit)
       });
     case "skill_file_executable":
@@ -113,7 +120,9 @@ function folderRefusal(
     case "skill_path_invalid":
       return t("skillFiles.refusedPath", { path });
     case "skill_path_duplicate":
-      return t("skillFiles.refusedPathTwice", { path });
+      return details.folder === undefined
+        ? t("skillFiles.refusedPathTwice", { path })
+        : t("skillFiles.refusedPathBelowFile", { path, folder: details.folder });
     case "files_unavailable":
       return t("skillFiles.refusedUnavailable", { path });
     default:
@@ -131,6 +140,7 @@ export function readRefusalDetails(error: unknown): RefusalDetails {
     modelBindingId: text(details, "modelBindingId"),
     namespace: text(details, "namespace"),
     path: text(details, "path"),
+    folder: text(details, "folder"),
     limit: number(details, "limit"),
     actual: number(details, "actual"),
     issues: (Array.isArray(issues) ? issues : []).flatMap((issue: unknown) => {

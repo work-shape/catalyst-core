@@ -95,7 +95,7 @@ export function SkillEditor({
 
   const submit = async () => {
     setSaving(true);
-    // A file beside the config changed: the whole folder is written. Otherwise the config is,
+    // A file beside SKILL.md changed: the whole folder is written. Otherwise the config is,
     // and the files beside it stay as they are.
     const { stored, ...answer } =
       folder !== undefined && !unread && skillFolderChanged(form, state.baseline)

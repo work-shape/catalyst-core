@@ -171,17 +171,16 @@ describe("the skill editor's folder", () => {
     ]);
   });
 
-  it("writes the config alone where only text the config holds changed, and the files stay", async () => {
+  it("writes the config alone where only SKILL.md changed, and the files stay", async () => {
     const world = await written();
     const { form: baseline, revision } = await open(world);
-    const form: SkillFormState = {
-      ...baseline,
-      content: "# Form filler\n\nFill the form.",
-      files: baseline.files.map((file) =>
-        file.path === "references/guide.md" ? { ...file, text: "# Guide\n\nShorter.\n" } : file
-      )
-    };
+    const form: SkillFormState = { ...baseline, content: "# Form filler\n\nFill the form." };
     expect(skillFolderChanged(form, baseline)).toBe(false);
+    // An edited reference is a file of the folder: the instance checks it as one.
+    const edited = baseline.files.map((file) =>
+      file.path === "references/guide.md" ? { ...file, text: "# Guide\n\nShorter.\n" } : file
+    );
+    expect(skillFolderChanged({ ...baseline, files: edited }, baseline)).toBe(true);
 
     const answer = await save(world, form, baseline, revision);
     expect(answer.statusCode, answer.body).toBe(200);
@@ -217,6 +216,63 @@ describe("the skill editor's folder", () => {
         }
       ]
     });
+    // Nothing was written.
+    expect((await get(world, false)).revision).toBe(revision);
+  });
+
+  it("tells a refused text file with its path: too large, a Git LFS pointer, a file below a file", async () => {
+    const world = await written();
+    const { form: baseline, revision } = await open(world);
+    const { t } = createTranslationContext("en");
+    const refusedWith = async (files: SkillFormState["files"]) => {
+      const form = { ...baseline, files };
+      expect(skillFolderChanged(form, baseline)).toBe(true);
+      const answer = await save(world, form, baseline, revision);
+      expect(answer.statusCode, answer.body).toBe(422);
+      const outcome = readBuildRefusal({ payload: answer.json() }, t, "en");
+      return outcome.ok || outcome.conflict ? undefined : outcome.refusals;
+    };
+
+    expect(
+      await refusedWith([
+        ...baseline.files,
+        skillFileOfBytes("assets/large.txt", Buffer.alloc(2 * 1024 * 1024 + 1, "x"))
+      ])
+    ).toEqual([
+      {
+        field: "files",
+        message: "assets/large.txt has 2,097,153 B. A file of a skill has at most 2 MiB."
+      }
+    ]);
+    expect(
+      await refusedWith([
+        ...baseline.files,
+        skillFileOfBytes(
+          "references/pointer.md",
+          Buffer.from("version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 12\n")
+        )
+      ])
+    ).toEqual([
+      {
+        field: "files",
+        message:
+          "references/pointer.md is a Git LFS pointer, not the file itself. Upload the file itself."
+      }
+    ]);
+    // references/b.md renamed below references/a.md, which is a file itself.
+    expect(
+      await refusedWith([
+        ...baseline.files,
+        { path: "references/a.md", bytes: 4, text: "# A\n" },
+        { path: "references/a.md/b.md", bytes: 4, text: "# B\n" }
+      ])
+    ).toEqual([
+      {
+        field: "files",
+        message:
+          "references/a.md/b.md lies below references/a.md, which is a file itself. A name is a file or a folder, not both."
+      }
+    ]);
     // Nothing was written.
     expect((await get(world, false)).revision).toBe(revision);
   });

@@ -247,7 +247,8 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     /**
      * What a write of the config alone keeps of the revision before it: the index of the
      * files where that revision has a file set, and whatever else of its config such a write
-     * cannot know to send.
+     * cannot know to send. Throws `VALIDATION_FAILED` where the folder the write leaves is one
+     * a write of the whole folder is refused for.
      */
     carried(config: JsonObject, before: unknown, beforeHasFiles: boolean): JsonObject;
     /** The files a config holds itself, as a read of the folder answers them. */

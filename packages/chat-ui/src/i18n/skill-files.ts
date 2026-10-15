@@ -23,6 +23,8 @@ export const skillFiles = defineTranslations({
     "skillFiles.refusedNotText":
       "{path} is not UTF-8 text. Scripts and text files have to be UTF-8 text.",
     "skillFiles.refusedPath": "{path} cannot be the name of a file of a skill.",
+    "skillFiles.refusedPathBelowFile":
+      "{path} lies below {folder}, which is a file itself. A name is a file or a folder, not both.",
     "skillFiles.refusedPathTwice":
       "{path} is in the skill twice. Names that differ only in upper and lower case count as one.",
     "skillFiles.refusedTooLarge": "{path} has {size}. A file of a skill has at most {limit}.",
@@ -57,6 +59,8 @@ export const skillFiles = defineTranslations({
     "skillFiles.refusedNotText":
       "{path} ist kein UTF-8-Text. Skripte und Textdateien müssen UTF-8-Text sein.",
     "skillFiles.refusedPath": "{path} kann nicht der Name einer Datei eines Skills sein.",
+    "skillFiles.refusedPathBelowFile":
+      "{path} liegt unter {folder}, und {folder} ist selbst eine Datei. Ein Name ist eine Datei oder ein Ordner, nicht beides.",
     "skillFiles.refusedPathTwice":
       "{path} ist zweimal im Skill. Namen, die sich nur in Groß- und Kleinschreibung unterscheiden, zählen als einer.",
     "skillFiles.refusedTooLarge":

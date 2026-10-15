@@ -163,22 +163,23 @@ export function skillFormToConfig(form: SkillFormState): Record<string, unknown>
   };
 }
 
-/** The files the config does not hold, in the order of their paths, for a comparison. */
-function filesBesideConfig(form: SkillFormState): string {
+/** The files beside `SKILL.md`, in the order of their paths, for a comparison. */
+function filesOf(form: SkillFormState): string {
   return JSON.stringify(
     form.files
-      .filter((file) => !isConfigResource(file))
       .map((file) => [file.path, file.text, file.base64, file.sha256])
       .sort(([left], [right]) => ((left ?? "") < (right ?? "") ? -1 : 1))
   );
 }
 
 /**
- * Whether a save writes the whole folder: a file the config does not hold was added, replaced,
- * edited or deleted. Every other save writes the config, and the files beside it stay.
+ * Whether a save writes the whole folder: a file beside `SKILL.md` was added, replaced,
+ * renamed, edited or deleted, a text resource the config holds too. The instance checks such a
+ * write file by file and names the file it refuses. A save that changed only the fields and
+ * the text of `SKILL.md` writes the config, and the files beside it stay.
  */
 export function skillFolderChanged(form: SkillFormState, baseline: SkillFormState): boolean {
-  return filesBesideConfig(form) !== filesBesideConfig(baseline);
+  return filesOf(form) !== filesOf(baseline);
 }
 
 /** A file whose content the page has not read yet. */

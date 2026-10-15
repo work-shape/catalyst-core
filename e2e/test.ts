@@ -99,8 +99,8 @@ const allowedPageErrors: readonly AllowedPageError[] = [
   {
     name: "refused-skill-file",
     reason:
-      "Chromium's own log line: the test saves a skill with a compiled program under scripts/ " +
-      "and asserts what the page shows for the 422.",
+      "Chromium's own log line: the test saves a skill with a compiled program under scripts/ and " +
+      "one with a Git LFS pointer, and asserts what the page shows for each 422.",
     matches: requestAnswered(422),
     path: /^\/api\/v1\/assets\/skill\/e2e_skill_files$/u,
     tests: [
