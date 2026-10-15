@@ -455,13 +455,13 @@ describe("validation of an agent that lists data tools", () => {
       "unknown.tool"
     ]) {
       expect(issuesOf([name]), name).toEqual([
-        `Agent 'helper' references unavailable tool '${name}'`
+        `Agent 'helper' references unavailable tool '${name}' in toolNames[0]`
       ]);
     }
   });
 
   it("saves such an agent, and a Namespace allowlist still refuses a name it does not hold", async () => {
-    const t = await setupAccessInstance();
+    const t = await setupAccessInstance({ dataTools: createFakeConnection().toolSource });
 
     expect((await t.putAgent(t.admin.id, "helper", { toolNames: [ECHO] })).statusCode).toBe(200);
     await t.expectRefused(

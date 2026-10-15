@@ -218,7 +218,7 @@ describe("assets.validate", () => {
     expect(invalid.valid).toBe(false);
     expect(invalid.issues.map((issue) => issue.message)).toEqual([
       "Agent 'kai-intake' references missing skill 'missing'",
-      "Agent 'kai-intake' references unavailable tool 'unknown.tool'",
+      "Agent 'kai-intake' references unavailable tool 'unknown.tool' in toolNames[0]",
       "Agent 'kai-intake' references skills but does not allow 'read_skill'"
     ]);
     const malformed = await validate(t.kai.id, { name: "kai-intake" });

@@ -9,9 +9,10 @@ import {
   findAgentModelReferenceIssues,
   findDefaultAgentReferenceIssues,
   findDuplicates,
-  findMissingAgentSkillReferences,
-  findMissingAgentToolReferences
+  findMissingAgentSkillReferences
 } from "./reference-validation";
+
+import { findAgentToolReferenceIssues } from "./agent-tool-references";
 
 export function validateConfigAssetBundle(input: {
   /** Stored references are resolved by the runtime; writes always use strict validation. */
@@ -80,9 +81,11 @@ export function findAgentReferenceIssues(input: {
     ...findMissingAgentSkillReferences(input.agents, input.skillNames).map(
       (issue) => `Agent '${issue.agentName}' references missing skill '${issue.referenceName}'`
     ),
-    ...findMissingAgentToolReferences(input.agents, input.refs.enabledToolNames).map(
-      (issue) => `Agent '${issue.agentName}' references unavailable tool '${issue.referenceName}'`
-    ),
+    ...findAgentToolReferenceIssues({
+      agents: input.agents,
+      enabledToolNames: input.refs.enabledToolNames,
+      deferDataTools: true
+    }),
     ...input.agents
       .filter((agent) => agent.skillNames.length > 0 && !agent.toolNames.includes("read_skill"))
       .map((agent) => `Agent '${agent.name}' references skills but does not allow 'read_skill'`)

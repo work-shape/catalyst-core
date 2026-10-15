@@ -11,6 +11,7 @@ import type {
   ClientInstanceId,
   ConfigAssetSource,
   ConfigAssetStore,
+  DataToolSource,
   ExecutionWorkspaceCleanupStore,
   ManagedArtifactId,
   ModuleSnapshot,
@@ -99,6 +100,8 @@ export interface ChatServerOptions {
     /** The registered asset kinds, assembled once with the instance. */
     kinds: AssetKindRegistry<WorkflowAssetKind>;
     validationRefs: ConfigAssetValidationRefs;
+    /** Live data tools, resolved by the same sources used when an agent runs. */
+    dataTools?: DataToolSource;
     /**
      * The tools of `validationRefs.enabledToolNames` with what each tells people, for the agent
      * page. Asked on each read, because the assembly registers its tools after this is built.

@@ -35,6 +35,67 @@ describe("config asset bundle validation", () => {
 
   it.each([
     {
+      instructions: "Help.\nUse `page.save_as_app`.",
+      toolNames: [],
+      issue:
+        "Agent 'assistant' references unavailable tool 'page.save_as_app' in instructions line 2"
+    },
+    {
+      instructions: "Help.",
+      toolNames: ["page.save_as_app"],
+      issue: "Agent 'assistant' references unavailable tool 'page.save_as_app' in toolNames[0]"
+    }
+  ])("locates an unavailable explicit tool reference", ({ instructions, toolNames, issue }) => {
+    expect(
+      issueMessages(
+        validationError({
+          agents: [agent({ instructions, toolNames })],
+          skills: [],
+          defaultAgentName: "assistant",
+          refs: refs()
+        })
+      )
+    ).toContain(issue);
+  });
+
+  it("accepts enabled instruction tools without requiring them in toolNames", () => {
+    expect(() =>
+      validateConfigAssetBundle({
+        agents: [
+          agent({ instructions: "Use `page.save_as_app()` and `connection.crm.getRecord`." })
+        ],
+        skills: [],
+        defaultAgentName: "assistant",
+        refs: { ...refs(), enabledToolNames: ["page.save_as_app", "connection.crm.getRecord"] }
+      })
+    ).not.toThrow();
+  });
+
+  it("does not interpret prose, paths, URLs, files or fenced examples as tool references", () => {
+    expect(() =>
+      validateConfigAssetBundle({
+        agents: [
+          agent({
+            instructions: [
+              "page.save_as_app is prose, as is example.com.",
+              "Read `config.yaml`, `report.pdf`, `src/main.ts`, `https://example.com` and `toolNames`.",
+              "A pattern `page.*` and an argument `page.save_as_app({})` are not identifiers.",
+              "```ts",
+              "const name = `page.save_as_app`;",
+              "```",
+              "Use `search` and `read_skill`."
+            ].join("\n")
+          })
+        ],
+        skills: [],
+        defaultAgentName: "assistant",
+        refs: refs()
+      })
+    ).not.toThrow();
+  });
+
+  it.each([
+    {
       label: "traversal",
       resources: [{ path: "../secret.md", mediaType: "text/markdown", content: "no" }],
       issue: /normalized relative path/u

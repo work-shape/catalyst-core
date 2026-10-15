@@ -1,5 +1,6 @@
 import {
   AppError,
+  asCollaborationWorkspaceId,
   auditActorFromIdentity,
   findNamespaceOfAssetName,
   isAppError,
@@ -299,7 +300,15 @@ async function checkBatch(
   stopIfRefused(unplaced);
   stopIfRefused(writeIssues(() => found.validateWrite(stored.set)));
 
-  const changed = await findChangedAgentRefusals(options, call.access, stored.set, found.accepted);
+  const changed = await findChangedAgentRefusals(options, call.access, stored.set, found.accepted, {
+    names: ready()
+      .filter((entry) => entry.kind.kind === "agent" && entry.item.type === "put")
+      .map((entry) => entry.name),
+    scope:
+      input.workspaceId === undefined
+        ? {}
+        : { workspaceId: asCollaborationWorkspaceId(input.workspaceId) }
+  });
   const puts = putsByAsset(ready());
   for (const { agentName, error } of changed.refusals) {
     const entry = puts.get(assetKey("agent", agentName));

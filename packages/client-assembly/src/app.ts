@@ -478,6 +478,8 @@ export async function createClientInstanceExecutionAssembly(
     connectionParts,
     dataToolSources
   );
+  if (toolOptions.dataTools) configAssets.dataTools = toolOptions.dataTools;
+  validationRefs.offToolModule = (name) => modules.offModuleOf("tool", name);
   const defaultModelProvider = modelProviders[0];
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");

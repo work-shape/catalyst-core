@@ -529,11 +529,22 @@ export class AssetWorkflow {
       readOnly ??
       (ofDefinition.length > 0
         ? ofDefinition
-        : await writeIssuesOf(this.options, call.access, view.set, found, () => {
-            const { scope } = target;
-            const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
-            assertReferencesWithinOwners(kinds, [{ ...write, config: prepared }], stored.assets);
-          }));
+        : await writeIssuesOf(
+            this.options,
+            call.access,
+            view.set,
+            found,
+            () => {
+              const { scope } = target;
+              const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
+              assertReferencesWithinOwners(kinds, [{ ...write, config: prepared }], stored.assets);
+            },
+            {
+              names: kind.kind === "agent" && name !== undefined ? [name] : [],
+              scope:
+                target.scope.kind === "workspace" ? { workspaceId: target.scope.workspaceId } : {}
+            }
+          ));
     return {
       valid: issues.length === 0,
       issues: issues.map(({ message, path, code }) => ({
@@ -612,7 +623,11 @@ export class AssetWorkflow {
       this.options,
       call.access,
       stored.set,
-      validated
+      validated,
+      {
+        names: kind.kind === "agent" ? [name] : [],
+        scope: target.scope.kind === "workspace" ? { workspaceId: target.scope.workspaceId } : {}
+      }
     );
     const next = findDefinition(validated, kind.kind, name);
     if (next === undefined) {
