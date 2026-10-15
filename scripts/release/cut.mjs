@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Cut a lockstep release locally. This creates commits, never tags or publishes.
-// pnpm release:cut 0.8.0 [--root ../capabilities]
+// pnpm release:cut 0.8.0 --root ../capabilities
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -17,17 +17,18 @@ import {
 const NUMBER = "(?:0|[1-9][0-9]*)";
 const IDENTIFIER = `(?:${NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)`;
 const SEMVER = new RegExp(
-  `^(${NUMBER})\\.(${NUMBER})\\.(${NUMBER})(?:-(${IDENTIFIER}(?:\\.${IDENTIFIER})*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$`,
+  `^(${NUMBER})\\.(${NUMBER})\\.(${NUMBER})(?:-(${IDENTIFIER}(?:\\.${IDENTIFIER})*))?$`,
   "u"
 );
 
 function versionParts(version) {
   const match = typeof version === "string" ? SEMVER.exec(version) : null;
-  if (!match || match[0] !== version) throw new Error(`"${version}" is not a SemVer version.`);
+  if (!match || match[0] !== version)
+    throw new Error(`"${version}" is not a SemVer version without build metadata.`);
   return { numbers: match.slice(1, 4).map(BigInt), prerelease: match[4]?.split(".") ?? [] };
 }
 
-/** SemVer precedence: build metadata does not affect the order. */
+/** SemVer precedence for release versions (build metadata is refused). */
 function compareVersions(left, right) {
   const a = versionParts(left);
   const b = versionParts(right);
@@ -75,8 +76,11 @@ function prepare(root, version, heading) {
     throw new Error(`${root} is not a repository root.`);
   if (run("git", ["status", "--porcelain", "--untracked-files=all"], root).trim() !== "")
     throw new Error(`${root} is dirty; commit or stash all changes before cutting a release.`);
-  if (run("git", ["symbolic-ref", "--quiet", "HEAD"], root).trim() === "")
+  try {
+    run("git", ["symbolic-ref", "--quiet", "HEAD"], root);
+  } catch {
     throw new Error(`${root} needs a release branch.`);
+  }
 
   const packages = manifests(root);
   for (const { manifest } of packages) {
@@ -90,19 +94,26 @@ function prepare(root, version, heading) {
     throw new Error(`${root}: ${version} already has a changelog section.`);
   // Allow an empty companion cut: both repositories always advance, even when only one changed.
   const nextChangelog = foldChanges(text, changes, heading).text;
-  return { root, packages, changes, nextChangelog };
+  return {
+    root,
+    packages,
+    changes,
+    nextChangelog,
+    before: run("git", ["rev-parse", "HEAD"], root).trim()
+  };
 }
 
 export function cut(args, coreRoot = repoRoot) {
   const [version, ...options] = args;
   versionParts(version);
-  if (
-    options.length !== 0 &&
-    !(options.length === 2 && options[0] === "--root" && options[1] && !options[1].startsWith("--"))
-  )
-    throw new Error("Usage: pnpm release:cut <version> [--root ../capabilities]");
-  const roots = [realpathSync(coreRoot)];
-  if (options.length > 0) roots.push(realpathSync(resolve(coreRoot, options[1])));
+  if (!(
+    options.length === 2 &&
+    options[0] === "--root" &&
+    options[1] &&
+    !options[1].startsWith("--")
+  ))
+    throw new Error("Usage: pnpm release:cut <version> --root ../capabilities");
+  const roots = [realpathSync(coreRoot), realpathSync(resolve(coreRoot, options[1]))];
   if (new Set(roots).size !== roots.length)
     throw new Error("--root must name a different repository.");
   const now = new Date();
@@ -114,6 +125,15 @@ export function cut(args, coreRoot = repoRoot) {
   const heading = releaseHeading(version, date);
   // Finish every refusal check in both repositories before changing either tree.
   const repositories = roots.map((root) => prepare(root, version, heading));
+  const versions = new Set(
+    repositories.flatMap(({ packages }) =>
+      packages.flatMap(({ manifest }) => (manifest.version === undefined ? [] : [manifest.version]))
+    )
+  );
+  if (versions.size !== 1)
+    throw new Error(
+      `Core and capabilities must share one current version; found ${[...versions].join(", ")}.`
+    );
   for (const repository of repositories) {
     const { root, packages, changes, nextChangelog } = repository;
     for (const { path, manifest } of packages)
@@ -136,9 +156,40 @@ export function cut(args, coreRoot = repoRoot) {
     ];
     if (root === roots[0]) paths.push(join(root, "packages/api-contract/openapi.json"));
     run("git", ["add", "--", ...paths], root);
-    run("git", ["commit", "-m", `chore(release): cut ${version}`], root, "inherit");
-    console.log(
-      `${root}: cut ${version} (${packages.length} manifests, ${changes.length} change files).`
+    run("git", ["diff", "--cached", "--check"], root);
+  }
+  const message = `chore(release): cut ${version}`;
+  try {
+    for (const { root, packages, changes } of repositories) {
+      run("git", ["commit", "-m", message], root, "inherit");
+      console.log(
+        `${root}: cut ${version} at ${run("git", ["rev-parse", "HEAD"], root).trim()} (${packages.length} manifests, ${changes.length} change files).`
+      );
+    }
+  } catch (error) {
+    // Git commits across repositories cannot be atomic (hooks/signing can fail).
+    // Both cuts are staged: report actual heads and commands that recover without rerunning cut.
+    const states = repositories.map(({ root, before }) => ({
+      root,
+      before,
+      head: run("git", ["rev-parse", "HEAD"], root).trim()
+    }));
+    const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
+    const command = (root, args) => ["git", "-C", root, ...args].map(quote).join(" ");
+    throw new Error(
+      [
+        `Release commit failed: ${error instanceof Error ? error.message : String(error)}`,
+        ...states.map(
+          ({ root, head, before }) =>
+            `${root}: ${head === before ? "cut staged, HEAD unchanged at" : "committed cut at"} ${head} (before ${before}).`
+        ),
+        "After fixing the commit failure and inspecting the staged cut, finish with (do not rerun release:cut):",
+        ...states
+          .filter(({ head, before }) => head === before)
+          .map(({ root }) => command(root, ["commit", "-m", message])),
+        "Or undo the cut in BOTH repositories (discards the cut and any subsequent local edits):",
+        ...states.map(({ root, before }) => command(root, ["reset", "--hard", before]))
+      ].join("\n")
     );
   }
 }
@@ -148,9 +199,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     cut(process.argv.slice(2));
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
-    console.error(
-      "No tags or packages were published. If a gate failed, inspect the uncommitted cut before retrying from a clean tree."
-    );
+    console.error("No tags or packages were published.");
     process.exitCode = 1;
   }
 }

@@ -166,6 +166,19 @@ describe("the changelog command", () => {
     expect(existsSync(join(root, changesPath, "good.md"))).toBe(true);
   });
 
+  it.each([["--typo", "--check"], ["--check", "--roots", "."], ["stray"], ["--date"]])(
+    "refuses unknown or incomplete arguments: %j",
+    (...args) => {
+      quiet();
+      const root = repository({ "good.md": change("Fixed", "- A fix.") });
+      const before = readFileSync(join(root, "CHANGELOG.md"), "utf8");
+      expect(main(args, root)).toBe(1);
+      expect(console.error).toHaveBeenCalled();
+      expect(readFileSync(join(root, "CHANGELOG.md"), "utf8")).toBe(before);
+      expect(existsSync(join(root, changesPath, "good.md"))).toBe(true);
+    }
+  );
+
   it("holds well-formed change files in this repository", () => {
     expect(readChanges(repoRoot).errors).toEqual([]);
   });

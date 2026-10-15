@@ -193,6 +193,21 @@ function option(args, name) {
  * @returns {number} the exit code
  */
 export function main(args, root = repoRoot) {
+  // Parse the whole command before reading files so typos cannot produce a false green check.
+  for (let index = 0; index < args.length; index += 1) {
+    const flag = args[index];
+    if (flag === "--check") continue;
+    if (!["--root", "--release", "--date"].includes(flag)) {
+      console.error(`Unknown argument: ${flag}`);
+      return 1;
+    }
+    const value = args[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      console.error(`${flag} takes a value.`);
+      return 1;
+    }
+    index += 1;
+  }
   const target = option(args, "--root");
   if (args.includes("--root")) {
     if (target === undefined || target.startsWith("--")) {
