@@ -6,13 +6,13 @@ import {
   createPlatformId,
   userInDeletionError,
   type AccessAdministrationStore,
-  type ClientInstanceId,
   type Namespace,
   type NamespaceUsage,
   type PermissionGrant
 } from "@vivd-catalyst/core";
 import { keysetFilter } from "../paging";
-import type { PostgresConnection, PostgresTransaction } from "../postgres-database";
+import type { PostgresConnection } from "../postgres-database";
+import { lockRights } from "../rights-lock";
 import {
   collaborationWorkspaces,
   configAssets,
@@ -25,8 +25,19 @@ import {
 type GrantRow = typeof permissionGrants.$inferSelect;
 type NamespaceRow = typeof namespaces.$inferSelect;
 
-export function createPostgresAccessStore(db: PostgresConnection): AccessAdministrationStore {
+/** `inTransaction` is true for the store of a transaction, the only one that holds a lock. */
+export function createPostgresAccessStore(
+  db: PostgresConnection,
+  inTransaction = false
+): AccessAdministrationStore {
   return {
+    async lockRights(input) {
+      if (!inTransaction) {
+        throw new AppError("INTERNAL", "The rights are held inside a transaction only");
+      }
+      await lockRights(db, input);
+    },
+
     async loadPersistedAccess(input) {
       const [holder, grantRows] = await Promise.all([
         input.holder.kind === "user"
@@ -93,7 +104,10 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
 
     async createGrant(input) {
       return db.transaction(async (tx) => {
-        await lockAccess(tx, input.clientInstanceId);
+        await lockRights(tx, {
+          clientInstanceId: input.clientInstanceId,
+          ...(input.holderKind === "user" ? { userId: input.holderId } : {})
+        });
         if (input.holderKind === "user") {
           // Held until the row is written: the deletion of the user removes the rows the
           // user holds, so none may appear once it was requested.
@@ -105,8 +119,7 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
                 eq(productUsers.clientInstanceId, input.clientInstanceId),
                 eq(productUsers.id, input.holderId)
               )
-            )
-            .for("share");
+            );
           if (holder && holder.deletionRequestedAt !== null) throw userInDeletionError();
         }
         if (input.holderKind === "service_principal") {
@@ -232,16 +245,27 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
     },
 
     async deleteGrant(input) {
-      const [row] = await db
-        .delete(permissionGrants)
-        .where(
-          and(
-            eq(permissionGrants.clientInstanceId, input.clientInstanceId),
-            eq(permissionGrants.id, input.grantId)
-          )
-        )
-        .returning();
-      return row ? mapGrant(row) : undefined;
+      return db.transaction(async (tx) => {
+        // Lifting a deny gives as much as an allow does: it waits for and is waited for by
+        // every other write of rights, the user's own lock included.
+        await lockRights(tx, { clientInstanceId: input.clientInstanceId });
+        const where = and(
+          eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+          eq(permissionGrants.id, input.grantId)
+        );
+        const [existing] = await tx
+          .select({ holderKind: permissionGrants.holderKind, holderId: permissionGrants.holderId })
+          .from(permissionGrants)
+          .where(where);
+        if (existing?.holderKind === "user") {
+          await lockRights(tx, {
+            clientInstanceId: input.clientInstanceId,
+            userId: existing.holderId
+          });
+        }
+        const [row] = await tx.delete(permissionGrants).where(where).returning();
+        return row ? mapGrant(row) : undefined;
+      });
     },
 
     async listGrants(input) {
@@ -281,7 +305,7 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
 
     async createNamespace(input) {
       return db.transaction(async (tx) => {
-        await lockAccess(tx, input.clientInstanceId);
+        await lockRights(tx, { clientInstanceId: input.clientInstanceId });
         // Two prefixes overlap when either one starts with the other.
         const [overlapping] = await tx
           .select({ prefix: namespaces.prefix })
@@ -339,7 +363,7 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
 
     async deleteNamespace(input) {
       return db.transaction(async (tx) => {
-        await lockAccess(tx, input.clientInstanceId);
+        await lockRights(tx, { clientInstanceId: input.clientInstanceId });
         const [referenced] = await tx
           .select({ count: sql<number>`count(*)::int` })
           .from(permissionGrants)
@@ -460,16 +484,6 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
 /** The workspace that owns an asset, where one does. */
 function assetOwner(row: { scopeKind: string; scopeId: string | null }): { workspaceId?: string } {
   return row.scopeKind === "workspace" && row.scopeId !== null ? { workspaceId: row.scopeId } : {};
-}
-
-/**
- * One writer at a time per client instance for what must hold across rows: prefixes do not
- * overlap, and a grant names a registered Namespace.
- */
-async function lockAccess(tx: PostgresTransaction, clientInstanceId: ClientInstanceId) {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${`access:${clientInstanceId}`}, 0))`
-  );
 }
 
 function mapGrant(row: GrantRow): PermissionGrant {

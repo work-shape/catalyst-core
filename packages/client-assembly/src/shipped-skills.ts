@@ -95,6 +95,12 @@ export async function seedInstanceShippedSkills(execution: {
     stores: execution.store,
     skills: execution.shippedSkills
   });
+  if (result.retained.length > 0) {
+    execution.logger.warn(
+      { skillNames: result.retained },
+      "Instance skills share shipped skill names; keeping the instance copies. Pull config assets and rename the instance copies before adopting the shipped skills"
+    );
+  }
   if (result.created.length + result.updated.length + result.removed.length > 0) {
     // Names only: the skills, and the agents that listed a removed one.
     execution.logger.info({ skills: result }, "Shipped skills reconciled");

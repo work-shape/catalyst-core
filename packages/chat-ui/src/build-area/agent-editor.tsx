@@ -47,7 +47,7 @@ import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
 import type { ConnectionToolChoice } from "./connection-tools";
-import { withImpliedTools } from "./instance-tools";
+import { heldToolCount, toolPackages } from "./instance-tools";
 import { ToolPackagesSection } from "./tool-packages-section";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import { PlatformInstructions } from "./platform-instructions";
@@ -384,11 +384,21 @@ export function AgentEditor({
     {
       id: "tools",
       label: t("configTools"),
-      count: withImpliedTools(form.toolNames, form.skillNames).length,
+      // The tools that are on: what the rows add up to, and the Apps' tools after them.
+      count:
+        heldToolCount(
+          toolPackages({
+            references,
+            selected: form.toolNames,
+            skillNames: form.skillNames,
+            locale,
+            connections: connectionTools.read,
+            isOtherSource: isAppToolName
+          })
+        ) + form.toolNames.filter(isAppToolName).length,
       refusalField: "tools",
       description: t("configToolsDescription"),
-      // The packages, this instance's own tools and the Connections as chips, as the Skills
-      // above; then the Apps.
+      // A row per package, per own tool of this instance and per Connection; then the Apps.
       body: (
         <>
           <ToolPackagesSection

@@ -32,6 +32,7 @@ import {
 } from "./legacy-permission-lists";
 import { permissionGrants, productUsers, userIdentities } from "./schema";
 import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
+import { lockRights, lockRightsOfUsableUser } from "./rights-lock";
 
 export async function resolveUserIdentity(
   db: PostgresConnection,
@@ -43,190 +44,141 @@ export async function resolveUserIdentity(
     input.linkByVerifiedEmail && normalizedEmail && input.emailVerified
   );
 
-  const resolved = await db.transaction(async (tx) => {
-    const now = new Date();
-    await acquireResolveLock(
-      tx,
-      `identity:${input.clientInstanceId}:${input.authSource}:${input.externalUserId}`
-    );
-    if (emailLinkingEnabled) {
-      await acquireResolveLock(tx, `identity-email:${input.clientInstanceId}:${normalizedEmail}`);
-    }
+  // Ordinary requests refresh only this user's sign-in metadata. If the mapping vanished,
+  // finish that transaction (and release its user lock) before taking the access lock.
+  const linked = await db.transaction((tx) => refreshLinkedSignIn(tx, input));
+  const resolved =
+    linked ??
+    (await db.transaction(async (tx) => {
+      await lockRights(tx, { clientInstanceId: input.clientInstanceId });
+      // Another first sign-in or administrator may have linked it after the plain lookup.
+      const concurrent = await refreshLinkedSignIn(tx, input);
+      if (concurrent) return concurrent;
+      const now = new Date();
 
-    const [existingIdentity] = await tx
-      .select()
-      .from(userIdentities)
-      .where(
-        and(
-          eq(userIdentities.clientInstanceId, input.clientInstanceId),
-          eq(userIdentities.authSource, input.authSource),
-          eq(userIdentities.externalUserId, input.externalUserId)
-        )
-      )
-      .limit(1);
-
-    if (existingIdentity) {
-      const [user] = await tx
-        .select()
-        .from(productUsers)
-        .where(
-          and(
-            eq(productUsers.clientInstanceId, input.clientInstanceId),
-            eq(productUsers.id, existingIdentity.userId)
+      let user: ProductUserRow | undefined;
+      if (input.sourceUserId) {
+        const [existingUser] = await tx
+          .select()
+          .from(productUsers)
+          .where(
+            and(
+              eq(productUsers.clientInstanceId, input.clientInstanceId),
+              eq(productUsers.id, input.sourceUserId)
+            )
           )
-        )
-        .limit(1);
-      if (!user) {
-        throw new AppError("INTERNAL", "User identity mapping points to a missing user");
+          .limit(1);
+        user = existingUser;
       }
-      requireUsableUser(mapUserRecord(user, [], []).status);
 
-      const [updatedIdentity] = await tx
-        .update(userIdentities)
-        .set({
+      let linkedByVerifiedEmail = false;
+      if (!user && emailLinkingEnabled && normalizedEmail) {
+        user = await findSingleUserByVerifiedEmail(tx, input.clientInstanceId, normalizedEmail);
+        linkedByVerifiedEmail = user !== undefined;
+      }
+
+      // A user the session names or a verified email leads to: closed is closed on this way too.
+      if (user) {
+        await lockRights(tx, { clientInstanceId: input.clientInstanceId, userId: user.id });
+        // A direct deletion mark may have committed while the row lock was being acquired.
+        user = await tx
+          .select()
+          .from(productUsers)
+          .where(
+            and(
+              eq(productUsers.clientInstanceId, input.clientInstanceId),
+              eq(productUsers.id, user.id)
+            )
+          )
+          .then(([row]) => row);
+        if (!user) throw new AppError("NOT_FOUND", "User is not available");
+        requireUsableUser(mapUserRecord(user, [], []).status);
+      }
+
+      if (!user) {
+        const [createdUser] = await tx
+          .insert(productUsers)
+          .values({
+            id: createUserId(),
+            clientInstanceId: input.clientInstanceId,
+            displayLabel: input.displayLabel,
+            email: input.email ?? null,
+            roles: input.roles,
+            permissionRefs: input.permissionRefs,
+            status: "active",
+            createdAt: now,
+            updatedAt: now,
+            lastAuthenticatedAt: now
+          })
+          .returning();
+        user = createdUser;
+        if (createdUser) {
+          // The list the sign-in brings becomes the new user's rows; nobody granted them.
+          await writeLegacyPermissionList(tx, {
+            clientInstanceId: input.clientInstanceId,
+            holderKind: "user",
+            holderId: createdUser.id,
+            entries: input.permissions,
+            grantedBy: LEGACY_LIST_GRANTOR
+          });
+        }
+      } else {
+        const [updatedUser] = await tx
+          .update(productUsers)
+          .set({
+            updatedAt: now,
+            lastAuthenticatedAt: now
+          })
+          .where(
+            and(
+              eq(productUsers.clientInstanceId, input.clientInstanceId),
+              eq(productUsers.id, user.id)
+            )
+          )
+          .returning();
+        user = updatedUser;
+      }
+
+      if (!user) {
+        throw new AppError("INTERNAL", "Failed to resolve user identity");
+      }
+
+      const [identity] = await tx
+        .insert(userIdentities)
+        .values({
+          clientInstanceId: input.clientInstanceId,
+          userId: user.id,
+          authSource: input.authSource,
+          externalUserId: input.externalUserId,
           displayLabel: input.displayLabel,
           email: input.email ?? null,
           emailVerified: input.emailVerified ?? false,
-          updatedAt: now,
-          lastAuthenticatedAt: now
-        })
-        .where(
-          and(
-            eq(userIdentities.clientInstanceId, input.clientInstanceId),
-            eq(userIdentities.authSource, input.authSource),
-            eq(userIdentities.externalUserId, input.externalUserId)
-          )
-        )
-        .returning();
-      await tx
-        .update(productUsers)
-        .set({
-          updatedAt: now,
-          lastAuthenticatedAt: now
-        })
-        .where(
-          and(
-            eq(productUsers.clientInstanceId, input.clientInstanceId),
-            eq(productUsers.id, existingIdentity.userId)
-          )
-        );
-
-      return {
-        userId: existingIdentity.userId,
-        identity: mapUserIdentity(updatedIdentity),
-        linkedByVerifiedEmail: false
-      };
-    }
-
-    let user: ProductUserRow | undefined;
-    if (input.sourceUserId) {
-      const [existingUser] = await tx
-        .select()
-        .from(productUsers)
-        .where(
-          and(
-            eq(productUsers.clientInstanceId, input.clientInstanceId),
-            eq(productUsers.id, input.sourceUserId)
-          )
-        )
-        .limit(1);
-      user = existingUser;
-    }
-
-    let linkedByVerifiedEmail = false;
-    if (!user && emailLinkingEnabled && normalizedEmail) {
-      user = await findSingleUserByVerifiedEmail(tx, input.clientInstanceId, normalizedEmail);
-      linkedByVerifiedEmail = user !== undefined;
-    }
-
-    // A user the session names or a verified email leads to: closed is closed on this way too.
-    if (user) requireUsableUser(mapUserRecord(user, [], []).status);
-
-    if (!user) {
-      const [createdUser] = await tx
-        .insert(productUsers)
-        .values({
-          id: createUserId(),
-          clientInstanceId: input.clientInstanceId,
-          displayLabel: input.displayLabel,
-          email: input.email ?? null,
-          roles: input.roles,
-          permissionRefs: input.permissionRefs,
-          status: "active",
           createdAt: now,
           updatedAt: now,
           lastAuthenticatedAt: now
         })
-        .returning();
-      user = createdUser;
-      if (createdUser) {
-        // The list the sign-in brings becomes the new user's rows; nobody granted them.
-        await writeLegacyPermissionList(tx, {
-          clientInstanceId: input.clientInstanceId,
-          holderKind: "user",
-          holderId: createdUser.id,
-          entries: input.permissions,
-          grantedBy: LEGACY_LIST_GRANTOR
-        });
-      }
-    } else {
-      const [updatedUser] = await tx
-        .update(productUsers)
-        .set({
-          updatedAt: now,
-          lastAuthenticatedAt: now
+        .onConflictDoUpdate({
+          target: [
+            userIdentities.clientInstanceId,
+            userIdentities.authSource,
+            userIdentities.externalUserId
+          ],
+          set: {
+            displayLabel: input.displayLabel,
+            email: input.email ?? null,
+            emailVerified: input.emailVerified ?? false,
+            updatedAt: now,
+            lastAuthenticatedAt: now
+          }
         })
-        .where(
-          and(
-            eq(productUsers.clientInstanceId, input.clientInstanceId),
-            eq(productUsers.id, user.id)
-          )
-        )
         .returning();
-      user = updatedUser;
-    }
 
-    if (!user) {
-      throw new AppError("INTERNAL", "Failed to resolve user identity");
-    }
-
-    const [identity] = await tx
-      .insert(userIdentities)
-      .values({
-        clientInstanceId: input.clientInstanceId,
+      return {
         userId: user.id,
-        authSource: input.authSource,
-        externalUserId: input.externalUserId,
-        displayLabel: input.displayLabel,
-        email: input.email ?? null,
-        emailVerified: input.emailVerified ?? false,
-        createdAt: now,
-        updatedAt: now,
-        lastAuthenticatedAt: now
-      })
-      .onConflictDoUpdate({
-        target: [
-          userIdentities.clientInstanceId,
-          userIdentities.authSource,
-          userIdentities.externalUserId
-        ],
-        set: {
-          userId: user.id,
-          displayLabel: input.displayLabel,
-          email: input.email ?? null,
-          emailVerified: input.emailVerified ?? false,
-          updatedAt: now,
-          lastAuthenticatedAt: now
-        }
-      })
-      .returning();
-
-    return {
-      userId: user.id,
-      identity: mapUserIdentity(identity),
-      linkedByVerifiedEmail
-    };
-  });
+        identity: mapUserIdentity(identity),
+        linkedByVerifiedEmail
+      };
+    }));
 
   if (resolved.linkedByVerifiedEmail) {
     await appendAuditEvent({
@@ -252,6 +204,53 @@ export async function resolveUserIdentity(
     identity: resolved.identity,
     correlationId: input.correlationId
   });
+}
+
+/**
+ * Refreshes an existing sign-in without the instance access lock. It changes no owner, role
+ * or grant: user first, then identity, matching rights writers without ever waiting for their
+ * advisory lock while holding a user. Re-read the mapping after locking the user because an
+ * administrator may have removed it and linked the same external id elsewhere in between.
+ * An absent mapping returns to the caller, which ends this transaction before linking it.
+ */
+async function refreshLinkedSignIn(tx: PostgresTransaction, input: ResolveUserIdentityInput) {
+  const address = and(
+    eq(userIdentities.clientInstanceId, input.clientInstanceId),
+    eq(userIdentities.authSource, input.authSource),
+    eq(userIdentities.externalUserId, input.externalUserId)
+  );
+  const [known] = await tx
+    .select({ userId: userIdentities.userId })
+    .from(userIdentities)
+    .where(address)
+    .limit(1);
+  if (!known) return undefined;
+  const userWhere = and(
+    eq(productUsers.clientInstanceId, input.clientInstanceId),
+    eq(productUsers.id, known.userId)
+  );
+  const [user] = await tx.select().from(productUsers).where(userWhere).for("update").limit(1);
+  if (!user) return undefined;
+  const identityWhere = and(address, eq(userIdentities.userId, user.id));
+  const [current] = await tx.select().from(userIdentities).where(identityWhere).limit(1);
+  if (!current) return undefined;
+  requireUsableUser(mapUserRecord(user, [], []).status);
+
+  const now = new Date();
+  await tx.update(productUsers).set({ updatedAt: now, lastAuthenticatedAt: now }).where(userWhere);
+  const [identity] = await tx
+    .update(userIdentities)
+    .set({
+      displayLabel: input.displayLabel,
+      email: input.email ?? null,
+      emailVerified: input.emailVerified ?? false,
+      updatedAt: now,
+      lastAuthenticatedAt: now
+    })
+    .where(identityWhere)
+    .returning();
+  if (!identity) throw new AppError("INTERNAL", "The locked sign-in is not available");
+  return { userId: user.id, identity: mapUserIdentity(identity), linkedByVerifiedEmail: false };
 }
 
 export async function listUsers(
@@ -313,6 +312,7 @@ export async function createUser(
   input: CreateUserInput
 ): Promise<UserRecord> {
   return db.transaction(async (tx) => {
+    await lockRights(tx, { clientInstanceId: input.clientInstanceId });
     const now = new Date();
     const [row] = await tx
       .insert(productUsers)
@@ -411,6 +411,7 @@ export async function updateUser(
   }
 
   const row = await db.transaction(async (tx) => {
+    await lockRights(tx, input);
     const [updated] = await tx
       .update(productUsers)
       .set(set)
@@ -443,46 +444,27 @@ export async function updateUser(
   return requireUserRecord(db, input.clientInstanceId, row.id);
 }
 
-/**
- * Holds the user against a deletion request until the transaction ends and refuses when the
- * deletion was requested already: the statement that marks the user waits for this lock.
- */
-async function lockUserNotInDeletion(
-  tx: PostgresTransaction,
-  input: { clientInstanceId: ClientInstanceId; userId: string }
-): Promise<void> {
-  const [user] = await tx
-    .select({ deletionRequestedAt: productUsers.deletionRequestedAt })
-    .from(productUsers)
-    .where(
-      and(
-        eq(productUsers.clientInstanceId, input.clientInstanceId),
-        eq(productUsers.id, input.userId)
-      )
-    )
-    .for("share");
-  if (!user) throw new AppError("NOT_FOUND", "User is not available");
-  if (user.deletionRequestedAt !== null) throw userInDeletionError();
-}
-
 export async function markUserDeletionRequested(
   db: PostgresConnection,
   input: DeleteUserInput
 ): Promise<boolean> {
-  const marked = await db
-    .update(productUsers)
-    .set({ deletionRequestedAt: drizzleSql`now()` })
-    .where(
-      and(
-        eq(productUsers.clientInstanceId, input.clientInstanceId),
-        eq(productUsers.id, input.userId),
-        isNull(productUsers.deletionRequestedAt)
+  return db.transaction(async (tx) => {
+    await lockRights(tx, input);
+    const marked = await tx
+      .update(productUsers)
+      .set({ deletionRequestedAt: drizzleSql`now()` })
+      .where(
+        and(
+          eq(productUsers.clientInstanceId, input.clientInstanceId),
+          eq(productUsers.id, input.userId),
+          isNull(productUsers.deletionRequestedAt)
+        )
       )
-    )
-    .returning({ id: productUsers.id });
-  if (marked.length > 0) return true;
-  await requireUserRecord(db, input.clientInstanceId, input.userId);
-  return false;
+      .returning({ id: productUsers.id });
+    if (marked.length > 0) return true;
+    await requireUserRecord(tx, input.clientInstanceId, input.userId);
+    return false;
+  });
 }
 
 export async function deleteUser(
@@ -497,6 +479,7 @@ export async function deleteUser(
   // The user's grant rows go with the user: a row left behind would answer for whoever
   // carried the id next.
   const rows = await db.transaction(async (tx) => {
+    await lockRights(tx, input);
     await tx
       .delete(permissionGrants)
       .where(
@@ -527,7 +510,7 @@ export async function upsertUserIdentity(
   input: UpsertUserIdentityInput
 ): Promise<UserRecord> {
   return connection.transaction(async (db) => {
-    await lockUserNotInDeletion(db, input);
+    await lockRightsOfUsableUser(db, input);
     return upsertLockedUserIdentity(db, input);
   });
 }
@@ -537,7 +520,7 @@ async function upsertLockedUserIdentity(
   input: UpsertUserIdentityInput
 ): Promise<UserRecord> {
   const now = new Date();
-  await db
+  const [identity] = await db
     .insert(userIdentities)
     .values({
       clientInstanceId: input.clientInstanceId,
@@ -556,14 +539,22 @@ async function upsertLockedUserIdentity(
         userIdentities.authSource,
         userIdentities.externalUserId
       ],
+      // A mapping may be edited on its current account, never silently reassigned. A move
+      // would change both accounts and has no product workflow; neither owner is changed.
+      setWhere: eq(userIdentities.userId, input.userId),
       set: {
-        userId: input.userId,
         displayLabel: input.displayLabel ?? null,
         email: input.email ?? null,
         emailVerified: input.emailVerified ?? false,
         updatedAt: now
       }
+    })
+    .returning({ userId: userIdentities.userId });
+  if (!identity) {
+    throw new AppError("CONFLICT", "This sign-in is already linked to another user", {
+      reason: "identity_already_linked"
     });
+  }
   await db
     .update(productUsers)
     .set({ updatedAt: now })
@@ -581,7 +572,7 @@ export async function deleteUserIdentity(
   input: DeleteUserIdentityInput
 ): Promise<UserRecord> {
   return connection.transaction(async (db) => {
-    await lockUserNotInDeletion(db, input);
+    await lockRightsOfUsableUser(db, input);
     return deleteLockedUserIdentity(db, input);
   });
 }
@@ -652,10 +643,6 @@ export async function requireUserRecord(
     throw new AppError("NOT_FOUND", "User is not available");
   }
   return user;
-}
-
-async function acquireResolveLock(tx: PostgresTransaction, key: string): Promise<void> {
-  await tx.execute(drizzleSql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
 }
 
 async function findSingleUserByVerifiedEmail(
