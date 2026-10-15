@@ -88,24 +88,50 @@ function impliedTools(skillNames: readonly string[]): Map<string, ToolInclusionR
 }
 
 /**
- * The tool names an agent is saved with: its chosen ones and those it holds by implication. A
- * companion tool goes and comes with the tool it belongs to.
+ * The companions that share their tool's check box on this instance: those whose two tools it
+ * offers both of. Where it offers only the tool, that stands alone as before.
+ */
+function pairedCompanions(offeredNames: readonly string[] | undefined): Map<string, string> {
+  return new Map(
+    [...COMPANION_TOOLS].filter(
+      ([companion, lead]) =>
+        (offeredNames?.includes(companion) ?? false) && offeredNames?.includes(lead)
+    )
+  );
+}
+
+/**
+ * The tool names with each companion the instance pairs held exactly while its tool is: added
+ * where the tool is held, removed where it is not. `offeredNames` are the instance's tools;
+ * without them nothing is paired.
+ */
+export function withCompanionTools(
+  toolNames: readonly string[],
+  offeredNames: readonly string[] | undefined
+): string[] {
+  const paired = pairedCompanions(offeredNames);
+  const chosen = toolNames.filter((name) => {
+    const lead = paired.get(name);
+    return lead === undefined || toolNames.includes(lead);
+  });
+  const companions = [...paired]
+    .filter(([companion, lead]) => chosen.includes(lead) && !chosen.includes(companion))
+    .map(([companion]) => companion);
+  return [...chosen, ...companions];
+}
+
+/**
+ * The tool names an agent is saved with: its chosen ones and those it holds by implication, a
+ * companion with its tool among them. `offeredNames` are the instance's tools.
  */
 export function withImpliedTools(
   toolNames: readonly string[],
-  skillNames: readonly string[]
+  skillNames: readonly string[],
+  offeredNames: readonly string[] | undefined
 ): string[] {
-  const chosen = toolNames.filter((name) => {
-    const lead = COMPANION_TOOLS.get(name);
-    return lead === undefined || toolNames.includes(lead);
-  });
-  const companions = [...COMPANION_TOOLS]
-    .filter(([, lead]) => chosen.includes(lead))
-    .map(([companion]) => companion);
-  const implied = [...impliedTools(skillNames).keys(), ...companions].filter(
-    (name) => !chosen.includes(name)
-  );
-  return [...chosen, ...implied];
+  const held = withCompanionTools(toolNames, offeredNames);
+  const implied = [...impliedTools(skillNames).keys()].filter((name) => !held.includes(name));
+  return [...held, ...implied];
 }
 
 /**
@@ -130,13 +156,12 @@ function instanceToolGroups(input: {
     )
     .map((name): AgentToolReference => ({ name }));
   const implied = impliedTools(input.skillNames);
-  const shown = [...offered, ...held];
-  const shownNames = new Set(shown.map((tool) => tool.name));
+  // A companion the instance pairs has no row: its tool's check box holds it.
+  const paired = pairedCompanions(references?.enabledToolNames);
 
   const byGroup = new Map<ToolGroupName, InstanceToolView[]>();
-  for (const tool of shown) {
-    const lead = COMPANION_TOOLS.get(tool.name);
-    if (lead !== undefined && shownNames.has(lead)) {
+  for (const tool of [...offered, ...held]) {
+    if (paired.has(tool.name)) {
       continue;
     }
     const group = tool.group ?? "instance";

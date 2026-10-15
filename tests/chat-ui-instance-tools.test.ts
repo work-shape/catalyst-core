@@ -6,6 +6,7 @@ import {
   AgentEditor,
   agentConfigToForm,
   agentFormToConfig,
+  editedAgentConfig,
   setPackageTools,
   toolPackages,
   withImpliedTools,
@@ -239,9 +240,12 @@ describe("tools an agent holds because of something else", () => {
   });
 
   it("saves read_skill with an agent that has a skill, once", () => {
-    expect(withImpliedTools(["web_fetch"], ["tax-review"])).toEqual(["web_fetch", "read_skill"]);
-    expect(withImpliedTools(["read_skill"], ["tax-review"])).toEqual(["read_skill"]);
-    expect(withImpliedTools(["web_fetch"], [])).toEqual(["web_fetch"]);
+    expect(withImpliedTools(["web_fetch"], ["tax-review"], [])).toEqual([
+      "web_fetch",
+      "read_skill"
+    ]);
+    expect(withImpliedTools(["read_skill"], ["tax-review"], [])).toEqual(["read_skill"]);
+    expect(withImpliedTools(["web_fetch"], [], [])).toEqual(["web_fetch"]);
 
     const form = agentConfigToForm({
       name: "assistant",
@@ -256,39 +260,61 @@ describe("tools an agent holds because of something else", () => {
 });
 
 describe("the fact sheet, one check box for keeping and reading it", () => {
-  const results = references({
-    enabledToolNames: [
-      "show_view",
-      "page.save",
-      "structured_data.publish",
-      "structured_data.read",
-      "structured_result.read"
-    ],
-    tools: [
-      { name: "show_view", group: "results", effect: "reading" },
-      { name: "page.save", group: "results", effect: "changing" },
-      {
-        name: "structured_data.publish",
-        title: { en: "Keep a fact sheet", de: "Faktenblatt führen" },
-        group: "results",
-        effect: "changing"
-      },
-      {
-        name: "structured_data.read",
-        title: { en: "Read the fact sheet", de: "Faktenblatt lesen" },
-        group: "results",
-        effect: "reading"
-      },
-      {
-        name: "structured_result.read",
-        title: { en: "Reopen an earlier result", de: "Früheres Ergebnis öffnen" },
-        group: "results",
-        effect: "reading"
-      }
-    ]
+  const resultTools = [
+    { name: "show_view", group: "results", effect: "reading" },
+    { name: "page.save", group: "results", effect: "changing" },
+    {
+      name: "structured_data.publish",
+      title: { en: "Keep a fact sheet", de: "Faktenblatt führen" },
+      group: "results",
+      effect: "changing"
+    },
+    {
+      name: "structured_data.read",
+      title: { en: "Read the fact sheet", de: "Faktenblatt lesen" },
+      group: "results",
+      effect: "reading"
+    },
+    {
+      name: "structured_result.read",
+      title: { en: "Reopen an earlier result", de: "Früheres Ergebnis öffnen" },
+      group: "results",
+      effect: "reading"
+    }
+  ] satisfies ConfigAssetReferences["tools"];
+  const offering = (names: string[]) =>
+    references({
+      enabledToolNames: names,
+      tools: resultTools.filter((tool) => names.includes(tool.name))
+    });
+  const both = offering(resultTools.map((tool) => tool.name));
+  const publishOnly = offering(
+    resultTools.map((tool) => tool.name).filter((name) => name !== "structured_data.read")
+  );
+  const resultsPackage = (selected: string[], offered = both) =>
+    byKey(packages({ references: offered, selected }), "package:results");
+  const stored = (toolNames: string[]) => ({
+    name: "assistant",
+    displayName: "Assistant",
+    instructions: "Help.",
+    toolNames,
+    skillNames: [],
+    initialPrompts: []
   });
-  const resultsPackage = (selected: string[]) =>
-    byKey(packages({ references: results, selected }), "package:results");
+  /** What the agent page saves: the stored agent with its form changed by `edit`. */
+  const save = (
+    toolNames: string[],
+    edit: (form: ReturnType<typeof agentConfigToForm>) => ReturnType<typeof agentConfigToForm>,
+    offered = both
+  ) => {
+    const config = stored(toolNames);
+    return editedAgentConfig(edit(agentConfigToForm(config)), config, offered.enabledToolNames)
+      .toolNames;
+  };
+  const newInstructions = (form: ReturnType<typeof agentConfigToForm>) => ({
+    ...form,
+    instructions: "Help more."
+  });
 
   it("shows four tools in Results, reading the fact sheet within keeping it", () => {
     const view = resultsPackage(["structured_data.publish", "structured_data.read"]);
@@ -311,21 +337,56 @@ describe("the fact sheet, one check box for keeping and reading it", () => {
     expect(resultsPackage(["structured_data.read"])?.heldCount).toBe(0);
   });
 
-  it("saves keeping and reading together, and turning keeping off removes both", () => {
-    expect(withImpliedTools(["structured_data.publish"], [])).toEqual([
+  it("saves keeping and reading together, also when only another field changed", () => {
+    // A stored agent of one half is saved as the pair or as neither, as its box shows.
+    expect(save(["web_fetch", "structured_data.publish"], newInstructions)).toEqual([
+      "web_fetch",
       "structured_data.publish",
       "structured_data.read"
     ]);
-    expect(withImpliedTools(["structured_data.read", "structured_data.publish"], [])).toEqual([
+    expect(save(["web_fetch", "structured_data.read"], newInstructions)).toEqual(["web_fetch"]);
+    // The pair as stored stays as stored.
+    expect(save(["structured_data.read", "structured_data.publish"], newInstructions)).toEqual([
       "structured_data.read",
       "structured_data.publish"
     ]);
-    // The box off: the page leaves the reading behind, the save takes it away.
-    expect(withImpliedTools(["web_fetch", "structured_data.read"], [])).toEqual(["web_fetch"]);
-    // Turning the whole package on gives both.
+  });
+
+  it("turns both on with the box and both off without it", () => {
+    const keepBox = { choosable: ["structured_data.publish"] };
+    expect(
+      save([], (form) => ({ ...form, toolNames: setPackageTools(form.toolNames, keepBox, true) }))
+    ).toEqual(["structured_data.publish", "structured_data.read"]);
+    expect(
+      save(["structured_data.publish", "structured_data.read"], (form) => ({
+        ...form,
+        toolNames: setPackageTools(form.toolNames, keepBox, false)
+      }))
+    ).toEqual([]);
+    // The whole package on gives both too.
     const view = resultsPackage([]);
     if (!view) throw new Error("no results package");
-    expect(withImpliedTools(setPackageTools([], view, true), [])).toContain("structured_data.read");
+    expect(
+      save([], (form) => ({ ...form, toolNames: setPackageTools(form.toolNames, view, true) }))
+    ).toContain("structured_data.read");
+  });
+
+  it("offers keeping alone where the instance does not offer reading", () => {
+    const view = resultsPackage([], publishOnly);
+    if (!view) throw new Error("no results package");
+    expect(view.choosable).toContain("structured_data.publish");
+    expect(view.tools.map((tool) => tool.name)).not.toContain("structured_data.read");
+    // Its box adds the keeping only, so the server is never asked for a tool it lacks.
+    expect(
+      save(
+        [],
+        (form) => ({ ...form, toolNames: setPackageTools(form.toolNames, view, true) }),
+        publishOnly
+      )
+    ).not.toContain("structured_data.read");
+    expect(save(["structured_data.publish"], newInstructions, publishOnly)).toEqual([
+      "structured_data.publish"
+    ]);
   });
 });
 

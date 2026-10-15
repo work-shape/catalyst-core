@@ -152,7 +152,9 @@ export function AgentEditor({
     setSaving(true);
     const saved: BuildWriteOutcome =
       frame.asset === undefined || changedFields > 0
-        ? await frame.save(editedAgentConfig(form, frame.asset?.config))
+        ? await frame.save(
+            editedAgentConfig(form, frame.asset?.config, references?.enabledToolNames)
+          )
         : { ok: true };
     if (saved.ok) {
       state.markSaved();
@@ -384,7 +386,7 @@ export function AgentEditor({
     {
       id: "tools",
       label: t("configTools"),
-      count: withImpliedTools(form.toolNames, form.skillNames).length,
+      count: withImpliedTools(form.toolNames, form.skillNames, references?.enabledToolNames).length,
       refusalField: "tools",
       description: t("configToolsDescription"),
       // The packages, this instance's own tools and the Connections as chips, as the Skills

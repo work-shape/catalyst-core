@@ -176,7 +176,7 @@ describe("tools of Connections on the agent page", () => {
     const config = { ...agentBase, toolNames: held };
     const ticked = toggleToolName(held, "connection.crm.add_note", true);
     expect(
-      editedAgentConfig({ ...agentConfigToForm(config), toolNames: ticked }, config).toolNames
+      editedAgentConfig({ ...agentConfigToForm(config), toolNames: ticked }, config, []).toolNames
     ).toEqual([...held, "connection.crm.add_note"]);
     expect(connectionToolsView(answered, ticked).unavailable).toEqual(held);
     expect(toggleToolName(ticked, "connection.crm.gone", false)).toEqual([
