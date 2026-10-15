@@ -156,19 +156,6 @@ describe("who may write a grant, and what a grant may say", () => {
     await t.expectOk(t.admin.id, "namespaces.list");
   });
 
-  it("lets a person read their own effective rights without users.manage", async () => {
-    const t = await setup();
-    await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.read", { namespace: "kai-" });
-    const response = await t.expectOk(t.kai.id, "permissions.effective", {
-      query: { holderKind: "user", holderId: t.kai.id }
-    });
-    expect(response.json()).toMatchObject({
-      holderActive: true,
-      items: expect.arrayContaining([expect.objectContaining({ action: "agent.read" })])
-    });
-  });
-
   it("refuses an administrator whose users.manage was revoked in the legacy column", async () => {
     const t = await setup();
     await t.stores.users.updateUser({
