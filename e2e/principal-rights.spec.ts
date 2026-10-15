@@ -232,7 +232,7 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       ).toBeVisible();
     });
 
-    await test.step("an administrator who is not shown service principals sees the person and no principal", async () => {
+    await test.step("an administrator, who manages service principals, sees the person and the principal", async () => {
       // The right is back, so there is a principal's row the list could show.
       const given = await requestWithOrigin(
         page,
@@ -257,8 +257,9 @@ test("a superadmin gives a service principal a Connection, is refused one that i
       const access = page.locator("#access");
       await expect(access.getByRole("heading", { name: "Who may use it" })).toBeVisible();
       await expect(access.locator('[data-holder-kind="person"]')).toHaveCount(1);
-      await expect(access.locator('[data-holder-kind="service_principal"]')).toHaveCount(0);
-      await expect(access.getByText(label)).toHaveCount(0);
+      // RIGHTS-1a: the role holds `service_principals.manage`, so the list shows principals.
+      await expect(access.locator('[data-holder-kind="service_principal"]')).toHaveCount(1);
+      await expect(access.getByText(label).first()).toBeVisible();
     });
   } finally {
     if (principalId !== undefined) {

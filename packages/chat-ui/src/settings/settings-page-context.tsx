@@ -35,6 +35,11 @@ export interface SettingsPageContextValue {
   /** The person left the workspace they were changing. */
   onWorkspaceLeft(): void;
   onWorkspaceDeleted(collaborationWorkspaceId: string): void;
+  /**
+   * Opens the chat dock beside the open page with a new conversation and this text in its
+   * composer, for the person to send. Absent where the shell has no dock.
+   */
+  startDockedChat?: (prompt: string) => void;
 }
 
 const SettingsPageContext = createContext<SettingsPageContextValue | undefined>(undefined);

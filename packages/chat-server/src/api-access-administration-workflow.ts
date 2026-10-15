@@ -2,13 +2,14 @@ import type { ApiCredentialScope, ServicePrincipalPermission } from "@vivd-catal
 import {
   AppError,
   isAuthenticatedServicePrincipal,
-  isSuperadmin,
+  isPermission,
   asApiCredentialId,
   asServicePrincipalId,
   asUserId,
   auditActorFromIdentity,
   type ApiCredentialRecord,
   type AuthenticatedUser,
+  type HeldRight,
   type OperationAuthorization,
   type OperationAuthorizeContext,
   type OperationExecutionContext,
@@ -16,6 +17,11 @@ import {
   type ServicePrincipalRecord
 } from "@vivd-catalyst/core";
 import { recordGovernanceAccess } from "./governance-actions";
+import {
+  authorizeGivingToPrincipal,
+  principalRights,
+  type PrincipalRightsOptions
+} from "./principal-rights";
 import type { ChatServerOptions } from "./types";
 
 const SERVICE_PERMISSIONS = new Set<ServicePrincipalPermission>([
@@ -27,40 +33,43 @@ const CREDENTIAL_SCOPES = new Set<ApiCredentialScope>([
   "config_assets:release"
 ]);
 
-/** The right every API access operation asks for. */
+/** The right that creates service principals, gives and takes their rights, and enables them. */
+export const SERVICE_PRINCIPALS_ACTION = "service_principals.manage";
+/** The right over API keys: a principal's, and the oversight of every person's own. */
 const API_ACCESS_ACTION = "api_access.manage";
 
 /** What a changing API access operation takes from its Operation Run. */
 type ChangeContext = Pick<OperationExecutionContext, "actor" | "audit" | "correlationId">;
 
-/**
- * Who may change API access: a person who holds `api_access.manage` on the instance and is a
- * superadmin. It is the `authorize` of the four changing operations, so the run records the
- * check and a refusal, and nothing of the operation runs for anybody else. A refusal for the
- * role names the operation, since no right stands for the role.
- */
-export function authorizeApiAccessChange(
-  operationId: string
-): (input: unknown, context: OperationAuthorizeContext) => OperationAuthorization {
-  return (_input, caller) => authorizePrincipalAdministration(caller, operationId);
-}
+/** What an API access operation's own check reads of the call. */
+type Caller = Pick<OperationAuthorizeContext, "actor" | "access">;
 
 /**
- * The one rule on who administers service principals, for every place that asks it: the four
- * changes of API access, and letting a Workflow act as a principal (`workflow-run-as.ts`).
- * A service principal never passes, a Workflow Run's among them.
+ * The one rule on who administers service principals, for every place that asks it: creating
+ * and changing one, and writing its grant rows (`access-workflow.ts`). A person who holds
+ * `service_principals.manage`. A service principal never passes, a Workflow Run's among them.
+ * What the principal is given beside that asks the rule of no escalation
+ * (`authorizeGivingToPrincipal`).
  */
 export function authorizePrincipalAdministration(
-  { actor, access }: Pick<OperationAuthorizeContext, "actor" | "access">,
+  caller: Caller,
   operationId: string
 ): OperationAuthorization {
-  const right = access.authorize(API_ACCESS_ACTION);
+  return authorizePersonHolding(SERVICE_PRINCIPALS_ACTION, caller, operationId);
+}
+
+function authorizePersonHolding(
+  action: string,
+  { actor, access }: Caller,
+  operationId: string
+): OperationAuthorization {
+  const right = access.authorize(action);
   if (!right.allowed) {
-    return { allowed: false, action: API_ACCESS_ACTION, reason: right.reason };
+    return { allowed: false, action, reason: right.reason };
   }
-  return !isAuthenticatedServicePrincipal(actor) && isSuperadmin(actor)
-    ? { allowed: true }
-    : { allowed: false, action: operationId, reason: "no_grant" };
+  return isAuthenticatedServicePrincipal(actor)
+    ? { allowed: false, action: operationId, reason: "user_only" }
+    : { allowed: true };
 }
 
 export interface ServicePrincipalDetail {
@@ -93,11 +102,76 @@ interface CreateApiCredentialCommand {
 
 /**
  * What an administrator sees and changes about service principals and their keys. The four
- * changes are registered operations: the caller's right is checked by `authorizeApiAccessChange`
- * before a method here runs.
+ * changes are registered operations: each is checked by its `authorize…` method here before
+ * its change runs.
  */
 export class ApiAccessAdministrationWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
+
+  /** Creating a principal: the right over principals, and every legacy key it is given. */
+  authorizeCreatePrincipal(
+    operationId: string,
+    caller: Caller,
+    command: Pick<CreateServicePrincipalCommand, "displayLabel" | "permissions">
+  ): OperationAuthorization {
+    const administration = authorizePrincipalAdministration(caller, operationId);
+    if (!administration.allowed) return administration;
+    return authorizeGivingToPrincipal(caller, command, keyRights(command.permissions ?? []));
+  }
+
+  /**
+   * Changing a principal: the right over principals, and the rule on what the change gives. A
+   * key added is given. Enabling a disabled principal lends everything it holds once enabled.
+   * Taking a key away and disabling ask nothing more. A principal the instance does not have
+   * passes: the write answers that itself.
+   */
+  async authorizeUpdatePrincipal(
+    operationId: string,
+    caller: Caller,
+    command: Pick<UpdateServicePrincipalCommand, "servicePrincipalId" | "status" | "permissions">
+  ): Promise<OperationAuthorization> {
+    const administration = authorizePrincipalAdministration(caller, operationId);
+    if (!administration.allowed) return administration;
+    const principal = await this.findPrincipal(command.servicePrincipalId);
+    if (!principal) return { allowed: true };
+    const keys = command.permissions ?? principal.permissions;
+    if (principal.status !== "active" && command.status === "active") {
+      const held = await principalRights(this.rightsOptions(), principal.id);
+      // The rights it holds once enabled: its keys as the change leaves them, and the rest.
+      const others = held.filter(
+        (right) => right.resource !== undefined || !isPermission(right.action)
+      );
+      return authorizeGivingToPrincipal(caller, principal, [...keyRights(keys), ...others]);
+    }
+    const added = keys.filter((key) => !principal.permissions.includes(key));
+    return authorizeGivingToPrincipal(caller, principal, keyRights(added));
+  }
+
+  /**
+   * Issuing a principal a key: `api_access.manage`, and every right the principal holds, since
+   * the key is a bearer copy of them. A principal the instance does not have passes: the write
+   * answers that itself.
+   */
+  async authorizeCreateCredential(
+    operationId: string,
+    caller: Caller,
+    command: Pick<CreateApiCredentialCommand, "servicePrincipalId">
+  ): Promise<OperationAuthorization> {
+    const keyAdministration = authorizePersonHolding(API_ACCESS_ACTION, caller, operationId);
+    if (!keyAdministration.allowed) return keyAdministration;
+    const principal = await this.findPrincipal(command.servicePrincipalId);
+    if (!principal) return { allowed: true };
+    return authorizeGivingToPrincipal(
+      caller,
+      principal,
+      await principalRights(this.rightsOptions(), principal.id)
+    );
+  }
+
+  /** Revoking a key takes away and asks only `api_access.manage`. */
+  authorizeRevokeCredential(operationId: string, caller: Caller): OperationAuthorization {
+    return authorizePersonHolding(API_ACCESS_ACTION, caller, operationId);
+  }
 
   async listServicePrincipals(
     actor: AuthenticatedUser,
@@ -212,6 +286,19 @@ export class ApiAccessAdministrationWorkflow {
     return credential;
   }
 
+  private rightsOptions(): PrincipalRightsOptions {
+    return { clientInstanceId: this.options.clientInstanceId, access: this.options.stores.access };
+  }
+
+  private async findPrincipal(
+    servicePrincipalId: string
+  ): Promise<ServicePrincipalRecord | undefined> {
+    const principals = await this.options.stores.apiAccess.listServicePrincipals({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    return principals.find((candidate) => candidate.id === servicePrincipalId);
+  }
+
   private async detail(principal: ServicePrincipalRecord): Promise<ServicePrincipalDetail> {
     return {
       principal,
@@ -269,4 +356,9 @@ export class ApiAccessAdministrationWorkflow {
       }
     });
   }
+}
+
+/** Legacy keys as rights on the whole instance, as a principal holds them. */
+function keyRights(keys: readonly string[]): HeldRight[] {
+  return keys.map((action) => ({ action }));
 }

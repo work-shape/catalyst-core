@@ -4,6 +4,7 @@ import type { AvatarKind, GenericIconKey } from "@vivd-catalyst/ui";
 import type { AvailableIn } from "../api/asset-writes";
 import type { TranslationKey } from "../i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
+import type { BuildNamespace } from "./build-rights";
 
 /** One asset as a list shows it: what the instance says of it without its content. */
 export type BuildAssetRow = AssetSummary;
@@ -69,6 +70,32 @@ export interface BuildAssetEditorProps {
   save(config: Record<string, unknown>): Promise<BuildWriteOutcome>;
 }
 
+/**
+ * What the frame hands a kind's own dialog for a new asset, in place of the one that asks for
+ * the name and the id: the Namespaces the reader may name it in, and the writes of the asset.
+ */
+export interface BuildCreateDialogProps {
+  namespaces: readonly BuildNamespace[];
+  /** The reader may name the asset without a Namespace. */
+  mayNameFreely: boolean;
+  /** Writes the asset's definition: creates it at `null`, else over the revision given. */
+  put(input: {
+    name: string;
+    config: Record<string, unknown>;
+    expectedRevision: number | null;
+  }): Promise<{ revision: number }>;
+  /** Deletes the asset the dialog made, where the reader may (`mayDelete`). */
+  remove(input: { name: string; expectedRevision: number }): Promise<unknown>;
+  /** Whether the reader may delete an asset of the kind in this Namespace, by its prefix. */
+  mayDelete(namespace: string | undefined): boolean;
+  onClose(): void;
+  /**
+   * The asset exists: the frame closes the dialog and opens its page. `then` runs once the
+   * page is open, such as opening the chat beside it.
+   */
+  onCreated(name: string, then?: () => void): void;
+}
+
 /** What every kind of the Build area names: its rail item and its list. */
 interface BuildKindBase {
   /** The asset kind, as the server stores it. */
@@ -126,6 +153,12 @@ export interface BuildAssetKind extends BuildKindBase {
   missingText: TranslationKey;
   /** The body of the asset page, for an existing asset and for a new one. */
   Editor: ComponentType<BuildAssetEditorProps>;
+  /**
+   * The kind's own dialog for a new asset, which makes the asset itself. Without it the frame
+   * asks for the name and the id and opens the `Editor` of a new asset. A copy always takes
+   * the frame's dialog.
+   */
+  CreateDialog?: ComponentType<BuildCreateDialogProps>;
   /**
    * A new asset is available in the shared workspace it is made in: the dialog that starts
    * it says where, and offers every workspace to whoever may change that.

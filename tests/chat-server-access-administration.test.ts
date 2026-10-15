@@ -427,15 +427,16 @@ describe("who may write a grant, and what a grant may say", () => {
         }
       ]
     });
-    // A service principal's rights are read behind api_access.manage.
+    // A service principal's rights are read behind service_principals.manage, which the
+    // administrator holds by the role (RIGHTS-1a).
     await t.expectRefused(
-      t.admin.id,
+      t.kai.id,
       "permissions.effective",
       { query: { holderKind: "service_principal", holderId: "sp_missing" } },
-      t.forbidden("api_access.manage", "no_grant")
+      t.forbidden("users.manage", "no_grant")
     );
     await t.expectRefused(
-      t.root.id,
+      t.admin.id,
       "permissions.effective",
       { query: { holderKind: "service_principal", holderId: "sp_missing" } },
       { status: 404, code: "NOT_FOUND", details: { reason: "unknown_holder" } }
