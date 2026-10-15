@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
-import { AgentUnavailableNotices } from "@vivd-catalyst/chat-ui/build-area";
+import { AgentUnavailableNotices, savedAgentUnavailable } from "@vivd-catalyst/chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 type Status = Parameters<typeof AgentUnavailableNotices>[0]["status"];
@@ -72,5 +72,49 @@ describe("the top of an agent's page", () => {
       })
     ).toBe("");
     expect(notices(undefined)).toBe("");
+  });
+});
+
+describe("what stays unavailable after a save", () => {
+  const status: Status = {
+    chatAvailable: false,
+    unavailableTools: [{ name: "crm.lookup", reason: "unknown_tool" }],
+    unavailableSkills: [{ name: "tax-old", reason: "unknown_skill" }],
+    unavailableModels: [
+      { name: "removed", field: "modelBindingId", reason: "unknown_model" },
+      { name: "retired", field: "userSelectableModelBindingIds", reason: "unknown_model" }
+    ]
+  };
+  const asRead = {
+    toolNames: ["crm.lookup", "web.search"],
+    skillNames: ["tax-old"],
+    modelProviderId: "",
+    modelBindingId: "removed",
+    userSelectableModelBindingIds: ["retired"]
+  };
+
+  it("keeps the report while the saved agent still names what it reports", () => {
+    expect(savedAgentUnavailable(status, asRead)).toEqual(status);
+  });
+
+  it("drops what a repair save replaced or removed, and lets the agent chat again", () => {
+    const repaired = savedAgentUnavailable(status, {
+      ...asRead,
+      toolNames: ["web.search"],
+      skillNames: [],
+      modelBindingId: "fast"
+    });
+    expect(repaired).toEqual({
+      chatAvailable: true,
+      unavailableTools: [],
+      unavailableSkills: [],
+      unavailableModels: [
+        { name: "retired", field: "userSelectableModelBindingIds", reason: "unknown_model" }
+      ]
+    });
+    const markup = notices(repaired);
+    expect(markup).not.toContain("data-agent-chat-unavailable");
+    expect(markup).not.toContain("crm.lookup");
+    expect(markup).toContain("retired</span> (model does not exist on this instance)");
   });
 });

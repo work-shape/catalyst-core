@@ -2,12 +2,56 @@ import type { Asset } from "@vivd-catalyst/api-client";
 import { Banner } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { useModuleName } from "../module-texts";
+import type { AgentFormState } from "./asset-form-model";
 
 /** What a stored agent names that this instance cannot run, as its read reports it. */
 type AgentUnavailable = Pick<
   Asset,
   "unavailableTools" | "unavailableSkills" | "unavailableModels" | "chatAvailable"
 >;
+
+/** What a saved agent names, as far as its availability depends on it. */
+type SavedAgentReferences = Pick<
+  AgentFormState,
+  | "toolNames"
+  | "skillNames"
+  | "modelProviderId"
+  | "modelBindingId"
+  | "userSelectableModelBindingIds"
+>;
+
+/**
+ * What of the read's report still holds for the agent as last saved. The read is not repeated
+ * after a save: a save that removed or replaced a reference repaired it, and a save cannot add
+ * one, because the instance refuses a changed agent that names what it lacks.
+ */
+export function savedAgentUnavailable(
+  status: AgentUnavailable | undefined,
+  saved: SavedAgentReferences
+): AgentUnavailable | undefined {
+  if (status === undefined) return undefined;
+  const unavailableModels = (status.unavailableModels ?? []).filter(({ name, field }) =>
+    field === "userSelectableModelBindingIds"
+      ? saved.userSelectableModelBindingIds.includes(name)
+      : saved[field] === name
+  );
+  return {
+    unavailableTools: (status.unavailableTools ?? []).filter(({ name }) =>
+      saved.toolNames.includes(name)
+    ),
+    unavailableSkills: (status.unavailableSkills ?? []).filter(({ name }) =>
+      saved.skillNames.includes(name)
+    ),
+    unavailableModels,
+    ...(status.chatAvailable === undefined
+      ? {}
+      : {
+          chatAvailable:
+            status.chatAvailable ||
+            !unavailableModels.some(({ field }) => field !== "userSelectableModelBindingIds")
+        })
+  };
+}
 
 /**
  * At the top of an agent's page: that the agent cannot chat while its model is missing, and one
