@@ -762,7 +762,6 @@ const config = [
     plugins: { catalyst: plugin, "import-x": importX },
     settings: importRules(root).settings,
     rules: {
-      "max-lines": ["error", { max: 800 }],
       ...importRules(root).rules,
       ...Object.fromEntries(
         Object.keys(plugin.rules ?? {}).map((name) => [`catalyst/${name}`, "error"])

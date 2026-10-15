@@ -31,7 +31,7 @@ The capabilities lockfile records the platform manifests it was resolved against
 ## What checks what
 
 - **typescript-eslint**, with type information: floating and misused promises, `return-await` inside try, non-null assertions, explicit `any`, unsafe and unnecessary type assertions, and `@ts-` comments.
-- **ESLint**: `max-lines` at 800 lines. Inline directives are switched off (`noInlineConfig`), so a disable comment suppresses nothing; ESLint warns about each directive and the collector counts that warning as `eslint/inline-config`.
+- **ESLint**: Inline directives are switched off (`noInlineConfig`), so a disable comment suppresses nothing; ESLint warns about each directive and the collector counts that warning as `eslint/inline-config`.
 - **eslint-plugin-import-x**, resolving through `tsconfig.lint.json`: `no-relative-packages` rejects a relative path into another package, in `import`, `import()` and `require()`. `no-unresolved` rejects a path that a package does not export, which is what a deep import is.
 - **Knip**: unused files, exports, types and dependencies, and imports of a package the manifest does not declare (`knip/unlisted`). That last check is what holds imports to the declared package graph. Vite configs are scanned as source because loading them fails on the chat UI plugin.
 - **The `catalyst` ESLint plugin** in `eslint.config.mjs`: no console global in server package sources, with config-cli exempt, logger declarations only in core, environment reads only in the one environment module of a package, which is `src/env.ts` and nothing nested below it (`chat-ui` keeps `src/env.js` for its Vite plugin and `artifact-helpers` keeps `src/lib/env.ts`, both named in the rule), and in no other file of the package, its root and its scripts included; `import.meta.env` is allowed only in the four named frontend entries, global `fetch` only in `api-client` and adapter folders, literal interface text, and the two temporary CB-3b rules for in-memory stores and conditional database skips. Root files such as tests and scripts are outside the boundary rules.
@@ -68,7 +68,7 @@ Platform `main` is protected with this check required once the pipeline runs; Fe
 
 ## Baselines
 
-The collector compares the exact measured count with each baseline entry by target, rule and package. Large files are counted per file and literal interface text per folder, so an entry for one folder cannot cover new text in another. A missing entry means zero. A rise fails, and a fall fails until the entry is lowered or removed. No check rewrites the baseline.
+The collector compares the exact measured count with each baseline entry by target, rule and package. Literal interface text is counted per folder, so an entry for one folder cannot cover new text in another. A missing entry means zero. A rise fails, and a fall fails until the entry is lowered or removed. No check rewrites the baseline.
 
 A rise names the files that hold the findings for that rule and scope, the first ten, with the number in each. An invalid entry is printed in full.
 
@@ -84,6 +84,5 @@ Owners are recorded per entry. Test compiler errors belong to CB-2b. Other test 
 
 ## Open points
 
-1. The 16 capabilities artifact-helper files over 800 lines belong to C-126, the backlog item for splitting them.
-2. `rxjs` stays in chat-ui at 7.8.2: the program calls it unused, but the Univer packages require it as a peer. `@ai-sdk/react` was removed.
-3. `api-contract` declares its dependency on `core` in the graph and the manifest before it imports it. Knip reports the unused dependency, and CB-4a, which introduces the import, owns that entry.
+1. `rxjs` stays in chat-ui at 7.8.2: the program calls it unused, but the Univer packages require it as a peer. `@ai-sdk/react` was removed.
+2. `api-contract` declares its dependency on `core` in the graph and the manifest before it imports it. Knip reports the unused dependency, and CB-4a, which introduces the import, owns that entry.

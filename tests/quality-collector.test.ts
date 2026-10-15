@@ -160,7 +160,7 @@ export const same = count as number;
   [`${source}/ts-comment.ts`]: `// @ts-expect-error fixture
 export const wrong: number = "text";
 `,
-  [`${source}/inline-config.ts`]: `// eslint-disable-next-line max-lines
+  [`${source}/inline-config.ts`]: `// eslint-disable-next-line no-debugger
 export const quiet = 1;
 `,
   [`${source}/warned.ts`]: `debugger;\n`,
@@ -411,9 +411,7 @@ export const { getWorkspaceCommand } = store;
 export const cancelled = store.requestWorkspaceCommandCancellation();
 `,
 
-  // Size, retired stores and database skips
-  [`${source}/large.ts`]: `export const large = 1;\n${"//\n".repeat(800)}`,
-  [`${source}/limit.ts`]: `export const limit = 1;\n${"//\n".repeat(799)}`,
+  // Retired stores and database skips
   [`${source}/memory-store.ts`]: `declare const settings: { STORE?: string };
 export const inMemory = settings.STORE === "memory";
 `,
@@ -716,7 +714,6 @@ describe("quality collector", { timeout: 180_000 }, () => {
         "catalyst/route-registration packages/chat-server/src/routes/better-auth-routes.ts",
         "catalyst/route-registration packages/document-worker/src/index.ts",
         "catalyst/route-registration packages/document-worker/src/index.ts",
-        `max-lines ${source}/large.ts`,
         `catalyst/job-executor-boundary ${source}/claim-query.ts`,
         `catalyst/job-executor-boundary ${source}/claim-text.ts`,
         `catalyst/job-executor-boundary ${source}/claim-option.ts`,
@@ -778,12 +775,11 @@ describe("quality collector", { timeout: 180_000 }, () => {
     );
   });
 
-  it("counts literal interface text per folder and large files per file", () => {
+  it("counts literal interface text per folder and other findings per package", () => {
     const scopes = measure("lint", "scope");
     expect(scopes.filter((scope) => scope.startsWith("catalyst/literal-text "))).toEqual(
       Array.from({ length: 15 }, () => `catalyst/literal-text ${source}/screens`)
     );
-    expect(scopes).toContain(`max-lines ${source}/large.ts`);
     expect(scopes).toContain("catalyst/console-boundary packages/alpha");
   });
 

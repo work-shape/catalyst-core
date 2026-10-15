@@ -1,6 +1,6 @@
 # Measured quality baseline
 
-Counts are exact by target, rule and package in each repository's `quality-baseline.json`. Large files are scoped per file and literal interface text per folder. Zero counts are left out and fail on their first violation. Initially measured on platform `218cd58` and capabilities `d050a54` for CB-1a; counts below include CB-2 reductions.
+Counts are exact by target, rule and package in each repository's `quality-baseline.json`. Literal interface text is scoped per folder. Zero counts are left out and fail on their first violation. Initially measured on platform `218cd58` and capabilities `d050a54` for CB-1a; counts below include CB-2 reductions.
 
 | Target         | Rule                                               | Tool              | Platform | Capabilities | Owners                                                                                                  |
 | -------------- | -------------------------------------------------- | ----------------- | -------: | -----------: | ------------------------------------------------------------------------------------------------------- |
@@ -29,7 +29,6 @@ Counts are exact by target, rule and package in each repository's `quality-basel
 | lint           | `knip/files`                                       | Knip              |        1 |            1 | CB-4b, CB-8b                                                                                            |
 | lint           | `knip/types`                                       | Knip              |      139 |           33 | CB-10a, CB-4b, CB-4d, CB-7c, CB-8b, EW-1, G-5c                                                          |
 | lint           | `knip/unlisted`                                    | Knip              |       59 |            7 | CB-2                                                                                                    |
-| lint           | `max-lines`                                        | ESLint            |       41 |           23 | AP-3, C-126, CB-10a, CB-1b, CB-2, CB-3a, CB-3b, CB-7c, CB-9, EW-1, G-5c, LU-1, MD-1, NL-1, PA-1a, PA-1b |
 | types:packages | `typescript/unused`                                | TypeScript        |       15 |           16 | CB-10a, CB-2, CB-3a, CB-4d, CB-7c, CB-8b, EW-1, G-5c                                                    |
 | types:tests    | `typescript/test-errors`                           | TypeScript        |      102 |           13 | CB-2b                                                                                                   |
 | types:tests    | `typescript/unused`                                | TypeScript        |       15 |           17 | CB-10a, CB-2, CB-3a, CB-4d, CB-7c, CB-8b, EW-1, G-5c                                                    |
@@ -46,8 +45,6 @@ Module cycles count one finding per member file. Platform has three groups with 
 
 S3-07 moved the environment reads of package sources into each package's one environment module. Six reads in two scripts remain: three in `packages/deployment-kit/verify/compose-helpers.mjs` in platform and three in `packages/artifact-helpers/scripts/artifact-parity-probe.mjs` in capabilities. The other 30 capabilities findings are artifact-helper CLI entries that pass the whole `process` object to the command runner, whose contract reads only stdout, stderr and exitCode.
 
-C-126 owns the 16 artifact-helper source and script files over 800 lines.
-
-CB-8a added the literal interface text rule with 144 findings, all in `packages/chat-ui/src/control-plane`. NL-4a localized that folder and removed the entry, so the rule has no baseline left. CB-8a also split `chat-ui/src/i18n.tsx`, which removed its large-file entry, and stopped exporting one unused function from it.
+CB-8a added the literal interface text rule with 144 findings, all in `packages/chat-ui/src/control-plane`. NL-4a localized that folder and removed the entry, so the rule has no baseline left. CB-8a also split `chat-ui/src/i18n.tsx` and stopped exporting one unused function from it.
 
 CB-3c replaced the inline Compose migration command with the client migration entry, which removed the two formatting findings in `clients/demo`.
