@@ -499,7 +499,7 @@ declares no tool calls, no web search, no reasoning efforts, no fast tier and no
 compaction, so a call that asks for one of them is refused before it is sent. In this version
 the adapter serves the product's own calls, such as document extraction, and no agent: every
 agent run offers tools, and Gemini needs its thought signatures sent back with a tool call,
-which the adapter does not carry yet. A binding on a `google-vertex` entry must therefore state
+which the adapter does not carry. A binding on a `google-vertex` entry must therefore state
 `agentSelectable: false`; startup stops on one that does not and names the binding.
 
 Optional `labels` are static operator metadata attached to both ordinary and streaming
@@ -608,10 +608,8 @@ the adapter states `additionalProperties: false` on every object and leaves out 
 numbers, on string lengths and on list lengths above one, which the caller still checks on the
 answer. A schema that refers to itself is refused by Bedrock.
 
-**Claude 5.5 profiles are not supported yet.** The adapter is checked against Claude Sonnet 4.6,
-on recorded exchanges. The Claude 5.5 models think by default and bill thinking as output. The
-adapter now steers thinking and sends it back, but none of this has run against a 5.5 model.
-Keep a binding on a 5.5 profile out of the config until it has.
+**Claude 5.5 profiles are not supported.** The adapter is checked against Claude Sonnet 4.6,
+on recorded exchanges. Keep a binding on a 5.5 profile out of the config.
 
 Limits of one request:
 
@@ -1094,21 +1092,21 @@ connections:
 
 An operation of `http_api` takes, beside `name`, `effect` and `exposure`:
 
-- `method` `GET` and `effect: reading`. Nothing else is accepted yet; a GET is no proof that nothing changes, so the effect is declared as for any operation.
+- `method` `GET` and `effect: reading`. Nothing else is accepted; a GET is no proof that nothing changes, so the effect is declared as for any operation.
 - `path`, relative to `baseUrl`, with a `{name}` placeholder for each entry of `pathParams`. It holds no query, no address and no segment `.` or `..`, also not written as `%2e`.
 - `pathParams` and `query`: each parameter with its JSON `schema` (a path parameter a `string`, `integer` or `number`, a query parameter also a `boolean`), an optional `description`, and for a query parameter `required`. A path parameter is always required.
 - `description`, what the operation reads and when to call it, which an agent reads, and optionally `title`, its name in words.
 
 A caller fills the declared parameters and nothing else: never the host, the method, a header or the key. A path parameter is percent-encoded and may not be empty, hold a `/`, or be `.` or `..`; an input with any other key is refused as `input_invalid` before anything is sent. No redirect is followed. The answer must be JSON of at most 2 MiB; a list is answered as `{ items: [...] }`, so every result is an object. An answer that is not JSON or too large fails as `output_invalid`, and one that holds the key as `output_rejected`.
 
-An operation that reads the data of one Mandant takes the Mandant as a named parameter and returns it on every item, so that a data scope can attach to it later. The key `scope` on an operation is reserved for that and refused until it is built.
+An operation that reads the data of one Mandant takes the Mandant as a named parameter and returns it on every item. The key `scope` on an operation is reserved and refused.
 
 ### What a start does
 
 The API process reconciles the stored Connections with this section each time it starts, in one transaction under one lock, so several API processes starting together write once. Workers do not seed.
 
 - A new entry becomes a Connection with `origin: release` at revision 1. A changed entry becomes a new revision. An unchanged entry writes nothing.
-- An entry that is gone removes its Connection, its stored secret, its state and the grants that allow something on that one Connection. A deny on it stays with the name, as for every asset. A later release also removes what was read from the outside system about it.
+- An entry that is gone removes its Connection, its stored secret, its state and the grants that allow something on that one Connection. A deny on it stays with the name, as for every asset.
 - A renamed entry is a removed entry and a new one: the new Connection starts at revision 1 with no grants of its own, and grants have to be written again.
 - The value of `secret` is read once and stored encrypted. A changed value becomes the next version of the secret and no new revision of the Connection. A variable that is not set leaves the Connection in the state `needs_configuration`, and a call of it is refused with `connection_not_configured`.
 - A Connection created on the instance is never touched. An entry with the name of such a Connection stops startup.
@@ -1201,15 +1199,15 @@ dataStores:
 
 ### Build rules for data scope
 
-Prepare stores and their readers for a later per-person filter by client (Mandant):
+Keep the client (Mandant) on every per-client row and in every reader:
 
 - Give every per-client table a `NOT NULL` column for the client key, named consistently across the store (for example `mandant_nr`), including findings, snapshots, open items and run history. Aggregate views group by that column.
-- A Workflow that copies data from an outside system writes the client key on every row. Design per-client work as child runs keyed by the client, and keep the key in aggregates. Child runs are not available yet; do not replace them with an unkeyed cross-client run.
+- A Workflow that copies data from an outside system writes the client key on every row and keeps the key in aggregates.
 - Every `http_api` operation whose path or result is per client takes the client as a named parameter and returns the client key on every item. Keep a mapping table when source ids and client keys differ.
-- App `sql` reads use those per-client tables. Do not put a structured Knowledge Base with free SQL on these stores. Named queries are not available yet.
-- Until the filter exists, say who an App or Workflow is for when it serves only part of the firm. Everyone in that audience must be allowed to see every client the Connection's outside account sees. Limit that account in the outside system to the agreed clients.
+- App `sql` reads use those per-client tables. Do not put a structured Knowledge Base with free SQL on these stores.
+- Say who an App or Workflow is for when it serves only part of the firm. Everyone in that audience must be allowed to see every client the Connection's outside account sees. Limit that account in the outside system to the agreed clients.
 
-Table `scope` in `store.yaml`, config `scopes` and operation declaration `scope` are reserved and refused at save. App SQL validation refuses the parameter name `scope` and the bindings `$viewer.scope` and `$viewer.scope_all`; they are reserved for the later data-scope slices. The binding `$viewer.groups` is refused too. Use an ordinary parameter such as `mandant_nr` for now. These rules do not filter anything per person yet.
+Table `scope` in `store.yaml`, config `scopes` and operation declaration `scope` are reserved and refused at save. App SQL validation refuses the parameter name `scope` and the bindings `$viewer.scope`, `$viewer.scope_all` and `$viewer.groups`. Use an ordinary parameter such as `mandant_nr`. These rules do not filter anything per person.
 
 ## Config Is Not A Secret Store
 

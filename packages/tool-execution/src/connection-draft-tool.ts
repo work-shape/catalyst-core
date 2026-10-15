@@ -356,6 +356,13 @@ export function createConnectionDraftTool(input: {
 }): AnyToolDefinition {
   return defineTool({
     name: CONNECTION_DRAFT_TOOL_NAME,
+    title: { en: "Draft the tools of an API", de: "Werkzeuge einer API entwerfen" },
+    summary: {
+      en: "Drafts the read operations of a REST API for a person to approve.",
+      de: "Entwirft die lesenden Operationen einer REST-API, die eine Person freigibt."
+    },
+    group: "platform",
+    icon: "connection",
     effect: "reading",
     description: [
       "Propose the tools of a REST API Connection for a person to approve. Use it when the person asks you to draft the tools of a REST API, such as from the API's OpenAPI description, which you may read with web_fetch.",

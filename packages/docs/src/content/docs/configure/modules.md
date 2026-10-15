@@ -29,7 +29,7 @@ modules:
 | `connections`     | Connections to outside systems: the asset kind `connection`, its rights and its list in Studio.         | `secretStore.keys` and `egress.allow` once `connections` names a Connection.      |
 | `workflows`       | Workflows: the asset kind `workflow`, its runs, schedules and code steps, and the Workflows row in the main rail. | Nothing for steps that call operations. Code steps run in the sandbox of the workspace command worker. |
 | `dataStores`      | Data Stores: the asset kind `data_store`, one Postgres database per store, and the operations on its rows. | A key under `secretStore.keys` and a platform database role with `CREATEDB` and `CREATEROLE`. See [Data Stores](/configure/release-config/#data-stores). |
-| `knowledge`       | Reserved for Knowledge Bases. It is registered and adds nothing yet.                                     | Nothing.                                                                          |
+| `knowledge`       | Reserved for Knowledge Bases. It is registered and adds nothing.                                     | Nothing.                                                                          |
 | `personalApiKeys` | Keys a person issues that act as them, and `catalyst login`. See [the CLI](/configure/cli/).            | Nothing. Off, no personal key signs in; stored keys stay.                         |
 
 The document processing capability is part of the paid capabilities and not in the open repository. The other modules ship with the open platform.

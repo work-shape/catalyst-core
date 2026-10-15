@@ -44,7 +44,7 @@ A step marked "A published run asks for approval here" needs someone's approval 
 
 Click **Publish** ("Veröffentlichen") on the draft banner. The revision becomes the version that runs, by hand and on its schedule. **Discard** ("Verwerfen") takes the draft back to the published version.
 
-A Workflow runs with its own account, not with yours, so it can read and change what you cannot. That is why publishing is held tight: today it takes a superadmin.
+A Workflow runs with its own account, not with yours, so it can read and change what you cannot. That is why publishing is held tight: it takes a superadmin.
 
 ## Start it by hand
 

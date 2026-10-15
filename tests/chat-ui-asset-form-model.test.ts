@@ -289,14 +289,16 @@ describe("asset form model", () => {
     const form = agentConfigToForm(stored);
 
     expect(
-      editedAgentConfig({ ...form, userSelectableModelBindingIds: ["terra"] }, stored)
+      editedAgentConfig({ ...form, userSelectableModelBindingIds: ["terra"] }, stored, [])
     ).toEqual({ ...stored, userSelectableModelBindingIds: ["terra"] });
     // An edited field is saved in the form's shape; a new agent has nothing to keep.
-    expect(editedAgentConfig({ ...form, description: { en: "New", de: "New" } }, stored)).toEqual({
+    expect(
+      editedAgentConfig({ ...form, description: { en: "New", de: "New" } }, stored, [])
+    ).toEqual({
       ...stored,
       description: "New"
     });
-    expect(editedAgentConfig(form, undefined)).toEqual(agentFormToConfig(form));
+    expect(editedAgentConfig(form, undefined, [])).toEqual(agentFormToConfig(form));
   });
 
   it("collapses identical locales to a plain string and drops empty localized fields", () => {
