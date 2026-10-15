@@ -94,7 +94,7 @@ and sets `E2E_EXTERNAL_POSTGRES=1`, so the runner starts no container there.
 A hosted runner shares its address with many others, and a public registry limits what an address
 may pull without a sign-in: `public.ecr.aws` answered "toomanyrequests" to the Postgres image and
 failed a release check twice. The checks therefore pull such an image from a copy in the
-organisation's own registry, `ghcr.io/vivd-solutions/mirror/NAME`, by digest.
+organisation's own registry, `ghcr.io/work-shape/mirror/NAME`, by digest.
 
 `.github/mirrored-images` lists the images, one `NAME:TAG DIGEST` per line. The workflow "Mirror
 images" copies what the registry does not hold yet, with all platforms and the digest of the

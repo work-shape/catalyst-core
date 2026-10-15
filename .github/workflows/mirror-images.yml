@@ -22,7 +22,7 @@ concurrency:
 jobs:
   mirror:
     # A fork has no registry of this organisation to write to.
-    if: github.repository == 'vivd-solutions/vivd-catalyst'
+    if: github.repository == 'work-shape/catalyst-core'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
@@ -37,4 +37,4 @@ jobs:
           TOKEN: ${{ github.token }}
         run: skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
       - name: Copy what the registry does not hold
-        run: .github/scripts/mirror-images.sh .github/mirrored-images ghcr.io/vivd-solutions/mirror
+        run: .github/scripts/mirror-images.sh .github/mirrored-images ghcr.io/work-shape/mirror

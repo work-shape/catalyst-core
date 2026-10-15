@@ -36,7 +36,7 @@ x-artifact-preview-worker-environment: &artifact-preview-worker-environment
 services:
   postgres:
     # The instance's Postgres image, by the digest of docker/postgres/pinned-image.
-    image: ghcr.io/vivd-solutions/catalyst-postgres@sha256:65ca7654cafb0193713cf294a58d9a213605e83bb4b8650ff7892b2c3e53667f
+    image: ghcr.io/work-shape/catalyst-postgres@sha256:65ca7654cafb0193713cf294a58d9a213605e83bb4b8650ff7892b2c3e53667f
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-agent_chat}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent_chat}
