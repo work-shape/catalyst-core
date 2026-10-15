@@ -313,7 +313,9 @@ describe("You > Connect a local agent", () => {
       ),
       "utf8"
     );
-    const apiImports = [...source.matchAll(/import \{([^}]*)\} from "\.\.\/\.\.\/api\/[^"]+"/gu)]
+    const apiImports = [
+      ...source.matchAll(/import \{([^}]*)\} from "\.\.\/\.\.\/\.\.\/shared\/api\/[^"]+"/gu)
+    ]
       .flatMap((match) => (match[1] ?? "").split(","))
       .map((name) => name.trim())
       .filter((name) => name !== "");

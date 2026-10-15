@@ -32,27 +32,27 @@ const rightId = new RegExp(
 
 /** The screens the ticket names: Instance > Access, Users, API access, Members, a Connection. */
 const RIGHTS_SCREENS = [
-  "access/grants-tab.tsx",
-  "access/check-tab.tsx",
-  "access/principal-rights.tsx",
-  "control-plane/api-access-panel.tsx",
-  "control-plane/user-permissions-card.tsx",
-  "control-plane/user-permission-overview.tsx",
-  "settings/pages/access.tsx",
-  "settings/pages/api-access.tsx",
-  "settings/pages/workspace-members.tsx",
-  "build-area/connection-page.tsx"
+  "admin/access/grants-tab.tsx",
+  "admin/access/check-tab.tsx",
+  "admin/access/principal-rights.tsx",
+  "admin/control-plane/api-access-panel.tsx",
+  "admin/control-plane/user-permissions-card.tsx",
+  "admin/control-plane/user-permission-overview.tsx",
+  "admin/settings/pages/access.tsx",
+  "admin/settings/pages/api-access.tsx",
+  "admin/settings/pages/workspace-members.tsx",
+  "studio/build-area/connection-page.tsx"
 ];
 
 /** The words those screens are made of. */
 const RIGHTS_WORDS = [
-  "i18n/rights.ts",
-  "i18n/access.ts",
-  "i18n/api-access.ts",
-  "i18n/administration.ts",
-  "i18n/collaboration-workspace.ts",
-  "i18n/connections.ts",
-  "i18n/settings.ts"
+  "shared/i18n/rights.ts",
+  "shared/i18n/access.ts",
+  "shared/i18n/api-access.ts",
+  "shared/i18n/administration.ts",
+  "shared/i18n/collaboration-workspace.ts",
+  "shared/i18n/connections.ts",
+  "shared/i18n/settings.ts"
 ];
 
 function source(path: string): string {
@@ -139,7 +139,7 @@ describe("the words of a right", () => {
   });
 
   it("call a service principal Technisches Konto in German, and the workspace role no Rolle", () => {
-    for (const path of [...RIGHTS_WORDS, "i18n/operations.ts"]) {
+    for (const path of [...RIGHTS_WORDS, "shared/i18n/operations.ts"]) {
       for (const text of values(path).de) {
         expect(text, path).not.toMatch(/Principal/u);
       }
