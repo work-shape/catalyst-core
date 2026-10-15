@@ -7,18 +7,18 @@ import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import {
   ApprovalRequestWorkflow,
   type ApprovalRequestWorkflowOptions
-} from "../approval-request-workflow";
+} from "../approvals/approval-request-service";
 import { createAppActionOperationSource } from "../apps/action-source";
 import { guardAppOrigin } from "../apps/app-origin-guard";
-import { createHeldAssetPreviewer } from "../held-asset-preview";
+import { createHeldAssetPreviewer } from "../approvals/held-asset-preview";
 import {
   createOperationApprovalFiler,
   createOperationCallApprovalHandler
-} from "../operation-call-approval-handler";
-import { publishApprovalKinds } from "../publish-approval";
+} from "../approvals/operation-call-approval-handler";
+import { publishApprovalKinds } from "../approvals/publish-approval";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
 import { createAuditingEventEmitter } from "./event-emitter";
-import type { GuardrailRunner } from "../guardrail-runner";
+import type { GuardrailRunner } from "../guardrails/guardrail-runner";
 
 export type OperationCallsOptions = Pick<
   Omit<ResolvedChatServerOptions, "operationCalls">,

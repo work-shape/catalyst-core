@@ -1,10 +1,10 @@
 import { paginate, pageScope } from "../http/paging";
 import { DEFAULT_LIST_LIMIT, apiOperations } from "@work-shape/catalyst-api-contract";
 import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
-import { agentConnections } from "../agent-connections";
+import { agentConnections } from "../connections/agent-connections";
 import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
-import { accessResource } from "../asset-access";
-import { listedTo } from "../asset-read-workflow";
+import { accessResource } from "../assets/asset-access";
+import { listedTo } from "../assets/asset-read-service";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -22,13 +22,13 @@ import {
 import {
   CollaborationWorkspaceWorkflow,
   type WorkspaceChangeCall
-} from "../collaboration-workspace-workflow";
+} from "../workspaces/collaboration-workspace-service";
 import type { Route } from "../http/route";
 import { deletionState } from "./deletion-answer";
-import { requirePathParam, resolveRequestLocale } from "../request-context";
+import { requirePathParam, resolveRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
-import { requireWorkspaceAccess } from "../workspace-access";
-import { findWorkspaceFiles } from "../workspace-files";
+import { requireWorkspaceAccess } from "../workspaces/workspace-access";
+import { findWorkspaceFiles } from "../workspaces/workspace-files";
 
 /** The agent kind and the right that writes one, as the kind registers them. */
 const AGENT_KIND = "agent";

@@ -35,7 +35,7 @@ import {
   type PolicyValue
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
-import { decide } from "../asset-access";
+import { decide } from "../assets/asset-access";
 import { appActionBinding, type AppActionOwner } from "./action-kinds";
 import { APP_ACTIONS } from "./app-kind";
 

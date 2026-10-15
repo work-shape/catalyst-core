@@ -41,9 +41,9 @@ import {
 } from "@work-shape/catalyst-core";
 import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
-import { appContentView, checkAppContentToken } from "../app-content";
-import { mayOpenAssetFileSet } from "../asset-access";
-import { ConversationWorkflow } from "../conversations/conversation-workflow";
+import { appContentView, checkAppContentToken } from "../pages/app-content";
+import { mayOpenAssetFileSet } from "../assets/asset-access";
+import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { ResolvedChatServerOptions } from "../types";
 import {
   appActionDefinition,

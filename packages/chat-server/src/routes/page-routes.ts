@@ -32,13 +32,13 @@ import {
   isAppContentAddress,
   isHtmlContentType,
   mintAppContentToken
-} from "../app-content";
+} from "../pages/app-content";
 import { appOutsideHosts } from "../apps/app-outside-hosts";
-import { mayOpenAssetFileSet } from "../asset-access";
-import { ConversationWorkflow } from "../conversations/conversation-workflow";
+import { mayOpenAssetFileSet } from "../assets/asset-access";
+import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { Route } from "../http/route";
-import { fileSetEntryPath, readFileSetFile } from "../page-file-sets";
-import { conversationIdParam } from "../request-context";
+import { fileSetEntryPath, readFileSetFile } from "../pages/page-file-sets";
+import { conversationIdParam } from "./request-context";
 import type { ResolvedChatServerOptions } from "../types";
 
 /** What the content route refuses with. All are `404`, a code and nothing else. */

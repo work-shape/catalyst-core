@@ -1,8 +1,8 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { AppError } from "@work-shape/catalyst-core";
-import { configAssetReferences } from "../config-asset-workflow";
+import { configAssetReferences } from "../config-assets/config-asset-service";
 import type { Route } from "../http/route";
-import { readPlatformContext, usableActions } from "../platform-context";
+import { readPlatformContext, usableActions } from "../platform/platform-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerPlatformRoutes(route: Route, options: ChatServerOptions): void {

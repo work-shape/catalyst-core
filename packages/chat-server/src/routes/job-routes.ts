@@ -1,7 +1,7 @@
 import { apiOperations, parseJobStatusList } from "@work-shape/catalyst-api-contract";
 import { isAuthenticatedServicePrincipal, isSuperadmin } from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
-import { JobAdminWorkflow } from "../job-admin-workflow";
+import { JobAdminWorkflow } from "../jobs/job-admin-service";
 import type { ChatServerOptions } from "../types";
 
 /** Instance > Jobs: what the background is doing, and the retry of a job that died. */

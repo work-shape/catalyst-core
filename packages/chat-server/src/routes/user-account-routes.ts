@@ -2,10 +2,10 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { asUserId, getSubjectUserId, allowedLegacyPermissions } from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
 import { deletionAnswer } from "./deletion-answer";
-import { resolveRequestLocale } from "../request-context";
+import { resolveRequestLocale } from "./request-context";
 import type { ResolvedChatServerOptions } from "../types";
-import { PasswordSetupWorkflow } from "../password-setup-workflow";
-import { UserAccountWorkflow } from "../user-account-workflow";
+import { PasswordSetupWorkflow } from "../users/password-setup-service";
+import { UserAccountWorkflow } from "../users/user-account-service";
 
 export function registerUserAccountRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const userAccount = new UserAccountWorkflow(options);

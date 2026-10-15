@@ -11,11 +11,11 @@ import {
   type OperationBeforeEvent,
   type Page
 } from "@work-shape/catalyst-core";
-import type { AssetCall } from "../asset-access";
-import type { PageRevisionOrigin } from "../asset-draft-workflow";
-import { fileSetWriteEvent } from "../asset-guardrail-events";
-import { recordAssetEvent, scopeOf } from "../asset-target";
-import { AssetWorkflow } from "../asset-workflow";
+import type { AssetCall } from "../assets/asset-access";
+import type { PageRevisionOrigin } from "../assets/asset-draft-service";
+import { fileSetWriteEvent } from "../guardrails/asset-guardrail-events";
+import { recordAssetEvent, scopeOf } from "../assets/asset-target";
+import { AssetWorkflow } from "../assets/asset-service";
 import type { AssetWorkflowOptions } from "../types";
 import { appConfigOf } from "./app-kind";
 

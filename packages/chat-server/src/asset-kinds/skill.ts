@@ -16,7 +16,7 @@ import {
   storedFileMatchesConfig,
   withCarriedSkillParts,
   withSkillFileIndex
-} from "../skill-files";
+} from "./skill-files";
 import { readDefinitionField, readDefinitionName, type WorkflowAssetKind } from "./shared";
 
 /**

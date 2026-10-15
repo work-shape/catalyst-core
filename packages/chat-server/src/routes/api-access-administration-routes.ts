@@ -1,5 +1,5 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { ApiAccessAdministrationWorkflow } from "../api-access-administration-workflow";
+import { ApiAccessAdministrationWorkflow } from "../access/api-access-administration-service";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 

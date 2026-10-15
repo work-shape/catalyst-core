@@ -21,7 +21,7 @@ import {
   type EgressChecker,
   type EgressTarget
 } from "@work-shape/catalyst-core";
-import { requestConnectionDiscovery } from "../connection-jobs";
+import { requestConnectionDiscovery } from "../connections/connection-jobs";
 import {
   configValuesEqual,
   readDefinitionField,

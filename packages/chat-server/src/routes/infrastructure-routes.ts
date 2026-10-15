@@ -1,6 +1,6 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { Route } from "../http/route";
-import { INFRASTRUCTURE_CHECK_INTERVAL_MS } from "../job-kinds";
+import { INFRASTRUCTURE_CHECK_INTERVAL_MS } from "../jobs/job-kinds";
 import type { ChatServerOptions } from "../types";
 
 /** Instance > Infrastructure: what the instance runs on. Nothing here changes a provider. */

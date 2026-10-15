@@ -3,10 +3,10 @@ import {
   type StructuredDataResourceResponse
 } from "@work-shape/catalyst-api-contract";
 import { AppError, asStructuredDataResourceId } from "@work-shape/catalyst-core";
-import { listConversationResources } from "../conversation-resources";
-import { ConversationWorkflow } from "../conversations/conversation-workflow";
+import { listConversationResources } from "../conversations/conversation-resources";
+import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { Route } from "../http/route";
-import { conversationIdParam, requirePathParam } from "../request-context";
+import { conversationIdParam, requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerConversationResourceRoutes(route: Route, options: ChatServerOptions): void {

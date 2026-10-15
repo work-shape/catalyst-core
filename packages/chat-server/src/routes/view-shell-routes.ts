@@ -2,7 +2,7 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { AppError } from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
-import { VIEW_SHELL_FILES, viewShellContentPolicy } from "../view-shell";
+import { VIEW_SHELL_FILES, viewShellContentPolicy } from "../pages/view-shell";
 
 /**
  * How long a browser keeps the shell. The header carries `views.allowedScriptSrc`, which is

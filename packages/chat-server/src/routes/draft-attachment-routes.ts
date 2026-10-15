@@ -7,11 +7,11 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { AppError, getSubjectUserId, type JsonObject } from "@work-shape/catalyst-core";
-import { ConversationWorkflow } from "../conversations/conversation-workflow";
+import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { Route } from "../http/route";
-import { conversationIdParam, requirePathParam } from "../request-context";
+import { conversationIdParam, requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
-import type { UploadFileContent } from "../attachments";
+import type { UploadFileContent } from "../conversations/attachments";
 
 export function registerDraftAttachmentRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);

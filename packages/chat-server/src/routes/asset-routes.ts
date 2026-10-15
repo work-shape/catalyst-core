@@ -4,17 +4,21 @@ import {
   isAuthenticatedServicePrincipal,
   type OperationResource
 } from "@work-shape/catalyst-core";
-import { ASSET_PUT_BODY_LIMIT_BYTES } from "../asset-files";
+import { ASSET_PUT_BODY_LIMIT_BYTES } from "../assets/asset-files";
 import {
   assetWriteEvent,
   publishEvents,
   revertWriteEvents,
   syncWriteEvents
-} from "../asset-guardrail-events";
+} from "../guardrails/asset-guardrail-events";
 import { readDefinitionName } from "../asset-kinds/shared";
-import { authorizeAssetPlacement, setAssetAvailability, setAssetDefault } from "../asset-placement";
-import { AssetWorkflow } from "../asset-workflow";
-import { ConfigAssetWorkflow } from "../config-asset-workflow";
+import {
+  authorizeAssetPlacement,
+  setAssetAvailability,
+  setAssetDefault
+} from "../assets/asset-placement";
+import { AssetWorkflow } from "../assets/asset-service";
+import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 

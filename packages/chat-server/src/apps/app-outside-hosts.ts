@@ -1,6 +1,6 @@
 import { declaredExternalHostsOf } from "@work-shape/catalyst-app-build";
 import type { ClientInstanceId, FileSet, FileSetId, PagesStore } from "@work-shape/catalyst-core";
-import type { AppContentMode } from "../app-content";
+import type { AppContentMode } from "../pages/app-content";
 
 // Which outside hosts the frame of an App may connect to.
 //
