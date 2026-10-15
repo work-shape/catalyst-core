@@ -1,62 +1,8 @@
-import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { ShippedGuardrailView } from "@vivd-catalyst/api-client";
-import { ShippedGuardrails, type ShippedGuardrailsRead } from "@vivd-catalyst/chat-ui/build-area";
-import { render, renderItem } from "./chat-ui-inbox-harness";
+import { renderItem } from "./chat-ui-inbox-harness";
 
-// GR-PUB-1 in the interface: the switch of the guardrail the release ships on Build >
-// Guardrails, and the Inbox item of a publish that waits for an approver.
-
-const shipped: ShippedGuardrailView = {
-  name: "publishing-needs-approval",
-  displayName: "Publishing needs an instance admin's approval",
-  reason: "A new revision of an App or a Workflow goes live once an instance admin approved it.",
-  on: ["app.before_publish", "workflow.before_publish"],
-  outcome: "require_approval",
-  enabled: true,
-  canSwitch: true
-};
-
-function renderShipped(items: ShippedGuardrailView[], locale: "de" | "en" = "en") {
-  const read: ShippedGuardrailsRead = {
-    status: "ready",
-    items,
-    switching: undefined,
-    switchTo: () => Promise.resolve(undefined)
-  };
-  return render(createElement(ShippedGuardrails, { read }), locale);
-}
-
-describe("the guardrail the release ships, on Build > Guardrails", () => {
-  it("shows it on, in the reader's language, with a switch an instance admin can use", () => {
-    const english = renderShipped([shipped]);
-    expect(english).toContain("Publishing needs an instance admin&#x27;s approval");
-    expect(english).toContain("On, as the platform ships it.");
-    expect(english).toMatch(/role="switch"[^>]*aria-checked="true"/u);
-    expect(english).not.toMatch(/<button[^>]*role="switch"[^>]* disabled=""/u);
-
-    const german = renderShipped([shipped], "de");
-    expect(german).toContain("Veröffentlichen braucht die Freigabe eines Instanz-Admins");
-    expect(german).toContain("Eingeschaltet, wie die Plattform sie liefert.");
-  });
-
-  it("says who switched it off and holds the switch for a reader who may not switch it", () => {
-    const markup = renderShipped([
-      {
-        ...shipped,
-        enabled: false,
-        canSwitch: false,
-        switchedBy: { id: "usr_admin", label: "Ada Admin" },
-        switchedAt: "2026-10-14T21:00:00.000Z"
-      }
-    ]);
-    expect(markup).toMatch(/role="switch"[^>]*aria-checked="false"/u);
-    expect(markup).toMatch(/<button[^>]*role="switch"[^>]* disabled=""/u);
-    expect(markup).toContain("Switched off by Ada Admin");
-    expect(markup).toContain("Only an instance admin can switch it.");
-    expect(markup).toContain("makes a new version live with their own click");
-  });
-});
+// GR-PUB-1 in the interface: the Inbox item of a publish that waits for an approver. The switch
+// of the guardrail the release ships is in `chat-ui-guardrails-list.test.ts`.
 
 describe("the Inbox item of a publish that waits", () => {
   const preview = {

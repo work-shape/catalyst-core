@@ -153,7 +153,9 @@ export function AgentEditor({
     setSaving(true);
     const saved: BuildWriteOutcome =
       frame.asset === undefined || changedFields > 0
-        ? await frame.save(editedAgentConfig(form, frame.asset?.config))
+        ? await frame.save(
+            editedAgentConfig(form, frame.asset?.config, references?.enabledToolNames)
+          )
         : { ok: true };
     if (saved.ok) {
       state.markSaved();

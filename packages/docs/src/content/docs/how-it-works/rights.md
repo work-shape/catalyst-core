@@ -283,10 +283,3 @@ An agent of the whole instance can be offered in several workspaces under **Avai
 A Connection is signed in with one shared account ("Ein gemeinsames Konto"). Everyone who may use it sees the same in the outside system: what that account sees. If a team should be able to do less, create a second Connection with fewer operations and give the right to use it to each person of that team.
 
 A right on a Connection is given on that one Connection. Writing, deleting and approving Connections stay with the Admin role.
-
-## Not built yet
-
-- **Groups and custom roles.** A right names one person or one technical account.
-- **Personal Connections**, where each person signs in with their own account.
-- **Rows per person.** An App's query cannot yet limit itself to the rows of the person looking.
-- **Namespaces** still appear on the Access page. They are being retired; the workspace takes over their job. [Rights for one person or asset](/operate/rights-and-namespaces/) describes them.
