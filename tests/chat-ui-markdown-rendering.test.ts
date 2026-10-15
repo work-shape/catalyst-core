@@ -5,7 +5,7 @@ import { TranslationProvider } from "./chat-ui-render-harness";
 import {
   MarkdownArtifact,
   MarkdownLinkPolicyProvider
-} from "../packages/chat-ui/src/markdown-text";
+} from "../packages/chat-ui/src/chat/markdown/markdown-text";
 
 const policy = {
   ownOrigins: ["https://chat.example.com"],

@@ -10,7 +10,7 @@ import {
   shownRailSections,
   WorkspaceRail,
   type RailSection
-} from "../packages/chat-ui/src/workspace/workspace-rail";
+} from "../packages/chat-ui/src/chat/workspace/workspace-rail";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { createTestConfig } from "./support/fixtures";
 

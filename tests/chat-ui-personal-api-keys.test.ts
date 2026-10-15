@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
-import { PersonalApiKeysTable } from "../packages/chat-ui/src/control-plane/personal-api-keys-list";
+import { PersonalApiKeysTable } from "../packages/chat-ui/src/admin/control-plane/personal-api-keys-list";
 import {
   buildPersonalKeyScopes,
   connectCodeOfSearch,
@@ -16,16 +16,19 @@ import {
   personalKeyExpiryOf,
   personalKeyRequest,
   personalKeyState
-} from "../packages/chat-ui/src/control-plane/personal-api-keys-model";
-import { settingsCatalog, visibleSettingsPages } from "../packages/chat-ui/src/settings/catalog";
-import { ConnectCodeConfirm } from "../packages/chat-ui/src/settings/pages/api-keys";
+} from "../packages/chat-ui/src/admin/control-plane/personal-api-keys-model";
+import {
+  settingsCatalog,
+  visibleSettingsPages
+} from "../packages/chat-ui/src/admin/settings/catalog";
+import { ConnectCodeConfirm } from "../packages/chat-ui/src/admin/settings/pages/api-keys";
 import {
   ConnectLocalAgentView,
   LOCAL_AGENT_TOOLS,
   localAgentCommand,
   type LocalAgentCommandState,
   type LocalAgentTool
-} from "../packages/chat-ui/src/settings/pages/connect-local-agent";
+} from "../packages/chat-ui/src/admin/settings/pages/connect-local-agent";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { personalWorkspace, settingsUser } from "./chat-ui-settings-fixtures";
@@ -304,7 +307,10 @@ describe("You > Connect a local agent", () => {
 
   it("reads the instance's context and nothing else: opening or copying issues no key and no code", async () => {
     const source = await readFile(
-      new URL("../packages/chat-ui/src/settings/pages/connect-local-agent.tsx", import.meta.url),
+      new URL(
+        "../packages/chat-ui/src/admin/settings/pages/connect-local-agent.tsx",
+        import.meta.url
+      ),
       "utf8"
     );
     const apiImports = [...source.matchAll(/import \{([^}]*)\} from "\.\.\/\.\.\/api\/[^"]+"/gu)]

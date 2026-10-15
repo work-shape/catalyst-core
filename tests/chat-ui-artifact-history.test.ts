@@ -6,7 +6,7 @@ import {
   createAssistantToolCallsMetadata,
   createToolResultMetadata
 } from "@work-shape/catalyst-core";
-import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
+import { toUiMessages } from "../packages/chat-ui/src/chat/assistant/assistant-ui-adapter";
 import {
   readToolActionLabel,
   readToolDetailSections
@@ -15,7 +15,7 @@ import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
   readSurfacedToolArtifactRefs,
   readToolArtifactRefs
-} from "../packages/chat-ui/src/tool-artifacts";
+} from "../packages/chat-ui/src/chat/tools/tool-artifacts";
 
 describe("chat UI artifact history projection", () => {
   it("replays promoted workspace artifact refs while suppressing internal workspace details", () => {

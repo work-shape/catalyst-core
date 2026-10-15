@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UsageSummary } from "@work-shape/catalyst-api-client";
-import { UsageView } from "../packages/chat-ui/src/control-plane/usage-view";
+import { UsageView } from "../packages/chat-ui/src/admin/control-plane/usage-view";
 import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
 
 describe("usage spend budget progress", () => {

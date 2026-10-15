@@ -2,65 +2,69 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { cn, SkipLink, Spinner, UiRoot, useExit } from "@work-shape/catalyst-ui";
 import { DocsAddressProvider } from "@work-shape/catalyst-ui";
 import { DEFAULT_THEME_INPUTS } from "@work-shape/catalyst-ui/theme";
-import { startNewAgent } from "./agents/agents-model";
-import { AgentsPage } from "./agents/agents-page";
-import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
-import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
-import { AttachmentContentProvider } from "./attachment-content";
-import { ChatDropOverlay } from "./chat-file-dropzone";
+import { startNewAgent } from "./studio/agents/agents-model";
+import { AgentsPage } from "./studio/agents/agents-page";
+import { ApprovalRevisionHostProvider } from "./chat/approvals/approval-revision-host";
+import { AssistantRuntimePanel } from "./chat/assistant/assistant-runtime-panel";
+import { AttachmentContentProvider } from "./chat/files/attachment-content";
+import { ChatDropOverlay } from "./chat/files/chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
-import { collaborationWorkspaceDisplayName } from "./collaboration-workspace/collaboration-workspace-name";
-import { CollaborationWorkspacePanel } from "./collaboration-workspace/collaboration-workspace-panel";
-import { CollaborationWorkspaceSelector } from "./collaboration-workspace/collaboration-workspace-selector";
-import { canViewAudit } from "./control-plane/governance";
-import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
-import { DockedChat, DockedPage, useChatDockView } from "./dock/docked-chat";
-import { createTranslationContext, TranslationProvider, useTranslation } from "./i18n";
-import { AppsArea, isAppsRoute } from "./apps/apps-area";
-import { AppsHostProvider, type AppsHost } from "./apps/apps-host";
-import { WorkflowsArea, isWorkflowsRoute } from "./workflows/workflows-area";
-import { WorkflowsHostProvider, type WorkflowsHost } from "./workflows/workflows-host";
+import { collaborationWorkspaceDisplayName } from "./shared/collaboration-workspace/collaboration-workspace-name";
+import { CollaborationWorkspacePanel } from "./shared/collaboration-workspace/collaboration-workspace-panel";
+import { CollaborationWorkspaceSelector } from "./shared/collaboration-workspace/collaboration-workspace-selector";
+import { canViewAudit } from "./shared/governance";
+import { ControlPlaneRoutes } from "./admin/control-plane/control-plane-routes";
+import { DockedChat, DockedPage, useChatDockView } from "./chat/dock/docked-chat";
+import { createTranslationContext, TranslationProvider, useTranslation } from "./shared/i18n";
+import { AppsArea, isAppsRoute } from "./studio/apps/apps-area";
+import { AppsHostProvider, type AppsHost } from "./studio/apps/apps-host";
+import { WorkflowsArea, isWorkflowsRoute } from "./studio/workflows/workflows-area";
+import { WorkflowsHostProvider, type WorkflowsHost } from "./studio/workflows/workflows-host";
 import {
   ConnectionDraftHostProvider,
   connectionDraftHost
-} from "./build-area/connection-draft-card";
-import { useRailApps } from "./apps/rail-apps";
-import { InboxArea } from "./inbox";
-import { LoginPanel } from "./login-panel";
-import { operationRunHref, operationRunsHref } from "./operations/operations-model";
-import { PageHostProvider } from "./pages/page-host";
-import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
-import { isResourcesPanelAvailable } from "./resources-panel-model";
-import { announcePanelMove } from "./surface/panel-move";
-import { surfacePlacement } from "./surface/surface-layout";
-import { SurfaceSlot } from "./surface/surface-slot";
-import { useSplitArea } from "./surface/use-split-area";
-import { useSurfaceReport } from "./surface/use-surface-report";
-import { useToolDisplayPanel } from "./tool-display-panel";
-import { uiLabelsFor } from "./ui-labels";
-import { MarkdownLinkPolicyProvider } from "./markdown-text";
-import { ViewPolicyProvider } from "./view-policy";
-import { agentChipDisplayFor } from "./workspace/agent-selector";
-import { ClientBrandingHeader } from "./workspace/client-branding";
-import { ConversationPalette } from "./workspace/conversation-palette";
-import { UserMenu } from "./workspace/user-menu";
+} from "./studio/build-area/connection-draft-card";
+import { useRailApps } from "./studio/apps/rail-apps";
+import { InboxArea } from "./chat/inbox";
+import { LoginPanel } from "./chat/login-panel";
+import { operationRunHref, operationRunsHref } from "./shared/operations-model";
+import { PageHostProvider } from "./studio/pages/page-host";
+import {
+  ResourcesPanel,
+  ResourcesPanelToggle,
+  useResourcesPanelState
+} from "./chat/files/resources-panel";
+import { isResourcesPanelAvailable } from "./chat/files/resources-panel-model";
+import { announcePanelMove } from "./chat/surface/panel-move";
+import { surfacePlacement } from "./chat/surface/surface-layout";
+import { SurfaceSlot } from "./chat/surface/surface-slot";
+import { useSplitArea } from "./chat/surface/use-split-area";
+import { useSurfaceReport } from "./chat/surface/use-surface-report";
+import { useToolDisplayPanel } from "./chat/tools/tool-display-panel";
+import { uiLabelsFor } from "./shared/ui-labels";
+import { MarkdownLinkPolicyProvider } from "./chat/markdown/markdown-text";
+import { ViewPolicyProvider } from "./chat/views/view-policy";
+import { agentChipDisplayFor } from "./chat/workspace/agent-selector";
+import { ClientBrandingHeader } from "./chat/workspace/client-branding";
+import { ConversationPalette } from "./chat/workspace/conversation-palette";
+import { UserMenu } from "./chat/workspace/user-menu";
 import {
   ConfigCheckPanel,
   OutdatedInterfaceNotice,
   SessionCheckPanel,
   StagingBanner,
   WorkspaceChrome
-} from "./workspace/workspace-chrome";
-import { WorkspaceRail } from "./workspace/workspace-rail";
-import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
-import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspace-chat-model";
-import { WorkspaceProviders } from "./workspace/workspace-providers";
-import { useWorkspaceShortcuts } from "./workspace/workspace-shortcuts";
+} from "./chat/workspace/workspace-chrome";
+import { WorkspaceRail } from "./chat/workspace/workspace-rail";
+import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./shared/workspace-route";
+import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./chat/workspace/workspace-chat-model";
+import { WorkspaceProviders } from "./chat/workspace/workspace-providers";
+import { useWorkspaceShortcuts } from "./chat/workspace/workspace-shortcuts";
 
 // The Workflow screens on sample data: a page for whoever may open the UI library, loaded
 // only when it is opened.
 const WorkflowSamples = lazy(async () => {
-  const { WorkflowSamples: Samples } = await import("./workflows/samples/workflow-samples");
+  const { WorkflowSamples: Samples } = await import("./studio/workflows/samples/workflow-samples");
   return { default: Samples };
 });
 // The gallery of the shared UI library is its own chunk, loaded only when its route is opened.

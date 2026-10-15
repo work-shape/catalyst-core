@@ -10,7 +10,7 @@ import {
   createToolResultMetadata
 } from "@work-shape/catalyst-core";
 import { genericIcons } from "@work-shape/catalyst-ui";
-import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
+import { toUiMessages } from "../packages/chat-ui/src/chat/assistant/assistant-ui-adapter";
 import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
   artifactDisplayFilename,
@@ -21,11 +21,11 @@ import {
   readArtifactImagePagesPreview,
   readSurfacedToolArtifactRefs,
   readToolArtifactRefs
-} from "../packages/chat-ui/src/tool-artifacts";
+} from "../packages/chat-ui/src/chat/tools/tool-artifacts";
 import {
   ConversationFileDownloadButton,
   conversationFileFromArtifact
-} from "../packages/chat-ui/src/conversation-file-presentation";
+} from "../packages/chat-ui/src/chat/files/conversation-file-presentation";
 import { ToolCallPart } from "@work-shape/catalyst-chat-ui/tool-call";
 import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 

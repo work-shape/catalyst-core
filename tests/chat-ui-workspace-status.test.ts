@@ -8,7 +8,7 @@ import {
   ConfigCheckPanel,
   OutdatedInterfaceBanner,
   SessionCheckPanel
-} from "../packages/chat-ui/src/workspace/workspace-chrome";
+} from "../packages/chat-ui/src/chat/workspace/workspace-chrome";
 
 describe("workspace config status", () => {
   const idle = { retrying: false, onRetry: () => undefined, onReload: () => undefined };

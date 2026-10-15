@@ -7,11 +7,11 @@ import {
   isCredentialActive,
   optionalTrimmedValue,
   scopesAllowedByPermissions
-} from "../packages/chat-ui/src/control-plane/api-access-model";
+} from "../packages/chat-ui/src/admin/control-plane/api-access-model";
 import {
   createApiAccessAuthorityKey,
   createApiAccessRevealController
-} from "../packages/chat-ui/src/control-plane/api-access-reveal-controller";
+} from "../packages/chat-ui/src/shared/api/api-access-reveal-controller";
 import { canManageApiAccess, canViewAdministrationPanel } from "@work-shape/catalyst-chat-ui/admin";
 
 describe("API access model", () => {

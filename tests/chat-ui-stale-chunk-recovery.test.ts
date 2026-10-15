@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   installStaleChunkRecovery,
   STALE_CHUNK_RELOAD_COOLDOWN_MS
-} from "../packages/chat-ui/src/stale-chunk-recovery";
+} from "../packages/chat-ui/src/shared/stale-chunk-recovery";
 
 describe("stale client chunk recovery", () => {
   it("reloads once per cooldown when Vite reports a missing lazy chunk", () => {

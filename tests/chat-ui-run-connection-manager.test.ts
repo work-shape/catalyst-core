@@ -5,7 +5,7 @@ import {
   type RunConnectionCompletion,
   type RunConnectionManager,
   type RunCursorStorage
-} from "../packages/chat-ui/src/conversation/run-connection-manager";
+} from "../packages/chat-ui/src/chat/conversation/run-connection-manager";
 
 describe("chat UI run connection manager", () => {
   it("remembers cursor hints and asks for a snapshot refresh when observation application reports a gap", async () => {

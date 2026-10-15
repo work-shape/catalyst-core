@@ -3,7 +3,7 @@ import {
   detectArtifactPreviewSourceKind,
   resolveFilePreviewCapability
 } from "@work-shape/catalyst-core";
-import { getSourceFilePreviewKind } from "../packages/chat-ui/src/conversation-file-presentation";
+import { getSourceFilePreviewKind } from "../packages/chat-ui/src/chat/files/conversation-file-presentation";
 
 describe("file preview policy", () => {
   it.each([

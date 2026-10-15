@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveThemeModePreference } from "../packages/chat-ui/src/theme";
+import { resolveThemeModePreference } from "../packages/chat-ui/src/shared/theme";
 
 // The token mapping moved to the shared UI library; tests/ui-theme.test.ts covers it.
 describe("chat UI theme mode", () => {

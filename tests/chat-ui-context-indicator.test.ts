@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
-import { ContextIndicator } from "../packages/chat-ui/src/assistant/context-indicator";
-import { resolveContextUsage } from "../packages/chat-ui/src/assistant/context-usage";
-import { LanguageAppearanceView } from "../packages/chat-ui/src/settings/pages/language-appearance";
+import { ContextIndicator } from "../packages/chat-ui/src/chat/assistant/context-indicator";
+import { resolveContextUsage } from "../packages/chat-ui/src/chat/assistant/context-usage";
+import { LanguageAppearanceView } from "../packages/chat-ui/src/admin/settings/pages/language-appearance";
 import {
   readStoredContextIndicatorPreference,
   writeStoredContextIndicatorPreference
-} from "../packages/chat-ui/src/workspace-utils";
+} from "../packages/chat-ui/src/shared/workspace-utils";
 
 describe("chat context indicator", () => {
   it("is off by default and persists an explicit user preference", () => {

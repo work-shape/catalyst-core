@@ -1,20 +1,20 @@
 import { useCallback, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { ThemeMode } from "@work-shape/catalyst-ui/theme";
-import type { ClientLabelOverrides } from "./i18n";
+import type { ClientLabelOverrides } from "./shared/i18n";
 import { ChatWorkspace } from "./chat-workspace";
-import { createWorkspaceQueryClient } from "./api/workspace-queries";
+import { createWorkspaceQueryClient } from "./shared/api/workspace-queries";
 import {
   ToolDisplayActionsProvider,
   ToolDisplayWidgetProvider,
   type ToolDisplayWidgetRegistry
-} from "./domain-ui-widgets";
-import type { ChatShellAdministration } from "./settings/page-definition";
+} from "./shared/domain-ui-widgets";
+import type { ChatShellAdministration } from "./shared/page-definition";
 import {
   defaultWorkspaceRoute,
   type WorkspaceRoute,
   type WorkspaceRouteChangeOptions
-} from "./workspace/workspace-route";
+} from "./shared/workspace-route";
 
 export interface ChatShellProps {
   apiBaseUrl: string;

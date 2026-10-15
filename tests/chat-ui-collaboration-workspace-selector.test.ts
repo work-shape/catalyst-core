@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 import {
   CollaborationWorkspaceSelector,
   CollaborationWorkspaceSelectorMenu
-} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
-import { ClientBrandingHeader } from "../packages/chat-ui/src/workspace/client-branding";
+} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-selector";
+import { ClientBrandingHeader } from "../packages/chat-ui/src/chat/workspace/client-branding";
 
 const noop = () => undefined;
 

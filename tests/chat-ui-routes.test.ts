@@ -9,7 +9,7 @@ import {
   workspaceRouteFromPath,
   workspaceRouteNavigation,
   workspaceRoutePath
-} from "../packages/chat-ui/src/routes";
+} from "../packages/chat-ui/src/shared/routes";
 import {
   addressDockConversation,
   clampDockWidth,
