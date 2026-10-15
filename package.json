@@ -27,6 +27,7 @@
     "format": "catalyst-quality format --write",
     "format:check": "catalyst-quality format",
     "release:check": "node scripts/release/check-packages.mjs",
+    "release:cut": "node scripts/release/cut.mjs",
     "release:check:public": "node scripts/release/check-public-tarball.mjs",
     "release:metadata": "node scripts/release/package-metadata.mjs --write",
     "test": "vitest run && pnpm test:deployment-kit",

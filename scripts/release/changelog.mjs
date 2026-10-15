@@ -6,6 +6,8 @@
 //   node scripts/release/changelog.mjs                  print the Unreleased section as the
 //                                                       release will write it
 //   node scripts/release/changelog.mjs --check          exit 1 when a change file is malformed
+//   node scripts/release/changelog.mjs --root ../capabilities --check
+//                                                       validate another repository's files
 //   node scripts/release/changelog.mjs --release 0.7.0 [--date 2026-10-20]
 //                                                       fold the change files into CHANGELOG.md
 //                                                       under that version and delete them
@@ -166,7 +168,7 @@ function readChangelog(root) {
 
 /** @param {string} version @param {string} date */
 export function releaseHeading(version, date) {
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(version))
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(version))
     throw new Error(`"${version}" is not a version such as 0.7.0`);
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(date))
     throw new Error(`"${date}" is not a date such as 2026-10-20`);
@@ -191,6 +193,14 @@ function option(args, name) {
  * @returns {number} the exit code
  */
 export function main(args, root = repoRoot) {
+  const target = option(args, "--root");
+  if (args.includes("--root")) {
+    if (target === undefined || target.startsWith("--")) {
+      console.error("--root takes a repository directory.");
+      return 1;
+    }
+    root = resolve(target);
+  }
   const { changes, errors } = readChanges(root);
   if (errors.length > 0) {
     for (const error of errors) console.error(error);

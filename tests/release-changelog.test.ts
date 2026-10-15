@@ -169,4 +169,13 @@ describe("the changelog command", () => {
   it("holds well-formed change files in this repository", () => {
     expect(readChanges(repoRoot).errors).toEqual([]);
   });
+
+  it("checks a companion root without reading the core's change files", () => {
+    quiet();
+    const root = repository({ "bad.md": "malformed companion change" });
+    expect(main(["--root", root, "--check"])).toBe(1);
+    rmSync(join(root, changesPath, "bad.md"));
+    expect(main(["--root", root, "--check"])).toBe(0);
+    expect(main(["--root"])).toBe(1);
+  });
 });

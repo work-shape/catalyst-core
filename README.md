@@ -181,11 +181,23 @@ section: Fixed
 list items without headings. `pnpm check:changes` (part of `pnpm check`) refuses a file the release
 could not place, and `pnpm changelog` prints the next release's section as it will read.
 
-The release runs `pnpm changelog --release <version>` (`--date YYYY-MM-DD`, default today) and
-commits the result with the version bump. It turns the Unreleased section of `CHANGELOG.md` into
-`## <version> — <date>`, puts each file's entry after the entries already in its section, files in
-name order, and deletes the files. Entries in the Unreleased section of `CHANGELOG.md` are the ones
-written before change files existed.
+From a clean release branch, run `pnpm release:cut 0.8.0 --root ../capabilities` to cut both
+repositories, or omit `--root` to cut only core. Every root, package and reference-client manifest
+advances to that version, including private packages; dependencies stay `workspace:*`.
+The command refuses invalid SemVer, versions at or below any current package version, and dirty
+trees (including staged and untracked files) in either repository before making changes.
+
+The cut uses `scripts/release/changelog.mjs` to turn each repository's Unreleased section and
+change files into `## <version> — <today>`, then deletes the folded files. Empty companion releases
+get a version section too. It refreshes OpenAPI and runs `release:check` before creating one
+`chore(release): cut <version>` commit per repository. A failed gate leaves the cut uncommitted
+for inspection; restore or commit it before retrying from a clean tree. Run both repositories'
+`pnpm check` on scratch release branches to validate the cut. The command never tags, pushes or
+publishes; CI publication on a release tag is a separate step.
+
+`pnpm changelog --release <version> --date YYYY-MM-DD` remains available for folding change files
+alone. Entries in the Unreleased section of `CHANGELOG.md` are the ones written before change
+files existed.
 
 A release that offers the Connect a local agent command publishes the CLI of its version to npm
 before it names that version in `PUBLISHED_CLI_VERSION` and before the instance switches on
