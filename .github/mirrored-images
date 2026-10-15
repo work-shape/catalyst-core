@@ -1,5 +1,5 @@
 # Images the hosted checks of this organisation pull, kept as copies in its own registry:
-# ghcr.io/vivd-solutions/mirror/NAME. A check pulls the copy by the digest written here, so it
+# ghcr.io/work-shape/mirror/NAME. A check pulls the copy by the digest written here, so it
 # does not depend on the limits a public registry puts on the addresses of shared runners.
 #
 #   NAME:TAG DIGEST

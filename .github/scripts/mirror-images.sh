@@ -3,7 +3,7 @@
 #
 #   mirror-images.sh LIST DESTINATION
 #
-# DESTINATION is the prefix of the copies, such as ghcr.io/vivd-solutions/mirror. The caller is
+# DESTINATION is the prefix of the copies, such as ghcr.io/work-shape/mirror. The caller is
 # signed in to it (skopeo login). An image the destination already holds under its digest is
 # left alone and nothing is pulled for it. One it does not hold is copied with all platforms
 # from the first public registry that serves it, and the copy has the digest of the original.

@@ -26,10 +26,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 env:
-  REPOSITORY: ghcr.io/vivd-solutions/catalyst-postgres
+  REPOSITORY: ghcr.io/work-shape/catalyst-postgres
 jobs:
   image:
-    runs-on: ubuntu-24.04
+    # Preparation branches may be pushed before the transfer; only the new owner publishes.
+    if: github.repository == 'work-shape/catalyst-core'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

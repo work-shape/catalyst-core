@@ -22,7 +22,7 @@ jobs:
   publish:
     # Runs once the repository variable names the Cloudflare account, so the workflow can land
     # before the hosting exists.
-    if: github.repository == 'vivd-solutions/vivd-catalyst' && github.ref == 'refs/heads/main' && vars.CLOUDFLARE_ACCOUNT_ID != ''
+    if: github.repository == 'work-shape/catalyst-core' && github.ref == 'refs/heads/main' && vars.CLOUDFLARE_ACCOUNT_ID != ''
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:

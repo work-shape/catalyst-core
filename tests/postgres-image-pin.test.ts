@@ -22,7 +22,7 @@ function postgresImageOf(composeFile: string): string | undefined {
 
 describe("the instance's Postgres image", () => {
   it("is pinned by digest in our own registry", () => {
-    expect(pinned).toMatch(/^ghcr\.io\/vivd-solutions\/catalyst-postgres@sha256:[0-9a-f]{64}$/u);
+    expect(pinned).toMatch(/^ghcr\.io\/work-shape\/catalyst-postgres@sha256:[0-9a-f]{64}$/u);
   });
 
   it.each(["clients/demo/docker-compose.yml", "clients/demo/docker-compose.prod.yml"])(

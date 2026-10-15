@@ -47,7 +47,7 @@ RUN set -eux; \
   test "$(printf '%s\n' "$after" | grep -vxF "$before")" = "postgresql-17-pgvector=$PGVECTOR_VERSION"; \
   test -f /usr/share/postgresql/17/extension/vector.control
 
-LABEL org.opencontainers.image.source="https://github.com/vivd-solutions/vivd-catalyst" \
+LABEL org.opencontainers.image.source="https://github.com/work-shape/catalyst-core" \
   org.opencontainers.image.description="Postgres 17 of a Catalyst instance: the official image plus pgvector from PGDG" \
   org.opencontainers.image.base.name="${POSTGRES_BASE}" \
   dev.workshape.catalyst.postgres.pgvector="${PGVECTOR_VERSION}" \
