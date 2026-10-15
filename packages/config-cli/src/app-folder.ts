@@ -29,7 +29,7 @@ export interface AppFolderState {
 /** One file a push sends. */
 type AppFileInput = { path: string; text: string } | { path: string; base64: string };
 
-export interface AppFolderRead {
+interface AppFolderRead {
   files: AppFileInput[];
   /** The SHA-256 of each file sent, by its path. */
   hashes: Record<string, string>;

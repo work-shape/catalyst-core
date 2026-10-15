@@ -3258,10 +3258,8 @@ describe("catalyst asset commands against an instance", () => {
         "1",
         ...workspace
       );
-      expect(published, published.err).toMatchObject({
-        code: 0,
-        out: "Published revision 1 of app 'offers'.\n"
-      });
+      expect(published, published.err).toMatchObject({ code: 0 });
+      expect(published.out).toContain("Published revision 1 of App 'offers'.\n");
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
       const shown = await run("apps", "show", "offers", "--files", ...workspace);
       expect(shown.out).toContain("index.html");

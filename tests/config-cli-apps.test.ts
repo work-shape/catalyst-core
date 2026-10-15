@@ -33,7 +33,7 @@ function cliAs(
   instance: TestInstance,
   userId: string,
   cwd: string,
-  confirm?: (question: string) => Promise<boolean>
+  prompt?: (question: string) => Promise<string>
 ) {
   const serverFetch = createTestFetch(instance, { "x-test-user": userId });
   const fetchImpl: typeof fetch = async (input, init) => {
@@ -56,7 +56,7 @@ function cliAs(
       cwd,
       env: { CATALYST_API_KEY: "cat_personal" },
       fetchImpl,
-      ...(confirm === undefined ? {} : { confirm }),
+      ...(prompt === undefined ? {} : { prompt }),
       stdout: (text) => out.push(text),
       stderr: (text) => err.push(text)
     });
@@ -251,14 +251,31 @@ describe("catalyst app commands", () => {
     }
   });
 
-  it("shows what a publish makes live and publishes only with --yes or a yes at the terminal", async () => {
+  it("shows what a publish makes live and keeps the terminal question and refuses --yes", async () => {
     const t = await setupAppInstance({ explicitCredentials: true, build: passThroughBuild });
     try {
       const cwd = await temporaryDirectory();
       const run = cliAs(t.instance, t.admin.id, cwd);
       await writeFolder(join(cwd, "offers"), { "app.yaml": manifest(), "index.html": "<p>1</p>" });
       expect((await run("app", "push", "offers", "--workspace", t.workspaceId)).code).toBe(0);
-      const first = await run("app", "publish", "offers", "--workspace", t.workspaceId, "--yes");
+      const scripted = await cliAs(t.instance, t.admin.id, cwd, async () => "y")(
+        "app",
+        "publish",
+        "offers",
+        "--workspace",
+        t.workspaceId,
+        "--yes"
+      );
+      expect(scripted.code).toBe(1);
+      expect(scripted.err).toContain("--yes publishes nothing");
+      expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
+      const first = await cliAs(t.instance, t.admin.id, cwd, async () => "y")(
+        "app",
+        "publish",
+        "offers",
+        "--workspace",
+        t.workspaceId
+      );
       expect(first, first.err).toMatchObject({ code: 0 });
       expect(first.out).toContain("Publish revision 1 of App 'offers' (its first publish).");
       expect(first.out).toContain("Published revision 1 of App 'offers'.");
@@ -270,34 +287,37 @@ describe("catalyst app commands", () => {
       expect((await run("app", "push", "offers")).code).toBe(0);
 
       const asked = await run("app", "publish", "offers", "--workspace", t.workspaceId);
-      expect(asked.code).toBe(2);
+      expect(asked.code).toBe(1);
       expect(asked.out).toContain("Publish revision 2 of App 'offers' in place of revision 1.");
       expect(asked.out).toContain("External hosts it calls:\n  api.example.org  (added)");
-      expect(asked.err).toContain(
-        "Nothing was published. Run again with --yes to publish revision 2."
-      );
+      expect(asked.err).toContain("needs your answer here or your click in the interface");
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
 
       const questions: string[] = [];
       const declined = await cliAs(t.instance, t.admin.id, cwd, async (question) => {
         questions.push(question);
-        return false;
+        return "n";
       })("app", "publish", "offers", "--workspace", t.workspaceId);
-      expect(declined).toMatchObject({ code: 2, err: "Nothing was published.\n" });
-      expect(questions).toEqual(["Publish revision 2 of 'offers'?"]);
+      expect(declined).toMatchObject({ code: 1, err: "Nothing was published.\n" });
+      expect(questions).toEqual([
+        "Publish revision 2 of app 'offers'? If approval is required, this files a request in the Inbox. [y/N] "
+      ]);
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
 
-      const confirmed = await cliAs(t.instance, t.admin.id, cwd, async () => true)(
+      const confirmed = await cliAs(t.instance, t.admin.id, cwd, async () => "y")(
         "app",
         "publish",
         "offers",
         "--workspace",
-        t.workspaceId
+        t.workspaceId,
+        "--json"
       );
       expect(confirmed, confirmed.err).toMatchObject({ code: 0 });
-      expect(confirmed.out).toContain(
-        "Published revision 2 of App 'offers' in place of revision 1."
-      );
+      expect(JSON.parse(confirmed.out)).toMatchObject({
+        publishedRevision: 2,
+        replacedRevision: 1
+      });
+      expect(confirmed.err).toContain("Publish revision 2 of App 'offers' in place of revision 1.");
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 2 });
 
       const status = await run("app", "status", "offers", "--workspace", t.workspaceId);

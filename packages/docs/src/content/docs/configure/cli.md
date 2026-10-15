@@ -175,7 +175,7 @@ catalyst app status offers offers                     # draft, published, local 
 catalyst app publish offers                           # shows what goes live, then asks
 ```
 
-An App belongs to one workspace. The commands take it from `--workspace`, from the folder's last pull, or from `workspace: <id>` in `catalyst.yaml`.
+An App belongs to one workspace. The commands take it from `--workspace`, from the folder's last pull, or from the selected instance's `workspace: <id>` in `catalyst.yaml`.
 
 - `pull <app> [dir]` writes the draft into `dir`, which defaults to a folder named after the App. `--published` writes the published revision instead, and `--revision <n>` writes any one revision. Every file is written byte for byte and checked against the hash the instance gave. The folder also gets `.catalyst-app.json`, which records the instance, the workspace, the revision and each file's hash. That file is never sent. A pull refuses to overwrite a file you changed, and it refuses a folder that holds files but no pulled App.
 - `push [dir]` sends the folder as the App's next draft revision. The revision it names as its base is the one the folder was pulled at. A folder that was never pulled creates the App under the `id` its `app.yaml` names. A pulled folder keeps its App: a push whose `app.yaml` names another `id` is refused before anything is sent. The instance builds the files before it writes the revision. A build that fails writes nothing, prints every error as `file:line:column: message` and exits with 1:
@@ -186,6 +186,7 @@ An App belongs to one workspace. The commands take it from `--workspace`, from t
   ```
 
   A push refused because someone else saved the draft in between also writes nothing. Pull into another folder, carry your changes over and push from there. Merging such a push needs the App's repository, which is not built yet.
+
 - A push leaves out dotfiles, dot-folders, `node_modules` and anything that is not a regular file such as a link, and it names what it left out. A dotfile the App already holds is sent like any other file, so pulling and then pushing changes nothing. The limits of the instance are checked before anything is sent, with the file named. In the default release a file holds at most 2 MiB, an App at most 500 files, and one push at most 8 MiB. Larger media belong in Managed Files.
 - `publish <app>` prints what the draft makes live. That is the publish dialog's Connections and outside hosts, and beside them the changing actions the revision calls live (each marked new or changed) and the Data Store levels it needs, all compared against the published revision. It then asks before publishing. It needs your answer in a terminal; `--yes` and a run without a terminal publish nothing and exit with 1. A required approval still waits in the Inbox (exit 3). `--revision <n>` publishes an older revision instead, which is the way back.
 - `status <app> [dir]` prints the draft revision and the published revision, with who made each and when. A revision exists only once its files have built, so the draft shown is built, together with its kit version. With a pulled folder it also lists the files you changed, added or removed since the pull.

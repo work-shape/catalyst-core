@@ -20,13 +20,13 @@ import {
 import { formatRefusal, formatWarnings } from "./asset-output";
 import { connectApi, resolveWorkingDir, type ConfigCommandOptions } from "./command-support";
 import { askBeforePublish } from "./publish-question";
-import { readManifestIfPresent, resolveInstance, type CatalystManifest } from "./working-copy";
+import { readManifestIfPresent, resolveInstance } from "./working-copy";
 
 // `catalyst app pull|push|publish|status`: an App as a folder on this machine. Each command
 // is built from the asset operations every kind has (`assets.get`, `assets.put`,
 // `assets.publish`, `assets.revisions.list`); the instance decides every right, revision and
 // build, and its refusal is printed as it gave it. An App belongs to one workspace, named by
-// `--workspace`, by the folder's last pull, or by `workspace` in `catalyst.yaml`.
+// `--workspace`, by the folder's last pull, or by the instance's `workspace` in `catalyst.yaml`.
 
 type AssetKind = PlatformContext["kinds"][number];
 
@@ -35,7 +35,7 @@ const EXIT = { done: 0, refused: 1, usage: 2, pending: 3 } as const;
 const APP_KIND = "app";
 
 /** What the App commands read from the command line, parsed by the asset commands. */
-export interface AppCommandValues {
+interface AppCommandValues {
   workspace?: string;
   revision?: string;
   published: boolean;
@@ -61,8 +61,7 @@ export const APP_VERBS = {
   },
   publish: {
     usage: "publish <app> [--revision <n>] [--yes]",
-    summary:
-      "Show what the draft makes live, then ask before publishing it (assets.publish)"
+    summary: "Show what the draft makes live, then ask before publishing it (assets.publish)"
   },
   status: {
     usage: "status <app> [dir]",
@@ -70,7 +69,7 @@ export const APP_VERBS = {
   }
 } as const;
 
-export type AppVerb = keyof typeof APP_VERBS;
+type AppVerb = keyof typeof APP_VERBS;
 
 export function isAppVerb(value: string): value is AppVerb {
   return Object.hasOwn(APP_VERBS, value);
@@ -259,11 +258,7 @@ async function push(
     throw error;
   }
   if (outcome.status === "pending_approval") {
-    writeErr(
-      options,
-      `Waits for an approval on the instance; nothing has changed yet (Operation Run ${outcome.run.id}).`
-    );
-    return EXIT.pending;
+    return pendingApproval(outcome.run, values.json, options);
   }
   const output = outcome.output;
   const asset = await target.api.read((client) =>
@@ -318,10 +313,18 @@ async function publish(
   }
   const live = candidate.publishedRevision === undefined ? undefined : await get("published");
   const review = publishReview(candidate, live);
-  writeOut(options, values.json ? JSON.stringify(review, null, 2) : formatReview(app, review));
-  if (!(await askBeforePublish(options, {
-    kind: APP_KIND, command: APP_KIND, name: app, revision: number, yes: values.yes
-  }))) return EXIT.refused;
+  if (values.json) writeErr(options, formatReview(app, review));
+  else writeOut(options, formatReview(app, review));
+  if (
+    !(await askBeforePublish(options, {
+      kind: APP_KIND,
+      command: APP_KIND,
+      name: app,
+      revision: number,
+      yes: values.yes
+    }))
+  )
+    return EXIT.refused;
   const outcome = await target.api.change(
     (client, idempotencyKey) =>
       client.assets.publish({
@@ -332,11 +335,12 @@ async function publish(
     `It may have been applied: run 'catalyst app status ${app}' before sending it again.`
   );
   if (outcome.status === "pending_approval") {
-    writeErr(
+    return pendingApproval(
+      outcome.run,
+      values.json,
       options,
-      `Waits for an approval on the instance; nothing has changed yet (Operation Run ${outcome.run.id}).`
+      "If you are an instance approver, you can approve it in the Inbox."
     );
-    return EXIT.pending;
   }
   writeOut(
     options,
@@ -536,13 +540,19 @@ async function openApp(
   state: AppFolderState | undefined
 ): Promise<Target> {
   const manifest = await readManifestIfPresent(resolveWorkingDir(options));
-  const url = instanceUrl(manifest, options.instance, state);
+  const instance = await resolveInstance(manifest, {
+    ...options,
+    ...(options.instance === undefined && manifest?.defaultInstance === undefined && state
+      ? { instance: state.instance }
+      : {})
+  });
+  const { url } = instance;
   if (state !== undefined && state.instance !== url) {
     throw new AppUsageError(
       `The folder was pulled from ${state.instance}, and the command names ${url}. A folder belongs to one instance.`
     );
   }
-  const workspaceId = values.workspace ?? state?.workspaceId ?? manifest?.workspace;
+  const workspaceId = values.workspace ?? state?.workspaceId ?? instance.workspace;
   if (workspaceId === undefined) {
     throw new AppUsageError(
       "Name the workspace the App belongs to: --workspace <id>, or `workspace: <id>` in catalyst.yaml."
@@ -551,17 +561,6 @@ async function openApp(
   const api = await connectApi(url, options);
   const context = await api.read((client) => client.platform.context.get());
   return { api, url, workspaceId, kinds: context.kinds };
-}
-
-function instanceUrl(
-  manifest: CatalystManifest | undefined,
-  requested: string | undefined,
-  state: AppFolderState | undefined
-): string {
-  if (requested === undefined && manifest?.defaultInstance === undefined && state !== undefined) {
-    return state.instance;
-  }
-  return resolveInstance(manifest ?? { instances: {}, agents: [], skills: [] }, requested).url;
 }
 
 /** The `id` of the folder's app.yaml, which is the App's name on the instance. */
@@ -666,4 +665,20 @@ function writeOut(target: Pick<ConfigCommandOptions, "stdout">, text: string): v
 
 function writeErr(target: Pick<ConfigCommandOptions, "stderr">, text: string): void {
   (target.stderr ?? ((value: string) => process.stderr.write(value)))(`${text}\n`);
+}
+
+/** A held write preserves the request id and the JSON outcome the generic commands return. */
+function pendingApproval(
+  run: { id: string; approvalRequestId?: string },
+  json: boolean,
+  options: ConfigCommandOptions,
+  hint?: string
+): number {
+  if (json) writeOut(options, JSON.stringify({ status: "pending_approval", run }, null, 2));
+  else
+    writeErr(
+      options,
+      `Waits for an approval on the instance; nothing has changed yet (${run.approvalRequestId === undefined ? "" : `request ${run.approvalRequestId}, `}Operation Run ${run.id}).${hint ? ` ${hint}` : ""}`
+    );
+  return EXIT.pending;
 }
