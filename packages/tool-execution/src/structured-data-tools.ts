@@ -30,10 +30,10 @@ export function createStructuredDataToolDefinitions(input: {
   return [
     defineTool({
       name: "structured_data.publish",
-      title: { en: "Publish conversation facts", de: "Fakten der Unterhaltung festhalten" },
+      title: { en: "Keep a fact sheet", de: "Faktenblatt führen" },
       summary: {
-        en: "Records labelled facts with their sources, so people can check and reuse them.",
-        de: "Hält benannte Fakten mit ihren Quellen fest, damit man sie prüfen und weiterverwenden kann."
+        en: "Writes key facts beside the chat, each with the document and page it comes from, so people can check and copy them.",
+        de: "Schreibt wichtige Fakten neben den Chat, jeweils mit Dokument und Seite, aus denen sie stammen, damit man sie prüfen und kopieren kann."
       },
       group: "results",
       icon: "result",
@@ -265,10 +265,10 @@ export function createStructuredDataToolDefinitions(input: {
     }),
     defineTool({
       name: "structured_data.read",
-      title: { en: "Read conversation facts", de: "Fakten der Unterhaltung lesen" },
+      title: { en: "Read the fact sheet", de: "Faktenblatt lesen" },
       summary: {
-        en: "Reads the facts recorded in this conversation.",
-        de: "Liest die Fakten, die in dieser Unterhaltung festgehalten sind."
+        en: "Looks at the fact sheet before adding to it.",
+        de: "Schaut ins Faktenblatt, bevor Neues dazukommt."
       },
       group: "results",
       icon: "result",
@@ -339,10 +339,10 @@ export function createStructuredDataToolDefinitions(input: {
     }),
     defineTool({
       name: "structured_result.read",
-      title: { en: "Read structured result", de: "Strukturiertes Ergebnis lesen" },
+      title: { en: "Reopen an earlier result", de: "Früheres Ergebnis öffnen" },
       summary: {
-        en: "Reads a result published earlier in the conversation, such as a review.",
-        de: "Liest ein Ergebnis, das früher in der Unterhaltung veröffentlicht wurde, etwa eine Prüfung."
+        en: "Opens a result from earlier in this chat, such as a review, to continue or correct it.",
+        de: "Öffnet ein Ergebnis von früher in diesem Chat, etwa eine Prüfung, um es fortzusetzen oder zu korrigieren."
       },
       group: "results",
       icon: "result",
