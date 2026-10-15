@@ -94,7 +94,8 @@ for (const theme of ["light", "dark"] as const) {
       await expect(dialog.getByRole("textbox", { name: /^Title/u })).toHaveValue(
         `${GUIDE_TITLE} (copy)`
       );
-      await dialog.getByRole("textbox", { name: /^Id/u }).fill(copyName);
+      await dialog.getByRole("button", { name: "Advanced", exact: true }).click();
+      await dialog.getByRole("textbox", { name: /^Address/u }).fill(copyName);
       await shot(page, `platform-skill-copy-dialog-${theme}-1440`);
       await dialog.getByRole("button", { name: "Continue" }).click();
 

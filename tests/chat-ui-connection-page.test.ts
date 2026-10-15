@@ -98,6 +98,7 @@ function renderPage(input: PageInput = {}): string {
         reload: async () => "loaded"
       },
     exists: async () => true,
+    checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
       delete: async () => undefined,

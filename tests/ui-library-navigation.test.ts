@@ -27,6 +27,7 @@ import {
   type SubRailProps,
   Tabs,
   TabsContent,
+  TabsDisclosure,
   TabsLink,
   TabsList,
   TabsNav,
@@ -67,6 +68,35 @@ describe("navigation, page structure and data components", () => {
     expect(markup.match(/role="tab"/gu)).toHaveLength(2);
     expect(markup).toMatch(/role="tab"[^>]*aria-selected="true"/u);
     expect(markup).toContain('role="tabpanel"');
+  });
+
+  it("sets what stands at the end of a tab row outside the set of tabs", () => {
+    const row = (open: boolean) =>
+      render(
+        createElement(
+          Tabs,
+          { defaultValue: "a" },
+          createElement(
+            TabsList,
+            {
+              label: "Views",
+              end: createElement(TabsDisclosure, { open, onOpenChange() {} }, "Technical details")
+            },
+            createElement(TabsTrigger, { value: "a" }, "First")
+          )
+        )
+      );
+
+    const folded = row(false);
+    const list = /<div[^>]*role="tablist"[^>]*>.*?<\/div>/u.exec(folded)?.[0] ?? "";
+    expect(list).toContain("First");
+    expect(list).not.toContain("Technical details");
+    expect(folded.indexOf("Technical details")).toBeGreaterThan(folded.indexOf("First"));
+    expect(folded).toMatch(
+      /<button type="button" aria-expanded="false"[^>]*><span[^>]*>Technical details/u
+    );
+    expect(row(true)).toMatch(/aria-expanded="true"[^>]*><span[^>]*>Technical details/u);
+    expect(folded).not.toMatch(/role="tab"[^>]*>Technical details/u);
   });
 
   it("reads a tab's count out with its noun, and shows it quiet unless it is told to stand out", () => {

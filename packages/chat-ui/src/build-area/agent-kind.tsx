@@ -31,6 +31,7 @@ export const agentKind: BuildAssetKind = {
   searchLabel: "build.agentsSearch",
   newLabel: "configNewAgent",
   titleLabel: "configDisplayName",
+  purposeLabel: "build.createPurpose",
   deleteTitle: "configDeleteAgentTitle",
   deleteDescription: "configDeleteAgentDescription",
   emptyText: "build.agentsEmpty",

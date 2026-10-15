@@ -342,6 +342,7 @@ describe("the dialog's first step", () => {
           source,
           namespaces: [],
           mayNameFreely: true,
+          checkName: async () => ({ available: true as const }),
           put: async () => ({ revision: 1 }),
           remove: async () => undefined,
           mayDelete: () => true,

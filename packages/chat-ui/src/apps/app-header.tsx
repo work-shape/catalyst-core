@@ -173,10 +173,14 @@ export function AppHeader({
   ) : (
     <>
       {head}
-      <div className="flex shrink-0 items-stretch px-(--layout-gutter)">
+      {/* In a narrow window the state takes its own line above the tabs, so no tab is cut. */}
+      <div className="flex shrink-0 items-stretch px-(--layout-gutter) max-sm:flex-col-reverse">
         <div className="min-w-0 flex-1">{tabs}</div>
         {stateUnderHead ? (
-          <div data-slot="app-head-state" className="flex shrink-0 items-center border-b ps-3">
+          <div
+            data-slot="app-head-state"
+            className="flex shrink-0 items-center border-b ps-3 max-sm:border-b-0 max-sm:ps-0 max-sm:pb-2"
+          >
             {state}
           </div>
         ) : null}

@@ -85,6 +85,8 @@ export interface AssetNameRule {
   pattern: RegExp;
   maxLength?: number;
   description: string;
+  /** The definition schema's name field, when it checks more than the published pattern. */
+  schema?: AssetKindSchema<string>;
 }
 
 /** The action names the rights of a kind are checked as. */
@@ -243,7 +245,13 @@ export function assetNameIssue(
   kind: Pick<RegisteredAssetKind, "nameRule">,
   name: string
 ): AssetValidationIssue | undefined {
-  const { pattern, maxLength, description } = kind.nameRule;
+  const unstorable = unstorableTextIssues({ name })[0];
+  if (unstorable) return unstorable;
+  const { pattern, maxLength, description, schema } = kind.nameRule;
+  const parsed = schema?.safeParse(name);
+  if (parsed && !parsed.success) {
+    return { message: parsed.error.issues[0]?.message ?? description, path: ["name"] };
+  }
   return pattern.test(name) && (maxLength === undefined || name.length <= maxLength)
     ? undefined
     : { message: description, path: ["name"] };

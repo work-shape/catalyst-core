@@ -55,6 +55,7 @@ export const apps = defineTranslations({
     "apps.actionTestTitle": "Test “{name}”",
     "apps.actionTestableInDraft": "Can be tested",
     "apps.actions": "Actions",
+    "apps.technicalDetails": "Technical details",
     "apps.actionsEmpty":
       "This app has no actions yet. An action lets the app read from a connection or write to it.",
     "apps.actionsFailed": "The actions could not be loaded.",
@@ -258,6 +259,7 @@ export const apps = defineTranslations({
     "apps.actionTestTitle": "„{name}“ testen",
     "apps.actionTestableInDraft": "Kann getestet werden",
     "apps.actions": "Aktionen",
+    "apps.technicalDetails": "Technische Details",
     "apps.actionsEmpty":
       "Diese App hat noch keine Aktionen. Mit einer Aktion liest die App über eine Verbindung oder schreibt über sie.",
     "apps.actionsFailed": "Die Aktionen konnten nicht geladen werden.",

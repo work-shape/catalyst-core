@@ -354,6 +354,7 @@ export function BuildFrame({
             namespaces={source.rights.creatableNamespaces(entry.kind)}
             mayNameFreely={source.rights.instanceWrite}
             startsIn={startsIn}
+            checkName={(name) => source.checkName(entry.kind, name)}
             onClose={() => setCopying(undefined)}
             onStart={(chosen) => {
               setCopying(undefined);
@@ -414,6 +415,7 @@ export function BuildFrame({
         <entry.CreateDialog
           namespaces={source.rights.creatableNamespaces(entry.kind)}
           mayNameFreely={source.rights.instanceWrite}
+          checkName={(name) => source.checkName(entry.kind, name)}
           put={(input) => source.writes.put({ ...input, kind: entry.kind })}
           remove={(input) => source.writes.delete({ ...input, kind: entry.kind })}
           mayDelete={(namespace) =>
@@ -437,6 +439,7 @@ export function BuildFrame({
           namespaces={source.rights.creatableNamespaces(entry.kind)}
           mayNameFreely={source.rights.instanceWrite}
           startsIn={startsIn}
+          checkName={(name) => source.checkName(entry.kind, name)}
           onClose={() => setAsking(false)}
           onStart={(chosen) => {
             setAsking(false);
