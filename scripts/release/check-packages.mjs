@@ -34,9 +34,10 @@ const MAX_TARBALL_BYTES = 300_000;
 // Raised chat-ui to 1.3 MB on 2026-10-14 for the guardrail pages of EW-6a, the Studio scope
 // filter and workspace owners of WS-OWN-1a, Connect a local agent of CONNECT-1a, the tool chips
 // of TOOLS-1, Knowledge Bases of KB-1, the New connection dialog of CS-5a and the agent's opens
-// and first saves of NAV-2; src/ and dist/ both count each line.
+// and first saves of NAV-2; src/ and dist/ both count each line. Raised to 1.31 MB on
+// 2026-10-15 for the name check of UXA-2's create forms, 232 bytes over.
 const MAX_TARBALL_BYTES_BY_DIR = {
-  "chat-ui": 1_300_000,
+  "chat-ui": 1_310_000,
   ui: 500_000,
   // Raised on 2026-10-14 for App Kit 1.4.0 and the guardrail assets of EW-6a. Follow-up
   // KIT-SHARE-1: vendored App Kit versions share React and the chart engine; then lower the
