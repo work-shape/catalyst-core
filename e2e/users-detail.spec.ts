@@ -140,3 +140,49 @@ test("a user's detail keeps its cards apart and in the window, and each right's 
     await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/instance/users/${shownId}`);
   }
 });
+
+test("the users list keeps names readable at 390 and 1280 in English and German", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  const name = "Annemarie Schwarzenberger-Hohenlohe";
+  const email = `e2e-users-list-${Date.now()}@example.test`;
+  await signInViaApi(page, superadminUser);
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
+    data: { displayLabel: name, email, roles: ["user"] }
+  });
+  expect(created.ok()).toBe(true);
+  for (const locale of ["en", "de"]) {
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/settings/instance/users");
+      await page.evaluate((value) => localStorage.setItem("vivd-catalyst:locale", value), locale);
+      await page.reload();
+      await page
+        .getByRole("searchbox", {
+          name: locale === "de" ? "Benutzer suchen" : "Search users",
+          exact: true
+        })
+        .fill(email);
+      const entry = page.getByRole("button", { name: `${name} ${email}`, exact: true });
+      await expect(entry).toBeVisible();
+      await shoot(page, `users-list-${width}-${locale}`);
+      const label = entry.getByText(name, { exact: true });
+      const box = await label.boundingBox();
+      expect.soft(box?.width, `${locale} ${width}: readable name`).toBeGreaterThanOrEqual(120);
+      expect
+        .soft(box ? box.x + box.width : Infinity, `${locale} ${width}: name inside window`)
+        .toBeLessThanOrEqual(width);
+      expect
+        .soft(
+          await label.evaluate(
+            (node) =>
+              node.scrollWidth <= node.clientWidth ||
+              node.getAttribute("title") === node.textContent
+          ),
+          `${locale} ${width}: full name available`
+        )
+        .toBe(true);
+    }
+  }
+});

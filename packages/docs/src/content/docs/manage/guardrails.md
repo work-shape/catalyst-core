@@ -49,6 +49,16 @@ Hits never name a person. They say which rule, when, and what kind of thing was 
 
 The page in Studio only reads. You write a guardrail with the CLI, as below.
 
+## Publishing needs an instance admin's approval
+
+Every instance carries one guardrail of the platform, **Publishing needs an instance admin's approval** ("Veröffentlichen braucht die Freigabe eines Instanz-Admins"). It stands above the list in Studio, under **Shipped with the platform** ("Mit der Plattform geliefert"), and is on.
+
+- A holder of `app.approve` or `workflow.approve` at instance scope clicks **Publish** in the app: the new version is live at once, and the record names them as publisher and approver. A workspace-scoped approve right does not count. A CLI publish always waits when approval is required, even for an admin: the server cannot tell a person at a terminal from an agent driving it, and keys never carry approve rights. The CLI names the request; an instance approver can approve it in the **Inbox**.
+- Anyone else who may publish waits: their publish lands in the **Inbox** ("Eingang") of the instance admins as **App to publish** ("App zur Veröffentlichung") or **Workflow to publish** ("Workflow zur Veröffentlichung"). The item shows the version and the one it replaces, the files that differ, the changing actions or steps that are new or changed, the outside hosts it adds, the Connections, the Data Stores and the account a Workflow runs as. **Approve and publish** makes exactly that version live; if the draft or the live version changed meanwhile, the item says so and can no longer be approved. Publishing again replaces the waiting request.
+- An instance admin can switch it off on that card, after a question. Then whoever may publish makes a new version live with their own click. Switching it off and on is recorded in the audit log, and an update of the platform never switches it back on.
+
+Whatever the switch says, a new version goes live only on a person's click: `--yes` on the CLI publishes nothing, and neither does a publish from an agent or another program.
+
 ## Where guardrails come from
 
 - **The operator's floor.** The operator sets guardrails in the release config. They always run, nobody can change or stop them in the product, and Studio marks them "set by the operator".

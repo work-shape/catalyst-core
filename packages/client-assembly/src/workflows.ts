@@ -11,6 +11,7 @@ import {
   createWorkflowEngine,
   noWorkflowStepFiles,
   workflowDefinitionStartIssues,
+  workflowRunPrincipal,
   workflowStartIssues,
   workflowStepFileIssues,
   workflowsModule,
@@ -143,9 +144,14 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     });
     const entries: WorkflowListEntry[] = [];
     for (const { id, assetId, name, description, revisionId, definition, files } of published) {
+      // The active principal answers both whether a run can start and whom it acts as.
+      const principal = definition.ok
+        ? await workflowRunPrincipal(stores.apiAccess, clientInstanceId, definition.manifest)
+        : undefined;
       const reasons = definition.ok
         ? [
             ...(await workflowStartIssues(definition.manifest, {
+              principal,
               clientInstanceId,
               principals: stores.apiAccess,
               registry: operationCalls.registry
@@ -167,6 +173,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
         runnable: reasons.length === 0,
         reasons,
         ...(definition.ok ? { inputs: definition.manifest.inputs } : {}),
+        ...(principal ? { runsAs: principal.displayLabel } : {}),
         ...(lastRun ? { lastRun } : {})
       });
     }

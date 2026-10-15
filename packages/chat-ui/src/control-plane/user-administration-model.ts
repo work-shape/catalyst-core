@@ -248,20 +248,22 @@ function optionalText(value: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+type UserPermission = Exclude<Permission, "config_assets.release">;
+
 /**
  * The typed permissions an administrator can give to or take from a user.
  * `config_assets.release` is left out: it is carried by service tokens for
  * release automation and the server refuses it on users.
  */
-export const USER_PERMISSIONS: readonly Permission[] = PERMISSIONS.filter(
-  (permission) => permission !== "config_assets.release"
+export const USER_PERMISSIONS: readonly UserPermission[] = PERMISSIONS.filter(
+  (permission): permission is UserPermission => permission !== "config_assets.release"
 );
 
 /** Where a user's permission state comes from; "none" is neither held nor touched. */
 export type UserPermissionSource = "role" | "granted" | "revoked" | "none";
 
 export interface UserPermissionState {
-  permission: Permission;
+  permission: UserPermission;
   held: boolean;
   source: UserPermissionSource;
 }
@@ -309,43 +311,44 @@ export const USER_PERMISSION_SOURCE_LABEL_KEYS: Record<
   revoked: "userRightSourceRevoked"
 };
 
-const USER_PERMISSION_COPY: Record<string, { label: TranslationKey; description: TranslationKey }> =
-  {
-    "agent_skills.approve": {
-      label: "userRightAgentSkillsApprove",
-      description: "userRightAgentSkillsApproveDescription"
-    },
-    "config_assets.read": {
-      label: "userRightConfigAssetsRead",
-      description: "userRightConfigAssetsReadDescription"
-    },
-    "config_assets.write": {
-      label: "userRightConfigAssetsWrite",
-      description: "userRightConfigAssetsWriteDescription"
-    },
-    "usage.view": { label: "userRightUsageView", description: "userRightUsageViewDescription" },
-    "users.manage": {
-      label: "userRightUsersManage",
-      description: "userRightUsersManageDescription"
-    },
-    "api_access.manage": {
-      label: "userRightApiAccessManage",
-      description: "userRightApiAccessManageDescription"
-    },
-    "agent_models.manage": {
-      label: "userRightAgentModelsManage",
-      description: "userRightAgentModelsManageDescription"
-    },
-    "audit.view": { label: "userRightAuditView", description: "userRightAuditViewDescription" }
-  };
+const USER_PERMISSION_COPY: Record<
+  UserPermission,
+  { label: TranslationKey; description: TranslationKey }
+> = {
+  "agent_skills.approve": {
+    label: "userRightAgentSkillsApprove",
+    description: "userRightAgentSkillsApproveDescription"
+  },
+  "config_assets.read": {
+    label: "userRightConfigAssetsRead",
+    description: "userRightConfigAssetsReadDescription"
+  },
+  "config_assets.write": {
+    label: "userRightConfigAssetsWrite",
+    description: "userRightConfigAssetsWriteDescription"
+  },
+  "usage.view": { label: "userRightUsageView", description: "userRightUsageViewDescription" },
+  "users.manage": {
+    label: "userRightUsersManage",
+    description: "userRightUsersManageDescription"
+  },
+  "api_access.manage": {
+    label: "userRightApiAccessManage",
+    description: "userRightApiAccessManageDescription"
+  },
+  "agent_models.manage": {
+    label: "userRightAgentModelsManage",
+    description: "userRightAgentModelsManageDescription"
+  },
+  "audit.view": { label: "userRightAuditView", description: "userRightAuditViewDescription" }
+};
 
-/** Absent for a permission added to the catalog before it got its copy here. */
-export function userPermissionCopy(
-  permission: Permission
-): { label: TranslationKey; description: TranslationKey } | undefined {
-  return Object.hasOwn(USER_PERMISSION_COPY, permission)
-    ? USER_PERMISSION_COPY[permission]
-    : undefined;
+/** The words of a key: a key core adds does not compile until it has them here. */
+export function userPermissionCopy(permission: UserPermission): {
+  label: TranslationKey;
+  description: TranslationKey;
+} {
+  return USER_PERMISSION_COPY[permission];
 }
 
 function userPermissionSource(

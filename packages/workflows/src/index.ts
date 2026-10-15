@@ -66,6 +66,7 @@ export {
 export { lastDueWithin, nextDueAfter, parseCron } from "./cron";
 export {
   WORKFLOW_EXECUTED_STEP_TYPES,
+  indexWorkflowSteps,
   parseWorkflowManifest,
   readWorkflowManifest,
   workflowManifestFingerprint,
@@ -92,6 +93,7 @@ export { WORKFLOW_TEST_RUN_ERRORS } from "./test-run";
 export * from "./limits";
 export { replaceScheduleJob, workflowScheduleJobKind } from "./schedule-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
+export { workflowRunPrincipal } from "./run-identity";
 export {
   workflowDefinitionStartIssues,
   workflowStartIssues,

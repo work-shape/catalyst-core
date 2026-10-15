@@ -3,7 +3,12 @@ import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
 import { GUARDRAIL_OUTCOME_VIEWS, guardrailFactsOfRow, readOutcome } from "./guardrail-model";
 import { GuardrailPage } from "./guardrail-page";
 import { GuardrailRunLine } from "./guardrail-run-line";
-import { useGuardrailSource } from "./guardrail-source";
+import { useGuardrailSource, useShippedGuardrails } from "./guardrail-source";
+import { ShippedGuardrails } from "./shipped-guardrails";
+import {
+  useOptionalSettingsPage,
+  type SettingsPageContextValue
+} from "../settings/settings-page-context";
 
 /** The kind's segment in an address: `/build/guardrails`. */
 const GUARDRAILS_BUILD_PATH = "guardrails";
@@ -14,9 +19,23 @@ function GuardrailAssetPage(frame: BuildAssetViewProps) {
 }
 
 /**
- * Guardrails in Studio: a list, and a page that shows one Guardrail with its hits. The kind
- * has no editor and no button that starts one until EW-6b. A row says in one line when the
- * guardrail runs and what it does, and its badge what a hit does.
+ * The guardrails the release ships, with their switches, above the list. Outside the settings
+ * pages, as in a list rendered alone, there is no instance to ask, and it shows nothing.
+ */
+function ShippedGuardrailsHead() {
+  const settings = useOptionalSettingsPage();
+  return settings ? <ShippedGuardrailsOf settings={settings} /> : null;
+}
+
+function ShippedGuardrailsOf({ settings }: { settings: SettingsPageContextValue }) {
+  return <ShippedGuardrails read={useShippedGuardrails(settings)} />;
+}
+
+/**
+ * Guardrails in Studio: the guardrails the release ships with their switches, a list, and a
+ * page that shows one Guardrail with its hits. The kind has no editor and no button that
+ * starts one until EW-6b. A row says in one line when the guardrail runs and what it does, and
+ * its badge what a hit does.
  */
 export const guardrailKind: BuildListedKind = {
   kind: "guardrail",
@@ -26,6 +45,7 @@ export const guardrailKind: BuildListedKind = {
   searchLabel: "guardrails.search",
   emptyText: "guardrails.empty",
   icon: "guardrail",
+  ListHead: ShippedGuardrailsHead,
   view: { Page: GuardrailAssetPage, missingText: "guardrails.missing" },
   // When it runs and what it does, in one line: the description is on its page.
   RowLine: ({ asset }) => (

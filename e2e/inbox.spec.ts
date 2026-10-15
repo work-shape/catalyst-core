@@ -2,12 +2,14 @@ import {
   apiBaseUrl,
   decidedCount,
   expectInboxFrameStill,
+  idOf,
   reviewer,
   shoot,
   shotsDir,
   signIn,
   tabName
 } from "./inbox-fixtures";
+import { approvePublishInInbox, memberPublishesApp } from "./publish-approval-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
 import { expect, test } from "./test";
@@ -500,13 +502,6 @@ const heldSkill = (paragraph: string) => ({
   content: `# Parental leave\n\n${KEPT_PARAGRAPH}\n\n${paragraph}\n`
 });
 const grantsUrl = `${apiBaseUrl}/api/v1/instance/access/grants`;
-/** The id of what an answer of the instance created. */
-function idOf(body: unknown): string {
-  if (typeof body !== "object" || body === null || !("id" in body) || typeof body.id !== "string") {
-    throw new Error("The answer names no id.");
-  }
-  return body.id;
-}
 /** The widths the item of a held skill is pictured at: a desk and a phone. */
 const SKILL_SHOT_WIDTHS = [1440, 390];
 
@@ -783,5 +778,23 @@ test("the title and the tabs stand still from a tab with rows to an empty one", 
       );
     }
     await reviewerContext.close();
+  }
+});
+
+// GR-PUB-1. Fails without the shipped guardrail: a member's Publish was live at once.
+test("a member's publish of an App waits in the Inbox with its review, and an admin's approval makes it live", async ({
+  page,
+  browser,
+  baseURL,
+  pageErrors,
+  accessState: _accessState
+}, testInfo) => {
+  test.setTimeout(shotsDir ? 300_000 : 120_000);
+  await signIn(page, reviewer);
+  const waiting = await memberPublishesApp(page, browser, baseURL, pageErrors, testInfo.retry);
+  try {
+    await approvePublishInInbox(page, waiting);
+  } finally {
+    await waiting.end();
   }
 });

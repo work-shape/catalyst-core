@@ -12,6 +12,7 @@ import type { JsonObject } from "./json";
 import type { ActorAccess, Permission, PlatformAction } from "./permissions";
 import type { JobsStore } from "./jobs";
 import type { OperationRunStore } from "./operation-runs";
+import type { ConfigAssetStore } from "./config-assets";
 
 export * from "./approval-request";
 
@@ -23,6 +24,8 @@ export * from "./approval-request";
 export interface ApprovalTransactionStores {
   jobs: JobsStore;
   operationRuns: OperationRunStore;
+  /** What a kind reads of the asset a request is about, such as whether it moved. */
+  configAssets: Pick<ConfigAssetStore, "getConfigAsset">;
 }
 
 /**
@@ -166,6 +169,8 @@ export interface ApprovalRequestListFilter {
   conversationId?: ConversationId;
   /** Only the requests whose payload has this top-level key. */
   payloadKey?: string;
+  /** Only the requests whose payload's `subject` holds these fields with these values. */
+  subjectContains?: JsonObject;
 }
 
 export interface ApprovalRequestStore {

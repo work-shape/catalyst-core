@@ -159,6 +159,8 @@ export const apps = defineTranslations({
     "apps.publishHosts": "External hosts it calls",
     "apps.publishMissingRight": "You need the right “{right}” to publish.",
     "apps.publishPending": "The change waits for an approval.",
+    "apps.publishWaits":
+      "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is.",
     "apps.publishThisRevision": "Publish this revision",
     "apps.publishTitle": "Publish “{name}”?",
     "apps.published": "Published · revision {number}",
@@ -365,6 +367,8 @@ export const apps = defineTranslations({
     "apps.publishHosts": "Externe Hosts, die sie aufruft",
     "apps.publishMissingRight": "Zum Veröffentlichen brauchst du das Recht „{right}“.",
     "apps.publishPending": "Die Änderung wartet auf eine Freigabe.",
+    "apps.publishWaits":
+      "Zur Freigabe gesendet. Ein Instanz-Admin entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
     "apps.publishThisRevision": "Diese Revision veröffentlichen",
     "apps.publishTitle": "„{name}“ veröffentlichen?",
     "apps.published": "Veröffentlicht · Revision {number}",

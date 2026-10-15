@@ -15,6 +15,7 @@ import type {
   JobWorker,
   Logger,
   ModuleSnapshot,
+  PlatformEventEmitter,
   PlatformStores,
   RegisteredJobHandler,
   ServicePrincipalRecord,
@@ -228,6 +229,8 @@ export async function workflowFixture(
     /** For the job that removes run data: the days a run keeps its values, and batch sizes. */
     stepDataDays?: number;
     pruneBatch?: InstanceWorkflowsParts["pruneBatch"];
+    /** The events of the call path, such as one whose guardrails run. */
+    events?: (stores: PlatformStores) => PlatformEventEmitter;
   } = {}
 ): Promise<WorkflowFixture> {
   let workflows: InstanceWorkflows | undefined;
@@ -254,40 +257,42 @@ export async function workflowFixture(
     ...(options.now ? { now: options.now } : {}),
     ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone })
   });
-  const t = await fixtureOn((connectionOptions) =>
-    setupAccessInstance({
-      ...connectionOptions,
-      furtherKinds: [...(connectionOptions.furtherKinds ?? []), ...(fromAssets ? [kind] : [])],
-      modules: {
-        ...connectionOptions.modules,
-        ...(options.moduleOn === false ? {} : { workflows: { enabled: true } })
-      },
-      server(stores, config) {
-        const server = connectionOptions.server?.(stores, config) ?? {};
-        if (!server.operationCalls) throw new Error("The instance built no call path");
-        modules = resolveInstanceModules(config, []).snapshot;
-        instanceStores = stores;
-        workflows = createInstanceWorkflows({
-          modules,
-          clientInstanceId,
-          stores,
-          operationCalls: server.operationCalls,
-          ...(fromAssets ? {} : { definitions: given ?? fixtureDefinitions() }),
-          ...(options.limits ? { limits: options.limits } : {}),
-          ...(options.now ? { now: options.now } : {}),
-          ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone }),
-          ...(options.stepFiles ? { stepFiles: options.stepFiles } : {}),
-          ...(options.codeRunner ? { codeRunner: options.codeRunner } : {}),
-          ...(options.stepDataDays === undefined ? {} : { stepDataDays: options.stepDataDays }),
-          ...(options.pruneBatch ? { pruneBatch: options.pruneBatch } : {})
-        });
-        return server;
-      },
-      // What the assembly does with the routes of a module: they follow the server's own.
-      register(route) {
-        for (const register of workflows?.routes ?? []) register(route);
-      }
-    })
+  const t = await fixtureOn(
+    (connectionOptions) =>
+      setupAccessInstance({
+        ...connectionOptions,
+        furtherKinds: [...(connectionOptions.furtherKinds ?? []), ...(fromAssets ? [kind] : [])],
+        modules: {
+          ...connectionOptions.modules,
+          ...(options.moduleOn === false ? {} : { workflows: { enabled: true } })
+        },
+        server(stores, config) {
+          const server = connectionOptions.server?.(stores, config) ?? {};
+          if (!server.operationCalls) throw new Error("The instance built no call path");
+          modules = resolveInstanceModules(config, []).snapshot;
+          instanceStores = stores;
+          workflows = createInstanceWorkflows({
+            modules,
+            clientInstanceId,
+            stores,
+            operationCalls: server.operationCalls,
+            ...(fromAssets ? {} : { definitions: given ?? fixtureDefinitions() }),
+            ...(options.limits ? { limits: options.limits } : {}),
+            ...(options.now ? { now: options.now } : {}),
+            ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone }),
+            ...(options.stepFiles ? { stepFiles: options.stepFiles } : {}),
+            ...(options.codeRunner ? { codeRunner: options.codeRunner } : {}),
+            ...(options.stepDataDays === undefined ? {} : { stepDataDays: options.stepDataDays }),
+            ...(options.pruneBatch ? { pruneBatch: options.pruneBatch } : {})
+          });
+          return server;
+        },
+        // What the assembly does with the routes of a module: they follow the server's own.
+        register(route) {
+          for (const register of workflows?.routes ?? []) register(route);
+        }
+      }),
+    options.events ? { events: options.events } : {}
   );
   const principal = await t.stores.apiAccess.createServicePrincipal({
     clientInstanceId,

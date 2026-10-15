@@ -581,7 +581,7 @@ describe("Connection page", () => {
     expect(service).toContain(">Service principal<");
     expect(service).toContain(">Disabled<");
     expect(service).toContain('href="/settings/instance/api-access?principal=spn_1"');
-    expect(service).toContain("monthly-check");
+    expect(service).not.toContain("monthly-check");
   });
 
   it("says that nobody was given the Connection by itself", () => {

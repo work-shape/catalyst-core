@@ -222,7 +222,7 @@ Example: an instance sets changing actions to `approval`. Mara saves `tax-vat-he
 
 ## Roles and single rights
 
-Catalyst has three roles. The interface calls the role of a person their **Access level**, and you set it on **Settings > Instance > Users**.
+Catalyst has three roles. You set the **Role** of a person on **Settings > Instance > Users**.
 
 | Role | What it carries |
 | --- | --- |
@@ -232,7 +232,7 @@ Catalyst has three roles. The interface calls the role of a person their **Acces
 
 The three roles are fixed. You cannot change what a role carries, and you cannot create a role of your own.
 
-Below the Access level, the same page has a card named **Rights** with one switch per right. A switch adds a right the role does not carry, or takes away one it does. The card shows where each right comes from: "by role", "granted individually" or "revoked individually". A revoked right stays revoked even though the role carries it.
+Below the Role, the same page has a card named **Rights** with one switch per right. A switch adds a right the role does not carry, or takes away one it does. The card shows where each right comes from: "by role", "granted individually" or "revoked individually". A revoked right stays revoked even though the role carries it.
 
 A switch is stored as grants for the whole instance, one per action the right stands for, and each records who set it and when. These grants are changed on the Users page and on the API access page for a Service Principal, not in the Grants list of the Access page, which leaves them out.
 
@@ -247,7 +247,7 @@ A switch is stored as grants for the whole instance, one per action the right st
 | Manage API access | `api_access.manage` | Superadmin |
 | Manage agent model settings | `agent_models.manage` | Superadmin |
 
-Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin level, changes another Superadmin, deletes a user, or switches "Manage API access" and "Manage agent model settings" on or off.
+Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin role, changes another Superadmin, deletes a user, or switches "Manage API access" and "Manage agent model settings" on or off.
 
 "Approve skill changes" also lets a person decide an action that waits for an approval.
 
@@ -257,7 +257,7 @@ Managing Service Principals, `service_principals.manage`, is on no switch either
 
 Chatting is not on this list. Which conversations you see depends on the Collaboration Workspaces you are a member of and on whether a conversation is private, and not on one of these rights. The one exception is a Superadmin, who can enter every Shared Workspace.
 
-The Users page has one more field, **Permission refs**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field.
+The Users page has one more field, **Tool rights**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field.
 
 ## Grants
 
@@ -626,7 +626,7 @@ A release push reaches every agent and skill of the instance and is not held bac
 
 | You want to | Screen | You need |
 | --- | --- | --- |
-| Make somebody an Admin or a Superadmin | Settings > Instance > Users, Access level | Manage users. Superadmin for the Superadmin level. |
+| Make somebody an Admin or a Superadmin | Settings > Instance > Users, Role | Manage users. Superadmin for the Superadmin role. |
 | Give or take one right for the whole instance | Settings > Instance > Users, Rights | Manage users |
 | Let somebody edit an agent | Settings > Instance > Access, Rights | Manage users |
 | Change the lists of a Namespace registered before | Settings > Instance > Access, Namespaces | Manage users |

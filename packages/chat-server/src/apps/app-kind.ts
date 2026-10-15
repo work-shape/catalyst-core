@@ -5,7 +5,8 @@ export { APP_ASSET_KIND };
 import {
   PAGE_MANIFEST_FILE,
   compiledActionsOf,
-  declaredDataStoresOf
+  declaredDataStoresOf,
+  declaredExternalHostsOf
 } from "@vivd-catalyst/app-build";
 import {
   CONNECTION_ASSET_KIND,
@@ -21,7 +22,11 @@ import {
   type PlatformStores
 } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { readDefinitionName, type WorkflowAssetKind } from "../asset-kinds/shared";
+import {
+  readDefinitionName,
+  type PublishReach,
+  type WorkflowAssetKind
+} from "../asset-kinds/shared";
 import { unlistedDataStore } from "./action-kinds";
 
 /** The id of an App: what its manifest calls `id`. Unique on the instance. */
@@ -36,6 +41,7 @@ export const APP_ACTIONS = {
   write: "app.write",
   delete: "app.delete",
   publish: "app.publish",
+  approve: "app.approve",
   use: "app.use"
 } as const;
 
@@ -82,6 +88,36 @@ const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
 const connectionOperationsSchema = z.object({
   operations: z.array(z.object({ name: z.string(), effect: z.string() }))
 });
+
+/**
+ * What an App revision reaches beside the live one: its named actions new or changed, the
+ * outside hosts it adds, the Connections it names and the Data Stores with the level it needs.
+ */
+function appPublishReach(next: JsonObject, live: JsonObject | undefined): PublishReach {
+  const manifestOf = (config: JsonObject | undefined) =>
+    manifestOfConfigSchema.safeParse(config).data?.manifest;
+  const manifest = manifestOf(next);
+  const before = new Map(
+    compiledActionsOf(manifestOf(live)).map((action) => [action.name, JSON.stringify(action)])
+  );
+  const liveHosts = new Set(declaredExternalHostsOf(manifestOf(live)));
+  return {
+    calls: compiledActionsOf(manifest).flatMap((action) => {
+      const then = before.get(action.name);
+      if (then === JSON.stringify(action)) return [];
+      return [
+        {
+          label: action.name,
+          effect: action.effect,
+          change: then === undefined ? ("new" as const) : ("changed" as const)
+        }
+      ];
+    }),
+    hostsAdded: declaredExternalHostsOf(manifest).filter((host) => !liveHosts.has(host)),
+    connections: appConnectionNames(next),
+    dataStores: declaredDataStoresOf(manifest)
+  };
+}
 
 /**
  * What a manifest names that the instance does not hold, one issue per name: a Connection, a
@@ -262,6 +298,7 @@ export function createAppAssetKind(): WorkflowAssetKind {
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
     onPublish: requireDataStores,
+    publishReach: appPublishReach,
     // A write from files reads the name people see from the manifest. A manifest that names
     // none keeps the one the App was made with.
     configOfFiles: ({ name, manifest, current }) =>

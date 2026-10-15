@@ -169,15 +169,15 @@ describe("rights on a Workflow", () => {
     const rows = ["workflow.publish", "workflow.use", "workflow.read"].map(onWorkflow);
     const markup = rights({ grants: rows });
     expect(markup).toContain("Workflow agent-inventory");
-    const order = ["Read workflows", "Use workflows", "Publish workflows"].map((label) =>
+    const order = ["View workflows", "Use workflows", "Publish workflows"].map((label) =>
       markup.indexOf(`${label}</`)
     );
     expect(order.every((position) => position >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((left, right) => left - right));
 
     const german = rights({ grants: rows }, "de");
-    expect(german).toContain("Workflows: Nutzen");
-    expect(german).toContain("Workflows: Veröffentlichen");
+    expect(german).toContain("Workflows verwenden");
+    expect(german).toContain("Workflows veröffentlichen");
   });
 });
 

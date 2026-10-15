@@ -8,8 +8,9 @@ import { BackLink, TitlePlaceholder, routeLink, type OpenRoute } from "./workflo
 
 /**
  * The head of a Workflow, on its canvas and on the list of its runs: the way back, the name,
- * "Edit with the agent", "Start now", "Copy ID" for whoever may change it, and the two tabs. The tabs are addresses. Without runs on
- * the instance there is one view and no tabs. The description is the first paragraph under them.
+ * "Edit with the agent", "Start now", "Copy ID" for whoever may change it, and the two tabs.
+ * The tabs are addresses. Without runs on the instance there is one view and no tabs. The
+ * first paragraph under them says what the Workflow does and whom every run acts as.
  */
 export function WorkflowHead({
   workspaceId,
@@ -26,7 +27,7 @@ export function WorkflowHead({
   workspaceId: string;
   workflowId: string;
   /** The Workflow, once its record arrived. */
-  workflow: Pick<WorkflowView, "name" | "description"> | undefined;
+  workflow: Pick<WorkflowView, "name" | "description" | "runsAs"> | undefined;
   tab: "workflow" | "runs";
   runsAvailable: boolean;
   canStart: boolean;
@@ -39,6 +40,10 @@ export function WorkflowHead({
 }) {
   const { t } = useTranslation();
   const address = { collaborationWorkspaceId: workspaceId, workflow: workflowId };
+  const lead = [
+    workflow?.description,
+    workflow?.runsAs === undefined ? undefined : t("workflows.runsAs", { account: workflow.runsAs })
+  ].filter((part): part is string => part !== undefined && part !== "");
   return (
     <>
       {/* Where a control floats beside the head, the head starts at the top edge. */}
@@ -99,10 +104,8 @@ export function WorkflowHead({
       ) : (
         <div aria-hidden="true" className="shrink-0 border-b" />
       )}
-      {/* What the Workflow does is the first paragraph of the page, not a part of its head. */}
-      {workflow?.description === undefined || workflow.description === "" ? null : (
-        <PageLead className="shrink-0 pb-3">{workflow.description}</PageLead>
-      )}
+      {/* What the Workflow does, and whom every run acts as: never the person who starts it. */}
+      {lead.length === 0 ? null : <PageLead className="shrink-0 pb-3">{lead.join(" · ")}</PageLead>}
     </>
   );
 }

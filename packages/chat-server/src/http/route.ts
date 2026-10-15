@@ -23,6 +23,7 @@ import {
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type ClientInstanceId,
+  type OperationApproval,
   type OperationAuthorization,
   type OperationAuthorizeContext,
   type OperationBeforeEvent,
@@ -164,7 +165,13 @@ type RightsCheck<Op extends Operation> = Op["requires"] extends readonly [unknow
 /** What a registration adds to the descriptor: what the call touches and what it does. */
 type OperationBindingOf<Op extends Operation, Sent> = Omit<
   AssembledOperationBinding,
-  "resource" | "policyTargets" | "beforeEvents" | "execute" | "authorize" | "inputWithoutSecrets"
+  | "resource"
+  | "policyTargets"
+  | "beforeEvents"
+  | "approval"
+  | "execute"
+  | "authorize"
+  | "inputWithoutSecrets"
 > &
   RightsCheck<Op> & {
     resource?(input: OperationInput<Op>): OperationResource | undefined;
@@ -176,6 +183,9 @@ type OperationBindingOf<Op extends Operation, Sent> = Omit<
     policyTargets?(
       input: OperationInput<Op>
     ): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
+    approval?(
+      input: OperationInput<Op>
+    ): OperationApproval | undefined | Promise<OperationApproval | undefined>;
     execute(
       input: OperationInput<Op>,
       context: OperationBindingContext
@@ -384,7 +394,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       await requireWithinLimit(options, operation, { identity: caller.identity }, reply);
     }
     if (caller.identity && operation.scope) {
-      await requireOperationScope(options, caller.identity, operation.id, operation.scope);
+      await requireOperationScope(options, caller.identity, operation);
     }
     const query = parseInput(operation.query, request.query, "Request query is invalid");
     const body = parseInput(operation.body, request.body ?? {}, "Request body is invalid");
@@ -548,10 +558,19 @@ const FURTHER_SCOPE_OF_OPERATION: Partial<
 async function requireOperationScope(
   options: Pick<ResolvedChatServerOptions, "authorizer">,
   identity: AuthenticatedIdentity,
-  operationId: string,
-  scope: OperationScope
+  operation: Operation
 ): Promise<void> {
-  const further = FURTHER_SCOPE_OF_OPERATION[operationId];
+  const scope = operation.scope;
+  if (!scope) return;
+  if (
+    !isAuthenticatedServicePrincipal(identity) &&
+    identity.keyScopes !== undefined &&
+    operation.personalKeyScope
+  ) {
+    requireAuthScope(identity, operation.personalKeyScope);
+    return;
+  }
+  const further = FURTHER_SCOPE_OF_OPERATION[operation.id];
   if (hasAuthScope(identity, scope) || !further || !hasAuthScope(identity, further.scope)) {
     requireAuthScope(identity, scope);
     return;

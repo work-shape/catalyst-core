@@ -182,6 +182,8 @@ export const listWorkflowStepRunsQuerySchema = listQuerySchema.extend({
  * `principal_inactive`). A later engine may name further codes.
  */
 export const workflowStartIssueSchema = z.object({
+  /** The technical account’s display label, when it still exists. */
+  principalDisplayLabel: z.string().optional(),
   code: z.string(),
   /** A sentence of the product. Never a value of a run. */
   message: z.string(),
@@ -204,6 +206,11 @@ export const workflowSummarySchema = z.object({
    * from which a page builds its start form. Missing where the definition cannot be read.
    */
   inputs: z.record(z.string(), z.unknown()).optional(),
+  /**
+   * The display label of the service principal every run of the Workflow acts as. Missing
+   * where that principal is disabled or gone, which `reasons` then says.
+   */
+  runsAs: z.string().optional(),
   /**
    * What the caller may do with this Workflow, of `workflow.read` (its runs) and `workflow.use`
    * (a start). Never empty: a Workflow the caller holds neither on is not listed.

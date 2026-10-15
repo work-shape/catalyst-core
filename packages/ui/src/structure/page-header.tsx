@@ -166,7 +166,12 @@ export function PageHeader({
     primaryAction !== undefined ||
     overflow !== undefined;
   const actions = hasActions ? (
-    <div className={cn("flex shrink-0 flex-wrap items-center gap-2", detail && "md:flex-nowrap")}>
+    <div
+      className={cn(
+        "flex max-w-full shrink-0 flex-wrap items-center gap-2",
+        detail && "md:flex-nowrap"
+      )}
+    >
       {ownShellAction}
       {secondaryActions}
       {primaryAction}

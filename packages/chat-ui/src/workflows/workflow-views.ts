@@ -94,6 +94,8 @@ export interface WorkflowView {
   id: string;
   name: string;
   description?: string;
+  /** The account every run acts as, by its label, where the instance names it. */
+  runsAs?: string;
   published: boolean;
   /** The id of the revision that is published, which is the one the page draws. */
   revisionId?: string;
@@ -138,8 +140,9 @@ export type WorkflowStepTarget = "live" | "test" | "dry_run";
 /** One thing the instance refuses a start for: its code and its own sentence. */
 export interface WorkflowStartIssue {
   code: string;
-  /** The instance's own sentence, which it writes in English. */
+  /** The instance's fallback sentence, which it writes in English. */
   message: string;
+  principalDisplayLabel?: string;
 }
 
 export type WorkflowRunStatus =

@@ -9,6 +9,7 @@ import {
   removeGuardrailHits
 } from "./connection-fixtures";
 import { z } from "zod";
+import { shoot } from "./inbox-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
@@ -228,4 +229,42 @@ test("Studio lists the Guardrails with when each runs, and a Guardrail's page sh
     await removeReleaseAsset(privacy.id);
     await removeReleaseAsset(tone.id);
   }
+});
+
+// GR-PUB-1: the guardrail the platform ships stands above the list, on, with its switch for an
+// instance admin. Switching it off asks first. The test cancels: every spec file runs against
+// the same instance, and the switch is the instance's. Switching itself is held by the server
+// tests (`tests/publish-approval-guardrail.test.ts`).
+test("Studio shows the guardrail the platform ships, on, and asks before it is switched off", async ({
+  page
+}) => {
+  test.setTimeout(shotsDir ? 180_000 : 60_000);
+  const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+    data: { ...admin, rememberMe: true }
+  });
+  expect(signedIn.ok()).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/build/guardrails");
+  const shipped = page.getByRole("region", { name: "Shipped with the platform" });
+  await expect(shipped).toContainText("Publishing needs an instance admin's approval");
+  await expect(shipped).toContainText("Needs approval");
+  const toggle = shipped.getByRole("switch");
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await expect(toggle).toBeEnabled();
+  await shoot(page, "gr-pub-1-guardrails-switch", async () => {
+    await expect(page.getByRole("switch").first()).toHaveAttribute("aria-checked", "true");
+  });
+
+  await toggle.click();
+  const asked = page.getByRole("dialog", {
+    name: "Switch off “Publishing needs an instance admin's approval”?"
+  });
+  await expect(asked).toContainText("no admin is asked");
+  await shoot(page, "gr-pub-1-guardrails-switch-off", async () => {
+    await page.getByRole("switch").first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
 });

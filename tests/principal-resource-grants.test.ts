@@ -402,6 +402,44 @@ describe("who writes a service principal's grant row", () => {
     ).toEqual([]);
   });
 
+  it("lets a principal manager read principal grants and rights without reading people", async () => {
+    const s = await setup();
+    const { t, principal } = s;
+    await t.stores.users.updateUser({
+      clientInstanceId,
+      userId: s.ops.id,
+      permissions: ["!users.manage", "api_access.manage"]
+    });
+    const grantId = await s.grantTo(await t.seed("crm", forWorkflows));
+    const query = { holderKind: "service_principal", holderId: principal.id };
+    const listed = await t.expectOk(s.ops.id, "permissions.list", { query });
+    expect(listed.json()).toMatchObject({ items: [expect.objectContaining({ id: grantId })] });
+    const effective = await t.expectOk(s.ops.id, "permissions.effective", { query });
+    expect(effective.json()).toMatchObject({
+      holderActive: true,
+      items: expect.arrayContaining([expect.objectContaining({ action: "connection.use" })])
+    });
+    for (const query of [{}, { holderKind: "user", holderId: t.admin.id }]) {
+      await t.expectRefused(
+        s.ops.id,
+        "permissions.list",
+        { query },
+        {
+          status: 403,
+          code: "FORBIDDEN"
+        }
+      );
+    }
+    await t.expectRefused(
+      s.ops.id,
+      "permissions.effective",
+      {
+        query: { holderKind: "user", holderId: t.admin.id }
+      },
+      { status: 403, code: "FORBIDDEN" }
+    );
+  });
+
   it("lists one principal's rows and one Connection's holders, a person's row beside a principal's", async () => {
     const s = await setup();
     const { t, principal } = s;

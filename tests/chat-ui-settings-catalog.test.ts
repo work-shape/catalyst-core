@@ -32,13 +32,20 @@ function pageIds(of: SettingsViewer): string[] {
   return visibleSettingsPages(catalog, of).map((page) => `${page.group}/${page.id}`);
 }
 
-function resolve(path: string, of: SettingsViewer, build = buildOn, workspacesReady = true) {
+function resolve(
+  path: string,
+  of: SettingsViewer,
+  build = buildOn,
+  workspacesReady = true,
+  platformReady = true
+) {
   return resolveSettingsRoute({
     route: workspaceRouteFromPath(path),
     catalog,
     build,
     viewer: of,
-    workspacesReady
+    workspacesReady,
+    platformReady
   });
 }
 
@@ -356,5 +363,20 @@ describe("old addresses", () => {
       kind: "pending"
     });
     expect(resolve("/admin", member, buildOn, false)).toEqual({ kind: "pending" });
+  });
+
+  it("waits for the platform context before it calls a page shown by a right closed", () => {
+    // An administrator opens API access by its address: the right that shows the page comes
+    // with the platform context, and until it arrives the page is not sent elsewhere.
+    const admin = viewer({ roles: ["admin"], permissions: ["users.manage"] });
+    expect(resolve("/settings/instance/api-access", admin, buildOn, true, false)).toEqual({
+      kind: "pending"
+    });
+    expect(
+      resolve("/settings/instance/api-access", {
+        ...admin,
+        platform: { ...platformContext(), instanceActions: ["service_principals.manage"] }
+      })
+    ).toMatchObject({ kind: "page" });
   });
 });

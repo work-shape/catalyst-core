@@ -598,7 +598,7 @@ function ConnectionSettings({ config }: { config: Record<string, unknown> }) {
 /**
  * The people and the service principals that were given this Connection by itself. A person is
  * a round avatar with an address; a service principal is a square one with a key, says what it
- * is in words, and opens its own page.
+ * is in words, and opens its own page. Neither is named by an id.
  */
 function ConnectionHolders({
   read,
@@ -657,9 +657,6 @@ function ConnectionHolders({
                   </Badge>
                 ) : null}
               </>
-            }
-            description={
-              holder.detail ? <code className="font-mono">{holder.detail}</code> : undefined
             }
             link={holder.name === undefined ? undefined : <a href={principalHref(holder.id)} />}
           />

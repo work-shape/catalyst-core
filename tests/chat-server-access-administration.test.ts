@@ -117,7 +117,7 @@ describe("Namespace administration", () => {
 });
 
 describe("who may write a grant, and what a grant may say", () => {
-  it("refuses a user without users.manage all eight operations", async () => {
+  it("refuses a user without users.manage administration of other people and Namespaces", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
     const grantId = await t.grant(t.lena.id, "agent.read", { namespace: "kai-" });
@@ -136,7 +136,7 @@ describe("who may write a grant, and what a grant may say", () => {
       ],
       ["permissions.revoke", { params: { grantId } }],
       ["permissions.list", {}],
-      ["permissions.effective", { query: { holderKind: "user", holderId: t.kai.id } }],
+      ["permissions.effective", { query: { holderKind: "user", holderId: t.lena.id } }],
       ["namespaces.create", { payload: { prefix: "mine-", displayName: "Mine" } }],
       ["namespaces.update", { params: { prefix: "kai-" }, payload: { displayName: "Mine" } }],
       ["namespaces.list", {}],
@@ -433,7 +433,7 @@ describe("who may write a grant, and what a grant may say", () => {
       t.kai.id,
       "permissions.effective",
       { query: { holderKind: "service_principal", holderId: "sp_missing" } },
-      t.forbidden("users.manage", "no_grant")
+      t.forbidden("service_principals.manage", "no_grant")
     );
     await t.expectRefused(
       t.admin.id,

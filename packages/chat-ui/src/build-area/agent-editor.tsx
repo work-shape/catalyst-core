@@ -1,5 +1,5 @@
 import { Star } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import type {
   AdministeredCollaborationWorkspace,
   ConfigAssetReferences
@@ -44,7 +44,7 @@ import {
   type AgentFormState
 } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
-import { refusalsOf } from "./build-refusals";
+import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
 import type { ConnectionToolChoice } from "./connection-tools";
 import { withImpliedTools } from "./instance-tools";
@@ -52,6 +52,18 @@ import { ToolPackagesSection } from "./tool-packages-section";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import { PlatformInstructions } from "./platform-instructions";
 import type { SkillFacts } from "./skill-facts";
+
+/**
+ * Where an agent can be chosen. It is stored beside the agent's definition and saved with it
+ * through the page's save bar, whichever agent fields the instance lets people change.
+ */
+export interface AgentAvailabilityChoice {
+  saved: AgentAvailabilityForm | undefined;
+  workspaces: readonly AdministeredCollaborationWorkspace[];
+  workspacesError?: string;
+  /** Answers with what went wrong, if anything did. */
+  save(availability: AgentAvailabilityForm): Promise<string | undefined>;
+}
 
 /** The skills an agent can be given, as far as the instance was asked for them. */
 export interface SkillChoice {
@@ -97,8 +109,8 @@ export function AgentEditor({
   appTools?: AppToolsRead;
   /** Makes the agent the instance's default. Answers with what went wrong, if anything did. */
   onMakeDefault?: () => Promise<string | undefined>;
-  /** Saved on its own, so it sits outside the agent form's save. */
-  availability?: ReactNode;
+  /** Where the agent can be chosen, for a reader who may change it. */
+  availability?: AgentAvailabilityChoice;
 }) {
   const { locale, t } = useTranslation();
   const state = useAssetForm(initialForm);
@@ -106,6 +118,13 @@ export function AgentEditor({
   const [saving, setSaving] = useState(false);
   const [defaultError, setDefaultError] = useState<string>();
   const { canWrite } = frame;
+  const savedAvailability = useMemo(
+    () => agentAvailabilityToForm(availability?.saved),
+    [availability?.saved]
+  );
+  const [availabilityForm, setAvailabilityForm] = useState(savedAvailability);
+  const availabilityChanged =
+    availability !== undefined && !agentAvailabilityFormsEqual(availabilityForm, savedAvailability);
   const canEdit = (field: string) => canWrite && editableAgentFields.includes(field);
   const canEditModel = canWrite && canManageAgentModels;
   const canEditMaxSteps = canEdit("maxSteps");
@@ -126,14 +145,28 @@ export function AgentEditor({
   const showFastMode = form.fastMode || fastModeModelBindingIds.includes(form.modelBindingId);
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
-  const submit = async () => {
+  const changedFields = countChangedFields(form, state.baseline);
+  // One save bar for the agent and where it can be chosen: the agent first, then its
+  // availability, each only when it changed.
+  const submit = async (): Promise<BuildWriteOutcome> => {
     setSaving(true);
-    const answer = await frame.save(editedAgentConfig(form, frame.asset?.config));
-    setSaving(false);
-    state.setOutcome(answer);
-    if (answer.ok) {
+    const saved: BuildWriteOutcome =
+      frame.asset === undefined || changedFields > 0
+        ? await frame.save(editedAgentConfig(form, frame.asset?.config))
+        : { ok: true };
+    if (saved.ok) {
       state.markSaved();
     }
+    const refused =
+      saved.ok && availability !== undefined && availabilityChanged
+        ? await availability.save(availabilityForm)
+        : undefined;
+    const answer: BuildWriteOutcome =
+      refused === undefined
+        ? saved
+        : { ok: false, conflict: false, refusals: [{ field: "availability", message: refused }] };
+    setSaving(false);
+    state.setOutcome(answer);
     return answer;
   };
   const skillsByName = new Map(skillChoice.options.map((skill) => [skill.name, skill]));
@@ -397,7 +430,18 @@ export function AgentEditor({
             id: "availability",
             label: t("configAvailability"),
             description: t("configAvailabilityDescription"),
-            body: availability
+            refusalField: "availability" as const,
+            body: (
+              <AgentAvailabilityFields
+                form={availabilityForm}
+                locked={isDefault && savedAvailability.mode === "all"}
+                disabled={saving}
+                workspaces={availability.workspaces}
+                workspacesError={availability.workspacesError}
+                refusals={refusalsOf(outcome, "availability")}
+                onChange={setAvailabilityForm}
+              />
+            )
           }
         ]
       : [])
@@ -407,7 +451,9 @@ export function AgentEditor({
     <AssetEditorShell
       frame={{
         ...frame,
-        canWrite: canWrite && (editableAgentFields.length > 0 || canManageAgentModels)
+        canWrite:
+          canWrite &&
+          (editableAgentFields.length > 0 || canManageAgentModels || availability !== undefined)
       }}
       title={
         form.displayName[locale].trim() ||
@@ -438,9 +484,12 @@ export function AgentEditor({
       sections={sections}
       missingTranslations={agentMissingTranslations(form)}
       control={{
-        changes: countChangedFields(form, state.baseline),
+        changes: changedFields + (availabilityChanged ? 1 : 0),
         submit,
-        discard: state.discard
+        discard: () => {
+          state.discard();
+          setAvailabilityForm(savedAvailability);
+        }
       }}
       outcome={outcome}
       saving={saving}
@@ -455,31 +504,29 @@ const NO_CONNECTION_TOOLS: ConnectionToolChoice = { read: { status: "unknown" } 
 const NO_APP_TOOLS: AppToolsRead = { status: "unknown" };
 
 /**
- * Where an agent can be chosen. It is stored apart from the agent's definition and has its own
- * save, so it does not depend on which agent fields are editable.
+ * Where an agent can be chosen, as the fields of its section. The section's heading names it,
+ * and the page's save bar saves it with the agent.
  */
-export function AgentAvailabilityEditor({
-  availability,
-  isDefault,
+function AgentAvailabilityFields({
+  form,
+  locked,
+  disabled,
   workspaces,
   workspacesError,
-  mutating,
-  onSave
+  refusals,
+  onChange
 }: {
-  availability: AgentAvailabilityForm | undefined;
-  isDefault: boolean;
+  form: AgentAvailabilityForm;
+  /** The default agent is offered everywhere, and stays so until another agent is the default. */
+  locked: boolean;
+  disabled: boolean;
   workspaces: readonly AdministeredCollaborationWorkspace[];
   workspacesError?: string;
-  mutating: boolean;
-  /** Answers with what went wrong, if anything did. */
-  onSave(availability: AgentAvailabilityForm): Promise<string | undefined>;
+  refusals: readonly string[];
+  onChange(form: AgentAvailabilityForm): void;
 }) {
   const { t } = useTranslation();
-  const saved = useMemo(() => agentAvailabilityToForm(availability), [availability]);
-  const [form, setForm] = useState(saved);
-  const [error, setError] = useState<string>();
-  const locked = isDefault && saved.mode === "all";
-  const disabled = locked || mutating;
+  const fixed = locked || disabled;
   const workspaceNames = new Map(workspaces.map((workspace) => [workspace.id, workspace.name]));
   // Ids the list no longer returns stay visible, so saving never drops them unseen.
   const workspaceIds = [
@@ -490,17 +537,16 @@ export function AgentAvailabilityEditor({
     form.mode === "selected" &&
     !form.personalWorkspaces &&
     form.collaborationWorkspaceIds.length === 0;
-
-  const update = (patch: Partial<AgentAvailabilityForm>) =>
-    setForm((value) => ({ ...value, ...patch }));
+  const update = (patch: Partial<AgentAvailabilityForm>) => onChange({ ...form, ...patch });
 
   return (
     <>
       <RadioGroup
         variant="plain"
         label={t("configAvailability")}
+        labelHidden
         hint={locked ? t("configAvailabilityDefaultLocked") : undefined}
-        disabled={disabled}
+        disabled={fixed}
         value={form.mode}
         onValueChange={(mode) => update({ mode })}
         options={[
@@ -517,7 +563,7 @@ export function AgentAvailabilityEditor({
         <>
           <Checkbox
             checked={form.personalWorkspaces}
-            disabled={disabled}
+            disabled={fixed}
             label={t("configAvailabilityPersonal")}
             description={t("configAvailabilityPersonalHint")}
             onCheckedChange={(personalWorkspaces) => update({ personalWorkspaces })}
@@ -527,7 +573,7 @@ export function AgentAvailabilityEditor({
             options={workspaceIds}
             optionLabel={(id) => workspaceNames.get(id) ?? id}
             selected={form.collaborationWorkspaceIds}
-            disabled={disabled}
+            disabled={fixed}
             emptyHint={workspacesError ?? t("configAvailabilityNoSharedWorkspaces")}
             hint={nothingSelected ? t("configAvailabilityHiddenHint") : undefined}
             onChange={(collaborationWorkspaceIds) => update({ collaborationWorkspaceIds })}
@@ -535,23 +581,7 @@ export function AgentAvailabilityEditor({
         </>
       ) : null}
 
-      {error ? <FormNotice tone="error">{error}</FormNotice> : null}
-
-      {locked ? null : (
-        <div>
-          <Button
-            variant="outline"
-            size="sm"
-            loading={mutating}
-            disabled={agentAvailabilityFormsEqual(form, saved)}
-            onClick={() => {
-              onSave(form).then(setError, () => undefined);
-            }}
-          >
-            {t("configAvailabilitySave")}
-          </Button>
-        </div>
-      )}
+      <FieldRefusals messages={refusals} />
     </>
   );
 }
