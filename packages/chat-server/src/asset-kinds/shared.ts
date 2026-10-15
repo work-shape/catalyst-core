@@ -23,6 +23,8 @@ export interface ConfigAssetValidationRefs extends StoredAgentReferences {
   fastModeModelBindingIds: string[];
   reasoningEfforts: string[];
   enabledToolNames: string[];
+  /** The full registry, including tools this instance does not enable. */
+  registeredToolNames?: readonly string[];
 }
 
 /**

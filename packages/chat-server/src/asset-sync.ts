@@ -10,7 +10,7 @@ import {
   type PolicyTarget
 } from "@vivd-catalyst/core";
 import type { AgentToolWarning } from "./agent-tool-validation";
-import { afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
+import { clearLiveOnceSwitches } from "./asset-after-write";
 import { z } from "zod";
 import { configValuesEqual, readDefinitionName } from "./asset-kinds/shared";
 import {
@@ -243,8 +243,7 @@ async function checkBatch(
   const stored = await loadStoredAssets(options);
   const storedByName = definitionsByName(stored.set);
   /** The set as the batch would leave it. */
-  const withItems = (set: AssetSet) =>
-    leftByItems(call.access, storedByName, ready(), set, call.actor.id);
+  const withItems = (set: AssetSet) => leftByItems(call.access, storedByName, ready(), set);
   let candidate = withItems(stored.set);
   const storedDefault = stored.state.defaultAgentName ?? null;
   if (
@@ -482,16 +481,6 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
     const id = result.assetIds[assetKey(entry.kind.kind, entry.name)];
     if (!entry.absent && entry.item.type === "put") {
       await clearLiveOnceSwitches(options, call, entry.kind, entry.name, id);
-      const mutation = mutations.find(
-        (item) =>
-          item.type === "upsert" && item.kind === entry.kind.kind && item.name === entry.name
-      );
-      if (mutation?.type === "upsert") {
-        await afterWrite(options, call, entry, {
-          previous: entry.asset?.config,
-          config: mutation.config
-        });
-      }
     }
   }
   return {

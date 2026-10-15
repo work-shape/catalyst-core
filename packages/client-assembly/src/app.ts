@@ -334,7 +334,7 @@ export async function createClientInstanceExecutionAssembly(
   const jobRetries = capabilityContributions.flatMap(
     (contribution) => contribution.jobRetries ?? []
   );
-  const references = createConfigAssetReferences(config, modelProviders);
+  const references = createConfigAssetReferences(config, modelProviders, modules);
   const { validationRefs } = references;
   validationRefs.isToolAvailable = (agent, name) =>
     findConfigAssetAgentValidationIssues(config, [{ ...agent, toolNames: [name] }], (binding) =>

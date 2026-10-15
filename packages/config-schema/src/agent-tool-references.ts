@@ -12,15 +12,15 @@ const NON_TOOL_SUFFIX =
   /\.(?:md|txt|json|ya?ml|csv|tsv|xlsx?|docx?|pptx?|pdf|html?|css|[cm]?[jt]sx?|py|sh|sql|xml|log|toml|ini|env|gz|tar|png|jpe?g|svg|webp|zip|com|org|net|io|de|co|uk|eu|dev|app|ai|info|biz|edu|gov|me|us|at|ch|fr|nl|it|es|ca|au|cloud|online|site|test|localhost)$/iu;
 
 /**
- * Lists toolNames and dotted instruction tokens in the instance's tool namespaces.
+ * Lists toolNames and dotted instruction tokens in the full tool registry’s namespaces.
  * Lines are one-based within instructions. Skills are never scanned.
  */
 export function agentToolReferenceLocations(
   agent: Pick<AgentConfig, "toolNames" | "instructions">,
-  enabledToolNames: readonly string[]
+  registeredToolNames: readonly string[]
 ): AgentToolReferenceLocation[] {
   const namespaces = new Set([
-    ...enabledToolNames.map((name) => name.split(".")[0]),
+    ...registeredToolNames.map((name) => name.split(".")[0]),
     "connection",
     "app",
     "data_store"
@@ -58,12 +58,17 @@ export function agentToolReferenceLocations(
 export function findAgentToolReferenceIssues(input: {
   agents: readonly AgentConfig[];
   enabledToolNames: readonly string[];
+  /** All registered tools, including tools disabled by release config or module switches. */
+  registeredToolNames?: readonly string[];
   /** The synchronous schema pass defers dynamic tools to the instance's asset set. */
   deferDataTools?: boolean;
 }): string[] {
   const enabled = new Set(input.enabledToolNames);
   return input.agents.flatMap((agent) => {
-    const references = agentToolReferenceLocations(agent, input.enabledToolNames);
+    const references = agentToolReferenceLocations(
+      agent,
+      input.registeredToolNames ?? input.enabledToolNames
+    );
     const missing = input.deferDataTools
       ? new Set(
           findMissingAgentToolReferences(

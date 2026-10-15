@@ -40,10 +40,11 @@ export async function findAgentToolValidation(
       : []
   );
   const refs = options.configAssets.validationRefs;
+  const registeredToolNames = refs.registeredToolNames ?? refs.enabledToolNames;
   const names = [
     ...new Set(
       agents.flatMap((agent) =>
-        agentToolReferenceLocations(agent, refs.enabledToolNames).map(({ name }) => name)
+        agentToolReferenceLocations(agent, registeredToolNames).map(({ name }) => name)
       )
     )
   ];
@@ -56,7 +57,9 @@ export async function findAgentToolValidation(
   for (const definition of definitionsOf(validated, "connection")) {
     const connection = connectionConfigSchema.parse(definition);
     for (const operation of connection.operations) {
-      existing.add(connectionOperationName(connection.name, operation.name));
+      const name = connectionOperationName(connection.name, operation.name);
+      if (operation.exposure.includes("agent")) existing.add(name);
+      else existing.delete(name);
     }
   }
   for (const definition of definitionsOf(validated, "app")) {
@@ -73,7 +76,7 @@ export async function findAgentToolValidation(
   const callable = new Set([...refs.enabledToolNames, ...dataTools.map(({ name }) => name)]);
   const warnings: AgentToolWarning[] = [];
   const refusals = agents.flatMap((agent) => {
-    const references = agentToolReferenceLocations(agent, refs.enabledToolNames);
+    const references = agentToolReferenceLocations(agent, registeredToolNames);
     const issues = references
       .filter(
         ({ name }) =>
@@ -88,6 +91,7 @@ export async function findAgentToolValidation(
       );
     for (const { name } of references) {
       if (
+        isStoredDataTool(name) &&
         existing.has(name) &&
         (!callable.has(name) ||
           refs.offToolModule?.(name) !== undefined ||

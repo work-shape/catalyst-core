@@ -25,6 +25,7 @@ export function validateConfigAssetBundle(input: {
     modelBindingIds: string[];
     fastModeModelBindingIds: string[];
     enabledToolNames: string[];
+    registeredToolNames?: readonly string[];
   };
 }): { agents: AgentConfig[]; skills: SkillConfig[] } {
   const issues: ConfigAssetValidationIssue[] = [];
@@ -69,6 +70,7 @@ export function findAgentReferenceIssues(input: {
     modelBindingIds: readonly string[];
     fastModeModelBindingIds: readonly string[];
     enabledToolNames: readonly string[];
+    registeredToolNames?: readonly string[];
   };
 }): string[] {
   return [
@@ -84,6 +86,7 @@ export function findAgentReferenceIssues(input: {
     ...findAgentToolReferenceIssues({
       agents: input.agents,
       enabledToolNames: input.refs.enabledToolNames,
+      registeredToolNames: input.refs.registeredToolNames,
       deferDataTools: true
     }),
     ...input.agents

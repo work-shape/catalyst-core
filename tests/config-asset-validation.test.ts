@@ -77,6 +77,17 @@ describe("config asset bundle validation", () => {
     );
   });
 
+  it("recognizes a registered tool namespace even when no tool in it is enabled", () => {
+    const error = validationError({
+      agents: [agent({ instructions: "Use workflow.run." })],
+      skills: [],
+      refs: refs()
+    });
+    expect(issueMessages(error)).toContain(
+      "Agent 'assistant' references unavailable tool 'workflow.run' in instructions line 1"
+    );
+  });
+
   it("accepts enabled instruction tools without requiring them in toolNames", () => {
     expect(() =>
       validateConfigAssetBundle({
@@ -339,7 +350,8 @@ function refs() {
     modelProviderIds: ["provider-1"],
     modelBindingIds: ["binding-1"],
     fastModeModelBindingIds: [],
-    enabledToolNames: ["search", "read_skill", "page.save"]
+    enabledToolNames: ["search", "read_skill", "page.save"],
+    registeredToolNames: ["search", "read_skill", "page.save", "page.save_as_app", "workflow.run"]
   };
 }
 

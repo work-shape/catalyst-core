@@ -428,13 +428,13 @@ describe("a Connection through the asset operations", () => {
     });
     expect(await stored(t, "made-here")).toBeNull();
 
-    // Connection deletes stay individual; release-config Connections stay outside the batch.
+    // A batch of a Namespace holder carries no Connection, and a release carries agents and
+    // skills only.
     await t.createNamespace("kai-");
-    await t.seed("kai-outside", { origin: "runtime" });
     const batch = await t.call(t.admin.id, "assets.sync", {
       payload: {
         namespace: "kai-",
-        items: [{ type: "delete", kind: "connection", name: "kai-outside", expectedRevision: 1 }]
+        items: [{ type: "put", kind: "connection", config: connection("kai-outside") }]
       }
     });
     expect(batch.statusCode).toBeGreaterThanOrEqual(400);
@@ -445,7 +445,7 @@ describe("a Connection through the asset operations", () => {
     });
     expect(release.statusCode).toBeGreaterThanOrEqual(400);
     expect(JSON.stringify(release.json())).toContain("is not part of a release");
-    expect(await stored(t, "kai-outside")).toMatchObject({ origin: "runtime" });
+    expect(await stored(t, "kai-outside")).toBeUndefined();
     expect(await stored(t, "released")).toBeUndefined();
   });
 
@@ -762,9 +762,7 @@ describe("the module connections", () => {
         off.call("assets.sync", {
           payload: {
             namespace: "kai-",
-            items: [
-              { type: "delete", kind: "connection", name: "kai-outside", expectedRevision: 1 }
-            ]
+            items: [{ type: "put", kind: "connection", config: connection("kai-outside") }]
           }
         }),
         off.call("permissions.grant", {

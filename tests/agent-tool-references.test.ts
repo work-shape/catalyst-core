@@ -87,6 +87,81 @@ describe("the tools the agent page is told of", () => {
     expect(byName.get("read_skill")).not.toHaveProperty("module");
   });
 
+  it.each([false, true])(
+    "validates the incident sentence against the assembled registry (apps enabled: %s)",
+    async (enabled) => {
+      const workspaceObjectRoot = await mkdtemp(join(tmpdir(), "catalyst-page-references-"));
+      const pageTools = ["page.save", "page.save_as_app"];
+      const config = createTestConfig({
+        executionWorkspaces: { enabled: true },
+        workspaceObjectRoot,
+        tools: ["workspace.write_file", ...(enabled ? pageTools : [])].map((name) => ({
+          name,
+          enabled: true
+        }))
+      });
+      config.modules.apps = { enabled };
+      config.modules.assetManagement = { enabled: true };
+      config.administration.agentConfiguration.allowAgentCreation = true;
+      config.administration.agentConfiguration.editableAgentFields = [
+        "displayName",
+        "instructions",
+        "toolNames",
+        "skillNames",
+        "initialPrompts"
+      ];
+      config.infrastructure.objectStorage.files = {
+        provider: "filesystem",
+        root: join(workspaceObjectRoot, "files")
+      };
+      const instance = await createTestInstance({
+        config,
+        tools: [],
+        env: { CHAT_SESSION_TOKEN_SECRET: "page-tool-reference-test-".repeat(2) }
+      });
+      try {
+        // The full module registry knows Page tools even with apps off. The enabled set
+        // must not infer them from the workspace file tool on this instance.
+        const references = configAssetReferencesSchema.parse(
+          (await instance.call("platform.references.get", {})).json()
+        );
+        expect(references.enabledToolNames).toContain("workspace.write_file");
+        for (const name of pageTools)
+          expect(references.enabledToolNames.includes(name)).toBe(enabled);
+        const agentConfig = {
+          name: "page-helper",
+          displayName: "Page helper",
+          modelProviderId: "local",
+          toolNames: [],
+          skillNames: [],
+          initialPrompts: [],
+          instructions:
+            "Help.\nBuild a Page in the chat with page.save. When the user wants to keep or share it, save that Page as an App with page.save_as_app."
+        };
+        const validation = await instance.call("assets.validate", {
+          params: { kind: "agent" },
+          payload: { config: agentConfig }
+        });
+        expect(validation.statusCode, validation.body).toBe(200);
+        expect(validation.json()).toMatchObject({ valid: enabled });
+        if (!enabled) {
+          for (const name of pageTools)
+            expect(validation.body).toContain(
+              `Agent 'page-helper' references unavailable tool '${name}' in instructions line 2`
+            );
+        }
+        const write = await instance.call("assets.put", {
+          params: { kind: "agent", name: agentConfig.name },
+          payload: { config: agentConfig, expectedRevision: null }
+        });
+        expect(write.statusCode, write.body).toBe(enabled ? 200 : 422);
+      } finally {
+        await instance.close();
+        await rm(workspaceObjectRoot, { recursive: true, force: true });
+      }
+    }
+  );
+
   it("describes the model's own web search, which no code registers", () => {
     expect(agentToolReferences(["web_search", "unknown.tool"], [])).toEqual([
       expect.objectContaining({

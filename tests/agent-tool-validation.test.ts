@@ -40,7 +40,7 @@ describe("agent tool references on the target instance", () => {
       })
     });
 
-  it.each(["disabled", "secret unreadable", "catalog undiscovered"])(
+  it.each(["disabled", "operation disabled", "secret unreadable", "catalog undiscovered"])(
     "accepts an existing Connection with a warning when %s",
     async (reason) => {
       const dataTools: DataToolSource = {
@@ -61,7 +61,15 @@ describe("agent tool references on the target instance", () => {
             kind: "connection",
             name: "crm",
             config: connection("crm", {
-              enabled: reason !== "disabled"
+              enabled: reason !== "disabled",
+              operations: [
+                {
+                  name: "echo",
+                  effect: "reading",
+                  exposure: ["agent"],
+                  enabled: reason !== "operation disabled"
+                }
+              ]
             })
           }
         ]
@@ -97,42 +105,52 @@ describe("agent tool references on the target instance", () => {
     }
   );
 
-  it("accepts a runtime Connection and its agent in the same push batch before discovery", async () => {
-    const t = await setupRelease({
-      furtherKinds: [connectionKind()],
-      modules: { connections: { enabled: true } }
-    });
-    const items = [
-      putAgent("rel-connected", {
-        toolNames: ["connection.rel-crm.echo"],
-        instructions: "Use connection.rel-crm.echo."
-      }),
-      {
-        type: "put",
-        kind: "connection",
-        expectedRevision: null,
-        config: connection("rel-crm", {
-          origin: "runtime",
-          authScheme: "none",
-          secretHandle: undefined
-        })
+  it.each([{ exposure: [] }, { exposure: ["bridge"] }, { exposure: ["workflow"] }])(
+    "refuses a stored Connection operation without agent exposure (%j)",
+    async ({ exposure }) => {
+      const t = await setupRelease({
+        furtherKinds: [connectionKind()],
+        modules: { connections: { enabled: true } }
+      });
+      await applyAtCurrentRevisions(t.stores.configAssets, {
+        clientInstanceId,
+        mutations: [
+          {
+            type: "upsert",
+            kind: "connection",
+            name: "crm",
+            config: connection("crm", {
+              operations: [{ name: "echo", effect: "reading", exposure, enabled: true }]
+            })
+          }
+        ]
+      });
+      const config = agent("rel-unexposed", {
+        toolNames: ["connection.crm.echo"],
+        instructions: "Use connection.crm.echo."
+      });
+      const validation = await t.call(t.admin.id, "assets.validate", {
+        params: { kind: "agent" },
+        payload: { config }
+      });
+      expect(validation.statusCode, validation.body).toBe(200);
+      expect(validation.json()).toMatchObject({
+        valid: false,
+        issues: expect.arrayContaining([
+          { message: expect.stringContaining("connection.crm.echo") }
+        ])
+      });
+      expect(validation.json()).not.toHaveProperty("warnings");
+      for (const operation of ["assets.sync_check", "assets.sync"] as const) {
+        const response = await asService(t, operation, {
+          payload: { items: [putAgent(config.name, config)] }
+        });
+        expect(response.statusCode, response.body).toBe(422);
+        expect(response.body).toContain("connection.crm.echo");
       }
-    ];
-    const payload = { namespace: "rel-", items };
-    const checked = await t.call(t.admin.id, "assets.sync_check", { payload });
-    expect(checked.statusCode, checked.body).toBe(200);
-    const added = await t.call(t.admin.id, "assets.sync", { payload });
-    expect(added.statusCode, added.body).toBe(200);
-    expect((await t.stored("connection", "rel-crm"))?.config).toMatchObject({
-      ownerPrincipalId: t.admin.id
-    });
-    expect(await t.stored("agent", "rel-connected")).toBeDefined();
-    const state = await t.stores.connections.getConnectionState({
-      clientInstanceId,
-      connectionAssetId: await t.assetId("connection", "rel-crm")
-    });
-    expect(state).toMatchObject({ health: "unknown" });
-  });
+      expect(await t.stored("agent", config.name)).toBeUndefined();
+    }
+  );
 
   it("accepts an unpublished stored App action with a warning but refuses a nonexistent action", async () => {
     const t = await setupRelease({
@@ -209,23 +227,34 @@ describe("agent tool references on the target instance", () => {
     expect(other.statusCode, other.body).toBe(200);
   });
 
-  it("refuses the real unbackticked incident and identifies its instruction line", async () => {
-    const t = await setupRelease({ furtherToolNames: ["page.save"] });
-    const config = agent("rel-page", {
-      instructions:
-        "Help.\nBuild a Page in the chat with page.save. When the user wants to keep or share it, save that Page as an App with page.save_as_app."
-    });
-    for (const operation of ["assets.sync_check", "assets.sync"] as const) {
-      const refused = await asService(t, operation, {
-        payload: { items: [putAgent(config.name, config)] }
+  it.each([false, true])(
+    "checks the unbackticked incident against registered Page tools (enabled: %s)",
+    async (enabled) => {
+      const pageTools = ["page.save", "page.save_as_app"];
+      const t = await setupRelease({
+        registeredToolNames: [...validationRefs.enabledToolNames, ...pageTools],
+        furtherToolNames: enabled ? pageTools : []
       });
-      expect(refused.statusCode, refused.body).toBe(422);
-      expect(refused.body).toContain(
-        "Agent 'rel-page' references unavailable tool 'page.save_as_app' in instructions line 2"
-      );
+      const config = agent("rel-page", {
+        instructions:
+          "Help.\nBuild a Page in the chat with page.save. When the user wants to keep or share it, save that Page as an App with page.save_as_app."
+      });
+      for (const operation of ["assets.sync_check", "assets.sync"] as const) {
+        const response = await asService(t, operation, {
+          payload: { items: [putAgent(config.name, config)] }
+        });
+        expect(response.statusCode, response.body).toBe(enabled ? 200 : 422);
+        if (!enabled) {
+          for (const name of pageTools) {
+            expect(response.body).toContain(
+              `Agent 'rel-page' references unavailable tool '${name}' in instructions line 2`
+            );
+          }
+        }
+      }
+      expect(Boolean(await t.stored("agent", config.name))).toBe(enabled);
     }
-    expect(await t.stored("agent", config.name)).toBeUndefined();
-  });
+  );
 
   it("refuses an instruction reference whose tool module is off", async () => {
     const t = await setupRelease({

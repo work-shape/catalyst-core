@@ -56,13 +56,14 @@ function readOnlyOrigin(): AppError {
 }
 
 /**
- * Connection deletion stays individual so its dependency checks and cleanup run together.
+ * A batch carries no Connection yet: a write of one makes its secret handle and asks for its
+ * discovery, which `assets.put` does and a batch does not.
  */
 function refuseBatch(surface: AssetWriteSurface): void {
   if (surface !== "sync") return;
   throw new AppError(
     "VALIDATION_FAILED",
-    `${CONNECTION_REFUSALS.batchUnavailable}: a Connection is deleted one at a time, with assets.delete`,
+    `${CONNECTION_REFUSALS.batchUnavailable}: a Connection is written one at a time, with assets.put. A batch cannot hold one yet`,
     { reason: CONNECTION_REFUSALS.batchUnavailable }
   );
 }
@@ -270,7 +271,7 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
         throw readOnlyOrigin();
       }
     },
-    assertInteractiveUpsertAllowed: () => undefined,
+    assertInteractiveUpsertAllowed: ({ surface }) => refuseBatch(surface),
     assertInteractiveDeleteAllowed: ({ surface }) => refuseBatch(surface),
     // An agent names tools and an App names Connections in its manifest. Neither is checked
     // again when the Connection goes, so a delete asks here: of each, its draft and what it

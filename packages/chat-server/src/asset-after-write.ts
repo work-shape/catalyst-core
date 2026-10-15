@@ -12,7 +12,7 @@ type AfterOptions = Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "
 export async function afterWrite(
   options: AfterOptions,
   call: AssetCall,
-  target: Pick<AssetTarget, "kind" | "name">,
+  target: AssetTarget,
   write: { previous: unknown; config: JsonObject }
 ): Promise<void> {
   const { kind, name } = target;
