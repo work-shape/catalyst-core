@@ -46,6 +46,7 @@ describe("the released OpenAPI document", () => {
     expect(
       listed.filter((entry) => /^(?:assets\.|platform\.context\.get )/u.test(entry)).sort()
     ).toEqual([
+      "assets.check_name  POST /api/v1/assets/{kind}/check-name",
       "assets.delete  POST /api/v1/assets/{kind}/{name}/delete",
       "assets.discard_draft  POST /api/v1/assets/{kind}/{name}/discard-draft",
       "assets.get  GET /api/v1/assets/{kind}/{name}",

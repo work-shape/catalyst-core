@@ -1,4 +1,4 @@
-import { guardrailConfigSchema } from "@vivd-catalyst/config-schema";
+import { guardrailConfigSchema, guardrailNameSchema } from "@vivd-catalyst/config-schema";
 import {
   AppError,
   DATA_STORE_ASSET_KIND,
@@ -170,7 +170,8 @@ export function createGuardrailAssetKind(): WorkflowAssetKind {
       nameRule: {
         pattern: GUARDRAIL_NAME_PATTERN,
         maxLength: GUARDRAIL_NAME_MAX_LENGTH,
-        description: GUARDRAIL_NAME_RULE
+        description: GUARDRAIL_NAME_RULE,
+        schema: guardrailNameSchema
       },
       actions: { ...GUARDRAIL_ACTIONS },
       lifecycle: "draft_published",

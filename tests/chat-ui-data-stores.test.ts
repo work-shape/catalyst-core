@@ -262,6 +262,7 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
       reload: async () => "loaded"
     }),
     exists: async () => true,
+    checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
       delete: async () => undefined,

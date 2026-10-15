@@ -4,6 +4,7 @@ import { Button } from "../actions/button";
 import { Checkbox } from "../forms/checkbox";
 import { Field } from "../forms/field";
 import { Input, Textarea } from "../forms/input";
+import { NameWithAddress, addressOf, type NameAndAddress } from "../forms/name-with-address";
 import { RadioGroup } from "../forms/radio-group";
 import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
@@ -91,6 +92,39 @@ function FieldSamples({ text }: { text: GalleryText }) {
       </Field>
     </div>
   );
+}
+
+/** The address follows the name until it is typed; one address counts as taken. */
+function NameWithAddressSample({ text }: { text: GalleryText }) {
+  const [value, setValue] = useState<NameAndAddress>({ name: "" });
+  const address = addressOf(value, slug);
+  return (
+    <div className="grid max-w-sm" data-gallery-sample="name-with-address">
+      <NameWithAddress
+        value={value}
+        onChange={setValue}
+        derive={slug}
+        check={
+          address === ""
+            ? { state: "unchecked" }
+            : address === slug(text.namePlaceholder)
+              ? { state: "refused", reason: text.addressTaken }
+              : { state: "free" }
+        }
+        nameLabel={text.name}
+        addressLabel={text.address}
+        addressHint={text.addressHint}
+        advancedLabel={text.advanced}
+      />
+    </div>
+  );
+}
+
+function slug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "_")
+    .replace(/^_+|_+$/gu, "");
 }
 
 /** The bar is absent until a field differs from what was saved, then counts the changes. */
@@ -326,6 +360,11 @@ export const formsGallery: GalleryGroup = {
       name: "Field",
       components: ["Field"],
       render: (text) => <FieldSamples text={text} />
+    },
+    {
+      name: "NameWithAddress",
+      components: ["NameWithAddress"],
+      render: (text) => <NameWithAddressSample text={text} />
     },
     {
       name: "SaveBar",

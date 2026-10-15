@@ -46,8 +46,11 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       kind: "agent",
       plural: "agents",
       schema: agentConfigSchema,
-      // What the schema accepts today: any name that is not empty.
-      nameRule: { pattern: /^[\s\S]+$/u, description: "Agent name must not be empty" },
+      nameRule: {
+        pattern: /^[\s\S]+$/u,
+        description: "Agent name must not be empty",
+        schema: agentConfigSchema.shape.name
+      },
       actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).
       owners: ["instance", "workspace"],

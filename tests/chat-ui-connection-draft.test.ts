@@ -383,6 +383,7 @@ describe("the New connection dialog opened from a card", () => {
           source,
           namespaces: [],
           mayNameFreely: true,
+          checkName: async () => ({ available: true as const }),
           put: async (input) => {
             writes.push(input);
             return { revision: 1 };
