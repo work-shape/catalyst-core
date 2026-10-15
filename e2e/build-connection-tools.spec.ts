@@ -5,7 +5,7 @@ import type { Page } from "@playwright/test";
 import { ALLOWED_URL, plantConnection, removeConnection } from "./connection-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
-import { addToolPackage, closeToolPackage, openToolPackage, toolChip } from "./tool-packages";
+import { closeToolPackage, openToolPackage, switchToolPackage, toolRow } from "./tool-packages";
 
 // The Tools section of an agent's page in Studio, with the tools of Connections. The Connection
 // is a real asset of the instance of the suite's Connector type `test`, which contacts nothing.
@@ -90,15 +90,10 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
     await page.goto(`/build/agents/${name}`);
     const tools = page.locator("#tools");
     const key = `connection:${connection.name}`;
-    // The agent uses no tool of the Connection yet, so it is no chip: the picker offers it.
-    await expect(toolChip(tools, key)).toHaveCount(0);
-    await tools.getByRole("button", { name: "Tools: Add packages" }).click();
-    const picker = page.getByRole("dialog");
-    const offer = picker.getByRole("option", { name: /^Sample business/u });
+    // The agent uses no tool of the Connection yet: its row stands under Connections, off.
     // Only what agents may call and is on and ready is offered: of the four operations, one.
-    await expect(offer).toContainText("1 tool");
-    await page.keyboard.press("Escape");
-    await expect(picker).toBeHidden();
+    await expect(toolRow(tools, key)).toContainText("Sample business");
+    await expect(toolRow(tools, key).locator("[data-tool-count]")).toHaveText("0/1");
     // The name nothing offers stays, marked, in a group of its own.
     const unavailable = tools.locator(`[data-unavailable-option="${gone}"]`);
     await expect(unavailable).toContainText(gone);
@@ -108,9 +103,8 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
       "These tools are no longer offered to this agent. The agent keeps each one until you remove it."
     );
 
-    await addToolPackage(page, tools, "Sample business");
-    await expect(toolChip(tools, key)).toContainText("Sample business");
-    const panel = await openToolPackage(page, tools, key);
+    await switchToolPackage(tools, key, true);
+    const panel = await openToolPackage(tools, key);
     const box = panel.getByRole("checkbox", { name: /^echo/u });
     await expect(panel.getByRole("checkbox")).toHaveCount(1);
     await expect(box).toBeChecked();
@@ -119,7 +113,7 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
       "href",
       new RegExp(`/build/connections/${connection.name}$`, "u")
     );
-    await closeToolPackage(page);
+    await closeToolPackage(tools, key);
     const saved = page.waitForResponse(
       (response) =>
         response.request().method() === "PUT" &&
@@ -133,7 +127,7 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
     ).toEqual([gone, echo]);
 
     await page.reload();
-    await expect(toolChip(tools, key)).toContainText("Sample business");
+    await expect(toolRow(tools, key).locator("[data-tool-count]")).toHaveText("1/1");
     await expect(unavailable).toBeVisible();
     await expectNoSidewaysScroll(page);
 
@@ -151,13 +145,13 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
           await page.emulateMedia({ colorScheme: mode });
           await page.setViewportSize(size);
           await page.reload();
-          await expect(toolChip(tools, key)).toBeVisible();
-          await openToolPackage(page, tools, key);
+          await expect(toolRow(tools, key)).toBeVisible();
+          await openToolPackage(tools, key);
           await page.screenshot({
             path: join(shotsDir, `agent-connection-tools-${mode}-${locale}-${width}.png`),
             animations: "disabled"
           });
-          await closeToolPackage(page);
+          await closeToolPackage(tools, key);
           await expectNoSidewaysScroll(page);
         }
       }

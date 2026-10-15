@@ -1,12 +1,6 @@
 import { Building2, Lock, X } from "lucide-react";
 import { useId, type MouseEventHandler, type ReactNode } from "react";
 import { cn } from "../cn";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  type PopoverContentProps
-} from "../overlays/popover";
 import { useUiLabels } from "../ui-root";
 import { Avatar, type AvatarAccent } from "./avatar";
 
@@ -31,23 +25,6 @@ export interface ChipProps {
   href?: string;
   /** Makes the chip a button, or handles the click on its link. */
   onClick?: MouseEventHandler<HTMLElement>;
-  /** Small muted text after the label, such as how many of the object's parts are on. */
-  trailing?: ReactNode;
-  /**
-   * Makes the chip a button that opens this panel under it, for what the chip names: its parts
-   * and what can be done with them. The chip is marked while the panel is open.
-   */
-  popover?: ChipPopover;
-  className?: string;
-}
-
-/** The panel a chip opens. */
-export interface ChipPopover {
-  content: ReactNode;
-  open?: boolean;
-  onOpenChange?(open: boolean): void;
-  /** The width of the panel, as `PopoverContent` takes it. */
-  size?: PopoverContentProps["size"];
   className?: string;
 }
 
@@ -60,8 +37,6 @@ export function Chip({
   onRemove,
   href,
   onClick,
-  trailing,
-  popover,
   className
 }: ChipProps) {
   const labels = useUiLabels("Chip");
@@ -77,9 +52,6 @@ export function Chip({
       <span id={labelId} className="truncate">
         {children}
       </span>
-      {trailing === undefined ? null : (
-        <span className="text-muted-foreground tabular-nums">{trailing}</span>
-      )}
       {lockLabel === undefined ? null : (
         <>
           <Lock aria-hidden="true" className="text-muted-foreground" />
@@ -93,28 +65,11 @@ export function Chip({
     <span
       className={cn(
         "inline-flex max-w-full shrink-0 items-center rounded-full border text-caption whitespace-nowrap text-foreground",
-        // The chip whose panel is open is marked.
-        popover && "has-[[aria-expanded=true]]:border-primary",
         chipSizes[size],
         className
       )}
     >
-      {popover ? (
-        <Popover open={popover.open} onOpenChange={popover.onOpenChange}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className={cn(bodyClassName, interactiveClassName)}
-              onClick={onClick}
-            >
-              {body}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent size={popover.size} className={popover.className}>
-            {popover.content}
-          </PopoverContent>
-        </Popover>
-      ) : href !== undefined ? (
+      {href !== undefined ? (
         <a href={href} className={cn(bodyClassName, interactiveClassName)} onClick={onClick}>
           {body}
         </a>
