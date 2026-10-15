@@ -59,5 +59,6 @@ test("shared configuration, unknown paths and non-PR events always run everythin
     assert.deepEqual(selectChecks(["README.md", file]), full, file);
   }
   assert.deepEqual(selectChecks(["README.md"], "push"), full);
+  assert.deepEqual(selectChecks(["README.md"], "workflow_dispatch"), full);
   assert.deepEqual(selectChecks([]), full);
 });

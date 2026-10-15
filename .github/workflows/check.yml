@@ -1,5 +1,7 @@
 # PR selection (git diff from the merge base, including both sides of renames):
-# - Drafts run no jobs; ready_for_review starts the first hosted check.
+# - Hosted checks are opt-in: add/re-add the `ci` PR label, or dispatch a branch.
+# - Opening, pushing, reopening and marking a PR ready do not start hosted checks.
+# - Dispatches, main pushes and release tags run in full, including draft branches.
 # - Docs-only: packages/docs/**, changes/** and *.md outside packages/*/src/** run
 #   docs and changes, plus the small selection/required-result jobs.
 # - Other changes run build, static, docs, four test shards, upgrade/compatibility,
@@ -9,26 +11,28 @@
 # - Workflows/actions/scripts, quality-config, any lockfile or config file, root
 #   configuration and unknown paths select EVERYTHING (even inside a docs PR).
 # - Pushes to main and release tags always select EVERYTHING.
-# Keep `check` as the required aggregate: selected failures/cancellations fail it;
+# Keep `check` as the stable aggregate: selected failures/cancellations fail it;
 # intentionally skipped jobs pass. `browser` remains for existing check consumers.
 name: Check
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled]
+  workflow_dispatch:
   push:
     branches: [main]
     tags: ["v*"]
 permissions:
   contents: read
   packages: read
-# PRs share a group and cancel superseded work. Each main/tag run has its own group,
-# including re-runs, so GitHub cannot discard even a pending main/tag run.
+# Explicit CI label requests share a PR group and cancel superseded requests.
+# Unrelated label events get unique groups so they cannot displace a requested run.
+# Main/tag/dispatch runs also get unique groups, including re-runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.label.name == 'ci' && github.ref || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.label.name == 'ci' }}
 jobs:
   paths:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.label.name == 'ci'
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 3
     outputs:
@@ -350,7 +354,7 @@ jobs:
           else test "$SHARDS" = skipped; fi
   check:
     needs: [paths, changes, build, static, docs, tests, upgrade, release, images, browser]
-    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.label.name == 'ci') }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 2
     steps:
