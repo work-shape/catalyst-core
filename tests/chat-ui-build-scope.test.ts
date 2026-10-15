@@ -60,6 +60,7 @@ function source(input: { permissions: string[]; actions: string[]; scope: BuildS
     }),
     useAsset: () => ({ status: "missing" }),
     exists: async () => true,
+    checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
       delete: async () => undefined,

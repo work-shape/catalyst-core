@@ -132,9 +132,9 @@ for (const locale of LOCALES) {
       const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
       const connect = dialog.locator("[data-connection-connect]");
       await expect(connect).toBeDisabled();
-      await field("title").fill("Sample on the suite");
-      await dialog.locator("[data-connection-details]").click();
-      await field("id").fill(id);
+      await dialog.locator('[data-name-with-address-field="name"]').fill("Sample on the suite");
+      await dialog.locator("[data-name-with-address-fold]").click();
+      await dialog.locator('[data-name-with-address-field="address"]').fill(id);
       await field("url").fill(`${sampleBase}/nope`);
       await expect(field("secret")).toHaveAttribute("type", "password");
       await field("secret").fill("not-the-key");
@@ -229,11 +229,11 @@ for (const locale of LOCALES) {
     try {
       await dialog.locator('[data-connection-type="http_api"]').getByRole("button").click();
       const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
-      await field("title").fill("Exampledata");
+      await dialog.locator('[data-name-with-address-field="name"]').fill("Exampledata");
       await field("url").fill(sampleBase);
       await field("secret").fill(sampleKey);
-      await dialog.locator("[data-connection-details]").click();
-      await field("id").fill(id);
+      await dialog.locator("[data-name-with-address-fold]").click();
+      await dialog.locator('[data-name-with-address-field="address"]').fill(id);
       await field("headers").getByRole("button").last().click();
       await field("headers").locator("input").nth(0).fill("x-e2e");
       await field("headers").locator("input").nth(1).fill("catalyst");
@@ -301,10 +301,10 @@ test("cancel after a failed connect asks, then deletes the Connection", async ({
   try {
     await dialog.locator('[data-connection-type="http_api"]').getByRole("button").click();
     const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
-    await field("title").fill("Nowhere");
+    await dialog.locator('[data-name-with-address-field="name"]').fill("Nowhere");
     await field("url").fill(`${sampleBase}/nope`);
-    await dialog.locator("[data-connection-details]").click();
-    await field("id").fill(id);
+    await dialog.locator("[data-name-with-address-fold]").click();
+    await dialog.locator('[data-name-with-address-field="address"]').fill(id);
     await field("testPath").fill("/nothing");
     await dialog.locator("[data-connection-connect]").click();
     await expect(field("url")).toHaveAttribute("aria-invalid", "true");

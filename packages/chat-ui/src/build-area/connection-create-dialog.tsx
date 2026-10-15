@@ -6,6 +6,7 @@ import { useTranslation } from "../i18n";
 import type { BuildCreateDialogProps } from "./build-asset-kind";
 import { assetIdFromTitle } from "./build-model";
 import { readBuildRefusal, readRefusalDetails } from "./build-refusals";
+import { addressBlocksCreate, useAddressCheck } from "./name-check";
 import { ConnectionApprovalList, approveLabel, useApprovalChoice } from "./connection-approval";
 import {
   discoveredCandidates,
@@ -65,6 +66,7 @@ export function ConnectionCreateFlow({
   source,
   namespaces,
   mayNameFreely,
+  checkName,
   put,
   remove,
   mayDelete,
@@ -109,7 +111,10 @@ export function ConnectionCreateFlow({
     setStage({ step: "form" });
   };
 
-  const complete = title !== "" && id !== "" && fields.form.url.trim() !== "";
+  // Once the dialog wrote the Connection, its id is its own: nothing is checked any more.
+  const check = useAddressCheck(created ? undefined : checkName, id === "" ? "" : name);
+  const complete =
+    title !== "" && id !== "" && fields.form.url.trim() !== "" && !addressBlocksCreate(check);
 
   const connect = async () => {
     const key = fields.key;
@@ -390,7 +395,7 @@ export function ConnectionCreateFlow({
         return (
           <ConnectionCreateForm
             fields={fields}
-            id={id}
+            check={check}
             namespaces={choices}
             errors={errors}
             busy={busy}

@@ -15,6 +15,7 @@ import {
   PageHeader,
   SkeletonList
 } from "@vivd-catalyst/ui";
+import type { CheckName } from "../api/asset-writes";
 import { AreaFrame, useAreaTitleFocus } from "../area-frame";
 import { agentKind } from "../build-area/agent-kind";
 import type { BuildAssetStart } from "../build-area/build-asset-kind";
@@ -48,6 +49,7 @@ export interface AgentsPageProps {
   newAgent?: AgentCreation & {
     /** Where the new agent starts available: the open workspace, as one made in Studio does. */
     startsIn: BuildCreateStart;
+    checkName: CheckName;
     onStart(start: BuildAssetStart): void;
   };
 }
@@ -132,6 +134,7 @@ export function AgentsPage({
           namespaces={newAgent.namespaces}
           mayNameFreely={newAgent.mayNameFreely}
           startsIn={newAgent.startsIn}
+          checkName={newAgent.checkName}
           onClose={() => setCreating(false)}
           onStart={(start) => {
             setCreating(false);

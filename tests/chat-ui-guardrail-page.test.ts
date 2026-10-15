@@ -99,6 +99,7 @@ function renderPage(
     }),
     useAsset: () => ({ status: "ready", asset, loadedAt: 1, reload: async () => "loaded" }),
     exists: async () => true,
+    checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
       delete: async () => undefined,

@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode, Ref } from "react";
 import type { Asset, AssetSummary } from "@vivd-catalyst/api-client";
 import type { AvatarKind, GenericIconKey } from "@vivd-catalyst/ui";
-import type { AvailableIn } from "../api/asset-writes";
+import type { AvailableIn, CheckName } from "../api/asset-writes";
 import type { TranslationKey } from "../i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
 import type { BuildNamespace } from "./build-rights";
@@ -18,6 +18,8 @@ export interface BuildAssetStart {
   name: string;
   /** The name people read. */
   title: string;
+  /** What the asset does, in the reader's language, where its kind's dialog asks. */
+  description?: string;
   /** Where a new asset of a kind that `startsInWorkspace` starts available. */
   availableIn?: AvailableIn;
   /** The definition a copy starts from. A new asset without it starts empty. */
@@ -78,6 +80,8 @@ export interface BuildCreateDialogProps {
   namespaces: readonly BuildNamespace[];
   /** The reader may name the asset without a Namespace. */
   mayNameFreely: boolean;
+  /** Asks the instance whether the asset could take the name, as it is typed. */
+  checkName: CheckName;
   /** Writes the asset's definition: creates it at `null`, else over the revision given. */
   put(input: {
     name: string;
@@ -144,6 +148,8 @@ export interface BuildAssetKind extends BuildKindBase {
   newLabel: TranslationKey;
   /** Names the field of the dialog that asks for the name people read. */
   titleLabel: TranslationKey;
+  /** The dialog's question of what the new asset does. A kind without it asks the name alone. */
+  purposeLabel?: TranslationKey;
   /** The question that confirms a delete, with `{name}`, and the sentence under it. */
   deleteTitle: TranslationKey;
   deleteDescription: TranslationKey;

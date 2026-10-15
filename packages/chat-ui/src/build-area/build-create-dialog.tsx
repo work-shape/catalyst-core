@@ -1,9 +1,22 @@
 import { useState, type FormEvent } from "react";
-import { Button, Dialog, Field, Input, KeyValue, KeyValueList, Select } from "@vivd-catalyst/ui";
+import {
+  Button,
+  Dialog,
+  Field,
+  KeyValue,
+  KeyValueList,
+  NameWithAddress,
+  Select,
+  Textarea,
+  addressOf,
+  type NameAndAddress
+} from "@vivd-catalyst/ui";
+import type { CheckName } from "../api/asset-writes";
 import { useTranslation } from "../i18n";
 import type { BuildAssetKind, BuildAssetStart } from "./build-asset-kind";
 import { assetIdFromTitle } from "./build-model";
 import type { BuildNamespace } from "./build-rights";
+import { addressBlocksCreate, useAddressCheck } from "./name-check";
 
 /** The choice of no Namespace: the id is taken as typed. */
 const NO_NAMESPACE = "";
@@ -17,11 +30,13 @@ export interface BuildCreateStart {
 }
 
 /**
- * Starts a new asset: its name, and its id with the Namespace it is named in. The id follows
- * the name until the reader changes it. Only the Namespaces the reader may write in are
- * offered, and the choice of none only to somebody who may write anywhere. A kind that starts
- * in its workspace says where the asset will be available, and lets whoever may change that
- * choose every workspace instead.
+ * Starts a new asset: its name, and under "Advanced" its address with the Namespace it is
+ * named in. The address follows the name until the reader changes it, and is checked as it
+ * changes; Continue waits for the check and stops at a refused address. Only the Namespaces
+ * the reader may write in are offered, and the choice of none only to somebody who may write
+ * anywhere. A kind that starts in its workspace says where the asset will be available, and
+ * lets whoever may change that choose every workspace instead. A kind that names what its
+ * asset does asks that too.
  */
 export function BuildCreateDialog({
   entry,
@@ -30,6 +45,7 @@ export function BuildCreateDialog({
   namespaces,
   mayNameFreely,
   startsIn,
+  checkName,
   onClose,
   onStart
 }: {
@@ -42,18 +58,23 @@ export function BuildCreateDialog({
   mayNameFreely: boolean;
   /** Present for a kind that starts in its workspace. */
   startsIn: BuildCreateStart | undefined;
+  /** Asks the instance about the whole address. Without it nothing is checked before the save. */
+  checkName?: CheckName;
   onClose(): void;
   /** Hears the name and the id chosen. A copy adds the definition it starts from itself. */
   onStart(start: Omit<BuildAssetStart, "copyOf">): void;
 }) {
   const { t } = useTranslation();
-  const [title, setTitle] = useState(initialTitle);
-  const [typedId, setTypedId] = useState<string>();
+  const [value, setValue] = useState<NameAndAddress>({ name: initialTitle });
+  const [purpose, setPurpose] = useState("");
   const [prefix, setPrefix] = useState(
     mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE)
   );
   const [everywhere, setEverywhere] = useState(false);
-  const id = typedId ?? assetIdFromTitle(title);
+  const title = value.name.trim();
+  const id = addressOf(value, assetIdFromTitle).trim();
+  const name = id === "" ? "" : `${prefix}${id}`;
+  const check = useAddressCheck(checkName, name);
   const choices = [
     ...(mayNameFreely ? [{ prefix: NO_NAMESPACE, displayName: t("build.createNoNamespace") }] : []),
     ...namespaces
@@ -61,13 +82,14 @@ export function BuildCreateDialog({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (title.trim() && id.trim()) {
+    if (title && id && !addressBlocksCreate(check)) {
       const availableIn = everywhere
         ? ("all" as const)
         : startsIn?.workspace && { workspaceId: startsIn.workspace.id };
       onStart({
-        name: `${prefix}${id.trim()}`,
-        title: title.trim(),
+        name,
+        title,
+        ...(purpose.trim() ? { description: purpose.trim() } : {}),
         ...(availableIn ? { availableIn } : {})
       });
     }
@@ -84,53 +106,60 @@ export function BuildCreateDialog({
           <Button variant="outline" onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button type="submit" form="build-create-form">
+          <Button
+            type="submit"
+            form="build-create-form"
+            disabled={!title || !id || addressBlocksCreate(check)}
+          >
             {t("build.createContinue")}
           </Button>
         </>
       }
     >
-      <form id="build-create-form" className="grid gap-4" onSubmit={submit}>
-        <Field label={t(entry.titleLabel)} required>
-          <Input
-            autoFocus
-            value={title}
-            required
-            onChange={(event) => setTitle(event.target.value)}
-          />
-        </Field>
-        {choices.length > 1 ? (
-          <Field label={t("build.createNamespace")} hint={t("build.createNamespaceHint")}>
-            <Select value={prefix} onChange={(event) => setPrefix(event.target.value)}>
-              {choices.map((choice) => (
-                <option key={choice.prefix} value={choice.prefix}>
-                  {choice.prefix === NO_NAMESPACE
-                    ? choice.displayName
-                    : `${choice.displayName} (${choice.prefix})`}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        ) : null}
-        <Field
-          label={t("build.createId")}
-          required
-          hint={
+      <form id="build-create-form" onSubmit={submit}>
+        <NameWithAddress
+          autoFocus
+          value={value}
+          onChange={setValue}
+          derive={assetIdFromTitle}
+          check={check}
+          nameLabel={t(entry.titleLabel)}
+          addressLabel={t("build.createAddress")}
+          addressHint={
             prefix === NO_NAMESPACE
-              ? t("build.createIdHint")
-              : t("build.createIdHintNamespace", { id: `${prefix}${id}` })
+              ? t("build.createAddressHint")
+              : t("build.createAddressHintNamespace", { id: name })
+          }
+          advancedLabel={t("build.createAdvanced")}
+          advanced={
+            choices.length > 1 ? (
+              <Field label={t("build.createNamespace")}>
+                <Select value={prefix} onChange={(event) => setPrefix(event.target.value)}>
+                  {choices.map((choice) => (
+                    <option key={choice.prefix} value={choice.prefix}>
+                      {choice.prefix === NO_NAMESPACE
+                        ? choice.displayName
+                        : `${choice.displayName} (${choice.prefix})`}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : undefined
           }
         >
-          <Input
-            value={id}
-            required
-            className="font-mono"
-            onChange={(event) => setTypedId(event.target.value)}
-          />
-        </Field>
-        {startsIn ? (
-          <AvailableIn startsIn={startsIn} everywhere={everywhere} onChange={setEverywhere} />
-        ) : null}
+          {entry.purposeLabel ? (
+            <Field label={t(entry.purposeLabel)} optional>
+              <Textarea
+                rows={2}
+                value={purpose}
+                onChange={(event) => setPurpose(event.target.value)}
+              />
+            </Field>
+          ) : null}
+          {startsIn ? (
+            <AvailableIn startsIn={startsIn} everywhere={everywhere} onChange={setEverywhere} />
+          ) : null}
+        </NameWithAddress>
       </form>
     </Dialog>
   );

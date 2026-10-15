@@ -133,6 +133,7 @@ function source(input: SourceInput = {}): BuildSource {
     }),
     useAsset: (kind, name) => input.assets?.[`${kind}/${name}`] ?? { status: "missing" },
     exists: async () => true,
+    checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
       delete: async () => undefined,

@@ -486,16 +486,20 @@ export function countChangedFields<Form extends object>(form: Form, baseline: Fo
   ).length;
 }
 
-/** An agent as the dialog that starts one leaves it: its id, and its name in the reader's language. */
+/**
+ * An agent as the dialog that starts one leaves it: its id, and its name and what it does in
+ * the reader's language.
+ */
 export function startedAgentForm(
-  start: { name: string; title: string },
+  start: { name: string; title: string; description?: string },
   language: keyof LocalizedPair
 ): AgentFormState {
   const form = emptyAgentForm();
   return {
     ...form,
     name: start.name,
-    displayName: { ...form.displayName, [language]: start.title }
+    displayName: { ...form.displayName, [language]: start.title },
+    description: { ...form.description, [language]: start.description ?? "" }
   };
 }
 

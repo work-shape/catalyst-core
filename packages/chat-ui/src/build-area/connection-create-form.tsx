@@ -1,15 +1,15 @@
 import {
-  Disclosure,
-  DisclosureContent,
-  DisclosureTrigger,
   Field,
   FormNotice,
   Input,
+  NameWithAddress,
   Select,
   Step,
-  Steps
+  Steps,
+  type AddressCheck
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
+import { assetIdFromTitle } from "./build-model";
 import type { BuildNamespace } from "./build-rights";
 import type { ConnectStep, ConnectStepState } from "./connection-connect";
 import { ConnectionHeaderRows, ConnectionTestPathField } from "./connection-form";
@@ -17,7 +17,8 @@ import type { ConnectionFormState } from "./connection-form-model";
 
 // The second step of the New connection dialog: the name, the address and the key, with the
 // id, how the key is sent and, for a REST API, its fixed headers and test path under
-// "Technical details". The auth scheme follows the key field: empty sends none.
+// "Technical details". The id follows the name until it is typed and is checked as it
+// changes. The auth scheme follows the key field: empty sends none.
 
 /** The choice of no Namespace: the id is taken as typed. */
 export const NO_NAMESPACE = "";
@@ -41,7 +42,7 @@ export type CreateFieldErrors = Partial<
 
 export function ConnectionCreateForm({
   fields,
-  id,
+  check,
   namespaces,
   errors,
   busy,
@@ -49,8 +50,8 @@ export function ConnectionCreateForm({
   onChange
 }: {
   fields: CreateFields;
-  /** The id the Connection gets, without its Namespace. */
-  id: string;
+  /** What the instance said of the id, as it is typed. A refused write's reason goes first. */
+  check: AddressCheck;
   /** The Namespaces offered; the choice of none among them where the reader may name freely. */
   namespaces: readonly BuildNamespace[];
   errors: CreateFieldErrors;
@@ -65,7 +66,6 @@ export function ConnectionCreateForm({
   const form = (next: Partial<ConnectionFormState>) =>
     onChange({ ...fields, form: { ...fields.form, ...next } });
   const detailsWrong =
-    errors.id !== undefined ||
     errors.headerName !== undefined ||
     errors.headers !== undefined ||
     errors.testPath !== undefined;
@@ -76,55 +76,22 @@ export function ConnectionCreateForm({
       data-connection-create-form={fields.form.connectorType}
       onSubmit={(event) => event.preventDefault()}
     >
-      <Field label={t("connectionCreate.name")} required>
-        <Input
-          autoFocus
-          value={fields.title}
-          disabled={busy}
-          data-connection-field="title"
-          onChange={(event) => onChange({ ...fields, title: event.target.value })}
-        />
-      </Field>
-      <Field
-        label={t(rest ? "connectionCreate.baseUrl" : "connectionCreate.serverUrl")}
-        hint={rest ? t("connectionCreate.baseUrlHint") : undefined}
-        error={errors.url}
-        required
-      >
-        <Input
-          type="url"
-          inputMode="url"
-          autoComplete="off"
-          spellCheck={false}
-          className="font-mono"
-          value={fields.form.url}
-          disabled={busy}
-          data-connection-field="url"
-          onChange={(event) => form({ url: event.target.value })}
-        />
-      </Field>
-      <Field
-        label={t("connectionCreate.key")}
-        optional
-        hint={t(rest ? "connectionCreate.keyHint" : "connectionCreate.keyHintMcp")}
-        error={errors.key}
-      >
-        <Input
-          type="password"
-          autoComplete="new-password"
-          spellCheck={false}
-          value={fields.key}
-          disabled={busy}
-          data-connection-field="secret"
-          onChange={(event) => onChange({ ...fields, key: event.target.value })}
-        />
-      </Field>
-      <Disclosure defaultOpen={detailsWrong} key={String(detailsWrong)} disabled={busy}>
-        <DisclosureTrigger data-connection-details="">
-          {t("connectionCreate.details")}
-        </DisclosureTrigger>
-        <DisclosureContent>
-          <div className="grid min-w-0 gap-4 pt-2">
+      <NameWithAddress
+        autoFocus
+        value={{ name: fields.title, typedAddress: fields.typedId }}
+        onChange={(named) =>
+          onChange({ ...fields, title: named.name, typedId: named.typedAddress })
+        }
+        derive={assetIdFromTitle}
+        check={errors.id === undefined ? check : { state: "refused", reason: errors.id }}
+        nameLabel={t("connectionCreate.name")}
+        addressLabel={t("connectionCreate.id")}
+        addressHint={t("connectionCreate.idHint")}
+        advancedLabel={t("connectionCreate.details")}
+        advancedOpen={detailsWrong}
+        disabled={busy}
+        advanced={
+          <>
             {namespaces.length > 1 ? (
               <Field label={t("connectionCreate.namespace")}>
                 <Select
@@ -142,21 +109,6 @@ export function ConnectionCreateForm({
                 </Select>
               </Field>
             ) : null}
-            <Field
-              label={t("connectionCreate.id")}
-              hint={t("connectionCreate.idHint")}
-              error={errors.id}
-              required
-            >
-              <Input
-                className="font-mono"
-                spellCheck={false}
-                value={id}
-                disabled={busy}
-                data-connection-field="id"
-                onChange={(event) => onChange({ ...fields, typedId: event.target.value })}
-              />
-            </Field>
             <Field label={t("connectionCreate.sendAs")}>
               <Select
                 value={fields.sendAs}
@@ -202,9 +154,44 @@ export function ConnectionCreateForm({
                 {errors.testPath ? <FormNotice tone="error">{errors.testPath}</FormNotice> : null}
               </>
             ) : null}
-          </div>
-        </DisclosureContent>
-      </Disclosure>
+          </>
+        }
+      >
+        <Field
+          label={t(rest ? "connectionCreate.baseUrl" : "connectionCreate.serverUrl")}
+          hint={rest ? t("connectionCreate.baseUrlHint") : undefined}
+          error={errors.url}
+          required
+        >
+          <Input
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            className="font-mono"
+            value={fields.form.url}
+            disabled={busy}
+            data-connection-field="url"
+            onChange={(event) => form({ url: event.target.value })}
+          />
+        </Field>
+        <Field
+          label={t("connectionCreate.key")}
+          optional
+          hint={t(rest ? "connectionCreate.keyHint" : "connectionCreate.keyHintMcp")}
+          error={errors.key}
+        >
+          <Input
+            type="password"
+            autoComplete="new-password"
+            spellCheck={false}
+            value={fields.key}
+            disabled={busy}
+            data-connection-field="secret"
+            onChange={(event) => onChange({ ...fields, key: event.target.value })}
+          />
+        </Field>
+      </NameWithAddress>
       {steps.length > 0 ? (
         <Steps label={t("connectionCreate.steps")} data-connection-steps="">
           {steps.map(({ step, state }) => (

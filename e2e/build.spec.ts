@@ -176,9 +176,10 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await page.getByRole("button", { name: "New agent", exact: true }).click();
     const create = page.getByRole("dialog", { name: "New agent", exact: true });
     await create.getByRole("textbox", { name: /^Display name/u }).fill("Kai Helper");
-    await expect(create.getByText("The full id will be kai-kai_helper.")).toBeVisible();
-    await create.getByRole("textbox", { name: /^Id/u }).fill("helper");
-    await expect(create.getByText("The full id will be kai-helper.")).toBeVisible();
+    await create.getByRole("button", { name: "Advanced", exact: true }).click();
+    await expect(create.getByText("The full address will be kai-kai_helper.")).toBeVisible();
+    await create.getByRole("textbox", { name: /^Address/u }).fill("helper");
+    await expect(create.getByText("The full address will be kai-helper.")).toBeVisible();
     // Made outside a shared workspace by somebody who may not widen it, the agent starts hidden.
     await expect(
       create.getByText("Hidden until an instance admin makes it available")

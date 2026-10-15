@@ -5,6 +5,7 @@ import { startNewAgent } from "./agents/agents-model";
 import { AgentsPage } from "./agents/agents-page";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
+import { createAssetWrites } from "./api/asset-writes";
 import { AttachmentContentProvider } from "./attachment-content";
 import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
@@ -651,6 +652,11 @@ function ChatWorkspaceContent({
                                             : undefined,
                                         mayChooseAll: model.controlPlane.agentCreation.mayChooseAll
                                       },
+                                      checkName: (name) =>
+                                        createAssetWrites(chat.client).checkName({
+                                          kind: "agent",
+                                          name
+                                        }),
                                       onStart: (start) =>
                                         startNewAgent(model.route.showRoute, start)
                                     }

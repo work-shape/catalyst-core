@@ -53,6 +53,7 @@ export { connectionToolsView, type ConnectionToolsRead } from "./connection-tool
 export { toggleToolName } from "./tool-group";
 export { setPackageTools, toolPackages, withImpliedTools } from "./instance-tools";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
+export { addressBlocksCreate, addressCheckOf } from "./name-check";
 export {
   PendingApprovalError,
   readBuildRefusal,
