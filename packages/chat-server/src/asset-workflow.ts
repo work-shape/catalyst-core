@@ -13,7 +13,9 @@ import {
   type AssetRepoWrite,
   type FileSet,
   type JsonObject,
+  type OperationApproval,
   type OperationAuthorization,
+  type OperationOrigin,
   type PolicyTarget
 } from "@vivd-catalyst/core";
 import { afterRemove, afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
@@ -80,6 +82,8 @@ import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import { assertReferencesWithinOwners } from "./asset-owner-references";
+import { liveRevision } from "./asset-live-revision";
+import { publishApproval, publishFromAPerson } from "./publish-approval";
 import type { AssetWorkflowOptions } from "./types";
 
 type MutationBatch = Omit<
@@ -125,16 +129,35 @@ export class AssetWorkflow {
   }
 
   /**
-   * The publish right of the kind. A kind without a published revision names none, and a call
-   * on it passes here to be refused for that by the operation itself.
+   * The publish right of the kind and the kind's own check of the revision it makes live. A
+   * kind without a published revision names none, and a call on it passes here to be refused
+   * for that by the operation itself.
    */
   async authorizePublish(
-    access: ActorAccess,
-    address: AssetAddress
+    caller: { actor: AuthenticatedIdentity; access: ActorAccess; origin: OperationOrigin },
+    address: AssetAddress & { revision: number }
   ): Promise<OperationAuthorization> {
+    const { access, origin } = caller;
     const target = await this.target(address);
     const { publish } = target.kind.actions;
-    return publish === undefined ? { allowed: true } : decide(access, publish, target.resource);
+    if (publish === undefined) return { allowed: true };
+    const right = publishFromAPerson(target, origin) ?? decide(access, publish, target.resource);
+    // What the revision lends is asked of the caller now too: a publish that waits for an
+    // approval is filed only where its caller could make it live.
+    if (right.allowed && target.asset?.status === "active") {
+      await liveRevision(this.options, caller, target, address.revision);
+    }
+    return right;
+  }
+
+  /**
+   * Who decides a publish that a guardrail holds: the holders of the kind's `approve` right,
+   * and the caller's own click where they hold it. None for a kind whose publish is not held.
+   */
+  async publishApproval(
+    input: AssetAddress & { revision: number }
+  ): Promise<OperationApproval | undefined> {
+    return publishApproval(await this.target(input), input.revision);
   }
 
   async authorizeDelete(

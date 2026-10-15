@@ -47,9 +47,12 @@ export interface OperationRunActor {
  * and the call ran on its caller's word instead, because the operation answers a secret that
  * is shown once and so cannot wait. `workflow_publish`: a step of a run of a published Workflow
  * revision made a call whose policy asks its caller to confirm, and publishing the Workflow
- * was that confirmation: the publish review lists its changing operations.
+ * was that confirmation: the publish review lists its changing operations. `approved_by_caller`:
+ * a guardrail asked for an approval and the caller holds the right that decides it, so their
+ * own call was the approval (`approval` of the operation's definition).
  */
-export type OperationRunDecisionReason = "inherited_approval_not_applied" | "workflow_publish";
+export type OperationRunDecisionReason =
+  "inherited_approval_not_applied" | "workflow_publish" | "approved_by_caller";
 
 export interface OperationRunDecision {
   /**

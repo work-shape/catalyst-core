@@ -34,6 +34,7 @@ import {
   type ConnectorOperationDescriptor,
   type ConnectorTypeDefinition,
   type EgressChecker,
+  type PlatformEventEmitter,
   type JsonValue,
   type OperationEffect,
   type OperationOrigin,
@@ -218,7 +219,11 @@ export function fixture(options: { secret?: string } = {}): Promise<ConnectionOp
  */
 export async function fixtureOn<Instance extends AccessInstance>(
   setup: (options: AccessInstanceOptions) => Promise<Instance>,
-  options: { secret?: string } = {}
+  options: {
+    secret?: string;
+    /** The events of the call path, such as one whose guardrails run. Audited ones when absent. */
+    events?: (stores: AccessInstance["stores"]) => PlatformEventEmitter;
+  } = {}
 ): Promise<ConnectionOperationsFixture & Instance> {
   /** What happened, in order, across the call path, the stores and the Connector type. */
   const sequence: string[] = [];
@@ -333,7 +338,8 @@ export async function fixtureOn<Instance extends AccessInstance>(
         centralPolicySettings() {
           sequence.push("resolve policy");
           return state.centralSettings;
-        }
+        },
+        ...(options.events ? { events: options.events(stores) } : {})
       };
       const approvalRequests = { store: stores.approvals, handlers: new Map() };
       calls = createOperationCalls({

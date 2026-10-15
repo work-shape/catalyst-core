@@ -97,6 +97,12 @@ export interface AssetKindActions {
   /** Moves the published pointer. Only a `draft_published` kind names it. */
   publish?: string;
   /**
+   * Decides a publish that waits for an approval, and makes its holder's own publish the
+   * approval a guardrail on the kind's publish asks for. Only a `draft_published` kind whose
+   * publish a guardrail can hold names it.
+   */
+  approve?: string;
+  /**
    * Where using an asset of the kind is a right of its own: calling through a Connection, or
    * opening the published revision of a kind with users of its own.
    */

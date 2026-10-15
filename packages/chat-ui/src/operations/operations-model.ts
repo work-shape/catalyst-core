@@ -86,9 +86,14 @@ const operationDecisionLabelKeys: Record<
 export function operationDecisionLabelKey(
   decision: Pick<NonNullable<OperationRunResource["decision"]>, "mode" | "reason">
 ): TranslationKey {
-  return decision.reason === "workflow_publish"
-    ? "operations.decisionWorkflowPublish"
-    : operationDecisionLabelKeys[decision.mode];
+  switch (decision.reason) {
+    case "workflow_publish":
+      return "operations.decisionWorkflowPublish";
+    case "approved_by_caller":
+      return "operations.decisionApprovedByCaller";
+    default:
+      return operationDecisionLabelKeys[decision.mode];
+  }
 }
 
 /** The filters of the list. Each is one field of the query of `operations.list_runs`. */

@@ -98,7 +98,8 @@ export const workflows = defineTranslations({
       "The draft goes back to the published revision {number}. The discarded revisions are kept.",
     "workflows.draft.discardFailed": "The draft could not be discarded.",
     "workflows.draft.discardTitle": "Discard the draft of “{name}”?",
-    "workflows.draft.pending": "The change waits for an approval.",
+    "workflows.draft.pending":
+      "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is.",
     "workflows.draft.publish": "Publish",
     "workflows.draft.publishBody":
       "Revision {number} becomes the version that runs, by hand and on its schedule.",
@@ -272,6 +273,7 @@ export const workflows = defineTranslations({
     "workflows.startForm.tooLong": "Enter at most {limit} characters.",
     "workflows.startForm.tooShort": "Enter at least {limit} characters.",
     "workflows.startNow": "Start now",
+    "workflows.runsAs": "Runs as {account}",
     "workflows.step.agent": "AI agent",
     "workflows.step.changing": "Changes data",
     "workflows.step.code": "Script",
@@ -394,7 +396,8 @@ export const workflows = defineTranslations({
       "Der Entwurf geht auf die veröffentlichte Revision {number} zurück. Die verworfenen Revisionen bleiben erhalten.",
     "workflows.draft.discardFailed": "Der Entwurf konnte nicht verworfen werden.",
     "workflows.draft.discardTitle": "Entwurf von „{name}“ verwerfen?",
-    "workflows.draft.pending": "Die Änderung wartet auf eine Freigabe.",
+    "workflows.draft.pending":
+      "Zur Freigabe gesendet. Ein Instanz-Admin entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
     "workflows.draft.publish": "Veröffentlichen",
     "workflows.draft.publishBody":
       "Revision {number} wird die Version, die läuft, von Hand und nach ihrem Zeitplan.",
@@ -576,6 +579,7 @@ export const workflows = defineTranslations({
     "workflows.startForm.tooLong": "Gib höchstens {limit} Zeichen ein.",
     "workflows.startForm.tooShort": "Gib mindestens {limit} Zeichen ein.",
     "workflows.startNow": "Jetzt starten",
+    "workflows.runsAs": "Läuft als {account}",
     "workflows.step.agent": "KI-Agent",
     "workflows.step.changing": "Ändert Daten",
     "workflows.step.code": "Skript",

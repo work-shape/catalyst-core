@@ -143,6 +143,8 @@ export const assetSchema = z.object({
   revision: revisionNumberSchema,
   ...pointerShape,
   config: configAssetConfigSchema,
+  /** The active account's display label for the Workflow revision returned by this read. */
+  runsAs: z.string().optional(),
   /**
    * The revision `config` and `files` are of, for a kind with a draft and a published revision:
    * the draft where the call names none.

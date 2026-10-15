@@ -251,6 +251,26 @@ describe("the Workflow screens over the engine of an instance", () => {
     expect(startOffered(workflow)).toBe(false);
   });
 
+  it("reads the unpublished draft's account label from the asset", async () => {
+    const { client } = recordedApiClient(({ operation }) =>
+      operation === "assets.get"
+        ? {
+            ...ASSET,
+            publishedRevision: undefined,
+            draftRevision: 1,
+            runsAs: "Draft account",
+            config: {
+              ...ASSET.config,
+              manifest: { ...ASSET.config.manifest, runAs: "internal-account-name" }
+            }
+          }
+        : { items: [] }
+    );
+    const source = createInstanceSource(client, "draft-account");
+    const workflow = await source.getWorkflow("cw_1", "month-end", signal);
+    expect(workflow).toMatchObject({ published: false, mayStart: false, runsAs: "Draft account" });
+  });
+
   it("holds no start for a Workflow whose entry names the read alone", async () => {
     const { source } = instance();
     const workflow = await source.getWorkflow("cw_1", "open-invoices", signal);

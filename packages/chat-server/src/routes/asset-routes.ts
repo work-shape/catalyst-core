@@ -104,12 +104,15 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.publish"], {
-    authorize: (input, { access }) => workflow.authorizePublish(access, input),
+    authorize: (input, { actor, access, origin }) =>
+      workflow.authorizePublish({ actor, access, origin }, input),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     beforeEvents: (input) => publishEvents(options, input),
+    // A publish a guardrail holds waits for the holders of the kind's `approve` right.
+    approval: (input) => workflow.publishApproval(input),
     execute: (input, context) => workflow.drafts.publish(context, input)
   });
 

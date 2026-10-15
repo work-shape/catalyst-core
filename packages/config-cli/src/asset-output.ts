@@ -4,6 +4,7 @@ import type {
   AssetSummary,
   ConfigAssetReferences,
   ConfigAssetRevision,
+  DryRunGuardrailResponse,
   PlatformContext
 } from "@vivd-catalyst/api-contract";
 import { ConfigApiError } from "./api";
@@ -200,4 +201,18 @@ function records(value: unknown): Record<string, unknown>[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** What a guardrail's dry run would have answered, without names, as its publish prints it first. */
+export function formatDryRun(name: string, answer: DryRunGuardrailResponse): string {
+  const people = (count: { actions: number; people: number }) =>
+    `${count.actions} action${count.actions === 1 ? "" : "s"} by ${count.people} ${count.people === 1 ? "person" : "people"}`;
+  return [
+    `Dry run of revision ${answer.revision} of guardrail '${name}' on '${answer.event}', over the last ${answer.days} days:`,
+    `  would have blocked ${people(answer.wouldBlock)}`,
+    `  would have asked for an approval on ${people(answer.wouldRequireApproval)}`,
+    `  would have warned on ${people(answer.wouldWarn)}`,
+    `  ${answer.evaluated} of ${answer.matched} matching actions checked again${answer.limitedTo === undefined ? "" : ` (at most ${answer.limitedTo})`}${answer.notEvaluable > 0 ? `; ${answer.notEvaluable} could not be, as their content or origin is not kept` : ""}.`,
+    "No names are shown and nothing was kept."
+  ].join("\n");
 }

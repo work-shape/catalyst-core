@@ -23,6 +23,12 @@ export const platformAssetKindSchema = z.object({
     /** Named by a kind with the lifecycle `draft_published`. */
     publish: z.string().optional(),
     /**
+     * Named by a kind whose publish a guardrail can hold for an approval: its holders decide
+     * the request, and their own publish is the approval. A publish of such a kind goes live
+     * only on a person's click. A CLI submission waits when approval is required.
+     */
+    approve: z.string().optional(),
+    /**
      * Only for a kind whose assets are used through a right of their own: a Connection, or a
      * kind whose published revision has users of its own.
      */

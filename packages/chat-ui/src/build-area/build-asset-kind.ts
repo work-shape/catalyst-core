@@ -132,6 +132,11 @@ interface BuildKindBase {
    * workspace names.
    */
   RowLine?: ComponentType<{ asset: BuildAssetRow }>;
+  /**
+   * What the list shows above its rows, with rows and without: such as the guardrails the
+   * release ships, which are no asset of the list.
+   */
+  ListHead?: ComponentType;
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
 }
