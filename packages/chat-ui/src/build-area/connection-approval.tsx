@@ -5,6 +5,7 @@ import {
   APPROVAL_SURFACES,
   DEFAULT_APPROVAL_SURFACES,
   readingNames,
+  parameterEnums,
   type ApprovalCandidate,
   type ApprovalSurface
 } from "./connection-approval-model";
@@ -162,6 +163,27 @@ export function ConnectionApprovalList({
                             {candidate.description}
                           </FoldedText>
                         ) : null}
+                        {parameterEnums(candidate.declaration).map((entry) => (
+                          <span
+                            key={`${entry.location}.${entry.name}.${entry.path}`}
+                            className="mt-2 grid min-w-0 gap-0.5"
+                            data-approval-parameter={`${entry.location}.${entry.name}`}
+                          >
+                            <span className="text-caption text-muted-foreground">
+                              {t(
+                                entry.location === "pathParams"
+                                  ? "connectionCreate.pathParameter"
+                                  : "connectionCreate.queryParameter",
+                                { name: entry.name }
+                              )}
+                              {entry.path ? ` · ${entry.path}` : ""}
+                            </span>
+                            <span className="text-caption">
+                              {t("connectionCreate.allowedValues")}
+                            </span>
+                            <FoldedText data-approval-enum={entry.path}>{entry.values}</FoldedText>
+                          </span>
+                        ))}
                       </>
                     ) : candidate.description ? (
                       // Whole: the model of an agent that carries the tool reads all of it, so

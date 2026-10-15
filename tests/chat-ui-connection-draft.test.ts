@@ -1,8 +1,11 @@
 import { createElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { createApiClient } from "@vivd-catalyst/api-client";
 import {
   ConnectionCreateFlow,
+  ConnectionDraftCard,
+  ConnectionDraftHostProvider,
   ConnectionDraftCardView,
   connectionDraftHost,
   openConnectionDraft,
@@ -16,6 +19,8 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // The card of the agent's draft of REST API tools (CS-5c): what it reads of the tool's answer,
 // where its button leads, and that nothing is saved on the way. The person's confirmation in
 // the approval list is the save (e2e/connection-editor.spec.ts clicks it).
+
+const API_SCOPE = { apiBaseUrl: "https://catalyst.example.test", authScope: "reader-a" };
 
 /** A text that stands for a key. No draft, card or form below may repeat it. */
 const SECRET = "sk-live-card-7a6b5c4d";
@@ -134,7 +139,7 @@ describe("the card's button", () => {
 
 describe("the card's host", () => {
   /** A client whose instance holds the Connections of `held`, by id. */
-  const client = (held: Record<string, Record<string, unknown>>) =>
+  const client = (held: Record<string, Record<string, unknown>>, missingStatus = 404) =>
     createApiClient({
       baseUrl: "https://catalyst.example.test",
       fetchImpl: async (input, init) => {
@@ -145,20 +150,26 @@ describe("the card's host", () => {
         return config
           ? Response.json(connectionAsset(name, config))
           : Response.json(
-              { error: { code: "NOT_FOUND", message: "No such Connection" } },
-              { status: 404 }
+              {
+                error: {
+                  code: missingStatus === 403 ? "FORBIDDEN" : "NOT_FOUND",
+                  message: "Unavailable"
+                }
+              },
+              { status: missingStatus }
             );
       }
     });
 
   it("gives the button only to a reader who may write Connections", () => {
-    const input = { client: client({}), showRoute: () => undefined };
-    expect(connectionDraftHost({ ...input, mayWriteConnections: false })).toBeUndefined();
-    expect(connectionDraftHost({ ...input, mayWriteConnections: true })).toBeDefined();
+    const input = { ...API_SCOPE, client: client({}), showRoute: () => undefined };
+    expect(connectionDraftHost({ ...input, mayWriteConnections: false }).open).toBeUndefined();
+    expect(connectionDraftHost({ ...input, mayWriteConnections: true }).open).toBeDefined();
   });
 
   it("names an existing Connection by its own title, and a new id by nothing", async () => {
     const host = connectionDraftHost({
+      ...API_SCOPE,
       client: client({ exampledata: { connectorType: "http_api", displayName: "Kanzlei-API" } }),
       mayWriteConnections: true,
       showRoute: () => undefined
@@ -168,6 +179,133 @@ describe("the card's host", () => {
       title: "Kanzlei-API"
     });
     expect(await host?.connectionOf("crm")).toBeUndefined();
+  });
+
+  it("does not open a new Connection when a writer's read is forbidden", async () => {
+    const shown: unknown[] = [];
+    const host = connectionDraftHost({
+      ...API_SCOPE,
+      client: client({}, 403),
+      mayWriteConnections: true,
+      showRoute: (route) => shown.push(route)
+    });
+    expect(await host.open?.(draft())).toBe("failed");
+    expect(shown).toEqual([]);
+  });
+
+  const renderCard = (queryClient: QueryClient, host: ReturnType<typeof connectionDraftHost>) =>
+    renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(
+          ConnectionDraftHostProvider,
+          { value: host, children: null },
+          createElement(
+            TranslationProvider,
+            { locale: "en", children: null },
+            createElement(ConnectionDraftCard, { draft: draft() })
+          )
+        )
+      )
+    );
+
+  it("resolves an accessible existing title for the actual reader card without an approval button", async () => {
+    const queryClient = new QueryClient();
+    const host = connectionDraftHost({
+      ...API_SCOPE,
+      client: client({ exampledata: { connectorType: "http_api", displayName: "Kanzlei-API" } }),
+      mayWriteConnections: false,
+      showRoute: () => {
+        throw new Error("A reader must not navigate to approval");
+      }
+    });
+    try {
+      await queryClient.fetchQuery({
+        queryKey: [
+          "assets",
+          API_SCOPE.apiBaseUrl,
+          API_SCOPE.authScope,
+          "connection-draft-target",
+          "exampledata"
+        ],
+        queryFn: async () => (await host.connectionOf("exampledata")) ?? null
+      });
+      const markup = renderCard(queryClient, host);
+      expect(markup).toContain("Tools for Kanzlei-API");
+      expect(markup).not.toContain("Tools for Exampledata");
+      expect(markup).not.toContain("data-connection-draft-open");
+    } finally {
+      queryClient.clear();
+    }
+  });
+
+  it.each([403, 404])(
+    "uses the agent title when the reader cannot read the target (%s), without an approval button",
+    async (status) => {
+      const queryClient = new QueryClient();
+      const host = connectionDraftHost({
+        ...API_SCOPE,
+        client: client({}, status),
+        mayWriteConnections: false,
+        showRoute: () => undefined
+      });
+      try {
+        await queryClient.fetchQuery({
+          queryKey: [
+            "assets",
+            API_SCOPE.apiBaseUrl,
+            API_SCOPE.authScope,
+            "connection-draft-target",
+            "exampledata"
+          ],
+          queryFn: async () => (await host.connectionOf("exampledata")) ?? null
+        });
+        const markup = renderCard(queryClient, host);
+        expect(markup).toContain("Tools for Exampledata");
+        expect(markup).not.toContain("data-connection-draft-open");
+      } finally {
+        queryClient.clear();
+      }
+    }
+  );
+
+  it("uses a cached Connection list title only for the current API and identity", () => {
+    const queryClient = new QueryClient();
+    const host = connectionDraftHost({
+      ...API_SCOPE,
+      client: client({}),
+      mayWriteConnections: false,
+      showRoute: () => undefined
+    });
+    const cacheList = (apiBaseUrl: string, authScope: string, title: string) => {
+      queryClient.setQueryData(
+        ["assets", apiBaseUrl, authScope, "list", "connection", "", "", "", "en"],
+        {
+          pages: [{ items: [{ name: "exampledata", title }] }],
+          pageParams: [undefined]
+        }
+      );
+    };
+    try {
+      queryClient.setQueryData(
+        ["assets", API_SCOPE.apiBaseUrl, "other-reader", "connection-draft-target", "exampledata"],
+        { title: "Private target title", connectorType: "http_api" }
+      );
+      cacheList(API_SCOPE.apiBaseUrl, "other-reader", "Private title");
+      cacheList("https://other.example.test", API_SCOPE.authScope, "Other instance");
+      let markup = renderCard(queryClient, host);
+      expect(markup).toContain("Tools for Exampledata");
+      expect(markup).not.toContain("Private title");
+      expect(markup).not.toContain("Private target title");
+      expect(markup).not.toContain("Other instance");
+      cacheList(API_SCOPE.apiBaseUrl, API_SCOPE.authScope, "Cached Kanzlei-API");
+      markup = renderCard(queryClient, host);
+      expect(markup).toContain("Tools for Cached Kanzlei-API");
+      expect(markup).not.toContain("data-connection-draft-open");
+    } finally {
+      queryClient.clear();
+    }
   });
 });
 

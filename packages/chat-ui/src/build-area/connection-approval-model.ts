@@ -23,6 +23,42 @@ export interface ApprovalCandidate extends ApprovedOperation {
   request?: { method: string; path: string };
 }
 
+/** Every enum in a path or query parameter's schema, including nested schema branches. */
+export function parameterEnums(declaration: Record<string, unknown> | undefined) {
+  const enums: { location: "pathParams" | "query"; name: string; path: string; values: string }[] =
+    [];
+  for (const location of ["pathParams", "query"] as const) {
+    for (const [name, parameter] of Object.entries(recordOf(declaration?.[location]) ?? {})) {
+      const visit = (value: unknown, path: string) => {
+        if (Array.isArray(value)) {
+          value.forEach((item, index) => visit(item, `${path}[${index}]`));
+          return;
+        }
+        const schema = recordOf(value);
+        if (!schema) return;
+        for (const [key, child] of Object.entries(schema)) {
+          if (key === "enum" && Array.isArray(child)) {
+            enums.push({
+              location,
+              name,
+              path,
+              values: child
+                .map((item) => (typeof item === "string" ? item : JSON.stringify(item)))
+                .join("\n")
+            });
+          } else {
+            // Walk every branch rather than choosing one anyOf/oneOf alternative. Enum
+            // values themselves are data, so their objects are never treated as schemas.
+            visit(child, path ? `${path}.${key}` : key);
+          }
+        }
+      };
+      visit(recordOf(parameter)?.schema, "");
+    }
+  }
+  return enums;
+}
+
 /**
  * An operation as a person reads it: its name in sentence case, such as "List customers" for
  * `list_customers`. The outside system names operations; it gives them no title for people.

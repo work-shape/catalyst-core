@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import { sendToolCall } from "./page-surface-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
@@ -256,7 +256,8 @@ for (const locale of LOCALES) {
             "- name: health",
             "  description: Says whether the service runs.",
             "  method: GET",
-            "  path: /healthz"
+            "  path: /healthz",
+            `  query: ${JSON.stringify(enumQuery)}`
           ].join("\n")
         );
       await shoot(page, locale, "rest-paste");
@@ -264,6 +265,7 @@ for (const locale of LOCALES) {
       const row = dialog.locator('li[data-approval-tool="health"]');
       await expect(row).toContainText("GET /healthz");
       await expect(row.getByRole("checkbox")).toBeChecked();
+      await checkParameterEnums(row, locale);
       await shoot(page, locale, "rest-approve");
       await dialog.locator("[data-connection-approve]").click();
 
@@ -338,6 +340,37 @@ const LONG_DESCRIPTION = [
   "It reads only and changes nothing; it takes no parameter and answers in a few milliseconds."
 ].join(" ");
 
+/** Ordinary multi-value enums, including text that must never become an element or link. */
+const ENUM_TEXT = '<img data-enum-injection src=x onerror="alert(1)"> [open](javascript:alert(2))';
+const LONG_ENUM_VALUE =
+  "A detailed report category for the service's regional availability history. ".repeat(12);
+const enumQuery = {
+  status: { schema: { type: "string", enum: ["ready", ENUM_TEXT] } },
+  report: { schema: { type: "string", enum: ["overview", LONG_ENUM_VALUE] } }
+};
+
+/** Both paste and draft must show values, keep markup inert, and unfold the long value. */
+async function checkParameterEnums(row: Locator, locale: Locale): Promise<void> {
+  const status = row.locator('[data-approval-parameter="query.status"]');
+  await expect(status).toContainText("ready");
+  await expect(status).toContainText(ENUM_TEXT);
+  await expect(row.locator("img, a, [data-enum-injection]")).toHaveCount(0);
+  const report = row.locator('[data-approval-parameter="query.report"]');
+  await expect(report).toContainText("overview");
+  const more = report.locator("[data-approval-enum]").getByRole("button");
+  await expect(more).toHaveText(showMore[locale]);
+  await expect(more).toBeVisible();
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  const value = report.locator("[data-approval-enum] > span").first();
+  await expect(value).toHaveText(`overview\n${LONG_ENUM_VALUE}`);
+  await expect(value).not.toHaveClass(/line-clamp-3/u);
+  // Fold it again so the short values and the fold control fit together in the screenshots.
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+}
+
 function healthDraft(id: string) {
   return {
     connection: id,
@@ -351,6 +384,7 @@ function healthDraft(id: string) {
         description: "Says whether the service runs.",
         method: "GET",
         path: "/healthz",
+        query: enumQuery,
         effect: "reading"
       },
       {
@@ -376,6 +410,16 @@ async function shootModes(page: Page, locale: Locale, name: string): Promise<voi
     await page.emulateMedia({ colorScheme: mode });
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
+      if (name === "enum") {
+        // Keep both enum sets inside the approval dialog's scrollport at each width.
+        const row = page.getByRole("dialog").locator('li[data-approval-tool="health"]');
+        const first = row.locator('[data-approval-parameter="query.status"]');
+        const last = row.locator('[data-approval-parameter="query.report"]');
+        await last.scrollIntoViewIfNeeded();
+        await expect(first).toBeInViewport({ ratio: 1 });
+        await expect(last).toBeInViewport({ ratio: 1 });
+        await expect(last.getByRole("button", { name: showMore[locale] })).toBeVisible();
+      }
       await page.screenshot({
         path: join(shotsDir, `connection-draft-${name}-${width}-${locale}-${mode}.png`),
         animations: "disabled"
@@ -449,6 +493,8 @@ for (const locale of LOCALES) {
       );
       await expect(dialog.locator("[data-connection-drafted]")).toContainText(EXISTING_TITLE);
       await expect(dialog.locator("[data-connection-drafted]")).not.toContainText(DRAFT_TITLE);
+      await checkParameterEnums(health, locale);
+      await shootModes(page, locale, "enum");
       const status = dialog.locator('li[data-approval-tool="status"]');
       const more = status.getByRole("button", { name: showMore[locale] });
       await expect(more).toBeVisible();

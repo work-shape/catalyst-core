@@ -417,10 +417,10 @@ function ChatWorkspaceContent({
           editWithAgent: model.workflows.editWithAgent
         }
       : undefined;
-
-  // The card of an agent's draft of REST API tools opens the Connection's approval list.
   const connectionDraft = connectionDraftHost({
     client: chat.client,
+    apiBaseUrl: model.auth.apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
     mayWriteConnections: model.controlPlane.mayWriteConnections,
     showRoute: model.route.showRoute
   });

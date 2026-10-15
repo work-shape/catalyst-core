@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { PLATFORM_TOOL_NAMES, platformModules } from "@vivd-catalyst/client-assembly";
-import { createHttpApiConnectorType, HTTP_API_CONNECTOR_TYPE } from "@vivd-catalyst/connections";
+import {
+  createHttpApiConnectorType,
+  HTTP_API_CONNECTOR_TYPE,
+  isCredentialHeaderName
+} from "@vivd-catalyst/connections";
 import {
   asClientInstanceId,
   createConnectorTypeRegistry,
@@ -177,7 +181,7 @@ describe("the agent's draft of REST API tools", () => {
     }
   });
 
-  it("refuses a parameter that can carry a credential by its words, and keeps a cursor", async () => {
+  it("refuses a parameter that can carry a credential by its normalized name, with only exact harmless exceptions", async () => {
     const withQuery = (name: string) =>
       draft({
         operations: [{ ...listClients, query: { [name]: { schema: { type: "string" } } } }]
@@ -200,7 +204,32 @@ describe("the agent's draft of REST API tools", () => {
       "Ocp-Apim-Subscription-Key",
       "APIKey",
       "sessionid",
-      "password"
+      "password",
+      "aPiKeY",
+      "rEfReSh_tOkEn",
+      "pRiVaTeKeY",
+      "sEsSiOnId",
+      "pagePassword",
+      "next_secret",
+      "sortJwt",
+      "pageAuth",
+      "nextSignature",
+      "x-pageToken",
+      "pageTokenSuffix",
+      "auth1key",
+      "a-u-t-h",
+      "s_e_s_s_i_o_n",
+      "pa1ss2word",
+      "pw3d",
+      "X-Api-Key",
+      "access-token",
+      "client_secret",
+      "passphrase",
+      "passwd",
+      "bearer",
+      "signature",
+      "syncToken",
+      "cursorToken"
     ];
     for (const name of refused) {
       expect(await refusedPaths(withQuery(name)), name).toContain(`operations.0.query.${name}`);
@@ -209,6 +238,8 @@ describe("the agent's draft of REST API tools", () => {
       "pageToken",
       "next_page_token",
       "nextToken",
+      "continuationToken",
+      "PaGe1_ToKeN",
       "secretary",
       "author",
       "sortKey"
@@ -263,6 +294,60 @@ describe("the agent's draft of REST API tools", () => {
     ).toContain("operations.0.pathParams.clientId.schema.anyOf.0.default");
   });
 
+  it("refuses a singleton enum at any schema depth, but keeps reviewable choices", async () => {
+    const wrappers: ((schema: Record<string, unknown>) => Record<string, unknown>)[] = [
+      (schema) => schema,
+      (schema) => ({ anyOf: [schema] }),
+      (schema) => ({ oneOf: [schema] }),
+      (schema) => ({ allOf: [schema] }),
+      (schema) => ({ items: schema }),
+      (schema) => ({ properties: { nested: schema } }),
+      (schema) => ({ additionalProperties: schema }),
+      (schema) => ({ $defs: { hidden: schema } }),
+      (schema) => ({ anyOf: [{ allOf: [{ items: schema }] }] })
+    ];
+    const withSchema = (schema: Record<string, unknown>) =>
+      draft({ operations: [{ ...listClients, query: { state: { schema } } }] });
+    for (const wrap of wrappers) {
+      const result = await run(withSchema({ type: "string", ...wrap({ enum: [SECRET] }) }));
+      expect(result.status).toBe("failed");
+      expect(JSON.stringify(result)).toContain("value_in_draft");
+      expect(JSON.stringify(result)).not.toContain(SECRET);
+      for (const keyword of ["default", "const", "examples", "example"]) {
+        const value = keyword === "examples" ? [SECRET] : SECRET;
+        const refused = await run(withSchema({ type: "string", ...wrap({ [keyword]: value }) }));
+        expect(refused.status, keyword).toBe("failed");
+        expect(JSON.stringify(refused)).toContain("value_in_draft");
+        expect(JSON.stringify(refused)).not.toContain(SECRET);
+      }
+    }
+    expect((await run(withSchema({ type: "string", enum: ["active", "archived"] }))).status).toBe(
+      "success"
+    );
+  });
+
+  it("refuses Unicode, encoded and space-padded parameter names", async () => {
+    for (const name of [
+      "ＡＰＩ_KEY",
+      "ＡＰＩ_ＫＥＹ",
+      "api%5Fkey",
+      " api_key",
+      "api_key ",
+      "a\u200bpi_key"
+    ]) {
+      expect(
+        (
+          await run(
+            draft({
+              operations: [{ ...listClients, query: { [name]: { schema: { type: "string" } } } }]
+            })
+          )
+        ).status,
+        name
+      ).toBe("failed");
+    }
+  });
+
   it("refuses a '.' or '..' path segment in any spelling", async () => {
     for (const path of ["/clients/../admin", "/clients/./x", "/clients/%2e%2E/admin", "/%2E"]) {
       expect(await refusedPaths(draft({ operations: [{ ...listClients, path }] }))).toContain(
@@ -297,5 +382,31 @@ describe("where the draft tool is offered", () => {
     // Fixtures hand an agent every name of the list; with connections off, that agent would be
     // refused for naming a tool of a module that is off.
     expect(PLATFORM_TOOL_NAMES).not.toContain(CONNECTION_DRAFT_TOOL_NAME);
+  });
+});
+
+describe("the unchanged fixed-header credential rule", () => {
+  it("keeps main's case-insensitive substring rule, without the parameter exceptions or extras", () => {
+    const mainWords = ["auth", "key", "token", "secret", "password", "session"];
+    const mainRule = (name: string) =>
+      mainWords.some((word) => name.toLowerCase().includes(word)) ||
+      ["proxy-authorization", "cookie"].includes(name.toLowerCase());
+    const names = [
+      "author",
+      "secretary",
+      "sortKey",
+      "pageToken",
+      "jwt",
+      "pwd",
+      "passwd",
+      "bearer",
+      "signature",
+      "Cookie",
+      "COOKIE",
+      "ＡＰＩ_KEY",
+      "api%5Fkey",
+      ...mainWords.flatMap((word) => [word, word.toUpperCase(), `x-${word}-value`, `${word}id`])
+    ];
+    for (const name of names) expect(isCredentialHeaderName(name), name).toBe(mainRule(name));
   });
 });

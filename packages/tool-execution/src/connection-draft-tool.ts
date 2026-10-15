@@ -28,14 +28,10 @@ export const CONNECTION_DRAFT_TOOL_NAME = "platform.connections.draft_tools";
 const DRAFT_HEADERS_MAX = 16;
 
 /**
- * Parameter names that hand a credential to the request: a draft refuses them, as an agent
- * would fill such a parameter with a key at every call. A name is read as its words, split at
- * case changes, digits and separators: `refresh_token` is `refresh token`, `APIKey` is
- * `api key`. It names a credential where a word is one of the release's credential words or
- * of the words below, or such a word fused to one of the qualifiers, as `authkey`. A word
- * never matches inside another: `secretary` and `author` stay allowed.
+ * Compared without case, separators or digits: a credential word anywhere in the name is
+ * refused. The few known harmless names below are the only exceptions.
  */
-const CREDENTIAL_PARAMETER_WORDS: ReadonlySet<string> = new Set([
+const CREDENTIAL_PARAMETER_WORDS = [
   ...CONNECTION_CREDENTIAL_WORDS,
   "authorization",
   "bearer",
@@ -51,64 +47,31 @@ const CREDENTIAL_PARAMETER_WORDS: ReadonlySet<string> = new Set([
   "sig",
   "signature",
   "tokens"
-]);
-/** Words a credential word is fused to in one word, as `apikey` or `accesstoken`. */
-const CREDENTIAL_QUALIFIERS = [
-  "access",
-  "api",
-  "auth",
-  "client",
-  "id",
-  "license",
-  "private",
-  "refresh",
-  "session",
-  "subscription",
-  "user"
 ];
-/**
- * The words before a credential word that make it a cursor, not a credential: `pageToken`,
- * `nextToken` and `sortKey` stay allowed. Fused as well: `pagetoken`.
- */
-const CURSOR_QUALIFIERS = ["page", "next", "cursor", "continuation", "sync", "sort"];
 
-/** A parameter's name as its words, lower case. */
-function wordsOf(name: string): string[] {
-  return (name.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+/gu) ?? []).map((word) =>
-    word.toLowerCase()
-  );
-}
+/** Exact normalized names that contain a credential word but name no credential. */
+const HARMLESS_PARAMETER_NAMES: ReadonlySet<string> = new Set([
+  "pagetoken",
+  "nextpagetoken",
+  "nexttoken",
+  "continuationtoken",
+  "sortkey",
+  "author",
+  "secretary"
+]);
 
-/**
- * Whether one word is two fused, a credential word and a qualifier or another credential word,
- * either way round: `authkey`, `apitoken`, `sessionid`. `pagetoken` is a cursor.
- */
-function isFusedCredentialWord(word: string): boolean {
-  const fusable = (part: string): boolean =>
-    CREDENTIAL_PARAMETER_WORDS.has(part) || CREDENTIAL_QUALIFIERS.includes(part);
-  for (let at = 1; at < word.length; at += 1) {
-    const [first, second] = [word.slice(0, at), word.slice(at)];
-    if (CURSOR_QUALIFIERS.includes(first)) continue;
-    if (CREDENTIAL_PARAMETER_WORDS.has(second) && fusable(first)) return true;
-    if (CREDENTIAL_PARAMETER_WORDS.has(first) && fusable(second)) return true;
-  }
-  return false;
-}
-
-/** Whether a parameter's name names a credential, by the lists above. */
 function isCredentialParameterName(name: string): boolean {
-  const words = wordsOf(name);
-  return words.some((word, index) =>
-    CREDENTIAL_PARAMETER_WORDS.has(word)
-      ? !CURSOR_QUALIFIERS.includes(words[index - 1] ?? "")
-      : isFusedCredentialWord(word)
+  const normalized = name.toLowerCase().replace(/[-_\d\s]/gu, "");
+  return (
+    !HARMLESS_PARAMETER_NAMES.has(normalized) &&
+    CREDENTIAL_PARAMETER_WORDS.some((word) => normalized.includes(word))
   );
 }
 
 /**
  * The keywords of a parameter's schema that carry a value of the draft's own: whatever they
  * hold is saved with the Connection and read by the agent, yet the approval list shows none of
- * it. A draft refuses them.
+ * it. A draft refuses them, and refuses a singleton enum for the same reason as const.
  */
 const DRAFT_VALUE_KEYWORDS = ["default", "const", "examples", "example"];
 
@@ -119,7 +82,10 @@ function valueKeywordPaths(schema: unknown, path: string[] = []): string[][] {
   }
   if (typeof schema !== "object" || schema === null) return [];
   return Object.entries(schema).flatMap(([key, value]) => [
-    ...(DRAFT_VALUE_KEYWORDS.includes(key) ? [[...path, key]] : []),
+    ...(DRAFT_VALUE_KEYWORDS.includes(key) ||
+    (key === "enum" && Array.isArray(value) && value.length === 1)
+      ? [[...path, key]]
+      : []),
     ...valueKeywordPaths(value, [...path, key])
   ]);
 }
@@ -158,7 +124,7 @@ const parameterSchema = z.object({
   schema: z
     .record(z.string(), z.unknown())
     .describe(
-      "The JSON Schema of the value. Its 'type' is string, integer or number; a query parameter may also be boolean. No 'default', 'const', 'examples' or 'example': a draft carries no value of its own."
+      "The JSON Schema of the value. Its 'type' is string, integer or number; a query parameter may also be boolean. No 'default', 'const', 'examples', 'example' or singleton 'enum': a draft carries no fixed value of its own."
     ),
   description: z.string().optional().describe("What the value is, for whoever fills it."),
   required: z
@@ -395,7 +361,7 @@ export function createConnectionDraftTool(input: {
       "Propose the tools of a REST API Connection for a person to approve. Use it when the person asks you to draft the tools of a REST API, such as from the API's OpenAPI description, which you may read with web_fetch.",
       "Write each operation as one GET request that only reads: its name, a description an agent can act on, the path with its parameters and the query parameters, each with a JSON Schema.",
       "The tool checks the operations as a save of the Connection would, and answers either every issue, which you fix before you call it again, or the draft, which the person sees as a card in this conversation. From the card they open the Connection's approval list and approve the tools; nothing is saved before that, and you never save a Connection.",
-      "Never ask for a key and never put one into the draft: the person enters it on the Connection's page. A header or parameter that carries a credential, a value in a parameter's schema ('default', 'const', 'examples'), a method other than GET and the effect 'changing' are refused.",
+      "Never ask for a key and never put one into the draft: the person enters it on the Connection's page. A header or parameter that carries a credential, a fixed value in a parameter's schema ('default', 'const', 'examples', 'example', a singleton 'enum'), a method other than GET and the effect 'changing' are refused.",
       "After a draft, tell the person in one sentence to review the tools on the card and approve what they need."
     ].join(" "),
     inputSchema,
