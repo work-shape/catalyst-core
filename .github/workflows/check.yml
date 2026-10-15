@@ -279,12 +279,19 @@ jobs:
     # Individual tests (except explicit serial groups) are spread across ten isolated
     # databases. One worker per shard avoids extra concurrent mutations of shared accounts
     # and fixed-port beforeAll servers, and splits the former 15-minute standalone file.
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # Run 38778358978: groups 1 and 4 took 9:47 and 10:41; the other groups
+    # took 3:44–7:36. Give only those two groups extra CPU; keep one worker.
+    runs-on: ${{ matrix.runner || 'blacksmith-2vcpu-ubuntu-2404' }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        include:
+          - shard: 1
+            runner: blacksmith-4vcpu-ubuntu-2404
+          - shard: 4
+            runner: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
