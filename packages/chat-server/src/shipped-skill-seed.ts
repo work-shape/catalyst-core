@@ -28,6 +28,8 @@ const SYSTEM_ACTOR: AuditActor = { displayLabel: "System", roles: [] };
 
 /** What one start changed, by skill name. */
 export interface ShippedSkillSeedResult {
+  /** Instance-owned names kept intact until an administrator resolves the collision. */
+  retained: string[];
   created: string[];
   updated: string[];
   removed: string[];
@@ -95,19 +97,24 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
       asset
     ])
   );
-  const result: ShippedSkillSeedResult = { created: [], updated: [], removed: [], unlisted: [] };
+  const result: ShippedSkillSeedResult = {
+    retained: [],
+    created: [],
+    updated: [],
+    removed: [],
+    unlisted: []
+  };
   const mutations: ConfigAssetMutation[] = [];
   const baseRevisions: Record<string, number | null> = {};
   for (const [name, config] of shipped) {
     const asset = stored.get(name);
     if (asset && !isShipped(asset)) {
-      // A skill of the instance's own is never touched, not even deleted: it may hold what
-      // the instance's people wrote. The name is the platform's, so the start stops.
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `The platform ships the skill '${name}', and the instance holds a skill of its own named '${name}'. Remove the instance copy with 'catalyst config push' after pulling, with the previous release still running: pull, delete skills/${name}, take '${name}' out of the agents' skillNames, push with --prune. Then start this release`,
-        { skillName: name }
-      );
+      // Keep the instance's content and references usable, and leave the admin API available
+      // to resolve the collision. Starting a new release must not require deleting user work
+      // with the previous release running. A later start can seed the shipped skill once the
+      // instance copy has been renamed or removed through the product's asset workflow.
+      result.retained.push(name);
+      continue;
     }
     if (asset && configValuesEqual(asset.config, config)) continue;
     // A skill the platform shipped once and dropped left a deleted row: the release that
