@@ -612,9 +612,9 @@ export interface ChangedAgentRefusal {
 }
 
 /**
- * Checks submitted agents' tool references and changed agents' models and Namespace limits.
- * Returns refusals, callability warnings and the Namespaces for the kind's editing policy.
- * Namespace lists bind every writer; null allows everything and an empty list nothing.
+ * Checks submitted agents' tool references and changed agents' models and editing limits.
+ * Returns refusals, callability warnings and scope records for the kind's editing policy.
+ * These limits bind every writer; null allows everything and an empty list nothing.
  */
 export async function findChangedAgentRefusals(
   options: AssetWorkflowOptions,
@@ -678,7 +678,7 @@ export async function assertChangedAgentsAllowed(
   if (refusal) {
     throw refusal.error;
   }
-  return { namespaces: found.namespaces, warnings: found.warnings };
+  return found;
 }
 
 function invalidAssetSet(issues: readonly string[]): AppError {

@@ -77,7 +77,7 @@ describe("config asset bundle validation", () => {
     );
   });
 
-  it("recognizes a registered tool namespace even when no tool in it is enabled", () => {
+  it("recognizes a registered tool group even when no tool in it is enabled", () => {
     const error = validationError({
       agents: [agent({ instructions: "Use workflow.run." })],
       skills: [],
@@ -101,7 +101,7 @@ describe("config asset bundle validation", () => {
     ).not.toThrow();
   });
 
-  it("ignores non-tool namespaces, paths, URLs, emails, filenames and domain endings", () => {
+  it("ignores non-tool prefixes, paths, URLs, emails, filenames and domain endings", () => {
     expect(() =>
       validateConfigAssetBundle({
         agents: [

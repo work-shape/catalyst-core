@@ -7,19 +7,19 @@ export interface AgentToolReferenceLocation {
   location: string;
 }
 
-// These suffixes name files or hosts rather than tools, even in a tool namespace.
+// These suffixes name files or hosts rather than tools, even in a tool group.
 const NON_TOOL_SUFFIX =
   /\.(?:md|txt|json|ya?ml|csv|tsv|xlsx?|docx?|pptx?|pdf|html?|css|[cm]?[jt]sx?|py|sh|sql|xml|log|toml|ini|env|gz|tar|png|jpe?g|svg|webp|zip|com|org|net|io|de|co|uk|eu|dev|app|ai|info|biz|edu|gov|me|us|at|ch|fr|nl|it|es|ca|au|cloud|online|site|test|localhost)$/iu;
 
 /**
- * Lists toolNames and dotted instruction tokens in the full tool registry’s namespaces.
+ * Lists toolNames and dotted instruction tokens in the full tool registry’s tool groups.
  * Lines are one-based within instructions. Skills are never scanned.
  */
 export function agentToolReferenceLocations(
   agent: Pick<AgentConfig, "toolNames" | "instructions">,
   registeredToolNames: readonly string[]
 ): AgentToolReferenceLocation[] {
-  const namespaces = new Set([
+  const toolPrefixes = new Set([
     ...registeredToolNames.map((name) => name.split(".")[0]),
     "connection",
     "app",
@@ -42,7 +42,7 @@ export function agentToolReferenceLocations(
       const name = match[1];
       if (
         name === undefined ||
-        !namespaces.has(name.split(".")[0]) ||
+        !toolPrefixes.has(name.split(".")[0]) ||
         NON_TOOL_SUFFIX.test(name) ||
         seen.has(name)
       )
