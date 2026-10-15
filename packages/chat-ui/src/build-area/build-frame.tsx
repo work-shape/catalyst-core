@@ -45,7 +45,12 @@ import {
   type BuildAssetCopy
 } from "./build-asset-page";
 import { BuildCreateDialog } from "./build-create-dialog";
-import { clearBuildStartRequest, requestedBuildStart } from "./build-create-request";
+import {
+  clearBuildCreateDialogRequest,
+  clearBuildStartRequest,
+  requestedBuildStart,
+  useBuildCreateDialogRequest
+} from "./build-create-request";
 import { BUILD_SEARCH_DELAY_MS, type BuildListFilter, type BuildSource } from "./build-data";
 import {
   formatUpdated,
@@ -121,6 +126,15 @@ export function BuildFrame({
     setStart(undefined);
   }
   const creating = start !== undefined;
+  // A kind's own New dialog asked for from outside Studio opens over its list.
+  const dialogAsked = useBuildCreateDialogRequest(
+    location.name === undefined ? location.kindPath : undefined
+  );
+  useEffect(() => {
+    if (!dialogAsked) return;
+    clearBuildCreateDialogRequest();
+    setAsking(true);
+  }, [dialogAsked]);
   // What a kind's own dialog asked to run once the page of the asset it made is open.
   const afterOpen = useRef<{ name: string; then(): void }>(undefined);
   useEffect(() => {

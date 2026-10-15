@@ -46,6 +46,21 @@ export const CONNECTION_OPERATION_NAME_MAX_LENGTH = 64;
  */
 export const CONNECTION_MAX_ACCEPTED_OPERATIONS = 100;
 
+/**
+ * The words that make a name of a request's header or parameter one that can carry a
+ * credential, compared without case. A REST API's fixed header holding one is refused in its
+ * settings; an agent's draft refuses a parameter holding one as a word. A release constant
+ * (manager, 2026-10-14).
+ */
+export const CONNECTION_CREDENTIAL_WORDS = [
+  "auth",
+  "key",
+  "token",
+  "secret",
+  "password",
+  "session"
+] as const;
+
 /** What an operation does to the outside system. A hint of that system never decides it. */
 export type ConnectionOperationEffect = "reading" | "changing";
 
@@ -94,25 +109,6 @@ export interface DeclaredOperationParameter {
   required?: boolean;
 }
 
-/**
- * Where a declared operation meets one dimension of the data scope, such as the Mandant: the
- * input parameter that picks the value, and the field of each returned item that holds it.
- */
-export interface DeclaredOperationScopeDimension {
-  /** A declared path or query parameter, such as `clientNumber`. */
-  input?: string;
-  /** The field of each returned item, such as `items[].number`. */
-  output?: string;
-}
-
-/**
- * The data scope of a declared operation by dimension, such as
- * `{ mandant: { input: "clientNumber", output: "items[].number" } }` (SCOPE-2). The shape is
- * read now so that SCOPE-2 needs no new one; until SCOPE-2 the key is reserved and refused at
- * save (SCOPE-0). Nothing filters by it.
- */
-export type DeclaredOperationScope = Record<string, DeclaredOperationScopeDimension>;
-
 /** Why `scope` on an operation declaration is refused before SCOPE-2 (SCOPE-0). */
 export const CONNECTION_SCOPE_RESERVED =
   "'scope' is reserved: scoped Connection operations arrive with SCOPE-2. Until then an operation that serves one Mandant takes it as a named parameter and returns it on every item";
@@ -133,7 +129,6 @@ export interface ConnectionOperationDeclaration {
   path?: string;
   pathParams?: Record<string, DeclaredOperationParameter>;
   query?: Record<string, DeclaredOperationParameter>;
-  scope?: DeclaredOperationScope;
 }
 
 /** The members of `ConnectionOperationDeclaration`, which only a declaring type reads. */
@@ -143,8 +138,7 @@ export const CONNECTION_DECLARATION_FIELDS = [
   "method",
   "path",
   "pathParams",
-  "query",
-  "scope"
+  "query"
 ] as const satisfies readonly (keyof ConnectionOperationDeclaration)[];
 
 export interface ConnectionOperationConfig extends ConnectionOperationDeclaration {
@@ -642,11 +636,7 @@ function declarationIssues(
       path: ["operations", index, ...(issue.path ?? [])]
     });
     if (type.declared) {
-      const reserved: AssetValidationIssue[] =
-        operation.scope === undefined
-          ? []
-          : [{ message: CONNECTION_SCOPE_RESERVED, path: ["scope"], code: "key_reserved" }];
-      return [...reserved, ...type.declared.issues(operation)].map(at);
+      return type.declared.issues(operation).map(at);
     }
     return CONNECTION_DECLARATION_FIELDS.filter((field) => operation[field] !== undefined).map(
       (field) =>
