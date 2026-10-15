@@ -13,7 +13,11 @@
   },
   "files": [
     "dist",
-    "src"
+    "src/styles.css",
+    "src/vite.js",
+    "src/vite.d.ts",
+    "src/content-policy.js",
+    "src/env.js"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
