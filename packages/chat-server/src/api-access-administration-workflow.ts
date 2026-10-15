@@ -22,6 +22,7 @@ import {
   principalRights,
   type PrincipalRightsOptions
 } from "./principal-rights";
+import { requireAuthorized, withRightsHeld } from "./rights-held";
 import type { ChatServerOptions } from "./types";
 
 const SERVICE_PERMISSIONS = new Set<ServicePrincipalPermission>([
@@ -39,7 +40,10 @@ export const SERVICE_PRINCIPALS_ACTION = "service_principals.manage";
 const API_ACCESS_ACTION = "api_access.manage";
 
 /** What a changing API access operation takes from its Operation Run. */
-type ChangeContext = Pick<OperationExecutionContext, "actor" | "audit" | "correlationId">;
+type ChangeContext = Pick<
+  OperationExecutionContext,
+  "actor" | "access" | "audit" | "correlationId"
+>;
 
 /** What an API access operation's own check reads of the call. */
 type Caller = Pick<OperationAuthorizeContext, "actor" | "access">;
@@ -200,37 +204,45 @@ export class ApiAccessAdministrationWorkflow {
   }
 
   async createServicePrincipal(
+    operationId: string,
     context: ChangeContext,
     command: CreateServicePrincipalCommand
   ): Promise<ServicePrincipalDetail> {
     this.requireServicePermissions(command.permissions);
-    const principal = await this.options.stores.apiAccess.createServicePrincipal({
-      clientInstanceId: this.options.clientInstanceId,
-      name: command.name,
-      displayLabel: command.displayLabel,
-      description: command.description,
-      status: command.status,
-      permissionRefs: [],
-      permissions: command.permissions ?? [],
-      createdByUserId: asUserId(context.actor.id)
+    const principal = await this.whileRightsHeld(context, async (held, caller) => {
+      requireAuthorized(await held.authorizeCreatePrincipal(operationId, caller, command));
+      return held.options.stores.apiAccess.createServicePrincipal({
+        clientInstanceId: this.options.clientInstanceId,
+        name: command.name,
+        displayLabel: command.displayLabel,
+        description: command.description,
+        status: command.status,
+        permissionRefs: [],
+        permissions: command.permissions ?? [],
+        createdByUserId: asUserId(caller.actor.id)
+      });
     });
     await this.recordPrincipalMutation(context, "api_access.service_principal_created", principal);
     return this.detail(principal);
   }
 
   async updateServicePrincipal(
+    operationId: string,
     context: ChangeContext,
     command: UpdateServicePrincipalCommand
   ): Promise<ServicePrincipalDetail> {
     this.requireServicePermissions(command.permissions);
-    const principal = await this.options.stores.apiAccess.updateServicePrincipal({
-      clientInstanceId: this.options.clientInstanceId,
-      servicePrincipalId: asServicePrincipalId(command.servicePrincipalId),
-      displayLabel: command.displayLabel,
-      description: command.description,
-      status: command.status,
-      permissions: command.permissions,
-      grantedBy: asUserId(context.actor.id)
+    const principal = await this.whileRightsHeld(context, async (held, caller) => {
+      requireAuthorized(await held.authorizeUpdatePrincipal(operationId, caller, command));
+      return held.options.stores.apiAccess.updateServicePrincipal({
+        clientInstanceId: this.options.clientInstanceId,
+        servicePrincipalId: asServicePrincipalId(command.servicePrincipalId),
+        displayLabel: command.displayLabel,
+        description: command.description,
+        status: command.status,
+        permissions: command.permissions,
+        grantedBy: asUserId(caller.actor.id)
+      });
     });
     await this.recordPrincipalMutation(context, "api_access.service_principal_updated", principal);
     return this.detail(principal);
@@ -241,18 +253,22 @@ export class ApiAccessAdministrationWorkflow {
    * this answer; the audit row below names the key by its prefix alone.
    */
   async createApiCredential(
+    operationId: string,
     context: ChangeContext,
     command: CreateApiCredentialCommand
   ): Promise<{ credential: ApiCredentialRecord; secret: string }> {
     this.requireCredentialScopes(command.scopes);
     this.requireFutureExpiry(command.expiresAt);
     const { audit: auditRecorder } = context;
-    const created = await this.options.stores.apiAccess.createApiCredential({
-      clientInstanceId: this.options.clientInstanceId,
-      servicePrincipalId: asServicePrincipalId(command.servicePrincipalId),
-      name: command.name,
-      scopes: command.scopes,
-      expiresAt: command.expiresAt
+    const created = await this.whileRightsHeld(context, async (held, caller) => {
+      requireAuthorized(await held.authorizeCreateCredential(operationId, caller, command));
+      return held.options.stores.apiAccess.createApiCredential({
+        clientInstanceId: this.options.clientInstanceId,
+        servicePrincipalId: asServicePrincipalId(command.servicePrincipalId),
+        name: command.name,
+        scopes: command.scopes,
+        expiresAt: command.expiresAt
+      });
     });
     await auditRecorder.record({
       type: "api_access.credential_created",
@@ -293,6 +309,22 @@ export class ApiAccessAdministrationWorkflow {
       }
     });
     return credential;
+  }
+
+  /**
+   * `withRightsHeld` for a change of a service principal or its keys: the workflow on the
+   * transaction's stores, and the caller with their rights now.
+   */
+  private whileRightsHeld<Result>(
+    context: ChangeContext,
+    change: (held: ApiAccessAdministrationWorkflow, caller: Caller) => Promise<Result>
+  ): Promise<Result> {
+    return withRightsHeld(
+      this.options,
+      { actor: context.actor, access: context.access },
+      ({ options, actor, access }) =>
+        change(new ApiAccessAdministrationWorkflow(options), { actor, access })
+    );
   }
 
   private rightsOptions(): PrincipalRightsOptions {

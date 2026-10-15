@@ -2,7 +2,6 @@ import {
   AppError,
   hasAuthScope,
   isSuperadmin,
-  operationDenialError,
   type ActorAccess,
   type AuthenticatedUser,
   type OperationAuthorization,
@@ -61,16 +60,7 @@ export function authorizePrincipalHolderWrite(
       };
 }
 
-export function requireAuthorized(authorization: OperationAuthorization): void {
-  if (!authorization.allowed) {
-    throw operationDenialError({
-      kind: "forbidden",
-      action: authorization.action,
-      reason: authorization.reason,
-      ...(authorization.message === undefined ? {} : { message: authorization.message })
-    });
-  }
-}
+export { requireAuthorized } from "./rights-held";
 
 /**
  * Nobody writes a row of their own: an allow would give themselves a right, and one they hold

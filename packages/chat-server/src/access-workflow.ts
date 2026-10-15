@@ -46,15 +46,19 @@ import {
   authorizeGivingToPrincipal,
   type PrincipalRightsOptions
 } from "./principal-rights";
+import { namespaceLists, type NamespaceListsCommand } from "./namespace-lists";
+import { withRightsHeld } from "./rights-held";
 import type { ChatServerOptions } from "./types";
 
 type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
 /**
- * A grant write asks again what its `authorize` asked, of the same answer on the caller's
- * rights: `access` is the call's one snapshot and is not read anew. What is read anew is the
- * holder. The check is repeated so the write refuses by itself, whoever calls it.
+ * A grant write asks again what its `authorize` asked, under the rights locks and with the
+ * caller's rights and the holder read anew (`withRightsHeld`), so the write refuses by itself,
+ * whoever calls it, and nothing changes what it read before it commits.
  */
 type GrantWriteContext = Pick<OperationExecutionContext, "correlationId" | "access">;
+/** The call as a write sees it under the rights locks. */
+type HeldGrantCall = GrantWriteContext & { actor: AuthenticatedUser };
 
 /**
  * The right every operation here asks for. The two grant writes ask it themselves, of a user's
@@ -79,11 +83,6 @@ interface GrantCommand {
   scopeId?: string;
   namespace?: string;
   effect: PermissionGrant["effect"];
-}
-
-interface NamespaceListsCommand {
-  allowedToolNames?: string[] | null;
-  allowedModelBindingIds?: string[] | null;
 }
 
 /**
@@ -181,9 +180,22 @@ export class AccessWorkflow {
     context: GrantWriteContext,
     command: GrantCommand
   ): Promise<PermissionGrant> {
-    if (command.holderKind === "service_principal") {
-      return this.grantToPrincipal(actor, context, command);
-    }
+    const userId = command.holderKind === "user" ? command.holderId : undefined;
+    const grant = await this.whileRightsHeld(actor, context, userId, async (held, now) => {
+      requireAuthorized(await held.authorizeGrant(now.actor, now.access, GRANT_OPERATION, command));
+      return command.holderKind === "service_principal"
+        ? held.grantToPrincipal(now.actor, now, command)
+        : held.grantToUser(now.actor, now, command);
+    });
+    await this.record(actor, context, "permission.granted", grant.id, grantAuditMetadata(grant));
+    return grant;
+  }
+
+  private async grantToUser(
+    actor: AuthenticatedUser,
+    context: GrantWriteContext,
+    command: GrantCommand
+  ): Promise<PermissionGrant> {
     if (command.holderKind !== "user") {
       throw refused(
         "invalid_scope",
@@ -227,7 +239,7 @@ export class AccessWorkflow {
     );
     // The store refuses the same for a deletion requested after this read.
     if (holder.status === "deleting") throw userInDeletionError();
-    const grant = await this.options.stores.access.createGrant({
+    return this.options.stores.access.createGrant({
       clientInstanceId: this.options.clientInstanceId,
       holderKind: "user",
       holderId: holder.id,
@@ -236,8 +248,6 @@ export class AccessWorkflow {
       ...scope,
       grantedBy: asUserId(actor.id)
     });
-    await this.record(actor, context, "permission.granted", grant.id, grantAuditMetadata(grant));
-    return grant;
   }
 
   /**
@@ -301,7 +311,7 @@ export class AccessWorkflow {
       )
     );
     // The store refuses the same for a principal deleted after this read.
-    const grant = await this.options.stores.access.createGrant({
+    return this.options.stores.access.createGrant({
       clientInstanceId: this.options.clientInstanceId,
       holderKind: "service_principal",
       holderId: principal.id,
@@ -311,11 +321,36 @@ export class AccessWorkflow {
       scopeId: asset.id,
       grantedBy: asUserId(actor.id)
     });
-    await this.record(actor, context, "permission.granted", grant.id, grantAuditMetadata(grant));
-    return grant;
   }
 
   async revoke(
+    actor: AuthenticatedUser,
+    context: GrantWriteContext,
+    grantId: string
+  ): Promise<PermissionGrant> {
+    // Read before the locks only to name the user they hold; read again under them.
+    const named = await this.options.stores.access.getGrant({
+      clientInstanceId: this.options.clientInstanceId,
+      grantId
+    });
+    const userId = named?.holderKind === "user" ? named.holderId : undefined;
+    const revoked = await this.whileRightsHeld(actor, context, userId, async (held, now) => {
+      requireAuthorized(
+        await held.authorizeRevoke(now.actor, now.access, REVOKE_OPERATION, grantId)
+      );
+      return held.revokeNow(now.actor, now, grantId);
+    });
+    await this.record(
+      actor,
+      context,
+      "permission.revoked",
+      revoked.id,
+      grantAuditMetadata(revoked)
+    );
+    return revoked;
+  }
+
+  private async revokeNow(
     actor: AuthenticatedUser,
     context: GrantWriteContext,
     grantId: string
@@ -355,14 +390,26 @@ export class AccessWorkflow {
     if (!revoked) {
       throw new AppError("NOT_FOUND", "Grant not found");
     }
-    await this.record(
-      actor,
-      context,
-      "permission.revoked",
-      revoked.id,
-      grantAuditMetadata(revoked)
-    );
     return revoked;
+  }
+
+  /** `withRightsHeld` for a grant write: the workflow on the transaction's stores. */
+  private whileRightsHeld<Result>(
+    actor: AuthenticatedUser,
+    context: GrantWriteContext,
+    userId: string | undefined,
+    change: (held: AccessWorkflow, now: HeldGrantCall) => Promise<Result>
+  ): Promise<Result> {
+    return withRightsHeld(
+      this.options,
+      { actor, access: context.access, ...(userId === undefined ? {} : { userId }) },
+      ({ options, actor: current, access }) =>
+        change(new AccessWorkflow(options), {
+          correlationId: context.correlationId,
+          access,
+          actor: current
+        })
+    );
   }
 
   /**
@@ -422,7 +469,7 @@ export class AccessWorkflow {
     context: AccessCallContext,
     command: { prefix: string; displayName: string } & NamespaceListsCommand
   ): Promise<Namespace> {
-    const lists = this.namespaceLists(command);
+    const lists = namespaceLists(this.options.configAssets.validationRefs, command);
     const namespace = await this.options.stores.access.createNamespace({
       clientInstanceId: this.options.clientInstanceId,
       prefix: command.prefix,
@@ -452,7 +499,7 @@ export class AccessWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       prefix: command.prefix,
       ...(command.displayName === undefined ? {} : { displayName: command.displayName }),
-      ...this.namespaceLists(command)
+      ...namespaceLists(this.options.configAssets.validationRefs, command)
     });
     if (!namespace) {
       throw new AppError("NOT_FOUND", "Namespace not found");
@@ -569,37 +616,6 @@ export class AccessWorkflow {
       throw refused("invalid_scope", "The asset is not an active asset of the action's kind");
     }
     return asset;
-  }
-
-  /** An entry of a list must exist on this instance: an enabled tool, a known model binding. */
-  private namespaceLists(command: NamespaceListsCommand): NamespaceListsCommand {
-    const refs = this.options.configAssets.validationRefs;
-    const unknownTool = command.allowedToolNames?.find(
-      (name) => !refs.enabledToolNames.includes(name)
-    );
-    if (unknownTool !== undefined) {
-      throw new AppError("VALIDATION_FAILED", `'${unknownTool}' is not an enabled tool`, {
-        reason: "unknown_tool",
-        toolName: unknownTool
-      });
-    }
-    const unknownBinding = command.allowedModelBindingIds?.find(
-      (id) => !refs.modelBindingIds.includes(id)
-    );
-    if (unknownBinding !== undefined) {
-      throw new AppError("VALIDATION_FAILED", `'${unknownBinding}' is not a model binding`, {
-        reason: "unknown_model_binding",
-        modelBindingId: unknownBinding
-      });
-    }
-    return {
-      ...(command.allowedToolNames === undefined
-        ? {}
-        : { allowedToolNames: unique(command.allowedToolNames) }),
-      ...(command.allowedModelBindingIds === undefined
-        ? {}
-        : { allowedModelBindingIds: unique(command.allowedModelBindingIds) })
-    };
   }
 
   private async findHolder(
@@ -748,8 +764,4 @@ function namespaceAuditMetadata(namespace: Namespace): JsonObject {
     restrictsTools: namespace.allowedToolNames !== undefined,
     restrictsModels: namespace.allowedModelBindingIds !== undefined
   };
-}
-
-function unique(values: string[] | null): string[] | null {
-  return values === null ? null : [...new Set(values)];
 }

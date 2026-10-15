@@ -4,7 +4,6 @@ import {
   type CreateUserInput,
   type DeleteUserInput,
   type DeleteUserIdentityInput,
-  type HeldUserChangeInput,
   type ResolveUserIdentityInput,
   type UpdateUserInput,
   type UpsertUserIdentityInput,
@@ -25,8 +24,7 @@ import {
   markUserDeletionRequested as markPostgresUserDeletionRequested,
   resolveUserIdentity as resolvePostgresUserIdentity,
   updateUser as updatePostgresUser,
-  upsertUserIdentity as upsertPostgresUserIdentity,
-  whileUserHeld as whilePostgresUserHeld
+  upsertUserIdentity as upsertPostgresUserIdentity
 } from "../postgres-user-operations";
 import type { PostgresConnection } from "../postgres-database";
 export function createPostgresUsersStore(db: PostgresConnection): UserStore {
@@ -61,9 +59,6 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
     },
     async deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord> {
       return deletePostgresUserIdentity(db, input);
-    },
-    async whileUserHeld<T>(input: HeldUserChangeInput, change: () => Promise<T>): Promise<T> {
-      return whilePostgresUserHeld(db, input, change);
     },
     async getUserModelPreference(
       input: UserModelPreferenceInput

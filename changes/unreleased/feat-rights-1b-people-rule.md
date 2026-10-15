@@ -25,10 +25,17 @@ section: Changed
 - **Permission refs follow the rule:** a reference of a tool is given only by a person who
   holds it, never to oneself, and a person's references count when their account is changed.
   A superadmin who does not hold a reference no longer gives it on the Users page.
-- **The account checked is the account written:** a change of a user, a sign-in added or
-  removed, and a password set ask the rule again inside the write, under a lock of the user
-  that keeps a concurrent change of their level, a grant written for them and a deletion
-  request waiting. A user promoted after the first check is refused, not written.
+- **The rights checked are the rights written:** every write that changes who holds what
+  (grants and their removal, roles, legacy keys, permission refs, sign-ins, passwords,
+  memberships, Service Principals and their keys, personal API keys) takes the instance's
+  access lock and then the lock of the user it changes, at the start of its transaction, and
+  asks its check again there, of the rights as they are then rather than as the call was
+  admitted. A user promoted, a deny given to the caller, a deny of the user lifted or a
+  membership given in between is counted, not missed. A first password sign-in is created only
+  after that check and removed again when the change fails; a new password for an existing
+  sign-in is the last step before the commit. Rights writes of one instance now run one at a
+  time, and an account change and a grant for the same user no longer end in a Postgres
+  deadlock.
 - **Effect on an operated instance:** an admin keeps every change they made before, except
   changing the account of a person who holds `api_access.manage` or `agent_models.manage`,
   which now only a superadmin does, and writing a grant for themselves, which another admin

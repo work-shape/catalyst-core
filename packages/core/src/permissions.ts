@@ -16,6 +16,7 @@ import {
 } from "./identity";
 import type { ClientInstanceId, UserId } from "./ids";
 import type { StorePage } from "./paging";
+import type { RightsLock } from "./rights-lock";
 import type { ISODateString } from "./time";
 
 export const PERMISSIONS = [
@@ -661,7 +662,7 @@ export interface GrantScopeAsset {
 }
 
 /** The store behind grants and Namespaces: the evaluator's port plus the administration writes. */
-export interface AccessAdministrationStore extends AccessStore {
+export interface AccessAdministrationStore extends AccessStore, RightsLock {
   /**
    * Throws CONFLICT `duplicate_grant`, VALIDATION_FAILED `unknown_namespace` for an
    * unregistered prefix, `userInDeletionError` for a user whose deletion was requested, and

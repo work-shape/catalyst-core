@@ -82,13 +82,7 @@ export interface UpdateUserInput {
   permissions?: string[];
   /** Who the rows `permissions` writes name as their grantor. */
   grantedBy?: UserId;
-  status?: UserStatus; /**
-   * Asked inside the write's transaction with the user as the transaction reads them, under a
-   * lock that keeps every other change of the user, of their roles and of their rows waiting
-   * until it ends. A refusal it throws writes nothing: a check made before the call may have
-   * read a user who has changed since.
-   */
-  check?: (user: UserRecord) => Promise<void>;
+  status?: UserStatus;
 }
 
 export interface UpsertUserIdentityInput {
@@ -99,13 +93,6 @@ export interface UpsertUserIdentityInput {
   displayLabel?: string;
   email?: string;
   emailVerified?: boolean;
-  /**
-   * Asked inside the write's transaction with the user as the transaction reads them, under a
-   * lock that keeps every other change of the user, of their roles and of their rows waiting
-   * until it ends. A refusal it throws writes nothing: a check made before the call may have
-   * read a user who has changed since.
-   */
-  check?: (user: UserRecord) => Promise<void>;
 }
 
 export interface DeleteUserIdentityInput {
@@ -113,21 +100,6 @@ export interface DeleteUserIdentityInput {
   userId: UserId;
   authSource: string;
   externalUserId: string;
-  /**
-   * Asked inside the write's transaction with the user as the transaction reads them, under a
-   * lock that keeps every other change of the user, of their roles and of their rows waiting
-   * until it ends. A refusal it throws writes nothing: a check made before the call may have
-   * read a user who has changed since.
-   */
-  check?: (user: UserRecord) => Promise<void>;
-}
-
-/** A change of a user made outside the user store, such as their password in the auth store. */
-export interface HeldUserChangeInput {
-  clientInstanceId: ClientInstanceId;
-  userId: UserId;
-  /** As the `check` of a write: asked under the lock, with the user as they are. */
-  check: (user: UserRecord) => Promise<void>;
 }
 
 export interface DeleteUserInput {
@@ -174,13 +146,6 @@ export interface UserStore {
   deleteUser(input: DeleteUserInput): Promise<UserRecord>;
   upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord>;
   deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord>;
-  /**
-   * Runs a change the store does not make, under the lock of a write's `check`: the check
-   * first, then the change, and every other change of the user waits for both. The change
-   * must not write the user's own rows, which the lock holds. Refuses a user whose deletion
-   * was requested.
-   */
-  whileUserHeld<T>(input: HeldUserChangeInput, change: () => Promise<T>): Promise<T>;
   getUserModelPreference(input: UserModelPreferenceInput): Promise<UserModelPreference | undefined>;
   setUserModelPreference(
     input: UserModelPreferenceInput & { preference: UserModelPreference }

@@ -5,7 +5,6 @@ import {
   isAuthenticatedServicePrincipal,
   isPermission,
   isSuperadmin,
-  operationDenialError,
   type ActorAccess,
   type AuthenticatedIdentity,
   type HeldRight,
@@ -15,6 +14,7 @@ import {
 } from "@vivd-catalyst/core";
 import { authorizeHeldRightsWithin } from "./held-rights-within";
 import { personRights } from "./person-rights";
+import { requireAuthorized } from "./rights-held";
 import { RELEASE_KEY } from "./principal-rights";
 import type { ChatServerOptions } from "./types";
 
@@ -112,10 +112,21 @@ export async function authorizeUserAdministration(
 }
 
 /**
- * The same rules, asked again inside the operation on the user as they are when it writes: a
- * user may have become a superadmin, or been given a right, since the call was admitted. The
- * refusal ends the run as denied, like the one before it.
+ * The whole check of `authorizeUserAdministration`, asked again where the operation writes:
+ * under the rights locks, of the stores of its transaction and of the caller's rights now
+ * (`withRightsHeld`). A user may have become a superadmin, been given a right, or the caller
+ * lost one, since the call was admitted. The refusal ends the run as denied.
  */
+export async function requireUserAdministration(
+  options: RulesOptions,
+  operationId: string,
+  caller: Caller,
+  call: UserAdministrationCall
+): Promise<void> {
+  requireAuthorized(await authorizeUserAdministration(options, operationId, caller, call));
+}
+
+/** The rules alone, of a user already read: for a call that only a superadmin makes. */
 export async function requireMayAdministerUser(
   options: RulesOptions,
   operationId: string,
@@ -123,15 +134,7 @@ export async function requireMayAdministerUser(
   target: UserRecord | undefined,
   call: Omit<UserAdministrationCall, "userId"> = {}
 ): Promise<void> {
-  const decision = await userAdministrationRule(options, operationId, caller, target, call);
-  if (!decision.allowed) {
-    throw operationDenialError({
-      kind: "forbidden",
-      action: decision.action,
-      reason: decision.reason,
-      ...(decision.message === undefined ? {} : { message: decision.message })
-    });
-  }
+  requireAuthorized(await userAdministrationRule(options, operationId, caller, target, call));
 }
 
 /**

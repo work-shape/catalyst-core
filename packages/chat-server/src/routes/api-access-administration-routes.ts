@@ -27,7 +27,7 @@ export function registerApiAccessAdministrationRoutes(
     changeClass: "reversible",
     authorize: (input, caller) =>
       workflow.authorizeCreatePrincipal(createPrincipal.id, caller, input),
-    execute: (input, context) => workflow.createServicePrincipal(context, input)
+    execute: (input, context) => workflow.createServicePrincipal(createPrincipal.id, context, input)
   });
 
   route.operation(updatePrincipal, {
@@ -35,7 +35,7 @@ export function registerApiAccessAdministrationRoutes(
     authorize: (input, caller) =>
       workflow.authorizeUpdatePrincipal(updatePrincipal.id, caller, input),
     resource: ({ servicePrincipalId }) => ({ kind: "service_principal", id: servicePrincipalId }),
-    execute: (input, context) => workflow.updateServicePrincipal(context, input)
+    execute: (input, context) => workflow.updateServicePrincipal(updatePrincipal.id, context, input)
   });
 
   route.operation(createCredential, {
@@ -44,7 +44,7 @@ export function registerApiAccessAdministrationRoutes(
     authorize: (input, caller) =>
       workflow.authorizeCreateCredential(createCredential.id, caller, input),
     resource: ({ servicePrincipalId }) => ({ kind: "service_principal", id: servicePrincipalId }),
-    execute: (input, context) => workflow.createApiCredential(context, input)
+    execute: (input, context) => workflow.createApiCredential(createCredential.id, context, input)
   });
 
   route.operation(revokeCredential, {
