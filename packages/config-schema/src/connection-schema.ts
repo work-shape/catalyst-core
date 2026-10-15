@@ -218,8 +218,73 @@ const idempotencyKeyHeaderSchema = z
       "The header of an idempotency key is 'Idempotency-Key' or a name of at most 64 letters, digits and hyphens that ends in '-Idempotency-Key' or '-Request-Id'"
   });
 
+/** The name of a parameter of a declared operation, as a path placeholder or a query key. */
+const DECLARED_PARAMETER_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/u;
+/** How many path and query parameters one declared operation names, each. */
+const DECLARED_PARAMETERS_MAX = 32;
+
+const declaredParameterNameSchema = z.string().regex(DECLARED_PARAMETER_NAME_PATTERN, {
+  message:
+    "A parameter name starts with a letter or an underscore and holds at most 64 letters, digits, '_', '.' or '-'"
+});
+
+const declaredParametersSchema = z
+  .record(
+    declaredParameterNameSchema,
+    z
+      .object({
+        schema: z.record(z.string(), jsonValueSchema),
+        description: z.string().trim().min(1).max(1_000).optional(),
+        required: z.boolean().optional()
+      })
+      .strict()
+  )
+  .refine((parameters) => Object.keys(parameters).length <= DECLARED_PARAMETERS_MAX, {
+    message: `An operation declares at most ${DECLARED_PARAMETERS_MAX} parameters of a kind`
+  });
+
+/**
+ * What a Connection declares of an operation itself, for a Connector type that has neither a
+ * catalog nor a discovery (`http_api`). The shapes are read here; what the type accepts, such
+ * as the method and how the path and its parameters fit, is the type's own check. A type that
+ * does not declare refuses every one of these fields.
+ */
+const operationDeclarationShape = {
+  title: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().min(1).max(4_000).optional(),
+  method: z
+    .string()
+    .regex(/^[A-Z]{1,16}$/u, { message: "A method is written in capitals, such as GET" })
+    .optional(),
+  path: z.string().min(1).max(2_048).optional(),
+  pathParams: declaredParametersSchema.optional(),
+  query: declaredParametersSchema.optional(),
+  /**
+   * The data scope by dimension, such as `{ mandant: { input: clientNumber, output:
+   * items[].number } }`. The shape is read now so that SCOPE-2 needs no new one; until then
+   * the Connection kind refuses the key at save (SCOPE-0).
+   */
+  scope: z
+    .record(
+      z.string().regex(/^[a-z][a-z0-9_]{0,31}$/u, {
+        message: "A scope dimension is a lower-case name, such as mandant"
+      }),
+      z
+        .object({
+          input: declaredParameterNameSchema.optional(),
+          output: z.string().min(1).max(128).optional()
+        })
+        .strict()
+        .refine((dimension) => dimension.input !== undefined || dimension.output !== undefined, {
+          message: "A scope dimension names its input, its output or both"
+        })
+    )
+    .optional()
+};
+
 const connectionOperationSchema = z
   .object({
+    ...operationDeclarationShape,
     name: z
       .string()
       .max(CONNECTION_OPERATION_NAME_MAX_LENGTH)
@@ -320,6 +385,7 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
 
 const releaseConnectionOperationSchema = z
   .object({
+    ...operationDeclarationShape,
     name: connectionOperationSchema.shape.name,
     /** Required: the operator decides what an operation does, a hint of the system never. */
     effect: z.enum(["reading", "changing"]),

@@ -171,13 +171,13 @@ guardrails:
 
 A guardrail answers one event. A rule that should hold wherever content can go live needs one entry per event: the IBAN rule above stops an asset write and, with its second entry, the publish of an App, so an App whose revision was written before the rule existed cannot go live with an IBAN either.
 
-| Field                        | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `displayName`, `description` | What Build shows. Without `displayName` the name is shown.                                                                                                                                                                                                                                                                                                                                                                                    |
-| `on`                         | The event the guardrail answers: `asset.before_write` (a save, a push, a revert, an App written from a Page, an agent's save and the skill change it proposes, again when that change is approved), `operation.before_call` (every call of an operation), `app.before_publish`, `workflow.before_publish`, `data_store.before_publish` (the revision a publish makes live, with its files) or `approval_request.before_create`.                   |
-| `filter`                     | Narrows the event: `kind` (the asset's kind, or the request's kind such as `skill_change`), `operation` (a name or a prefix ending in `.*`), `origin` (`agent`, `user`, `cli`, `mcp`, `app`, `workflow`, `schedule`) and `agent`, as far as the event knows them. Without it, everything at the event.                                                                                                                                          |
-| `check`                      | `pattern`: an RE2 expression (no backreferences, no lookaround), with the `reason` a person is shown. `model_judge`: a model of `modelBindingId` reads the content against `instruction` (at most 8,000 characters, any language) and answers with no tools. Either may name the event's `fields`: `name` and `content` of an asset, `input` of a call, `summary` and `newContent` of a request.                                                 |
-| `outcome`                    | What a hit does: `allow`, `warn`, `require_approval` (a changing call waits for an approval in the Inbox; the App draft an agent's `page.save` writes cannot wait, so there it is a `block`) or `block`. Every guardrail that applies runs, and the strictest answer wins.                                                                                                                                                                                                                                                       |
+| Field                        | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displayName`, `description` | What Build shows. Without `displayName` the name is shown.                                                                                                                                                                                                                                                                                                                                                                      |
+| `on`                         | The event the guardrail answers: `asset.before_write` (a save, a push, a revert, an App written from a Page, an agent's save and the skill change it proposes, again when that change is approved), `operation.before_call` (every call of an operation), `app.before_publish`, `workflow.before_publish`, `data_store.before_publish` (the revision a publish makes live, with its files) or `approval_request.before_create`. |
+| `filter`                     | Narrows the event: `kind` (the asset's kind, or the request's kind such as `skill_change`), `operation` (a name or a prefix ending in `.*`), `origin` (`agent`, `user`, `cli`, `mcp`, `app`, `workflow`, `schedule`) and `agent`, as far as the event knows them. Without it, everything at the event.                                                                                                                          |
+| `check`                      | `pattern`: an RE2 expression (no backreferences, no lookaround), with the `reason` a person is shown. `model_judge`: a model of `modelBindingId` reads the content against `instruction` (at most 8,000 characters, any language) and answers with no tools. Either may name the event's `fields`: `name` and `content` of an asset, `input` of a call, `summary` and `newContent` of a request.                                |
+| `outcome`                    | What a hit does: `allow`, `warn`, `require_approval` (a changing call waits for an approval in the Inbox; the App draft an agent's `page.save` writes cannot wait, so there it is a `block`) or `block`. Every guardrail that applies runs, and the strictest answer wins.                                                                                                                                                      |
 
 Content longer than 2 Mi characters is not read in part: a guardrail that blocks or asks for an approval answers it as a match; one that warns warns. A text file in UTF-8, or in UTF-16 with its byte order mark or without one where at least 90% of the bytes at one parity of its first KiB are NUL and at most 10% at the other, is read as text. Any other file is read by a `pattern` as its printable runs (printable ASCII, tab and line ends) of at least 4 characters, as `strings` finds them, so text beside a NUL byte is still found and a photo adds next to nothing. A `model_judge` reads the text files and, of an image or a font (PNG, JPEG, GIF, WebP, ICO, WOFF, WOFF2, TrueType, OpenType), the printable runs of at least 16 characters, which a photo has next to none of and text put into the file has throughout; any other file that is no text leaves it nothing it can judge, which a judge that blocks or asks for an approval answers as a match. Such a refusal does not say to try again, as nothing about it is temporary; a judge that failed or timed out does.
 
@@ -938,18 +938,18 @@ infrastructure:
 
 Providers and their settings:
 
-| Port            | Provider                    | Settings                                                                                                                                                                                                     |
-| --------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `models`        | `openai-compatible`         | `model`, `api`, `reasoningEffort`, `contextManagement`, `baseUrl`, `credentialSecret` (default `OPENAI_API_KEY`), `authMode`, `organizationSecret`                                                           |
-| `models`        | `google-vertex`             | `model`, `projectId`, `credentialSecret` (default `GOOGLE_VERTEX_CREDENTIALS`): the JSON key of a service account. Gemini on Vertex AI; `region` decides the endpoint and location.                          |
-| `models`        | `aws-bedrock`               | `accountId`: the AWS account of the profiles; `model`: the ARN of an application inference profile of that account in `eu-central-1`; `credentialSecret` (default `AWS_BEARER_TOKEN_BEDROCK`): a Bedrock API key. Claude on Amazon Bedrock; `region` must be `eu`; every model needs a price. |
-| `models`        | `deterministic`             | `model`. Answers without a model; for tests and local runs.                                                                                                                                                  |
-| `mail`          | `mailjet`                   | `appUrl`, `sender`, `apiKeySecret` (default `MAILJET_API_KEY`), `apiSecretSecret` (default `MAILJET_API_SECRET`)                                                                                             |
-| `mail`          | `capture`                   | `appUrl`, `sender`. Development only.                                                                                                                                                                        |
-| `objectStorage` | `s3`                        | `bucket`, `bucketRegion`, `endpoint`, `forcePathStyle`, `accessKeySecret` (default `AWS_ACCESS_KEY_ID`), `secretKeySecret` (default `AWS_SECRET_ACCESS_KEY`). Any S3-compatible store.                       |
-| `objectStorage` | `filesystem`                | `root`: a directory that the API and its workers share.                                                                                                                                                      |
-| `sandbox`       | `docker`                    | `image`, `cpuCount`, `memoryBytes`, `pidsLimit`, `endpoint` (a `tcp://` or `ssh://` Docker engine on another host; needs `region`). The container has no network and a read-only root file system.           |
-| `sandbox`       | `local`                     | None. Development only.                                                                                                                                                                                      |
+| Port            | Provider            | Settings                                                                                                                                                                                                                                                                                      |
+| --------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `models`        | `openai-compatible` | `model`, `api`, `reasoningEffort`, `contextManagement`, `baseUrl`, `credentialSecret` (default `OPENAI_API_KEY`), `authMode`, `organizationSecret`                                                                                                                                            |
+| `models`        | `google-vertex`     | `model`, `projectId`, `credentialSecret` (default `GOOGLE_VERTEX_CREDENTIALS`): the JSON key of a service account. Gemini on Vertex AI; `region` decides the endpoint and location.                                                                                                           |
+| `models`        | `aws-bedrock`       | `accountId`: the AWS account of the profiles; `model`: the ARN of an application inference profile of that account in `eu-central-1`; `credentialSecret` (default `AWS_BEARER_TOKEN_BEDROCK`): a Bedrock API key. Claude on Amazon Bedrock; `region` must be `eu`; every model needs a price. |
+| `models`        | `deterministic`     | `model`. Answers without a model; for tests and local runs.                                                                                                                                                                                                                                   |
+| `mail`          | `mailjet`           | `appUrl`, `sender`, `apiKeySecret` (default `MAILJET_API_KEY`), `apiSecretSecret` (default `MAILJET_API_SECRET`)                                                                                                                                                                              |
+| `mail`          | `capture`           | `appUrl`, `sender`. Development only.                                                                                                                                                                                                                                                         |
+| `objectStorage` | `s3`                | `bucket`, `bucketRegion`, `endpoint`, `forcePathStyle`, `accessKeySecret` (default `AWS_ACCESS_KEY_ID`), `secretKeySecret` (default `AWS_SECRET_ACCESS_KEY`). Any S3-compatible store.                                                                                                        |
+| `objectStorage` | `filesystem`        | `root`: a directory that the API and its workers share.                                                                                                                                                                                                                                       |
+| `sandbox`       | `docker`            | `image`, `cpuCount`, `memoryBytes`, `pidsLimit`, `endpoint` (a `tcp://` or `ssh://` Docker engine on another host; needs `region`). The container has no network and a read-only root file system.                                                                                            |
+| `sandbox`       | `local`             | None. Development only.                                                                                                                                                                                                                                                                       |
 
 Every stored byte goes through one object storage port. `objectStorage.files` holds uploaded
 documents and what is prepared from them, and is used by the document processing capability, a
@@ -1049,9 +1049,59 @@ egress:
       port: 443
 ```
 
-Each key under `connections` is the name of a Connection. A name that starts with the prefix of a [Namespace](/operate/rights-and-namespaces/) belongs to that Namespace: whoever holds `connection.read` or `connection.use` there holds it on this Connection too, so choose the name with that in mind. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`, `outside`) and optionally `policy` and `schemaFingerprint`. What stands in the list is accepted; nothing else of the outside system can be called. Each exposure admits one kind of caller: `agent` an agent, `bridge` an App, `workflow` a Workflow, and `outside` the CLI and the platform MCP server, a caller with an API key or a Service Principal's credential, whose results leave the instance. A person in the browser outside an App and a schedule are admitted by none. `outside` is off unless the list names it.
+Each key under `connections` is the name of a Connection. A name that starts with the prefix of a [Namespace](/operate/rights-and-namespaces/) belongs to that Namespace: whoever holds `connection.read` or `connection.use` there holds it on this Connection too, so choose the name with that in mind. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`, `outside`) and optionally `policy` and `schemaFingerprint`; an operation of `http_api` also declares its request ([below](#a-rest-interface-http_api)). What stands in the list is accepted; nothing else of the outside system can be called. Each exposure admits one kind of caller: `agent` an agent, `bridge` an App, `workflow` a Workflow, and `outside` the CLI and the platform MCP server, a caller with an API key or a Service Principal's credential, whose results leave the instance. A person in the browser outside an App and a schedule are admitted by none. `outside` is off unless the list names it.
 
 `secret` is the name of a secret, resolved like every other secret of the instance: from the environment variable of that name or from the file `<NAME>_FILE` points at. It is the only place of a Connection where a secret may stand, and it never holds the value. An `authScheme` other than `none` needs it, and `none` refuses it.
+
+### A REST interface: `http_api`
+
+The connector type `http_api` reads a REST interface by GET. It has no discovery: each operation declares its request, and the declaration is what an agent, an App or a Workflow sees of it.
+
+```yaml
+connections:
+  exampledata:
+    connectorType: http_api
+    displayName: Exampledata
+    settings:
+      baseUrl: https://api.exampledata.com/datevconnect
+      headers:
+        x-client-instance-id: 6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b
+      testPath: /health
+    authScheme: bearer
+    secret: EXAMPLEDATA_KEY
+    operations:
+      - name: open_items
+        effect: reading
+        exposure: [workflow]
+        method: GET
+        path: /clients/{clientId}/open-items
+        description: Reads the open items of one Mandant.
+        pathParams:
+          clientId:
+            schema: { type: string }
+        query:
+          fiscalYear:
+            schema: { type: integer }
+            required: true
+```
+
+`settings` takes `baseUrl`, `headers`, `testPath` and `headerName`, and nothing else:
+
+- `baseUrl` is the address every path is relative to: `https`, or `http` for a host the egress list names as private. It holds no user name, password, query or fragment. Changing its protocol, host or port clears the stored key, which must then be set again, so the key never goes to a host it was not given for.
+- `headers` are sent with every request and are never a credential. A header whose name can carry one is refused with `credential_in_settings`: `Authorization`, `Proxy-Authorization`, `Cookie` and any name that contains `auth`, `key`, `token`, `secret`, `password` or `session`, in any case. The key goes in `secret`.
+- `authScheme` `bearer` sends the key as `Authorization: Bearer`; `header` sends it in the header `headerName` names.
+- `testPath`, optional, is a GET path that **Test connection** asks, and its answer must be 2xx. Without it the test asks `baseUrl`: 401 or 403 means the key was refused, any other answer that the system is reachable. A test keeps nothing of the answer.
+
+An operation of `http_api` takes, beside `name`, `effect` and `exposure`:
+
+- `method` `GET` and `effect: reading`. Nothing else is accepted yet; a GET is no proof that nothing changes, so the effect is declared as for any operation.
+- `path`, relative to `baseUrl`, with a `{name}` placeholder for each entry of `pathParams`. It holds no query, no address and no segment `.` or `..`, also not written as `%2e`.
+- `pathParams` and `query`: each parameter with its JSON `schema` (a path parameter a `string`, `integer` or `number`, a query parameter also a `boolean`), an optional `description`, and for a query parameter `required`. A path parameter is always required.
+- `description`, what the operation reads and when to call it, which an agent reads, and optionally `title`, its name in words.
+
+A caller fills the declared parameters and nothing else: never the host, the method, a header or the key. A path parameter is percent-encoded and may not be empty, hold a `/`, or be `.` or `..`; an input with any other key is refused as `input_invalid` before anything is sent. No redirect is followed. The answer must be JSON of at most 2 MiB; a list is answered as `{ items: [...] }`, so every result is an object. An answer that is not JSON or too large fails as `output_invalid`, and one that holds the key as `output_rejected`.
+
+An operation that reads the data of one Mandant takes the Mandant as a named parameter and returns it on every item, so that a data scope can attach to it later. The key `scope` on an operation is reserved for that and refused until it is built.
 
 ### What a start does
 
