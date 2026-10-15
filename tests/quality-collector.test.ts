@@ -27,7 +27,7 @@ const project: Record<string, string> = {
   ".gitignore": "node_modules\n",
   "package.json": JSON.stringify({ name: "fixture", private: true, workspaces: ["packages/*"] }),
   "eslint.config.mjs": `import config from "@vivd-catalyst/quality-config";
-export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "warn" } }];
+export default [...config, { rules: { "catalyst/retired-terms": "error" } }, { files: ["**/warned.ts"], rules: { "no-debugger": "warn" } }];
 `,
   "knip.json": JSON.stringify({
     workspaces: {
@@ -781,6 +781,58 @@ describe("quality collector", { timeout: 180_000 }, () => {
       Array.from({ length: 15 }, () => `catalyst/literal-text ${source}/screens`)
     );
     expect(scopes).toContain("catalyst/console-boundary packages/alpha");
+  });
+
+  it("ratchets retired terms in identifiers, strings, templates and JSX per package", () => {
+    const fixtures = {
+      [`${source}/retired-identifiers.ts`]: `export interface Namespace { namespaceId: string }
+export const listNamespaces = (namespace: Namespace) => ({ namespace });
+export const NAMESPACE_ID = "example";
+`,
+      [`${source}/retired-strings.ts`]:
+        'export const route = "/namespaces"; export const escaped = "\\u006eamespace";\n',
+      [`${source}/retired-template.ts`]: "export const route = `/namespaces/${1}`;\n",
+      [`${source}/retired-jsx.tsx`]:
+        'export const content = <NamespacePanel namespaceId="namespace">Namespaces</NamespacePanel>;\n',
+      [`${source}/retired-private.ts`]:
+        "export class Example { #namespace = 1; read() { return this.#namespace; } }\n",
+      "packages/beta/src/retired-escaped.ts": 'export const names\\u0070aceId = "example";\n',
+      [`${source}/retired-allowed.ts`]:
+        '// Namespace retirement is tracked in NS-RETIRE.\nexport namespace Types { export type Id = string; }\nexport const space = "workspace";\n'
+    };
+    try {
+      write(fixtures);
+      const findings = measure("lint").filter((finding) =>
+        finding.startsWith("catalyst/retired-terms ")
+      );
+      expect(findings).toEqual(
+        [
+          ...Array.from(
+            { length: 7 },
+            () => `catalyst/retired-terms ${source}/retired-identifiers.ts`
+          ),
+          ...Array.from({ length: 2 }, () => `catalyst/retired-terms ${source}/retired-strings.ts`),
+          `catalyst/retired-terms ${source}/retired-template.ts`,
+          ...Array.from({ length: 5 }, () => `catalyst/retired-terms ${source}/retired-jsx.tsx`),
+          ...Array.from({ length: 2 }, () => `catalyst/retired-terms ${source}/retired-private.ts`),
+          "catalyst/retired-terms packages/beta/src/retired-escaped.ts"
+        ].sort()
+      );
+      const scopes = measure("lint", "scope").filter((finding) =>
+        finding.startsWith("catalyst/retired-terms ")
+      );
+      expect(scopes).toEqual([
+        ...Array.from({ length: 17 }, () => "catalyst/retired-terms packages/alpha"),
+        "catalyst/retired-terms packages/beta"
+      ]);
+      const unbaselined = collect("lint");
+      expect(unbaselined.status).toBe(1);
+      expect(unbaselined.stderr).toContain(
+        "lint|catalyst/retired-terms|packages/beta: measured 1, baseline 0; repair the increase"
+      );
+    } finally {
+      for (const file of Object.keys(fixtures)) rmSync(join(directory, file), { force: true });
+    }
   });
 
   it("reports compiler errors and unused declarations in packages and tests", () => {

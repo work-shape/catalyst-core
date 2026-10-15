@@ -448,6 +448,153 @@
       "scope": "packages/tool-execution",
       "count": 2,
       "owner": "EW-1"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "clients/demo",
+      "count": 63,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "e2e",
+      "count": 75,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/api-contract",
+      "count": 69,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/app-build",
+      "count": 13,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/app-kit",
+      "count": 2,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/asset-schemas",
+      "count": 3,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/chat-server",
+      "count": 276,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/chat-ui",
+      "count": 656,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/client-assembly",
+      "count": 1,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/config-cli",
+      "count": 34,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/core",
+      "count": 80,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/data-source",
+      "count": 4,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/data-stores",
+      "count": 7,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/deployment-kit",
+      "count": 1,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/docs",
+      "count": 1,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/postgres-connector",
+      "count": 9,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/postgres-store",
+      "count": 82,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/quality-config",
+      "count": 1,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/tool-execution",
+      "count": 3,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "packages/ui",
+      "count": 5,
+      "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/retired-terms",
+      "scope": "tests",
+      "count": 868,
+      "owner": "NS-RETIRE"
     }
   ],
   "acceptedRaises": [
@@ -457,6 +604,153 @@
       "reason": "connect_codes.start and connect_codes.redeem (PK-1) change identity data by design; accepted 2026-10-13",
       "acceptedBy": "manager",
       "date": "2026-10-13"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|clients/demo",
+      "to": 63,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|e2e",
+      "to": 75,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/api-contract",
+      "to": 69,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/app-build",
+      "to": 13,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/app-kit",
+      "to": 2,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/asset-schemas",
+      "to": 3,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/chat-server",
+      "to": 276,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/chat-ui",
+      "to": 656,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/client-assembly",
+      "to": 1,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/config-cli",
+      "to": 34,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/core",
+      "to": 80,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/data-source",
+      "to": 4,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/data-stores",
+      "to": 7,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/deployment-kit",
+      "to": 1,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/docs",
+      "to": 1,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/postgres-connector",
+      "to": 9,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/postgres-store",
+      "to": 82,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/quality-config",
+      "to": 1,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/tool-execution",
+      "to": 3,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|packages/ui",
+      "to": 5,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/retired-terms|tests",
+      "to": 868,
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "acceptedBy": "Felix (D4\u2032 implementation request)",
+      "date": "2026-10-15"
     }
   ]
 }

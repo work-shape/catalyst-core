@@ -7,6 +7,7 @@ import { importRules } from "./import-rules.mjs";
 import { moduleSnapshotBoundaryRule } from "./module-snapshot-rule.mjs";
 import { modelGatewayRules } from "./model-gateway-rules.mjs";
 import { runOperationBoundaryRule } from "./run-operation-rule.mjs";
+import { retiredTermsRule } from "./retired-terms-rule.mjs";
 
 /**
  * @typedef {import("eslint").Rule.RuleContext} Context
@@ -726,7 +727,8 @@ const plugin = {
           ? { "MemberExpression[property.name=/^(skip|skipIf|runIf)$/]": report }
           : {}
     ),
-    ...modelGatewayRules({ root, rule, packageAt, keyName, loadedModule })
+    ...modelGatewayRules({ root, rule, packageAt, keyName, loadedModule }),
+    "retired-terms": retiredTermsRule
   }
 };
 
@@ -765,7 +767,9 @@ const config = [
       ...importRules(root).rules,
       ...Object.fromEntries(
         Object.keys(plugin.rules ?? {}).map((name) => [`catalyst/${name}`, "error"])
-      )
+      ),
+      // Each repository opts into the product vocabulary ratchet with its own measured baseline.
+      "catalyst/retired-terms": "off"
     }
   },
   {

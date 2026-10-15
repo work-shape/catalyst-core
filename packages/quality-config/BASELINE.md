@@ -48,3 +48,5 @@ S3-07 moved the environment reads of package sources into each package's one env
 CB-8a added the literal interface text rule with 144 findings, all in `packages/chat-ui/src/control-plane`. NL-4a localized that folder and removed the entry, so the rule has no baseline left. CB-8a also split `chat-ui/src/i18n.tsx` and stopped exporting one unused function from it.
 
 CB-3c replaced the inline Compose migration command with the client migration entry, which removed the two formatting findings in `clients/demo`.
+
+D4′ seeds `catalyst/retired-terms` on platform with 2,253 matching tokens in 21 package and root-folder scopes, owned by NS-RETIRE. The initial entries have one-time accepted raises for the new rule; later increases fail, and removals must lower the exact baseline. The rule is opt-in per repository and is enabled on platform only. No product identifier, route, schema, audit event or table is renamed or removed by the check.
