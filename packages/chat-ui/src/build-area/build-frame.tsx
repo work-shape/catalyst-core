@@ -35,7 +35,8 @@ import {
   opensAssets,
   type BuildAssetRow,
   type BuildAssetStart,
-  type BuildKind
+  type BuildKind,
+  type BuildListLead
 } from "./build-asset-kind";
 import { useBuildAssetKinds } from "./build-asset-kinds";
 import {
@@ -476,6 +477,9 @@ function useSettledText(text: string): string {
   return settled;
 }
 
+/** A kind that adds no rows of its own to its list. */
+const NO_LEAD: BuildListLead = { rows: [] };
+
 function BuildList({
   source,
   kind,
@@ -534,6 +538,184 @@ function BuildList({
     ) : undefined;
   const listError = list.error ? <LoadError message={list.error} onRetry={list.retry} /> : null;
 
+  // The rows a kind adds come first, in the same list, under the same search and filters.
+  const listBody = (lead: BuildListLead) => {
+    const rows = list.rows;
+    const leadRows = lead.rows;
+    return (
+      <>
+        {listError}
+        {lead.error}
+        {rows === undefined || leadRows === undefined ? (
+          listError ? null : (
+            <SkeletonList rows={6} />
+          )
+        ) : rows.length === 0 && leadRows.length === 0 && !filtered && scopes.length < 2 ? (
+          <EmptyState icon={<RegistryIcon name={entry.icon} />} action={newButton}>
+            {t(editable && !state.canCreate ? editable.emptyReadOnlyText : entry.emptyText)}
+          </EmptyState>
+        ) : (
+          <div className="grid min-w-0 gap-3">
+            <FilterBar
+              search={
+                <Input
+                  type="search"
+                  leadingIcon={<Search />}
+                  aria-label={t(entry.searchLabel)}
+                  placeholder={t(entry.searchLabel)}
+                  value={view.text}
+                  onChange={(event) => onViewChange({ ...view, text: event.currentTarget.value })}
+                />
+              }
+              filters={
+                <>
+                  {scope && scopes.length > 1 ? (
+                    <Picker
+                      label={t("build.scopeFilter")}
+                      options={scopes.map((option) => ({
+                        value: buildScopeValue(option),
+                        label: scopeName(option)
+                      }))}
+                      value={buildScopeValue(scope)}
+                      onValueChange={(value) => {
+                        const chosen = scopes.find((option) => buildScopeValue(option) === value);
+                        if (chosen) source.chooseScope?.(chosen);
+                      }}
+                    >
+                      <PickerButton
+                        label={t("build.scopeFilter")}
+                        value={scopeName(scope)}
+                        placeholder={t("build.scopeInstance")}
+                      />
+                    </Picker>
+                  ) : null}
+                  {namespaces.length > 1 ? (
+                    <Picker
+                      search
+                      label={t("build.namespaceFilter")}
+                      options={[
+                        { value: ALL_NAMESPACES, label: t("build.namespaceAll") },
+                        ...namespaces.map((namespace) => ({
+                          value: namespace.prefix,
+                          label: namespace.displayName,
+                          description: namespace.prefix
+                        }))
+                      ]}
+                      value={view.namespace ?? ALL_NAMESPACES}
+                      onValueChange={(prefix) =>
+                        onViewChange({
+                          ...view,
+                          namespace: prefix === ALL_NAMESPACES ? undefined : prefix
+                        })
+                      }
+                    >
+                      <PickerButton
+                        label={t("build.namespaceFilter")}
+                        value={namespaceName(view.namespace) ?? t("build.namespaceAll")}
+                        placeholder={t("build.namespaceAll")}
+                      />
+                    </Picker>
+                  ) : null}
+                </>
+              }
+            />
+            {rows.length === 0 && leadRows.length === 0 ? (
+              <EmptyState layout="inline" icon={<SearchX aria-hidden="true" />}>
+                {settledText.trim() !== ""
+                  ? t("build.noMatch", { query: settledText.trim() })
+                  : view.namespace === undefined && scope
+                    ? t("build.noneInScope", { scope: scopeName(scope) })
+                    : t("build.noMatchInNamespace")}
+              </EmptyState>
+            ) : (
+              <List aria-label={t(entry.label)}>
+                {leadRows.map((row) => (
+                  <ListRow
+                    key={row.key}
+                    leading={<RowMark entry={entry} title={row.title} />}
+                    title={row.title}
+                    descriptionWraps="always"
+                    description={row.description}
+                    chips={row.chips}
+                    actions={row.actions}
+                    actionsVisible
+                  />
+                ))}
+                {rows.map((asset) => {
+                  const title = asset.title.trim() || asset.name;
+                  const namespace = namespaceName(asset.namespace) ?? asset.namespace;
+                  const own = entry.row?.(asset);
+                  const rowText = entry.rowText?.(asset)?.trim();
+                  const RowLine = entry.RowLine;
+                  return (
+                    <ListRow
+                      key={asset.name}
+                      leading={own?.leading ?? <RowMark entry={entry} title={title} />}
+                      title={title}
+                      // A kind's own line is a sentence, read whole.
+                      descriptionWraps={!own && RowLine !== undefined ? "always" : false}
+                      description={
+                        own ? (
+                          own.description
+                        ) : RowLine ? (
+                          <RowLine asset={asset} />
+                        ) : (
+                          rowText || undefined
+                        )
+                      }
+                      // One chip says whose the asset is: "Personal" alone for the reader's own.
+                      chips={
+                        <>
+                          {asset.scope.kind === "workspace" ? (
+                            <Chip size="sm">{workspaceName(asset.scope.workspaceId)}</Chip>
+                          ) : null}
+                          {namespace ? <Chip size="sm">{namespace}</Chip> : null}
+                          {entry.badges?.(asset, t)}
+                        </>
+                      }
+                      time={
+                        <time
+                          className="hidden sm:inline"
+                          dateTime={asset.updatedAt}
+                          title={formatDateTime(asset.updatedAt, locale)}
+                        >
+                          {formatUpdated(asset.updatedAt, now, locale)}
+                        </time>
+                      }
+                      link={
+                        opens ? (
+                          <a
+                            href={hrefOf(asset)}
+                            onClick={(event) => {
+                              if (opensHere(event)) {
+                                event.preventDefault();
+                                onOpen(asset);
+                              }
+                            }}
+                          />
+                        ) : undefined
+                      }
+                    />
+                  );
+                })}
+              </List>
+            )}
+            {list.hasMore ? (
+              <Button
+                variant="outline"
+                className="justify-self-start"
+                loading={list.loadingMore}
+                onClick={list.loadMore}
+              >
+                {t("build.showMore")}
+              </Button>
+            ) : null}
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <>
       <PageHeader
@@ -561,161 +743,12 @@ function BuildList({
         }
       />
       {loadError}
-      {entry.ListHead ? <entry.ListHead /> : null}
-      {listError}
-      {list.rows === undefined ? (
-        listError ? null : (
-          <SkeletonList rows={6} />
-        )
-      ) : list.rows.length === 0 && !filtered && scopes.length < 2 ? (
-        <EmptyState icon={<RegistryIcon name={entry.icon} />} action={newButton}>
-          {t(editable && !state.canCreate ? editable.emptyReadOnlyText : entry.emptyText)}
-        </EmptyState>
+      {entry.ListLead ? (
+        <entry.ListLead filter={{ text: settledText, namespace: view.namespace, scope }}>
+          {listBody}
+        </entry.ListLead>
       ) : (
-        <div className="grid min-w-0 gap-3">
-          <FilterBar
-            search={
-              <Input
-                type="search"
-                leadingIcon={<Search />}
-                aria-label={t(entry.searchLabel)}
-                placeholder={t(entry.searchLabel)}
-                value={view.text}
-                onChange={(event) => onViewChange({ ...view, text: event.currentTarget.value })}
-              />
-            }
-            filters={
-              <>
-                {scope && scopes.length > 1 ? (
-                  <Picker
-                    label={t("build.scopeFilter")}
-                    options={scopes.map((option) => ({
-                      value: buildScopeValue(option),
-                      label: scopeName(option)
-                    }))}
-                    value={buildScopeValue(scope)}
-                    onValueChange={(value) => {
-                      const chosen = scopes.find((option) => buildScopeValue(option) === value);
-                      if (chosen) source.chooseScope?.(chosen);
-                    }}
-                  >
-                    <PickerButton
-                      label={t("build.scopeFilter")}
-                      value={scopeName(scope)}
-                      placeholder={t("build.scopeInstance")}
-                    />
-                  </Picker>
-                ) : null}
-                {namespaces.length > 1 ? (
-                  <Picker
-                    search
-                    label={t("build.namespaceFilter")}
-                    options={[
-                      { value: ALL_NAMESPACES, label: t("build.namespaceAll") },
-                      ...namespaces.map((namespace) => ({
-                        value: namespace.prefix,
-                        label: namespace.displayName,
-                        description: namespace.prefix
-                      }))
-                    ]}
-                    value={view.namespace ?? ALL_NAMESPACES}
-                    onValueChange={(prefix) =>
-                      onViewChange({
-                        ...view,
-                        namespace: prefix === ALL_NAMESPACES ? undefined : prefix
-                      })
-                    }
-                  >
-                    <PickerButton
-                      label={t("build.namespaceFilter")}
-                      value={namespaceName(view.namespace) ?? t("build.namespaceAll")}
-                      placeholder={t("build.namespaceAll")}
-                    />
-                  </Picker>
-                ) : null}
-              </>
-            }
-          />
-          {list.rows.length === 0 ? (
-            <EmptyState layout="inline" icon={<SearchX aria-hidden="true" />}>
-              {settledText.trim() !== ""
-                ? t("build.noMatch", { query: settledText.trim() })
-                : view.namespace === undefined && scope
-                  ? t("build.noneInScope", { scope: scopeName(scope) })
-                  : t("build.noMatchInNamespace")}
-            </EmptyState>
-          ) : (
-            <List aria-label={t(entry.label)}>
-              {list.rows.map((asset) => {
-                const title = asset.title.trim() || asset.name;
-                const namespace = namespaceName(asset.namespace) ?? asset.namespace;
-                const own = entry.row?.(asset);
-                const rowText = entry.rowText?.(asset)?.trim();
-                const RowLine = entry.RowLine;
-                return (
-                  <ListRow
-                    key={asset.name}
-                    leading={own?.leading ?? <RowMark entry={entry} title={title} />}
-                    title={title}
-                    // A kind's own line is a sentence, read whole.
-                    descriptionWraps={!own && RowLine !== undefined ? "always" : false}
-                    description={
-                      own ? (
-                        own.description
-                      ) : RowLine ? (
-                        <RowLine asset={asset} />
-                      ) : (
-                        rowText || undefined
-                      )
-                    }
-                    // One chip says whose the asset is: "Personal" alone for the reader's own.
-                    chips={
-                      <>
-                        {asset.scope.kind === "workspace" ? (
-                          <Chip size="sm">{workspaceName(asset.scope.workspaceId)}</Chip>
-                        ) : null}
-                        {namespace ? <Chip size="sm">{namespace}</Chip> : null}
-                        {entry.badges?.(asset, t)}
-                      </>
-                    }
-                    time={
-                      <time
-                        className="hidden sm:inline"
-                        dateTime={asset.updatedAt}
-                        title={formatDateTime(asset.updatedAt, locale)}
-                      >
-                        {formatUpdated(asset.updatedAt, now, locale)}
-                      </time>
-                    }
-                    link={
-                      opens ? (
-                        <a
-                          href={hrefOf(asset)}
-                          onClick={(event) => {
-                            if (opensHere(event)) {
-                              event.preventDefault();
-                              onOpen(asset);
-                            }
-                          }}
-                        />
-                      ) : undefined
-                    }
-                  />
-                );
-              })}
-            </List>
-          )}
-          {list.hasMore ? (
-            <Button
-              variant="outline"
-              className="justify-self-start"
-              loading={list.loadingMore}
-              onClick={list.loadMore}
-            >
-              {t("build.showMore")}
-            </Button>
-          ) : null}
-        </div>
+        listBody(NO_LEAD)
       )}
       {cliOpen ? (
         <Dialog
