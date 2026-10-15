@@ -9,6 +9,13 @@ export {
   type TextareaVariant
 } from "./input";
 export {
+  NameWithAddress,
+  addressOf,
+  type AddressCheck,
+  type NameAndAddress,
+  type NameWithAddressProps
+} from "./name-with-address";
+export {
   RadioGroup,
   type RadioGroupProps,
   type RadioGroupVariant,

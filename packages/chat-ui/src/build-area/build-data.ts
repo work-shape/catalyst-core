@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
 import { invalidateOfferedAgents } from "../api/agent-placement-mutations";
-import { createAssetWrites, type AvailableIn } from "../api/asset-writes";
+import { createAssetWrites, type AvailableIn, type NameCheckAnswer } from "../api/asset-writes";
 import { usePlatformContextQuery } from "../api/workspace-queries";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useTranslation } from "../i18n";
@@ -32,7 +32,7 @@ const BUILD_LIST_PAGE_SIZE = 50;
 /** How many revisions one read of an asset's history asks for. */
 const BUILD_HISTORY_PAGE_SIZE = 50;
 
-/** How long the reader may pause typing before the search asks the instance. */
+/** How long the reader may pause typing before a search or a name check asks the instance. */
 export const BUILD_SEARCH_DELAY_MS = 250;
 
 /** What narrows a list. Both parts are answered by the instance. */
@@ -144,6 +144,8 @@ export interface BuildSource {
    * the instance could not say.
    */
   exists(kind: string, name: string): Promise<boolean | undefined>;
+  /** Whether a new asset of the kind could take the name, where Studio would make it. */
+  checkName(kind: string, name: string): Promise<NameCheckAnswer>;
   writes: BuildWrites;
   /**
    * The owner Studio works in for a kind a workspace can own: lists, reads and writes of such
@@ -383,6 +385,7 @@ export function useBuildSource(): BuildSource {
         () => true,
         (error: unknown) => (apiErrorCode(error) === "NOT_FOUND" ? false : undefined)
       ),
+    checkName: (kind, name) => writes.checkName({ kind, name, ...inScope(kind) }),
     writes: {
       put: (input) =>
         made(writes.put({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),

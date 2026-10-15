@@ -92,9 +92,9 @@ The names in the list are in the instance's default language.
 
 ## Create
 
-**New agent** or **New skill** opens a dialog for the name and the id. The id follows the name until you change it. It cannot be changed after the asset is saved.
+Where no agent that builds is offered, **New agent** or **New skill** opens a dialog that asks for the name, and for an agent what it should do. Its address, the id, is made from the name under **Advanced** and follows the name until you change it. It is checked while you type: a taken address, or one the kind does not allow, is named at the field, the fold opens, and **Continue** waits until it is fixed. The address cannot be changed after the asset is saved.
 
-If you hold the write right in a Namespace, the dialog offers that Namespace and the id starts with its prefix. Only Namespaces you may write in are offered. The choice **No Namespace** is offered to people who may write every asset of the instance.
+If you hold the write right in a Namespace, **Advanced** offers that Namespace and the address starts with its prefix. Only Namespaces you may write in are offered. The choice **No Namespace** is offered to people who may write every asset of the instance.
 
 **Continue** opens the page of the new asset. Nothing is stored until you press **Create agent** or **Create skill** there.
 

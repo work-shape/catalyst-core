@@ -27,7 +27,7 @@ import {
   type PlannedItem,
   type ReadyItem
 } from "./asset-sync-refusals";
-import { scopeOf } from "./asset-read-workflow";
+import { scopeOf } from "./asset-target";
 import type { AssetWorkflowOptions } from "./types";
 
 // The items of a batch before anything is written: what each is by its own input, the row it

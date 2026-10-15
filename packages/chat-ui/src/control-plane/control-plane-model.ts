@@ -7,6 +7,7 @@ import type {
   SafeConfig
 } from "@vivd-catalyst/api-client";
 import type { AgentCreation } from "../agents/agents-model";
+import { createAssetWrites } from "../api/asset-writes";
 import {
   AGENT_ASSET_KIND,
   CONNECTION_ASSET_KIND,
@@ -278,7 +279,10 @@ export function useControlPlaneModel({
         ? {
             namespaces: buildRights.creatableNamespaces(AGENT_ASSET_KIND),
             mayNameFreely: buildRights.instanceWrite,
-            mayChooseAll: buildRights.instanceWrite
+            mayChooseAll: buildRights.instanceWrite,
+            // Ids are unique on the instance: the check names no workspace.
+            checkName: (name) =>
+              createAssetWrites(client).checkName({ kind: AGENT_ASSET_KIND, name })
           }
         : undefined,
     showUiLibrary: view === "ui-library" && canViewUiLibrary,

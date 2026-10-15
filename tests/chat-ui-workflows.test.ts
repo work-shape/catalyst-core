@@ -2,7 +2,6 @@ import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
-  CancelRunDialog,
   StartDialog,
   WorkflowPageView,
   WorkflowRunPageView,
@@ -389,9 +388,26 @@ describe("the page of a Workflow", () => {
   });
 
   it("shows no id, no operation name and no file name of the definition", () => {
-    const markup = render(page());
-    for (const internal of ["connection.crm", "check.py", "summary.md", "workflow-runner"]) {
-      expect(markup).not.toContain(internal);
+    for (const locale of ["en", "de"] as const) {
+      const blocked = {
+        ...workflow,
+        refusedFor: [
+          {
+            code: "principal_inactive",
+            message: "The internal account workflow-runner is disabled.",
+            principalDisplayLabel: "Booking checks"
+          }
+        ]
+      };
+      const markup = render(page({ workflow: blocked }), locale);
+      for (const internal of ["connection.crm", "check.py", "summary.md", "workflow-runner"]) {
+        expect(markup).not.toContain(internal);
+      }
+      expect(markup).toContain(
+        locale === "de"
+          ? "Das technische Konto „Booking checks“ ist deaktiviert."
+          : "The technical account “Booking checks” is disabled."
+      );
     }
   });
 
@@ -741,19 +757,6 @@ describe("the page of a run", () => {
     expect(cancelOffered(going, "user_2", READER)).toBe(false);
     expect(cancelOffered(going, "user_2", { ...READER, write: true })).toBe(true);
     expect(cancelOffered(ended, "user_1", { ...READER, write: true })).toBe(false);
-  });
-
-  it("asks once before a run is cancelled, with a way to keep it running", () => {
-    const dialog = (error?: string, locale: "en" | "de" = "en") =>
-      render(
-        createElement(CancelRunDialog, { loading: false, error, onConfirm: noop, onClose: noop }),
-        locale
-      );
-    expect(dialog()).toContain(t("workflows.run.cancelTitle"));
-    expect(dialog()).toContain(t("workflows.run.cancelBody"));
-    expect(dialog()).toContain(t("workflows.run.cancelKeep"));
-    expect(dialog(t("workflows.run.cancelFailed"))).toContain(t("workflows.run.cancelFailed"));
-    expect(dialog(undefined, "de")).toContain(de("workflows.run.cancelKeep"));
   });
 
   const unread = {

@@ -247,7 +247,11 @@ export interface WorkflowSummaryResource {
 
 /** The reasons of a summary as the screens hold them: the code and the sentence. */
 function startIssues(summary: WorkflowSummaryResource | undefined): WorkflowStartIssue[] {
-  return (summary?.reasons ?? []).map(({ code, message }) => ({ code, message }));
+  return (summary?.reasons ?? []).map(({ code, message, principalDisplayLabel }) => ({
+    code,
+    message,
+    ...(principalDisplayLabel === undefined ? {} : { principalDisplayLabel })
+  }));
 }
 
 /** Whether the caller may start the Workflow, as its entry of the list says. */

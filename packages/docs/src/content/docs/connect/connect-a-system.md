@@ -18,7 +18,7 @@ The German interface shows the labels in quotes.
 ## Create the Connection
 
 1. Open **Studio** and choose **Connections** ("Verbindungen").
-2. Click **New connection** ("Neue Verbindung"). Give it a name people will recognise, such as "CRM". The ID below it follows the name; keep it or change it now, as it cannot change later. Click **Continue** ("Weiter").
+2. Click **New connection** ("Neue Verbindung"). Give it a name people will recognise, such as "CRM". Its id, under **Technical details** ("Technische Details"), follows the name and is checked while you type; keep it or change it now, as it cannot change later. Click **Continue** ("Weiter").
 3. Under **Server** enter the **Server address** ("Serveradresse"): the https address of the MCP endpoint.
 4. Under **Authentication** ("Authentifizierung") choose what the server expects:
    - **None** ("Keine"),

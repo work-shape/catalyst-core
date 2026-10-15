@@ -5,6 +5,8 @@ import {
   getAssetQuerySchema,
   assetSummarySchema,
   assetWriteResponseSchema,
+  checkAssetNameRequestSchema,
+  checkAssetNameResponseSchema,
   checkAssetSyncResponseSchema,
   deleteAssetRequestSchema,
   discardAssetDraftRequestSchema,
@@ -107,6 +109,23 @@ export const assetOperations = {
     effect: "reading",
     body: validateAssetRequestSchema,
     response: json(validateAssetResponseSchema),
+    errors: [],
+    rateClass: "read"
+  }),
+  // The right is the kind's write right on the name, as a create asks it. The answer tells
+  // no more than a refused create would: an id is unique on the instance.
+  "assets.check_name": defineRegisteredOperation({
+    id: "assets.check_name",
+    method: "POST",
+    path: "/api/v1/assets/:kind/check-name",
+    summary: "Check whether a new asset could take a name, without creating it",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "reading",
+    body: checkAssetNameRequestSchema,
+    response: json(checkAssetNameResponseSchema),
     errors: [],
     rateClass: "read"
   }),

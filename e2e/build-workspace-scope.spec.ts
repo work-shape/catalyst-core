@@ -63,7 +63,8 @@ test("an agent made in a workspace's Studio scope is the workspace's, listed wit
     await page.getByRole("button", { name: "New agent", exact: true }).click();
     const create = page.getByRole("dialog", { name: "New agent", exact: true });
     await create.getByRole("textbox", { name: /^Display name/u }).fill("Scope helper");
-    await create.getByRole("textbox", { name: /^Id/u }).fill(agentName);
+    await create.getByRole("button", { name: "Advanced", exact: true }).click();
+    await create.getByRole("textbox", { name: /^Address/u }).fill(agentName);
     await expect(
       create.getByRole("combobox", { name: "Available in" }).locator("option:checked")
     ).toHaveText(workspaceName);

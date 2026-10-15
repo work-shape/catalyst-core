@@ -3,6 +3,14 @@ import type { ApiClient } from "@vivd-catalyst/api-client";
 /** Where a new agent starts: everywhere, or in the shared workspace it was made in. */
 export type AvailableIn = "all" | { workspaceId: string };
 
+/** What the instance says of a name a create would take. */
+export type NameCheckAnswer =
+  | { available: true }
+  | { available: false; reason: "name_invalid" | "name_taken"; message: string };
+
+/** Asks the instance whether a new asset of a kind could take the name. */
+export type CheckName = (name: string) => Promise<NameCheckAnswer>;
+
 /** One asset as a write names it. Without a workspace it is one of the instance's own. */
 interface AssetAddress {
   kind: string;
@@ -22,6 +30,9 @@ function scopeOf(workspaceId: string | undefined): { workspaceId?: string } {
  */
 export function createAssetWrites(client: ApiClient) {
   return {
+    /** Whether a create would take the name, asked before it: the name's shape, then the id. */
+    checkName: ({ kind, name, workspaceId }: AssetAddress): Promise<NameCheckAnswer> =>
+      client.assets.check_name({ params: { kind }, body: { name, ...scopeOf(workspaceId) } }),
     /**
      * With `null` for the expected revision the call creates the asset. A new agent starts
      * where `availableIn` says, and hidden without it.
