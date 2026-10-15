@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   LEGACY_PERMISSION_ACTIONS,
   PERMISSIONS,
@@ -10,6 +10,7 @@ import {
   type PermissionGrant
 } from "@vivd-catalyst/core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
+import { lockRights } from "./rights-lock";
 import { permissionGrants } from "./schema";
 
 // The legacy permission list of a user or a service principal is a view of the holder's
@@ -104,9 +105,7 @@ export async function writeLegacyPermissionList(
   }
 ): Promise<void> {
   // One writer of a holder's rows at a time, so two saves of one list cannot both add a row.
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${`access:${input.clientInstanceId}`}, 0))`
-  );
+  await lockRights(tx, { clientInstanceId: input.clientInstanceId });
   const rows = await tx
     .select({
       action: permissionGrants.action,

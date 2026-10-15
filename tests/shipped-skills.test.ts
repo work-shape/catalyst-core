@@ -236,7 +236,13 @@ describe("the skills that ship with the platform", () => {
         }
       ]
     });
-    expect(result).toEqual({ created: [], updated: [GUIDE], removed: [], unlisted: [] });
+    expect(result).toEqual({
+      retained: [],
+      created: [],
+      updated: [GUIDE],
+      removed: [],
+      unlisted: []
+    });
     const replaced = await read(without, GUIDE);
     expect(replaced.revision).toBeGreaterThan(guide.revision);
     expect(replaced.config.content).toBe("# The next release's guide");
@@ -316,7 +322,7 @@ describe("the skills that ship with the platform", () => {
     expect(revisions).toHaveLength(2);
   });
 
-  it("stops the start where a skill of the instance holds a name the platform ships", async () => {
+  it("retains an instance skill without changing its revision when a release takes its name", async () => {
     const app = await start(false);
     const created = await app.call("assets.put", {
       params: { kind: "skill", name: "spreadsheets" },
@@ -326,22 +332,89 @@ describe("the skills that ship with the platform", () => {
       }
     });
     expect(created.statusCode, created.body).toBe(200);
-    await expect(
-      seedShippedSkills({
-        clientInstanceId,
-        stores: app.stores,
-        skills: [
-          {
-            name: "spreadsheets",
-            title: "Spreadsheets",
-            description: "Shipped.",
-            content: "Shipped.",
-            icon: "spreadsheet"
-          }
-        ]
-      })
-    ).rejects.toThrow("The platform ships the skill 'spreadsheets'");
+    const before = await read(app, "spreadsheets");
+    const result = await seedShippedSkills({
+      clientInstanceId,
+      stores: app.stores,
+      skills: [
+        {
+          name: "spreadsheets",
+          title: "Spreadsheets",
+          description: "Shipped.",
+          content: "Shipped.",
+          icon: "spreadsheet"
+        }
+      ]
+    });
+    expect(result.retained).toEqual(["spreadsheets"]);
+    expect(await read(app, "spreadsheets")).toEqual(before);
   });
+  it.each(["active", "deleted before upgrade", "deleted after upgrade"])(
+    "starts and retains a workspace-owned skill that is %s without writing it",
+    async (state) => {
+      const earlier = await start(false);
+      const workspace = await earlier.call("workspaces.create", { payload: { name: "Team" } });
+      expect(workspace.statusCode, workspace.body).toBe(200);
+      const { id: workspaceId } = z.object({ id: z.string() }).parse(workspace.json());
+      const created = await earlier.call("assets.put", {
+        params: { kind: "skill", name: "pdf" },
+        payload: {
+          config: { name: "pdf", title: "PDF", description: "Ours.", content: "Ours." },
+          expectedRevision: null,
+          workspaceId
+        }
+      });
+      expect(created.statusCode, created.body).toBe(200);
+      const { revision } = z.object({ revision: z.number() }).parse(created.json());
+      const key = { clientInstanceId, kind: "skill", name: "pdf" };
+      const original = await earlier.stores.configAssets.getConfigAsset(key);
+      expect(original).toMatchObject({ scope: { kind: "workspace", workspaceId } });
+
+      if (state === "deleted after upgrade") {
+        await start(false, [artifactSkills]);
+        expect(await earlier.stores.configAssets.getConfigAsset(key)).toEqual(original);
+      }
+      if (state !== "active") {
+        const deleted = await earlier.call("assets.delete", {
+          params: { kind: "skill", name: "pdf" },
+          payload: { expectedRevision: revision, workspaceId }
+        });
+        expect(deleted.statusCode, deleted.body).toBe(200);
+      }
+      const before = await earlier.stores.configAssets.getConfigAsset(key);
+      const revisions = await earlier.stores.configAssets.listConfigAssetRevisions(key);
+      expect(before).toMatchObject({
+        status: state === "active" ? "active" : "deleted",
+        scope: { kind: "workspace", workspaceId }
+      });
+
+      for (let restart = 0; restart < 2; restart++) {
+        const upgraded = await start(false, [artifactSkills]);
+        // A real assembly start finishes, and its admin API remains usable.
+        expect(await shippedNames(upgraded)).toEqual([GUIDE]);
+        const response = await upgraded.call("assets.get", {
+          params: { kind: "skill", name: "pdf" },
+          query: { workspaceId }
+        });
+        expect(response.statusCode, response.body).toBe(state === "active" ? 200 : 404);
+        expect(await upgraded.stores.configAssets.getConfigAsset(key)).toEqual(before);
+        expect(await upgraded.stores.configAssets.listConfigAssetRevisions(key)).toEqual(revisions);
+        const result = await seedShippedSkills({
+          clientInstanceId,
+          stores: upgraded.stores,
+          skills: [platformDocsSkill, generalSkill("pdf", "pdf", ["read_skill"])]
+        });
+        expect(result).toEqual({
+          retained: ["pdf"],
+          created: [],
+          updated: [],
+          removed: [],
+          unlisted: []
+        });
+      }
+    }
+  );
+
   it("stores the skills a capability ships, with their icon and summary, where the instance has their tools", async () => {
     const app = await start(false, [artifactSkills]);
     // `spreadsheets` names `workspace.exec`, which an instance without Execution Workspaces
@@ -372,7 +445,7 @@ describe("the skills that ship with the platform", () => {
     expect(await shippedNames(without)).toEqual([GUIDE]);
   });
 
-  it("stops the start of a release that ships a skill the instance holds as its own, and says how to remove it", async () => {
+  it("starts an upgraded instance and keeps a colliding skill available through the admin API", async () => {
     const earlier = await start(false);
     const created = await earlier.call("assets.put", {
       params: { kind: "skill", name: "pdf" },
@@ -383,9 +456,11 @@ describe("the skills that ship with the platform", () => {
     });
     expect(created.statusCode, created.body).toBe(200);
 
-    await expect(start(false, [artifactSkills])).rejects.toThrow(
-      "The platform ships the skill 'pdf', and the instance holds a skill of its own named 'pdf'. Remove the instance copy with 'catalyst config push' after pulling"
-    );
+    const upgraded = await start(false, [artifactSkills]);
+    expect((await read(upgraded, "pdf")).config.content).toBe("Ours.");
+    // Repeated startup does not overwrite content or create another revision.
+    const again = await start(false, [artifactSkills]);
+    expect(await read(again, "pdf")).toEqual(await read(earlier, "pdf"));
     // The instance's skill is left as it was: the start deletes nothing.
     const kept = await read(earlier, "pdf");
     expect(kept.config.content).toBe("Ours.");

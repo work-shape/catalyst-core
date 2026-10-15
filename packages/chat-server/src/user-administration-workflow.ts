@@ -24,10 +24,20 @@ import type { ChatServerOptions } from "./types";
 import { recordGovernanceAccess } from "./governance-actions";
 import { createPasswordSetupLink, PLATFORM_INVITATION_VALID_DAYS } from "./password-setup-workflow";
 import type { DeletionOutcome } from "./subject-deletion";
-import { changedPermissionEntries, requireMayAdministerUser } from "./user-administration-rights";
+import { withRightsHeld } from "./rights-held";
+import {
+  changedPermissionEntries,
+  requireMayAdministerUser,
+  requireUserAdministration
+} from "./user-administration-rights";
 
 /** What a changing user administration operation takes from its Operation Run. */
-type ChangeContext = Pick<OperationExecutionContext, "actor" | "audit" | "correlationId">;
+type ChangeContext = Pick<
+  OperationExecutionContext,
+  "actor" | "access" | "audit" | "correlationId"
+>;
+/** The call under the rights locks, with the password sign-ins its change created so far. */
+type HeldChangeContext = ChangeContext & { createdSignIns: string[] };
 
 interface CreateUserCommand {
   displayLabel: string;
@@ -104,33 +114,34 @@ export class UserAdministrationWorkflow {
     context: ChangeContext,
     command: CreateUserCommand
   ): Promise<UserRecord> {
-    const actor = personOf(context.actor);
-    requireMayAdministerUser(operationId, actor, undefined, {
-      roles: command.roles,
-      permissions: command.permissions
-    });
+    personOf(context.actor);
     this.requireAssignablePermissions(command.permissions);
     if (command.passwordSignIn && !command.email) {
       throw new AppError("VALIDATION_FAILED", "Email is required to create a password sign-in");
     }
-
-    let created = await this.options.stores.users.createUser({
-      clientInstanceId: this.options.clientInstanceId,
-      displayLabel: command.displayLabel,
-      email: command.email,
-      roles: command.roles,
-      permissionRefs: command.permissionRefs,
-      permissions: command.permissions,
-      grantedBy: asUserId(actor.id),
-      status: command.status
+    const { passwordSignIn } = command;
+    const created = await this.whileRightsHeld(context, undefined, async (held, now) => {
+      await requireUserAdministration(held.options, operationId, now, {
+        displayLabel: command.displayLabel,
+        roles: command.roles,
+        permissionRefs: command.permissionRefs,
+        permissions: command.permissions
+      });
+      const user = await held.options.stores.users.createUser({
+        clientInstanceId: this.options.clientInstanceId,
+        displayLabel: command.displayLabel,
+        email: command.email,
+        roles: command.roles,
+        permissionRefs: command.permissionRefs,
+        permissions: command.permissions,
+        grantedBy: asUserId(now.actor.id),
+        status: command.status
+      });
+      return passwordSignIn ? held.attachPasswordSignIn(now, user, passwordSignIn.password) : user;
     });
     await this.recordUserMutation(context, "user.created", created);
-    if (command.passwordSignIn) {
-      created = await this.setOrCreatePasswordSignIn(context, created, {
-        password: command.passwordSignIn.password,
-        auditType: "user.password_sign_in_created"
-      });
-    }
+    if (passwordSignIn)
+      await this.recordPassword(context, created, "user.password_sign_in_created");
     return created;
   }
 
@@ -139,24 +150,31 @@ export class UserAdministrationWorkflow {
     context: ChangeContext,
     command: UpdateUserCommand
   ): Promise<UserRecord> {
-    const actor = personOf(context.actor);
-    const existing = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, existing, {
-      roles: command.roles,
-      permissions: command.permissions
-    });
-    requireNotInDeletion(existing);
-    this.requireAssignablePermissions(command.permissions, existing.permissions);
-    const updated = await this.options.stores.users.updateUser({
-      clientInstanceId: this.options.clientInstanceId,
-      userId: command.userId,
-      displayLabel: command.displayLabel,
-      email: command.email,
+    personOf(context.actor);
+    const change = {
       roles: command.roles,
       permissionRefs: command.permissionRefs,
-      permissions: command.permissions,
-      grantedBy: asUserId(actor.id),
-      status: command.status
+      permissions: command.permissions
+    };
+    const updated = await this.whileRightsHeld(context, command.userId, async (held, now) => {
+      await requireUserAdministration(held.options, operationId, now, {
+        userId: command.userId,
+        ...change
+      });
+      const existing = await held.getUserOrThrow(command.userId);
+      requireNotInDeletion(existing);
+      held.requireAssignablePermissions(command.permissions, existing.permissions);
+      return held.options.stores.users.updateUser({
+        clientInstanceId: this.options.clientInstanceId,
+        userId: command.userId,
+        displayLabel: command.displayLabel,
+        email: command.email,
+        roles: command.roles,
+        permissionRefs: command.permissionRefs,
+        permissions: command.permissions,
+        grantedBy: asUserId(now.actor.id),
+        status: command.status
+      });
     });
     await this.recordUserMutation(context, "user.updated", updated);
     return updated;
@@ -168,22 +186,29 @@ export class UserAdministrationWorkflow {
     command: DeleteUserCommand
   ): Promise<DeletionOutcome<UserRecord>> {
     const actor = personOf(context.actor);
-    // The operation's `authorize` refused everybody else before. Asked again where it deletes.
-    requireMayAdministerUser(operationId, actor, undefined, { superadminOnly: true });
     if (command.userId === actor.id) {
       throw new AppError("VALIDATION_FAILED", "Superadmins cannot delete their own user account");
     }
-
-    const existing = await this.getUserOrThrow(command.userId);
-    await this.requireAtLeastOneRemainingSuperadmin(existing);
-    return requestAccountDeletion(this.options, {
-      userId: command.userId,
-      requestedBy: "admin",
-      actor: auditActorFromUser(actor),
-      actorUserId: asUserId(actor.id),
-      correlationId: context.correlationId,
-      alreadyRequested: existing.status === "deleting"
-    });
+    return requestAccountDeletion(
+      this.options,
+      {
+        userId: command.userId,
+        requestedBy: "admin",
+        actor: auditActorFromUser(actor),
+        actorUserId: asUserId(actor.id),
+        correlationId: context.correlationId
+      },
+      (mark) =>
+        this.whileRightsHeld(context, command.userId, async (held, now) => {
+          await requireUserAdministration(held.options, operationId, now, {
+            userId: command.userId,
+            superadminOnly: true
+          });
+          const existing = await held.getUserOrThrow(command.userId);
+          await held.requireAtLeastOneRemainingSuperadmin(existing);
+          return mark(held.options.stores);
+        })
+    );
   }
 
   async upsertIdentity(
@@ -191,18 +216,19 @@ export class UserAdministrationWorkflow {
     context: ChangeContext,
     command: UpsertUserIdentityCommand
   ): Promise<UserRecord> {
-    const actor = personOf(context.actor);
-    const existing = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, existing);
-    requireNotInDeletion(existing);
-    const updated = await this.options.stores.users.upsertUserIdentity({
-      clientInstanceId: this.options.clientInstanceId,
-      userId: command.userId,
-      authSource: command.authSource,
-      externalUserId: command.externalUserId,
-      displayLabel: command.displayLabel,
-      email: command.email,
-      emailVerified: command.emailVerified
+    personOf(context.actor);
+    const updated = await this.whileRightsHeld(context, command.userId, async (held, now) => {
+      await requireUserAdministration(held.options, operationId, now, { userId: command.userId });
+      requireNotInDeletion(await held.getUserOrThrow(command.userId));
+      return held.options.stores.users.upsertUserIdentity({
+        clientInstanceId: this.options.clientInstanceId,
+        userId: command.userId,
+        authSource: command.authSource,
+        externalUserId: command.externalUserId,
+        displayLabel: command.displayLabel,
+        email: command.email,
+        emailVerified: command.emailVerified
+      });
     });
     const { audit: auditRecorder } = context;
     await auditRecorder.record({
@@ -225,15 +251,16 @@ export class UserAdministrationWorkflow {
     context: ChangeContext,
     command: DeleteUserIdentityCommand
   ): Promise<UserRecord> {
-    const actor = personOf(context.actor);
-    const existing = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, existing);
-    requireNotInDeletion(existing);
-    const updated = await this.options.stores.users.deleteUserIdentity({
-      clientInstanceId: this.options.clientInstanceId,
-      userId: command.userId,
-      authSource: command.authSource,
-      externalUserId: command.externalUserId
+    personOf(context.actor);
+    const updated = await this.whileRightsHeld(context, command.userId, async (held, now) => {
+      await requireUserAdministration(held.options, operationId, now, { userId: command.userId });
+      requireNotInDeletion(await held.getUserOrThrow(command.userId));
+      return held.options.stores.users.deleteUserIdentity({
+        clientInstanceId: this.options.clientInstanceId,
+        userId: command.userId,
+        authSource: command.authSource,
+        externalUserId: command.externalUserId
+      });
     });
     const { audit: auditRecorder } = context;
     await auditRecorder.record({
@@ -261,7 +288,7 @@ export class UserAdministrationWorkflow {
     context: ChangeContext,
     command: ResetUserPasswordCommand
   ): Promise<{ ok: true }> {
-    const actor = personOf(context.actor);
+    personOf(context.actor);
     const setPassword = this.options.standaloneAuth?.setPassword;
     if (!setPassword) {
       throw new AppError(
@@ -269,34 +296,32 @@ export class UserAdministrationWorkflow {
         "Password reset requires standalone auth to be enabled for this client instance"
       );
     }
-    const user = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, user);
-    requireNotInDeletion(user);
-    const identity = user.identities.find(
-      (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
-    );
-    if (!identity) {
-      await this.setOrCreatePasswordSignIn(context, user, {
-        password: command.password,
-        auditType: "user.password_sign_in_created"
-      });
-      return { ok: true };
-    }
-    await setPassword({
-      externalUserId: identity.externalUserId,
-      password: command.password
-    });
-    const { audit: auditRecorder } = context;
-    await auditRecorder.record({
-      type: "user.password_reset",
-      status: "success",
-      actor: auditActorFromIdentity(context.actor),
-      subject: user.id,
-      correlationId: context.correlationId,
-      metadata: {
-        authSource: identity.authSource
+    const { user, created } = await this.whileRightsHeld(
+      context,
+      command.userId,
+      async (held, now) => {
+        await requireUserAdministration(held.options, operationId, now, { userId: command.userId });
+        const current = await held.getUserOrThrow(command.userId);
+        requireNotInDeletion(current);
+        const identity = current.identities.find(
+          (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
+        );
+        if (!identity) {
+          return {
+            user: await held.attachPasswordSignIn(now, current, command.password),
+            created: true
+          };
+        }
+        // The last step before the commit, after the check: a password set is not taken back.
+        await setPassword({ externalUserId: identity.externalUserId, password: command.password });
+        return { user: current, created: false };
       }
-    });
+    );
+    await this.recordPassword(
+      context,
+      user,
+      created ? "user.password_sign_in_created" : "user.password_reset"
+    );
     return { ok: true };
   }
 
@@ -319,15 +344,20 @@ export class UserAdministrationWorkflow {
       );
     }
     let user = await this.getUserOrThrow(command.userId);
-    requireMayAdministerUser(operationId, actor, user);
+    await requireMayAdministerUser(this.options, operationId, context, user);
     if (user.status !== "active") {
       throw new AppError("VALIDATION_FAILED", "Only active users can be invited");
     }
     if (!user.identities.some((identity) => identity.authSource === STANDALONE_AUTH_SOURCE)) {
-      user = await this.setOrCreatePasswordSignIn(context, user, {
-        password: randomBytes(32).toString("base64url"),
-        auditType: "user.password_sign_in_created"
+      user = await this.whileRightsHeld(context, command.userId, async (held, now) => {
+        await requireUserAdministration(held.options, operationId, now, { userId: command.userId });
+        const current = await held.getUserOrThrow(command.userId);
+        if (current.status !== "active") {
+          throw new AppError("VALIDATION_FAILED", "Only active users can be invited");
+        }
+        return held.attachPasswordSignIn(now, current, randomBytes(32).toString("base64url"));
       });
+      await this.recordPassword(context, user, "user.password_sign_in_created");
     }
     const identity = user.identities.find(
       (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
@@ -379,16 +409,19 @@ export class UserAdministrationWorkflow {
     return { ok: true };
   }
 
-  private async setOrCreatePasswordSignIn(
-    context: ChangeContext,
+  /**
+   * Creates the user's password sign-in in the auth store and attaches it to the user. Called
+   * under the rights locks after the check (`whileRightsHeld`), so nothing of the auth store
+   * changes for a call the check refuses; a sign-in it creates is noted in `now`, so a failure
+   * after it removes it again.
+   */
+  private async attachPasswordSignIn(
+    now: HeldChangeContext,
     user: UserRecord,
-    input: {
-      password: string;
-      auditType: "user.password_sign_in_created" | "user.password_reset";
-    }
+    password: string
   ): Promise<UserRecord> {
-    const setOrCreatePasswordSignIn = this.options.standaloneAuth?.setOrCreatePasswordSignIn;
-    if (!setOrCreatePasswordSignIn) {
+    const auth = this.options.standaloneAuth;
+    if (!auth) {
       throw new AppError(
         "VALIDATION_FAILED",
         "Password sign-in requires standalone auth to be enabled for this client instance"
@@ -398,17 +431,18 @@ export class UserAdministrationWorkflow {
       throw new AppError("VALIDATION_FAILED", "Email is required to create a password sign-in");
     }
     await this.requireAvailablePasswordEmail(user);
-
-    const signIn = await setOrCreatePasswordSignIn({
+    const before = await auth.findPasswordSignIn({ email: user.email });
+    const signIn = await auth.setOrCreatePasswordSignIn({
       email: user.email,
       displayLabel: user.displayLabel,
       roles: user.roles,
       permissionRefs: user.permissionRefs,
       permissions: user.permissions,
-      password: input.password
+      password
     });
+    if (!before) now.createdSignIns.push(signIn.externalUserId);
     await this.requireAvailablePasswordIdentity(user, signIn.externalUserId);
-    const updated = await this.options.stores.users.upsertUserIdentity({
+    return this.options.stores.users.upsertUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
       userId: user.id,
       authSource: STANDALONE_AUTH_SOURCE,
@@ -417,18 +451,64 @@ export class UserAdministrationWorkflow {
       email: signIn.email,
       emailVerified: signIn.emailVerified
     });
-    const { audit: auditRecorder } = context;
-    await auditRecorder.record({
-      type: input.auditType,
+  }
+
+  private async recordPassword(
+    context: ChangeContext,
+    user: UserRecord,
+    type: "user.password_sign_in_created" | "user.password_reset"
+  ): Promise<void> {
+    await context.audit.record({
+      type,
       status: "success",
       actor: auditActorFromIdentity(context.actor),
       subject: user.id,
       correlationId: context.correlationId,
-      metadata: {
-        authSource: STANDALONE_AUTH_SOURCE
-      }
+      metadata: { authSource: STANDALONE_AUTH_SOURCE }
     });
-    return updated;
+  }
+
+  /**
+   * `withRightsHeld` for a change of users: the workflow on the transaction's stores and the
+   * call with the caller's rights now. The auth store keeps its own tables outside the
+   * transaction, so a password sign-in the change created is removed again when the change
+   * fails, its commit included.
+   */
+  private async whileRightsHeld<Result>(
+    context: ChangeContext,
+    userId: string | undefined,
+    change: (held: UserAdministrationWorkflow, now: HeldChangeContext) => Promise<Result>
+  ): Promise<Result> {
+    const createdSignIns: string[] = [];
+    try {
+      return await withRightsHeld(
+        this.options,
+        {
+          actor: context.actor,
+          access: context.access,
+          ...(userId === undefined ? {} : { userId })
+        },
+        ({ options, actor, access }) =>
+          change(new UserAdministrationWorkflow(options), {
+            ...context,
+            actor,
+            access,
+            createdSignIns
+          })
+      );
+    } catch (error) {
+      for (const externalUserId of createdSignIns) {
+        await this.options.standaloneAuth
+          ?.deletePasswordSignIn({ externalUserId })
+          .catch((undoError: unknown) =>
+            this.options.logger.error(
+              { err: undoError },
+              "A password sign-in created by a refused change could not be removed"
+            )
+          );
+      }
+      throw error;
+    }
   }
 
   private async requireAvailablePasswordEmail(user: UserRecord): Promise<void> {

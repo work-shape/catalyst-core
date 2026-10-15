@@ -16,6 +16,7 @@ import {
 } from "./identity";
 import type { ClientInstanceId, UserId } from "./ids";
 import type { StorePage } from "./paging";
+import type { RightsLock } from "./rights-lock";
 import type { ISODateString } from "./time";
 
 export const PERMISSIONS = [
@@ -187,6 +188,8 @@ export interface ActorAccess {
    * holder and decides no call: a covering deny is not read.
    */
   holdsGrantAt(action: string, scopeKinds: readonly PermissionGrant["scopeKind"][]): boolean;
+  /** The holder's denies of the action (of a legacy key, of its actions), wherever they lie. */
+  denials(action: string): readonly AccessEntry[];
 }
 
 export interface Authorizer {
@@ -569,7 +572,15 @@ export function createActorAccess(
           grant.action === action &&
           grant.effect === "allow" &&
           scopeKinds.includes(grant.scopeKind)
-      )
+      ),
+    denials(action) {
+      const actions: readonly string[] = isPermission(action)
+        ? LEGACY_PERMISSION_ACTIONS[action]
+        : [action];
+      return listAccessEntries(holder, persisted).filter(
+        (entry) => entry.effect === "deny" && actions.includes(entry.action)
+      );
+    }
   };
 }
 
@@ -597,7 +608,8 @@ export function boundedActorAccess(
       }
     },
     holdsGrantAt: (action, scopeKinds) =>
-      tester.holdsGrantAt(action, scopeKinds) && principal.holdsGrantAt(action, scopeKinds)
+      tester.holdsGrantAt(action, scopeKinds) && principal.holdsGrantAt(action, scopeKinds),
+    denials: (action) => [...tester.denials(action), ...principal.denials(action)]
   };
 }
 
@@ -650,7 +662,7 @@ export interface GrantScopeAsset {
 }
 
 /** The store behind grants and Namespaces: the evaluator's port plus the administration writes. */
-export interface AccessAdministrationStore extends AccessStore {
+export interface AccessAdministrationStore extends AccessStore, RightsLock {
   /**
    * Throws CONFLICT `duplicate_grant`, VALIDATION_FAILED `unknown_namespace` for an
    * unregistered prefix, `userInDeletionError` for a user whose deletion was requested, and

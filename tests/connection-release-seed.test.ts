@@ -408,13 +408,14 @@ describe("the release seed of Connections", () => {
     // A grant written on the Connection goes with it, as with every deleted asset.
     const removedId = required((await readAssets()).find((asset) => asset.name === "outside")).id;
     await first.call("assets.list", { params: { kind: "connection" } });
-    const [holder] = await withTestSql(
-      (sql) => sql<{ id: string }[]>`select id from product_users limit 1`
-    );
+    // Another person than the caller: nobody writes a row of their own.
+    const holder = z
+      .object({ id: z.string() })
+      .parse((await first.call("users.create", { payload: { displayLabel: "Holder" } })).json());
     const granted = await first.call("permissions.grant", {
       payload: {
         holderKind: "user",
-        holderId: required(holder).id,
+        holderId: holder.id,
         action: "connection.use",
         scopeKind: "asset",
         scopeId: removedId
