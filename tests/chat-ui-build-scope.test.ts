@@ -63,6 +63,7 @@ function source(input: { permissions: string[]; actions: string[]; scope: BuildS
     checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
+      readFiles: async () => [],
       delete: async () => undefined,
       publish: async () => ({ draftRevision: 1, publishedRevision: 1 }),
       revert: async () => ({ revision: 1 }),

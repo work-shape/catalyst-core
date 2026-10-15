@@ -18,6 +18,7 @@ import {
   PageHeader,
   SkeletonPage
 } from "@vivd-catalyst/ui";
+import type { AssetContent, AssetFileEntry } from "../api/asset-writes";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { usePageShown } from "./asset-editor-shell";
@@ -54,9 +55,9 @@ export function NewAssetPage({
   start: BuildAssetStart;
   onCreated(name: string): void;
 }) {
-  const { t } = useTranslation();
   const { source } = page;
   const Editor = entry.Editor;
+  const create = useCreate({ entry, start, source, onCreated });
   return (
     <Editor
       page={page.page}
@@ -71,51 +72,68 @@ export function NewAssetPage({
         ? { owner: source.scope.workspaceId }
         : {})}
       onUnsavedChange={page.onUnsavedChange}
-      save={async (config) => {
-        const create = (expectedRevision: number | null) =>
-          source.writes.put({
-            kind: entry.kind,
-            name: start.name,
-            config,
-            expectedRevision,
-            ...(start.availableIn ? { availableIn: start.availableIn } : {})
-          });
-        try {
-          try {
-            await create(null);
-          } catch (error) {
-            // The id is held by a deleted asset. The reader chose the id for a new asset and
-            // holds no older text of it, so the asset is created again after that delete, which
-            // the instance has just told, and keeps its history.
-            const met = readBuildRefusal(error, t);
-            if (met.ok || !met.conflict || !met.deleted || met.currentRevision === undefined) {
-              throw error;
-            }
-            await create(met.currentRevision);
-          }
-          onCreated(start.name);
-          return { ok: true };
-        } catch (error) {
-          const outcome = readBuildRefusal(error, t);
-          // A create that meets a conflict found the id taken, or held by a deleted asset
-          // whose history the reader may not read.
-          return !outcome.ok && outcome.conflict
-            ? {
-                ok: false,
-                conflict: false,
-                refusals: [
-                  {
-                    message: t(outcome.deleted ? "build.nameDeleted" : "build.nameTaken", {
-                      name: start.name
-                    })
-                  }
-                ]
-              }
-            : outcome;
-        }
-      }}
+      save={(config) => create({ config })}
+      folder={{ read: async () => [], save: (files) => create({ files }) }}
     />
   );
+}
+
+/** Creates a new asset from its config or its folder, and opens its page. */
+function useCreate({
+  entry,
+  start,
+  source,
+  onCreated
+}: {
+  entry: BuildAssetKind;
+  start: BuildAssetStart;
+  source: BuildSource;
+  onCreated(name: string): void;
+}): (content: AssetContent) => Promise<BuildWriteOutcome> {
+  const { locale, t } = useTranslation();
+  return async (content) => {
+    const create = (expectedRevision: number | null) =>
+      source.writes.put({
+        kind: entry.kind,
+        name: start.name,
+        ...content,
+        expectedRevision,
+        ...(start.availableIn ? { availableIn: start.availableIn } : {})
+      });
+    try {
+      try {
+        await create(null);
+      } catch (error) {
+        // The id is held by a deleted asset. The reader chose the id for a new asset and
+        // holds no older text of it, so the asset is created again after that delete, which
+        // the instance has just told, and keeps its history.
+        const met = readBuildRefusal(error, t, locale);
+        if (met.ok || !met.conflict || !met.deleted || met.currentRevision === undefined) {
+          throw error;
+        }
+        await create(met.currentRevision);
+      }
+      onCreated(start.name);
+      return { ok: true };
+    } catch (error) {
+      const outcome = readBuildRefusal(error, t, locale);
+      // A create that meets a conflict found the id taken, or held by a deleted asset
+      // whose history the reader may not read.
+      return !outcome.ok && outcome.conflict
+        ? {
+            ok: false,
+            conflict: false,
+            refusals: [
+              {
+                message: t(outcome.deleted ? "build.nameDeleted" : "build.nameTaken", {
+                  name: start.name
+                })
+              }
+            ]
+          }
+        : outcome;
+    }
+  };
 }
 
 /** What "Copy to edit" starts from: the shipped asset's title and its definition. */
@@ -363,7 +381,7 @@ function LoadedAssetPage({
 
   /** Reads what a write was refused for, and remembers a conflict for the notice. */
   const refusalOf = (error: unknown): BuildWriteOutcome => {
-    const outcome = readBuildRefusal(error, t);
+    const outcome = readBuildRefusal(error, t, locale);
     if (!outcome.ok && outcome.conflict) {
       setConflict((known) => (outcome.deleted ? "deleted" : (known ?? "saved")));
       setConflictBy(
@@ -386,6 +404,35 @@ function LoadedAssetPage({
       );
     }
     return outcome;
+  };
+
+  /**
+   * Saves the config or the whole folder against the revision the page loaded. A save of a
+   * kind with drafts moves the draft, and nothing of what is published. After a folder write
+   * the page keeps the config it loaded: the instance read the new one from the files, and the
+   * editor holds what was saved.
+   */
+  const write = async (
+    content: AssetContent
+  ): Promise<BuildWriteOutcome & { stored?: readonly AssetFileEntry[] }> => {
+    try {
+      const { revision, files } = await source.writes.put({
+        ...address,
+        ...content,
+        expectedRevision: stored.revision
+      });
+      setStored({
+        ...stored,
+        ...("config" in content ? { config: content.config } : {}),
+        revision,
+        ...(hasDraft ? { draftRevision: revision } : {})
+      });
+      setFailure(undefined);
+      onRestored(undefined);
+      return { ok: true, ...(files ? { stored: files } : {}) };
+    } catch (error) {
+      return refusalOf(error);
+    }
   };
   const loadNewer = async () => {
     setReloading(true);
@@ -567,26 +614,10 @@ function LoadedAssetPage({
             </Banner>
           ) : null
         }
-        save={async (config) => {
-          try {
-            const { revision } = await source.writes.put({
-              ...address,
-              config,
-              expectedRevision: stored.revision
-            });
-            // A save of a kind with drafts moves the draft, and nothing of what is published.
-            setStored({
-              ...stored,
-              config,
-              revision,
-              ...(hasDraft ? { draftRevision: revision } : {})
-            });
-            setFailure(undefined);
-            onRestored(undefined);
-            return { ok: true };
-          } catch (error) {
-            return refusalOf(error);
-          }
+        save={(config) => write({ config })}
+        folder={{
+          read: () => source.writes.readFiles(address),
+          save: (files) => write({ files })
         }}
       />
       <BuildHistory

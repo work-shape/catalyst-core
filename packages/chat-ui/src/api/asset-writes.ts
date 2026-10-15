@@ -19,6 +19,41 @@ interface AssetAddress {
   workspaceId?: string;
 }
 
+/**
+ * One file of an asset's folder as a write carries it: its path and its content, as `text`
+ * for UTF-8 text and as `base64` for everything else.
+ */
+export type AssetFileWrite = { path: string; text: string } | { path: string; base64: string };
+
+/** One file of an asset's folder as a read answers it, with its content. */
+export interface AssetFileRead {
+  path: string;
+  bytes: number;
+  sha256: string;
+  /** The content of UTF-8 text. */
+  text?: string;
+  /** The content of every other file. */
+  base64?: string;
+}
+
+/** One file a write of a folder stored: its path, its hash and its size. */
+export interface AssetFileEntry {
+  path: string;
+  sha256: string;
+  bytes: number;
+}
+
+/** What a write of an asset carries: its config, or the whole folder of a kind that has one. */
+export type AssetContent =
+  { config: Record<string, unknown> } | { files: readonly AssetFileWrite[] };
+
+function contentOf(content: AssetContent): {
+  config?: Record<string, unknown>;
+  files?: AssetFileWrite[];
+} {
+  return "files" in content ? { files: [...content.files] } : { config: content.config };
+}
+
 function scopeOf(workspaceId: string | undefined): { workspaceId?: string } {
   return workspaceId === undefined ? {} : { workspaceId };
 }
@@ -35,29 +70,35 @@ export function createAssetWrites(client: ApiClient) {
       client.assets.check_name({ params: { kind }, body: { name, ...scopeOf(workspaceId) } }),
     /**
      * With `null` for the expected revision the call creates the asset. A new agent starts
-     * where `availableIn` says, and hidden without it.
+     * where `availableIn` says, and hidden without it. A kind whose revision holds a folder,
+     * such as a skill, is written as its config or as its whole folder.
      */
     put: ({
       kind,
       name,
       workspaceId,
-      config,
       expectedRevision,
-      availableIn
-    }: AssetAddress & {
-      config: Record<string, unknown>;
-      expectedRevision: number | null;
-      availableIn?: AvailableIn;
-    }) =>
+      availableIn,
+      ...content
+    }: AssetAddress &
+      AssetContent & {
+        expectedRevision: number | null;
+        availableIn?: AvailableIn;
+      }) =>
       client.assets.put({
         params: { kind, name },
         body: {
-          config,
+          ...contentOf(content),
           expectedRevision,
           ...scopeOf(workspaceId),
           ...(availableIn ? { availableIn } : {})
         }
       }),
+    /** The whole folder of the asset's current revision, each file with its content. */
+    readFiles: ({ kind, name, workspaceId }: AssetAddress) =>
+      client.assets
+        .get({ params: { kind, name }, query: { files: "true", ...scopeOf(workspaceId) } })
+        .then((asset) => asset.files ?? []),
     delete: ({
       kind,
       name,

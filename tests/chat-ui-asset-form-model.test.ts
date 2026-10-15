@@ -489,7 +489,7 @@ describe("changed fields", () => {
         {
           ...skill,
           content: "# Steps\n1. Read.",
-          resources: [{ path: "references/a.md", mediaType: "text/markdown", content: "" }]
+          files: [{ path: "references/a.md", bytes: 0, text: "" }]
         },
         skill
       )

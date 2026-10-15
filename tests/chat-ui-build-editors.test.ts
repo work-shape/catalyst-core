@@ -46,6 +46,7 @@ function frame(overrides: Partial<BuildAssetEditorProps> = {}): BuildAssetEditor
     notice: null,
     onUnsavedChange: noop,
     save: async () => ({ ok: true }),
+    folder: { read: async () => [], save: saved },
     ...overrides
   };
 }
@@ -576,7 +577,7 @@ describe("save bar", () => {
     );
 
     expect(existing).not.toContain('type="submit"');
-    expect(existing).toContain("Add reference");
+    expect(existing).toContain('aria-label="Add a file to references/"');
     expect(started).toMatch(/<button[^>]*type="submit"[^>]*>Create skill<\/button>/u);
     // The head is one row: a long name takes two lines, is then cut and says itself whole on
     // hover.
@@ -734,7 +735,7 @@ describe("skill page", () => {
       expect(inputOf(markup, "Title")).toContain('readOnly=""');
       expect(inputOf(markup, "Title")).not.toContain('required=""');
       expect(markup).toContain("You can read this but not change it.");
-      expect(markup).not.toContain("Add reference");
+      expect(markup).not.toContain('aria-label="Add a file to references/"');
       expect(markup).not.toContain("Save changes");
     }
   });
@@ -743,11 +744,11 @@ describe("skill page", () => {
     const markup = page({ canWrite: true, editable: true });
 
     expect(markup).not.toContain("You can read this but not change it.");
-    expect(markup).toContain("Add reference");
+    expect(markup).toContain('aria-label="Add a file to references/"');
     expect(markup).not.toMatch(/<textarea[^>]*readOnly=""/u);
     expect(inputOf(markup, "Title")).not.toContain('disabled=""');
     // The index counts the files of the package: the instructions and one reference.
-    expect(markup).toMatch(/<a href="#instructions"[^>]*>.*?>2<\/span><\/a>/u);
+    expect(markup).toMatch(/<a href="#files"[^>]*>.*?>2<\/span><\/a>/u);
   });
 });
 

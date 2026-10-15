@@ -2,7 +2,14 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
 import { invalidateOfferedAgents } from "../api/agent-placement-mutations";
-import { createAssetWrites, type AvailableIn, type NameCheckAnswer } from "../api/asset-writes";
+import {
+  createAssetWrites,
+  type AssetContent,
+  type AssetFileEntry,
+  type AssetFileRead,
+  type AvailableIn,
+  type NameCheckAnswer
+} from "../api/asset-writes";
 import { usePlatformContextQuery } from "../api/workspace-queries";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useTranslation } from "../i18n";
@@ -98,14 +105,18 @@ export interface BuildKindState {
 
 /** A write of one asset, as the frame makes it. The answer carries the new revision. */
 interface BuildWrites {
-  put(input: {
-    kind: string;
-    name: string;
-    config: Record<string, unknown>;
-    /** The revision the page loaded, or `null` for an asset the call creates. */
-    expectedRevision: number | null;
-    availableIn?: AvailableIn;
-  }): Promise<{ revision: number }>;
+  /** Writes the config, or the whole folder of a kind whose revision holds one. */
+  put(
+    input: {
+      kind: string;
+      name: string;
+      /** The revision the page loaded, or `null` for an asset the call creates. */
+      expectedRevision: number | null;
+      availableIn?: AvailableIn;
+    } & AssetContent
+  ): Promise<{ revision: number; files?: AssetFileEntry[] }>;
+  /** The whole folder of an asset's current revision, each file with its content. */
+  readFiles(input: { kind: string; name: string }): Promise<AssetFileRead[]>;
   delete(input: { kind: string; name: string; expectedRevision: number }): Promise<unknown>;
   /** Makes a saved revision of a kind with drafts the one its users get. */
   publish(input: {
@@ -395,6 +406,7 @@ export function useBuildSource(): BuildSource {
         made(writes.publish({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
       revert: (input) =>
         made(writes.revert({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),
+      readFiles: ({ kind, name }) => writes.readFiles({ kind, name, ...inScope(kind) }),
       revisions: ({ kind, name, cursor }) =>
         client.assets.revisions.list({
           params: { kind, name },

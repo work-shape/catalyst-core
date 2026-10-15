@@ -99,4 +99,5 @@ export {
   type BuildLocation
 } from "./build-route";
 export { SkillEditor } from "./skill-editor";
+export * from "./skill-form-model";
 export { skillFacts } from "./skill-facts";

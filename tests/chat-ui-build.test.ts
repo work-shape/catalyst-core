@@ -136,6 +136,7 @@ function source(input: SourceInput = {}): BuildSource {
     checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
+      readFiles: async () => [],
       delete: async () => undefined,
       publish: async () => ({ draftRevision: 1, publishedRevision: 1 }),
       revert: async () => ({ revision: 1 }),
@@ -628,7 +629,7 @@ describe("Studio asset page", () => {
     expect(markup).toMatch(/<input[^>]*readOnly=""[^>]*value="Tax review"/u);
     expect(markup).not.toMatch(/<input[^>]*disabled=""[^>]*value="Tax review"/u);
     expect(markup).not.toMatch(/<input[^>]*required=""[^>]*value="Tax review"/u);
-    expect(markup).not.toContain("Add reference");
+    expect(markup).not.toContain('aria-label="Add a file to references/"');
     expect(markup).not.toContain("Save changes");
     expect(markup).not.toContain('type="submit"');
     // History and "Copy ID" are offered to everybody who reads the asset.
@@ -641,7 +642,7 @@ describe("Studio asset page", () => {
 
     expect(markup).not.toContain("data-build-read-only");
     expect(markup).not.toMatch(/<input[^>]*readOnly=""[^>]*value="Tax review"/u);
-    expect(markup).toContain("Add reference");
+    expect(markup).toContain('aria-label="Add a file to references/"');
     expect(markup).toContain('aria-label="More actions"');
     // Nothing is changed yet, so there is nothing to save.
     expect(markup).not.toContain("Save changes");

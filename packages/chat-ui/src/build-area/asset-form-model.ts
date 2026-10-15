@@ -36,27 +36,6 @@ export interface AgentFormState {
   initialPrompts: AgentInitialPromptForm[];
 }
 
-export interface SkillFormState {
-  name: string;
-  title: string;
-  description: string;
-  /** The sentence for people. Empty where the skill has none. */
-  summary: string;
-  /**
-   * The skill's starters as its file holds them. The form does not edit them: they are kept
-   * so that a save here leaves them as they are.
-   */
-  starters: unknown[];
-  content: string;
-  resources: SkillResourceFormState[];
-}
-
-interface SkillResourceFormState {
-  path: string;
-  mediaType: string;
-  content: string;
-}
-
 /** Mirrors the availability contract; an agent without a stored row is hidden everywhere. */
 export interface AgentAvailabilityForm {
   mode: "all" | "selected";
@@ -391,58 +370,6 @@ export function emptyAgentForm(): AgentFormState {
   };
 }
 
-export function skillConfigToForm(config: Record<string, unknown>): SkillFormState {
-  const resources = Array.isArray(config.resources) ? config.resources : [];
-  return {
-    name: typeof config.name === "string" ? config.name : "",
-    title: typeof config.title === "string" ? config.title : "",
-    description: typeof config.description === "string" ? config.description : "",
-    summary: typeof config.summary === "string" ? config.summary : "",
-    starters: Array.isArray(config.starters) ? config.starters : [],
-    content: typeof config.content === "string" ? config.content : "",
-    resources: resources.flatMap((resource) => {
-      if (!resource || typeof resource !== "object" || Array.isArray(resource)) {
-        return [];
-      }
-      const record = resource as Record<string, unknown>;
-      return typeof record.path === "string" &&
-        typeof record.mediaType === "string" &&
-        typeof record.content === "string"
-        ? [{ path: record.path, mediaType: record.mediaType, content: record.content }]
-        : [];
-    })
-  };
-}
-
-export function skillFormToConfig(form: SkillFormState): Record<string, unknown> {
-  return {
-    name: form.name.trim(),
-    title: form.title.trim(),
-    description: form.description.trim(),
-    ...(form.summary.trim() ? { summary: form.summary.trim() } : {}),
-    ...(form.starters.length ? { starters: form.starters } : {}),
-    content: form.content,
-    ...(form.resources.length ? { resources: form.resources } : {})
-  };
-}
-
-/** Example names shown in the empty name fields. Names are identifiers and are not translated. */
-
-/** The file that holds a skill's instructions. */
-export const SKILL_ROOT_FILE_NAME = "SKILL.md";
-
-export function emptySkillForm(): SkillFormState {
-  return {
-    name: "",
-    title: "",
-    description: "",
-    summary: "",
-    starters: [],
-    content: "",
-    resources: []
-  };
-}
-
 function hasLocalizedContent(pair: LocalizedPair): boolean {
   return Boolean(pair.en.trim() || pair.de.trim());
 }
@@ -512,8 +439,4 @@ export function startedAgentForm(
     displayName: { ...form.displayName, [language]: start.title },
     description: { ...form.description, [language]: start.description ?? "" }
   };
-}
-
-export function startedSkillForm(start: { name: string; title: string }): SkillFormState {
-  return { ...emptySkillForm(), name: start.name, title: start.title };
 }

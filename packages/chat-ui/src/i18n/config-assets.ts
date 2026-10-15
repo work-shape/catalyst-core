@@ -3,7 +3,6 @@ import { defineTranslations } from "./translation-area";
 export const configAssets = defineTranslations({
   en: {
     configAddPrompt: "Add prompt",
-    configAddResource: "Add reference",
     configAgent: "Agent",
     configAgentNameHint: "Stable identifier, letters/digits/underscores. Cannot be renamed later.",
     configAppliesImmediately: "Applies to new conversations immediately.",
@@ -95,11 +94,7 @@ export const configAssets = defineTranslations({
       "Runs use the provider's priority tier. Fast runs are billed at a higher rate.",
     configReasoningEffort: "Reasoning effort",
     configReloadLatest: "Reload latest",
-    configRemove: "Remove",
     configRestore: "Restore",
-    configResourceContent: "Reference content",
-    configResourcePath: "Reference path",
-    configResourceType: "Media type",
     configRevisionCreate: "Created",
     configRevisionDelete: "Deleted",
     configRevisionHistory: "Revision history",
@@ -113,7 +108,6 @@ export const configAssets = defineTranslations({
     configSkillDescriptionHint: "Tells the model when to read this skill.",
     configSkillDetails: "Skill details",
     configSkillDetailsDescription: "Metadata used to decide when this skill is relevant.",
-    configSkillInstructionsDescription: "Markdown content loaded when the agent reads this skill.",
     configSkillNameHint: "Stable identifier. Cannot be renamed later.",
     configSkills: "Skills",
     configSkillTitleHint: "Shown to the model in the skill list.",
@@ -164,7 +158,6 @@ export const configAssets = defineTranslations({
   },
   de: {
     configAddPrompt: "Vorschlag hinzufügen",
-    configAddResource: "Referenz hinzufügen",
     configAgent: "Agent",
     configAgentNameHint:
       "Stabile Kennung aus Buchstaben, Ziffern und Unterstrichen. Kann später nicht umbenannt werden.",
@@ -263,11 +256,7 @@ export const configAssets = defineTranslations({
       "Läufe nutzen die Prioritätsstufe des Anbieters. Schnelle Läufe werden zu einem höheren Preis abgerechnet.",
     configReasoningEffort: "Denkaufwand",
     configReloadLatest: "Neueste Version laden",
-    configRemove: "Entfernen",
     configRestore: "Wiederherstellen",
-    configResourceContent: "Referenzinhalt",
-    configResourcePath: "Referenzpfad",
-    configResourceType: "Medientyp",
     configRevisionCreate: "Erstellt",
     configRevisionDelete: "Gelöscht",
     configRevisionHistory: "Versionsverlauf",
@@ -282,8 +271,6 @@ export const configAssets = defineTranslations({
     configSkillDetails: "Details des Skills",
     configSkillDetailsDescription:
       "Metadaten, anhand derer entschieden wird, wann dieser Skill relevant ist.",
-    configSkillInstructionsDescription:
-      "Markdown-Inhalt, der geladen wird, wenn der Agent diesen Skill liest.",
     configSkillNameHint: "Stabile Kennung. Kann später nicht umbenannt werden.",
     configSkills: "Skills",
     configSkillTitleHint: "Wird dem Modell in der Liste der Skills angezeigt.",

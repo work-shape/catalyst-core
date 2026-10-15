@@ -1,7 +1,7 @@
 import { Badge, SkillIcon } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { useSettingsPage } from "../settings/settings-page-context";
-import { skillConfigToForm, startedSkillForm } from "./asset-form-model";
+import { skillConfigToForm, startedSkillForm } from "./skill-form-model";
 import type { BuildAsset, BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
 import { SkillEditor } from "./skill-editor";
 import { skillFacts } from "./skill-facts";

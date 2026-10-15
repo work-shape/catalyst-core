@@ -106,12 +106,19 @@ Texts that exist in English and German are written in one language at a time. **
 
 If you may read an asset but not change it, the page says so and has no save bar.
 
+### The files of a skill
+
+A skill's page shows the skill as a folder under **Files**: `SKILL.md`, which holds the instructions, and the files below `references/`, `scripts/` and `assets/`. The **+** of a folder uploads a file into it or starts a new, empty one; the type of a file is read from its name. A text file, such as a reference or a script, is edited in place. Any file can be renamed, replaced with a new version, downloaded and deleted, and the page shows its size and, once saved, its SHA-256 hash. A file that is not text is not shown, only replaced.
+
+The changes are saved with the save bar like any other field. Where a file beside the instructions changed, the save writes the whole folder; otherwise it writes the text alone and the other files stay. The instance holds the limits and says which one a save broke, with the path of the file: a file of more than 2 MiB, more than 500 files or 8 MiB in a skill, a compiled program, or a file under `scripts/` that is not UTF-8 text. See [A skill as a folder of files](/configure/config-assets/#a-skill-as-a-folder-of-files).
+
 ### When a save is refused
 
 - **A tool, model or skill that is not allowed.** A Namespace can limit the tools and models of its agents. The refusal stands under the field it concerns, and the form keeps what you typed.
 - **Somebody else saved first.** The page saves against the revision it loaded. If the asset changed in between, nothing is overwritten. A notice offers **Load the newer version** and asks before it replaces what you typed, so you can copy what you need first. Until then the page saves nothing. If the newer version cannot be loaded, the page says so and keeps your text.
 - **Somebody deleted it.** The notice says that the asset was deleted. Your text stays so that you can copy it, and the notice leads back to the list.
 - **A skill you may not read.** An agent can only be given skills you may read yourself. A skill it already has stays when you save other changes.
+- **A file of a skill that is not allowed.** The refusal names the file and stands under the files of the skill.
 - **Anything else** is shown in the words of the instance, above the save bar.
 
 ## History and restore

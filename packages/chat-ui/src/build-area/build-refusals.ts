@@ -1,11 +1,13 @@
+import type { LocaleCode } from "@vivd-catalyst/api-client";
 import type { TranslationContextValue } from "../i18n";
+import { formatFileBytes } from "./skill-form-model";
 import { apiErrorCode, apiErrorMessage } from "../workspace-utils";
 
 type Translate = TranslationContextValue["t"];
 
 /** The part of an asset page a refusal is about. A kind names its sections' fields with these. */
 export type BuildRefusalField =
-  "tools" | "model" | "skills" | "knowledge" | "source" | "availability";
+  "tools" | "model" | "skills" | "knowledge" | "source" | "availability" | "files";
 
 /** What a refused change says, and where on the page it says it. */
 interface BuildRefusal {
@@ -48,6 +50,11 @@ interface RefusalDetails {
   toolName?: string;
   modelBindingId?: string;
   namespace?: string;
+  /** The file of a folder a refusal names. */
+  path?: string;
+  /** The limit a refusal names, and what the write had of it. */
+  limit?: number;
+  actual?: number;
   issues: { message: string; path: unknown[] }[];
 }
 
@@ -62,6 +69,58 @@ function text(value: unknown, key: string): string | undefined {
   return typeof found === "string" ? found : undefined;
 }
 
+function number(value: unknown, key: string): number | undefined {
+  const found = field(value, key);
+  return typeof found === "number" ? found : undefined;
+}
+
+/**
+ * What a refusal of a folder says in the reader's language, with the path of the file it
+ * names: the instance holds the limits and the rules, and says which one a write broke.
+ */
+function folderRefusal(
+  details: RefusalDetails,
+  t: Translate,
+  locale: LocaleCode
+): string | undefined {
+  const path = details.path ?? "";
+  const size = (bytes: number | undefined) =>
+    bytes === undefined ? "" : formatFileBytes(bytes, locale);
+  switch (details.reason) {
+    case "skill_file_too_large":
+      return t("skillFiles.refusedTooLarge", {
+        path,
+        size: size(details.actual),
+        limit: size(details.limit)
+      });
+    case "skill_too_many_files":
+      return t("skillFiles.refusedTooMany", {
+        count: String(details.actual ?? ""),
+        limit: String(details.limit ?? "")
+      });
+    case "skill_too_large":
+    case "files_too_large":
+      return t("skillFiles.refusedTotal", {
+        size: size(details.actual),
+        limit: size(details.limit)
+      });
+    case "skill_file_executable":
+      return t("skillFiles.refusedExecutable", { path });
+    case "skill_file_not_text":
+      return t("skillFiles.refusedNotText", { path });
+    case "skill_file_lfs_pointer":
+      return t("skillFiles.refusedLfs", { path });
+    case "skill_path_invalid":
+      return t("skillFiles.refusedPath", { path });
+    case "skill_path_duplicate":
+      return t("skillFiles.refusedPathTwice", { path });
+    case "files_unavailable":
+      return t("skillFiles.refusedUnavailable", { path });
+    default:
+      return undefined;
+  }
+}
+
 /** The reason and the issues a refusal of the instance names in its details. */
 export function readRefusalDetails(error: unknown): RefusalDetails {
   const details = field(field(field(error, "payload"), "error"), "details");
@@ -71,6 +130,9 @@ export function readRefusalDetails(error: unknown): RefusalDetails {
     toolName: text(details, "toolName"),
     modelBindingId: text(details, "modelBindingId"),
     namespace: text(details, "namespace"),
+    path: text(details, "path"),
+    limit: number(details, "limit"),
+    actual: number(details, "actual"),
     issues: (Array.isArray(issues) ? issues : []).flatMap((issue: unknown) => {
       const message = text(issue, "message");
       const path = field(issue, "path");
@@ -123,7 +185,11 @@ const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
  * other sentence is shown as the instance said it, which includes the one sentence about an
  * asset the reader may not read.
  */
-export function readBuildRefusal(error: unknown, t: Translate): BuildWriteOutcome {
+export function readBuildRefusal(
+  error: unknown,
+  t: Translate,
+  locale: LocaleCode = "en"
+): BuildWriteOutcome {
   if (apiErrorCode(error) === "REVISION_CONFLICT") {
     return { ok: false, conflict: true, ...readConflict(error) };
   }
@@ -146,6 +212,10 @@ export function readBuildRefusal(error: unknown, t: Translate): BuildWriteOutcom
   }
   if (details.reason === "model_binding_required") {
     return refused({ field: "model", message: t("build.refusedModelRequired", { namespace }) });
+  }
+  const folder = folderRefusal(details, t, locale);
+  if (folder !== undefined) {
+    return refused({ field: "files", message: folder });
   }
   const { issues } = details;
   if (issues.length > 0) {

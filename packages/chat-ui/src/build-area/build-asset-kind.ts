@@ -1,7 +1,13 @@
 import type { ComponentType, ReactNode, Ref } from "react";
 import type { Asset, AssetSummary } from "@vivd-catalyst/api-client";
 import type { AvatarKind, GenericIconKey } from "@vivd-catalyst/ui";
-import type { AvailableIn, CheckName } from "../api/asset-writes";
+import type {
+  AssetFileEntry,
+  AssetFileRead,
+  AssetFileWrite,
+  AvailableIn,
+  CheckName
+} from "../api/asset-writes";
 import type { TranslationKey } from "../i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
 import type { BuildNamespace, BuildScope } from "./build-rights";
@@ -70,6 +76,18 @@ export interface BuildAssetEditorProps {
   onUnsavedChange(unsaved: boolean): void;
   /** Saves the definition against the revision the page loaded, or creates the asset. */
   save(config: Record<string, unknown>): Promise<BuildWriteOutcome>;
+  /**
+   * The folder of a kind whose revision holds files beside its config, such as a skill: reads
+   * the files of the revision the page loaded, and saves the whole folder against it, or
+   * creates the asset with it. Absent where the frame writes the config alone.
+   */
+  folder?: {
+    read(): Promise<AssetFileRead[]>;
+    /** A save that was made answers the files it stored, each with its hash. */
+    save(
+      files: readonly AssetFileWrite[]
+    ): Promise<BuildWriteOutcome & { stored?: readonly AssetFileEntry[] }>;
+  };
 }
 
 /**

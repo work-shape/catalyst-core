@@ -1,18 +1,34 @@
-import { FileText, Plus, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { SKILL_RESOURCE_MEDIA_TYPES, SKILL_SUMMARY_MAX_LENGTH } from "@vivd-catalyst/core";
-import { Button, Field, Input, List, ListRow, Select, Textarea } from "@vivd-catalyst/ui";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { SKILL_SUMMARY_MAX_LENGTH } from "@vivd-catalyst/core";
+import { Field, Input, Textarea } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
-import {
-  SKILL_ROOT_FILE_NAME,
-  countChangedFields,
-  skillFormToConfig,
-  type SkillFormState
-} from "./asset-form-model";
+import { FieldRefusals } from "./asset-form-fields";
+import { countChangedFields } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
+import { refusalsOf } from "./build-refusals";
+import { SkillFileList, SkillFilePane, type SkillFileSelection } from "./skill-files";
+import {
+  freeSkillFilePath,
+  isUnread,
+  skillFileOfBytes,
+  skillFilePath,
+  skillFolderChanged,
+  skillFormToConfig,
+  skillFormToFolder,
+  textBytes,
+  withReadFiles,
+  withStoredHashes,
+  type SkillFileForm,
+  type SkillFolder,
+  type SkillFormState
+} from "./skill-form-model";
 
-type SkillResource = SkillFormState["resources"][number];
+/** Where the next chosen file goes: added to a folder, or in place of a file, by its place. */
+type UploadTarget = { folder: SkillFolder } | { replace: number };
+
+/** How the content of the files the skill's index names is read. */
+type FolderRead = "idle" | "loading" | "failed";
 
 export function SkillEditor({
   frame,
@@ -29,34 +45,117 @@ export function SkillEditor({
 }) {
   const { t } = useTranslation();
   const state = useAssetForm(initialForm);
-  const { form, setForm, outcome } = state;
+  const { form, setForm, outcome, amend } = state;
   const [saving, setSaving] = useState(false);
-  const [selectedResource, setSelectedResource] = useState<"root" | number>("root");
+  const [selected, setSelected] = useState<SkillFileSelection>("root");
+  const [folderRead, setFolderRead] = useState<FolderRead>("idle");
+  const [readAttempt, setReadAttempt] = useState(0);
+  const uploadInput = useRef<HTMLInputElement>(null);
+  const uploadTarget = useRef<UploadTarget>(undefined);
   const editable = frame.canWrite && instanceEditable;
+  const { folder } = frame;
+  const unread = form.files.some(isUnread);
+  // A file of the folder changes only once every file is read: a save then writes them all.
+  const filesEditable = editable && folder !== undefined && !unread;
+
+  // The index names the files beside the config without their content. The page reads them
+  // once, so a script can be read and edited, and a save of the folder carries every file.
+  useEffect(() => {
+    if (!unread || folder === undefined) return;
+    let current = true;
+    setFolderRead("loading");
+    folder.read().then(
+      (files) => {
+        if (!current) return;
+        amend((value) => withReadFiles(value, files));
+        setFolderRead("idle");
+      },
+      () => {
+        if (current) setFolderRead("failed");
+      }
+    );
+    return () => {
+      current = false;
+    };
+    // The read runs when the page opens and again when the reader asks: the revision it reads
+    // stays the page's while the page is open.
+  }, [readAttempt]);
 
   const update = (patch: Partial<SkillFormState>) => setForm((value) => ({ ...value, ...patch }));
+  /** Changes the file at a place of the list. A file is known by its place, not its path. */
+  const updateFile = (at: number, change: (file: SkillFileForm) => SkillFileForm | undefined) =>
+    setForm((value) => ({
+      ...value,
+      files: value.files.flatMap((file, index) => {
+        if (index !== at) return [file];
+        const next = change(file);
+        return next === undefined ? [] : [next];
+      })
+    }));
+
   const submit = async () => {
     setSaving(true);
-    const answer = await frame.save(skillFormToConfig(form));
+    // A file beside the config changed: the whole folder is written. Otherwise the config is,
+    // and the files beside it stay as they are.
+    const { stored, ...answer } =
+      folder !== undefined && !unread && skillFolderChanged(form, state.baseline)
+        ? await folder.save(skillFormToFolder(form))
+        : { ...(await frame.save(skillFormToConfig(form))), stored: undefined };
     setSaving(false);
     state.setOutcome(answer);
     if (answer.ok) {
       state.markSaved();
+      // A save of the folder answers the hash of every file it stored.
+      if (stored) amend((value) => withStoredHashes(value, stored));
     }
     return answer;
   };
-  const addResource = () => {
-    const used = new Set(form.resources.map((resource) => resource.path));
-    let number = 1;
-    let path = "references/reference.md";
-    while (used.has(path)) {
-      number += 1;
-      path = `references/reference-${number}.md`;
-    }
-    setSelectedResource(form.resources.length);
-    update({ resources: [...form.resources, { path, mediaType: "text/markdown", content: "" }] });
+
+  const chooseFile = (target: UploadTarget) => {
+    uploadTarget.current = target;
+    uploadInput.current?.click();
   };
-  const resource = selectedResource === "root" ? undefined : form.resources[selectedResource];
+  const takeFiles = async (chosen: readonly File[]) => {
+    const target = uploadTarget.current;
+    if (target === undefined || chosen.length === 0) return;
+    const files = [...form.files];
+    let last: number | undefined;
+    for (const chosenFile of chosen) {
+      const bytes = new Uint8Array(await chosenFile.arrayBuffer());
+      // A replaced file keeps its path. An upload of a name the folder holds replaces that
+      // file; every other one is added.
+      const at =
+        "replace" in target
+          ? target.replace
+          : files.findIndex((file) => file.path === skillFilePath(target.folder, chosenFile.name));
+      const path =
+        "replace" in target
+          ? (files[target.replace]?.path ?? chosenFile.name)
+          : skillFilePath(target.folder, chosenFile.name);
+      const next = skillFileOfBytes(path, bytes);
+      if (at >= 0 && at < files.length) {
+        files[at] = next;
+        last = at;
+      } else {
+        last = files.push(next) - 1;
+      }
+    }
+    setForm((value) => ({ ...value, files }));
+    if (last !== undefined) setSelected(last);
+  };
+  const addEmptyFile = (folderName: SkillFolder) => {
+    const path = freeSkillFilePath(form.files, folderName);
+    setForm((value) => ({ ...value, files: [...value.files, { path, bytes: 0, text: "" }] }));
+    setSelected(form.files.length);
+  };
+
+  const file = selected === "root" ? undefined : form.files[selected];
+  const at = selected === "root" ? -1 : selected;
+  const savedFile = file && state.baseline.files.find((candidate) => candidate.path === file.path);
+  // A file that differs from what was loaded or last saved has no stored hash yet.
+  const fileChanged =
+    savedFile === undefined || savedFile.text !== file?.text || savedFile.base64 !== file?.base64;
+  const fileRefusals = refusalsOf(outcome, "files");
 
   const sections: AssetSection[] = [
     {
@@ -96,47 +195,39 @@ export function SkillEditor({
       )
     },
     {
-      id: "instructions",
-      label: t("configInstructions"),
-      description: t("configSkillInstructionsDescription"),
-      count: form.resources.length > 0 ? form.resources.length + 1 : undefined,
+      id: "files",
+      label: t("skillFiles.title"),
+      description: t("skillFiles.description"),
+      count: form.files.length + 1,
+      refusalField: "files",
       body: (
         <>
-          {form.resources.length > 0 || editable ? (
-            <div className="grid gap-2">
-              <List aria-label={t("build.skillFiles")}>
-                <ListRow
-                  size="compact"
-                  leading={<FileText aria-hidden="true" />}
-                  title={SKILL_ROOT_FILE_NAME}
-                  selected={selectedResource === "root"}
-                  onClick={() => setSelectedResource("root")}
-                />
-                {form.resources.map((entry, index) => (
-                  <ListRow
-                    key={`${index}:${entry.path}`}
-                    size="compact"
-                    leading={<FileText aria-hidden="true" />}
-                    title={entry.path}
-                    selected={selectedResource === index}
-                    onClick={() => setSelectedResource(index)}
-                  />
-                ))}
-              </List>
-              {editable ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="justify-self-start"
-                  onClick={addResource}
-                >
-                  <Plus aria-hidden="true" />
-                  {t("configAddResource")}
-                </Button>
-              ) : null}
-            </div>
+          {filesEditable ? (
+            <input
+              ref={uploadInput}
+              type="file"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+              multiple
+              data-skill-file-input=""
+              onChange={(event) => {
+                const chosen = [...(event.currentTarget.files ?? [])];
+                event.currentTarget.value = "";
+                takeFiles(chosen).catch(() => undefined);
+              }}
+            />
           ) : null}
-          {resource === undefined || selectedResource === "root" ? (
+          <SkillFileList
+            files={form.files}
+            selected={selected}
+            editable={filesEditable}
+            onSelect={setSelected}
+            onNew={addEmptyFile}
+            onUpload={(folderName) => chooseFile({ folder: folderName })}
+          />
+          <FieldRefusals messages={fileRefusals} />
+          {file === undefined ? (
             <Field
               label={t("configContent")}
               hint={t("configSkillContentHint")}
@@ -151,21 +242,24 @@ export function SkillEditor({
               />
             </Field>
           ) : (
-            <SkillResourceEditor
-              resource={resource}
-              editable={editable}
-              onChange={(next) =>
-                update({
-                  resources: form.resources.map((candidate, index) =>
-                    index === selectedResource ? next : candidate
-                  )
-                })
+            <SkillFilePane
+              file={file}
+              editable={filesEditable}
+              read={folderRead}
+              onRetryRead={() => setReadAttempt((attempt) => attempt + 1)}
+              changed={fileChanged}
+              onRename={(path) => updateFile(at, (candidate) => ({ ...candidate, path }))}
+              onText={(text) =>
+                updateFile(at, (candidate) => ({
+                  path: candidate.path,
+                  bytes: textBytes(text),
+                  text
+                }))
               }
-              onRemove={() => {
-                update({
-                  resources: form.resources.filter((_, index) => index !== selectedResource)
-                });
-                setSelectedResource("root");
+              onReplace={() => chooseFile({ replace: at })}
+              onDelete={() => {
+                updateFile(at, () => undefined);
+                setSelected("root");
               }}
             />
           )}
@@ -184,66 +278,14 @@ export function SkillEditor({
       control={{
         changes: countChangedFields(form, state.baseline),
         submit,
-        discard: state.discard
+        discard: () => {
+          state.discard();
+          setSelected("root");
+        }
       }}
       outcome={outcome}
       saving={saving}
       saveLabel={frame.asset ? t("configSaveChanges") : t("configCreateSkill")}
     />
-  );
-}
-
-function SkillResourceEditor({
-  resource,
-  editable,
-  onChange,
-  onRemove
-}: {
-  resource: SkillResource;
-  editable: boolean;
-  onChange(resource: SkillResource): void;
-  onRemove(): void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <>
-      <div className="grid items-end gap-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto]">
-        <Field label={t("configResourcePath")} required={editable}>
-          <Input
-            value={resource.path}
-            readOnly={!editable}
-            onChange={(event) => onChange({ ...resource, path: event.target.value })}
-          />
-        </Field>
-        <Field label={t("configResourceType")}>
-          <Select
-            value={resource.mediaType}
-            disabled={!editable}
-            onChange={(event) => onChange({ ...resource, mediaType: event.target.value })}
-          >
-            {SKILL_RESOURCE_MEDIA_TYPES.map((mediaType) => (
-              <option key={mediaType} value={mediaType}>
-                {mediaType}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        {editable ? (
-          <Button variant="ghost" size="sm" onClick={onRemove}>
-            <X aria-hidden="true" />
-            {t("configRemove")}
-          </Button>
-        ) : null}
-      </div>
-      <Field label={t("configResourceContent")}>
-        <Textarea
-          variant="code"
-          className="min-h-96"
-          value={resource.content}
-          readOnly={!editable}
-          onChange={(event) => onChange({ ...resource, content: event.target.value })}
-        />
-      </Field>
-    </>
   );
 }

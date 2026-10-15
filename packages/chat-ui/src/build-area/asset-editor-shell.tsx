@@ -56,6 +56,11 @@ export function useAssetForm<Form>(initial: Form): {
   /** What the form is compared with: as loaded, or as last saved. */
   baseline: Form;
   markSaved(): void;
+  /**
+   * Changes the form and what it is compared with alike, for what the page reads after it
+   * loaded, such as the content of files: it is no change of the reader's.
+   */
+  amend(update: (form: Form) => Form): void;
   discard(): void;
   outcome: BuildWriteOutcome | undefined;
   setOutcome(outcome: BuildWriteOutcome | undefined): void;
@@ -68,6 +73,10 @@ export function useAssetForm<Form>(initial: Form): {
     setForm,
     baseline,
     markSaved: () => setBaseline(form),
+    amend: (update) => {
+      setForm(update);
+      setBaseline(update);
+    },
     discard: () => {
       setForm(baseline);
       setOutcome(undefined);

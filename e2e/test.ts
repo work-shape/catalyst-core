@@ -97,6 +97,17 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["superadmin manages config assets with validation and conflict protection"]
   },
   {
+    name: "refused-skill-file",
+    reason:
+      "Chromium's own log line: the test saves a skill with a compiled program under scripts/ " +
+      "and asserts what the page shows for the 422.",
+    matches: requestAnswered(422),
+    path: /^\/api\/v1\/assets\/skill\/e2e_skill_files$/u,
+    tests: [
+      "a skill's files are uploaded, written, replaced and deleted, and a refused one is named"
+    ]
+  },
+  {
     name: "drafted-connection-that-is-new",
     reason:
       "Chromium's own log line: the card of the agent's draft reads the Connection of its id, " +

@@ -101,6 +101,7 @@ function renderPage(input: PageInput = {}): string {
     checkName: async () => ({ available: true }),
     writes: {
       put: async () => ({ revision: 1 }),
+      readFiles: async () => [],
       delete: async () => undefined,
       publish: async () => ({ draftRevision: 1, publishedRevision: 1 }),
       revert: async () => ({ revision: 1 }),
