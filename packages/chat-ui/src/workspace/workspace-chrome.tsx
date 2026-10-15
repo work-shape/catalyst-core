@@ -31,18 +31,23 @@ export function OutdatedInterfaceBanner({ onReload }: { onReload(): void }) {
   const { t } = useTranslation();
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-3">
-      <Banner
-        tone="warning"
-        title={t("interfaceOutdatedTitle")}
-        action={
-          <Button size="sm" variant="secondary" onClick={onReload}>
-            {t("interfaceOutdatedReload")}
-          </Button>
-        }
-        className="pointer-events-auto w-full max-w-xl shadow-lg"
-      >
-        {t("interfaceOutdatedBody")}
-      </Banner>
+      {/*
+       * The banner's fill is a tint, so it floats on the raised surface: the page under it does
+       * not show through.
+       */}
+      <div className="pointer-events-auto w-full max-w-xl rounded-md bg-popover shadow-lg">
+        <Banner
+          tone="warning"
+          title={t("interfaceOutdatedTitle")}
+          action={
+            <Button size="sm" variant="secondary" onClick={onReload}>
+              {t("interfaceOutdatedReload")}
+            </Button>
+          }
+        >
+          {t("interfaceOutdatedBody")}
+        </Banner>
+      </div>
     </div>
   );
 }

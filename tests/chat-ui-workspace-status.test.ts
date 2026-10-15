@@ -154,5 +154,7 @@ describe("an interface older than its server", () => {
     expect(markup.match(/role="status"/gu)).toHaveLength(1);
     expect(markup).toContain(title);
     expect(markup).toMatch(new RegExp(`<button[^>]*>${action}</button>`, "u"));
+    // The banner's tinted fill floats over the page on an opaque surface of its own.
+    expect(markup).toMatch(/<div class="[^"]*bg-popover[^"]*"><div role="status"/u);
   });
 });

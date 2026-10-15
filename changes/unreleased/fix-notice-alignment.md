@@ -9,3 +9,5 @@ section: Fixed
   screen, instead of wrapping under them. This shows on the Workflow draft bar and on the notice
   that the application was updated. The UI library shows a Banner with a title and an action
   alone.
+- **The notice that the application was updated is opaque:** it floats over the page on the
+  raised surface under its warning tint, so the page under it no longer shows through.
