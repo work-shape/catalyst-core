@@ -3,8 +3,9 @@ import {
   DISCOVERY_WAIT_MS,
   connectionConfigToForm,
   newConnectionConfig,
+  emptyConnectionForm,
   waitsForDiscovery,
-  withAcceptedOperation,
+  withApprovedOperations,
   withConnectionForm,
   withOperationExposure,
   withReviewedOperation,
@@ -20,6 +21,7 @@ const FINGERPRINT = "f".repeat(64);
 describe("the form of a Connection", () => {
   it("makes a new MCP Connection that accepts nothing, with the header only where it is read", () => {
     const form: ConnectionFormState = {
+      ...emptyConnectionForm(),
       url: " https://mcp.example.com/mcp ",
       authScheme: "bearer",
       headerName: "X-Key"
@@ -50,9 +52,12 @@ describe("the form of a Connection", () => {
     };
     const form = connectionConfigToForm(copied);
     expect(form).toEqual({
+      connectorType: "mcp",
       url: "https://mcp.example.com/mcp",
       authScheme: "header",
-      headerName: "X-Key"
+      headerName: "X-Key",
+      headers: [],
+      testPath: ""
     });
     const config = newConnectionConfig({ name: "crm", title: "CRM", copyOf: copied }, form);
     expect(config).toMatchObject({ description: "The CRM.", operations: copied.operations });
@@ -60,32 +65,98 @@ describe("the form of a Connection", () => {
     expect(config).not.toHaveProperty("origin");
   });
 
-  it("accepts a tool pinned to what was read, takes it off, and accepts a new description", () => {
+  it("makes a REST API with its base address, fixed headers and test path, and reads it back", () => {
+    const form: ConnectionFormState = {
+      ...emptyConnectionForm("http_api"),
+      url: " https://gateway.example.test/datevconnect ",
+      authScheme: "header",
+      headerName: "X-Api-Key",
+      headers: [
+        { name: " x-client-instance-id ", value: " 7c1e " },
+        { name: "", value: "an empty row is no header" }
+      ],
+      testPath: " /health "
+    };
+    const config = newConnectionConfig({ name: "exampledata", title: "Exampledata" }, form);
+    expect(config).toEqual({
+      name: "exampledata",
+      displayName: "Exampledata",
+      connectorType: "http_api",
+      operations: [],
+      enabled: true,
+      settings: {
+        baseUrl: "https://gateway.example.test/datevconnect",
+        headers: { "x-client-instance-id": "7c1e" },
+        testPath: "/health",
+        headerName: "X-Api-Key"
+      },
+      authScheme: "header"
+    });
+    expect(connectionConfigToForm(config)).toEqual({
+      connectorType: "http_api",
+      url: "https://gateway.example.test/datevconnect",
+      authScheme: "header",
+      headerName: "X-Api-Key",
+      headers: [{ name: "x-client-instance-id", value: "7c1e" }],
+      testPath: "/health"
+    });
+    // Without a key nothing is sent, and the settings name no header and no test path.
+    expect(
+      newConnectionConfig(
+        { name: "open", title: "Open" },
+        { ...emptyConnectionForm("http_api"), url: "https://open.example.test", authScheme: "none" }
+      )
+    ).toMatchObject({ settings: { baseUrl: "https://open.example.test" }, authScheme: "none" });
+  });
+
+  it("approves tools at once, pinned to what was read, takes one off, and accepts a new description", () => {
     const base = {
       name: "crm",
       operations: [{ name: "list", effect: "reading", exposure: [], enabled: true, policy: "deny" }]
     };
-    const accepted = withAcceptedOperation(base, {
-      name: "lookup",
-      effect: "changing",
-      fingerprint: FINGERPRINT,
-      forAgents: true
-    });
+    const accepted = withApprovedOperations(
+      base,
+      [
+        { name: "lookup", effect: "changing", schemaFingerprint: FINGERPRINT },
+        {
+          name: "clients",
+          effect: "reading",
+          declaration: { method: "GET", path: "/clients", description: "Lists the clients." }
+        }
+      ],
+      ["agent", "workflow"]
+    );
     expect(accepted.operations).toEqual([
       { name: "list", effect: "reading", exposure: [], enabled: true, policy: "deny" },
       {
         name: "lookup",
         effect: "changing",
-        exposure: ["agent"],
+        exposure: ["agent", "workflow"],
         enabled: true,
         schemaFingerprint: FINGERPRINT
+      },
+      {
+        method: "GET",
+        path: "/clients",
+        description: "Lists the clients.",
+        name: "clients",
+        effect: "reading",
+        exposure: ["agent", "workflow"],
+        enabled: true
       }
     ]);
+    // Approved again, an operation stands once, as approved now.
+    expect(
+      withApprovedOperations(accepted, [{ name: "lookup", effect: "reading" }], []).operations
+    ).toHaveLength(3);
     expect(withReviewedOperation(accepted, "list", FINGERPRINT).operations).toMatchObject([
       { name: "list", schemaFingerprint: FINGERPRINT, policy: "deny" },
-      { name: "lookup" }
+      { name: "lookup" },
+      { name: "clients" }
     ]);
-    expect(withoutOperation(accepted, "lookup").operations).toEqual(base.operations);
+    expect(withoutOperation(withoutOperation(accepted, "lookup"), "clients").operations).toEqual(
+      base.operations
+    );
   });
 
   it("opens one operation to outside clients and closes it again, and leaves its other exposures", () => {
@@ -111,15 +182,14 @@ describe("the form of a Connection", () => {
     expect(withOperationExposure(opened, "list", "outside", false).operations).toEqual(
       base.operations
     );
-    // An accepted tool is never open to outside clients by itself.
-    const accepted = withAcceptedOperation(base, {
-      name: "fresh",
-      effect: "reading",
-      fingerprint: FINGERPRINT,
-      forAgents: true
-    });
+    // An approved tool is never open to outside clients by itself.
+    const accepted = withApprovedOperations(
+      base,
+      [{ name: "fresh", effect: "reading", schemaFingerprint: FINGERPRINT }],
+      ["agent", "bridge", "workflow"]
+    );
     expect(accepted.operations).toContainEqual(
-      expect.objectContaining({ name: "fresh", exposure: ["agent"] })
+      expect.objectContaining({ name: "fresh", exposure: ["agent", "bridge", "workflow"] })
     );
   });
 
