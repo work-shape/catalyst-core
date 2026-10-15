@@ -21,13 +21,7 @@ import {
   formatWarnings,
   kindNoun
 } from "./asset-output";
-import {
-  connectApi,
-  formatCommandError,
-  resolveWorkingDir,
-  type ConfigCommandOptions
-} from "./command-support";
-import { readManifestIfPresent, resolveInstance } from "./working-copy";
+import { openInstance, formatCommandError, type ConfigCommandOptions } from "./command-support";
 
 // `catalyst context`, `kinds`, `references` and `catalyst <kind> <verb>`: one command per
 // operation of the instance, for every kind it registers. A command reads its arguments, sends
@@ -643,20 +637,6 @@ async function runInstanceCommand(
     else out(context, () => formatContext(context));
   }
   return EXIT.done;
-}
-
-/**
- * The client of the instance the command names, as `resolveInstance` selects it, signed in with
- * the key every command uses (`connectApi`), and the workspace the working copy is bound to. A
- * bound root addresses what that workspace owns, as its `config` commands do, unless
- * `--workspace` names another.
- */
-async function openInstance(
-  options: ConfigCommandOptions
-): Promise<{ api: ConfigApi; workspace: string | undefined }> {
-  const manifest = await readManifestIfPresent(resolveWorkingDir(options));
-  const instance = await resolveInstance(manifest, options);
-  return { api: await connectApi(instance.url, options), workspace: instance.workspace };
 }
 
 /** The kind a noun names: its id, its plural, or either with dashes for underscores. */

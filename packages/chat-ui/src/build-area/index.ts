@@ -15,6 +15,9 @@ export type {
 export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
 export { type BuildAssetRead, type BuildList, type BuildSource } from "./build-data";
 export { BuildFrame } from "./build-frame";
+export * from "./connection-approval-model";
+export * from "./connection-connect";
+export { ConnectionCreateFlow } from "./connection-create-dialog";
 export { ConnectionEditor } from "./connection-editor";
 export * from "./connection-form-model";
 export type {
@@ -63,9 +66,12 @@ export {
 } from "./build-create-request";
 export {
   buildScopes,
+  buildWorkspaceName,
   mayCreateAgents,
   resolveBuildRights,
+  readLastBuildScope,
   resolveBuildScope,
+  showOwnerInStudio,
   type BuildScope
 } from "./build-rights";
 export {

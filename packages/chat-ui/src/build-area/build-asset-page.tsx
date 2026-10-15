@@ -32,6 +32,7 @@ import { BuildHistory } from "./build-history";
 import type { VisibleBuildKind } from "./build-model";
 import { formatDateTime } from "../control-plane/locale-format";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
+import { buildWorkspaceName } from "./build-rights";
 
 interface AssetPageProps {
   source: BuildSource;
@@ -186,10 +187,42 @@ export function ViewedAssetPage({
   name: string;
   kinds: readonly BuildKind[];
 }) {
+  const { t } = useTranslation();
   const read = source.useAsset(kind, name);
   usePageShown(page, read.status);
   if (read.status === "ready") {
-    return <view.Page page={page} back={back} asset={read.asset} kinds={kinds} />;
+    const { asset } = read;
+    const held = {
+      kind: asset.kind,
+      namespace: asset.namespace,
+      workspaceId: asset.scope.kind === "workspace" ? asset.scope.workspaceId : undefined
+    };
+    const draftAhead =
+      asset.draftRevision !== undefined && asset.revision !== asset.publishedRevision;
+    const publish =
+      draftAhead && source.rights.may("publish", held)
+        ? async (): Promise<string | undefined> => {
+            try {
+              await source.writes.publish({ kind, name, revision: asset.revision });
+            } catch (error) {
+              const outcome = readBuildRefusal(error, t);
+              return outcome.ok || outcome.conflict
+                ? t("build.publishFailed")
+                : outcome.refusals.map((refusal) => refusal.message).join(" ");
+            }
+            await read.reload().catch(() => undefined);
+            return undefined;
+          }
+        : undefined;
+    return (
+      <view.Page
+        page={page}
+        back={back}
+        asset={asset}
+        kinds={kinds}
+        {...(publish === undefined ? {} : { publish })}
+      />
+    );
   }
   return (
     <UnreadAssetPage
@@ -301,7 +334,9 @@ function LoadedAssetPage({
     (candidate) => candidate.prefix === stored.namespace
   );
   const workspaceName =
-    source.rights.workspaces.find((candidate) => candidate.id === owner)?.name ?? owner;
+    owner === undefined
+      ? undefined
+      : buildWorkspaceName(source.rights, owner, t("build.scopePersonal"));
   const readOnlyReason = shipped
     ? t("build.readOnlyPlatform")
     : workspaceName !== undefined

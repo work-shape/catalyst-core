@@ -160,7 +160,7 @@ export function grantableResources(
  * Whether the reader holds `action` on the resource: the rule a right given to a principal is
  * checked by, that nobody gives what they do not hold. Decided by the evaluator the server
  * decides with, over the reader's own entries from `permissions.effective`. Nothing while
- * those are not known, for a reader who may not read them: the dialog then offers the
+ * those are loading or could not be read: the dialog then offers the
  * resource, and the instance refuses it with the right named.
  */
 export function readerHolds(

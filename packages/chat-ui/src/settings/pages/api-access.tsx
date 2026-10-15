@@ -188,13 +188,13 @@ function PrincipalRightsOnInstance({
   const resources = resourceQueries.flatMap((query) => query.data ?? []);
   const workspacesQuery = useAdministeredCollaborationWorkspacesQuery({ ...api, enabled: true });
   const workspaces = workspacesQuery.data ?? [];
-  // Who gave a right is named for a reader who is shown the users. Such a reader is also told
-  // their own entries, and the dialog offers what they hold.
+  // Who gave a right is named only for a reader who may read users. Everyone may read
+  // their own entries, so the dialog offers only what they hold.
   const readsUsers = canManageUsers(user);
   const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: readsUsers });
   const ownRightsQuery = useEffectivePermissionsQuery({
     ...api,
-    holderId: readsUsers ? user.id : undefined
+    holderId: user.id
   });
   const mutations = usePrincipalGrantMutations({ ...api, principalId: principal.id });
   const failure = loadFailure(grantsQuery.error);

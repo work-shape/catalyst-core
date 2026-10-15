@@ -9191,9 +9191,6 @@
           }
         },
         "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "users.manage"
-        ],
         "x-catalyst-rate-class": "read"
       }
     },
@@ -9326,9 +9323,6 @@
           }
         },
         "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "users.manage"
-        ],
         "x-catalyst-rate-class": "read"
       },
       "post": {
@@ -22206,6 +22200,9 @@
                 "compactThresholdTokens": {
                   "type": "number"
                 },
+                "buildsAssets": {
+                  "type": "boolean"
+                },
                 "welcomeMessage": {
                   "type": "string"
                 },
@@ -27608,6 +27605,9 @@
                 },
                 "compactThresholdTokens": {
                   "type": "number"
+                },
+                "buildsAssets": {
+                  "type": "boolean"
                 },
                 "welcomeMessage": {
                   "type": "string"

@@ -316,6 +316,34 @@ export function toWorkflowListItem(summary: WorkflowSummaryResource): WorkflowLi
   };
 }
 
+/** What a list of Workflow assets says of one, as far as a row of a draft reads it. */
+export interface WorkflowAssetListed {
+  name: string;
+  title: string;
+  description?: string;
+  publishedRevision?: number;
+  updatedAt: string;
+}
+
+/**
+ * A Workflow never published, as a row of the list: the engine names it nowhere, so its asset
+ * does. Nothing starts it until a person publishes it.
+ */
+export function toDraftWorkflowListItem(asset: WorkflowAssetListed): WorkflowListItem {
+  const description = asset.description?.trim();
+  return {
+    id: asset.name,
+    name: asset.title.trim() || nameFromId(asset.name),
+    ...(description ? { description } : {}),
+    published: false,
+    updatedAt: asset.updatedAt,
+    startsByHand: false,
+    refusedFor: [],
+    mayStart: false,
+    startForm: NO_START_FORM
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
