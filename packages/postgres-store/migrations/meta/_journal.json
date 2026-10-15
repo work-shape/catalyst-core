@@ -589,6 +589,13 @@
       "when": 1792014168085,
       "tag": "0083_shipped_guardrail_switches",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1792064970885,
+      "tag": "0084_workspace_inspection_backfill",
+      "breakpoints": true
     }
   ]
 }

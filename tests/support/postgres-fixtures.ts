@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
-import { migrateDatabase } from "@vivd-catalyst/postgres-store";
+import { createPostgresStores, migrateDatabase } from "@vivd-catalyst/postgres-store";
 
 const defaultTestMigrationsDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -101,6 +101,14 @@ export class PostgresFixtures {
     } finally {
       await admin.end({ timeout: 5 });
     }
+  }
+
+  /** Opens a migration fixture after the test has brought its schema up to date. */
+  async stores(databaseUrl: string) {
+    const name = new URL(databaseUrl).pathname.slice(1);
+    if (!name.startsWith(`${this.prefix}_`))
+      throw new Error("Refusing to open a database outside this test run");
+    return createPostgresStores({ databaseUrl, poolSize: 1 });
   }
 
   async drop(databaseUrl: string): Promise<void> {
