@@ -322,7 +322,7 @@ describe("operation contracts", () => {
       | {
           kind: "policy";
           operation: string;
-          reason?: "approval_unavailable" | "workflow_deleted";
+          reason?: "approval_unavailable" | "approval_stale" | "workflow_deleted";
           guardrail?: { id: string; label: string; reason?: string };
         }
       | { kind: "guardrail"; guardrailId: string; message?: string }

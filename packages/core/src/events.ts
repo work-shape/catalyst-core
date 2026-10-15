@@ -372,6 +372,8 @@ export const EVENTS = {
   // A guardrail made to enforce at its scope, or taken back: who, which revision and where.
   "guardrail.published": { ...LIVE_ONCE_AUDIT, name: "guardrail.published" },
   "guardrail.unpublished": { ...LIVE_ONCE_AUDIT, name: "guardrail.unpublished" },
+  // A guardrail the release ships switched off or on again by an instance admin.
+  "guardrail.shipped_switched": { ...LIVE_ONCE_AUDIT, name: "guardrail.shipped_switched" },
   "live_once.cleared": { ...LIVE_ONCE_AUDIT, name: "live_once.cleared" },
   "live_once.switched_on": { ...LIVE_ONCE_AUDIT, name: "live_once.switched_on" },
   "live_once.used": { ...LIVE_ONCE_AUDIT, name: "live_once.used" },

@@ -40,6 +40,7 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
+import { liveRevision } from "./asset-live-revision";
 import { loadStoredAssets, requireMatchingConfigName, toJsonObject } from "./asset-write-rules";
 import { assertScopeCanOwn } from "./config-asset-writer";
 import type { AssetWorkflowOptions } from "./types";
@@ -435,27 +436,8 @@ export class AssetDraftWorkflow {
     call.access.require(right, target.resource);
     await this.host.authorizeEditing(call, "put");
     const asset = requireActive(target);
-    const revision = await this.options.configAssets.store.getConfigAssetRevision({
-      clientInstanceId: this.options.clientInstanceId,
-      kind: kind.kind,
-      name,
-      revision: input.revision
-    });
-    if (!revision || revision.config === null) {
-      throw new AppError(
-        "NOT_FOUND",
-        `Config ${kind.kind} '${name}' has no revision ${input.revision} to publish`,
-        { reason: "revision_unknown", revision: input.revision }
-      );
-    }
+    const revision = await liveRevision(this.options, call, target, input.revision);
     const { config } = revision;
-    await kind.authorizeLive?.({
-      actor: call.actor,
-      access: call.access,
-      name,
-      revision: input.revision,
-      config
-    });
     // The set as it would be were this revision the asset's content, checked as a write of it.
     const stored = await loadStoredAssets(this.options);
     const without = withoutDefinition(stored.set, kind.kind, name);

@@ -66,6 +66,7 @@ export {
 export { lastDueWithin, nextDueAfter, parseCron } from "./cron";
 export {
   WORKFLOW_EXECUTED_STEP_TYPES,
+  indexWorkflowSteps,
   parseWorkflowManifest,
   readWorkflowManifest,
   workflowManifestFingerprint,
