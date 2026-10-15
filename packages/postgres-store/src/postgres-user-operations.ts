@@ -45,14 +45,11 @@ export async function resolveUserIdentity(
   );
 
   const resolved = await db.transaction(async (tx) => {
+    // Every successful resolution writes sign-in metadata. Hold the shared access lock only
+    // for that write transaction; the audit and the final user read stay outside it. It also
+    // serializes first sign-ins and verified-email linking, replacing their private locks.
+    await lockRights(tx, { clientInstanceId: input.clientInstanceId });
     const now = new Date();
-    await acquireResolveLock(
-      tx,
-      `identity:${input.clientInstanceId}:${input.authSource}:${input.externalUserId}`
-    );
-    if (emailLinkingEnabled) {
-      await acquireResolveLock(tx, `identity-email:${input.clientInstanceId}:${normalizedEmail}`);
-    }
 
     const [existingIdentity] = await tx
       .select()
@@ -67,6 +64,10 @@ export async function resolveUserIdentity(
       .limit(1);
 
     if (existingIdentity) {
+      await lockRights(tx, {
+        clientInstanceId: input.clientInstanceId,
+        userId: existingIdentity.userId
+      });
       const [user] = await tx
         .select()
         .from(productUsers)
@@ -141,7 +142,22 @@ export async function resolveUserIdentity(
     }
 
     // A user the session names or a verified email leads to: closed is closed on this way too.
-    if (user) requireUsableUser(mapUserRecord(user, [], []).status);
+    if (user) {
+      await lockRights(tx, { clientInstanceId: input.clientInstanceId, userId: user.id });
+      // A direct deletion mark may have committed while the row lock was being acquired.
+      user = await tx
+        .select()
+        .from(productUsers)
+        .where(
+          and(
+            eq(productUsers.clientInstanceId, input.clientInstanceId),
+            eq(productUsers.id, user.id)
+          )
+        )
+        .then(([row]) => row);
+      if (!user) throw new AppError("NOT_FOUND", "User is not available");
+      requireUsableUser(mapUserRecord(user, [], []).status);
+    }
 
     if (!user) {
       const [createdUser] = await tx
@@ -212,7 +228,6 @@ export async function resolveUserIdentity(
           userIdentities.externalUserId
         ],
         set: {
-          userId: user.id,
           displayLabel: input.displayLabel,
           email: input.email ?? null,
           emailVerified: input.emailVerified ?? false,
@@ -450,20 +465,23 @@ export async function markUserDeletionRequested(
   db: PostgresConnection,
   input: DeleteUserInput
 ): Promise<boolean> {
-  const marked = await db
-    .update(productUsers)
-    .set({ deletionRequestedAt: drizzleSql`now()` })
-    .where(
-      and(
-        eq(productUsers.clientInstanceId, input.clientInstanceId),
-        eq(productUsers.id, input.userId),
-        isNull(productUsers.deletionRequestedAt)
+  return db.transaction(async (tx) => {
+    await lockRights(tx, input);
+    const marked = await tx
+      .update(productUsers)
+      .set({ deletionRequestedAt: drizzleSql`now()` })
+      .where(
+        and(
+          eq(productUsers.clientInstanceId, input.clientInstanceId),
+          eq(productUsers.id, input.userId),
+          isNull(productUsers.deletionRequestedAt)
+        )
       )
-    )
-    .returning({ id: productUsers.id });
-  if (marked.length > 0) return true;
-  await requireUserRecord(db, input.clientInstanceId, input.userId);
-  return false;
+      .returning({ id: productUsers.id });
+    if (marked.length > 0) return true;
+    await requireUserRecord(tx, input.clientInstanceId, input.userId);
+    return false;
+  });
 }
 
 export async function deleteUser(
@@ -519,7 +537,7 @@ async function upsertLockedUserIdentity(
   input: UpsertUserIdentityInput
 ): Promise<UserRecord> {
   const now = new Date();
-  await db
+  const [identity] = await db
     .insert(userIdentities)
     .values({
       clientInstanceId: input.clientInstanceId,
@@ -538,14 +556,22 @@ async function upsertLockedUserIdentity(
         userIdentities.authSource,
         userIdentities.externalUserId
       ],
+      // A mapping may be edited on its current account, never silently reassigned. A move
+      // would change both accounts and has no product workflow; neither owner is changed.
+      setWhere: eq(userIdentities.userId, input.userId),
       set: {
-        userId: input.userId,
         displayLabel: input.displayLabel ?? null,
         email: input.email ?? null,
         emailVerified: input.emailVerified ?? false,
         updatedAt: now
       }
+    })
+    .returning({ userId: userIdentities.userId });
+  if (!identity) {
+    throw new AppError("CONFLICT", "This sign-in is already linked to another user", {
+      reason: "identity_already_linked"
     });
+  }
   await db
     .update(productUsers)
     .set({ updatedAt: now })
@@ -634,10 +660,6 @@ export async function requireUserRecord(
     throw new AppError("NOT_FOUND", "User is not available");
   }
   return user;
-}
-
-async function acquireResolveLock(tx: PostgresTransaction, key: string): Promise<void> {
-  await tx.execute(drizzleSql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
 }
 
 async function findSingleUserByVerifiedEmail(

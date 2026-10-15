@@ -40,3 +40,6 @@ section: Changed
   changing the account of a person who holds `api_access.manage` or `agent_models.manage`,
   which now only a superadmin does, and writing a grant for themselves, which another admin
   or a superadmin now writes. Rolling back restores the earlier rule; no data changes.
+- **Close the remaining rights races:** deletion admission and its mark share the rights
+  transaction; identity mappings cannot silently move between users; sign-in metadata and
+  direct membership/provisioning writes take access, user, then identity/workspace locks.

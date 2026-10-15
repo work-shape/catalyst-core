@@ -189,20 +189,26 @@ export class UserAdministrationWorkflow {
     if (command.userId === actor.id) {
       throw new AppError("VALIDATION_FAILED", "Superadmins cannot delete their own user account");
     }
-    const existing = await this.getUserOrThrow(command.userId);
-    // The operation's `authorize` refused everybody else before. Asked again where it deletes.
-    await requireMayAdministerUser(this.options, operationId, context, existing, {
-      superadminOnly: true
-    });
-    await this.requireAtLeastOneRemainingSuperadmin(existing);
-    return requestAccountDeletion(this.options, {
-      userId: command.userId,
-      requestedBy: "admin",
-      actor: auditActorFromUser(actor),
-      actorUserId: asUserId(actor.id),
-      correlationId: context.correlationId,
-      alreadyRequested: existing.status === "deleting"
-    });
+    return requestAccountDeletion(
+      this.options,
+      {
+        userId: command.userId,
+        requestedBy: "admin",
+        actor: auditActorFromUser(actor),
+        actorUserId: asUserId(actor.id),
+        correlationId: context.correlationId
+      },
+      (mark) =>
+        this.whileRightsHeld(context, command.userId, async (held, now) => {
+          await requireUserAdministration(held.options, operationId, now, {
+            userId: command.userId,
+            superadminOnly: true
+          });
+          const existing = await held.getUserOrThrow(command.userId);
+          await held.requireAtLeastOneRemainingSuperadmin(existing);
+          return mark(held.options.stores);
+        })
+    );
   }
 
   async upsertIdentity(
