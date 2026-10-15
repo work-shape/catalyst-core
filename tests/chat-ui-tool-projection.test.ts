@@ -759,6 +759,16 @@ describe("chat UI message history projection", () => {
       ).toEqual({ actionLabel: "Open tasks", technicalName: "show_view", title: "Widget" });
     }
 
+    // The fact sheet steps say what happens, in both languages.
+    const step = (toolName: string, locale: "en" | "de") =>
+      readToolDisplayProjection({ args: {}, locale, result: undefined, toolName }).title;
+    expect(step("structured_data.publish", "en")).toBe("Updating the fact sheet");
+    expect(step("structured_data.read", "en")).toBe("Reading the fact sheet");
+    expect(step("structured_result.read", "en")).toBe("Reopening an earlier result");
+    expect(step("structured_data.publish", "de")).toBe("Faktenblatt wird aktualisiert");
+    expect(step("structured_data.read", "de")).toBe("Faktenblatt wird gelesen");
+    expect(step("structured_result.read", "de")).toBe("Früheres Ergebnis wird geöffnet");
+
     expect(
       readToolDisplayProjection({
         args: {},
