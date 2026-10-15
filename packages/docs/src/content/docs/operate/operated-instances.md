@@ -17,11 +17,11 @@ buckets, model providers and approvals, stays in the README and `docs/` of its d
 
 An instance is built from three repositories, checked out next to each other:
 
-| Checkout                 | Repository                                  | Visibility |
-| ------------------------ | ------------------------------------------- | ---------- |
-| `platform/`              | `vivd-solutions/vivd-catalyst`              | public     |
-| `capabilities/`          | `vivd-solutions/vivd-catalyst-capabilities` | private    |
-| `deployment.<instance>/` | `vivd-solutions/deployment.<instance>`      | private    |
+| Checkout                 | Repository                         | Visibility |
+| ------------------------ | ---------------------------------- | ---------- |
+| `platform/`              | `work-shape/catalyst-core`         | private    |
+| `capabilities/`          | `work-shape/catalyst-capabilities` | private    |
+| `deployment.<instance>/` | `work-shape/deployment.<instance>` | private    |
 
 The deployment repo builds the images, because it owns the combination of platform,
 capabilities, client assembly, registry names and deploy rights. Its layout is the same in every
@@ -94,7 +94,7 @@ argument names another file.
 ## GitHub
 
 The deployment repo has one repository secret, `CROSS_REPO_CHECKOUT_TOKEN`, which reads the
-private capabilities repository during a build.
+private platform and capabilities repositories during a build.
 
 It has two GitHub Environments, `staging` and `production`. `production` requires a reviewer
 before its deploy job runs; `staging` needs none once the first deploy works. Each Environment
@@ -243,7 +243,7 @@ with `gh`, without another registry or tool. Staging releases are marked as pre-
     "capabilities": "<capabilities commit sha>"
   },
   "images": {
-    "api": "ghcr.io/vivd-solutions/vivd-catalyst-acme-api@sha256:...",
+    "api": "ghcr.io/work-shape/catalyst-acme-api@sha256:...",
     "ui": "...-ui@sha256:...",
     "doc-worker": "...-doc-worker@sha256:...",
     "workspace-command-worker": "...-workspace-command-worker@sha256:...",
@@ -295,7 +295,7 @@ A release has six images, built from `deploy/docker-bake.hcl`:
 | `runner`                   | `${IMAGE_REPOSITORY}-catalyst-runner-base`     | started by the workspace command worker |
 
 `IMAGE_REPOSITORY` comes from `deploy/deployment.env`, for example
-`ghcr.io/vivd-solutions/vivd-catalyst-acme`. Production Compose names each image as
+`ghcr.io/work-shape/catalyst-acme`. Production Compose names each image as
 `${IMAGE_REPOSITORY}-<suffix>:${IMAGE_TAG}@${<NAME>_IMAGE_DIGEST}`. Docker resolves the digest;
 the tag only names the release in `docker ps`. Every deploy writes `IMAGE_REPOSITORY`, `IMAGE_TAG`
 (the staging release tag) and the six digests into the env file.
