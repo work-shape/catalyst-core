@@ -1,6 +1,6 @@
 ---
 title: What the release contains
-description: What the current release contains and what it does not contain yet.
+description: What the current release contains.
 ---
 
 Workshape Catalyst is an early product: configuration keys and package APIs can still change between releases.
@@ -14,7 +14,7 @@ The open platform contains:
 - agents and skills as config assets in the database, edited in Studio or synchronized with the `catalyst` CLI; skills may carry files of any type, and a few skills ship with the platform
 - Pages an agent builds in a conversation, and Apps saved from them, with a draft whose changing actions are simulated, **Run live once**, and publishing (module `apps`)
 - Workflows with a canvas, test runs, schedules, code steps and a list of runs, acting as a service principal (module `workflows`)
-- Connections to remote MCP servers, created in Studio or in release config, with a key entered on the Connection's page (module `connections`)
+- Connections to remote MCP servers and to REST interfaces read by GET (`http_api`), created in Studio or in release config, with a key entered on the Connection's page (module `connections`)
 - Data Stores: one Postgres database per store for Apps and Workflows (module `dataStores`)
 - custom code tools through the tool SDK, and capabilities through the capability SDK
 - data sources with guarded, read-only Postgres query tools
@@ -29,14 +29,5 @@ The open platform contains:
 - Docker images, Compose files, an explicit migration step, and the `/health` and `/ready` probes
 
 Document processing, the artifact helper commands for execution workspaces and the private data view are paid capabilities. They are not in the open repository.
-
-## Not In The Current Release
-
-- A connector for a plain HTTP or OpenAPI system. A Connection reaches a remote MCP server only.
-- Writing, testing or publishing a guardrail in the interface. Studio > Guardrails reads; the CLI writes.
-- A platform MCP server for a local agent such as Claude Code or Codex. A local agent works through `catalyst login` and the CLI.
-- Tools with the permission mode `approval_required`. An agent run cannot pause for a person's decision and continue afterwards, so startup refuses such a tool.
-- An approval for a call an agent makes. The operation policy value `approval` holds a person's call for a decision in the Inbox, see [Operation policy](/configure/release-config/#operation-policy). An agent's run cannot pause for such a decision and continue, so startup refuses a tool of the release whose calls would wait.
-- Editing a sent message and exporting a conversation.
 
 Each page of these docs describes the current release unless it says otherwise.
