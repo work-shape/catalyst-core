@@ -11,3 +11,5 @@ section: Changed
   the same text.
 - **A Connection is not MCP only in the docs:** Connect a system, the glossary and What the
   release contains name REST interfaces read by GET (`http_api`) beside remote MCP servers.
+- **CLI:** the note that `catalyst config local-key` was removed, and that `pnpm config:local-key`
+  in the client repository replaces it, stays on the page without a heading of its own.

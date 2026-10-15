@@ -173,6 +173,8 @@ The tool takes its key from the variable `CATALYST_API_KEY` when it is set, whic
 - The key is exchanged once for a short-lived access token. Every other request carries the token, not the key.
 - An error message never repeats the key, and the tool never prints it.
 
+`catalyst config local-key` was removed from this tool and exits with code 2. To create a key on a local development instance, run `pnpm config:local-key` in the client repository, as [Config assets](/configure/config-assets/#the-cli-working-copy) describes.
+
 ## For maintainers
 
 `pnpm release:check` packs the tool and reads every file of the tarball. It fails when the tarball depends on a workspace package, holds source of a private package, holds what looks like a credential or a file that stores credentials, or has no licence file. `pnpm release:check:public` runs the same check alone and then installs the tarball with npm in an empty directory.
