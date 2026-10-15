@@ -55,6 +55,10 @@ export interface LayoutGalleryText {
   tabsRequestsBody: string;
   tabsViews: string;
   tabsRoutes: string;
+  tabsFolded: string;
+  tabsPreview: string;
+  tabsFiles: string;
+  tabsDetails: string;
   segmentLabel: string;
   segmentUsers: string;
   segmentPermissions: string;
@@ -238,6 +242,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     tabsRequestsBody: "Three people asked to join.",
     tabsViews: "Views, switched in place",
     tabsRoutes: "Routes, as supplied links",
+    tabsFolded: "Tabs folded behind a disclosure",
+    tabsPreview: "Preview",
+    tabsFiles: "Files",
+    tabsDetails: "Technical details",
     segmentLabel: "List view",
     segmentUsers: "Users",
     segmentPermissions: "Permissions",
@@ -420,6 +428,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     tabsRequestsBody: "Drei Personen möchten beitreten.",
     tabsViews: "Ansichten, an Ort und Stelle gewechselt",
     tabsRoutes: "Seiten, als übergebene Links",
+    tabsFolded: "Tabs hinter einer Aufklappzeile",
+    tabsPreview: "Vorschau",
+    tabsFiles: "Dateien",
+    tabsDetails: "Technische Details",
     segmentLabel: "Listenansicht",
     segmentUsers: "Benutzer",
     segmentPermissions: "Berechtigungen",

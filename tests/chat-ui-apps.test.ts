@@ -376,8 +376,8 @@ describe("the draft of an App (layout 3)", () => {
     expect(markup).not.toContain("revision 3");
   });
 
-  it("offers the views of the draft as tabs under its head, the open one selected", () => {
-    const markup = render(
+  const viewsFrame = (detailsOpen: boolean) =>
+    render(
       createElement(AppEditFrame, {
         name: "Angebotsrechner",
         workspace,
@@ -385,20 +385,42 @@ describe("the draft of an App (layout 3)", () => {
         draftRevision: 3,
         publishedRevision: 2,
         view: "preview",
+        detailsOpen,
         children: createElement("p", null, "the draft"),
         onViewChange() {},
+        onDetailsOpenChange() {},
         onBack() {}
       })
     );
+  const tabNames = (markup: string) =>
+    [...markup.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/gu)].map((tab) => tab[1]);
+  const detailsToggle = (markup: string) =>
+    /<button[^>]*aria-expanded="(?:true|false)"[^>]*>Technical details/u.exec(markup)?.[0] ?? "";
 
-    const tabs = [...markup.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/gu)];
-    expect(tabs.map((tab) => tab[1])).toEqual(["Preview", "Files", "Actions"]);
-    expect(tabs[0]?.[0]).toContain('aria-selected="true"');
+  it("offers the views of the draft as tabs under its head, the open one selected", () => {
+    const markup = viewsFrame(true);
+
+    expect(tabNames(markup)).toEqual(["Preview", "Files", "Actions"]);
+    expect(markup).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>Preview</u);
     expect(markup).toContain('role="tabpanel"');
     expect(markup).not.toContain('role="radio"');
     // The tabs stand under the head, before the view they show.
     expect(markup.indexOf('role="tablist"')).toBeGreaterThan(markup.indexOf("</header>"));
     expect(markup.indexOf("the draft")).toBeGreaterThan(markup.indexOf('role="tablist"'));
+    expect(detailsToggle(markup)).toContain('aria-expanded="true"');
+  });
+
+  it("folds Files and Actions under Technical details, a line outside the tabs", () => {
+    const markup = viewsFrame(false);
+
+    expect(tabNames(markup)).toEqual(["Preview"]);
+    const toggle = detailsToggle(markup);
+    expect(toggle).toContain('aria-expanded="false"');
+    expect(toggle).not.toContain('role="tab"');
+    // The line stands after the set of tabs, not inside it.
+    const list = /<div[^>]*role="tablist"[^>]*>.*?<\/div>/u.exec(markup)?.[0] ?? "";
+    expect(list).not.toContain("Technical details");
+    expect(markup.indexOf("Technical details")).toBeGreaterThan(markup.indexOf('role="tablist"'));
   });
 
   it("says in its own words that a revision lost its files or is too large to be held", () => {

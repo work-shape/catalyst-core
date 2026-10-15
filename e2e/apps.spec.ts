@@ -338,8 +338,22 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(discard).toBeVisible();
   await shoot(page, "app-draft", MAIN, draftReady);
 
+  // Files and Actions fold under Technical details: folded on the first visit, open after a
+  // click, and still open after a reload, as this browser remembers.
+  const details = edit.getByRole("button", { name: "Technical details", exact: true });
+  const filesTab = edit.getByRole("tab", { name: "Files" });
+  await expect(details).toHaveAttribute("aria-expanded", "false");
+  await expect(edit.getByRole("tab")).toHaveText(["Preview"]);
+  await details.click();
+  await expect(details).toHaveAttribute("aria-expanded", "true");
+  await expect(edit.getByRole("tab")).toHaveText(["Preview", "Files", "Actions"]);
+  await page.reload();
+  await draftReady();
+  await expect(details).toHaveAttribute("aria-expanded", "true");
+  await expect(filesTab).toBeVisible();
+
   // The files of the draft, with the one the draft changed marked and open.
-  await edit.getByRole("tab", { name: "Files" }).click();
+  await filesTab.click();
   await expect(edit.getByRole("navigation", { name: "Files" })).toContainText(
     "src/routes/data.tsx"
   );

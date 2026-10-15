@@ -1,5 +1,6 @@
 import { Tabs as TabsPrimitive } from "radix-ui";
-import type { AnchorHTMLAttributes, ButtonHTMLAttributes, HTMLAttributes } from "react";
+import { ChevronDown } from "lucide-react";
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { cn } from "../cn";
 import { LinkSlot, splitLinkChild } from "../link-slot";
 import { CountBadge, type CountBadgeTone } from "../status/count-badge";
@@ -34,11 +35,65 @@ export function Tabs({ className, ...props }: TabsProps) {
 export interface TabsListProps extends Omit<HTMLAttributes<HTMLDivElement>, "aria-label"> {
   /** Names the set of tabs for assistive technology. */
   label: string;
+  /**
+   * Stands in the row after the tabs and outside the set, such as a `TabsDisclosure` that
+   * shows more of them.
+   */
+  end?: ReactNode;
 }
 
-export function TabsList({ className, label, ...props }: TabsListProps) {
+export function TabsList({ className, label, end, ...props }: TabsListProps) {
+  if (end === undefined) {
+    return (
+      <TabsPrimitive.List
+        aria-label={label}
+        className={cn(tabRowClassName, className)}
+        {...props}
+      />
+    );
+  }
   return (
-    <TabsPrimitive.List aria-label={label} className={cn(tabRowClassName, className)} {...props} />
+    <div className={cn(tabRowClassName, className)}>
+      <TabsPrimitive.List aria-label={label} className="flex shrink-0 gap-1" {...props} />
+      {end}
+    </div>
+  );
+}
+
+export interface TabsDisclosureProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "onClick"
+> {
+  open: boolean;
+  onOpenChange(open: boolean): void;
+}
+
+/**
+ * A line at the end of a tab row that shows or hides tabs most readers need not see, as
+ * "Technical details" does for the source of an App. It is no tab: it switches no view.
+ */
+export function TabsDisclosure({
+  className,
+  open,
+  onOpenChange,
+  children,
+  ...props
+}: TabsDisclosureProps) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      data-state={open ? "open" : "closed"}
+      className={cn("group/tabs-disclosure", tabClassName, className)}
+      onClick={() => onOpenChange(!open)}
+      {...props}
+    >
+      {children}
+      <ChevronDown
+        aria-hidden="true"
+        className="size-4 shrink-0 transition-transform duration-200 ease-out group-data-[state=closed]/tabs-disclosure:-rotate-90"
+      />
+    </button>
   );
 }
 
