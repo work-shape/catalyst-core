@@ -7,6 +7,7 @@ const INSTANCE_WRITE_PERMISSION = "config_assets.write";
 
 /** The asset kind of agents, as the instance names it. */
 export const AGENT_ASSET_KIND = "agent";
+export const CONNECTION_ASSET_KIND = "connection";
 
 /** `publish` is named by a kind with a draft and a published revision only. */
 type AssetVerb = "read" | "write" | "delete" | "publish";

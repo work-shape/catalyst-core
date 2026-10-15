@@ -1,3 +1,4 @@
+import { apiOperations } from "@vivd-catalyst/api-contract";
 import type { StorePage } from "@vivd-catalyst/core";
 import {
   AppError,
@@ -488,7 +489,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       canWithdraw:
         request.status === "pending" &&
         request.requestedBy.id === user.id &&
-        hasAuthScope(user, APPROVAL_WITHDRAW_AUTH_SCOPE)
+        (hasAuthScope(user, APPROVAL_WITHDRAW_AUTH_SCOPE) ||
+          (user.keyScopes !== undefined &&
+            hasAuthScope(user, apiOperations["approval_requests.withdraw"].personalKeyScope)))
     };
   }
 

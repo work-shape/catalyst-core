@@ -13,6 +13,7 @@ export { CodeBlock, type CodeBlockProps, type CodeToken } from "./code-block";
 export { CodeFile, type CodeFileProps } from "./code-file";
 export { CommandLine, type CommandLineProps } from "./command-line";
 export { FilterBar, type FilterBarProps } from "./filter-bar";
+export { FoldedText } from "./folded-text";
 export {
   KeyValue,
   KeyValueList,
