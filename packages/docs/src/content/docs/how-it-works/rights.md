@@ -9,7 +9,7 @@ This page is for the administrators of a Catalyst instance. It all comes down to
 
 **Who are you?** A person who signs in. A person who is a member of a workspace also gets what is shared there. A Workflow runs as a technical account that it names; a Superadmin creates that account on the API access page. An agent has none: it acts with the rights of the person it works for, and a tool on an agent adds no right.
 
-**What may you do?** A right is an action in a place, for example "use the Connection DATEV". The place is one workspace, one item, or the whole instance. A role bundles rights; the three roles User, Admin and Superadmin are fixed. A right is given to a person, to a Workflow's technical account, or comes with a role.
+**What may you do?** A right is an action in a place, for example "use the accounting Connection". The place is one workspace, one item, or the whole instance. A role bundles rights; the three roles User, Admin and Superadmin are fixed. A right is given to a person, to a Workflow's technical account, or comes with a role.
 
 Three rules always hold:
 
@@ -96,7 +96,7 @@ An App shows data in two ways: live from an outside system, or from its Data Sto
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 680 384" role="img" aria-labelledby="rx-f2-title rx-f2-desc">
 <title id="rx-f2-title">Where an App gets its data, and who sees it</title>
-<desc id="rx-f2-desc">Two ways inside one instance. At the top Anna reads live from DATEV through the App; the App calls the Connection as Anna. Below, the Workflow Night import copies data from DATEV into the App's Data Store as its technical account, and everyone who may open the App reads the copy. Numbers 1, 3 and 4 are Catalyst's decisions, number 2 the outside system's.</desc>
+<desc id="rx-f2-desc">Two ways inside one instance. At the top Anna reads live from an accounting data source through the App; the App calls the Connection as Anna. Below, the Workflow Night import copies data from an accounting data source into the App's Data Store as its technical account, and everyone who may open the App reads the copy. Numbers 1, 3 and 4 are Catalyst's decisions, number 2 the outside system's.</desc>
 <defs>
 <marker id="rx-f2-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 <path class="arrowhead" d="M0 0 10 5 0 10z"/>
@@ -115,7 +115,7 @@ An App shows data in two ways: live from an outside system, or from its Data Sto
 <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
 <path d="M2 12h20"/>
 </g>
-<text x="610" y="96" class="strong">DATEV</text>
+<text x="610" y="96" class="strong">Books</text>
 <text x="588" y="116" class="small">Outside</text>
 <text x="588" y="132" class="small">system</text>
 <circle class="gate-outside" cx="578" cy="152" r="10"/>
@@ -136,7 +136,7 @@ An App shows data in two ways: live from an outside system, or from its Data Sto
 <path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/>
 <path d="M9 8V2"/>
 </g>
-<text x="476" y="96" class="strong">DATEV</text>
+<text x="476" y="96" class="strong">Books</text>
 <text x="454" y="116" class="small">Connection</text>
 <circle class="node-person" cx="64" cy="110" r="16"/>
 <text x="64" y="114" class="initial" text-anchor="middle">A</text>
