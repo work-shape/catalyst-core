@@ -47,7 +47,6 @@ import {
   GrantWriteError,
   groupGrants,
   isConfigAssetGrantKind,
-  splitGrantableAction,
   withGrantKind,
   type AccessWriteFailure,
   type GrantForm,
@@ -63,9 +62,9 @@ import {
   rightAllowNoteKeys,
   rightSentenceKeys,
   scopeChoice,
-  verbLabelKeys,
   wordsOfKind
 } from "./grant-words";
+import { actionLabel, verbLabel } from "./right-words";
 
 /** From this many entries on, a picker of the grant dialog shows its search field. */
 const PICKER_SEARCH_FROM_COUNT = 8;
@@ -87,51 +86,46 @@ export interface GrantChoices {
   failed: boolean;
 }
 
-/** "Write agents" for an action of this page; the action's own name for any other. */
-function actionLabel(action: string, t: Translate): string {
-  const parts = splitGrantableAction(action);
-  if (!parts) {
-    return action;
-  }
-  return t(kindWords[parts.kind].actionOnKind, { action: t(verbLabelKeys[parts.verb]) });
-}
-
 /** What one row says, with its effect in words: "Denied: Write agents". */
 function grantLabel(grant: PermissionGrantRow, t: Translate): string {
   const action = actionLabel(grant.action, t);
   return grant.effect === "deny" ? t("access.deniedAction", { action }) : action;
 }
 
+/** The names the page was told, by id: of a workspace, and of an asset beyond agents and skills. */
+interface ScopeNames {
+  workspace(workspaceId: string): string | undefined;
+  asset(assetId: string): string | undefined;
+}
+
 /**
- * Where a row applies, in one line. The server leaves an asset's name out for a reader who
- * may not read agents and skills; the row then names the asset by its id. A workspace is named
- * when the page was told its name, else by its id.
+ * Where a row applies, in one line. An asset is named by the title its kind's list gives it,
+ * else by its name; a workspace by the name the page was told. The server leaves an asset's
+ * name out for a reader who may not see it, and the row then says that much, never an id.
  */
-function scopeLabel(
-  grant: PermissionGrantRow,
-  t: Translate,
-  workspaceName: (workspaceId: string) => string | undefined
-): string {
-  if (grant.scopeKind === "namespace" && grant.namespace !== undefined) {
-    return t("access.scopeNamespace", { prefix: grant.namespace });
+function scopeLabel(grant: PermissionGrantRow, t: Translate, names: ScopeNames): string {
+  switch (grant.scopeKind) {
+    case "instance":
+      return t("access.scopeWholeInstance");
+    case "namespace":
+      return t("access.scopeNamespace", { prefix: grant.namespace ?? "" });
+    case "workspace": {
+      const name = grant.scopeId === undefined ? undefined : names.workspace(grant.scopeId);
+      return name === undefined
+        ? t("access.scopeWorkspaceHidden")
+        : t("access.scopeWorkspace", { name });
+    }
+    case "asset": {
+      const asset = grant.scopeAsset;
+      const name =
+        (grant.scopeId === undefined ? undefined : names.asset(grant.scopeId)) ?? asset?.name;
+      if (asset === undefined || name === undefined) {
+        return t("access.scopeAssetHidden");
+      }
+      const words = wordsOfKind(asset.kind);
+      return words ? t(words.scopeAsset, { name }) : name;
+    }
   }
-  if (grant.scopeKind === "workspace" && grant.scopeId !== undefined) {
-    return t("access.scopeWorkspace", {
-      name: workspaceName(grant.scopeId) ?? grant.scopeId
-    });
-  }
-  if (grant.scopeKind === "instance") {
-    return t("access.scopeWholeInstance");
-  }
-  if (grant.scopeKind !== "asset") {
-    return grant.scopeKind;
-  }
-  const asset = grant.scopeAsset;
-  if (asset?.name === undefined) {
-    return t("access.scopeAssetById", { id: grant.scopeId ?? "" });
-  }
-  const words = wordsOfKind(asset.kind);
-  return words ? t(words.scopeAsset, { name: asset.name }) : asset.name;
 }
 
 export interface GrantsTabProps {
@@ -186,8 +180,14 @@ export function GrantsTab({
     userId === undefined ? undefined : users?.find((user) => user.id === userId);
   const holderName = (holderId: string) =>
     findUser(holderId)?.displayLabel ?? t("access.unknownUser");
-  const workspaceName = (workspaceId: string) =>
-    workspaces?.items?.find((workspace) => workspace.id === workspaceId)?.name;
+  const scopeNames: ScopeNames = {
+    workspace: (workspaceId) =>
+      workspaces?.items?.find((workspace) => workspace.id === workspaceId)?.name,
+    asset: (assetId) =>
+      Object.values(kindAssets ?? {})
+        .flatMap((choices) => choices.items ?? [])
+        .find((asset) => asset.id === assetId)?.name
+  };
 
   const newGrant = (
     <Button size="sm" onClick={() => setGranting(true)}>
@@ -247,7 +247,7 @@ export function GrantsTab({
                   holderName={holderName(group.holderId)}
                   grantedBy={grantedByText(group, findUser, t)}
                   grantedAt={formatDate(latest(group), locale)}
-                  scope={scopeLabel(group.scope, t, workspaceName)}
+                  where={scopeLabel(group.scope, t, scopeNames)}
                   onRevoke={setPendingRevoke}
                 />
               ))}
@@ -299,7 +299,7 @@ export function GrantsTab({
             {
               name: holderName(pendingRevoke.holderId),
               action: actionLabel(pendingRevoke.action, t),
-              scope: scopeLabel(pendingRevoke, t, workspaceName)
+              scope: scopeLabel(pendingRevoke, t, scopeNames)
             }
           )}
         </ConfirmDialog>
@@ -338,7 +338,7 @@ function GrantGroupRow({
   holderName,
   grantedBy,
   grantedAt,
-  scope,
+  where,
   onRevoke
 }: {
   group: GrantGroup;
@@ -347,7 +347,7 @@ function GrantGroupRow({
   grantedBy: string;
   grantedAt: string;
   /** Where the rows apply, in one line. */
-  scope: string;
+  where: string;
   onRevoke(grant: PermissionGrantRow): void;
 }) {
   const { t } = useTranslation();
@@ -398,7 +398,7 @@ function GrantGroupRow({
         </DropdownMenu>
       </div>
       <div className="col-span-2 grid min-w-0 justify-items-start gap-1 @xl:col-span-1">
-        <span className="max-w-full break-words">{scope}</span>
+        <span className="max-w-full break-words">{where}</span>
         {assetGone ? (
           <>
             <Badge tone="warning" size="sm">
@@ -603,7 +603,7 @@ function GrantDialog({
           {grantVerbs(form.kind).map((verb) => (
             <Checkbox
               key={verb}
-              label={t(verbLabelKeys[verb])}
+              label={verbLabel(verb, t)}
               description={rightDescription(verb)}
               checked={form.verbs.includes(verb)}
               onCheckedChange={(checked) =>

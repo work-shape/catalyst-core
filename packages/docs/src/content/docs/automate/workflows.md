@@ -54,9 +54,9 @@ An administrator gives these rights under **Settings > Instance > Access** ("Ein
 
 | Right | What the Access page says |
 | --- | --- |
-| Read workflows | See the Workflow, its steps and its runs. |
+| View workflows | See the Workflow, its steps and its runs. |
 | Use workflows | Start the Workflow. It then runs with the Workflow's own rights, not with this person's. |
-| Write workflows | Change the draft of the Workflow. A draft does not run until it is published. |
-| Publish workflows | Make a draft the version that runs. Today this also needs the superadmin role and the right to manage API access. |
+| Edit workflows | Change the draft of the Workflow. A draft does not run until it is published. |
+| Publish workflows | Make a draft the version that runs. Publishing also needs every right of the service principal the Workflow runs as. |
 
-Administrators hold every right; publishing also needs the superadmin role. A test run needs the right to write the Workflow.
+Administrators hold every right. A test run needs the right to edit the Workflow.

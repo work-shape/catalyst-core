@@ -86,21 +86,12 @@ export const access = defineTranslations({
     "access.scopeAssetGoneHint":
       "This deny stays until you remove it. It applies again when an asset with this name is created.",
     "access.unknownUser": "Unknown user",
-    "access.actionRead": "Read",
-    "access.actionWrite": "Write",
-    "access.actionDelete": "Delete",
     "access.kindAgent": "Agents",
     "access.kindSkill": "Skills",
-    "access.actionOnAgent": "{action} agents",
-    "access.actionOnSkill": "{action} skills",
-    "access.actionOnConnection": "{action} connections",
     "access.actionReadConnectionDescription":
       "See the connection and its status in Studio. Never its credentials.",
     "access.actionUseConnectionDescription":
       "Let agents this person builds or runs call the outside system through it.",
-    "access.actionUse": "Use",
-    "access.actionPublish": "Publish",
-    "access.actionOnWorkflow": "{action} workflows",
     "access.actionReadWorkflowDescription": "See the Workflow, its steps and its runs.",
     "access.actionUseWorkflowDescription":
       "Start the Workflow. It then runs with the Workflow's own rights, not with this person's, so it can read and change what the person cannot.",
@@ -110,7 +101,6 @@ export const access = defineTranslations({
     "access.actionPublishWorkflowNote":
       "Publishing also needs every right of the service principal the Workflow runs as. Whoever lacks one of them is refused, with the right named.",
     "access.scopeWorkflow": "Workflow {name}",
-    "access.actionOnGuardrail": "{action} guardrails",
     "access.actionPublishGuardrailDescription":
       "Make a guardrail of this workspace enforce, or stop it. A guardrail stops other people's work in the workspace.",
     "access.scopeGuardrail": "Guardrail {name}",
@@ -126,7 +116,6 @@ export const access = defineTranslations({
     "access.chooseWorkflow": "Choose a Workflow",
     "access.noWorkflows": "This instance has no Workflow yet.",
     "access.workflowsLoadFailed": "The Workflows could not be loaded.",
-    "access.actionOnKnowledgeBase": "{action} Knowledge Bases",
     "access.actionReadKnowledgeBaseDescription":
       "See the Knowledge Base, the tables it describes and whether they can be read.",
     "access.actionUseKnowledgeBaseDescription":
@@ -155,6 +144,7 @@ export const access = defineTranslations({
     "access.kindConnection": "Connections",
     "access.kindApp": "Apps",
     "access.kindWorkflow": "Workflows",
+    "access.kindDataStore": "Data stores",
     "access.kindGuardrail": "Guardrails",
     "access.scopeConnection": "Connection {name}",
     "access.scopeWorkspace": "Workspace {name}",
@@ -236,13 +226,13 @@ export const access = defineTranslations({
     "access.decidedByDenyNamespace": "Deny in Namespace {prefix}",
     "access.decidedByDenyAsset": "Deny on this asset",
     "access.decidedByDenyThrough":
-      "{deny} ({action}). Whoever is denied reading or writing an asset cannot delete it.",
+      "{deny} ({action}). Whoever may not view or edit an asset cannot delete it.",
     "access.decidedByNothing": "No role, individual right or given right covers this.",
 
     "access.namespacesIntro":
       "A Namespace is a name prefix such as kai-. Agents and skills whose names start with it belong to it, and a person can get rights inside it.",
     "access.referencesForbidden":
-      "Your account lacks the right config_assets.read, so the tools, models and assets of the instance are not shown here.",
+      "Your account may not view agents and skills, so the tools, models and assets of the instance are not shown here.",
     "access.lockUnknown":
       "The agents with this prefix could not be counted. If there are any, this applies to them.",
     "access.lockAgentsOne": "{count} agent already has this prefix.",
@@ -256,7 +246,8 @@ export const access = defineTranslations({
     "access.namespaceLockConfirmTitle": "Save {prefix} with an empty list?",
     "access.namespaceLockConfirm": "Save anyway",
     "access.deniedAction": "Denied: {action}",
-    "access.scopeAssetById": "Asset {id}",
+    "access.scopeAssetHidden": "An asset you cannot see",
+    "access.scopeWorkspaceHidden": "A workspace you cannot see",
     "access.revokeAllowItem": "Revoke: {action}",
     "access.revokeDenyItem": "Remove deny: {action}",
     "access.revokeDenyTitle": "Remove this deny?",
@@ -272,7 +263,7 @@ export const access = defineTranslations({
     "access.checkAssetsFailed":
       "The agents and skills could not be loaded, so rows on single assets cannot be matched to this name. No result is shown.",
     "access.checkAssetsForbidden":
-      "Your account lacks the right config_assets.read, so rows on single assets cannot be matched to this name. No result is shown.",
+      "Your account may not view agents and skills, so rows on single assets cannot be matched to this name. No result is shown.",
     "access.checkRightOnlyAgent":
       "This is the right alone. A save can still be refused: by a tool or model list of the Namespace, for a changed model setting without the right to manage models, when the first or last agent changes the default agent, or when agent configuration in the interface is switched off.",
     "access.checkRightOnlySkill":
@@ -284,7 +275,7 @@ export const access = defineTranslations({
       "Models: none allowed. Only a person with the right to manage models can save the agent, and only without a model.",
     "access.checkModelsListed": "Models: the agent names one of {list}.",
     "access.checkReadThroughGrant":
-      "Read is allowed through a grant: the person can open this asset. The overview of all agents and skills and the export need the instance-wide right to read.",
+      "Viewing is allowed through a given right: the person can open this asset. The overview of all agents and skills and the export need the right to view them on the whole instance.",
     "access.checkDenyNote":
       "A deny on an asset does not take away instance-wide rights: with them a person can still export the asset or set an agent as the default."
   },
@@ -374,21 +365,12 @@ export const access = defineTranslations({
     "access.scopeAssetGoneHint":
       "Diese Verweigerung bleibt, bis du sie aufhebst. Sie gilt wieder, sobald ein Asset mit diesem Namen angelegt wird.",
     "access.unknownUser": "Unbekannter Benutzer",
-    "access.actionRead": "Lesen",
-    "access.actionWrite": "Schreiben",
-    "access.actionDelete": "Löschen",
     "access.kindAgent": "Agenten",
     "access.kindSkill": "Skills",
-    "access.actionOnAgent": "Agenten: {action}",
-    "access.actionOnSkill": "Skills: {action}",
-    "access.actionOnConnection": "Verbindungen: {action}",
     "access.actionReadConnectionDescription":
       "Die Verbindung und ihren Status im Studio sehen. Nie ihre Zugangsdaten.",
     "access.actionUseConnectionDescription":
       "Agenten, die diese Person baut oder ausführt, dürfen das externe System darüber aufrufen.",
-    "access.actionUse": "Nutzen",
-    "access.actionPublish": "Veröffentlichen",
-    "access.actionOnWorkflow": "Workflows: {action}",
     "access.actionReadWorkflowDescription": "Den Workflow, seine Schritte und seine Läufe sehen.",
     "access.actionUseWorkflowDescription":
       "Den Workflow starten. Er läuft dann mit den eigenen Rechten des Workflows, nicht mit denen dieser Person, und kann deshalb lesen und ändern, was die Person nicht darf.",
@@ -396,14 +378,13 @@ export const access = defineTranslations({
       "Den Entwurf des Workflows ändern. Ein Entwurf läuft erst, wenn er veröffentlicht ist.",
     "access.actionPublishWorkflowDescription": "Einen Entwurf zu der Version machen, die läuft.",
     "access.actionPublishWorkflowNote":
-      "Zum Veröffentlichen braucht die Person außerdem jedes Recht des Service Principals, als der der Workflow läuft. Fehlt ihr eines, wird sie abgelehnt, mit dem fehlenden Recht beim Namen.",
+      "Zum Veröffentlichen braucht die Person außerdem jedes Recht des Technischen Kontos, als das der Workflow läuft. Fehlt ihr eines, wird sie abgelehnt, mit dem fehlenden Recht beim Namen.",
     "access.scopeWorkflow": "Workflow {name}",
-    "access.actionOnGuardrail": "Leitplanken: {action}",
     "access.actionPublishGuardrailDescription":
-      "Eine Leitplanke dieses Workspaces in Kraft setzen oder anhalten. Eine Leitplanke hält die Arbeit anderer im Workspace auf.",
+      "Eine Leitplanke dieses Arbeitsbereichs in Kraft setzen oder anhalten. Eine Leitplanke hält die Arbeit anderer im Arbeitsbereich auf.",
     "access.scopeGuardrail": "Leitplanke {name}",
     "access.scopeOnGuardrail": "An einer Leitplanke",
-    "access.scopeOnGuardrailDescription": "Leitplanken werden für einen Workspace vergeben.",
+    "access.scopeOnGuardrailDescription": "Leitplanken werden für einen Arbeitsbereich vergeben.",
     "access.grantGuardrail": "Leitplanke",
     "access.chooseGuardrail": "Leitplanke wählen",
     "access.noGuardrails": "Auf dieser Instanz gibt es noch keine Leitplanke.",
@@ -414,7 +395,6 @@ export const access = defineTranslations({
     "access.chooseWorkflow": "Workflow wählen",
     "access.noWorkflows": "Auf dieser Instanz gibt es noch keinen Workflow.",
     "access.workflowsLoadFailed": "Die Workflows konnten nicht geladen werden.",
-    "access.actionOnKnowledgeBase": "Wissensbasen: {action}",
     "access.actionReadKnowledgeBaseDescription":
       "Die Wissensbasis sehen, die Tabellen, die sie beschreibt, und ob sie sich lesen lassen.",
     "access.actionUseKnowledgeBaseDescription":
@@ -443,6 +423,7 @@ export const access = defineTranslations({
     "access.kindConnection": "Verbindungen",
     "access.kindApp": "Apps",
     "access.kindWorkflow": "Workflows",
+    "access.kindDataStore": "Datenspeicher",
     "access.kindGuardrail": "Leitplanken",
     "access.scopeConnection": "Verbindung {name}",
     "access.scopeWorkspace": "Arbeitsbereich {name}",
@@ -525,14 +506,14 @@ export const access = defineTranslations({
     "access.decidedByDenyNamespace": "Verweigerung im Namespace {prefix}",
     "access.decidedByDenyAsset": "Verweigerung an diesem Asset",
     "access.decidedByDenyThrough":
-      "{deny} ({action}). Wem das Lesen oder Schreiben eines Assets verweigert ist, der kann es nicht löschen.",
+      "{deny} ({action}). Wer ein Asset nicht ansehen oder bearbeiten darf, kann es nicht löschen.",
     "access.decidedByNothing":
       "Keine Rolle, kein einzelnes Recht und kein vergebenes Recht deckt das ab.",
 
     "access.namespacesIntro":
       "Ein Namespace ist ein Namenspräfix wie kai-. Agenten und Skills, deren Name damit beginnt, gehören dazu, und eine Person kann darin Rechte bekommen.",
     "access.referencesForbidden":
-      "Deinem Konto fehlt das Recht config_assets.read. Deshalb werden die Werkzeuge, Modelle und Assets der Instanz hier nicht angezeigt.",
+      "Dein Konto darf Agenten und Skills nicht ansehen. Deshalb werden die Werkzeuge, Modelle und Assets der Instanz hier nicht angezeigt.",
     "access.lockUnknown":
       "Die Agenten mit diesem Präfix konnten nicht gezählt werden. Falls es welche gibt, gilt das für sie.",
     "access.lockAgentsOne": "{count} Agent hat dieses Präfix bereits.",
@@ -546,7 +527,8 @@ export const access = defineTranslations({
     "access.namespaceLockConfirmTitle": "{prefix} mit leerer Liste speichern?",
     "access.namespaceLockConfirm": "Trotzdem speichern",
     "access.deniedAction": "Verweigert: {action}",
-    "access.scopeAssetById": "Asset {id}",
+    "access.scopeAssetHidden": "Ein Asset, das du nicht sehen kannst",
+    "access.scopeWorkspaceHidden": "Ein Arbeitsbereich, den du nicht sehen kannst",
     "access.revokeAllowItem": "Entziehen: {action}",
     "access.revokeDenyItem": "Verweigerung aufheben: {action}",
     "access.revokeDenyTitle": "Diese Verweigerung aufheben?",
@@ -564,7 +546,7 @@ export const access = defineTranslations({
     "access.checkAssetsFailed":
       "Die Agenten und Skills konnten nicht geladen werden. Zeilen an einzelnen Assets lassen sich diesem Namen deshalb nicht zuordnen. Es wird kein Ergebnis angezeigt.",
     "access.checkAssetsForbidden":
-      "Deinem Konto fehlt das Recht config_assets.read. Zeilen an einzelnen Assets lassen sich diesem Namen deshalb nicht zuordnen. Es wird kein Ergebnis angezeigt.",
+      "Dein Konto darf Agenten und Skills nicht ansehen. Zeilen an einzelnen Assets lassen sich diesem Namen deshalb nicht zuordnen. Es wird kein Ergebnis angezeigt.",
     "access.checkRightOnlyAgent":
       "Das ist nur das Recht. Ein Speichern kann trotzdem abgelehnt werden: durch eine Werkzeug- oder Modellliste des Namespace, bei einer geänderten Modelleinstellung ohne das Recht, Modelle zu verwalten, wenn der erste oder letzte Agent den Standardagenten ändert, oder wenn die Agentenkonfiguration in der Oberfläche abgeschaltet ist.",
     "access.checkRightOnlySkill":
@@ -577,7 +559,7 @@ export const access = defineTranslations({
       "Modelle: keines erlaubt. Den Agenten kann nur speichern, wer das Recht hat, Modelle zu verwalten, und nur ohne Modell.",
     "access.checkModelsListed": "Modelle: Der Agent nennt eines von {list}.",
     "access.checkReadThroughGrant":
-      "Lesen ist über ein vergebenes Recht erlaubt: Die Person kann dieses Asset öffnen. Die Übersicht aller Agenten und Skills und der Export brauchen das instanzweite Leserecht.",
+      "Ansehen ist über ein vergebenes Recht erlaubt: Die Person kann dieses Asset öffnen. Die Übersicht aller Agenten und Skills und der Export brauchen das Recht, sie auf der ganzen Instanz anzusehen.",
     "access.checkDenyNote":
       "Eine Verweigerung an einem Asset nimmt keine instanzweiten Rechte: Damit kann eine Person das Asset weiterhin exportieren oder einen Agenten als Standard festlegen."
   }

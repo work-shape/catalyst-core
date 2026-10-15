@@ -184,10 +184,15 @@ export function resolveSettingsRoute(input: {
   viewer: SettingsViewer;
   /** False while the workspace list loads: a Workspace page cannot be answered yet. */
   workspacesReady: boolean;
+  /**
+   * False while the platform context loads: a page shown by a right that only the context
+   * tells, such as API access by `service_principals.manage`, cannot be answered yet.
+   */
+  platformReady: boolean;
 }): SettingsResolution | undefined {
-  const { route, catalog, build, viewer, workspacesReady } = input;
+  const { route, catalog, build, viewer, workspacesReady, platformReady } = input;
   const administration = (): SettingsResolution => {
-    if (!workspacesReady) {
+    if (!workspacesReady || !platformReady) {
       return { kind: "pending" };
     }
     const first = firstAdministrationRoute(catalog, build, viewer);
@@ -215,6 +220,9 @@ export function resolveSettingsRoute(input: {
   );
   if (page?.visible(viewer)) {
     return { kind: "page", page };
+  }
+  if (!platformReady) {
+    return { kind: "pending" };
   }
   if (route.group === "instance") {
     return administration();

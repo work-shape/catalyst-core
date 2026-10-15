@@ -65,14 +65,12 @@ export const envBoundaryRule = ({
             ),
             ...hostMemberUses(context, ["process"])
           ].forEach(report),
-        // Vite injects these values into four explicitly named frontend entry files.
+        // Vite injects these values into the explicitly named frontend entry files.
         MetaProperty: (node) => {
           if (node.meta.name !== "import" || node.property.name !== "meta") return;
           const frontendEntries = [
             "/packages/chat-standalone/src/main.tsx",
-            "/clients/demo/src/chat-main.tsx",
-            "/deployment.musterbau/src/chat-main.tsx",
-            "/deployment.catalyst/src/chat-main.tsx"
+            "/clients/demo/src/chat-main.tsx"
           ];
           const filename = context.filename.replaceAll("\\", "/");
           if (

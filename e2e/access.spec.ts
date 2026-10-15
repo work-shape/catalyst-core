@@ -137,20 +137,20 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await expect(inWorkspace).toBeChecked();
     await expect(grantDialog.getByRole("radio", { name: /Namespace/u })).toHaveCount(0);
     await onAsset.check();
-    await grantDialog.getByLabel("Read").check();
+    await grantDialog.getByLabel("View").check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     const assetGrants = grantRows.filter({ hasText: "Agent kai-helper" });
     await expect(grantRows).toHaveCount(1);
     await expect(assetGrants).toContainText("E2E User");
-    await expect(assetGrants).toContainText("Read agents");
+    await expect(assetGrants).toContainText("View agents");
     await expect(assetGrants).toContainText("E2E Admin");
 
     // The same form with one more action adds the missing row and says what it left alone.
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-    for (const verb of ["Read", "Delete"]) {
+    for (const verb of ["View", "Delete"]) {
       await grantDialog.getByLabel(verb).check();
     }
     await onAsset.check();
@@ -187,7 +187,7 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await expect(checkRow(page, "write")).toContainText("Allowed");
     await expect(checkRow(page, "write")).toContainText("Right in Namespace kai-");
     await expect(page.getByTestId("check-right-only")).toContainText("This is the right alone.");
-    await expect(page.getByText("Read is allowed through a grant")).toBeVisible();
+    await expect(page.getByText("Viewing is allowed through a given right")).toBeVisible();
     await expect(page.getByTestId("check-namespace-limits")).toHaveCount(0);
     await check(page, "other-helper");
     await expect(checkRow(page, "write")).toContainText("Refused");
@@ -232,7 +232,7 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await tab(page, "Rights").click();
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-    await grantDialog.getByLabel("Write").check();
+    await grantDialog.getByLabel("Edit").check();
     await onAsset.check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("radio", { name: /^Deny/u }).check();
@@ -252,7 +252,7 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(grantRows).toHaveCount(2);
-    await expect(grantRows.locator('[data-effect="deny"]')).toHaveText("Denied: Write agents");
+    await expect(grantRows.locator('[data-effect="deny"]')).toHaveText("Denied: Edit agents");
 
     await check(page, "kai-helper");
     await expect(checkRow(page, "write")).toContainText("Refused");
@@ -293,13 +293,13 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
   await expect(orphanedDeny).toContainText("kai-helper");
   await expect(orphanedDeny).toContainText("This deny stays until you remove it.");
   await orphanedDeny.getByRole("button", { name: /^Actions for the right of/u }).click();
-  await page.getByRole("menuitem", { name: "Remove deny: Write agents" }).click();
+  await page.getByRole("menuitem", { name: "Remove deny: Edit agents" }).click();
   await page
     .getByRole("dialog", { name: "Remove this deny?" })
     .getByRole("button", { name: "Remove deny" })
     .click();
   await expect(orphanedDeny).toHaveCount(0);
-  for (const action of ["Read agents", "Write agents", "Delete agents"]) {
+  for (const action of ["View agents", "Edit agents", "Delete agents"]) {
     // The menu of the last round has left the page before the row's menu is opened again: a
     // click that lands while it is still leaving only finishes its closing.
     await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);

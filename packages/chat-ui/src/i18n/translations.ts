@@ -23,6 +23,7 @@ import { navigation } from "./navigation";
 import { operations } from "./operations";
 import { pages } from "./pages";
 import { personalApiKeys } from "./personal-api-keys";
+import { rights } from "./rights";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { tools } from "./tools";
@@ -59,6 +60,7 @@ export const translations = combineTranslations(common)
   .and(operations)
   .and(pages)
   .and(personalApiKeys)
+  .and(rights)
   .and(settings)
   .and(signIn)
   .and(tools)

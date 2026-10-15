@@ -148,7 +148,7 @@ test("an admin gives a member reading and using on one Workflow and removes both
   await page.setViewportSize(WIDE);
   await page.goto(accessPath);
   await page.getByRole("tab", { name: /^Rights/u }).click();
-  const row = page.getByTestId("grant-row").filter({ hasText: `Workflow ${id}` });
+  const row = page.getByTestId("grant-row").filter({ hasText: "Workflow Rights walk" });
   const dialog = page.getByRole("dialog", { name: "New right" });
   try {
     // The dialog says each right of a Workflow in a sentence, and what publishing still needs.
@@ -166,11 +166,11 @@ test("an admin gives a member reading and using on one Workflow and removes both
     await expect(dialog.getByRole("radiogroup", { name: "Where" })).toHaveCount(0);
 
     // Reading: the member is shown the Workflow and may not start it.
-    await dialog.getByRole("checkbox", { name: /^Read/u }).check();
+    await dialog.getByRole("checkbox", { name: /^View/u }).check();
     await dialog.getByRole("button", { name: "Create right" }).click();
     await expect(dialog).toBeHidden();
     await expect(row).toContainText(member.label);
-    await expect(row).toContainText("Read workflows");
+    await expect(row).toContainText("View workflows");
     await expect.poll(() => memberActions(memberPage, id)).toEqual(["workflow.read"]);
     expect(await start(memberPage, id)).toBeGreaterThanOrEqual(400);
 
@@ -200,8 +200,8 @@ test("an admin gives a member reading and using on one Workflow and removes both
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
     await page.reload();
     await page.getByRole("tab", { name: /^Rechte/u }).click();
-    await expect(row).toContainText("Workflows: Lesen");
-    await expect(row).toContainText("Workflows: Nutzen");
+    await expect(row).toContainText("Workflows ansehen");
+    await expect(row).toContainText("Workflows verwenden");
     await page.getByRole("button", { name: "Neues Recht" }).click();
     const german = page.getByRole("dialog", { name: "Neues Recht" });
     await german.getByRole("radio", { name: "Workflows" }).click();
@@ -215,11 +215,11 @@ test("an admin gives a member reading and using on one Workflow and removes both
     await page.getByRole("tab", { name: /^Rights/u }).click();
 
     // Both removed from the row's menu: the Workflow is gone for the member.
-    for (const right of ["Use workflows", "Read workflows"]) {
+    for (const right of ["Use workflows", "View workflows"]) {
       await row.getByRole("button", { name: `Actions for the right of ${member.label}` }).click();
       await page.getByRole("menuitem", { name: `Revoke: ${right}` }).click();
       const confirm = page.getByRole("dialog", { name: "Revoke this right?" });
-      await expect(confirm).toContainText(`Workflow ${id}`);
+      await expect(confirm).toContainText("Workflow Rights walk");
       await confirm.getByRole("button", { name: "Revoke" }).click();
       await expect(confirm).toBeHidden();
       await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
