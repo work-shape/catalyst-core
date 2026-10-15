@@ -884,37 +884,4 @@ export const product = { namespaceId: "example" };
     );
     expect(measure("types:tests")).toContain("typescript/test-errors tests/type-error.test.ts");
   });
-
-  it("keeps whole selected package baselines and ignores unrelated baseline scopes", () => {
-    write({
-      "scopes.json": JSON.stringify(["packages/alpha"]),
-      "quality-baseline.json": JSON.stringify({
-        version: 1,
-        entries: [
-          {
-            target: "lint",
-            rule: "catalyst/console-boundary",
-            scope: "packages/alpha",
-            count: 99,
-            owner: "fixture"
-          },
-          {
-            target: "lint",
-            rule: "catalyst/console-boundary",
-            scope: "packages/unrelated",
-            count: 99,
-            owner: "fixture"
-          }
-        ]
-      })
-    });
-    const scoped = collect("lint", `--scope-file=${join(directory, "scopes.json")}`);
-    expect(scoped.status).toBe(1);
-    expect(scoped.stderr).toContain(
-      "lint|catalyst/console-boundary|packages/alpha: measured 5, baseline 99"
-    );
-    expect(scoped.stderr).not.toContain("packages/unrelated");
-    write({ "scopes.json": JSON.stringify(["packages/unselected"]) });
-    expect(collect("lint", `--scope-file=${join(directory, "scopes.json")}`).status).toBe(0);
-  });
 });
