@@ -13,6 +13,7 @@ WHERE m.source_file_id IS NULL
   AND NOT (m.metadata ? 'purpose')
   AND jsonb_typeof(m.metadata->'workspaceId') = 'string'
   AND jsonb_typeof(m.metadata->'workspacePath') = 'string'
+  AND m.metadata->>'workspacePath' LIKE 'previews/%'
   AND m.filename = regexp_replace(m.metadata->>'workspacePath', '^.*/', '')
   AND (m.kind, m.mime_type) IN (
     ('image.png', 'image/png'), ('image.jpeg', 'image/jpeg'),

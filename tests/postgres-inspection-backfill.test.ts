@@ -64,6 +64,78 @@ it("backfills only proven path inspections and hides them from resources and fil
     );
     inspected.push("art_second_look");
 
+    // Each look-alike fails exactly one backfill guard.
+    const otherConversationId = asConversationId("conv_other_inspection");
+    await seedConversation(sql, otherConversationId);
+    await seedArtifact(sql, "art_wrong_conversation", {
+      workspacePath: "previews/wrong-conversation.png"
+    });
+    await seedMessage(
+      sql,
+      "art_wrong_conversation",
+      previewResult(
+        "art_wrong_conversation",
+        { path: "previews/wrong-conversation.png" },
+        undefined,
+        undefined,
+        "previews/wrong-conversation.png"
+      ),
+      "tool",
+      clientInstanceId,
+      otherConversationId
+    );
+    await seedArtifact(sql, "art_source_file", { workspacePath: "previews/source-file.png" });
+    await seedMessage(
+      sql,
+      "art_source_file",
+      previewResult(
+        "art_source_file",
+        { path: "previews/source-file.png" },
+        undefined,
+        undefined,
+        "previews/source-file.png"
+      )
+    );
+    await seedArtifact(sql, "art_failed_result", { workspacePath: "previews/failed-result.png" });
+    await seedMessage(
+      sql,
+      "art_failed_result",
+      previewResult(
+        "art_failed_result",
+        { path: "previews/failed-result.png" },
+        undefined,
+        undefined,
+        "previews/failed-result.png"
+      )
+    );
+    await sql`update messages set metadata = jsonb_set(
+      metadata, '{agentRuntime,result,status}', '"error"'::jsonb
+    ) where id = 'msg_art_failed_result'`;
+    await seedArtifact(sql, "art_path_mismatch", { workspacePath: "previews/path-mismatch.png" });
+    await seedMessage(
+      sql,
+      "art_path_mismatch",
+      previewResult(
+        "art_path_mismatch",
+        { path: "previews/different.png" },
+        undefined,
+        undefined,
+        "previews/different.png"
+      )
+    );
+    await seedArtifact(sql, "art_outside_previews", { workspacePath: "artifacts/chart.png" });
+    await seedMessage(
+      sql,
+      "art_outside_previews",
+      previewResult(
+        "art_outside_previews",
+        { path: "artifacts/chart.png" },
+        undefined,
+        undefined,
+        "artifacts/chart.png"
+      )
+    );
+
     // Same path/bytes/name/kind as the inspections, but explicitly promoted to the person.
     await seedArtifact(sql, "art_promoted");
     await seedMessage(
@@ -161,6 +233,7 @@ it("backfills only proven path inspections and hides them from resources and fil
       mime_type, byte_size, checksum, object_key, status, created_at)
       values ('file_user', ${clientInstanceId}, 'owner', 'check.png', 'image/png', 8,
         'same-checksum', 'user-upload-object', 'available', now())`;
+    await sql`update managed_artifacts set source_file_id = 'file_user' where id = 'art_source_file'`;
     await sql`insert into conversation_attachments (id, client_instance_id, conversation_id,
       message_id, file_id, filename, mime_type, byte_size, checksum, status, format,
       warnings, created_at, updated_at)
@@ -212,6 +285,11 @@ it("backfills only proven path inspections and hides them from resources and fil
         page: { limit: 100 }
       });
       const visible = [
+        "art_wrong_conversation",
+        "art_source_file",
+        "art_failed_result",
+        "art_path_mismatch",
+        "art_outside_previews",
         "art_promoted",
         "art_no_evidence",
         "art_wrong_client",
@@ -309,17 +387,19 @@ async function seedMessage(
   id: string,
   metadata: JsonObject,
   role = "tool",
-  instance: string = clientInstanceId
+  instance: string = clientInstanceId,
+  conversation: string = conversationId
 ): Promise<void> {
   await sql`insert into messages (id, client_instance_id, conversation_id, role, text, created_at, metadata)
-    values (${`msg_${id}`}, ${instance}, ${conversationId}, ${role}, '', now(), ${sql.json(metadata)})`;
+    values (${`msg_${id}`}, ${instance}, ${conversation}, ${role}, '', now(), ${sql.json(metadata)})`;
 }
 
-async function seedConversation(sql: Sql): Promise<void> {
+async function seedConversation(sql: Sql, id = conversationId): Promise<void> {
   await sql`insert into collaboration_workspaces (id, client_instance_id, kind, name, visibility, created_at, updated_at)
-    values (${collaborationWorkspaceId}, ${clientInstanceId}, 'shared', 'Test', 'private', now(), now())`;
+    values (${collaborationWorkspaceId}, ${clientInstanceId}, 'shared', 'Test', 'private', now(), now())
+    on conflict do nothing`;
   await sql`insert into conversations (id, client_instance_id, collaboration_workspace_id, created_by_user_id,
     created_by_external_user_id, visibility, title, status, created_at, updated_at, retained_until)
-    values (${conversationId}, ${clientInstanceId}, ${collaborationWorkspaceId}, 'owner', 'owner',
+    values (${id}, ${clientInstanceId}, ${collaborationWorkspaceId}, 'owner', 'owner',
       'workspace', 'Test', 'active', now(), now(), now() + interval '1 day')`;
 }
