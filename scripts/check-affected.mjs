@@ -7,6 +7,7 @@ import ts from "typescript";
 import {
   affectedPackages,
   affectedTests,
+  isGlobalChange,
   packageDirectory,
   qualityScopes
 } from "./affected-selection.mjs";
@@ -22,7 +23,10 @@ const run = (command, args, capture = false) => {
     maxBuffer: 64 * 1024 * 1024
   });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`${command} failed (exit ${result.status})`);
+  if (result.status !== 0)
+    throw new Error(
+      `${command} failed (exit ${result.status})${result.stderr ? `\n${result.stderr.trim()}` : ""}`
+    );
   return result.stdout ?? "";
 };
 const gitFiles = (...args) => run("git", args, true).split("\0").filter(Boolean);
@@ -83,11 +87,7 @@ const visit = (file) => {
 };
 const tests = files.filter((file) => /^tests\/.*\.test\.ts$/u.test(file));
 for (const file of tests) visit(file);
-const globalChange = changed.some(
-  (file) =>
-    !/^(packages|clients|tests|e2e|changes|docs|\.github)\//u.test(file) &&
-    !/^(README|CHANGELOG)\.md$/u.test(file)
-);
+const globalChange = changed.some((file) => isGlobalChange(file, packages));
 const testsToRun = globalChange ? tests : affectedTests(tests, dependencies, scopes, changed);
 console.log(
   `check:affected vs ${base}: ${selected.length} packages, ${testsToRun.length} test files`
@@ -121,13 +121,17 @@ try {
         run("pnpm", ["--filter", pkg.name, "typecheck"]);
     if (scopes.includes("packages/deployment-kit")) run("pnpm", ["test:deployment-kit"]);
   }
-  // Exact baseline counts for shared root tests/scripts require their whole quality scope.
-  if (globalChange || changed.some((file) => /^(tests|e2e)\//u.test(file))) {
+  // Vitest strips types; changed package exports can break otherwise passing root tests.
+  // Keep the whole test type scope so baseline counts stay exact.
+  if (
+    selected.length ||
+    testsToRun.length ||
+    globalChange ||
+    changed.some((file) => /^(tests|e2e)\//u.test(file))
+  )
     run("pnpm", ["typecheck:tests"]);
-    if (!globalChange) run("pnpm", ["lint"]);
-  }
   if (testsToRun.length) run("pnpm", ["exec", "vitest", "run", ...testsToRun]);
-  run(process.execPath, ["--test", "scripts/check-affected.test.mjs"]);
+  if (globalChange) run(process.execPath, ["--test", "scripts/check-affected.test.mjs"]);
   console.log(`check:affected passed in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 } finally {
   rmSync(temp, { recursive: true, force: true });

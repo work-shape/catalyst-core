@@ -58,8 +58,11 @@ and runs tests whose imports reach those packages (including through test suppor
 the whole workspace before findings are restricted to selected scopes. Set
 `POSTGRES_STORE_TEST_DATABASE_URL` for database tests, as with `pnpm test`.
 
-Shared configuration and tooling changes conservatively select all packages and tests. Changes
-to root tests also run the whole shared test type/lint scope so baseline counts remain exact.
+Shared configuration and tooling changes conservatively select all packages and tests, including
+`packages/quality-config/` and model adapter sources read by its rules. Selected packages always
+run the whole shared test typecheck, since Vitest strips types. A root-test-only edit runs that
+test (or tests importing changed support files) and the shared test typecheck, without package
+builds or lint.
 Docs and change files alone select no packages. Use `pnpm check:affected --list` to inspect the
 selection, or `AFFECTED_BASE=<ref>` for a different comparison base. The full integration and
 browser checks still run in the landing batch.
