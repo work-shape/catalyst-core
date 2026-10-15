@@ -47,6 +47,7 @@ export function ConnectionCreateForm({
   errors,
   busy,
   steps,
+  detailsOpen = false,
   onChange
 }: {
   fields: CreateFields;
@@ -59,13 +60,16 @@ export function ConnectionCreateForm({
   busy: boolean;
   /** The steps of the connect that runs, in their order. */
   steps: readonly { step: ConnectStep; state: ConnectStepState }[];
+  /** "Technical details" starts open, as for a form filled with an id or headers to look at. */
+  detailsOpen?: boolean;
   onChange(next: CreateFields): void;
 }) {
   const { t } = useTranslation();
   const rest = fields.form.connectorType === "http_api";
   const form = (next: Partial<ConnectionFormState>) =>
     onChange({ ...fields, form: { ...fields.form, ...next } });
-  const detailsWrong =
+  const detailsShown =
+    detailsOpen ||
     errors.headerName !== undefined ||
     errors.headers !== undefined ||
     errors.testPath !== undefined;
@@ -88,7 +92,7 @@ export function ConnectionCreateForm({
         addressLabel={t("connectionCreate.id")}
         addressHint={t("connectionCreate.idHint")}
         advancedLabel={t("connectionCreate.details")}
-        advancedOpen={detailsWrong}
+        advancedOpen={detailsShown}
         disabled={busy}
         advanced={
           <>

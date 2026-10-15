@@ -2,7 +2,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
+import { sendToolCall } from "./page-surface-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
@@ -10,7 +11,9 @@ import { expect, test } from "./test";
 // the port the suite's `egress.allow` names. An MCP server: a wrong address, then a refused
 // key, then the tools the server names, approved in one confirmation. A REST API: the address,
 // the key and the test path, then tools pasted as YAML and approved. Each in English and in
-// German; the key is typed and never shown again.
+// German; the key is typed and never shown again. The agent's draft of a REST API's tools
+// (CS-5c): a card in the chat whose button opens the approval list, on the Connection's page or
+// in the New connection dialog, and nothing is saved before the person approves.
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
@@ -253,7 +256,8 @@ for (const locale of LOCALES) {
             "- name: health",
             "  description: Says whether the service runs.",
             "  method: GET",
-            "  path: /healthz"
+            "  path: /healthz",
+            `  query: ${JSON.stringify(enumQuery)}`
           ].join("\n")
         );
       await shoot(page, locale, "rest-paste");
@@ -261,6 +265,7 @@ for (const locale of LOCALES) {
       const row = dialog.locator('li[data-approval-tool="health"]');
       await expect(row).toContainText("GET /healthz");
       await expect(row.getByRole("checkbox")).toBeChecked();
+      await checkParameterEnums(row, locale);
       await shoot(page, locale, "rest-approve");
       await dialog.locator("[data-connection-approve]").click();
 
@@ -321,3 +326,236 @@ test("cancel after a failed connect asks, then deletes the Connection", async ({
     await removeConnection(page, id);
   }
 });
+
+/** The draft the agent answers for the Connection `id`: the sample server's health, read. */
+/** The title the agent drafts with; an existing Connection keeps its own. */
+const DRAFT_TITLE = "Sample API";
+/** The title of the Connection the draft is for on its page. */
+const EXISTING_TITLE = "Sample health service";
+/** A description longer than the three lines the approval list shows before "Show more". */
+const LONG_DESCRIPTION = [
+  "Reads the status of the sample service: whether it runs, since when, and which version it serves.",
+  "Call it before any other tool of this Connection when a person asks whether the service is reachable,",
+  "and again after an error, to tell an outage of the service from a refused request.",
+  "It reads only and changes nothing; it takes no parameter and answers in a few milliseconds."
+].join(" ");
+
+/** Ordinary multi-value enums, including text that must never become an element or link. */
+const ENUM_TEXT = '<img data-enum-injection src=x onerror="alert(1)"> [open](javascript:alert(2))';
+const LONG_ENUM_VALUE =
+  "A detailed report category for the service's regional availability history. ".repeat(12);
+const enumQuery = {
+  status: { schema: { type: "string", enum: ["ready", ENUM_TEXT] } },
+  report: { schema: { type: "string", enum: ["overview", LONG_ENUM_VALUE] } }
+};
+
+/** Both paste and draft must show values, keep markup inert, and unfold the long value. */
+async function checkParameterEnums(row: Locator, locale: Locale): Promise<void> {
+  const status = row.locator('[data-approval-parameter="query.status"]');
+  await expect(status).toContainText("ready");
+  await expect(status).toContainText(ENUM_TEXT);
+  await expect(row.locator("img, a, [data-enum-injection]")).toHaveCount(0);
+  const report = row.locator('[data-approval-parameter="query.report"]');
+  await expect(report).toContainText("overview");
+  const more = report.locator("[data-approval-enum]").getByRole("button");
+  await expect(more).toHaveText(showMore[locale]);
+  await expect(more).toBeVisible();
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  const value = report.locator("[data-approval-enum] > span").first();
+  await expect(value).toHaveText(`overview\n${LONG_ENUM_VALUE}`);
+  await expect(value).not.toHaveClass(/line-clamp-3/u);
+  // Fold it again so the short values and the fold control fit together in the screenshots.
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+}
+
+function healthDraft(id: string) {
+  return {
+    connection: id,
+    title: DRAFT_TITLE,
+    baseUrl: sampleBase,
+    headerNames: ["x-e2e"],
+    operations: [
+      {
+        name: "health",
+        title: "Health",
+        description: "Says whether the service runs.",
+        method: "GET",
+        path: "/healthz",
+        query: enumQuery,
+        effect: "reading"
+      },
+      {
+        name: "status",
+        title: "Status",
+        description: LONG_DESCRIPTION,
+        method: "GET",
+        path: "/healthz",
+        effect: "reading"
+      }
+    ]
+  };
+}
+
+/** The control that unfolds a long description. */
+const showMore: Record<Locale, string> = { en: "Show more", de: "Mehr anzeigen" };
+
+/** Pictures of what stands now, light and dark, at 1280 and at 390; the page is not reloaded. */
+async function shootModes(page: Page, locale: Locale, name: string): Promise<void> {
+  if (!shotsDir) return;
+  await mkdir(shotsDir, { recursive: true });
+  for (const mode of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: mode });
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      if (name === "enum") {
+        // Keep both enum sets inside the approval dialog's scrollport at each width.
+        const row = page.getByRole("dialog").locator('li[data-approval-tool="health"]');
+        const first = row.locator('[data-approval-parameter="query.status"]');
+        const last = row.locator('[data-approval-parameter="query.report"]');
+        await last.scrollIntoViewIfNeeded();
+        await expect(first).toBeInViewport({ ratio: 1 });
+        await expect(last).toBeInViewport({ ratio: 1 });
+        await expect(last.getByRole("button", { name: showMore[locale] })).toBeVisible();
+      }
+      await page.screenshot({
+        path: join(shotsDir, `connection-draft-${name}-${width}-${locale}-${mode}.png`),
+        animations: "disabled"
+      });
+    }
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 1280, height: 900 });
+}
+
+for (const locale of LOCALES) {
+  test(`${locale}: the agent's draft is a card that opens the approval list, and only the approval saves it`, async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    const existing = `e2e-draft-${locale}-${randomUUID().slice(0, 8)}`;
+    const fresh = `e2e-draft-new-${locale}-${randomUUID().slice(0, 8)}`;
+    const existingWrites = recordWrites(page, existing);
+    const freshWrites = recordWrites(page, fresh);
+    const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+      data: { ...admin, rememberMe: true }
+    });
+    expect(signedIn.ok()).toBe(true);
+    await page.addInitScript((chosen) => {
+      window.localStorage.setItem("vivd-catalyst:locale", chosen);
+    }, locale);
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const created = await requestWithOrigin(
+      page,
+      "put",
+      `${apiBaseUrl}/api/v1/assets/connection/${existing}`,
+      {
+        data: {
+          expectedRevision: null,
+          config: {
+            name: existing,
+            displayName: EXISTING_TITLE,
+            connectorType: "http_api",
+            settings: { baseUrl: sampleBase, testPath: "/healthz" },
+            authScheme: "none",
+            operations: []
+          }
+        }
+      }
+    );
+    expect(created.ok()).toBe(true);
+    try {
+      await page.goto(`/build/connections/${existing}`);
+      const main = page.getByRole("region", { name: "Studio" });
+      // "Draft with Workshaper" opens the chat beside the page; the agent answers a card.
+      await main.locator("[data-connection-draft]").getByRole("button").click();
+      await sendToolCall(page, "platform.connections.draft_tools", healthDraft(existing));
+      const card = page.locator(
+        `[data-testid="connection-draft-card"][data-connection="${existing}"]`
+      );
+      await expect(card.locator('[data-connection-draft-tool="health"]')).toHaveText("Health");
+      // The card names the existing Connection by its own title, never by the agent's.
+      await expect(card).toContainText(EXISTING_TITLE);
+      await expect(card).not.toContainText(DRAFT_TITLE);
+      await shootModes(page, locale, "card");
+
+      // The button opens the approval list on the page, with what each tool tells an agent.
+      // Discarding it saves nothing.
+      await card.locator("[data-connection-draft-open]").click();
+      const dialog = page.getByRole("dialog");
+      const health = dialog.locator('li[data-approval-tool="health"]');
+      await expect(health).toContainText("GET /healthz");
+      await expect(health.locator("[data-approval-description]")).toHaveText(
+        "Says whether the service runs."
+      );
+      await expect(dialog.locator("[data-connection-drafted]")).toContainText(EXISTING_TITLE);
+      await expect(dialog.locator("[data-connection-drafted]")).not.toContainText(DRAFT_TITLE);
+      await checkParameterEnums(health, locale);
+      await shootModes(page, locale, "enum");
+      const status = dialog.locator('li[data-approval-tool="status"]');
+      const more = status.getByRole("button", { name: showMore[locale] });
+      await expect(more).toBeVisible();
+      await shootModes(page, locale, "approve");
+      await more.click();
+      await expect(status.locator("[data-approval-description]")).toContainText(
+        "answers in a few milliseconds."
+      );
+      await shootModes(page, locale, "approve-unfolded");
+      await dialog.locator("[data-connection-discard]").click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(main.locator('[data-connection-operation="health"]')).toHaveCount(0);
+      expect(existingWrites).toEqual([]);
+
+      // Opened again and approved, the one approval is the one save.
+      await card.locator("[data-connection-draft-open]").click();
+      await dialog.locator("[data-connection-approve]").click();
+      await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
+      expect(existingWrites).toEqual(["PUT /api/v1/assets/connection/:name"]);
+
+      // For an id no Connection has, the New connection dialog opens filled, without a key.
+      await sendToolCall(page, "platform.connections.draft_tools", healthDraft(fresh));
+      await page
+        .locator(`[data-testid="connection-draft-card"][data-connection="${fresh}"]`)
+        .locator("[data-connection-draft-open]")
+        .click();
+      const create = page.getByRole("dialog");
+      await expect(create.locator('[data-connection-create-form="http_api"]')).toBeVisible();
+      const field = (name: string) => create.locator(`[data-connection-field="${name}"]`);
+      await expect(create.locator('[data-name-with-address-field="name"]')).toHaveValue(
+        DRAFT_TITLE
+      );
+      await expect(field("url")).toHaveValue(sampleBase);
+      await expect(create.locator('[data-name-with-address-field="address"]')).toHaveValue(fresh);
+      await expect(field("secret")).toHaveValue("");
+      await expect(field("headers").locator("input").nth(0)).toHaveValue("x-e2e");
+      await field("headers").locator("input").nth(1).fill("catalyst");
+      await field("testPath").fill("/healthz");
+      await shootModes(page, locale, "new-form");
+      expect(freshWrites).toEqual([]);
+
+      // Connected, the drafted tools wait in the approval list; approving them saves them.
+      await create.locator("[data-connection-connect]").click();
+      await expect(create.locator('li[data-approval-tool="health"]')).toBeVisible();
+      await shootModes(page, locale, "new-approve");
+      expect(freshWrites).toEqual([
+        "PUT /api/v1/assets/connection/:name",
+        "POST /api/v1/connections/:name/test"
+      ]);
+      await create.locator("[data-connection-approve]").click();
+      // The chat beside the page stays open: its conversation is in the address.
+      await expect(page).toHaveURL(new RegExp(`/build/connections/${fresh}(?:\\?|$)`, "u"));
+      await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
+      expect(freshWrites).toEqual([
+        "PUT /api/v1/assets/connection/:name",
+        "POST /api/v1/connections/:name/test",
+        "PUT /api/v1/assets/connection/:name"
+      ]);
+    } finally {
+      await removeConnection(page, existing);
+      await removeConnection(page, fresh);
+    }
+  });
+}

@@ -26,6 +26,7 @@ import {
   type CreateFieldErrors,
   type CreateFields
 } from "./connection-create-form";
+import { useDraftForNewConnection, type ConnectionDraft } from "./connection-draft";
 import {
   emptyConnectionForm,
   newConnectionConfig,
@@ -55,7 +56,8 @@ type Stage =
   /** A REST API is connected: how its tools come in. */
   | { step: "add" }
   | { step: "paste"; error?: string }
-  | { step: "review"; candidates: ApprovalCandidate[] };
+  /** Declared operations to approve: pasted, or `drafted` by the agent in the chat. */
+  | { step: "review"; candidates: ApprovalCandidate[]; drafted?: true };
 
 export function ConnectionCreateDialog(props: BuildCreateDialogProps) {
   return <ConnectionCreateFlow {...props} source={useConnectionSource()} />;
@@ -74,14 +76,25 @@ export function ConnectionCreateFlow({
   onCreated
 }: BuildCreateDialogProps & { source: ConnectionSource }) {
   const { t } = useTranslation();
-  const [stage, setStage] = useState<Stage>({ step: "pick" });
-  const [fields, setFields] = useState<CreateFields>({
-    title: "",
-    prefix: mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE),
-    form: emptyConnectionForm(),
-    key: "",
-    sendAs: "bearer"
-  });
+  // The agent's draft opened from its card: the dialog starts at the REST API's form, filled
+  // with it, and after Verbinden its tools wait in the approval list.
+  const drafted = useDraftForNewConnection();
+  const [stage, setStage] = useState<Stage>({ step: drafted ? "form" : "pick" });
+  const [fields, setFields] = useState<CreateFields>(() =>
+    drafted
+      ? draftedFields(drafted, namespaces, mayNameFreely)
+      : {
+          title: "",
+          prefix: mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE),
+          form: emptyConnectionForm(),
+          key: "",
+          sendAs: "bearer"
+        }
+  );
+  // A drafted id or header names show under "Technical details", open from the start.
+  const [detailsOpen] = useState(
+    () => fields.typedId !== undefined || fields.form.headers.length > 0
+  );
   const [errors, setErrors] = useState<CreateFieldErrors>({});
   const [steps, setSteps] = useState<{ step: ConnectStep; state: ConnectStepState }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -177,7 +190,13 @@ export function ConnectionCreateFlow({
       case "connected":
         setSteps([]);
         if (rest) {
-          setStage({ step: "add" });
+          if (drafted && drafted.operations.length > 0) {
+            approval.reset(drafted.operations);
+            setRefusals(undefined);
+            setStage({ step: "review", candidates: drafted.operations, drafted: true });
+          } else {
+            setStage({ step: "add" });
+          }
           return;
         }
         enterTools(outcome.detail);
@@ -400,6 +419,7 @@ export function ConnectionCreateFlow({
             errors={errors}
             busy={busy}
             steps={steps}
+            detailsOpen={detailsOpen}
             onChange={setFields}
           />
         );
@@ -451,13 +471,21 @@ export function ConnectionCreateFlow({
       case "review":
         return (
           <div className="grid min-w-0 gap-4">
+            {stage.drafted ? (
+              <>
+                <ConnectedLine text={connectedLine} />
+                <p className="text-body text-muted-foreground" data-connection-drafted="">
+                  {t("connectionCreate.draftedIntro", { title })}
+                </p>
+              </>
+            ) : null}
             <ConnectionApprovalList
               candidates={stage.candidates}
               choice={approval.choice}
               onSelectedChange={approval.setSelected}
               onSurfacesChange={approval.setSurfaces}
               declared
-              source={pasted}
+              {...(stage.drafted ? {} : { source: pasted })}
               disabled={busy}
             />
             {refusals ? <ApprovalRefusals refusals={refusals} /> : null}
@@ -533,8 +561,11 @@ export function ConnectionCreateFlow({
             <Button
               variant="outline"
               disabled={busy}
+              {...(stage.step === "review" ? { "data-connection-discard": "" } : {})}
               onClick={() =>
-                stage.step === "review" ? setStage({ step: "paste" }) : onCreated(name)
+                stage.step === "review"
+                  ? setStage({ step: stage.drafted ? "add" : "paste" })
+                  : onCreated(name)
               }
             >
               {t(stage.step === "review" ? "connectionCreate.discard" : "connectionCreate.later")}
@@ -556,6 +587,38 @@ export function ConnectionCreateFlow({
       }
     }
   }
+}
+
+/**
+ * The fields of a new REST API filled with the agent's draft: its name, address and the names
+ * of its fixed headers, whose values the person types, as the key. The draft's id keeps the
+ * Namespace it starts with where the reader may create in that one.
+ */
+function draftedFields(
+  draft: ConnectionDraft,
+  namespaces: BuildCreateDialogProps["namespaces"],
+  mayNameFreely: boolean
+): CreateFields {
+  const { name, title, baseUrl, headerNames } = draft.connection;
+  const namespace = namespaces
+    .filter((entry) => entry.prefix !== NO_NAMESPACE && name.startsWith(entry.prefix))
+    .sort((left, right) => right.prefix.length - left.prefix.length)[0];
+  const prefix =
+    namespace?.prefix ?? (mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE));
+  const id = namespace ? name.slice(namespace.prefix.length) : name;
+  return {
+    title,
+    ...(id === assetIdFromTitle(title) ? {} : { typedId: id }),
+    prefix,
+    form: {
+      ...emptyConnectionForm(),
+      connectorType: "http_api",
+      url: baseUrl,
+      headers: headerNames.map((header) => ({ name: header, value: "" }))
+    },
+    key: "",
+    sendAs: "bearer"
+  };
 }
 
 /** The line that says what was connected. */

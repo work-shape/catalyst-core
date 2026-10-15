@@ -22,6 +22,7 @@ toolNames:
   - platform.assets.validate
   - platform.assets.put
   - platform.assets.operations
+  - platform.connections.draft_tools
 initialPrompts:
   - title: Find review risks
     prompt: List the most important application or document review risks I should check first.

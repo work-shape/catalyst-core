@@ -38,7 +38,7 @@ export interface NameWithAddressProps {
   children?: ReactNode;
   /** In the fold after the address: what few people change. */
   advanced?: ReactNode;
-  /** Opens the fold, such as when a field in `advanced` is wrong. */
+  /** Opens the fold when it turns on, such as when a field in `advanced` is wrong. */
   advancedOpen?: boolean;
   disabled?: boolean;
   autoFocus?: boolean;
@@ -47,7 +47,7 @@ export interface NameWithAddressProps {
 /**
  * A new thing's name, and the address it is reached by, folded away below. The address
  * follows the name until it is edited. The caller checks it as it changes and hands the
- * answer in as `check`; a refused address opens the fold, so its reason shows while typing, and it stays open.
+ * answer in as `check`; a refused address opens the fold, so its reason shows while typing.
  */
 export function NameWithAddress({
   value,
@@ -64,11 +64,17 @@ export function NameWithAddress({
   disabled = false,
   autoFocus = false
 }: NameWithAddressProps) {
-  const [opened, setOpened] = useState(false);
   const refused = check.state === "refused";
-  // A fold opened for a refusal stays open once the address is free again, so it does not
-  // jump while the person types.
-  if (refused && !opened) setOpened(true);
+  const wantsOpen = refused || advancedOpen;
+  const [opened, setOpened] = useState(wantsOpen);
+  // The fold opens when the address is refused or `advancedOpen` turns on, and stays open
+  // once the address is free again, so it does not jump while the person types. The person
+  // may close it.
+  const [wanted, setWanted] = useState(wantsOpen);
+  if (wantsOpen !== wanted) {
+    setWanted(wantsOpen);
+    if (wantsOpen) setOpened(true);
+  }
   return (
     <div className="grid min-w-0 gap-4" data-name-with-address="">
       <Field label={nameLabel} required>
@@ -81,11 +87,7 @@ export function NameWithAddress({
         />
       </Field>
       {children}
-      <Disclosure
-        open={opened || refused || advancedOpen}
-        onOpenChange={setOpened}
-        disabled={disabled}
-      >
+      <Disclosure open={opened} onOpenChange={setOpened} disabled={disabled}>
         <DisclosureTrigger data-name-with-address-fold="">{advancedLabel}</DisclosureTrigger>
         <DisclosureContent>
           <div className="grid min-w-0 gap-4 pt-2">

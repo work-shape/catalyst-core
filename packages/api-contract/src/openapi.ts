@@ -189,7 +189,14 @@ function createSecurity(operation: Operation): OpenApiOperation["security"] {
           : operation.credential
             ? [operation.credential]
             : [];
-  return schemes.map((scheme) => ({ [scheme]: operation.scope ? [operation.scope] : [] }));
+  const security = schemes.map((scheme) => ({
+    [scheme]: operation.scope ? [operation.scope] : []
+  }));
+  if (operation.personalKeyScope) {
+    // This alternative is an access token of a personal key, subject to ownership checks.
+    security.push({ accessToken: [operation.personalKeyScope] });
+  }
+  return security;
 }
 
 /**
