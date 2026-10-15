@@ -52,11 +52,14 @@ export async function acceptDeletion<Payload extends JsonObject, Result>(
     correlationId: string;
     /** Marks the subject and records the request. Resolves false when it was marked before. */
     mark(stores: PlatformStores): Promise<boolean>;
+    /** An admission that must share the marking transaction, such as a fresh rights check. */
+    transaction?: DeletionTransaction;
     /** One pass of the deletion. Resolves undefined when the subject was gone already. */
     complete(): Promise<Result | undefined>;
   }
 ): Promise<DeletionOutcome<Result>> {
-  const marked = await options.stores.transaction(async (stores) => {
+  const transaction = input.transaction ?? options.stores.transaction.bind(options.stores);
+  const marked = await transaction(async (stores) => {
     const newlyMarked = await input.mark(stores);
     await stores.jobs.enqueue(input.job, input.payload, {
       clientInstanceId: options.clientInstanceId,

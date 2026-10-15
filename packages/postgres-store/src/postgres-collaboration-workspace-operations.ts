@@ -17,6 +17,7 @@ import {
   createWorkspaceAccessRequestId,
   validateWorkspaceCreation
 } from "@vivd-catalyst/core";
+import { lockRights } from "./rights-lock";
 import { containsPattern } from "./like-pattern";
 import { deleteWorkspaceOwnedAssets } from "./postgres-config-asset-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
@@ -192,6 +193,9 @@ export async function ensurePersonalWorkspaceInTransaction(
 ): Promise<CollaborationWorkspace> {
   const existing = await getPersonalWorkspace(db, input.clientInstanceId, input.userId);
   if (existing) return existing;
+  await lockRights(db, input);
+  const concurrent = await getPersonalWorkspace(db, input.clientInstanceId, input.userId);
+  if (concurrent) return concurrent;
 
   const id = createCollaborationWorkspaceId();
   const now = new Date();
@@ -236,64 +240,73 @@ export async function addMembership(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["addMembership"]>[0]
 ): Promise<WorkspaceMembership> {
-  const workspace = await requireWorkspace(
-    db,
-    input.clientInstanceId,
-    input.collaborationWorkspaceId
-  );
-  if (workspace.kind === "personal") {
-    throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot gain members");
-  }
-  if (await getMembership(db, input)) {
-    throw new AppError("CONFLICT", "Workspace Membership already exists");
-  }
-  const now = new Date();
-  const [row] = await db
-    .insert(collaborationWorkspaceMemberships)
-    .values({ ...input, createdAt: now, updatedAt: now })
-    .returning();
-  return mapWorkspaceMembership(row);
+  return db.transaction(async (tx) => {
+    await lockRights(tx, input);
+    const workspace = await requireWorkspace(
+      tx,
+      input.clientInstanceId,
+      input.collaborationWorkspaceId
+    );
+    if (workspace.kind === "personal") {
+      throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot gain members");
+    }
+    if (await getMembership(tx, input)) {
+      throw new AppError("CONFLICT", "Workspace Membership already exists");
+    }
+    const now = new Date();
+    const [row] = await tx
+      .insert(collaborationWorkspaceMemberships)
+      .values({ ...input, createdAt: now, updatedAt: now })
+      .returning();
+    return mapWorkspaceMembership(row);
+  });
 }
 
 export async function updateMembershipRole(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["updateMembershipRole"]>[0]
 ): Promise<WorkspaceMembership> {
-  const workspace = await requireWorkspace(
-    db,
-    input.clientInstanceId,
-    input.collaborationWorkspaceId
-  );
-  if (workspace.kind === "personal") {
-    throw new AppError("VALIDATION_FAILED", "A Personal Workspace membership cannot change");
-  }
-  const [row] = await db
-    .update(collaborationWorkspaceMemberships)
-    .set({ role: input.role, updatedAt: new Date() })
-    .where(membershipWhere(input))
-    .returning();
-  if (!row) throw new AppError("NOT_FOUND", "Workspace Membership is not available");
-  return mapWorkspaceMembership(row);
+  return db.transaction(async (tx) => {
+    await lockRights(tx, input);
+    const workspace = await requireWorkspace(
+      tx,
+      input.clientInstanceId,
+      input.collaborationWorkspaceId
+    );
+    if (workspace.kind === "personal") {
+      throw new AppError("VALIDATION_FAILED", "A Personal Workspace membership cannot change");
+    }
+    const [row] = await tx
+      .update(collaborationWorkspaceMemberships)
+      .set({ role: input.role, updatedAt: new Date() })
+      .where(membershipWhere(input))
+      .returning();
+    if (!row) throw new AppError("NOT_FOUND", "Workspace Membership is not available");
+    return mapWorkspaceMembership(row);
+  });
 }
 
 export async function removeMembership(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["removeMembership"]>[0]
 ): Promise<WorkspaceMembership> {
-  const workspace = await requireWorkspace(
-    db,
-    input.clientInstanceId,
-    input.collaborationWorkspaceId
-  );
-  if (workspace.kind === "personal") {
-    throw new AppError("VALIDATION_FAILED", "A Personal Workspace membership cannot be removed");
-  }
-  const [row] = await db
-    .delete(collaborationWorkspaceMemberships)
-    .where(membershipWhere(input))
-    .returning();
-  if (!row) throw new AppError("NOT_FOUND", "Workspace Membership is not available");
-  return mapWorkspaceMembership(row);
+  return db.transaction(async (tx) => {
+    await lockRights(tx, input);
+    const workspace = await requireWorkspace(
+      tx,
+      input.clientInstanceId,
+      input.collaborationWorkspaceId
+    );
+    if (workspace.kind === "personal") {
+      throw new AppError("VALIDATION_FAILED", "A Personal Workspace membership cannot be removed");
+    }
+    const [row] = await tx
+      .delete(collaborationWorkspaceMemberships)
+      .where(membershipWhere(input))
+      .returning();
+    if (!row) throw new AppError("NOT_FOUND", "Workspace Membership is not available");
+    return mapWorkspaceMembership(row);
+  });
 }
 
 export async function listMemberships(
@@ -605,6 +618,7 @@ async function createWorkspaceRecords(
   db: PostgresTransaction,
   input: CreateWorkspaceInput
 ): Promise<CollaborationWorkspace> {
+  await lockRights(db, { clientInstanceId: input.clientInstanceId, userId: input.creatorUserId });
   const now = new Date();
   const [user] = await db
     .select({ id: productUsers.id })

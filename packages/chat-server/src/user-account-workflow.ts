@@ -113,8 +113,7 @@ export class UserAccountWorkflow {
       requestedBy: "self",
       actor: auditActorFromUser(actor),
       actorUserId: existing.id,
-      correlationId: context.correlationId,
-      alreadyRequested: existing.status === "deleting"
+      correlationId: context.correlationId
     });
     return outcome.status === "deleted" ? { status: "deleted", result: { ok: true } } : outcome;
   }
