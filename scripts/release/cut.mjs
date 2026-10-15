@@ -71,6 +71,29 @@ function manifests(root) {
   return paths.map((path) => ({ path, manifest: readJson(path) }));
 }
 
+/** Read-only lockstep check, also usable without preparing or cutting a release. */
+export function checkCurrentVersion(roots) {
+  const versions = new Set(
+    roots.flatMap((root) =>
+      manifests(root).flatMap(({ manifest }) =>
+        manifest.version === undefined ? [] : [manifest.version]
+      )
+    )
+  );
+  if (versions.size !== 1)
+    throw new Error(
+      `Core and capabilities must share one current version; found ${[...versions].join(", ")}.`
+    );
+  return [...versions][0];
+}
+
+const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
+const command = (root, args) => ["git", "-C", root, ...args].map(quote).join(" ");
+const undoCommands = (repositories) => [
+  "Or undo the cut in BOTH repositories (discards the cut and any subsequent local edits):",
+  ...repositories.map(({ root, before }) => command(root, ["reset", "--hard", before]))
+];
+
 function prepare(root, version, heading) {
   if (realpathSync(run("git", ["rev-parse", "--show-toplevel"], root).trim()) !== root)
     throw new Error(`${root} is not a repository root.`);
@@ -125,38 +148,45 @@ export function cut(args, coreRoot = repoRoot) {
   const heading = releaseHeading(version, date);
   // Finish every refusal check in both repositories before changing either tree.
   const repositories = roots.map((root) => prepare(root, version, heading));
-  const versions = new Set(
-    repositories.flatMap(({ packages }) =>
-      packages.flatMap(({ manifest }) => (manifest.version === undefined ? [] : [manifest.version]))
-    )
-  );
-  if (versions.size !== 1)
-    throw new Error(
-      `Core and capabilities must share one current version; found ${[...versions].join(", ")}.`
-    );
-  for (const repository of repositories) {
-    const { root, packages, changes, nextChangelog } = repository;
-    for (const { path, manifest } of packages)
-      writeFileSync(path, serialize({ ...manifest, version }));
-    // Use the existing changelog command, including its deletion of the folded change files.
-    // An empty companion release still gets a section to record its lockstep cut.
-    if (changes.length === 0) {
-      writeFileSync(join(root, "CHANGELOG.md"), nextChangelog);
-    } else if (changelog(["--release", version, "--date", date], root) !== 0) {
-      throw new Error(`${root}: changelog fold failed.`);
+  checkCurrentVersion(roots);
+  try {
+    for (const repository of repositories) {
+      const { root, packages, changes, nextChangelog } = repository;
+      for (const { path, manifest } of packages)
+        writeFileSync(path, serialize({ ...manifest, version }));
+      // Use the existing changelog command, including its deletion of the folded change files.
+      // An empty companion release still gets a section to record its lockstep cut.
+      if (changes.length === 0) {
+        writeFileSync(join(root, "CHANGELOG.md"), nextChangelog);
+      } else if (changelog(["--release", version, "--date", date], root) !== 0) {
+        throw new Error(`${root}: changelog fold failed.`);
+      }
     }
-  }
-  run("pnpm", ["generate:openapi"], roots[0], "inherit");
-  run("pnpm", ["release:check"], roots[0], "inherit");
-  for (const { root, packages, changes } of repositories) {
-    const paths = [
-      ...packages.map(({ path }) => path),
-      join(root, "CHANGELOG.md"),
-      ...changes.map(({ file }) => join(root, file))
-    ];
-    if (root === roots[0]) paths.push(join(root, "packages/api-contract/openapi.json"));
-    run("git", ["add", "--", ...paths], root);
-    run("git", ["diff", "--cached", "--check"], root);
+    run("pnpm", ["generate:openapi"], roots[0], "inherit");
+    run("pnpm", ["release:check"], roots[0], "inherit");
+    for (const { root, packages, changes } of repositories) {
+      const paths = [
+        ...packages.map(({ path }) => path),
+        join(root, "CHANGELOG.md"),
+        ...changes.map(({ file }) => join(root, file))
+      ];
+      if (root === roots[0]) paths.push(join(root, "packages/api-contract/openapi.json"));
+      run("git", ["add", "--", ...paths], root);
+      run("git", ["diff", "--cached", "--check"], root);
+    }
+  } catch (error) {
+    throw new Error(
+      [
+        `Release preparation failed: ${error instanceof Error ? error.message : String(error)}`,
+        ...repositories.map(({ root, before }) => {
+          const head = run("git", ["rev-parse", "HEAD"], root).trim();
+          const staged = run("git", ["diff", "--cached", "--name-only"], root).trim() !== "";
+          const unstaged = run("git", ["diff", "--name-only"], root).trim() !== "";
+          return `${root}: cut uncommitted, HEAD ${head === before ? "unchanged at" : "at"} ${head} (before ${before}; staged changes: ${staged ? "yes" : "no"}; unstaged changes: ${unstaged ? "yes" : "no"}).`;
+        }),
+        ...undoCommands(repositories)
+      ].join("\n")
+    );
   }
   const message = `chore(release): cut ${version}`;
   try {
@@ -174,8 +204,6 @@ export function cut(args, coreRoot = repoRoot) {
       before,
       head: run("git", ["rev-parse", "HEAD"], root).trim()
     }));
-    const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
-    const command = (root, args) => ["git", "-C", root, ...args].map(quote).join(" ");
     throw new Error(
       [
         `Release commit failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -187,8 +215,7 @@ export function cut(args, coreRoot = repoRoot) {
         ...states
           .filter(({ head, before }) => head === before)
           .map(({ root }) => command(root, ["commit", "-m", message])),
-        "Or undo the cut in BOTH repositories (discards the cut and any subsequent local edits):",
-        ...states.map(({ root, before }) => command(root, ["reset", "--hard", before]))
+        ...undoCommands(states)
       ].join("\n")
     );
   }

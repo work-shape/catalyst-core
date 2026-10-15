@@ -9,9 +9,10 @@ import {
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { cut } from "../scripts/release/cut.mjs";
+import { checkCurrentVersion, cut } from "../scripts/release/cut.mjs";
+import { repoRoot } from "../scripts/release/changelog.mjs";
 
 const scratch: string[] = [];
 const read = (root: string, path: string) => readFileSync(join(root, path), "utf8");
@@ -294,18 +295,81 @@ if (!staged.includes("package.json")) process.exit(1);
     }
   );
 
-  it("leaves both cuts uncommitted when release:check fails", () => {
-    const core = fixture();
-    const companion = fixture();
-    write(core, "gate.mjs", "process.exit(1);\n");
-    git(core, "add", ".");
-    git(core, "commit", "-m", "test: failing gate");
-    const before = [core, companion].map((root) => git(root, "rev-parse", "HEAD"));
-    expect(() => cut(["0.8.0", "--root", companion], core)).toThrow();
-    expect([core, companion].map((root) => git(root, "rev-parse", "HEAD"))).toEqual(before);
-    for (const root of [core, companion]) {
-      expect(git(root, "diff", "--cached", "--name-only")).toBe("");
-      expect(read(root, "CHANGELOG.md")).toContain("## 0.8.0 — ");
+  it.each(["release:check", "core diff", "companion diff"])(
+    "reports both repository states and executable undo commands when %s fails",
+    (failure) => {
+      const core = fixture("0.7.0", true, "catalyst-release cut's-");
+      const companion = fixture("0.7.0", true, "catalyst-release cut's-");
+      if (failure === "release:check") {
+        write(core, "gate.mjs", "process.exit(1);\n");
+      } else {
+        const target = failure === "core diff" ? core : companion;
+        write(
+          core,
+          "gate.mjs",
+          read(core, "gate.mjs") +
+            `const path = ${JSON.stringify(join(target, "CHANGELOG.md"))};\n` +
+            `writeFileSync(path, readFileSync(path, "utf8") + "trailing whitespace \\n");\n`
+        );
+      }
+      git(core, "add", ".");
+      git(core, "commit", "-m", "test: failing preparation");
+      const roots = [core, companion];
+      const before = roots.map((root) => git(root, "rev-parse", "HEAD"));
+      let report = "";
+      try {
+        cut(["0.8.0", "--root", companion], core);
+      } catch (error) {
+        report = error instanceof Error ? error.message : String(error);
+      }
+      expect(report).toContain("Release preparation failed:");
+      expect(report).toContain(
+        failure === "release:check" ? "pnpm release:check" : "git diff --cached --check"
+      );
+      for (const [index, root] of roots.entries()) {
+        const staged =
+          failure !== "release:check" && (root === core || failure === "companion diff");
+        expect(report).toContain(
+          `${root}: cut uncommitted, HEAD unchanged at ${before[index]} (before ${before[index]}; staged changes: ${staged ? "yes" : "no"}; unstaged changes: ${staged ? "no" : "yes"}).`
+        );
+        expect(read(root, "CHANGELOG.md")).toContain("## 0.8.0 — ");
+      }
+      const commands = report.split("\n").filter((line) => line.startsWith("'git'"));
+      expect(commands).toHaveLength(2);
+      for (const command of commands) execFileSync("sh", ["-c", command]);
+      for (const [index, root] of roots.entries()) {
+        expect(git(root, "status", "--porcelain")).toBe("");
+        expect(git(root, "rev-parse", "HEAD")).toBe(before[index]);
+      }
     }
-  });
+  );
+});
+
+const companionRoot = resolve(repoRoot, "../capabilities");
+
+describe("real repository release versions", () => {
+  // A standalone core checkout has no private companion. In the two-repo workspace both run.
+  for (const roots of [[repoRoot], [repoRoot, companionRoot]]) {
+    it.skipIf(roots.length === 2 && !existsSync(join(companionRoot, "package.json")))(
+      `checks ${roots.length === 2 ? "both real repositories" : "real core"} without writes`,
+      () => {
+        const snapshot = () =>
+          roots.map((root) => ({
+            head: git(root, "rev-parse", "HEAD"),
+            status: git(root, "status", "--porcelain"),
+            manifests: git(root, "ls-files", "*package.json")
+              .split("\n")
+              .map((path) => read(root, path))
+          }));
+        const before = snapshot();
+        const current = JSON.parse(read(repoRoot, "package.json")).version;
+        expect(current).toEqual(expect.any(String));
+        expect(checkCurrentVersion(roots)).toBe(current);
+        // Audit all tracked manifests, including private tooling and repository roots.
+        for (const repository of before)
+          for (const text of repository.manifests) expect(JSON.parse(text).version).toBe(current);
+        expect(snapshot()).toEqual(before);
+      }
+    );
+  }
 });
