@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test as base, type BrowserContext } from "@playwright/test";
@@ -484,9 +484,10 @@ function isAllowed(text: string, address: string, testTitle: string): boolean {
 
 /**
  * The budget for one holder of the instance state, also used to reclaim an abandoned lock.
- * Acquisition allows one such budget per worker that may already be queued.
  */
 const ACCESS_STATE_WAIT_MS = 180_000;
+/** A jammed queue fails within five minutes, naming the test holding the turn. */
+const MAX_TURN_QUEUE_WAIT_MS = 300_000;
 
 export interface PageErrorWatch {
   /** Watches a context a test opened itself, such as a second user's, before it opens a page. */
@@ -513,24 +514,53 @@ export async function takeTurn(
   baseURL: string | undefined
 ): Promise<() => Promise<void>> {
   const lock = join(tmpdir(), `catalyst-e2e-${name}-${(baseURL ?? "").replace(/\W+/gu, "-")}`);
-  // Each worker may already have a test in the queue. Full parallel repeats must be allowed
-  // to wait for those tests; the age at which an abandoned lock is removed stays unchanged.
-  const waitUntil = Date.now() + ACCESS_STATE_WAIT_MS * base.info().config.workers;
+  const testInfo = base.info();
+  // The sidecar keeps the directory empty, so abandoning a lock still uses atomic rmdir.
+  const holderPath = `${lock}.holder.json`;
+  const waitMs = Math.min(ACCESS_STATE_WAIT_MS * testInfo.config.workers, MAX_TURN_QUEUE_WAIT_MS);
+  const waitUntil = Date.now() + waitMs;
   for (;;) {
     try {
       await mkdir(lock);
-      return () => rmdir(lock).catch(() => undefined);
-    } catch {
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
+        throw error;
+      }
+      if (Date.now() > waitUntil) {
+        const holder = await readFile(holderPath, "utf8").catch(() => "unavailable");
+        throw new Error(
+          `The turn "${name}" on the instance stayed taken after ${waitMs} ms: ${lock}. Holder: ${holder}`
+        );
+      }
       // A run that was killed leaves its lock behind: one older than any test is taken over.
       const age = (await ageOf(lock)) ?? 0;
       if (age > ACCESS_STATE_WAIT_MS) {
         await rmdir(lock).catch(() => undefined);
-      } else if (Date.now() > waitUntil) {
-        throw new Error(`The turn "${name}" on the instance stayed taken: ${lock}`);
       } else {
         await pause();
       }
+      continue;
     }
+    try {
+      await writeFile(
+        holderPath,
+        JSON.stringify({
+          pid: process.pid,
+          worker: testInfo.workerIndex,
+          project: testInfo.project.name,
+          file: testInfo.file,
+          title: testInfo.title,
+          startedAt: new Date().toISOString()
+        })
+      );
+    } catch (error) {
+      await rmdir(lock);
+      throw error;
+    }
+    return async () => {
+      await rm(holderPath, { force: true });
+      await rmdir(lock).catch(() => undefined);
+    };
   }
 }
 
@@ -585,7 +615,7 @@ export const test = base.extend<{
         await release();
       }
     },
-    // takeTurn bounds the queue wait by the worker count, outside the test's own timeout.
+    // takeTurn caps the queue wait at five minutes, outside the test's own timeout.
     { timeout: 0 }
   ],
   /**
@@ -671,7 +701,7 @@ export const test = base.extend<{
         await release();
       }
     },
-    // takeTurn bounds the queue wait by the worker count, outside the test's own timeout.
+    // takeTurn caps the queue wait at five minutes, outside the test's own timeout.
     { timeout: 0 }
   ],
   pageErrors: [

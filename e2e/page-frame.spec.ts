@@ -3,7 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import { ALLOWED_URL, plantConnection, removeConnection } from "./connection-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { z } from "zod";
-import { expect, test } from "./test";
+import { expect, takeTurn, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const admin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -128,7 +128,8 @@ const LONG_TITLE =
 // long name or many actions wrapped the head to a second and third row. The id is offered by
 // "Copy ID" in the head's menu and stands nowhere on the page (UXA-1a).
 test("the head of every asset page is one row as high as the header, and the id is behind Copy ID", async ({
-  page
+  page,
+  baseURL
 }) => {
   test.setTimeout(180_000);
   await page.setViewportSize(WIDE);
@@ -153,7 +154,6 @@ test("the head of every asset page is one row as high as the header, and the id 
     }
   });
   expect(written.ok(), await written.text()).toBe(true);
-  await plantConnection(connection);
   try {
     const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
       data: { name: `Frame ${run}` }
@@ -181,66 +181,95 @@ test("the head of every asset page is one row as high as the header, and the id 
     });
     expect(published.ok(), await published.text()).toBe(true);
 
-    const editors: { path: string; id?: string; wideOnly?: boolean }[] = [
-      { path: "/build/agents/research_assistant", id: "research_assistant" },
-      { path: `/build/skills/${skill}`, id: skill },
-      { path: `/build/connections/${connection.name}`, id: connection.name },
-      { path: `/w/${workspaceId}/apps/${app}` },
-      // At 768 px the conversation of a draft covers the draft and its head.
-      { path: `/w/${workspaceId}/app-drafts/${app}`, wideOnly: true }
-    ];
-    // Fails with a draft whose head was drawn a second time once its record arrived: on a slow
-    // runner a measure of the first head met an element that was gone.
-    const record = new RegExp(`/api/v1/assets/app/${app}\\?`, "u");
-    await page.route(record, async (route) => {
-      await new Promise((done) => setTimeout(done, 500));
-      await route.continue();
-    });
-    await page.goto(`/w/${workspaceId}/app-drafts/${app}`);
-    const draftHead = page.locator('header[data-variant="detail"]');
-    await expect(draftHead.getByRole("heading", { level: 1 })).toBeVisible();
-    const firstHead = await draftHead.elementHandle();
-    await expect(draftHead.getByRole("button", { name: "Publish" })).toBeVisible();
-    expect(await firstHead?.evaluate((element) => element.isConnected)).toBe(true);
-    await page.unroute(record);
+    // The App build above may use most of this test's 180 s. Take both turns only while
+    // the Connection exists, and bound these checks below the abandoned-lock age (180 s).
+    const releaseAccess = await takeTurn("access", baseURL);
+    try {
+      const releaseConnections = await takeTurn("release-connections", baseURL);
+      try {
+        await test.step(
+          "check asset heads with a Connection",
+          async () => {
+            await plantConnection(connection);
+            const editors: { path: string; id?: string; wideOnly?: boolean }[] = [
+              { path: "/build/agents/research_assistant", id: "research_assistant" },
+              { path: `/build/skills/${skill}`, id: skill },
+              { path: `/build/connections/${connection.name}`, id: connection.name },
+              { path: `/w/${workspaceId}/apps/${app}` },
+              // At 768 px the conversation of a draft covers the draft and its head.
+              { path: `/w/${workspaceId}/app-drafts/${app}`, wideOnly: true }
+            ];
+            // Fails with a draft whose head was drawn a second time once its record arrived: on a slow
+            // runner a measure of the first head met an element that was gone.
+            const record = new RegExp(`/api/v1/assets/app/${app}\\?`, "u");
+            await page.route(record, async (route) => {
+              await new Promise((done) => setTimeout(done, 500));
+              await route.continue();
+            });
+            await page.goto(`/w/${workspaceId}/app-drafts/${app}`);
+            const draftHead = page.locator('header[data-variant="detail"]');
+            await expect(draftHead.getByRole("heading", { level: 1 })).toBeVisible();
+            const firstHead = await draftHead.elementHandle();
+            await expect(draftHead.getByRole("button", { name: "Publish" })).toBeVisible();
+            expect(await firstHead?.evaluate((element) => element.isConnected)).toBe(true);
+            await page.unroute(record);
 
-    for (const size of [WIDE, { width: 768, height: 900 }]) {
-      await page.setViewportSize(size);
-      for (const { path, id, wideOnly } of editors) {
-        if (wideOnly && size !== WIDE) {
-          continue;
-        }
-        const where = `${path} at ${size.width}`;
-        await page.goto(path);
-        const head = page.locator('header[data-variant="detail"]');
-        const name = head.getByRole("heading", { level: 1 });
-        await expect(name, where).toBeVisible();
-        const headBox = await box(head);
-        expect(Math.round(headBox.y), where).toBe(0);
-        expect(Math.round(headBox.height), where).toBe(HEADER);
-        // One row: the name and every button of the head stand on its middle line.
-        expect(await middle(name), where).toBe(HEADER / 2);
-        for (const button of await head.getByRole("button").all()) {
-          expect(await middle(button), where).toBe(HEADER / 2);
-        }
-        if (id !== undefined) {
-          await expect(page.locator("[data-page]"), where).not.toContainText(id);
-          await head.getByRole("button", { name: "More actions" }).click();
-          await expect(page.getByRole("menuitem", { name: "Copy ID" }), where).toBeVisible();
-          await page.keyboard.press("Escape");
-          await expect(page.getByRole("menu")).toBeHidden();
+            for (const size of [WIDE, { width: 768, height: 900 }]) {
+              await page.setViewportSize(size);
+              for (const { path, id, wideOnly } of editors) {
+                if (wideOnly && size !== WIDE) {
+                  continue;
+                }
+                const where = `${path} at ${size.width}`;
+                await page.goto(path);
+                const head = page.locator('header[data-variant="detail"]');
+                const name = head.getByRole("heading", { level: 1 });
+                await expect(name, where).toBeVisible();
+                const headBox = await box(head);
+                expect(Math.round(headBox.y), where).toBe(0);
+                expect(Math.round(headBox.height), where).toBe(HEADER);
+                // One row: the name and every button of the head stand on its middle line.
+                expect(await middle(name), where).toBe(HEADER / 2);
+                for (const button of await head.getByRole("button").all()) {
+                  expect(await middle(button), where).toBe(HEADER / 2);
+                }
+                if (id !== undefined) {
+                  await expect(page.locator("[data-page]"), where).not.toContainText(id);
+                  await head.getByRole("button", { name: "More actions" }).click();
+                  await expect(
+                    page.getByRole("menuitem", { name: "Copy ID" }),
+                    where
+                  ).toBeVisible();
+                  await page.keyboard.press("Escape");
+                  await expect(page.getByRole("menu")).toBeHidden();
+                }
+              }
+            }
+
+            // A name that does not fit takes a second line, is then cut and says itself whole on hover.
+            await page.goto(`/build/skills/${skill}`);
+            const cut = page
+              .locator('header[data-variant="detail"]')
+              .getByRole("heading", { level: 1 });
+            await expect(cut).toHaveAttribute("title", LONG_TITLE);
+            expect(await cut.evaluate(lines)).toBe(2);
+            expect(
+              await cut.evaluate((element) => element.scrollHeight > element.clientHeight)
+            ).toBe(true);
+          },
+          { timeout: 120_000 }
+        );
+      } finally {
+        try {
+          await removeConnection(connection.id);
+        } finally {
+          await releaseConnections();
         }
       }
+    } finally {
+      await releaseAccess();
     }
-
-    // A name that does not fit takes a second line, is then cut and says itself whole on hover.
-    await page.goto(`/build/skills/${skill}`);
-    const cut = page.locator('header[data-variant="detail"]').getByRole("heading", { level: 1 });
-    await expect(cut).toHaveAttribute("title", LONG_TITLE);
-    expect(await cut.evaluate(lines)).toBe(2);
-    expect(await cut.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   } finally {
-    await removeConnection(connection.id);
     await requestWithOrigin(page, "post", `${skillUrl}/delete`, {
       data: { expectedRevision: await assetRevision(page, skillUrl) }
     });
@@ -252,7 +281,8 @@ test("the head of every asset page is one row as high as the header, and the id 
 // px they go to a second row once they do not fit beside the arrow and the whole name; the row
 // then has its width back and gives way again in the same order.
 test("a narrowing head gives the chips, then the text of the way back, and the name gives way last", async ({
-  page
+  page,
+  releaseConnections: _releaseConnections
 }) => {
   await page.setViewportSize(WIDE);
   await signIn(page);
