@@ -321,6 +321,63 @@ describe("skill change approval workflow", () => {
     });
     expect((await f.revisions(f.agent.name, "agent")).at(-1)?.globalVersion).toBe(3);
   });
+  it.each(["approve", "revert"] as const)(
+    "keeps unavailable stored tools and skills when a creation %s is refused by strict writes",
+    async (action) => {
+      const f = await fixture();
+      const request = await f.propose(creation, "new_skill");
+      if (action === "revert") await f.approve(request.id);
+      const stored = {
+        ...f.agent,
+        toolNames: [...f.agent.toolNames, "documents.search"],
+        skillNames: [
+          ...f.agent.skillNames,
+          "later_skill",
+          ...(action === "revert" ? ["new_skill"] : [])
+        ]
+      };
+      await applyAtCurrentRevisions(f.store.configAssets, {
+        clientInstanceId,
+        mutations: [{ type: "upsert", kind: "agent", name: stored.name, config: json(stored) }]
+      });
+      expect((await f.source.getSnapshot()).agents[0]).toMatchObject({
+        toolNames: f.agent.toolNames,
+        skillNames: [skill.name, ...(action === "revert" ? ["new_skill"] : [])]
+      });
+      await expect(
+        action === "approve"
+          ? f.approve(request.id)
+          : f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id)
+      ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+      expect((await f.revisions(stored.name, "agent")).at(-1)?.config).toEqual(json(stored));
+      expect((await f.revisions("new_skill")).length).toBe(action === "revert" ? 1 : 0);
+    }
+  );
+
+  it("keeps a pending request applicable when its agent's primary model is unavailable", async () => {
+    const f = await fixture();
+    const request = await f.propose();
+    await applyAtCurrentRevisions(f.store.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: f.agent.name,
+          config: json({ ...f.agent, modelProviderId: "removed_model" })
+        }
+      ]
+    });
+    expect((await f.source.getSnapshot()).agents).toEqual([]);
+    expect(
+      await f.workflow.getRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).toMatchObject({ status: "pending" });
+    expect(await f.approve(request.id)).toMatchObject({ status: "approved" });
+    expect((await f.revisions(f.agent.name, "agent")).at(-1)?.config?.modelProviderId).toBe(
+      "removed_model"
+    );
+  });
+
   it("returns the original result when reapplied and recovers a pending request after an interrupted transition", async () => {
     const f = await fixture();
     const request = await f.propose();
@@ -352,20 +409,25 @@ describe("skill change approval workflow", () => {
   it("does not overwrite a concurrent revision while reading the mutation snapshot", async () => {
     const f = await fixture();
     const request = await f.propose();
-    const snapshot = await f.source.getSnapshot();
-    vi.spyOn(f.source, "getSnapshot").mockImplementationOnce(async () => {
-      const updated = await applyAtCurrentRevisions(f.store.configAssets, {
-        clientInstanceId,
-        mutations: [
-          {
-            type: "upsert",
-            kind: "skill",
-            name: skill.name,
-            config: json({ ...skill, content: "Concurrent work" })
-          }
-        ]
-      });
-      return { ...snapshot, version: updated.version };
+    const getAsset = f.store.configAssets.getConfigAsset.bind(f.store.configAssets);
+    let raced = false;
+    vi.spyOn(f.store.configAssets, "getConfigAsset").mockImplementation(async (input) => {
+      const stored = await getAsset(input);
+      if (input.kind === "skill" && !raced) {
+        raced = true;
+        await applyAtCurrentRevisions(f.store.configAssets, {
+          clientInstanceId,
+          mutations: [
+            {
+              type: "upsert",
+              kind: "skill",
+              name: skill.name,
+              config: json({ ...skill, content: "Concurrent work" })
+            }
+          ]
+        });
+      }
+      return stored;
     });
     await expect(
       f.handler.apply(request.payload, reviewer, {

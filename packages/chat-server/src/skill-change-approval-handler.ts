@@ -15,6 +15,7 @@ import {
   type JsonObject
 } from "@vivd-catalyst/core";
 import {
+  agentConfigSchema,
   applySkillChange,
   assertSkillChangeScope,
   createSkillChangePreview,
@@ -124,10 +125,15 @@ export function createSkillChangeApprovalHandler(
       if (await findProducedRevision(data.skillName, context.requestId)) {
         return false;
       }
-      const snapshot = await options.configAssets.source.getSnapshot();
+      const storedAgent = await store.getConfigAsset({
+        clientInstanceId: options.clientInstanceId,
+        kind: "agent",
+        name: data.agentName
+      });
       // The proposing agent was deleted or the skill detached from it: the request can never
       // be in scope again, unlike a disabled policy, which stays a refusal.
-      const agent = snapshot.agents.find((candidate) => candidate.name === data.agentName);
+      const agent =
+        storedAgent?.status === "active" ? agentConfigSchema.parse(storedAgent.config) : undefined;
       const creation = data.operations[0]?.type === "create_skill";
       if (!agent || (!creation && !agent.skillNames.includes(data.skillName))) {
         return true;
@@ -204,7 +210,7 @@ export function createSkillChangeApprovalHandler(
       if (previous) {
         return revisionResult(data.skillName, previous);
       }
-      const agent = snapshot.agents.find((candidate) => candidate.name === data.agentName);
+      const agent = snapshot.agent;
       assertSkillChangeScope({
         policy: options.config.administration.agentConfiguration.agentSkillChanges,
         agent,
@@ -278,7 +284,7 @@ export function createSkillChangeApprovalHandler(
         [`skill:${data.skillName}`]: snapshot.revisionOf("skill", data.skillName)
       };
       if (data.operations[0]?.type === "create_skill") {
-        const agent = snapshot.agents.find((candidate) => candidate.name === data.agentName);
+        const agent = snapshot.agent;
         if (agent) {
           baseRevisions[`agent:${agent.name}`] = snapshot.revisionOf("agent", agent.name);
           mutations.push({
@@ -342,8 +348,8 @@ export function createSkillChangeApprovalHandler(
 
   /**
    * The snapshot a change is made from, with the revision of the two assets it may write. The
-   * revisions are read before any snapshot data: a write that lands in between leaves the
-   * change with a base the store refuses, so it is never applied to content it did not read.
+   * content and revision come from the same stored rows: a write that lands after the read
+   * leaves a base the store refuses, so it is never applied to content it did not read.
    */
   async function loadMutationSnapshot(names: { skillName: string; agentName: string }) {
     const read = (kind: "skill" | "agent", name: string) =>
@@ -357,7 +363,8 @@ export function createSkillChangeApprovalHandler(
       [`agent:${names.agentName}`, agent?.revision ?? null]
     ]);
     return {
-      ...(await options.configAssets.source.getSnapshot()),
+      // Mutations use the stored definition, never the degraded runtime copy.
+      agent: agent?.status === "active" ? agentConfigSchema.parse(agent.config) : undefined,
       /**
        * The skill whole, with its resources, which the snapshot leaves out: the content of the
        * revision read above, so a change is made from what its base names.

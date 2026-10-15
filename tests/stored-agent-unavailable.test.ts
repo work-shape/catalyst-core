@@ -129,6 +129,59 @@ describe("stored agents with unavailable references", () => {
     expect(warnings()).toHaveLength(2);
   });
 
+  it.each(["web_off", "search_off", "pricing_removed", "unsupported_model"] as const)(
+    "starts ready with stored web_search unavailable when %s, while writes remain strict",
+    async (cause) => {
+      const stored = { ...base, toolNames: ["web_search"], skillNames: [] };
+      await storeAgents([stored]);
+      const release = config();
+      release.tools = [{ name: "web_search", enabled: true, config: {} }];
+      release.webAccess.enabled = cause !== "web_off";
+      release.webAccess.search.enabled = cause !== "search_off";
+      if (cause !== "unsupported_model") {
+        release.infrastructure.models.local = {
+          provider: "openai-compatible",
+          api: "responses",
+          model: "gpt-test",
+          baseUrl: "https://api.openai.com/v1",
+          credentialSecret: "OPENAI_API_KEY",
+          region: "global"
+        };
+      }
+      release.usage.costs.customer = {
+        id: "customer",
+        version: "1",
+        currency: "EUR",
+        models: [],
+        webSearch: cause === "pricing_removed" ? [] : [{ providerId: "local", pricePerCall: 0.01 }]
+      };
+      const warn = vi.spyOn(createLogger(), "warn");
+      const instance = await createTestInstance({
+        config: release,
+        env: { OPENAI_API_KEY: "test-key" },
+        tools: [],
+        seedAssets: false
+      });
+      expect((await instance.call("ready.get")).statusCode).toBe(200);
+      expect(await read(instance)).toMatchObject({
+        config: stored,
+        chatAvailable: true,
+        unavailableTools: [{ name: "web_search", reason: "unknown_tool" }]
+      });
+      expect(
+        warn.mock.calls.filter(
+          ([, message]) => message === "Stored agent references unavailable items"
+        )
+      ).toHaveLength(1);
+      const write = await instance.call("assets.put", {
+        params: { kind: "agent", name: "test_agent" },
+        payload: { config: { ...stored, displayName: "Changed" }, expectedRevision: 2 }
+      });
+      expect(write.statusCode, write.body).toBe(422);
+      expect((await read(instance)).config).toEqual(storedConfig(stored));
+    }
+  );
+
   it.each(["modelProviderId", "modelBindingId"] as const)(
     "keeps a missing %s readable, excludes it from chat and uses the remaining default",
     async (field) => {

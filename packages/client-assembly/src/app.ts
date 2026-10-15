@@ -336,6 +336,10 @@ export async function createClientInstanceExecutionAssembly(
   );
   const references = createConfigAssetReferences(config, modelProviders);
   const { validationRefs } = references;
+  validationRefs.isToolAvailable = (agent, name) =>
+    findConfigAssetAgentValidationIssues(config, [{ ...agent, toolNames: [name] }], (binding) =>
+      modelGateway.capabilities(binding)
+    ).length === 0;
   const assetSource = createConfigAssetSource({
     store: store.configAssets,
     clientInstanceId,
@@ -520,15 +524,6 @@ export async function createClientInstanceExecutionAssembly(
       enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
     }
   });
-
-  const agentIssues = findConfigAssetAgentValidationIssues(config, assets.agents, (binding) =>
-    modelGateway.capabilities(binding)
-  );
-  if (agentIssues.length) {
-    throw new AppError("VALIDATION_FAILED", "Client instance assembly is invalid", {
-      issues: agentIssues.map((message) => ({ message }))
-    });
-  }
 
   return {
     logger,

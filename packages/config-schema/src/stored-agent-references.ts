@@ -8,6 +8,8 @@ export interface StoredAgentReferences {
   enabledToolNames: readonly string[];
   modelProviderIds: readonly string[];
   modelBindingIds: readonly string[];
+  /** Whether the configured tool can run for this agent, including native model tools. */
+  isToolAvailable?(agent: AgentConfig, name: string): boolean;
   offToolModule?(name: string): string | undefined;
 }
 
@@ -25,7 +27,9 @@ export function resolveStoredAgentReferences(
   const unavailableTools = agent.toolNames.flatMap((name): UnavailableTool[] => {
     const module = refs.offToolModule?.(name);
     if (module !== undefined) return [{ name, reason: "module_off", module }];
-    return unknownTools.has(name) ? [{ name, reason: "unknown_tool" }] : [];
+    return unknownTools.has(name) || refs.isToolAvailable?.(agent, name) === false
+      ? [{ name, reason: "unknown_tool" }]
+      : [];
   });
   const unavailableSkills = agent.skillNames
     .filter((name) => !skillNames.includes(name))
