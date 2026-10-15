@@ -84,11 +84,13 @@ export function TabsDisclosure({
       type="button"
       aria-expanded={open}
       data-state={open ? "open" : "closed"}
-      className={cn("group/tabs-disclosure", tabClassName, className)}
+      className={cn("group/tabs-disclosure", tabClassName, "min-w-0 shrink", className)}
       onClick={() => onOpenChange(!open)}
       {...props}
     >
-      {children}
+      <span className="truncate" title={typeof children === "string" ? children : undefined}>
+        {children}
+      </span>
       <ChevronDown
         aria-hidden="true"
         className="size-4 shrink-0 transition-transform duration-200 ease-out group-data-[state=closed]/tabs-disclosure:-rotate-90"

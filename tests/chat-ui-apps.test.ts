@@ -395,7 +395,9 @@ describe("the draft of an App (layout 3)", () => {
   const tabNames = (markup: string) =>
     [...markup.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/gu)].map((tab) => tab[1]);
   const detailsToggle = (markup: string) =>
-    /<button[^>]*aria-expanded="(?:true|false)"[^>]*>Technical details/u.exec(markup)?.[0] ?? "";
+    /<button[^>]*aria-expanded="(?:true|false)"[^>]*><span[^>]*>Technical details/u.exec(
+      markup
+    )?.[0] ?? "";
 
   it("offers the views of the draft as tabs under its head, the open one selected", () => {
     const markup = viewsFrame(true);

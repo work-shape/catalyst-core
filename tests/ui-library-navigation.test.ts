@@ -92,8 +92,10 @@ describe("navigation, page structure and data components", () => {
     expect(list).toContain("First");
     expect(list).not.toContain("Technical details");
     expect(folded.indexOf("Technical details")).toBeGreaterThan(folded.indexOf("First"));
-    expect(folded).toMatch(/<button type="button" aria-expanded="false"[^>]*>Technical details/u);
-    expect(row(true)).toMatch(/aria-expanded="true"[^>]*>Technical details/u);
+    expect(folded).toMatch(
+      /<button type="button" aria-expanded="false"[^>]*><span[^>]*>Technical details/u
+    );
+    expect(row(true)).toMatch(/aria-expanded="true"[^>]*><span[^>]*>Technical details/u);
     expect(folded).not.toMatch(/role="tab"[^>]*>Technical details/u);
   });
 
