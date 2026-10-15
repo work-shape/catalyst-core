@@ -158,8 +158,9 @@ export function loadReferableAssets(
  *
  * The change is read against the view, which leaves assets out. The view has issues of its
  * own, because what it keeps may refer to what it leaves out: those are not the change's and
- * are not told. A changed agent is checked strictly even for references it kept from its
- * stored definition. An issue that arises only because of
+ * are not told. A reference already stored may be kept when only the caller cannot read
+ * its target; an actually unavailable reference is still checked strictly on a changed agent.
+ * An issue that arises only because of
  * an asset the caller may not read, in the view or in the stored set as a whole, is told as
  * one sentence that names nothing.
  */
@@ -173,9 +174,14 @@ export function findIssuesOfChange(
 ): AssetSetIssue[] {
   const key = (issue: AssetSetIssue) => JSON.stringify([issue.message, issue.path?.map(String)]);
   const keysOf = (issues: readonly AssetSetIssue[]) => new Set(issues.map(key));
+  // Only the caller's missing read access may excuse an existing reference. A target that
+  // is missing from the instance itself must still refuse a changed definition.
+  const storedIssues = keysOf(findAssetSetIssues(kinds, stored).issues);
   const before = new Map<string, number>();
-  for (const issue of findAssetSetIssues(kinds, view.set, view.set).issues) {
-    before.set(key(issue), (before.get(key(issue)) ?? 0) + 1);
+  for (const issue of findAssetSetIssues(kinds, view.set).issues) {
+    if (!storedIssues.has(key(issue))) {
+      before.set(key(issue), (before.get(key(issue)) ?? 0) + 1);
+    }
   }
   const ofChange = findAssetSetIssues(kinds, change(view.set), view.set).issues.filter((issue) => {
     if (issue.assetKind !== undefined && issue.assetName !== undefined) {
