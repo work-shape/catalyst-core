@@ -1,11 +1,11 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
   useSyncExternalStore,
   type HTMLAttributes,
-  type ReactNode,
-  type RefObject
+  type ReactNode
 } from "react";
 import { cn } from "../cn";
 import { SCROLL_EDGE_FADE_REM, scrollEdgeFadeStyle, useScrollEdgeFade } from "../scroll-edge-fade";
@@ -77,7 +77,18 @@ export function Sidebar({
     setLabelPinned(pinned);
   };
   const fadeAbove = body.overflow.above && !labelPinned;
-  useFadedItems(body.ref, fadeAbove, body.overflow.below);
+  // The body mounts anew when the sidebar becomes a drawer or leaves it, so the faded items
+  // follow the element itself, not only the edges that fade.
+  const [bodyNode, setBodyNode] = useState<HTMLDivElement | null>(null);
+  const bodyRef = body.ref;
+  const setBody = useCallback(
+    (node: HTMLDivElement | null) => {
+      bodyRef.current = node;
+      setBodyNode(node);
+    },
+    [bodyRef]
+  );
+  useFadedItems(bodyNode, fadeAbove, body.overflow.below);
 
   const frame = (
     <nav
@@ -97,7 +108,7 @@ export function Sidebar({
     >
       {header === undefined ? null : <div className="shrink-0 px-2">{header}</div>}
       <div
-        ref={body.ref}
+        ref={setBody}
         style={scrollEdgeFadeStyle({ above: fadeAbove, below: body.overflow.below })}
         onScroll={onBodyScroll}
         data-sidebar-body=""
@@ -141,22 +152,27 @@ export function Sidebar({
  * its menu's tooltip beside the item next to it, the last one in sight. An item with any part
  * clear of the fade is in sight and keeps the pointer.
  */
-function useFadedItems(body: RefObject<HTMLElement | null>, above: boolean, below: boolean) {
+function useFadedItems(node: HTMLElement | null, above: boolean, below: boolean) {
   useEffect(() => {
-    const node = body.current;
     if (!node || (!above && !below) || typeof IntersectionObserver === "undefined") {
       return;
     }
     const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
     const fade = SCROLL_EDGE_FADE_REM * rem;
-    // The body without its fading edges: an item that meets none of it is wholly faded.
+    // The body without its fading edges: an item that shares no area with it is wholly faded,
+    // also one that only touches its edge. The second threshold reports the step from touching
+    // to overlapping, which the first alone does not.
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          entry.target.toggleAttribute("data-faded", !entry.isIntersecting);
+          entry.target.toggleAttribute("data-faded", entry.intersectionRatio === 0);
         }
       },
-      { root: node, rootMargin: `${above ? -fade : 0}px 0px ${below ? -fade : 0}px 0px` }
+      {
+        root: node,
+        rootMargin: `${above ? -fade : 0}px 0px ${below ? -fade : 0}px 0px`,
+        threshold: [0, Number.EPSILON]
+      }
     );
     const observeItems = () => {
       for (const item of node.querySelectorAll("[data-nav-item]")) {
@@ -174,7 +190,7 @@ function useFadedItems(body: RefObject<HTMLElement | null>, above: boolean, belo
         item.removeAttribute("data-faded");
       }
     };
-  }, [body, above, below]);
+  }, [node, above, below]);
 }
 
 /**

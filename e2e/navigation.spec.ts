@@ -419,64 +419,63 @@ test("the collapsed rail keeps the search and New chat, and no entry for a list 
 
 // Fails without faded rows giving up the pointer: a row next to unseen under the rail's bottom
 // fade lit up under it and opened the tooltip of its menu beside the row above, the last in sight.
-// Fails as well with a strip over the whole fade: a row wholly in sight at the edge lost its click.
+// Fails with a strip over the whole fade: a row wholly in sight at the edge lost its click. Fails
+// when a row that only touches the fade's upper boundary counts as in sight.
 test("a row under the rail's faded edge takes no pointer, and a row in sight at that edge takes the click", async ({
   page
 }) => {
   test.setTimeout(120_000);
-  await page.setViewportSize({ width: 1280, height: 400 });
+  await page.setViewportSize(SHORT_RAIL);
   await signIn(page, member);
   const workspace = await createWorkspace(page, `Rail fade ${Date.now()}`);
   await createListedConversations(page, workspace.id, 10, "Faded edge");
   await page.goto(`/w/${encodeURIComponent(workspace.id)}`);
-  const navigation = rail(page);
-  await expect(navigation.getByTestId("conversation-row")).toHaveCount(10);
-  const body = navigation.locator("[data-sidebar-body]");
-  // The list runs on below the rail's edge.
-  expect(await body.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(64);
-  const box = await body.boundingBox();
-  if (!box) {
-    throw new Error("The rail's list has no box");
-  }
-  const bottom = box.y + box.height;
-  const x = box.x + box.width - 30;
-  const rowAt = (y: number) =>
-    page.evaluate(
-      ({ x, y }) =>
-        document.elementFromPoint(x, y)?.closest("[data-nav-item]")?.textContent ?? null,
-      { x, y }
-    );
-  /** Scrolls the first row below `edge` to `edge`: its top, or with `by: "bottom"` its bottom. */
-  const scrollRowTo = (edge: number, by: "top" | "bottom") =>
-    body.evaluate(
-      (node, { edge, by }) => {
-        for (const row of node.querySelectorAll('[data-testid="conversation-row"]')) {
-          const rect = row.getBoundingClientRect();
-          if (rect[by] > edge) {
-            node.scrollTop += rect[by] - edge;
-            return row.textContent ?? "";
-          }
-        }
-        throw new Error("No row below the edge");
-      },
-      { edge, by }
-    );
+  await expect(rail(page).getByTestId("conversation-row")).toHaveCount(10);
+  const { bottom, rowAt, scrollRowTo } = await fadedEdge(page);
 
   // A row whose top lies 6 px above the edge is next to unseen: the pointer meets no item there
   // and opens no tooltip.
   await scrollRowTo(bottom - 6, "top");
   await expect.poll(() => rowAt(bottom - 3)).toBeNull();
-  await page.mouse.move(x, bottom - 3);
+  await page.mouse.move(rowAt.x, bottom - 3);
   await page.waitForTimeout(500);
   await expect(page.getByRole("tooltip")).toHaveCount(0);
+
+  // A row whose top touches the fade's upper boundary, 16 px above the edge, lies wholly in it.
+  await scrollRowTo(bottom - 16, "top");
+  await expect.poll(() => rowAt(bottom - 5)).toBeNull();
 
   // A row whose bottom lies on the edge is wholly in sight, its lower half in the fade: it takes
   // the pointer there too, and a click 12 px above the edge opens it.
   const title = await scrollRowTo(bottom, "bottom");
   await expect.poll(() => rowAt(bottom - 12)).toBe(title);
   // The mouse itself, not a locator's click, which would scroll the row clear of the edge.
-  await page.mouse.click(box.x + 60, bottom - 12);
+  await page.mouse.click(rowAt.x - 120, bottom - 12);
   await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+});
+
+// Fails when the faded rows stay bound to the list the drawer held: the rail's list mounts anew
+// when the window widens past the drawer, and its rows went unmarked.
+test("after the rail leaves its drawer, a row under its faded edge still takes no pointer", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize(SHORT_RAIL);
+  await signIn(page, member);
+  const workspace = await createWorkspace(page, `Rail drawer fade ${Date.now()}`);
+  await createListedConversations(page, workspace.id, 10, "Drawer edge");
+  await page.setViewportSize({ width: 700, height: SHORT_RAIL.height });
+  await page.goto(`/w/${encodeURIComponent(workspace.id)}`);
+  await page.getByRole("button", { name: "Open sidebar" }).click();
+  const rows = rail(page).getByTestId("conversation-row");
+  await expect(rows.first()).toBeVisible();
+  await expect(rows).toHaveCount(10);
+
+  await page.setViewportSize(SHORT_RAIL);
+  await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
+  const { bottom, rowAt, scrollRowTo } = await fadedEdge(page);
+  await scrollRowTo(bottom - 6, "top");
+  await expect.poll(() => rowAt(bottom - 3)).toBeNull();
 });
 
 // Fails with the shield: the file then held the shield's path and no orange field.
@@ -585,4 +584,47 @@ async function createListedConversations(
       )
     );
   }
+}
+
+/** A window so low that ten conversations run on below the rail's edge. */
+const SHORT_RAIL = { width: 1280, height: 400 };
+
+/**
+ * The bottom edge of the rail's list, which fades: which row the pointer meets near its right
+ * end at a height, and a scroll that brings the first row beyond a height to it.
+ */
+async function fadedEdge(page: Page) {
+  const body = rail(page).locator("[data-sidebar-body]");
+  // The list runs on below the rail's edge.
+  expect(await body.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(64);
+  const box = await body.boundingBox();
+  if (!box) {
+    throw new Error("The rail's list has no box");
+  }
+  const x = box.x + box.width - 30;
+  const rowAt = Object.assign(
+    (y: number) =>
+      page.evaluate(
+        ({ x, y }) =>
+          document.elementFromPoint(x, y)?.closest("[data-nav-item]")?.textContent ?? null,
+        { x, y }
+      ),
+    { x }
+  );
+  /** Scrolls the first row beyond `edge` to it: its top, or with `by: "bottom"` its bottom. */
+  const scrollRowTo = (edge: number, by: "top" | "bottom") =>
+    body.evaluate(
+      (node, { edge, by }) => {
+        for (const row of node.querySelectorAll('[data-testid="conversation-row"]')) {
+          const rect = row.getBoundingClientRect();
+          if (rect[by] > edge) {
+            node.scrollTop += rect[by] - edge;
+            return row.textContent ?? "";
+          }
+        }
+        throw new Error("No row beyond the edge");
+      },
+      { edge, by }
+    );
+  return { bottom: box.y + box.height, rowAt, scrollRowTo };
 }
