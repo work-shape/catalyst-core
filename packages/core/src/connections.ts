@@ -109,25 +109,6 @@ export interface DeclaredOperationParameter {
   required?: boolean;
 }
 
-/**
- * Where a declared operation meets one dimension of the data scope, such as the Mandant: the
- * input parameter that picks the value, and the field of each returned item that holds it.
- */
-export interface DeclaredOperationScopeDimension {
-  /** A declared path or query parameter, such as `clientNumber`. */
-  input?: string;
-  /** The field of each returned item, such as `items[].number`. */
-  output?: string;
-}
-
-/**
- * The data scope of a declared operation by dimension, such as
- * `{ mandant: { input: "clientNumber", output: "items[].number" } }` (SCOPE-2). The shape is
- * read now so that SCOPE-2 needs no new one; until SCOPE-2 the key is reserved and refused at
- * save (SCOPE-0). Nothing filters by it.
- */
-export type DeclaredOperationScope = Record<string, DeclaredOperationScopeDimension>;
-
 /** Why `scope` on an operation declaration is refused before SCOPE-2 (SCOPE-0). */
 export const CONNECTION_SCOPE_RESERVED =
   "'scope' is reserved: scoped Connection operations arrive with SCOPE-2. Until then an operation that serves one Mandant takes it as a named parameter and returns it on every item";
@@ -148,7 +129,6 @@ export interface ConnectionOperationDeclaration {
   path?: string;
   pathParams?: Record<string, DeclaredOperationParameter>;
   query?: Record<string, DeclaredOperationParameter>;
-  scope?: DeclaredOperationScope;
 }
 
 /** The members of `ConnectionOperationDeclaration`, which only a declaring type reads. */
@@ -158,8 +138,7 @@ export const CONNECTION_DECLARATION_FIELDS = [
   "method",
   "path",
   "pathParams",
-  "query",
-  "scope"
+  "query"
 ] as const satisfies readonly (keyof ConnectionOperationDeclaration)[];
 
 export interface ConnectionOperationConfig extends ConnectionOperationDeclaration {
@@ -657,11 +636,7 @@ function declarationIssues(
       path: ["operations", index, ...(issue.path ?? [])]
     });
     if (type.declared) {
-      const reserved: AssetValidationIssue[] =
-        operation.scope === undefined
-          ? []
-          : [{ message: CONNECTION_SCOPE_RESERVED, path: ["scope"], code: "key_reserved" }];
-      return [...reserved, ...type.declared.issues(operation)].map(at);
+      return type.declared.issues(operation).map(at);
     }
     return CONNECTION_DECLARATION_FIELDS.filter((field) => operation[field] !== undefined).map(
       (field) =>
