@@ -9,6 +9,7 @@ export { stepOutputRows } from "./step-output";
 export { countsLine, placedSteps, workflowGraph, type CanvasRun } from "./workflow-canvas-model";
 export {
   toWorkflow,
+  toDraftWorkflowListItem,
   toWorkflowListItem,
   toWorkflowRun,
   toWorkflowStepRun
@@ -25,6 +26,7 @@ export {
   draftState,
   editOffered,
   failureHappened,
+  listedToReader,
   resolveWorkflowRights,
   startOffered,
   workflowsAccess,

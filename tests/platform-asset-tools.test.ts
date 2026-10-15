@@ -501,13 +501,15 @@ describe("a conversation about a Workflow", () => {
     }
     expect(await subjectOf()).toBeUndefined();
 
-    // The person goes to the Workflow: that step makes it the subject, audited as the person's
-    // answer to the agent's open, and the agent's save reaches it.
+    // The person goes to the Workflow: that step makes it the subject, audited once as the
+    // person's answer to the agent's open, and the agent's save reaches it.
     const confirmed = await t.ok(step(subject, undefined, workflowOpen));
     expect(
       subjectSchema.parse(z.object({ subject: subjectSchema }).parse(confirmed.json()).subject)
     ).toEqual(subject);
     expect(await subjectOf()).toEqual(subject);
+    // The same confirmation sent again changes nothing and writes no second row.
+    await t.ok(step(subject, undefined, workflowOpen));
     const audited = await t.app.stores.audit.listAuditEvents({
       clientInstanceId: t.clientInstanceId,
       limit: 500

@@ -5,6 +5,7 @@ import {
   placeFollowsOpens,
   planOpenMoves
 } from "@vivd-catalyst/chat-ui/open-move";
+import { readLastBuildScope, showOwnerInStudio } from "@vivd-catalyst/chat-ui/build-area";
 import type { WorkspaceRoute } from "@vivd-catalyst/chat-ui/shell";
 import type { AssetOpen } from "@vivd-catalyst/chat-ui/subject-run";
 
@@ -79,6 +80,30 @@ describe("the moves of a run's opens", () => {
       handled: ["o1"],
       moves: [{ page: workflowPage("intake"), replace: false }]
     });
+  });
+
+  it("names the owner of an asset whose page is in Studio, and sets Studio to it on the way", () => {
+    const store: AssetOpen = { ...open("data_store", "orders", "o1"), owner: WS };
+    const page: WorkspaceRoute = { kind: "build-asset", assetKind: "data-stores", name: "orders" };
+    expect(plan([store])).toEqual({
+      handled: ["o1"],
+      moves: [{ page, replace: false, owner: WS }]
+    });
+    showOwnerInStudio(WS);
+    expect(readLastBuildScope()).toBe(WS);
+    showOwnerInStudio(undefined);
+    expect(readLastBuildScope()).toBe("instance");
+  });
+
+  it("moves from the list page a New button started the conversation on (NAV-2)", () => {
+    const list: WorkspaceRoute = { kind: "workflows", collaborationWorkspaceId: WS };
+    const opens = [open("workflow", "new-close", "o1")];
+    expect(plan(opens, { here: list, startedFrom: "/w/w1/workflows" })).toEqual({
+      handled: ["o1"],
+      moves: [{ page: workflowPage("new-close"), replace: false }]
+    });
+    // Without that start the list is a page the person chose.
+    expect(plan(opens, { here: list })).toEqual({ handled: ["o1"], moves: [] });
   });
 
   it("moves nothing in a second tab, on a replayed run, or from a page the person chose", () => {

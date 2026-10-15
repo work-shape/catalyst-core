@@ -162,7 +162,8 @@ describe("Studio scope", () => {
         ...platformContext([], instanceActions(permissions)),
         workspaces: [
           { ...team, member: true, actions },
-          // A personal workspace is no scope of Studio: what is made there starts hidden.
+          // The reader's Personal Workspace is a scope of Studio beside the others, named
+          // "Personal": what the reader's agent made there is found and changed there.
           {
             id: "cws_mine",
             name: "Mine",
@@ -179,16 +180,23 @@ describe("Studio scope", () => {
 
     expect(member.readsAny).toBe(true);
     expect(member.readsInstance).toBe(false);
-    expect(member.workspaces).toEqual([{ id: "cws_team", name: "Team", member: true }]);
+    expect(member.workspaces).toEqual([
+      { id: "cws_team", name: "Team", member: true },
+      { id: "cws_mine", name: "Mine", member: true, personal: true }
+    ]);
     expect(member.reads("agent")).toBe(true);
     expect(member.may("write", { kind: "agent", workspaceId: "cws_team" })).toBe(true);
     expect(member.may("delete", { kind: "agent", workspaceId: "cws_team" })).toBe(false);
     expect(member.may("write", { kind: "skill", workspaceId: "cws_team" })).toBe(false);
-    expect(member.may("write", { kind: "agent", workspaceId: "cws_mine" })).toBe(false);
+    expect(member.may("write", { kind: "agent", workspaceId: "cws_mine" })).toBe(true);
+    expect(member.may("write", { kind: "agent", workspaceId: "cws_other" })).toBe(false);
     expect(member.may("write", { kind: "agent" })).toBe(false);
     expect(member.mayCreate("agent", "cws_team")).toBe(true);
     expect(member.mayCreate("agent")).toBe(false);
-    expect(buildScopes(member)).toEqual([{ kind: "workspace", workspaceId: "cws_team" }]);
+    expect(buildScopes(member)).toEqual([
+      { kind: "workspace", workspaceId: "cws_team" },
+      { kind: "workspace", workspaceId: "cws_mine" }
+    ]);
     expect(resolveBuildScope(member, undefined, undefined)).toEqual({
       kind: "workspace",
       workspaceId: "cws_team"
@@ -200,7 +208,8 @@ describe("Studio scope", () => {
 
     expect(buildScopes(admin)).toEqual([
       { kind: "instance" },
-      { kind: "workspace", workspaceId: "cws_team" }
+      { kind: "workspace", workspaceId: "cws_team" },
+      { kind: "workspace", workspaceId: "cws_mine" }
     ]);
     expect(resolveBuildScope(admin, undefined, "cws_team")).toEqual({ kind: "instance" });
     expect(resolveBuildScope(admin, "cws_team", undefined)).toEqual({

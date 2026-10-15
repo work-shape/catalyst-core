@@ -1,4 +1,4 @@
-import { Play, Workflow } from "lucide-react";
+import { Play, Plus, Workflow } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import {
   Avatar,
@@ -22,7 +22,7 @@ import { useTranslation } from "../i18n";
 import { RouteLink } from "../route-link";
 import { useStartRun } from "./start-run";
 import { useRunsAvailable, useWorkflowList, type WorkflowList } from "./workflow-data";
-import { startOffered } from "./workflow-model";
+import { listedToReader, startOffered } from "./workflow-model";
 import type { WorkflowListItem } from "./workflow-views";
 import { LoadError, RunStateBadge, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
@@ -39,7 +39,11 @@ export function WorkflowsPage() {
     name: starting?.name,
     form: starting?.startForm
   });
-  const rows = list.rows;
+  const write = host?.rights.write === true;
+  const rows = useMemo(
+    () => list.rows?.filter((workflow) => listedToReader(workflow, { write })),
+    [list.rows, write]
+  );
   // The ages are counted from when the list last arrived.
   const now = useMemo(() => new Date(), [rows]);
   if (!host?.workspace) {
@@ -49,10 +53,11 @@ export function WorkflowsPage() {
     <>
       <WorkflowsPageView
         workspaceId={host.workspace.id}
-        list={list}
+        list={{ ...list, rows }}
         now={now}
         runsAvailable={runsAvailable}
         onOpenRoute={host.showRoute}
+        {...(host.startNew ? { onNew: host.startNew } : {})}
         onStart={(workflow) => {
           setStarting(workflow);
           start.open();
@@ -70,6 +75,7 @@ export function WorkflowsPageView({
   now,
   runsAvailable,
   onOpenRoute,
+  onNew,
   onStart
 }: {
   workspaceId: string;
@@ -78,14 +84,29 @@ export function WorkflowsPageView({
   /** The instance runs Workflows: a card offers a start where the reader may make one. */
   runsAvailable: boolean;
   onOpenRoute: OpenRoute;
+  /**
+   * "New workflow": the dock opens with a conversation whose first save creates the Workflow,
+   * this text in its composer. Absent where nobody here builds one with an agent.
+   */
+  onNew?(prompt: string): void;
   onStart(workflow: WorkflowListItem): void;
 }) {
   const { t } = useTranslation();
   const rows = list.rows;
+  const newButton = onNew ? (
+    <Button onClick={() => onNew(t("workflows.newPrompt"))}>
+      <Plus aria-hidden="true" />
+      {t("workflows.new")}
+    </Button>
+  ) : undefined;
   return (
     <WorkflowsFrame label={t("workflows.title")} testId="workflows-area">
       <Page>
-        <PageHeader title={t("workflows.title")} description={t("workflows.description")} />
+        <PageHeader
+          title={t("workflows.title")}
+          description={t("workflows.description")}
+          primaryAction={newButton}
+        />
         {list.failed ? (
           <div className="mb-4">
             <LoadError onRetry={list.retry}>{t("workflows.listFailed")}</LoadError>
@@ -96,8 +117,8 @@ export function WorkflowsPageView({
             <SkeletonList rows={4} />
           )
         ) : rows.length === 0 ? (
-          <EmptyState icon={<Workflow aria-hidden="true" />}>
-            {t("workflows.emptyReadOnly")}
+          <EmptyState icon={<Workflow aria-hidden="true" />} action={newButton}>
+            {t(newButton ? "workflows.empty" : "workflows.emptyReadOnly")}
           </EmptyState>
         ) : (
           <div className="grid min-w-0 gap-4">
@@ -178,6 +199,11 @@ function WorkflowCard({
             <CardTitle id={titleId} className="min-w-0 break-words">
               {workflow.name}
             </CardTitle>
+            {workflow.published ? null : (
+              <Badge tone="neutral" size="sm">
+                {t("workflows.draft.unpublished")}
+              </Badge>
+            )}
             {cannotStart(workflow) ? (
               <Badge tone="warning" size="sm">
                 {t("workflows.notRunnable.badge")}
@@ -212,39 +238,37 @@ function WorkflowCard({
           )}
         </p>
       </CardContent>
-      {/* A Workflow without a published revision has nothing a reader could open. */}
-      {workflow.published ? (
-        <CardFooter>
-          <CardTarget label={t("workflows.openNamed", { name: workflow.name })}>
+      {/* A draft opens on its page, where it is published; it has nothing to start yet. */}
+      <CardFooter>
+        <CardTarget label={t("workflows.openNamed", { name: workflow.name })}>
+          <RouteLink
+            route={{ kind: "workflow", ...address }}
+            variant="primary"
+            onOpen={onOpenRoute}
+          >
+            {t("workflows.open")}
+          </RouteLink>
+        </CardTarget>
+        {canStart ? (
+          <Button variant="outline" aria-describedby={titleId} onClick={onStart}>
+            <Play aria-hidden="true" />
+            {t("workflows.startNow")}
+          </Button>
+        ) : null}
+        {/* A Workflow that ran has runs to look through. */}
+        {lastRun === undefined ? null : (
+          <div className="ml-auto flex items-center gap-1">
             <RouteLink
-              route={{ kind: "workflow", ...address }}
-              variant="primary"
+              route={{ kind: "workflow-runs", ...address }}
+              variant="link"
+              describedBy={titleId}
               onOpen={onOpenRoute}
             >
-              {t("workflows.open")}
+              {t("workflows.sectionRuns")}
             </RouteLink>
-          </CardTarget>
-          {canStart ? (
-            <Button variant="outline" aria-describedby={titleId} onClick={onStart}>
-              <Play aria-hidden="true" />
-              {t("workflows.startNow")}
-            </Button>
-          ) : null}
-          {/* A Workflow that ran has runs to look through. */}
-          {lastRun === undefined ? null : (
-            <div className="ml-auto flex items-center gap-1">
-              <RouteLink
-                route={{ kind: "workflow-runs", ...address }}
-                variant="link"
-                describedBy={titleId}
-                onOpen={onOpenRoute}
-              >
-                {t("workflows.sectionRuns")}
-              </RouteLink>
-            </div>
-          )}
-        </CardFooter>
-      ) : null}
+          </div>
+        )}
+      </CardFooter>
     </Card>
   );
 }

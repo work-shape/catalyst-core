@@ -22223,6 +22223,9 @@
                 "compactThresholdTokens": {
                   "type": "number"
                 },
+                "buildsAssets": {
+                  "type": "boolean"
+                },
                 "welcomeMessage": {
                   "type": "string"
                 },
@@ -27625,6 +27628,9 @@
                 },
                 "compactThresholdTokens": {
                   "type": "number"
+                },
+                "buildsAssets": {
+                  "type": "boolean"
                 },
                 "welcomeMessage": {
                   "type": "string"
