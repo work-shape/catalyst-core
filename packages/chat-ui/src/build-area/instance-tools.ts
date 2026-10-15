@@ -5,10 +5,9 @@ import type {
 } from "@vivd-catalyst/api-client";
 import { isConnectionToolName, type ConnectionToolsRead } from "./connection-tools";
 
-// The tools of an agent's Tools section as the page shows them: one chip per package
-// ("Paket") the agent uses, per own tool of this instance and per Connection, each with its tools
-// for the panel the chip opens, and the ones the picker can add. Pure, so the page and its tests
-// read the same answer.
+// The tools of an agent's Tools section as the page shows them: one row per package ("Paket"),
+// per own tool of this instance and per Connection, each with its tools folded below it and a
+// switch for all of them. Pure, so the page and its tests read the same answer.
 
 /** The groups in the order the page shows them. A group without tools is left out. */
 const INSTANCE_TOOL_GROUPS: readonly ToolGroupName[] = [
@@ -57,8 +56,8 @@ interface InstanceToolGroupView {
 }
 
 /**
- * One chip of the section, or one row of the picker that adds it: a package of the platform,
- * one own tool of this instance, or one Connection.
+ * One row of the section: a package of the platform, one own tool of this instance, or one
+ * Connection.
  */
 export interface ToolPackageView {
   /** Unique within the section: `package:<group>`, `own:<tool>` or `connection:<name>`. */
@@ -73,7 +72,7 @@ export interface ToolPackageView {
   /** The Connection: its name for the way to its page, and what picks its icon. */
   connection?: { name: string; service?: string; connectorType?: string };
   tools: InstanceToolView[];
-  /** The tools with a check box: what adding and removing the chip turns on and off. */
+  /** The tools with a check box: what the row's switch turns on and off. */
   choosable: string[];
   /** How many of its tools the agent holds, the included ones counted. */
   heldCount: number;
@@ -190,10 +189,9 @@ function instanceToolGroups(input: {
 }
 
 /**
- * Every chip the section can show, in its order: the packages, then this instance's own tools,
- * one chip each, then the Connections. A chip the agent holds a tool of is active; the others
- * are what the picker offers. `isOtherSource` answers for a name a later group shows, a tool of
- * an App.
+ * Every row of the section, in its order: the packages, then this instance's own tools, one row
+ * each, then the Connections; those the agent holds no tool of too. `isOtherSource` answers for
+ * a name a later group shows, a tool of an App.
  */
 export function toolPackages(input: {
   references: ConfigAssetReferences | undefined;
@@ -258,7 +256,7 @@ export function toolPackages(input: {
   return [...packages, ...own, ...connections];
 }
 
-/** The agent's tool names with all tools of a chip on, or none. The rest keep their order. */
+/** The agent's tool names with all tools of a row on, or none. The rest keep their order. */
 export function setPackageTools(
   selected: readonly string[],
   item: Pick<ToolPackageView, "choosable">,
@@ -267,6 +265,23 @@ export function setPackageTools(
   return on
     ? [...selected, ...item.choosable.filter((name) => !selected.includes(name))]
     : selected.filter((name) => !item.choosable.includes(name));
+}
+
+/**
+ * Where a row's switch stands: on while every tool with a check box is on, off while none is,
+ * mixed between. A tool held because of something else does not move it.
+ */
+export function packageSwitchState(
+  item: Pick<ToolPackageView, "choosable">,
+  selected: readonly string[]
+): "on" | "off" | "mixed" {
+  const on = item.choosable.filter((name) => selected.includes(name)).length;
+  return on === 0 ? "off" : on === item.choosable.length ? "on" : "mixed";
+}
+
+/** How many tools the rows hold together: the number the section's heading shows. */
+export function heldToolCount(items: readonly Pick<ToolPackageView, "heldCount">[]): number {
+  return items.reduce((sum, item) => sum + item.heldCount, 0);
 }
 
 function choosableOf(tools: readonly InstanceToolView[]): string[] {
