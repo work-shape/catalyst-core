@@ -255,6 +255,80 @@ describe("tools an agent holds because of something else", () => {
   });
 });
 
+describe("the fact sheet, one check box for keeping and reading it", () => {
+  const results = references({
+    enabledToolNames: [
+      "show_view",
+      "page.save",
+      "structured_data.publish",
+      "structured_data.read",
+      "structured_result.read"
+    ],
+    tools: [
+      { name: "show_view", group: "results", effect: "reading" },
+      { name: "page.save", group: "results", effect: "changing" },
+      {
+        name: "structured_data.publish",
+        title: { en: "Keep a fact sheet", de: "Faktenblatt führen" },
+        group: "results",
+        effect: "changing"
+      },
+      {
+        name: "structured_data.read",
+        title: { en: "Read the fact sheet", de: "Faktenblatt lesen" },
+        group: "results",
+        effect: "reading"
+      },
+      {
+        name: "structured_result.read",
+        title: { en: "Reopen an earlier result", de: "Früheres Ergebnis öffnen" },
+        group: "results",
+        effect: "reading"
+      }
+    ]
+  });
+  const resultsPackage = (selected: string[]) =>
+    byKey(packages({ references: results, selected }), "package:results");
+
+  it("shows four tools in Results, reading the fact sheet within keeping it", () => {
+    const view = resultsPackage(["structured_data.publish", "structured_data.read"]);
+
+    expect(view?.tools.map((tool) => tool.name)).toEqual([
+      "show_view",
+      "page.save",
+      "structured_data.publish",
+      "structured_result.read"
+    ]);
+    expect(view?.tools.find((tool) => tool.name === "structured_data.publish")?.title).toBe(
+      "Keep a fact sheet"
+    );
+    expect(view?.choosable).not.toContain("structured_data.read");
+    expect(view?.heldCount).toBe(1);
+  });
+
+  it("shows the box on for a stored agent that holds only the keeping", () => {
+    expect(resultsPackage(["structured_data.publish"])?.heldCount).toBe(1);
+    expect(resultsPackage(["structured_data.read"])?.heldCount).toBe(0);
+  });
+
+  it("saves keeping and reading together, and turning keeping off removes both", () => {
+    expect(withImpliedTools(["structured_data.publish"], [])).toEqual([
+      "structured_data.publish",
+      "structured_data.read"
+    ]);
+    expect(withImpliedTools(["structured_data.read", "structured_data.publish"], [])).toEqual([
+      "structured_data.read",
+      "structured_data.publish"
+    ]);
+    // The box off: the page leaves the reading behind, the save takes it away.
+    expect(withImpliedTools(["web_fetch", "structured_data.read"], [])).toEqual(["web_fetch"]);
+    // Turning the whole package on gives both.
+    const view = resultsPackage([]);
+    if (!view) throw new Error("no results package");
+    expect(withImpliedTools(setPackageTools([], view, true), [])).toContain("structured_data.read");
+  });
+});
+
 describe("the Tools section of the agent page", () => {
   function frame(): BuildAssetEditorProps {
     return {

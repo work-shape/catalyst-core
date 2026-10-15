@@ -27,6 +27,14 @@ type ToolInclusionReason = "skills";
 /** The tool that reads the agent's skills: every agent with a skill holds it. */
 const READ_SKILL_TOOL_NAME = "read_skill";
 
+/**
+ * Tools that come with another and stand on the page only through it: the agent holds the one
+ * exactly while it holds the other. Keeping a fact sheet includes reading it.
+ */
+const COMPANION_TOOLS: ReadonlyMap<string, string> = new Map([
+  ["structured_data.read", "structured_data.publish"]
+]);
+
 /** One tool as its group shows it. */
 export interface InstanceToolView {
   name: string;
@@ -79,13 +87,25 @@ function impliedTools(skillNames: readonly string[]): Map<string, ToolInclusionR
   return new Map(skillNames.length > 0 ? [[READ_SKILL_TOOL_NAME, "skills"]] : []);
 }
 
-/** The tool names an agent is saved with: its chosen ones and those it holds by implication. */
+/**
+ * The tool names an agent is saved with: its chosen ones and those it holds by implication. A
+ * companion tool goes and comes with the tool it belongs to.
+ */
 export function withImpliedTools(
   toolNames: readonly string[],
   skillNames: readonly string[]
 ): string[] {
-  const implied = [...impliedTools(skillNames).keys()].filter((name) => !toolNames.includes(name));
-  return [...toolNames, ...implied];
+  const chosen = toolNames.filter((name) => {
+    const lead = COMPANION_TOOLS.get(name);
+    return lead === undefined || toolNames.includes(lead);
+  });
+  const companions = [...COMPANION_TOOLS]
+    .filter(([, lead]) => chosen.includes(lead))
+    .map(([companion]) => companion);
+  const implied = [...impliedTools(skillNames).keys(), ...companions].filter(
+    (name) => !chosen.includes(name)
+  );
+  return [...chosen, ...implied];
 }
 
 /**
@@ -110,9 +130,15 @@ function instanceToolGroups(input: {
     )
     .map((name): AgentToolReference => ({ name }));
   const implied = impliedTools(input.skillNames);
+  const shown = [...offered, ...held];
+  const shownNames = new Set(shown.map((tool) => tool.name));
 
   const byGroup = new Map<ToolGroupName, InstanceToolView[]>();
-  for (const tool of [...offered, ...held]) {
+  for (const tool of shown) {
+    const lead = COMPANION_TOOLS.get(tool.name);
+    if (lead !== undefined && shownNames.has(lead)) {
+      continue;
+    }
     const group = tool.group ?? "instance";
     const includedBecause = implied.get(tool.name);
     byGroup.set(group, [
