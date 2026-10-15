@@ -1,6 +1,16 @@
 // Keep the list short. Removing a concept lowers its measured baseline; it does not rename it.
 const retiredTerms = ["Namespace"];
 
+// Technical names survive NS-RETIRE. Strip only these terms, not the rest of a string.
+const technicalTerms = [
+  /\b(?:pg_namespace(?:\s+(?:as\s+)?(?:referenced_)?namespace)?|relnamespace|pronamespace)\b/giu,
+  /\b(?:referenced_)?namespace\.(?:nspname|oid)\b/giu,
+  /\b(?:ImportNamespaceSpecifier|process namespace)\b/giu
+];
+// esbuild's plugin keys and local helpers, confined to the two implementations that use them.
+const esbuildFiles = ["packages/app-build/src/bundle.ts", "packages/app-kit/scripts/release.mjs"];
+const esbuildIdentifiers = new Set(["namespace", "NAMESPACE", "withoutNamespace"]);
+
 /** @type {import("eslint").Rule.RuleModule} */
 export const retiredTermsRule = {
   meta: {
@@ -18,9 +28,19 @@ export const retiredTermsRule = {
      * @param {string} text
      */
     const check = (node, text) => {
+      if (
+        node.type === "Identifier" &&
+        esbuildIdentifiers.has(text) &&
+        esbuildFiles.some((file) => context.filename.replaceAll("\\", "/").endsWith(`/${file}`))
+      )
+        return;
+      const productText = technicalTerms.reduce(
+        (remaining, term) => remaining.replace(term, ""),
+        text
+      );
       for (const term of retiredTerms) {
         const key = `${node.range?.[0]}:${term}`;
-        if (!text.toLowerCase().includes(term.toLowerCase()) || seen.has(key) || !node.loc)
+        if (!productText.toLowerCase().includes(term.toLowerCase()) || seen.has(key) || !node.loc)
           continue;
         // A shorthand property can visit its identifier twice. Count each token once.
         seen.add(key);

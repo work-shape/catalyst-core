@@ -835,6 +835,46 @@ export const NAMESPACE_ID = "example";
     }
   });
 
+  it("excludes technical namespace terms while still reporting the product term", () => {
+    const fixtures = {
+      "packages/app-build/package.json": JSON.stringify({ name: "@fixture/app-build" }),
+      "packages/app-kit/package.json": JSON.stringify({ name: "@fixture/app-kit" }),
+      [`${source}/technical-terms.ts`]: `export const query = "select * from pg_namespace n join pg_class c on c.relnamespace = n.oid";
+export const template = \`select namespace.nspname from pg_catalog.pg_namespace namespace where namespace.oid = \${1} and namespace.nspname = 'public'\`;
+export const functionQuery = "select * from pg_proc p join pg_namespace as referenced_namespace on referenced_namespace.oid = p.pronamespace";
+export const kind = "ImportNamespaceSpecifier";
+export const message = "a shared process namespace";
+`,
+      "packages/app-build/src/bundle.ts": `const NAMESPACE = "page";
+export const plugin = { namespace: NAMESPACE };
+export function withoutNamespace(path: string) { return path; }
+export const product = { namespaceId: "example" };
+`,
+      "packages/app-kit/scripts/release.mjs": 'export const plugin = { namespace: "kit-react" };\n',
+      [`${source}/product-term.ts`]: 'export const namespaceId = "example";\n',
+      // An exception in the same string must not hide a product reference.
+      [`${source}/mixed-terms.ts`]:
+        'export const query = "select namespaceId from pg_namespace namespace where namespace.nspname = public";\n',
+      // The esbuild exceptions are exact identifiers in named files only.
+      "packages/app-build/src/product.ts": 'export const namespace = "example";\n'
+    };
+    try {
+      write(fixtures);
+      expect(
+        measure("lint").filter((finding) => finding.startsWith("catalyst/retired-terms "))
+      ).toEqual(
+        [
+          `catalyst/retired-terms ${source}/product-term.ts`,
+          `catalyst/retired-terms ${source}/mixed-terms.ts`,
+          "catalyst/retired-terms packages/app-build/src/bundle.ts",
+          "catalyst/retired-terms packages/app-build/src/product.ts"
+        ].sort()
+      );
+    } finally {
+      for (const file of Object.keys(fixtures)) rmSync(join(directory, file), { force: true });
+    }
+  });
+
   it("reports compiler errors and unused declarations in packages and tests", () => {
     expect(measure("types:packages")).toEqual(
       expect.arrayContaining([
