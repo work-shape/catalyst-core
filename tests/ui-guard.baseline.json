@@ -9,7 +9,7 @@
     "packages/chat-ui/src/assistant/assistant-composer.tsx": {"elements":4,"hex":4},
     "packages/chat-ui/src/assistant/assistant-message.tsx": {"elements":1},
     "packages/chat-ui/src/assistant/context-indicator.tsx": {"elements":1},
-    "packages/chat-ui/src/assistant/model-picker.tsx": {"elements":5,"roles":2},
+    "packages/chat-ui/src/assistant/model-picker.tsx": {"elements":5,"roles":1},
     "packages/chat-ui/src/assistant/model-vendor.tsx": {"hex":3},
     "packages/chat-ui/src/attachment-preview.tsx": {"elements":1},
     "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-accent.ts": {"hex":72},

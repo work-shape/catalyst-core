@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ModelCard, ModelPicker } from "../packages/chat-ui/src/assistant/model-picker";
-import { TranslationProvider } from "./chat-ui-render-harness";
+import {
+  renderToStaticMarkup as renderInUiRoot,
+  TranslationProvider
+} from "./chat-ui-render-harness";
 import {
   agentModelSelection,
   conversationModelPicks,
@@ -96,7 +99,7 @@ describe("agent model selection", () => {
 });
 
 function renderPicker(models: AgentSelectableModel[]) {
-  return renderToStaticMarkup(
+  return renderInUiRoot(
     createElement(
       TranslationProvider,
       { children: null, locale: "en" as const },

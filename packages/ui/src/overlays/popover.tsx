@@ -3,9 +3,12 @@ import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactN
 import { cn } from "../cn";
 import { useOverlayContainer } from "../ui-root";
 
+/** The layer an anchored overlay sits on, and how it comes and goes. */
+const anchoredLayerClassName =
+  "z-(--layer-popover) outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95";
+
 /** The raised surface of an anchored overlay: popover, menu and picker share it. */
-export const anchoredPanelClassName =
-  "z-(--layer-popover) rounded-lg border bg-popover text-popover-foreground shadow-overlay outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95";
+export const anchoredPanelClassName = `${anchoredLayerClassName} rounded-lg border bg-popover text-popover-foreground shadow-overlay`;
 
 /** The distance an anchored overlay keeps from the viewport edge when it flips or shifts. */
 export const ANCHORED_COLLISION_PADDING = 8;
@@ -37,6 +40,7 @@ export const PopoverTrigger = forwardRef<HTMLButtonElement, PopoverTriggerProps>
 );
 
 export type PopoverSize = "sm" | "md" | "fit";
+export type PopoverSide = "top" | "right" | "bottom" | "left";
 
 const popoverWidths: Record<PopoverSize, string> = {
   sm: "w-64",
@@ -47,14 +51,34 @@ const popoverWidths: Record<PopoverSize, string> = {
 export interface PopoverContentProps extends HTMLAttributes<HTMLDivElement> {
   /** `fit` takes the width of its content. */
   size?: PopoverSize;
-  side?: "top" | "right" | "bottom" | "left";
+  /**
+   * `none` leaves out the surface, its padding and its scroll, for content that draws its own
+   * surfaces, such as a menu that opens a panel beside itself. It still opens above the page in
+   * the overlay container, and flips and shifts to stay in the window.
+   */
+  surface?: "panel" | "none";
+  /**
+   * Room kept free on these sides, in pixels, beyond the usual distance from the window's edge:
+   * the width of a panel the content opens beside itself, so the content shifts far enough for
+   * the panel to show whole.
+   */
+  reserve?: Partial<Record<PopoverSide, number>>;
+  side?: PopoverSide;
   align?: "start" | "center" | "end";
   sideOffset?: number;
 }
 
 export const PopoverContent = forwardRef<HTMLDivElement, PopoverContentProps>(
   function PopoverContent(
-    { className, size = "md", align = "start", sideOffset = 6, ...props },
+    {
+      className,
+      size = "md",
+      surface = "panel",
+      reserve = {},
+      align = "start",
+      sideOffset = 6,
+      ...props
+    },
     ref
   ) {
     const container = useOverlayContainer("Popover");
@@ -67,10 +91,19 @@ export const PopoverContent = forwardRef<HTMLDivElement, PopoverContentProps>(
           ref={ref}
           align={align}
           sideOffset={sideOffset}
-          collisionPadding={ANCHORED_COLLISION_PADDING}
+          collisionPadding={{
+            top: ANCHORED_COLLISION_PADDING + (reserve.top ?? 0),
+            right: ANCHORED_COLLISION_PADDING + (reserve.right ?? 0),
+            bottom: ANCHORED_COLLISION_PADDING + (reserve.bottom ?? 0),
+            left: ANCHORED_COLLISION_PADDING + (reserve.left ?? 0)
+          }}
           className={cn(
-            anchoredPanelClassName,
-            "max-h-(--radix-popover-content-available-height) max-w-(--radix-popover-content-available-width) overflow-y-auto p-4",
+            surface === "panel"
+              ? cn(
+                  anchoredPanelClassName,
+                  "max-h-(--radix-popover-content-available-height) max-w-(--radix-popover-content-available-width) overflow-y-auto p-4"
+                )
+              : anchoredLayerClassName,
             popoverWidths[size],
             className
           )}

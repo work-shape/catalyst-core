@@ -50,6 +50,7 @@ export {
   PopoverTrigger,
   type PopoverContentProps,
   type PopoverProps,
+  type PopoverSide,
   type PopoverSize,
   type PopoverTriggerProps
 } from "./popover";
