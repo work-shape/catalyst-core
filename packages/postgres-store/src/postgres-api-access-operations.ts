@@ -20,6 +20,7 @@ import {
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapApiCredential, mapServicePrincipal } from "./rows";
+import { lockRights } from "./rights-lock";
 import {
   legacyPermissionListOf,
   legacyPermissionLists,
@@ -98,6 +99,7 @@ async function insertServicePrincipal(
   now: Date
 ) {
   return db.transaction(async (tx) => {
+    await lockRights(tx, { clientInstanceId: input.clientInstanceId });
     const [row] = await tx
       .insert(servicePrincipals)
       .values({
@@ -191,6 +193,7 @@ export async function updateServicePrincipal(
   }
 
   const row = await db.transaction(async (tx) => {
+    await lockRights(tx, { clientInstanceId: input.clientInstanceId });
     const [updated] = await tx
       .update(servicePrincipals)
       .set(set)
@@ -219,15 +222,16 @@ export async function updateServicePrincipal(
 }
 
 /**
- * The principal row goes first. A grant write holds a share lock on it until its row is
- * stored, so this waits for one that is under way and then removes what it wrote; a grant
- * write that comes later finds no principal. The keys go with the row by their foreign key.
+ * Under the rights lock, which a grant write holds until its row is stored, so this waits for
+ * one that is under way and then removes what it wrote; a grant write that comes later finds
+ * no principal. The keys go with the row by their foreign key.
  */
 export async function deleteServicePrincipal(
   db: PostgresConnection,
   input: Parameters<ApiAccessStore["deleteServicePrincipal"]>[0]
 ): Promise<ServicePrincipalRecord | undefined> {
   return db.transaction(async (tx) => {
+    await lockRights(tx, { clientInstanceId: input.clientInstanceId });
     // What the principal held, for whoever records its deletion.
     const permissions = await legacyPermissionListOf(tx, {
       clientInstanceId: input.clientInstanceId,
@@ -281,25 +285,29 @@ export async function createApiCredential(
   db: PostgresConnection,
   input: CreateApiCredentialInput
 ): Promise<CreatedApiCredential> {
-  await requireServicePrincipal(db, input.clientInstanceId, input.servicePrincipalId);
   const id = createApiCredentialId();
   const material = await createApiCredentialSecretMaterial(id);
-  const [row] = await db
-    .insert(apiCredentials)
-    .values({
-      id,
-      clientInstanceId: input.clientInstanceId,
-      servicePrincipalId: input.servicePrincipalId,
-      name: input.name,
-      keyPrefix: material.keyPrefix,
-      secretHash: material.secretHash,
-      // A credential named no scope has every scope its principal has. That is `*`; a list
-      // is never null from this release on.
-      scopes: input.scopes ?? ["*"],
-      createdAt: new Date(),
-      expiresAt: input.expiresAt ? new Date(input.expiresAt) : null
-    })
-    .returning();
+  // A key is a bearer copy of its principal's rights: issued under the rights lock.
+  const [row] = await db.transaction(async (tx) => {
+    await lockRights(tx, { clientInstanceId: input.clientInstanceId });
+    await requireServicePrincipal(tx, input.clientInstanceId, input.servicePrincipalId);
+    return tx
+      .insert(apiCredentials)
+      .values({
+        id,
+        clientInstanceId: input.clientInstanceId,
+        servicePrincipalId: input.servicePrincipalId,
+        name: input.name,
+        keyPrefix: material.keyPrefix,
+        secretHash: material.secretHash,
+        // A credential named no scope has every scope its principal has. That is `*`; a list
+        // is never null from this release on.
+        scopes: input.scopes ?? ["*"],
+        createdAt: new Date(),
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null
+      })
+      .returning();
+  });
   return { credential: mapApiCredential(row), secret: material.secret };
 }
 
