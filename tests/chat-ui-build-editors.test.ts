@@ -533,10 +533,9 @@ describe("save bar", () => {
     // A new asset has nothing to go back to and no count of changes.
     expect(started).not.toContain("Discard");
     expect(started).not.toMatch(/\d+ changes?/u);
-    // The id stands once, in the first section with a copy button, and not in the head.
-    expect(started.match(/>tax-assistant<\/code>/gu)).toHaveLength(1);
-    expect(started.indexOf("data-asset-identifier")).toBeGreaterThan(started.indexOf("</header>"));
-    expect(started).toMatch(/data-asset-identifier[^]*?<button[^>]*aria-label="Copy"/u);
+    // The id is offered by "Copy ID" in the head's menu alone: the page never shows it.
+    expect(started).not.toContain(">tax-assistant<");
+    expect(started).not.toContain("data-asset-identifier");
     expect(inputOf(started, "Display name")).toContain('value="Tax assistant"');
   });
 
@@ -560,9 +559,10 @@ describe("save bar", () => {
     expect(existing).not.toContain('type="submit"');
     expect(existing).toContain("Add reference");
     expect(started).toMatch(/<button[^>]*type="submit"[^>]*>Create skill<\/button>/u);
-    // The head is one row: a long name is cut and says itself whole in a tooltip.
+    // The head is one row: a long name takes two lines, is then cut and says itself whole on
+    // hover.
     expect(started).toContain(
-      '<h1 class="min-w-0 truncate outline-none text-title" title="Tax review">Tax review'
+      '<h1 class="line-clamp-2 wrap-anywhere outline-none text-title" title="Tax review">Tax review'
     );
     expect(started).toMatch(/<header data-variant="detail"[^>]* class="[^"]*\bmd:flex-nowrap\b/u);
   });
@@ -729,5 +729,46 @@ describe("skill page", () => {
     expect(inputOf(markup, "Title")).not.toContain('disabled=""');
     // The index counts the files of the package: the instructions and one reference.
     expect(markup).toMatch(/<a href="#instructions"[^>]*>.*?>2<\/span><\/a>/u);
+  });
+});
+
+/** The pinned head of a page: everything from `<header` to its end. */
+function headOf(markup: string): string {
+  return markup.slice(markup.indexOf("<header"), markup.indexOf("</header>"));
+}
+
+describe("the head of an asset page", () => {
+  it("names the asset and says what it does, and never shows its id", () => {
+    const agent = agentPage({
+      config: {
+        name: "quarter-close-7f3a",
+        displayName: "Quarter close",
+        description: "Closes the books of a quarter."
+      }
+    });
+    const skillConfig = {
+      name: "tax-review-0042",
+      title: "Tax review",
+      summary: "Checks a tax return before it is filed.",
+      description: "How to review",
+      content: "#"
+    };
+    const skill = render(
+      createElement(SkillEditor, {
+        frame: frame({ asset: storedAsset("skill", skillConfig) }),
+        initialForm: skillConfigToForm(skillConfig),
+        editable: true
+      })
+    );
+
+    for (const [markup, id, name, line] of [
+      [agent, "quarter-close-7f3a", "Quarter close", "Closes the books of a quarter."],
+      [skill, "tax-review-0042", "Tax review", "Checks a tax return before it is filed."]
+    ] as const) {
+      const head = headOf(markup);
+      expect(head).toContain(`>${name}</h1>`);
+      expect(head).toMatch(new RegExp(`data-slot="page-header-description"[^>]*>${line}<`, "u"));
+      expect(markup).not.toContain(id);
+    }
   });
 });

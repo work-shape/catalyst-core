@@ -40,10 +40,10 @@ export function PageHeaderShellAction({
  * `list` heads a list or settings page: the page name, a description, the primary action.
  * `detail` heads one object: it is one row, `--layout-header` high, and stays at the top while
  * the page scrolls. Its name wins the row. What stands beside the name gives way in this order
- * before the name is cut: the description, the state, the scope chip, the text of
- * `PageHeaderBack`. From 768 px up the head never wraps: a name that still does not fit is cut
- * and says itself whole in a tooltip. In a narrower window the actions go to a second row when
- * they do not fit beside the whole name.
+ * before the name gives way: the description, the state, the scope chip, the text of
+ * `PageHeaderBack`. From 768 px up the head never wraps: a name that still does not fit takes a
+ * second line, is then cut, and says itself whole in a tooltip. In a narrower window the actions
+ * go to a second row when they do not fit beside the whole name.
  */
 export type PageHeaderVariant = "list" | "detail";
 
@@ -84,6 +84,12 @@ const BACK_GIVES_WAY = "has-[[data-slot=page-header-back]]:shrink-[1000000]";
 // content's.
 const NO_LEAST_WIDTH = "grid min-w-0 grid-cols-[minmax(0,max-content)]";
 
+/** Whether a detail head's name no longer stands whole on one line: it wrapped or was cut. */
+function nameGaveWay(name: HTMLElement): boolean {
+  const line = Number.parseFloat(getComputedStyle(name).lineHeight);
+  return name.scrollWidth > name.clientWidth || name.scrollHeight > line + 1;
+}
+
 /**
  * Whether the row of a detail head has no room for the text of its way back beside the whole
  * name. The text leaves whole as soon as it would be cut, so the arrow stands alone with no
@@ -107,9 +113,13 @@ function useBackTextGone(): [RefObject<HTMLDivElement | null>, boolean] {
       if (!was.current) {
         width.current = text.getBoundingClientRect().width;
       }
-      const cut = name.scrollWidth > name.clientWidth;
+      const cut = nameGaveWay(name);
       // The chips and the description give the room after the name before the text asks for it.
-      const free = node.getBoundingClientRect().right - name.getBoundingClientRect().right;
+      // A description holds all of that room; the gap before it is no room the text could take.
+      const room = node.querySelector<HTMLElement>("[data-slot=page-header-description-room]");
+      const free = room
+        ? room.getBoundingClientRect().width
+        : node.getBoundingClientRect().right - name.getBoundingClientRect().right;
       const next = was.current
         ? cut || free < width.current + 1
         : cut || slot.getBoundingClientRect().width < width.current - 0.5;
@@ -196,13 +206,26 @@ export function PageHeader({
               {back}
             </div>
           )}
-          <Heading
-            // An area puts the focus here when it opens; a title is no control and shows no ring.
-            className={cn("min-w-0 truncate outline-none", "text-title")}
-            title={typeof title === "string" ? title : undefined}
-          >
-            {title}
-          </Heading>
+          <div className="min-w-0">
+            <Heading
+              // An area puts the focus here when it opens; a title is no control and shows no
+              // ring. Two lines of the name fit the head's height; a longer one is cut after the
+              // second.
+              className={cn("line-clamp-2 wrap-anywhere outline-none", "text-title")}
+              title={typeof title === "string" ? title : undefined}
+            >
+              {title}
+            </Heading>
+            {typeof title === "string" ? (
+              // The name on one line, unseen and without height: the row's least width stays the
+              // whole name, so the actions wrap before the name does.
+              <span
+                aria-hidden="true"
+                data-name={title}
+                className="invisible block h-0 overflow-hidden text-title whitespace-nowrap before:content-[attr(data-name)]"
+              />
+            ) : null}
+          </div>
           {scope === undefined && state === undefined ? null : (
             // A chip is shown whole or not at all: one that does not fit goes to a second line,
             // and only the first line shows. The pseudo-element that opens the first line takes
@@ -342,7 +365,10 @@ function InlineDescription({ children, tooltip }: { children: ReactNode; tooltip
   return (
     // The slot is as wide as the room the name leaves, whatever the description holds. With too
     // little of it for a few words the description is not shown at all.
-    <div className="@container flex min-w-0 flex-1 basis-0 items-baseline">
+    <div
+      data-slot="page-header-description-room"
+      className="@container flex min-w-0 flex-1 basis-0 items-baseline"
+    >
       {/* A line of the name's size and no width: the description stands on the name's baseline. */}
       <span aria-hidden="true" className="invisible w-0 shrink-0 text-title">
         &#8203;

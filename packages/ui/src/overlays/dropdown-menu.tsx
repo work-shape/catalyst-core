@@ -1,6 +1,14 @@
-import { ArrowUpRight, Check } from "lucide-react";
+import { ArrowUpRight, Check, Copy } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
-import { forwardRef, useId, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type ReactNode
+} from "react";
 import { cn } from "../cn";
 import { useOverlayContainer } from "../ui-root";
 import { ANCHORED_COLLISION_PADDING, anchoredPanelClassName } from "./popover";
@@ -228,6 +236,59 @@ export function DropdownMenuItem({
       </TooltipTrigger>
       <TooltipContent side="right">{disabledReason}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/** How long a copy item says that it copied. */
+const COPIED_MS = 1500;
+
+export interface DropdownMenuCopyItemProps {
+  /** The text put on the clipboard. */
+  value: string;
+  /** What the item does, such as "Copy ID". */
+  children: ReactNode;
+  /** What it says for a moment once it copied, such as "ID copied". */
+  copiedLabel: string;
+  /** Leading icon while it has not copied. Default: the copy mark. */
+  icon?: ReactNode;
+}
+
+/**
+ * An item that puts a text on the clipboard. The menu stays open while its label says that it
+ * copied, and a screen reader hears the same.
+ */
+export function DropdownMenuCopyItem({
+  value,
+  children,
+  copiedLabel,
+  icon = <Copy aria-hidden="true" />
+}: DropdownMenuCopyItemProps) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) {
+      return undefined;
+    }
+    const timeout = setTimeout(() => setCopied(false), COPIED_MS);
+    return () => clearTimeout(timeout);
+  }, [copied]);
+  return (
+    <>
+      <DropdownMenuItem
+        keepOpen
+        icon={copied ? <Check aria-hidden="true" /> : icon}
+        onSelect={() => {
+          navigator.clipboard.writeText(value).then(
+            () => setCopied(true),
+            () => setCopied(false)
+          );
+        }}
+      >
+        {copied ? copiedLabel : children}
+      </DropdownMenuItem>
+      <span role="status" className="sr-only">
+        {copied ? copiedLabel : null}
+      </span>
+    </>
   );
 }
 

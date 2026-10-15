@@ -2,8 +2,6 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import {
   Banner,
   FormNotice,
-  KeyValue,
-  KeyValueList,
   Page,
   PageFooter,
   PageHeader,
@@ -91,29 +89,14 @@ export function usePageShown(page: BuildPageSlot, what: string): void {
 }
 
 /**
- * An asset's technical id, read-only and with a copy button: the first thing in the first
- * section of its page. The head is one row and names the asset only.
- */
-export function AssetIdentifier({ name }: { name: string }) {
-  const { t } = useTranslation();
-  return (
-    <KeyValueList layout="stacked" data-asset-identifier="">
-      <KeyValue label={t("build.identifier")} copyValue={name}>
-        <code className="font-mono text-code break-all">{name}</code>
-      </KeyValue>
-    </KeyValueList>
-  );
-}
-
-/**
- * The page of one asset, the same for every kind: the head with the way back and the name,
- * the id at the top of the first section, the outline of the sections, the one language
- * switch, what a refused save says, and the save bar that shows with the first change. A kind
- * hands it its sections.
+ * The page of one asset, the same for every kind: the head with the way back, the name and
+ * what the asset does, the outline of the sections, the one language switch, what a refused
+ * save says, and the save bar that shows with the first change. A kind hands it its sections.
  */
 export function AssetEditorShell({
   frame,
   title,
+  description,
   badges,
   headActions,
   sections,
@@ -127,6 +110,8 @@ export function AssetEditorShell({
   /** What the frame handed the kind's page. */
   frame: BuildAssetEditorProps;
   title: string;
+  /** What the asset does, in one line after its name. Never its id. */
+  description?: string;
   badges?: ReactNode;
   /** Actions of the kind before the frame's own, such as making an agent the default. */
   headActions?: ReactNode;
@@ -142,7 +127,7 @@ export function AssetEditorShell({
   saveHint?: string;
 }) {
   const { locale, t } = useTranslation();
-  const { page, back, actions, notice, canWrite, asset, start, onUnsavedChange } = frame;
+  const { page, back, actions, notice, canWrite, asset, onUnsavedChange } = frame;
   const { readOnlyReason, saveBlocked = false } = frame;
   const [language, setLanguage] = useState<AssetLanguage>(locale === "de" ? "de" : "en");
   const isNew = asset === undefined;
@@ -178,7 +163,6 @@ export function AssetEditorShell({
       () => undefined
     );
   };
-  const identifier = asset?.name ?? start?.name ?? "";
   const general = refusalsOf(outcome, undefined);
 
   return (
@@ -190,6 +174,7 @@ export function AssetEditorShell({
           variant="detail"
           back={back}
           title={title}
+          description={description || undefined}
           state={
             frame.draftState ? (
               <>
@@ -276,7 +261,7 @@ export function AssetEditorShell({
           </div>
         ) : null}
         <AssetLanguageProvider value={language}>
-          {sections.map((section, index) => (
+          {sections.map((section) => (
             <Section
               key={section.id}
               id={section.id}
@@ -285,7 +270,6 @@ export function AssetEditorShell({
               description={section.description}
               count={section.count}
             >
-              {index === 0 && identifier ? <AssetIdentifier name={identifier} /> : null}
               {section.body}
             </Section>
           ))}

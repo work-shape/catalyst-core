@@ -115,17 +115,16 @@ interface BuildKindBase {
   /** Rows show an avatar with the name's initials. Without it they show the kind's icon. */
   avatar?: AvatarKind;
   /**
-   * What a row says of an asset where the kind tells more than its icon and the asset's id: its
-   * own mark, where it has one, and the line under the title. A row without a line shows the
-   * title alone.
+   * What a row says of an asset where the kind tells more than its icon: its own mark, where it
+   * has one, and the line under the title. A row without a line shows the title alone. No row
+   * shows the asset's id.
    */
   row?(asset: BuildAssetRow): { leading?: ReactNode; description?: string };
-  /** What a row says after the asset's id, on the same line: such as the asset's description. */
+  /** The line under a row's title: what the asset does, such as its description. */
   rowText?(asset: BuildAssetRow): string | undefined;
   /**
-   * The line under a row's title in the kind's own words, in place of the asset's id and
-   * `rowText`, shown whole: a component, so it may read what the page knows, such as
-   * workspace names.
+   * The line under a row's title in the kind's own words, in place of `rowText`, shown whole:
+   * a component, so it may read what the page knows, such as workspace names.
    */
   RowLine?: ComponentType<{ asset: BuildAssetRow }>;
   /** The row's badges, such as the default marker. */

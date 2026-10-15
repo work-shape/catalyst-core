@@ -24,7 +24,7 @@ import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { agentKind } from "./agent-kind";
-import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
+import { usePageShown } from "./asset-editor-shell";
 import type { BuildAssetEditorProps, BuildAssetViewProps } from "./build-asset-kind";
 import { useBuildNavigation } from "./build-route";
 import {
@@ -246,7 +246,6 @@ export function ConnectionPage({
       description: t("connections.statusDescription"),
       body: (
         <>
-          <AssetIdentifier name={asset.name} />
           {enabled ? null : (
             <Banner tone="warning" data-connection-disabled="">
               {t("connections.disabledNotice")}
@@ -390,6 +389,7 @@ export function ConnectionPage({
           variant="detail"
           back={back}
           title={title}
+          description={textOf(config, "description")}
           scope={
             <Chip>
               {t(

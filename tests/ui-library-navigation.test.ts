@@ -454,8 +454,11 @@ describe("navigation, page structure and data components", () => {
     expect(head).toMatch(
       /<a href="\/agents"[^>]*data-slot="page-header-back"[^>]*aria-label="WAY"/u
     );
-    // The name is cut last and says itself whole in a tooltip.
-    expect(head).toMatch(/<h1[^>]*class="[^"]*truncate[^"]*"[^>]*title="NAME"[^>]*>NAME<\/h1>/u);
+    // The name gives way last: it takes a second line, is then cut and says itself whole on
+    // hover. Unseen beside it, the name on one line keeps the row's least width.
+    expect(head).toMatch(
+      /<h1[^>]*class="[^"]*line-clamp-2[^"]*"[^>]*title="NAME"[^>]*>NAME<\/h1><span aria-hidden="true" data-name="NAME"/u
+    );
     expect(head).toMatch(/data-slot="page-header-description"[^>]*>ABOUT</u);
     expect(head).toMatch(/shrink-\[1000000000000\][^>]*><div[^>]*data-slot="page-header-chips"/u);
     const list = render(createElement(PageHeader, { title: "NAME", description: "ABOUT" }));

@@ -87,8 +87,9 @@ describe("the Apps page", () => {
     expect(markup).toContain("Unpublished changes");
     expect(markup).toContain('href="/w/cw_1/apps/angebotsrechner"');
     expect(markup).toContain('aria-label="Actions for Angebotsrechner"');
-    // An App without a description goes by its id, and one without a publish opens its draft.
-    expect(markup).toContain(">urlaubsplaner</code>");
+    // No card shows an App's id: an App without a name goes by it as its title alone. One
+    // without a publish opens its draft.
+    expect(markup).not.toContain("font-mono");
     expect(markup).toContain("Draft only");
     expect(markup).toContain('href="/w/cw_1/app-drafts/urlaubsplaner"');
   });

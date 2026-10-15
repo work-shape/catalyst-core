@@ -144,10 +144,9 @@ describe("Connection page", () => {
     const markup = renderPage();
 
     expect(markup).toContain(">Sample business</h1>");
-    // The head names the Connection only; its id stands in the first section.
+    // The head names the Connection only; its id is behind "Copy ID" in the head's menu.
     expect(markup).not.toContain(">Connection<");
-    expect(markup.indexOf("data-asset-identifier")).toBeGreaterThan(markup.indexOf("</header>"));
-    expect(markup.match(/>sample-business<\/code>/gu)).toHaveLength(1);
+    expect(markup).not.toContain(">sample-business<");
     expect(markup).toContain(">Instance<");
     expect(markup).toContain(
       "This connection is defined in the release config. The operator changes it there; it cannot be changed here."
@@ -156,12 +155,13 @@ describe("Connection page", () => {
     expect(markup).not.toContain("Defined in release config");
     expect(markup).toContain("Enabled");
     expect(markup).toContain('aria-label="Back to Connections"');
-    // Nothing on the page writes: no field, no menu with Delete, no save. Its history is read,
-    // and a reader who may create one starts a copy of it.
-    for (const control of ["<input", "<textarea", "More actions", "Save", ">Edit<", ">Accept<"]) {
+    // Nothing on the page writes: no field, no save. Its history is read, its menu offers
+    // "Copy ID", and a reader who may create one starts a copy of it.
+    for (const control of ["<input", "<textarea", "Save", ">Edit<", ">Accept<"]) {
       expect(markup, control).not.toContain(control);
     }
     expect(markup).toContain(">History<");
+    expect(markup).toContain('aria-label="More actions"');
     expect(markup).toContain(">Copy to edit<");
     expect(renderPage({ locale: "de" })).toContain(
       "Diese Verbindung ist in der Release-Konfiguration festgelegt. Der Betreiber ändert sie dort; hier lässt sie sich nicht ändern."

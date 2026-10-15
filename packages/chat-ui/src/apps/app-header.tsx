@@ -7,7 +7,7 @@ import {
   cn,
   ConfirmDialog,
   Dialog,
-  DropdownMenuItem,
+  DropdownMenuCopyItem,
   InlineError,
   KeyValue,
   KeyValueList,
@@ -59,20 +59,14 @@ function useCopyAppLink(workspaceId: string, app: string): { copied: boolean; co
 /** The menu item that copies the link of an App. The menu stays open while the item answers. */
 export function CopyAppLinkItem({ workspaceId, app }: { workspaceId: string; app: string }) {
   const { t } = useTranslation();
-  const { copied, copy } = useCopyAppLink(workspaceId, app);
   return (
-    <>
-      <DropdownMenuItem
-        keepOpen
-        icon={copied ? <Check aria-hidden="true" /> : undefined}
-        onSelect={copy}
-      >
-        {copied ? t("apps.linkCopied") : t("apps.copyLink")}
-      </DropdownMenuItem>
-      <span role="status" className="sr-only">
-        {copied ? t("apps.linkCopied") : null}
-      </span>
-    </>
+    <DropdownMenuCopyItem
+      value={appLink(workspaceId, app, window.location.origin)}
+      copiedLabel={t("apps.linkCopied")}
+      icon={<Link aria-hidden="true" />}
+    >
+      {t("apps.copyLink")}
+    </DropdownMenuCopyItem>
   );
 }
 
@@ -118,6 +112,7 @@ export function AppStateBadge({ state }: { state: AppState }) {
  */
 export function AppHeader({
   name,
+  description,
   state,
   keepState = false,
   secondaryActions,
@@ -128,6 +123,8 @@ export function AppHeader({
   onBack
 }: {
   name: string;
+  /** What the App does, in one line after its name. */
+  description?: string;
   /** The badge after the name: the published or the draft revision. */
   state?: ReactNode;
   /**
@@ -164,6 +161,7 @@ export function AppHeader({
         </PageHeaderBack>
       }
       title={name}
+      description={description}
       state={stateUnderHead ? undefined : state}
       secondaryActions={secondaryActions}
       primaryAction={primaryAction}
@@ -228,7 +226,7 @@ export function AppFrame({
       ref={ref}
       aria-label={label}
       data-testid={testId}
-      className="flex h-full min-h-0 min-w-0 flex-col bg-background max-md:[--layout-page-head-start:var(--layout-header-control)]"
+      className="@container/app-frame flex h-full min-h-0 min-w-0 flex-col bg-background max-md:[--layout-page-head-start:var(--layout-header-control)]"
     >
       {header}
       <div className="min-h-0 min-w-0 flex-1">{children}</div>
@@ -237,7 +235,7 @@ export function AppFrame({
 }
 
 /**
- * What an App is and what it reaches: its id, its description, and the Connections, actions
+ * What an App is and what it reaches: its description, and the Connections, actions
  * and external hosts its manifest names. The record is the App's newest revision, which the
  * dialog says by number. Each action is listed with its effect and what the policy makes of a
  * call of it for the reader, once the instance said so; until then, and where it could not,
@@ -277,9 +275,6 @@ export function AppDetailsDialog({
     >
       {app && summary ? (
         <KeyValueList>
-          <KeyValue label={t("apps.detailsId")} copyValue={app.name}>
-            <code className="font-mono text-code">{app.name}</code>
-          </KeyValue>
           {description ? (
             <KeyValue label={t("apps.detailsDescription")} foldable>
               {description}

@@ -169,7 +169,7 @@ function AgentCard({
         <div className="flex min-w-0 items-center gap-3">
           <Avatar kind="agent" name={agent.displayName} icon={<Bot />} />
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <CardTitle id={titleId} className="min-w-0 break-words">
+            <CardTitle id={titleId} clamp className="min-w-0">
               {agent.displayName}
             </CardTitle>
             {isDefault ? <Badge size="sm">{t("configDefaultAgent")}</Badge> : null}

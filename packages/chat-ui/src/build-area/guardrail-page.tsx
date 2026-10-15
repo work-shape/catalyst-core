@@ -21,7 +21,8 @@ import type { GuardrailHitView } from "@vivd-catalyst/api-client";
 import { formatMomentShort } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useInboxItemKindLookup } from "../inbox/inbox-item-kinds";
-import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
+import { CopyIdMenu } from "../copy-id-item";
+import { usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { opensHere } from "../apps/app-header";
 import { opensAssets, type BuildKind } from "./build-asset-kind";
@@ -96,7 +97,6 @@ export function GuardrailPage({
       description: t("guardrails.checkDescription"),
       body: (
         <>
-          <AssetIdentifier name={asset.name} />
           <KeyValueList>
             <KeyValue label={t("guardrails.whenItRuns")}>
               <span data-guardrail-runs="">{runSentence(facts, nameOf)}</span>
@@ -178,12 +178,14 @@ export function GuardrailPage({
             variant="detail"
             back={back}
             title={guardrail.title ?? asset.name}
+            description={guardrail.description}
             scope={<Chip>{scopeLabel(scope, nameOf, t)}</Chip>}
             state={
               <Badge tone={outcome.tone} dot>
                 {t(outcome.label)}
               </Badge>
             }
+            overflow={<CopyIdMenu id={asset.name} label={t("build.assetActions")} />}
           />
         }
         outline={

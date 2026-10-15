@@ -66,13 +66,6 @@ export const connectionKind: BuildAssetKind = {
             <code className="font-mono">{connectorType}</code>
           </Chip>
         ) : null}
-        <Chip size="sm">
-          {t(
-            asset.scope.kind === "workspace"
-              ? "connections.scopeWorkspace"
-              : "connections.scopeInstance"
-          )}
-        </Chip>
         {typeof enabled === "boolean" ? (
           <Badge tone={enabled ? "success" : "neutral"} dot>
             {t(enabled ? "connections.enabled" : "connections.disabled")}

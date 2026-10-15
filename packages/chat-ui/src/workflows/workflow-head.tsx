@@ -1,5 +1,6 @@
 import { Bot, Play } from "lucide-react";
 import { Button, PageHeader, PageLead, TabsLink, TabsNav } from "@vivd-catalyst/ui";
+import { CopyIdMenu } from "../copy-id-item";
 import { useTranslation } from "../i18n";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
@@ -7,7 +8,7 @@ import { BackLink, TitlePlaceholder, routeLink, type OpenRoute } from "./workflo
 
 /**
  * The head of a Workflow, on its canvas and on the list of its runs: the way back, the name,
- * "Edit with the agent", "Start now", and the two tabs. The tabs are addresses. Without runs on
+ * "Edit with the agent", "Start now", "Copy ID" for whoever may change it, and the two tabs. The tabs are addresses. Without runs on
  * the instance there is one view and no tabs. The description is the first paragraph under them.
  */
 export function WorkflowHead({
@@ -75,6 +76,11 @@ export function WorkflowHead({
               {t("workflows.startNow")}
             </Button>
           ) : undefined
+        }
+        overflow={
+          edit === undefined ? undefined : (
+            <CopyIdMenu id={workflowId} label={t("workflows.moreActions")} />
+          )
         }
       />
       {runsAvailable ? (

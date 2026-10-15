@@ -13,8 +13,8 @@ import {
   PageHeader,
   Section
 } from "@vivd-catalyst/ui";
+import { CopyIdMenu } from "../copy-id-item";
 import { useTranslation } from "../i18n";
-import { AssetIdentifier } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { migrationNumber } from "./data-store-model";
 
@@ -85,6 +85,7 @@ export function DataStoreDraftPage({
           variant="detail"
           back={back}
           title={title}
+          description={description}
           scope={
             <Chip>
               {t(
@@ -99,6 +100,7 @@ export function DataStoreDraftPage({
               {t("dataStores.draftUnpublished")}
             </Badge>
           }
+          overflow={<CopyIdMenu id={asset.name} label={t("build.assetActions")} />}
         />
       }
     >
@@ -133,7 +135,6 @@ export function DataStoreDraftPage({
           description={t("dataStores.draftMigrationsDescription")}
           count={migrations.length}
         >
-          <AssetIdentifier name={asset.name} />
           {description === undefined ? null : <p className="text-body">{description}</p>}
           {migrations.length === 0 ? (
             <EmptyState layout="inline">{t("dataStores.draftMigrationsEmpty")}</EmptyState>

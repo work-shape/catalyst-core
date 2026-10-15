@@ -23,9 +23,10 @@ import {
   TableHeader,
   TableRow
 } from "@vivd-catalyst/ui";
+import { CopyIdMenu } from "../copy-id-item";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
-import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
+import { usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import {
   DATA_STORE_CONDITION_LABELS,
@@ -103,7 +104,6 @@ function PublishedDataStorePage({
       description: t("dataStores.statusDescription"),
       body: (
         <>
-          <AssetIdentifier name={asset.name} />
           <ReadState read={read} failedText={t("dataStores.stateFailed")} rows={3}>
             {(loaded) => (
               <DataStoreStatus
@@ -180,6 +180,7 @@ function PublishedDataStorePage({
           variant="detail"
           back={back}
           title={title}
+          description={textOf(asset.config, "description")}
           scope={
             <Chip>
               {t(
@@ -196,6 +197,7 @@ function PublishedDataStorePage({
               </Badge>
             ) : undefined
           }
+          overflow={<CopyIdMenu id={asset.name} label={t("build.assetActions")} />}
         />
       }
       outline={
