@@ -205,7 +205,7 @@ export const operations = defineTranslations({
     "operations.effectReading": "Lesend",
     "operations.effectChanging": "Ändernd",
     "operations.actorUser": "Benutzer",
-    "operations.actorServicePrincipal": "Dienstkonto",
+    "operations.actorServicePrincipal": "Technisches Konto",
     "operations.appDeleted": "Gelöschte App ({id})",
     "operations.appRevision": "Revision {number}",
     "operations.fieldApp": "App",

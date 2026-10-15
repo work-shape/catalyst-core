@@ -3813,9 +3813,9 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
   };
   const dialog = page.getByRole("dialog", { name: "New user" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Access level").locator('option[value="superadmin"]')).toHaveCount(
-    0
-  );
+  await expect(
+    dialog.getByLabel("Role", { exact: true }).locator('option[value="superadmin"]')
+  ).toHaveCount(0);
   await dialog.getByLabel("Display label").fill(createdUser.displayLabel);
   await dialog.getByLabel("Email").fill(createdUser.email);
   await dialog.getByLabel("Initial password").fill(createdUser.password);
