@@ -10,7 +10,7 @@ import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme
 const { Dialog, Drawer, HoverCard, HoverCardContent, HoverCardTrigger, IconButton, UiRoot } =
   library;
 const { Tooltip, TooltipContent, TooltipTrigger, uiLabelsDe, uiLabelsEn } = library;
-const { Avatar, Banner, Checkbox, Chip, ConfirmDialog, Field, Input, RadioGroup } = library;
+const { Avatar, Banner, Checkbox, Chip, ConfirmDialog, Field, Input, RadioGroup, Switch } = library;
 const { DropdownMenu, DropdownMenuContent, Picker, PickerButton, Popover, PopoverContent } =
   library;
 const { SkeletonList, scrollEdgeFadeStyle } = library;
@@ -319,6 +319,20 @@ describe("form components", () => {
     expect([state(false), state(true), state("indeterminate")]).toEqual(["false", "true", "mixed"]);
     expect(attribute(markup, "button", "id")).toBe(attribute(markup, "label", "for"));
     expect(attribute(markup, "button", "aria-describedby")).toBe(attribute(markup, "p", "id"));
+  });
+
+  it("reads a switch that can be partly on as a tri-state check box, and a plain one as a switch", () => {
+    const control = (props: { checked?: boolean; mixed?: boolean }) => {
+      const markup = render(createElement(Switch, { "aria-label": "All tools", ...props }));
+      return [attribute(markup, "button", "role"), attribute(markup, "button", "aria-checked")];
+    };
+
+    expect(control({ checked: true })).toEqual(["switch", "true"]);
+    expect(control({ checked: false })).toEqual(["switch", "false"]);
+    // Its role stays the same in every state, so a state change is not read as a new control.
+    expect(control({ checked: true, mixed: false })).toEqual(["checkbox", "true"]);
+    expect(control({ checked: false, mixed: false })).toEqual(["checkbox", "false"]);
+    expect(control({ checked: true, mixed: true })).toEqual(["checkbox", "mixed"]);
   });
 
   it("renders a radio group with one radio per option and its hint as the description", () => {

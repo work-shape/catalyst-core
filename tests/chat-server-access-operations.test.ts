@@ -226,22 +226,71 @@ describe("a field the query string names", () => {
 });
 
 describe("a superadmin's rows", () => {
+  it("does not let a non-superadmin write or revoke a row of a superadmin", async () => {
+    const { t } = await setup();
+    await t.createNamespace("kai-");
+    // Another superadmin: nobody writes a row of their own (RIGHTS-1b).
+    const root = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Root two",
+      roles: ["user", "admin", "superadmin"]
+    });
+    const payload = {
+      holderKind: "user",
+      holderId: root.id,
+      action: "agent.write",
+      scopeKind: "namespace",
+      namespace: "kai-",
+      effect: "deny"
+    };
+    // The operation's own check refuses, so the refusal names the operation.
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.grant",
+      { payload },
+      t.forbidden("permissions.grant", "no_grant")
+    );
+    expect(await t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
+
+    // A superadmin may, and the other administrator cannot take the row away again.
+    const created = grantSchema.parse(
+      (await t.expectOk(t.root.id, "permissions.grant", { payload })).json()
+    );
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.revoke",
+      { params: { grantId: created.id } },
+      { status: 403, code: "FORBIDDEN" }
+    );
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.effective",
+      { query: { holderKind: "user", holderId: root.id } },
+      { status: 404, code: "NOT_FOUND", details: { reason: "unknown_holder" } }
+    );
+    await t.expectOk(t.root.id, "permissions.revoke", { params: { grantId: created.id } });
+  });
+
   // Fails without the operation's own check: the policy was asked first, and the refusal came
   // from the handler as a failed run.
   it("are refused to an administrator before the policy is asked, as a denied run", async () => {
     const { t, asked } = await setup();
     await t.createNamespace("kai-");
+    // Another superadmin: nobody writes a row of their own (RIGHTS-1b).
+    const root = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Root two",
+      roles: ["user", "admin", "superadmin"]
+    });
     const held = grantSchema.parse(
-      (
-        await t.expectOk(t.root.id, "permissions.grant", { payload: grantPayload(t.root.id) })
-      ).json()
+      (await t.expectOk(t.root.id, "permissions.grant", { payload: grantPayload(root.id) })).json()
     );
 
     const attempts: Array<[TestOperationName, TestCallInput]> = [
-      ["permissions.grant", { payload: grantPayload(t.root.id, { effect: "deny" }) }],
+      ["permissions.grant", { payload: grantPayload(root.id, { effect: "deny" }) }],
       // The holder is decided before what the row says: an action that cannot be granted is
       // not looked at for a caller who may not write this holder's rows.
-      ["permissions.grant", { payload: grantPayload(t.root.id, { action: "users.manage" }) }],
+      ["permissions.grant", { payload: grantPayload(root.id, { action: "users.manage" }) }],
       ["permissions.revoke", { params: { grantId: held.id } }]
     ];
     for (const [index, [operation, input]] of attempts.entries()) {
