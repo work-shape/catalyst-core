@@ -38,8 +38,8 @@ function shippedSkillRefusal(name: string | undefined): AppError {
  * refused.
  *
  * `shippedSkillNames` names every skill the platform ships, also those of a module that is
- * off: a skill of the instance's own under one of them would stop the start that turns the
- * module on.
+ * off: new instance skills cannot take those names. Startup keeps existing instance copies
+ * with a warning until they are renamed or removed; the next start seeds the shipped skills.
  */
 export function createSkillAssetKind(options: {
   config: ClientInstanceConfig;

@@ -65,8 +65,6 @@ An action's name is the name of its file without the ending: `actions/load-booki
 
 Every call runs as the person who looks at the App, through the platform's policy and audit. In the published App the viewer needs the right to use the App; in its draft, the right to write it. Beside that, for a `connection` action the viewer needs the right to use the Connection, for a `workflow` action the right to use the Workflow. An `sql` action of a published App needs no right on the Data Store: the person who published the App answered for it.
 
-Server code of an App's own, beyond these three kinds, is planned and not available.
-
 ### A `connection` action
 
 ```yaml
@@ -116,7 +114,7 @@ actions:
 
 - A parameter line is `-- @param <name> <type>`, with `optional` after it where a call may leave it out. A type is `text`, `integer`, `number`, `boolean`, `date` or `timestamp`, or one of them followed by `[]` for a list.
 - A `reading` statement is one `SELECT` or `WITH`.
-- A `changing` statement is one `INSERT` of one row whose values are all parameters, with `on conflict do nothing` after it where an existing row is skipped. An `UPDATE` or a `DELETE` is not available yet.
+- A `changing` statement is one `INSERT` of one row whose values are all parameters, with `on conflict do nothing` after it where an existing row is skipped.
 - A value is bound to its place in the statement and never written into it.
 
 A reading statement answers `{ columns, rows, truncated }`: `rows` is a list of objects by column name, at most 1,000 rows and 2 MiB, and `truncated` says the result was cut; page with `limit` and `offset` parameters. A `numeric` value comes as text. An insert answers `{ table, inserted, skipped }`.
@@ -373,7 +371,7 @@ The build answers each fault with its file and a sentence that names the fix. Th
 
 - `connection_not_declared`: the action calls a Connection that `connections` in `app.yaml` does not list.
 - `data_store_not_declared`: an `sql` action and no `dataStores` in `app.yaml`.
-- `key_reserved`: a key a later part of Apps will use, such as `rights`, `requires` or an action of `kind: code`; remove it.
+- `key_reserved`: a reserved key, such as `rights`, `requires` or an action of `kind: code`; remove it.
 - An `sql` file without its line under `actions`: add `{ name, file, effect }`.
 - A YAML file in `actions/` without the ending `.action.yaml`: rename it.
 - A missing `connection`, `operation` or `effect` in an action file: add it.

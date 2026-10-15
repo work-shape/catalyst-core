@@ -1,4 +1,4 @@
-import { withImpliedTools } from "./instance-tools";
+import { withCompanionTools, withImpliedTools } from "./instance-tools";
 
 export interface LocalizedPair<Value = string> {
   en: Value;
@@ -180,28 +180,39 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
 /**
  * The config to save for an edited agent. A field the form left as loaded keeps its stored
  * value, so the form's normalisation (trimming, collapsing equal locales) never reaches the
- * server as a change to a field nobody touched.
+ * server as a change to a field nobody touched. The one exception is a companion tool: the
+ * stored tools gain or lose it with its tool, because the page shows the pair as one check box.
+ * `offeredToolNames` are the instance's tools.
  */
 export function editedAgentConfig(
   form: AgentFormState,
-  storedConfig: Record<string, unknown> | undefined
+  storedConfig: Record<string, unknown> | undefined,
+  offeredToolNames: readonly string[] | undefined
 ): Record<string, unknown> {
-  const edited = agentFormToConfig(form);
+  const edited = agentFormToConfig(form, offeredToolNames);
   if (!storedConfig) {
     return edited;
   }
-  const loaded = agentFormToConfig(agentConfigToForm(storedConfig));
+  const loaded = agentFormToConfig(agentConfigToForm(storedConfig), offeredToolNames);
+  const kept = (field: string, value: unknown) =>
+    field in storedConfig && JSON.stringify(value) === JSON.stringify(loaded[field]);
   return Object.fromEntries(
     Object.entries(edited).map(([field, value]) => [
       field,
-      field in storedConfig && JSON.stringify(value) === JSON.stringify(loaded[field])
-        ? storedConfig[field]
-        : value
+      !kept(field, value)
+        ? value
+        : field === "toolNames"
+          ? withCompanionTools(stringArray(storedConfig.toolNames), offeredToolNames)
+          : storedConfig[field]
     ])
   );
 }
 
-export function agentFormToConfig(form: AgentFormState): Record<string, unknown> {
+/** The agent's config from its form. `offeredToolNames` are the instance's tools, if known. */
+export function agentFormToConfig(
+  form: AgentFormState,
+  offeredToolNames?: readonly string[]
+): Record<string, unknown> {
   const displayName = pairToLocalized(form.displayName);
   const description = pairToLocalized(form.description);
   const welcomeMessage = pairToLocalized(form.welcomeMessage);
@@ -237,7 +248,7 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
     ...(Object.keys(modelReasoningEfforts).length ? { modelReasoningEfforts } : {}),
     ...(maxSteps === undefined ? {} : { maxSteps }),
     // The tools the agent holds because of something else are saved with it.
-    toolNames: withImpliedTools(form.toolNames, form.skillNames),
+    toolNames: withImpliedTools(form.toolNames, form.skillNames, offeredToolNames),
     skillNames: form.skillNames,
     ...(form.knowledgeBases.length ? { knowledgeBases: form.knowledgeBases } : {}),
     initialPrompts: form.initialPrompts

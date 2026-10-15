@@ -9,7 +9,7 @@ The German interface shows the labels in quotes.
 
 ## Before you start
 
-- The system needs an **MCP server** reachable over HTTPS. That is the only kind of connection today. A system that only has a plain HTTP or REST API needs an MCP server in front of it, or the operator adds a custom tool.
+- The system needs an **MCP server** reachable over HTTPS, which this page sets up. A system with a REST interface that is read by GET is connected with its operations declared, as [Connecting an outside system](/configure/build/#connecting-an-outside-system) shows; one that must be written to needs a [custom tool](/extend/custom-tools/).
 - You need the address of its MCP endpoint, such as `https://crm.example.com/mcp`, and its key or token if it asks for one.
 - You need to be an administrator. Creating a Connection, entering its key and testing it are rights of the administrator role.
 - The operator must allow the instance to reach the server's host. If it does not, the test says **Network denied** ("Netzwerk gesperrt"); ask the operator.

@@ -13,7 +13,7 @@ import {
 } from "@vivd-catalyst/chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
-// The Connections in an agent's Tools section, a chip each as the packages are (TOOLS-1), on
+// The Connections in an agent's Tools section, a row each as the packages are (TOOLS-1), on
 // answers of `connections.list_tools` handed to the page. That the instance answers a reader only the
 // Connections the reader may read, and only operations agents may call, is held in
 // tests/connection-operation-answers.test.ts. Every test here fails without them: the section
@@ -87,7 +87,7 @@ function tools(input: AgentInput): string {
       })
     )
   );
-  return /<section[^>]*id="tools">.*?<\/section>/u.exec(markup)?.[0] ?? "";
+  return /<section[^>]*id="tools">[\s\S]*?<\/section>/u.exec(markup)?.[0] ?? "";
 }
 
 describe("tools of Connections on the agent page", () => {
@@ -119,30 +119,29 @@ describe("tools of Connections on the agent page", () => {
       }
     ]
   };
-  const chip = (markup: string, key: string) =>
-    new RegExp(`data-tool-package="${key}">.*?</li>`, "u").exec(markup)?.[0] ?? "";
+  const row = (markup: string, key: string) =>
+    new RegExp(`data-tool-package="${key}"[\\s\\S]*?</li>`, "u").exec(markup)?.[0] ?? "";
 
-  it("shows a Connection the agent uses as a chip with its count, beside the packages", () => {
+  it("shows each Connection as a row with its count and switch, after the packages", () => {
     const markup = tools({
       config: { toolNames: ["read_skill", "connection.crm.find_customer"] },
       enabledToolNames: ["read_skill"],
       connectionTools: answered
     });
 
-    // The Connection is a chip like a package; one of its two operations is on.
-    expect(chip(markup, "connection:crm")).toContain("Customer records");
-    expect(chip(markup, "connection:crm")).toContain("1/2");
-    expect(chip(markup, "connection:crm")).toContain('aria-label="Remove"');
-    expect(chip(markup, "connection:crm")).toContain('aria-haspopup="dialog"');
-    // A Connection the agent does not use is not a chip: the picker offers it.
-    expect(markup).not.toContain('data-tool-package="connection:ledger"');
-    expect(markup).toContain("Add packages");
-    // The operations stand in the chip's panel, not on the page at rest.
+    // The Connection is a row like a package; one of its two operations is on.
+    expect(row(markup, "connection:crm")).toContain("Customer records");
+    expect(row(markup, "connection:crm")).toContain(">1/2<");
+    expect(row(markup, "connection:crm")).toContain('aria-checked="mixed"');
+    expect(row(markup, "connection:crm")).toContain('aria-expanded="false"');
+    // A Connection the agent uses none of stands too, switched off.
+    expect(row(markup, "connection:ledger")).toContain(">0/13<");
+    // The operations stand folded in the row, not on the page at rest.
     expect(markup).not.toContain("find_customer<");
     expect(markup).not.toContain("data-unavailable-option");
   });
 
-  it("offers every Connection the agent does not use in the picker, with its tools all on once added", () => {
+  it("turns on every tool of a Connection the agent does not use with its switch", () => {
     const view = toolPackages({
       references: undefined,
       selected: [],
@@ -172,11 +171,11 @@ describe("tools of Connections on the agent page", () => {
     // The reader learns nothing of a Connection the instance did not answer.
     expect(markup).not.toContain('data-tool-package="connection:payroll"');
 
-    // Saving sends every name the reader did not remove, also the ones no chip offers.
+    // Saving sends every name the reader did not remove, also the ones no row offers.
     const config = { ...agentBase, toolNames: held };
     const ticked = toggleToolName(held, "connection.crm.add_note", true);
     expect(
-      editedAgentConfig({ ...agentConfigToForm(config), toolNames: ticked }, config).toolNames
+      editedAgentConfig({ ...agentConfigToForm(config), toolNames: ticked }, config, []).toolNames
     ).toEqual([...held, "connection.crm.add_note"]);
     expect(connectionToolsView(answered, ticked).unavailable).toEqual(held);
     expect(toggleToolName(ticked, "connection.crm.gone", false)).toEqual([
@@ -201,9 +200,9 @@ describe("tools of Connections on the agent page", () => {
       connectionTools: answered,
       editableAgentFields: []
     });
-    expect(chip(readOnly, "connection:crm")).toContain("Customer records");
+    expect(row(readOnly, "connection:crm")).toContain("Customer records");
+    expect(row(readOnly, "connection:crm")).toMatch(/role="checkbox"[^>]*disabled=""/u);
     expect(readOnly).not.toContain('aria-label="Remove"');
-    expect(readOnly).not.toContain("Add packages");
   });
 
   it("judges nothing while the instance did not answer", () => {
@@ -223,8 +222,8 @@ describe("tools of Connections on the agent page", () => {
       connectionTools: answered,
       locale: "de"
     });
-    expect(chip(markup, "connection:crm")).toContain("1/2");
-    expect(markup).toContain("Pakete hinzufügen");
+    expect(row(markup, "connection:crm")).toContain(">1/2<");
+    expect(markup).toContain(">Verbindungen</h3>");
     expect(markup).toContain(
       "Diese Werkzeuge werden diesem Agenten nicht mehr angeboten. Der Agent behält sie, bis du sie entfernst."
     );

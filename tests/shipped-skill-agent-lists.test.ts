@@ -233,7 +233,7 @@ describe("the two config pushes around the release that ships the four", () => {
     );
   }
 
-  it("walks old release with copies → refused new start → push A --prune → new release → push B", async () => {
+  it("walks old release with copies → new start keeps copies → push A --prune → restart seeds shipped skills → push B", async () => {
     // Stage 0: the release running today, with the vendored copies and the agent listing them.
     const old = await start(false);
     for (const name of FOUR) {
@@ -244,27 +244,39 @@ describe("the two config pushes around the release that ships the four", () => {
     expect(created.statusCode, created.body).toBe(200);
     expect(await readSkill(old, "pdf")).toMatchObject({ status: "success" });
 
-    // The new release, started before push A, stops and deletes nothing.
-    await expect(start(true)).rejects.toThrow("instance holds a skill of its own named");
+    // The upgrade succeeds before push A, preserving the copies and the agent's references.
+    const upgraded = await start(true);
     for (const name of FOUR) {
-      expect((await get(old, "skill", name)).config).not.toHaveProperty("origin");
+      expect(await get(upgraded, "skill", name)).toEqual({
+        revision: 1,
+        config: instanceCopy(name)
+      });
     }
+    expect((await get(upgraded, "agent", AGENT)).revision).toBe(1);
+    expect((await get(upgraded, "agent", AGENT)).config).toMatchObject({ skillNames: FOUR });
+    const retained = await readSkill(upgraded, "pdf");
+    expect(retained).toMatchObject({ status: "success" });
+    expect(JSON.stringify(retained)).toContain("vendored copy");
 
     // A push cannot delete a skill an agent still lists (the reason for the agent change).
-    const early = await del(old, "skill", "pdf", 1);
+    const early = await del(upgraded, "skill", "pdf", 1);
     expect(early.statusCode, early.body).toBeGreaterThanOrEqual(400);
 
     // Push A, at commit 1 with --prune: the agent without the four, then the four deleted.
-    const agentA = await put(old, "agent", AGENT, agentListing([]), 1);
+    const agentA = await put(upgraded, "agent", AGENT, agentListing([]), 1);
     expect(agentA.statusCode, agentA.body).toBe(200);
     for (const name of FOUR) {
-      const r = await del(old, "skill", name, 1);
+      const r = await del(upgraded, "skill", name, 1);
       expect(r.statusCode, r.body).toBe(200);
     }
-    // Between push A and the deploy, the agents run without the four.
-    expect(await readSkill(old, "pdf")).toMatchObject({ status: "failed" });
+    // Between push A and the restart, the agents run without the four.
+    const afterPrune = await skills(upgraded);
+    for (const name of FOUR) {
+      expect(afterPrune.map((skill) => skill.name)).not.toContain(name);
+    }
+    expect(await readSkill(upgraded, "pdf")).toMatchObject({ status: "failed" });
 
-    // The deploy: the new release starts and stores the four with their icons.
+    // A restart of the new release seeds the four with their icons and origin release.
     const next = await start(true);
     const shipped = (await skills(next)).filter((s) => s.attributes?.origin === "release");
     expect(Object.fromEntries(shipped.map((s) => [s.name, s.attributes?.icon]))).toMatchObject({
@@ -273,11 +285,13 @@ describe("the two config pushes around the release that ships the four", () => {
       presentations: "presentation",
       pdf: "pdf"
     });
-    // The deleted rows of the instance copies continue as the release's.
-    expect((await get(next, "skill", "pdf")).config).toMatchObject({
-      origin: "release",
-      icon: "pdf"
-    });
+    // The deleted rows of every instance copy continue as the release's.
+    for (const name of FOUR) {
+      expect((await get(next, "skill", name)).config).toMatchObject({
+        origin: "release",
+        content: `# ${name}\nThe release's text.`
+      });
+    }
 
     // Push B, at the branch head: the agent lists the four again.
     const agentB = await put(

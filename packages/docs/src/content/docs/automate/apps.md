@@ -13,7 +13,7 @@ Describe what you need: who uses it, what it shows, what it should let people do
 
 The agent builds a **Page** and shows it beside the chat. **Preview** ("Vorschau") shows it working; **Files** ("Dateien") shows what it is made of. Keep asking for changes in the chat; each one the agent saves is the Page's newest revision.
 
-A Page belongs to its conversation. It cannot yet change anything in other systems. To keep it and share it, save it as an App.
+A Page belongs to its conversation. It cannot change anything in other systems. To keep it and share it, save it as an App.
 
 When you have no App yet, the **Apps** page offers **Build an app in chat** ("App im Chat bauen"), which starts a chat for this.
 
@@ -65,5 +65,5 @@ Later changes go to the draft again. The App shows **Unpublished changes** ("Unv
 ## Who may do what
 
 - Everyone in the workspace can open a published App.
-- Saving a Page as an App, editing the draft, **Run live once** and publishing are rights of the administrator role today. They cannot be given to one person yet. If you do not see **Save as app** or **Publish**, ask an administrator.
+- Saving a Page as an App, editing the draft, **Run live once** and publishing are rights of the administrator role. They cannot be given to one person. If you do not see **Save as app** or **Publish**, ask an administrator.
 - An action reaches only what the person using the App may reach. The App's screens never hold a key: they call actions by name, and the instance makes the call.

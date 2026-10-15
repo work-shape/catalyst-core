@@ -15,6 +15,21 @@ import {
 
 import { createStructuredDataToolDefinitions, ToolRegistry } from "@vivd-catalyst/tool-execution";
 
+describe("the words the agent page shows for the fact sheet tools", () => {
+  it("says what each tool does, in both languages", async () => {
+    const { stores } = await createTestInstance();
+    const words = Object.fromEntries(
+      createStructuredDataToolDefinitions({ store: stores }).map((tool) => [tool.name, tool.title])
+    );
+
+    expect(words).toEqual({
+      "structured_data.publish": { en: "Keep a fact sheet", de: "Faktenblatt führen" },
+      "structured_data.read": { en: "Read the fact sheet", de: "Faktenblatt lesen" },
+      "structured_result.read": { en: "Reopen an earlier result", de: "Früheres Ergebnis öffnen" }
+    });
+  });
+});
+
 describe("structured_data.publish", () => {
   it("reviews a fully materialized replacement and publishes with model-visible warnings", async () => {
     let proposal: Parameters<StructuredDataPublicationReviewer>[0] | undefined;

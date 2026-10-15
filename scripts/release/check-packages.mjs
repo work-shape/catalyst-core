@@ -33,9 +33,10 @@ const MAX_TARBALL_BYTES = 300_000;
 // schema snapshot each, about 9 kB packed per migration; 69 migrations are 620 kB, 82 are 814 kB
 // (2026-10-14, the Knowledge Base migration).
 // chat-ui dropped its duplicate TypeScript source on 2026-10-15; Tailwind scans the compiled
-// components in published packages and the original source during workspace development.
+// components in published packages and the original source during workspace development. It
+// packs to about 540 kB since; its limit went back to 650 kB on 2026-10-15 (Felix approved).
 const MAX_TARBALL_BYTES_BY_DIR = {
-  "chat-ui": 1_300_000,
+  "chat-ui": 650_000,
   ui: 500_000,
   // Raised on 2026-10-14 for App Kit 1.4.0 and the guardrail assets of EW-6a. Follow-up
   // KIT-SHARE-1: vendored App Kit versions share React and the chart engine; then lower the

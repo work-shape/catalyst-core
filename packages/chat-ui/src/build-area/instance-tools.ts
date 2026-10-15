@@ -5,10 +5,9 @@ import type {
 } from "@vivd-catalyst/api-client";
 import { isConnectionToolName, type ConnectionToolsRead } from "./connection-tools";
 
-// The tools of an agent's Tools section as the page shows them: one chip per package
-// ("Paket") the agent uses, per own tool of this instance and per Connection, each with its tools
-// for the panel the chip opens, and the ones the picker can add. Pure, so the page and its tests
-// read the same answer.
+// The tools of an agent's Tools section as the page shows them: one row per package ("Paket"),
+// per own tool of this instance and per Connection, each with its tools folded below it and a
+// switch for all of them. Pure, so the page and its tests read the same answer.
 
 /** The groups in the order the page shows them. A group without tools is left out. */
 const INSTANCE_TOOL_GROUPS: readonly ToolGroupName[] = [
@@ -26,6 +25,14 @@ type ToolInclusionReason = "skills";
 
 /** The tool that reads the agent's skills: every agent with a skill holds it. */
 const READ_SKILL_TOOL_NAME = "read_skill";
+
+/**
+ * Tools that come with another and stand on the page only through it: the agent holds the one
+ * exactly while it holds the other. Keeping a fact sheet includes reading it.
+ */
+const COMPANION_TOOLS: ReadonlyMap<string, string> = new Map([
+  ["structured_data.read", "structured_data.publish"]
+]);
 
 /** One tool as its group shows it. */
 export interface InstanceToolView {
@@ -49,8 +56,8 @@ interface InstanceToolGroupView {
 }
 
 /**
- * One chip of the section, or one row of the picker that adds it: a package of the platform,
- * one own tool of this instance, or one Connection.
+ * One row of the section: a package of the platform, one own tool of this instance, or one
+ * Connection.
  */
 export interface ToolPackageView {
   /** Unique within the section: `package:<group>`, `own:<tool>` or `connection:<name>`. */
@@ -65,7 +72,7 @@ export interface ToolPackageView {
   /** The Connection: its name for the way to its page, and what picks its icon. */
   connection?: { name: string; service?: string; connectorType?: string };
   tools: InstanceToolView[];
-  /** The tools with a check box: what adding and removing the chip turns on and off. */
+  /** The tools with a check box: what the row's switch turns on and off. */
   choosable: string[];
   /** How many of its tools the agent holds, the included ones counted. */
   heldCount: number;
@@ -79,13 +86,51 @@ function impliedTools(skillNames: readonly string[]): Map<string, ToolInclusionR
   return new Map(skillNames.length > 0 ? [[READ_SKILL_TOOL_NAME, "skills"]] : []);
 }
 
-/** The tool names an agent is saved with: its chosen ones and those it holds by implication. */
+/**
+ * The companions that share their tool's check box on this instance: those whose two tools it
+ * offers both of. Where it offers only the tool, that stands alone as before.
+ */
+function pairedCompanions(offeredNames: readonly string[] | undefined): Map<string, string> {
+  return new Map(
+    [...COMPANION_TOOLS].filter(
+      ([companion, lead]) =>
+        (offeredNames?.includes(companion) ?? false) && offeredNames?.includes(lead)
+    )
+  );
+}
+
+/**
+ * The tool names with each companion the instance pairs held exactly while its tool is: added
+ * where the tool is held, removed where it is not. `offeredNames` are the instance's tools;
+ * without them nothing is paired.
+ */
+export function withCompanionTools(
+  toolNames: readonly string[],
+  offeredNames: readonly string[] | undefined
+): string[] {
+  const paired = pairedCompanions(offeredNames);
+  const chosen = toolNames.filter((name) => {
+    const lead = paired.get(name);
+    return lead === undefined || toolNames.includes(lead);
+  });
+  const companions = [...paired]
+    .filter(([companion, lead]) => chosen.includes(lead) && !chosen.includes(companion))
+    .map(([companion]) => companion);
+  return [...chosen, ...companions];
+}
+
+/**
+ * The tool names an agent is saved with: its chosen ones and those it holds by implication, a
+ * companion with its tool among them. `offeredNames` are the instance's tools.
+ */
 export function withImpliedTools(
   toolNames: readonly string[],
-  skillNames: readonly string[]
+  skillNames: readonly string[],
+  offeredNames: readonly string[] | undefined
 ): string[] {
-  const implied = [...impliedTools(skillNames).keys()].filter((name) => !toolNames.includes(name));
-  return [...toolNames, ...implied];
+  const held = withCompanionTools(toolNames, offeredNames);
+  const implied = [...impliedTools(skillNames).keys()].filter((name) => !held.includes(name));
+  return [...held, ...implied];
 }
 
 /**
@@ -110,9 +155,14 @@ function instanceToolGroups(input: {
     )
     .map((name): AgentToolReference => ({ name }));
   const implied = impliedTools(input.skillNames);
+  // A companion the instance pairs has no row: its tool's check box holds it.
+  const paired = pairedCompanions(references?.enabledToolNames);
 
   const byGroup = new Map<ToolGroupName, InstanceToolView[]>();
   for (const tool of [...offered, ...held]) {
+    if (paired.has(tool.name)) {
+      continue;
+    }
     const group = tool.group ?? "instance";
     const includedBecause = implied.get(tool.name);
     byGroup.set(group, [
@@ -139,10 +189,9 @@ function instanceToolGroups(input: {
 }
 
 /**
- * Every chip the section can show, in its order: the packages, then this instance's own tools,
- * one chip each, then the Connections. A chip the agent holds a tool of is active; the others
- * are what the picker offers. `isOtherSource` answers for a name a later group shows, a tool of
- * an App.
+ * Every row of the section, in its order: the packages, then this instance's own tools, one row
+ * each, then the Connections; those the agent holds no tool of too. `isOtherSource` answers for
+ * a name a later group shows, a tool of an App.
  */
 export function toolPackages(input: {
   references: ConfigAssetReferences | undefined;
@@ -207,7 +256,7 @@ export function toolPackages(input: {
   return [...packages, ...own, ...connections];
 }
 
-/** The agent's tool names with all tools of a chip on, or none. The rest keep their order. */
+/** The agent's tool names with all tools of a row on, or none. The rest keep their order. */
 export function setPackageTools(
   selected: readonly string[],
   item: Pick<ToolPackageView, "choosable">,
@@ -216,6 +265,23 @@ export function setPackageTools(
   return on
     ? [...selected, ...item.choosable.filter((name) => !selected.includes(name))]
     : selected.filter((name) => !item.choosable.includes(name));
+}
+
+/**
+ * Where a row's switch stands: on while every tool with a check box is on, off while none is,
+ * mixed between. A tool held because of something else does not move it.
+ */
+export function packageSwitchState(
+  item: Pick<ToolPackageView, "choosable">,
+  selected: readonly string[]
+): "on" | "off" | "mixed" {
+  const on = item.choosable.filter((name) => selected.includes(name)).length;
+  return on === 0 ? "off" : on === item.choosable.length ? "on" : "mixed";
+}
+
+/** How many tools the rows hold together: the number the section's heading shows. */
+export function heldToolCount(items: readonly Pick<ToolPackageView, "heldCount">[]): number {
+  return items.reduce((sum, item) => sum + item.heldCount, 0);
 }
 
 function choosableOf(tools: readonly InstanceToolView[]): string[] {
