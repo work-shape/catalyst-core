@@ -15835,6 +15835,9 @@
                             "items": {
                               "type": "object",
                               "properties": {
+                                "principalDisplayLabel": {
+                                  "type": "string"
+                                },
                                 "code": {
                                   "type": "string"
                                 },

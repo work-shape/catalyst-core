@@ -26,7 +26,12 @@ const listSchema = z.object({
       definitionRevisionId: z.string(),
       runnable: z.boolean(),
       reasons: z.array(
-        z.strictObject({ code: z.string(), message: z.string(), path: z.string().optional() })
+        z.strictObject({
+          code: z.string(),
+          message: z.string(),
+          path: z.string().optional(),
+          principalDisplayLabel: z.string().optional()
+        })
       ),
       actions: z.array(z.string()),
       inputs: z.record(z.string(), z.unknown()).optional(),
@@ -282,6 +287,7 @@ describe("a Workflow stored as an asset", () => {
     await t.stores.apiAccess.updateServicePrincipal({
       clientInstanceId,
       servicePrincipalId: t.principal.id,
+      displayLabel: "Booking checks",
       status: "disabled"
     });
     const [disabled] = await listed(t);
@@ -291,6 +297,11 @@ describe("a Workflow stored as an asset", () => {
     expect(disabled?.reasons.map((reason) => [reason.code, reason.path])).toEqual([
       ["principal_inactive", "runAs"]
     ]);
+    expect(disabled?.reasons[0]).toMatchObject({
+      principalDisplayLabel: "Booking checks",
+      message: "The technical account ‘Booking checks’ is disabled."
+    });
+    expect(disabled?.reasons[0]?.message).not.toContain(t.principal.name);
     expect(await startReason()).toBe("principal_inactive");
     await t.stores.apiAccess.updateServicePrincipal({
       clientInstanceId,

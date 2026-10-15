@@ -1,5 +1,11 @@
 import { compileJsonSchema } from "@vivd-catalyst/connections";
-import type { OperationRegistry, WorkflowManifest, WorkflowRun } from "@vivd-catalyst/core";
+import type {
+  ApiAccessStore,
+  ClientInstanceId,
+  OperationRegistry,
+  WorkflowManifest,
+  WorkflowRun
+} from "@vivd-catalyst/core";
 import { indexWorkflowSteps, type WorkflowDefinitionIssue } from "./definition";
 import { secretOperationSteps } from "./operation-step";
 
@@ -21,6 +27,8 @@ export interface WorkflowStartIssue {
   code: string;
   /** A sentence of the product. Never a value of a run. */
   message: string;
+  /** The technical account’s display label, when it still exists. */
+  principalDisplayLabel?: string;
   /** Where in the definition it is, where it is at one place. */
   path?: string;
 }
@@ -47,6 +55,8 @@ export async function workflowStartIssues(
   instance: {
     /** The principal the definition runs as, as `workflowRunPrincipal` answers it. */
     principal: WorkflowRun["principal"] | undefined;
+    clientInstanceId: ClientInstanceId;
+    principals: Pick<ApiAccessStore, "findServicePrincipalByName">;
     registry: Pick<OperationRegistry, "resolve">;
   }
 ): Promise<WorkflowStartIssue[]> {
@@ -77,9 +87,16 @@ export async function workflowStartIssues(
   }
   issues.push(...(await secretOperationSteps(manifest, instance.registry)));
   if (!instance.principal) {
+    const principal = await instance.principals.findServicePrincipalByName({
+      clientInstanceId: instance.clientInstanceId,
+      name: manifest.runAs
+    });
     issues.push({
       code: "principal_inactive",
-      message: `The instance has no active service principal named '${manifest.runAs}', which the Workflow '${manifest.id}' runs as`,
+      message: principal
+        ? `The technical account ‘${principal.displayLabel}’ is disabled.`
+        : "The technical account for this Workflow is unavailable.",
+      ...(principal ? { principalDisplayLabel: principal.displayLabel } : {}),
       path: "runAs"
     });
   }
