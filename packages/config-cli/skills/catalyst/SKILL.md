@@ -77,12 +77,12 @@ catalyst data-store describe reporting
 catalyst data-store used-by reporting
 catalyst app actions offers
 catalyst keys list
-catalyst workspace list
+catalyst instance workspaces
 ```
 
 These commands print readable YAML; add `--json` for JSON. Paginated lists read every page. `workflow test` starts a test of the saved draft, simulating changing steps; it returns the current state, so read `run` and `steps` for progress. `--from <file|->` reads the request body `{"input": {...}}`; omitted, it sends `{}`. Run a test only when asked to test, and `catalyst workflow cancel <run-id>` only when asked to cancel that run.
 
-`app actions` without a name lists published Apps' actions; with a name it reads the draft if you may write it, otherwise the published revision. `keys list` reads only your own key metadata, never secrets. `workspace list` lists Shared Workspaces for agent availability through `instance.workspaces.list`, requiring `config_assets:write` and `agent.write`; it does not list your memberships. Keep `hasMore`, hidden counts and `truncated` in mind when reading hits, dependencies and actions.
+`app actions` without a name lists published Apps' actions; with a name it reads the draft if you may write it, otherwise the published revision. `keys list` reads only your own key metadata, never secrets. `instance workspaces` lists Shared Workspaces for agent availability through `instance.workspaces.list`, requiring `config_assets:write` and `agent.write`; it does not list your memberships. Keep `hasMore`, hidden counts and `truncated` in mind when reading hits, dependencies and actions.
 
 ## Exit codes
 

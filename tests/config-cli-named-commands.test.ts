@@ -209,7 +209,7 @@ const cases: CommandCase[] = [
     ]
   },
   {
-    args: ["workspace", "list"],
+    args: ["instance", "workspaces"],
     operation: "instance.workspaces.list",
     response: { items: [{ id: "workspace-1", name: "Team", createdAt: at }], hasMore: false },
     items: [{ id: "workspace-1", name: "Team", createdAt: at }]
@@ -217,6 +217,13 @@ const cases: CommandCase[] = [
 ];
 
 describe("named CLI operation faces", () => {
+  it("reserves workspace list and lists the instance command in help", async () => {
+    const result = await run(["--help"]);
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("instance workspaces (instance.workspaces.list)");
+    expect(result.out).not.toContain("workspace list");
+  });
+
   it.each(cases)("$args calls $operation with readable output and --json", async (entry) => {
     const operation = apiOperations[entry.operation];
     const requests: Request[] = [];
@@ -322,6 +329,19 @@ describe("named CLI operation faces", () => {
     }
   );
 
+  it("reports a missing workflow input file as a file error before sending anything", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    const result = await run(["workflow", "test", "month-end", "--from", "missing.json"], {
+      fetchImpl
+    });
+    expect(result.code).toBe(1);
+    expect(result.out).toBe("");
+    expect(result.err).toContain("ENOENT");
+    expect(result.err).toContain("missing.json");
+    expect(result.err).not.toContain("must be a JSON object");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed workflow input before sending anything", async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     for (const input of ["invalid JSON", "[]", '{"input": []}']) {
@@ -338,7 +358,7 @@ describe("named CLI operation faces", () => {
   });
 
   it("prints the instance's refusal and exits 1", async () => {
-    const result = await run(["workspace", "list"], {
+    const result = await run(["instance", "workspaces"], {
       fetchImpl: apiFetch(() =>
         Response.json(
           { error: { code: "FORBIDDEN", message: "Missing the right 'agent.write'" } },

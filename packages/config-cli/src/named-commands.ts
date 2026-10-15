@@ -77,9 +77,9 @@ const commands: Readonly<Record<string, NamedCommand>> = {
     optionalName: true
   },
   "keys list": { operation: apiOperations["me.api_keys.list"], usage: "keys list" },
-  "workspace list": {
+  "instance workspaces": {
     operation: apiOperations["instance.workspaces.list"],
-    usage: "workspace list"
+    usage: "instance workspaces"
   }
 };
 
@@ -130,13 +130,13 @@ export async function runNamedCommand(
     let body: unknown;
     if (command.from) {
       const source = values.from;
+      const text =
+        source === undefined
+          ? "{}"
+          : source === "-"
+            ? await readStdin(base.stdin ?? process.stdin)
+            : await readFile(resolve(base.cwd, source), "utf8");
       try {
-        const text =
-          source === undefined
-            ? "{}"
-            : source === "-"
-              ? await readStdin(base.stdin ?? process.stdin)
-              : await readFile(resolve(base.cwd, source), "utf8");
         const input: unknown = JSON.parse(text);
         // This is the operation's request body, not the generic call envelope.
         body = command.operation.body?.parse(input);
@@ -192,7 +192,7 @@ ${Object.values(commands)
   .join("\n")}
 
 Workflow test --from reads the request body {"input": {...}}; omitted, it sends {}.
-Lists read every page. workspace list shows Shared Workspaces for agent availability
+Lists read every page. instance workspaces shows Shared Workspaces for agent availability
 and needs config_assets:write and agent.write; it is not the membership list.
 Options: --instance <name-or-url>, --dir <working-copy-dir>, --json, --help
 Exit codes: 0 done, 1 refused or failed, 2 usage, 3 waits for approval.
