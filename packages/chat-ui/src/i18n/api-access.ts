@@ -83,7 +83,7 @@ export const apiAccess = defineTranslations({
     apiAccessRightsNoneGrantable:
       "This instance has no kind of resource a service principal can be given a right on.",
     apiAccessRightsNotAdministrable:
-      "You may not give rights to service principals. That takes a superadmin who manages API access. Ask one to add this right.",
+      "You may not give rights to service principals. That takes someone who manages service principals and holds the right themselves. Ask them to add this right.",
     apiAccessRightsRemove: "Remove",
     apiAccessRightsRemoveDescription:
       "{principal} can no longer use {resource}, at once. A Workflow that runs as it and calls {resource} fails from then on.",
@@ -200,7 +200,7 @@ export const apiAccess = defineTranslations({
     apiAccessRightsNoneGrantable:
       "Diese Instanz hat keine Art von Ressource, auf der ein Service Principal ein Recht erhalten kann.",
     apiAccessRightsNotAdministrable:
-      "Du darfst Service Principals keine Rechte geben. Das kann nur ein Superadmin, der den API-Zugriff verwaltet. Bitte einen darum, dieses Recht hinzuzufügen.",
+      "Du darfst Service Principals keine Rechte geben. Das kann nur, wer Service Principals verwaltet und das Recht selbst hat. Bitte so jemanden darum, dieses Recht hinzuzufügen.",
     apiAccessRightsRemove: "Entfernen",
     apiAccessRightsRemoveDescription:
       "{principal} kann {resource} sofort nicht mehr verwenden. Ein Workflow, der als dieser Service Principal läuft und {resource} aufruft, schlägt von da an fehl.",

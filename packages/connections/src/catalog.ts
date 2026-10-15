@@ -8,6 +8,7 @@ import {
   type ConnectionOperationStatus,
   type ConnectorOperationDescriptor,
   type ConnectorTypeDefinition,
+  type DeclaredOperations,
   type JsonObject,
   type JsonValue
 } from "@vivd-catalyst/core";
@@ -189,9 +190,10 @@ function schemasCompile(descriptor: ConnectorOperationDescriptor): boolean {
 }
 
 /**
- * Whether the operations of a type are described by an outside system: a type without a
- * catalog of its own reads them at a discovery. Their schemas are untrusted and are compiled
- * and checked in a worker thread only.
+ * Whether the operations of a type are described outside the release: a type without a
+ * catalog of its own reads them at a discovery, or has each Connection declare them, often
+ * from a vendor's description an agent wrote out. Their schemas are untrusted and are
+ * compiled and checked in a worker thread only.
  */
 export function describedByOutsideSystem(type: Pick<ConnectorTypeDefinition, "catalog">): boolean {
   return type.catalog === undefined;
@@ -232,10 +234,23 @@ function outsideBoundRefusal(
 }
 
 /**
+ * The descriptor a declaring type makes of an accepted operation, or nothing where the type
+ * refuses its declaration or its schemas are beyond what the platform compiles.
+ */
+function declaredDescriptor(
+  declared: DeclaredOperations,
+  operation: ConnectionOperationConfig
+): ConnectorOperationDescriptor | undefined {
+  if (declared.issues(operation).length > 0) return undefined;
+  const descriptor = declared.describe(operation);
+  return hasUsableSchemas(descriptor) ? descriptor : undefined;
+}
+
+/**
  * Whether one accepted operation can be called. The accepted fingerprint is the one config
  * names, else the pin of the first discovery. A type with a static catalog needs no stored
- * catalog: its descriptor is the release's own. A fingerprint config names is checked against
- * it all the same.
+ * catalog: its descriptor is the release's own, as a declared operation is its own. A
+ * fingerprint config names is checked against either all the same.
  */
 export function connectionOperationStatus(input: {
   type: ConnectorTypeDefinition;
@@ -246,10 +261,12 @@ export function connectionOperationStatus(input: {
   let descriptor: ConnectorOperationDescriptor | undefined;
   let fingerprint: string | undefined;
   let accepted: string | undefined;
-  if (type.catalog) {
-    descriptor = type.catalog.find(
-      (candidate) => candidate.name === operation.name && hasUsableSchemas(candidate)
-    );
+  if (type.catalog || type.declared) {
+    descriptor = type.catalog
+      ? type.catalog.find(
+          (candidate) => candidate.name === operation.name && hasUsableSchemas(candidate)
+        )
+      : declaredDescriptor(type.declared, operation);
     fingerprint = descriptor ? fingerprintOperation(descriptor) : undefined;
     accepted = operation.schemaFingerprint ?? fingerprint;
   } else {

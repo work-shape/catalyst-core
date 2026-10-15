@@ -46,8 +46,16 @@ import {
 import { copySecretField, SecretFields, type RevealedSecret } from "./api-access-secret-fields";
 import { useTranslation } from "../i18n";
 
+/** What the reader may change on the page; the instance decides each call itself. */
+interface ApiAccessRights {
+  /** Creates and changes principals and gives them rights: `service_principals.manage`. */
+  principals: boolean;
+  /** Issues and revokes principals' keys: `api_access.manage`. */
+  keys: boolean;
+}
+
 export interface ApiAccessPanelInput {
-  canMutate: boolean;
+  may: ApiAccessRights;
   principals: ServicePrincipalDetail[];
   /** The principal the page opens on, where its address names one. */
   initialPrincipalId?: string;
@@ -76,7 +84,7 @@ export interface ApiAccessPanelInput {
 }
 
 export function ApiAccessPanel({
-  canMutate,
+  may,
   principals,
   initialPrincipalId,
   renderRights,
@@ -109,12 +117,14 @@ export function ApiAccessPanel({
   }, [selectedPrincipal, selectedPrincipalId]);
 
   useEffect(() => {
-    if (!canMutate) {
+    if (!may.principals) {
       setPrincipalDialog(undefined);
+    }
+    if (!may.keys) {
       setCredentialDialogOpen(false);
       setCredentialToRevoke(undefined);
     }
-  }, [canMutate]);
+  }, [may.principals, may.keys]);
 
   return (
     <>
@@ -122,7 +132,7 @@ export function ApiAccessPanel({
         title={t("settings.apiAccess")}
         description={t("apiAccessDescription")}
         primaryAction={
-          canMutate ? (
+          may.principals ? (
             <Button onClick={() => setPrincipalDialog("create")}>
               <Plus aria-hidden="true" />
               {t("apiAccessCreatePrincipal")}
@@ -149,7 +159,7 @@ export function ApiAccessPanel({
                   layout="inline"
                   icon={<ShieldCheck aria-hidden="true" />}
                   action={
-                    canMutate ? (
+                    may.principals ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -206,7 +216,7 @@ export function ApiAccessPanel({
             <PrincipalDetail
               detail={selectedPrincipal}
               mutating={mutating}
-              canMutate={canMutate}
+              may={may}
               onEdit={() => setPrincipalDialog("edit")}
               onCreateCredential={() => setCredentialDialogOpen(true)}
               onRevokeCredential={setCredentialToRevoke}
@@ -215,7 +225,7 @@ export function ApiAccessPanel({
           ) : null}
         </div>
 
-        {principalDialog && canMutate ? (
+        {principalDialog && may.principals ? (
           <PrincipalDialog
             mode={principalDialog}
             detail={principalDialog === "edit" ? selectedPrincipal : undefined}
@@ -237,7 +247,7 @@ export function ApiAccessPanel({
           />
         ) : null}
 
-        {credentialDialogOpen && canMutate ? (
+        {credentialDialogOpen && may.keys ? (
           <CredentialDialog
             open={credentialDialogOpen}
             detail={selectedPrincipal}
@@ -256,11 +266,11 @@ export function ApiAccessPanel({
           />
         ) : null}
 
-        {canMutate && revealedCredential ? (
+        {may.keys && revealedCredential ? (
           <SecretDialog secret={revealedCredential} onClose={onClearRevealedCredential} />
         ) : null}
 
-        {credentialToRevoke && canMutate ? (
+        {credentialToRevoke && may.keys ? (
           <Dialog
             open={Boolean(credentialToRevoke)}
             title={t("apiAccessRevokeCredential")}
@@ -298,7 +308,7 @@ export function ApiAccessPanel({
 function PrincipalDetail({
   detail,
   mutating,
-  canMutate,
+  may,
   onEdit,
   onCreateCredential,
   onRevokeCredential,
@@ -306,7 +316,7 @@ function PrincipalDetail({
 }: {
   detail: ServicePrincipalDetail;
   mutating: boolean;
-  canMutate: boolean;
+  may: ApiAccessRights;
   onEdit(): void;
   onCreateCredential(): void;
   onRevokeCredential(credential: ApiCredential): void;
@@ -324,7 +334,7 @@ function PrincipalDetail({
             {principal.description ?? t("apiAccessNoDescription")}
           </p>
         </div>
-        {canMutate ? (
+        {may.principals ? (
           <Button variant="outline" size="sm" onClick={onEdit}>
             <Pencil aria-hidden="true" />
             {t("apiAccessEdit")}
@@ -346,7 +356,7 @@ function PrincipalDetail({
               <h3 className="text-sm font-semibold">{t("apiAccessApiKeys")}</h3>
               <p className="text-xs text-muted-foreground">{t("apiAccessApiKeysDescription")}</p>
             </div>
-            {canMutate ? (
+            {may.keys ? (
               <Button
                 size="sm"
                 disabled={
@@ -372,7 +382,7 @@ function PrincipalDetail({
                   <TableHead>{t("apiAccessExpires")}</TableHead>
                   <TableHead>{t("apiAccessStatus")}</TableHead>
                   <TableHead>{t("apiAccessLastUsed")}</TableHead>
-                  {canMutate ? <TableHead /> : null}
+                  {may.keys ? <TableHead /> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -413,7 +423,7 @@ function PrincipalDetail({
                       <TableCell className="text-xs text-muted-foreground">
                         {formatDate(credential.lastUsedAt, t("apiAccessNever"), locale)}
                       </TableCell>
-                      {canMutate ? (
+                      {may.keys ? (
                         <TableCell className="text-right">
                           {active ? (
                             <Button

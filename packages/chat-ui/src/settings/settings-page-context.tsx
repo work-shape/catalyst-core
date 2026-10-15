@@ -41,6 +41,11 @@ export interface SettingsPageContextValue {
    * Absent where none is: the New buttons keep their dialogs.
    */
   buildWithAgent?(prompt: string): void;
+  /**
+   * Opens the chat dock beside the open page with a new conversation and this text in its
+   * composer, for the person to send. Absent where the shell has no dock.
+   */
+  startDockedChat?: (prompt: string) => void;
 }
 
 const SettingsPageContext = createContext<SettingsPageContextValue | undefined>(undefined);

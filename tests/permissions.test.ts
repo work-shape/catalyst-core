@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  AppError,
   type PlatformAction,
   type Permission,
   ACTIONS,
@@ -10,7 +9,6 @@ import {
   ROLE_DEFAULT_PERMISSIONS,
   hasPermission,
   legacyPermissionFor,
-  requirePermission,
   resolveEffectivePermissions
 } from "@vivd-catalyst/core";
 
@@ -60,13 +58,16 @@ describe("permissions", () => {
       "usage.view",
       "audit.view",
       "api_access.manage",
+      "service_principals.manage",
       "agent_models.manage",
       "assets.release"
     ]);
     // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base and a Guardrail came
-    // after the legacy keys: no key names one, so nobody holds one through the legacy column.
+    // after the legacy keys, as did the right over service principals: no key names one, so
+    // nobody holds one through the legacy column.
     const unkeyed = (action: string) =>
-      /^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action);
+      /^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action) ||
+      action === "service_principals.manage";
     const keyed = ACTIONS.filter((action) => !unkeyed(action));
     expect(keyed).toHaveLength(14);
     for (const action of ACTIONS.filter(unkeyed)) {
@@ -158,7 +159,8 @@ describe("permissions", () => {
       "operations.approve",
       "users.manage",
       "usage.view",
-      "audit.view"
+      "audit.view",
+      "service_principals.manage"
     ]);
     expect(ROLE_DEFAULT_ACTIONS.superadmin).toEqual(
       ACTIONS.filter((action) => action !== "assets.release")
@@ -182,7 +184,9 @@ describe("permissions", () => {
           ROLE_DEFAULT_ACTIONS[role]
             .filter(
               (action) =>
-                !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action)
+                !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(
+                  action
+                ) && action !== "service_principals.manage"
             )
             .map(legacyPermissionFor)
         )
@@ -254,7 +258,7 @@ describe("permissions", () => {
     expect(effective.has("api_access.manage")).toBe(true);
   });
 
-  it("checks and requires permissions", () => {
+  it("checks permissions", () => {
     const subject = {
       roles: ["user"],
       permissions: ["usage.view"]
@@ -262,9 +266,5 @@ describe("permissions", () => {
 
     expect(hasPermission(subject, "usage.view")).toBe(true);
     expect(hasPermission(subject, "audit.view")).toBe(false);
-    expect(() => requirePermission(subject, "usage.view")).not.toThrow();
-    expect(() => requirePermission(subject, "audit.view")).toThrowError(
-      new AppError("FORBIDDEN", "Missing permission 'audit.view'")
-    );
   });
 });

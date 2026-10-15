@@ -891,7 +891,8 @@ export function useWorkspaceChatModel({
     showRoute: routeState.showRoute,
     onAccountDeleted: resetAuthenticatedWorkspaceState,
     onCollaborationWorkspaceDeleted: collaborationWorkspace.collaborationWorkspaceDeleted,
-    ...(buildWithAgent === undefined ? {} : { buildWithAgent })
+    ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
+    startDockedChat
   });
   const canViewAdministration = controlPlane.canViewAdministration;
   const approvalPendingCountQuery = useApprovalPendingCountQuery({
@@ -1090,6 +1091,16 @@ export function useWorkspaceChatModel({
       prompt
     );
     startNewConversation();
+  }
+
+  /** The dock beside the open page, with a new conversation and this text in its composer. */
+  function startDockedChat(prompt: string) {
+    draftController.setDraft(
+      { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
+      prompt
+    );
+    dock.show(undefined);
+    chrome.requestComposerFocus();
   }
 
   function conversationStarted(conversationId: string) {
