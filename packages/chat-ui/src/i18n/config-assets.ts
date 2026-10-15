@@ -124,14 +124,8 @@ export const configAssets = defineTranslations({
     configToolsIncluded: "Included",
     configToolsDescription:
       "What the agent can do. It always acts with the rights of the person it works for.",
-    configToolsNone: "No tools chosen yet.",
-    configToolsAdd: "Add packages",
-    configToolsPickerPackages: "Packages",
-    configToolsCount: "{count} tools",
-    configToolsCountOne: "1 tool",
-    configToolsRemovePackage: "Remove package",
-    configToolsRemove: "Remove",
-    configToolsAllOn: "All on",
+    configToolsPackages: "Packages",
+    configToolsGroupSwitch: "All tools of {group}",
     configToolsIncludedSkills: "Comes with the agent's skills.",
     configToolsTechnical: "Technical details",
     configToolsTechnicalTool: "Tool",
@@ -155,7 +149,7 @@ export const configAssets = defineTranslations({
     configToolGroupPlatform: "Platform",
     configToolGroupPlatformText:
       "Finds and edits agents, Workflows and Apps with the rights of the person it works for.",
-    configToolGroupInstance: "This instance's tools",
+    configToolGroupInstance: "This instance",
     configWelcomeMessage: "Welcome message",
     configWelcomeSubtitle: "Welcome subtitle"
   },
@@ -291,14 +285,8 @@ export const configAssets = defineTranslations({
     configToolsIncluded: "Enthalten",
     configToolsDescription:
       "Was der Agent tun kann. Er handelt immer mit den Rechten der Person, für die er arbeitet.",
-    configToolsNone: "Noch keine Werkzeuge gewählt.",
-    configToolsAdd: "Pakete hinzufügen",
-    configToolsPickerPackages: "Pakete",
-    configToolsCount: "{count} Werkzeuge",
-    configToolsCountOne: "1 Werkzeug",
-    configToolsRemovePackage: "Paket entfernen",
-    configToolsRemove: "Entfernen",
-    configToolsAllOn: "Alle an",
+    configToolsPackages: "Pakete",
+    configToolsGroupSwitch: "Alle Werkzeuge von {group}",
     configToolsIncludedSkills: "Kommt mit den Skills des Agenten.",
     configToolsTechnical: "Technische Details",
     configToolsTechnicalTool: "Werkzeug",
@@ -324,7 +312,7 @@ export const configAssets = defineTranslations({
     configToolGroupPlatform: "Plattform",
     configToolGroupPlatformText:
       "Findet und bearbeitet Agenten, Workflows und Apps mit den Rechten der Person, für die er arbeitet.",
-    configToolGroupInstance: "Werkzeuge dieser Instanz",
+    configToolGroupInstance: "Dieser Instanz",
     configWelcomeMessage: "Begrüßungsnachricht",
     configWelcomeSubtitle: "Begrüßungsuntertitel"
   }

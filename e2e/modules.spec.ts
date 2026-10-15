@@ -175,11 +175,11 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
       .locator("select option", {
         hasText: "Tools"
       });
-    await expect(toolCount).toHaveText("Tools (1)");
+    // The count is of the tools that are on, what the rows add up to: the stale one is not.
+    await expect(toolCount).toHaveText("Tools (0)");
 
     await stale.getByRole("button", { name: "Remove" }).click();
     await expect(stale).toHaveCount(0);
-    await expect(toolCount).toHaveText("Tools (0)");
     // The removal is an unsaved change: leaving the page asks first, and staying keeps it.
     const question = page.getByRole("dialog", { name: "Leave without saving?", exact: true });
     await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
