@@ -30,7 +30,11 @@ import {
   type StorePage,
   type UserRecord
 } from "@vivd-catalyst/core";
-import { authorizePrincipalAdministration } from "./api-access-administration-workflow";
+import {
+  SERVICE_PRINCIPALS_ACTION,
+  authorizePrincipalAdministration
+} from "./api-access-administration-workflow";
+import { assetRight, authorizeGivingToPrincipal } from "./principal-rights";
 import type { ChatServerOptions } from "./types";
 
 type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
@@ -41,10 +45,11 @@ type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
  */
 type GrantWriteContext = Pick<OperationExecutionContext, "correlationId" | "access">;
 
-/** The right every operation here asks for. The two grant writes ask it themselves. */
+/**
+ * The right every operation here asks for. The two grant writes ask it themselves, of a user's
+ * row; a service principal's row is written under `SERVICE_PRINCIPALS_ACTION`.
+ */
 const MANAGE_ACTION = "users.manage";
-/** The right a service principal is listed behind. */
-const API_ACCESS_ACTION = "api_access.manage";
 /** What a credential carries to change, and to read, service principals. */
 const API_ACCESS_WRITE_SCOPE = "api_access:write";
 const API_ACCESS_READ_SCOPE = "api_access:read";
@@ -74,12 +79,13 @@ interface NamespaceListsCommand {
 /**
  * Grants and Namespaces as an instance administrator writes them. The right itself,
  * `users.manage`, is the `requires` of the reads and the Namespace writes. The two grant
- * writes check it themselves, with the rule that a superadmin's rows are a superadmin's alone.
- * What is written is narrower than what the table holds. For a user: the actions of
- * `GRANTABLE_ACTION_SCOPES`, each at its scope kinds. For a service principal, under four
- * limits: who writes the row (who administers service principals, and never a service
+ * writes check it themselves for a user's row, with the rule that a superadmin's rows are a
+ * superadmin's alone. What is written is narrower than what the table holds. For a user: the
+ * actions of `GRANTABLE_ACTION_SCOPES`, each at its scope kinds. For a service principal, under
+ * five limits: who writes the row (who administers service principals, and never a service
  * principal), what it gives (a use right of `PRINCIPAL_GRANTABLE_ACTIONS` that a kind of the
- * instance registers), where (one named asset) and the effect (allow).
+ * instance registers, and that the writer holds there), where (one named asset) and the
+ * effect (allow).
  */
 export class AccessWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
@@ -94,13 +100,19 @@ export class AccessWorkflow {
     operation: string,
     command: Pick<GrantCommand, "holderKind" | "holderId">
   ): Promise<OperationAuthorization> {
-    return this.authorizeHolderWrite(actor, access, operation, (person) =>
-      command.holderKind === "service_principal"
-        ? authorizePrincipalHolderWrite(person, access, operation)
-        : command.holderKind === "user"
-          ? this.authorizeUserHolderWrite(person, operation, command.holderId)
-          : { allowed: true }
-    );
+    if (isAuthenticatedServicePrincipal(actor)) {
+      return holderNotAdministrable(operation, "A service principal writes no grant row");
+    }
+    if (command.holderKind === "service_principal") {
+      return authorizePrincipalHolderWrite(actor, access, operation);
+    }
+    const right = access.authorize(MANAGE_ACTION);
+    if (!right.allowed) {
+      return { allowed: false, action: MANAGE_ACTION, reason: right.reason };
+    }
+    return command.holderKind === "user"
+      ? this.authorizeUserHolderWrite(actor, operation, command.holderId)
+      : { allowed: true };
   }
 
   /**
@@ -114,43 +126,29 @@ export class AccessWorkflow {
     operation: string,
     grantId: string
   ): Promise<OperationAuthorization> {
-    return this.authorizeHolderWrite(actor, access, operation, async (person) => {
-      const existing = await this.options.stores.access.getGrant({
-        clientInstanceId: this.options.clientInstanceId,
-        grantId
-      });
-      if (existing?.holderKind === "service_principal") {
-        return seesPrincipals(person, access)
-          ? authorizePrincipalHolderWrite(person, access, operation)
-          : { allowed: true };
-      }
-      return existing?.holderKind === "user"
-        ? this.authorizeUserHolderWrite(person, operation, existing.holderId)
-        : { allowed: true };
-    });
-  }
-
-  /**
-   * A service principal writes no grant row, whatever it holds: it is refused before any right
-   * of its own is read, so no principal writes a row for itself or for another. Then
-   * `users.manage`, so a caller without it causes no read. Then the holder.
-   */
-  private async authorizeHolderWrite(
-    actor: AuthenticatedIdentity,
-    access: ActorAccess,
-    operation: string,
-    authorizeHolder: (
-      person: AuthenticatedUser
-    ) => Promise<OperationAuthorization> | OperationAuthorization
-  ): Promise<OperationAuthorization> {
+    // A service principal writes no grant row, whatever it holds: it is refused before any
+    // right of its own is read, so no principal removes a row of itself or of another.
     if (isAuthenticatedServicePrincipal(actor)) {
       return holderNotAdministrable(operation, "A service principal writes no grant row");
     }
+    // A caller who holds neither right that removes a row causes no read.
     const right = access.authorize(MANAGE_ACTION);
-    if (!right.allowed) {
+    if (!right.allowed && !access.authorize(SERVICE_PRINCIPALS_ACTION).allowed) {
       return { allowed: false, action: MANAGE_ACTION, reason: right.reason };
     }
-    return authorizeHolder(actor);
+    const existing = await this.options.stores.access.getGrant({
+      clientInstanceId: this.options.clientInstanceId,
+      grantId
+    });
+    if (existing?.holderKind === "service_principal") {
+      return seesPrincipals(actor, access)
+        ? authorizePrincipalHolderWrite(actor, access, operation)
+        : { allowed: true };
+    }
+    if (existing?.holderKind !== "user") return { allowed: true };
+    return right.allowed
+      ? this.authorizeUserHolderWrite(actor, operation, existing.holderId)
+      : { allowed: false, action: MANAGE_ACTION, reason: right.reason };
   }
 
   /**
@@ -230,7 +228,8 @@ export class AccessWorkflow {
    * that a kind of this instance registers; a right of the list whose kind this instance has
    * not loaded is refused like one outside the list, so no row waits for a kind to arrive.
    * Effect: allow. Where: one named asset of the right's kind, so nothing created later is
-   * reachable by a principal that was not given it.
+   * reachable by a principal that was not given it. And the writer holds the right there: the
+   * rule of no escalation, asked last, of the asset as it is now.
    */
   private async grantToPrincipal(
     actor: AuthenticatedUser,
@@ -268,13 +267,18 @@ export class AccessWorkflow {
         "A service principal is granted a right on one named asset only"
       );
     }
-    const scope = await this.grantScope(command);
+    const asset = await this.grantableAsset(command);
     const principal = await this.findPrincipal(command.holderId);
     if (!principal) {
       throw new AppError("NOT_FOUND", "Service principal not found", {
         reason: "unknown_holder"
       });
     }
+    requireAuthorized(
+      authorizeGivingToPrincipal({ actor, access: context.access }, principal, [
+        assetRight(action, asset)
+      ])
+    );
     // The store refuses the same for a principal deleted after this read.
     const grant = await this.options.stores.access.createGrant({
       clientInstanceId: this.options.clientInstanceId,
@@ -282,7 +286,8 @@ export class AccessWorkflow {
       holderId: principal.id,
       action,
       effect: "allow",
-      ...scope,
+      scopeKind: "asset",
+      scopeId: asset.id,
       grantedBy: asUserId(actor.id)
     });
     await this.record(actor, context, "permission.granted", grant.id, grantAuditMetadata(grant));
@@ -339,8 +344,8 @@ export class AccessWorkflow {
 
   /**
    * The user list hides superadmins from everyone else, and so do the rows they hold. The
-   * list of service principals is behind `api_access.manage` and the scope of reading API
-   * access, and so are the rows they hold.
+   * list of service principals is behind `service_principals.manage` and the scope of reading
+   * API access, and so are the rows they hold.
    */
   listGrants(
     actor: AuthenticatedUser,
@@ -477,18 +482,7 @@ export class AccessWorkflow {
       return { scopeKind: "namespace", namespace: command.namespace };
     }
     if (command.scopeKind === "asset") {
-      if (command.scopeId === undefined || command.namespace !== undefined) {
-        throw refused("invalid_scope", "An asset grant names an asset id and no Namespace");
-      }
-      const asset = await this.options.stores.access.getGrantableAsset({
-        clientInstanceId: this.options.clientInstanceId,
-        assetId: command.scopeId
-      });
-      // The action carries the kind, so a skill action on an agent could never match.
-      if (!asset || asset.kind !== kindOfAction(command.action)) {
-        throw refused("invalid_scope", "The asset is not an active asset of the action's kind");
-      }
-      return { scopeKind: "asset", scopeId: asset.id };
+      return { scopeKind: "asset", scopeId: (await this.grantableAsset(command)).id };
     }
     if (command.scopeKind === "workspace") {
       if (command.scopeId === undefined || command.namespace !== undefined) {
@@ -502,6 +496,22 @@ export class AccessWorkflow {
       "invalid_scope",
       "A grant can be written for a Namespace, one asset or one workspace only"
     );
+  }
+
+  /** The active asset of the action's kind an asset grant names. */
+  private async grantableAsset(command: GrantCommand): Promise<Omit<GrantScopeAsset, "active">> {
+    if (command.scopeId === undefined || command.namespace !== undefined) {
+      throw refused("invalid_scope", "An asset grant names an asset id and no Namespace");
+    }
+    const asset = await this.options.stores.access.getGrantableAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId: command.scopeId
+    });
+    // The action carries the kind, so a skill action on an agent could never match.
+    if (!asset || asset.kind !== kindOfAction(command.action)) {
+      throw refused("invalid_scope", "The asset is not an active asset of the action's kind");
+    }
+    return asset;
   }
 
   /** An entry of a list must exist on this instance: an enabled tool, a known model binding. */
@@ -554,9 +564,9 @@ export class AccessWorkflow {
         permissionRefs: user.permissionRefs
       };
     }
-    // Service principals are read behind `api_access.manage` and the scope of reading API
-    // access: the rule of the list of grant rows, so this says nothing the list hides.
-    access.require(API_ACCESS_ACTION);
+    // Service principals are read behind `service_principals.manage` and the scope of reading
+    // API access: the rule of the list of grant rows, so this says nothing the list hides.
+    access.require(SERVICE_PRINCIPALS_ACTION);
     requireAuthScope(actor, API_ACCESS_READ_SCOPE);
     const principal = await this.findPrincipal(input.holderId);
     if (!principal) {
@@ -661,15 +671,16 @@ function holderNotAdministrable(operation: string, message: string): OperationAu
 
 /** Whom the list of service principals is shown to, and so the rows they hold. */
 function seesPrincipals(actor: AuthenticatedUser, access: ActorAccess): boolean {
-  return access.authorize(API_ACCESS_ACTION).allowed && hasAuthScope(actor, API_ACCESS_READ_SCOPE);
+  return (
+    access.authorize(SERVICE_PRINCIPALS_ACTION).allowed &&
+    hasAuthScope(actor, API_ACCESS_READ_SCOPE)
+  );
 }
 
 /**
  * Who writes a service principal's grant row: whoever administers service principals, by that
- * one check and no second rule. A caller without `api_access.manage` is told the right. A
- * caller who holds it and is no superadmin is refused by name, since no right stands for the
- * role. The credential is asked what the operations that administer principals ask of it, so
- * a key issued for managing users writes no row for a principal.
+ * one check and no second rule. The credential is asked what the operations that administer
+ * principals ask of it, so a key issued for managing users writes no row for a principal.
  */
 function authorizePrincipalHolderWrite(
   actor: AuthenticatedUser,
@@ -678,12 +689,7 @@ function authorizePrincipalHolderWrite(
 ): OperationAuthorization {
   const administration = authorizePrincipalAdministration({ actor, access }, operation);
   if (!administration.allowed) {
-    return administration.action === operation
-      ? holderNotAdministrable(
-          operation,
-          `A grant row of a service principal is written by a superadmin who holds '${API_ACCESS_ACTION}'`
-        )
-      : administration;
+    return administration;
   }
   return hasAuthScope(actor, API_ACCESS_WRITE_SCOPE)
     ? { allowed: true }

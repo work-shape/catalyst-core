@@ -24,7 +24,7 @@ On an instance with the module [`connections`](/configure/modules/#connections) 
 
 [Connect a system](/connect/connect-a-system/) walks through these steps for the person who sets it up.
 
-A Connection reaches a remote MCP server. That is the one connector type a Connection made on the instance has: there is no connector for a plain HTTP or REST API. To reach such an API, put an MCP server in front of it, or have the operator add a [custom tool](/extend/custom-tools/) in the client assembly.
+A Connection reaches a remote MCP server (connector type `mcp`) or a REST interface that it reads by GET (connector type `http_api`). An MCP server lists its tools itself. A REST interface lists nothing: each operation is declared in the Connection's definition with its path and parameters, as [release config](/configure/release-config/#a-rest-interface-http_api) shows. An agent may write such declarations from a vendor's public OpenAPI description into the conversation; a person pastes them and saves, because an agent never saves a Connection. A REST interface that must be written to needs a [custom tool](/extend/custom-tools/) in the client assembly for now.
 
 1. **New connection** in Studio > Connections takes a name, the server's https address with the path of its MCP endpoint, and the authentication: none, a bearer token, or a key in a header the server names.
 2. The key is entered in that form or later on the Connection's page under **Credential** (German: **Zugangsdaten**), with **Enter the key** or **Enter a new key**. It is stored encrypted and never shown again, to anyone. A key is never typed into a chat: an agent cannot take it, and an agent that asks for one is wrong. Give the key on the Connection's page only.
@@ -33,13 +33,13 @@ A Connection reaches a remote MCP server. That is the one connector type a Conne
 
 The rights this needs:
 
-| Step | Right |
-| --- | --- |
-| See Studio > Connections and a Connection's page | `connection.read` |
-| Create a Connection, enter or replace its key, test it, accept its operations | `connection.write`, which the administrator role holds; the Access page does not grant it |
-| Delete a Connection | `connection.delete`, which the administrator role holds |
-| Give an agent a tool of the Connection | `agent.write` on the agent, and `connection.read` to see the Connection in the agent's Tools section |
-| Have an agent call the tool | `connection.use` for the person the agent works for: an agent acts with that person's rights |
+| Step                                                                          | Right                                                                                                |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| See Studio > Connections and a Connection's page                              | `connection.read`                                                                                    |
+| Create a Connection, enter or replace its key, test it, accept its operations | `connection.write`, which the administrator role holds; the Access page does not grant it            |
+| Delete a Connection                                                           | `connection.delete`, which the administrator role holds                                              |
+| Give an agent a tool of the Connection                                        | `agent.write` on the agent, and `connection.read` to see the Connection in the agent's Tools section |
+| Have an agent call the tool                                                   | `connection.use` for the person the agent works for: an agent acts with that person's rights         |
 
 The administrator role holds every right on Connections. Beside the rights, the operator must have turned the module [`connections`](/configure/modules/#connections) on, listed the server's host in [`egress.allow`](/configure/release-config/#egress) and set a [Secret Store key](/configure/release-config/#secret-store-keys); without the host on the list the save is refused with `egress_denied`. A Connection that comes from the release config is read-only on the instance, and its credential comes from the instance's environment.
 

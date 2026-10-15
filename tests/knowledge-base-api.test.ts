@@ -250,6 +250,80 @@ describe("a Knowledge Base on a Data Store", () => {
     expect(direct.statusCode).toBe(403);
   });
 
+  // RIGHTS-1a: a principal is given `knowledge_base.use` only by a caller who holds it there.
+  it("gives a service principal the use right only from a caller who holds it on the Knowledge Base", async () => {
+    const withAdmin = {
+      ...developmentAuth,
+      users: [
+        ...developmentAuth.users,
+        {
+          id: "admin-1",
+          roles: ["user", "admin"],
+          externalUserId: "admin-1",
+          displayLabel: "admin-1",
+          permissionRefs: []
+        }
+      ]
+    };
+    const instance = await start(true, undefined, withAdmin, undefined, true);
+    await published(instance);
+    const asAdmin = { "x-dev-user-id": "admin-1" };
+    const asset = required(
+      await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: KNOWLEDGE_BASE_ASSET_KIND,
+        name: KB
+      })
+    );
+    const principal = await instance.stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      displayLabel: "Nightly report"
+    });
+    const give = (headers: Record<string, string>) =>
+      instance.api.call("permissions.grant", {
+        headers,
+        payload: {
+          holderKind: "service_principal",
+          holderId: principal.id,
+          action: KNOWLEDGE_BASE_ACTIONS.use,
+          scopeKind: "asset",
+          scopeId: asset.id
+        }
+      });
+    // The administrator signs in once, and a deny then takes the Knowledge Base from her.
+    expect((await instance.api.call("platform.context.get", { headers: asAdmin })).statusCode).toBe(
+      200
+    );
+    const admin = required(
+      (await instance.stores.users.listUsers({ clientInstanceId })).find(
+        (user) => user.displayLabel === "admin-1"
+      )
+    );
+    const deny = await instance.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: admin.id,
+      action: KNOWLEDGE_BASE_ACTIONS.use,
+      effect: "deny",
+      scopeKind: "asset",
+      scopeId: asset.id,
+      grantedBy: admin.id
+    });
+
+    const refused = await give(asAdmin);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json<ErrorBody>().error.details).toMatchObject({
+      action: KNOWLEDGE_BASE_ACTIONS.use,
+      reason: "denied"
+    });
+    expect(refused.json<ErrorBody>().error.message).toContain(
+      `on the knowledge_base '${KB}' is denied to this call, and 'Nightly report' would act with it`
+    );
+    await instance.stores.access.deleteGrant({ clientInstanceId, grantId: deny.id });
+    const given = await give(asAdmin);
+    expect(given.statusCode, given.body).toBe(200);
+  });
+
   it("gives an agent that lists it one tool, which reads only the Knowledge Bases it lists", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
     await published(instance);

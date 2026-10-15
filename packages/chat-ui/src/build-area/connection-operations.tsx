@@ -12,6 +12,7 @@ import {
 import type { ConnectionOperationDetail } from "@vivd-catalyst/api-client";
 import { useTranslation, type TranslationKey } from "../i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
+import { operationTitle } from "./connection-approval-model";
 import { useConnectionWrite } from "./connection-editing";
 import {
   withOperationExposure,
@@ -50,7 +51,12 @@ const OPERATION_STATUS: Record<
   }
 };
 
-const EXPOSURE_LABELS: Record<ConnectionOperationDetail["exposure"][number], TranslationKey> = {
+type Exposure = ConnectionOperationDetail["exposure"][number];
+
+/** Who may call an operation, in the order the page offers it: `outside` only here. */
+const EXPOSURES: readonly Exposure[] = ["agent", "bridge", "workflow", "outside"];
+
+const EXPOSURE_LABELS: Record<Exposure, TranslationKey> = {
   agent: "connections.exposureAgent",
   bridge: "connections.exposureBridge",
   workflow: "connections.exposureWorkflow",
@@ -59,8 +65,8 @@ const EXPOSURE_LABELS: Record<ConnectionOperationDetail["exposure"][number], Tra
 
 /**
  * The accepted operations of a Connection made on the instance, each with the way to take it
- * off, to open it to outside clients or close it again and, where the server now describes it
- * differently, to accept the new description.
+ * off, to open it to agents, Apps, Workflows or outside clients or close it again and, where
+ * the server now describes it differently, to accept the new description.
  */
 export function EditableOperations({
   asset,
@@ -82,21 +88,35 @@ export function EditableOperations({
         operations={operations}
         actions={(operation) => (
           <div className="flex flex-wrap items-center gap-2">
-            <Checkbox
-              label={t("connections.exposeOutside")}
-              description={t("connections.exposeOutsideHint")}
-              checked={operation.exposure.includes("outside")}
-              disabled={blocked}
-              data-connection-outside={operation.name}
-              onCheckedChange={(exposed) => {
-                write
-                  .write(
-                    `outside:${operation.name}`,
-                    withOperationExposure(asset.config, operation.name, "outside", exposed)
-                  )
-                  .catch(() => undefined);
-              }}
-            />
+            <div
+              role="group"
+              aria-label={t("connections.operationExposure")}
+              className="flex w-full min-w-0 flex-wrap items-start gap-x-5 gap-y-2"
+            >
+              {EXPOSURES.map((exposure) => (
+                <Checkbox
+                  key={exposure}
+                  label={t(
+                    exposure === "outside" ? "connections.exposeOutside" : EXPOSURE_LABELS[exposure]
+                  )}
+                  description={
+                    exposure === "outside" ? t("connections.exposeOutsideHint") : undefined
+                  }
+                  checked={operation.exposure.includes(exposure)}
+                  disabled={blocked}
+                  data-connection-exposure={`${exposure}:${operation.name}`}
+                  {...(exposure === "outside" ? { "data-connection-outside": operation.name } : {})}
+                  onCheckedChange={(exposed) => {
+                    write
+                      .write(
+                        `${exposure}:${operation.name}`,
+                        withOperationExposure(asset.config, operation.name, exposure, exposed)
+                      )
+                      .catch(() => undefined);
+                  }}
+                />
+              ))}
+            </div>
             {operation.status === "needs_review" && operation.discoveredFingerprint ? (
               <Button
                 size="sm"
@@ -136,19 +156,6 @@ export function EditableOperations({
       {write.failure ? <FormNotice tone="error">{write.failure}</FormNotice> : null}
     </>
   );
-}
-
-/**
- * An operation as a person reads it: its name in sentence case, such as "List customers" for
- * `list_customers`. The outside system names operations; it gives them no title for people.
- */
-function operationTitle(name: string): string {
-  const words = name
-    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
-    .replace(/[_.-]+/gu, " ")
-    .trim()
-    .toLowerCase();
-  return words === "" ? name : `${words.slice(0, 1).toUpperCase()}${words.slice(1)}`;
 }
 
 export function ConnectionOperations({
