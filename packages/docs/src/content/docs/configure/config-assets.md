@@ -293,6 +293,7 @@ Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, 
 | `assets.revisions.list`   | `GET /api/v1/assets/{kind}/{name}/revisions` | `<kind>.read`        |
 | `assets.revert`           | `POST /api/v1/assets/{kind}/{name}/revert`   | `<kind>.write`       |
 | `assets.validate`         | `POST /api/v1/assets/{kind}/validate`        | `<kind>.read`        |
+| `assets.check_name`       | `POST /api/v1/assets/{kind}/check-name`      | `<kind>.write`       |
 | `assets.publish` | `POST /api/v1/assets/{kind}/{name}/publish` | `<kind>.publish` |
 | `assets.discard_draft` | `POST /api/v1/assets/{kind}/{name}/discard-draft` | `<kind>.write` |
 | `assets.sync`             | `POST /api/v1/assets/sync`                   | per item             |
@@ -301,6 +302,8 @@ Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, 
 | `platform.references.get` | `GET /api/v1/context/references`             | a right on any kind  |
 
 The right is decided for the one asset: an instance right, a grant in the Namespace of its name, or a grant on the asset. `assets.list` answers only the assets the caller may read, as summaries without content, in the order of their names. It filters by `prefix` (a name prefix such as a Namespace) and by `text` (a part of the name, in any case), and pages with `limit` and `cursor`. It is built for up to 10,000 assets of a kind.
+
+`assets.check_name` asks, before a create, whether a new asset could take a `name` in the owner `workspaceId` names, or the instance's own: it answers `available: true`, or `available: false` with `reason` `name_invalid` (the kind's rule for names, which `message` states) or `name_taken`. It writes nothing and asks the right a create asks, so it tells no more than a refused create would. A name a deleted asset holds is free to a caller who may read that asset, and taken to everyone else. The forms of Studio ask it while the address is typed.
 
 A write names the revision it was made against, for every asset it writes. `assets.put` with a number in `expectedRevision` replaces the asset at that revision; with `null` it creates the asset and is refused when the name is taken. `assets.delete` and `assets.revert` take a number. A write that leaves `expectedRevision` out is answered `428 PRECONDITION_REQUIRED` with `details.assets`, the assets it named no revision for, and changes nothing: no call overwrites what it did not read.
 

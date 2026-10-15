@@ -74,6 +74,13 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.validate(context, input)
   });
 
+  route.operation(apiOperations["assets.check_name"], {
+    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    execute: (input, context) => workflow.checkName(context, input)
+  });
+
   route.operation(apiOperations["assets.get"], {
     authorize: ({ files, ...input }, { access }) =>
       workflow.reads.authorizeGet(access, { ...input, files: files === "true" }),

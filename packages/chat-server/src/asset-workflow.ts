@@ -64,6 +64,7 @@ import {
 } from "./asset-write-rules";
 import {
   assertStoredWritable,
+  nameCheckOf,
   notFound,
   readsTarget,
   recordAssetEvent,
@@ -517,6 +518,13 @@ export class AssetWorkflow {
         ...(code === undefined ? {} : { code })
       }))
     };
+  }
+
+  /** Whether a create would take the name, asked with the right a create asks. Writes nothing. */
+  async checkName(call: AssetCall, input: AssetAddress) {
+    const target = await this.target(input);
+    call.access.require(target.kind.actions.write, target.resource);
+    return nameCheckOf(target, call.access);
   }
 
   sync(call: AssetCall, input: AssetSyncInput) {

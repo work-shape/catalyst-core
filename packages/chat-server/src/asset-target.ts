@@ -1,5 +1,6 @@
 import {
   AppError,
+  assetNameIssue,
   auditActorFromIdentity,
   type AccessResource,
   type ActorAccess,
@@ -113,6 +114,32 @@ export function requireFreeName(target: AssetTarget): void {
       { reason: `${target.kind.kind}_id_taken`, kind: target.kind.kind, name: target.name }
     );
   }
+}
+
+/**
+ * Whether a create would take the target's name: the kind's rule for names, then the id. A
+ * name a deleted asset holds is free to whoever reads that asset, whose create names the
+ * revision of its delete; to anybody else it is answered as taken, as their create would be.
+ */
+export function nameCheckOf(
+  target: AssetTarget,
+  access: ActorAccess
+):
+  | { available: true }
+  | { available: false; reason: "name_invalid" | "name_taken"; message: string } {
+  const issue = assetNameIssue(target.kind, target.name);
+  if (issue) return { available: false, reason: "name_invalid", message: issue.message };
+  const held =
+    target.elsewhere ||
+    target.asset?.status === "active" ||
+    (target.asset !== undefined && !readsTarget(access, target));
+  return held
+    ? {
+        available: false,
+        reason: "name_taken",
+        message: `The ${target.kind.kind} id '${target.name}' is taken on this instance`
+      }
+    : { available: true };
 }
 
 /**

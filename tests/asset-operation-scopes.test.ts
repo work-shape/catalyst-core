@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { validateConfigAssetBundle } from "@vivd-catalyst/config-schema";
+import { SKILL_NAME_RULE, validateConfigAssetBundle } from "@vivd-catalyst/config-schema";
 import type { AssetScope, CollaborationWorkspaceId } from "@vivd-catalyst/core";
 import {
   SERVICE_HEADER,
@@ -231,6 +231,56 @@ describe("assets.validate", () => {
       "assets.validate",
       { params: { kind: "agent" }, payload: { config: agent("kai-intake") } },
       t.forbidden("agent.read", "no_grant")
+    );
+  });
+});
+
+describe("assets.check_name", () => {
+  it("says before a create whether the name breaks the kind's rule or is taken, and writes nothing", async () => {
+    const t = await setupNamespace();
+    const check = async (userId: string, kind: "agent" | "skill", name: string) =>
+      (
+        await t.expectOk(userId, "assets.check_name", { params: { kind }, payload: { name } })
+      ).json();
+
+    expect(await check(t.kai.id, "skill", "kai-guide")).toEqual({ available: true });
+    expect(await t.stored("skill", "kai-guide")).toBeUndefined();
+    // The skill's own rule decides, in the words a refused put uses.
+    expect(await check(t.kai.id, "skill", "kai-two words")).toEqual({
+      available: false,
+      reason: "name_invalid",
+      message: SKILL_NAME_RULE
+    });
+    const put = await t.put(t.kai.id, "agent", "kai-helper");
+    expect(await check(t.kai.id, "agent", "kai-helper")).toEqual({
+      available: false,
+      reason: "name_taken",
+      message: "The agent id 'kai-helper' is taken on this instance"
+    });
+    // A name a deleted asset holds is free to who reads it: the create names its delete.
+    const { revision } = z.object({ revision: z.number() }).parse(put.json());
+    await t.expectOk(t.kai.id, "assets.delete", {
+      params: { kind: "agent", name: "kai-helper" },
+      payload: { expectedRevision: revision }
+    });
+    expect(await check(t.kai.id, "agent", "kai-helper")).toEqual({ available: true });
+
+    // The right is the one a create asks, in the Namespace the name falls in.
+    await t.expectRefused(
+      t.kai.id,
+      "assets.check_name",
+      { params: { kind: "agent" }, payload: { name: "lena-helper" } },
+      t.forbidden("agent.write", "no_grant")
+    );
+    // The put still refuses what the check refused.
+    await t.expectRefused(
+      t.kai.id,
+      "assets.put",
+      {
+        params: { kind: "skill", name: "kai-two words" },
+        payload: { config: skill("kai-two words"), expectedRevision: null }
+      },
+      { status: 422, code: "VALIDATION_FAILED" }
     );
   });
 });
