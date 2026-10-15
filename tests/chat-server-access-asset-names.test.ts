@@ -34,12 +34,8 @@ describe("what a grant row says to a caller who may not read agents and skills",
     });
     const row = z.object({ scopeId: z.string(), scopeAsset: z.unknown() });
 
-    // The caller's own write answers without the name, too.
-    const written = await t.expectOk(usersOnly.id, "permissions.grant", deny(secretId));
-    expect(row.parse(written.json())).toEqual({
-      scopeId: secretId,
-      scopeAsset: { kind: "skill", active: true }
-    });
+    // Writing a deny asks the right it refuses (RIGHTS-1b), so the administrator writes both.
+    await t.expectOk(t.admin.id, "permissions.grant", deny(secretId));
     await t.expectOk(t.admin.id, "permissions.grant", deny(goneId));
     await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "skill", name: "kai-gone" },

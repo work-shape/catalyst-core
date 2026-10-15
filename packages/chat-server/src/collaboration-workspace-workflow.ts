@@ -7,6 +7,7 @@ import {
   auditActorFromUser,
   getSubjectUserId,
   type AuditRecorder,
+  type ActorAccess,
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
@@ -23,6 +24,7 @@ import {
   type WorkspaceVisibility
 } from "@vivd-catalyst/core";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
+import { withRightsHeld } from "./rights-held";
 import type { ChatServerOptions } from "./types";
 import {
   effectiveWorkspaceRole,
@@ -48,6 +50,8 @@ export interface WorkspaceChangeCall {
   /** The operation, which a refusal names: no right a caller can be granted opens it. */
   operationId: string;
   user: AuthenticatedUser;
+  /** The caller's rights as the call was admitted; a change of members reads them anew. */
+  access: ActorAccess;
   /** Writes audit rows that name the run. */
   audit: AuditRecorder;
   correlationId: string;
@@ -403,6 +407,16 @@ export class CollaborationWorkspaceWorkflow {
     call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     email: string
+  ) {
+    return this.whileRightsHeld(call, undefined, (held, now) =>
+      held.addMemberByEmailNow(now, collaborationWorkspaceId, email)
+    );
+  }
+
+  private async addMemberByEmailNow(
+    call: WorkspaceChangeCall,
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    email: string
   ): Promise<WorkspaceMemberItem> {
     await this.requireRole(call, collaborationWorkspaceId, "admin");
     await this.requireSharedWorkspace(collaborationWorkspaceId);
@@ -432,6 +446,11 @@ export class CollaborationWorkspaceWorkflow {
       userId: target.id
     });
     if (existing) throw new AppError("CONFLICT", "User is already a workspace member");
+    // The rights locks of the user found, after the instance's that `whileRightsHeld` took.
+    await this.options.stores.access.lockRights({
+      clientInstanceId: this.options.clientInstanceId,
+      userId: target.id
+    });
     const pendingAccessRequest = await this.options.stores.workspaces.getAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
@@ -467,6 +486,17 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"],
     role: WorkspaceMembershipRole
+  ) {
+    return this.whileRightsHeld(call, targetUserId, (held, now) =>
+      held.changeMemberRoleNow(now, collaborationWorkspaceId, targetUserId, role)
+    );
+  }
+
+  private async changeMemberRoleNow(
+    call: WorkspaceChangeCall,
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    targetUserId: UserRecord["id"],
+    role: WorkspaceMembershipRole
   ): Promise<WorkspaceMembership> {
     const actor = await this.requireRole(call, collaborationWorkspaceId, "admin");
     await this.requireSharedWorkspace(collaborationWorkspaceId);
@@ -496,6 +526,16 @@ export class CollaborationWorkspaceWorkflow {
     call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
+  ) {
+    return this.whileRightsHeld(call, targetUserId, (held, now) =>
+      held.removeMemberNow(now, collaborationWorkspaceId, targetUserId)
+    );
+  }
+
+  private async removeMemberNow(
+    call: WorkspaceChangeCall,
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    targetUserId: UserRecord["id"]
   ): Promise<WorkspaceMembership> {
     const actor = await this.requireRole(call, collaborationWorkspaceId, "admin");
     await this.requireSharedWorkspace(collaborationWorkspaceId);
@@ -517,6 +557,15 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async leaveWorkspace(
+    call: WorkspaceChangeCall,
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ) {
+    return this.whileRightsHeld(call, call.user.id, (held, now) =>
+      held.leaveWorkspaceNow(now, collaborationWorkspaceId)
+    );
+  }
+
+  private async leaveWorkspaceNow(
     call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceMembership> {
@@ -635,6 +684,16 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async approveAccessRequest(
+    call: WorkspaceChangeCall,
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    targetUserId: UserRecord["id"]
+  ) {
+    return this.whileRightsHeld(call, targetUserId, (held, now) =>
+      held.approveAccessRequestNow(now, collaborationWorkspaceId, targetUserId)
+    );
+  }
+
+  private async approveAccessRequestNow(
     call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
@@ -782,6 +841,24 @@ export class CollaborationWorkspaceWorkflow {
     });
     if (!membership) throw new AppError("NOT_FOUND", "Workspace member is not available");
     return membership;
+  }
+
+  /**
+   * `withRightsHeld` for a change of who is a member: a membership holds the rights of the
+   * workspace, so the change waits for and is waited for by every other write of rights. The
+   * workflow runs on the transaction's stores, with the caller as they are now.
+   */
+  private whileRightsHeld<Result>(
+    call: WorkspaceChangeCall,
+    userId: string | undefined,
+    change: (held: CollaborationWorkspaceWorkflow, now: WorkspaceChangeCall) => Promise<Result>
+  ): Promise<Result> {
+    return withRightsHeld(
+      this.options,
+      { actor: call.user, access: call.access, ...(userId === undefined ? {} : { userId }) },
+      ({ options, actor, access }) =>
+        change(new CollaborationWorkspaceWorkflow(options), { ...call, user: actor, access })
+    );
   }
 
   /**

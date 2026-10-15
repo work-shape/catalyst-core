@@ -422,6 +422,7 @@ function changeCall(operationId: string, context: OperationExecutionContext): Wo
   return {
     operationId,
     user: personOf(context.actor),
+    access: context.access,
     audit: context.audit,
     correlationId: context.correlationId
   };

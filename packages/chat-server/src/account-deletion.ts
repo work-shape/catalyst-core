@@ -40,7 +40,8 @@ interface AccountDeletion {
  */
 export async function requestAccountDeletion(
   options: ChatServerOptions,
-  input: AccountDeletion & { actorUserId: UserId; alreadyRequested: boolean }
+  input: AccountDeletion & { actorUserId: UserId },
+  transaction?: DeletionTransaction
 ): Promise<DeletionOutcome<UserRecord>> {
   return acceptDeletion(options, {
     job: deleteAccountJob,
@@ -51,8 +52,19 @@ export async function requestAccountDeletion(
     },
     subjectId: input.userId,
     correlationId: input.correlationId,
+    ...(transaction === undefined ? {} : { transaction }),
     async mark(stores) {
-      if (!input.alreadyRequested) {
+      // Self-deletion takes the same order as administrator admission: access, user, then
+      // the workspaces whose last active owner must remain. Cleanup runs after this commits.
+      await stores.access.lockRights({
+        clientInstanceId: options.clientInstanceId,
+        userId: input.userId
+      });
+      const user = await stores.users.getUser({
+        clientInstanceId: options.clientInstanceId,
+        userId: input.userId
+      });
+      if (user?.status !== "deleting") {
         await requireNoSoleOwnedSharedWorkspace(stores, options, input.userId);
       }
       const marked = await stores.users.markUserDeletionRequested({

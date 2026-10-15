@@ -28,6 +28,8 @@ const SYSTEM_ACTOR: AuditActor = { displayLabel: "System", roles: [] };
 
 /** What one start changed, by skill name. */
 export interface ShippedSkillSeedResult {
+  /** Existing names kept intact when their content or owner conflicts with a shipped skill. */
+  retained: string[];
   created: string[];
   updated: string[];
   removed: string[];
@@ -95,24 +97,29 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
       asset
     ])
   );
-  const result: ShippedSkillSeedResult = { created: [], updated: [], removed: [], unlisted: [] };
+  const result: ShippedSkillSeedResult = {
+    retained: [],
+    created: [],
+    updated: [],
+    removed: [],
+    unlisted: []
+  };
   const mutations: ConfigAssetMutation[] = [];
   const baseRevisions: Record<string, number | null> = {};
   for (const [name, config] of shipped) {
     const asset = stored.get(name);
-    if (asset && !isShipped(asset)) {
-      // A skill of the instance's own is never touched, not even deleted: it may hold what
-      // the instance's people wrote. The name is the platform's, so the start stops.
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `The platform ships the skill '${name}', and the instance holds a skill of its own named '${name}'. Remove the instance copy with 'catalyst config push' after pulling, with the previous release still running: pull, delete skills/${name}, take '${name}' out of the agents' skillNames, push with --prune. Then start this release`,
-        { skillName: name }
-      );
+    // Deleted rows keep their owner too: an instance upsert cannot reclaim a workspace name.
+    const row = asset ?? (await store.getConfigAsset({ clientInstanceId, kind: SKILL_KIND, name }));
+    if ((row && row.scope.kind !== "instance") || (asset && !isShipped(asset))) {
+      // Keep user content and ownership intact, and leave the admin API available to resolve
+      // collisions. Removing an instance copy lets a later start seed the shipped skill;
+      // a workspace's name remains with that workspace even after deletion.
+      result.retained.push(name);
+      continue;
     }
     if (asset && configValuesEqual(asset.config, config)) continue;
     // A skill the platform shipped once and dropped left a deleted row: the release that
     // brings it back continues its revisions.
-    const row = asset ?? (await store.getConfigAsset({ clientInstanceId, kind: SKILL_KIND, name }));
     mutations.push({ type: "upsert", kind: SKILL_KIND, name, config });
     baseRevisions[`${SKILL_KIND}:${name}`] = row?.revision ?? null;
     (asset ? result.updated : result.created).push(name);

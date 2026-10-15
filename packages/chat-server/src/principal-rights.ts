@@ -1,6 +1,5 @@
 import {
   LEGACY_PERMISSION_ACTIONS,
-  authorizeHeldRights,
   isAuthenticatedServicePrincipal,
   isSuperadmin,
   legacyKeysHeld,
@@ -13,6 +12,7 @@ import {
   type OperationAuthorization,
   type ServicePrincipalRecord
 } from "@vivd-catalyst/core";
+import { authorizeHeldRightsWithin } from "./held-rights-within";
 
 /** What the rights of a service principal are read from: its grant rows and their assets. */
 export interface PrincipalRightsOptions {
@@ -99,11 +99,12 @@ export function assetRight(
  * enabling it or issuing it a key: the rule of no escalation, with one named exception. The
  * release key is given by a superadmin alone, since no person holds `assets.release`.
  */
-export function authorizeGivingToPrincipal(
+export async function authorizeGivingToPrincipal(
+  options: PrincipalRightsOptions,
   caller: { actor: AuthenticatedIdentity; access: ActorAccess },
   principal: Pick<ServicePrincipalRecord, "displayLabel">,
   rights: readonly HeldRight[]
-): OperationAuthorization {
+): Promise<OperationAuthorization> {
   const { actor } = caller;
   const superadmin = !isAuthenticatedServicePrincipal(actor) && isSuperadmin(actor);
   if (rights.some((right) => right.action === RELEASE_KEY) && !superadmin) {
@@ -114,7 +115,8 @@ export function authorizeGivingToPrincipal(
       message: `Only a superadmin gives a service principal '${RELEASE_KEY}', lends it by enabling the principal or issues it a key`
     };
   }
-  return authorizeHeldRights(
+  return authorizeHeldRightsWithin(
+    options,
     caller.access,
     rights.filter((right) => right.action !== RELEASE_KEY),
     { lends: { label: principal.displayLabel } }
