@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { assetRevision, readAsset, requestWithOrigin } from "./request-with-origin";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
-import { closeToolPackage, openToolPackage, toolRow } from "./tool-packages";
+import { closeToolPackage, openToolPackage, toolRowSwitch } from "./tool-packages";
 import { z } from "zod";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -3352,7 +3352,7 @@ test("superadmin config follows the German locale", async ({ page }) => {
   }
   await expect(form.getByText("Denkaufwand", { exact: true })).toBeVisible();
   await expect(
-    form.getByRole("switch", { name: "Alle Werkzeuge von Ergebnisse", exact: true })
+    form.getByRole("checkbox", { name: "Alle Werkzeuge von Ergebnisse", exact: true })
   ).toBeVisible();
   await expect(
     form.getByRole("heading", { name: "Einstiegsvorschläge", level: 2, exact: true })
@@ -3467,7 +3467,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
     // The agent holds no tool yet: every package stands as a row, switched off.
     const toolSection = form().locator("#tools");
-    await expect(toolRow(toolSection, "package:results").getByRole("switch")).toHaveAttribute(
+    await expect(toolRowSwitch(toolSection, "package:results")).toHaveAttribute(
       "aria-checked",
       "false"
     );

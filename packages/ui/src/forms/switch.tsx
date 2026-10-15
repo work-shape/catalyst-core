@@ -10,8 +10,11 @@ export interface SwitchProps extends Omit<
   checked?: boolean;
   defaultChecked?: boolean;
   /**
-   * The switch stands for several things of which only some are on: the thumb rests in the
-   * middle, and a press turns all of them on. It overrides `checked`.
+   * Given, true or false, the switch stands for several things, which can be all on, all off or
+   * only some on. While `mixed` is true only some are: the thumb rests in the middle, and a press
+   * turns all of them on; it overrides `checked`. A switch has two states only, so such a switch
+   * is a tri-state check box to assistive technology in each of its states, read out as on, off
+   * or partly on.
    */
   mixed?: boolean;
   onCheckedChange?(checked: boolean): void;
@@ -21,7 +24,7 @@ export interface SwitchProps extends Omit<
 }
 
 export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch(
-  { className, id, required, mixed = false, checked, "aria-describedby": describedBy, ...props },
+  { className, id, required, mixed, checked, "aria-describedby": describedBy, ...props },
   ref
 ) {
   const control = useFieldControl({ id, required, "aria-describedby": describedBy });
@@ -37,6 +40,8 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
       {...props}
       // Off underneath, so a press turns everything on.
       checked={mixed ? false : checked}
+      // role="switch" knows no partly on: a screen reader would read "off".
+      {...(mixed === undefined ? {} : { role: "checkbox" })}
       {...(mixed ? { "aria-checked": "mixed" as const, "data-state": "mixed" } : {})}
     >
       <SwitchPrimitive.Thumb

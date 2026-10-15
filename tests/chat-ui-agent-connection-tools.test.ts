@@ -201,7 +201,7 @@ describe("tools of Connections on the agent page", () => {
       editableAgentFields: []
     });
     expect(row(readOnly, "connection:crm")).toContain("Customer records");
-    expect(row(readOnly, "connection:crm")).toMatch(/role="switch"[^>]*disabled=""/u);
+    expect(row(readOnly, "connection:crm")).toMatch(/role="checkbox"[^>]*disabled=""/u);
     expect(readOnly).not.toContain('aria-label="Remove"');
   });
 

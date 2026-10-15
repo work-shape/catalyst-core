@@ -106,7 +106,7 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
     await switchToolPackage(tools, key, true);
     const panel = await openToolPackage(tools, key);
     const box = panel.getByRole("checkbox", { name: /^echo/u });
-    await expect(panel.getByRole("checkbox")).toHaveCount(1);
+    await expect(panel.locator("[data-package-tool]")).toHaveCount(1);
     await expect(box).toBeChecked();
     await expect(panel).toContainText("Returns its input.");
     await expect(panel.getByRole("link", { name: "Open connection" })).toHaveAttribute(

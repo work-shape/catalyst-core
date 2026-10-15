@@ -342,7 +342,7 @@ describe("the Tools section of the agent page", () => {
 
   it("lets a reader fold the rows out but switch nothing", () => {
     const reader = page(["web_fetch"], "en", false);
-    expect(row(reader, "package:web")).toMatch(/role="switch"[^>]*disabled=""/u);
+    expect(row(reader, "package:web")).toMatch(/role="checkbox"[^>]*disabled=""/u);
     expect(row(reader, "package:web")).toContain('aria-expanded="false"');
   });
 

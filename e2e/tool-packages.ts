@@ -8,9 +8,12 @@ import { expect } from "./test";
 export const toolRow = (tools: Locator, key: string) =>
   tools.locator(`[data-tool-package="${key}"]`);
 
-/** The switch of a row, which turns all its tools on or off. */
+/**
+ * The switch of a row, which turns all its tools on or off. It can be partly on, so assistive
+ * technology reads it as a tri-state check box.
+ */
 export const toolRowSwitch = (tools: Locator, key: string) =>
-  toolRow(tools, key).getByRole("switch");
+  toolRow(tools, key).getByRole("checkbox", { name: /^(All tools of|Alle Werkzeuge von) /u });
 
 /** Turns all tools of a row on or off with its switch. */
 export async function switchToolPackage(tools: Locator, key: string, on: boolean): Promise<void> {

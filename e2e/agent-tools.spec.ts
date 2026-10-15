@@ -139,6 +139,13 @@ test.describe("the Tools section of an agent, as rows", () => {
     await expect(toolRowSwitch(tools, "package:files")).toHaveAttribute("aria-checked", "false");
     await expect(rowCount(tools, "package:results")).toHaveText("1/2");
     await expect(toolRowSwitch(tools, "package:results")).toHaveAttribute("aria-checked", "mixed");
+    // What a screen reader hears: partly on, not off.
+    await expect(toolRowSwitch(tools, "package:results")).toMatchAriaSnapshot(
+      '- checkbox "All tools of Results" [checked=mixed]'
+    );
+    await expect(toolRowSwitch(tools, "package:files")).toMatchAriaSnapshot(
+      '- checkbox "All tools of Files and code" [checked=false]'
+    );
     await expect(toolRow(tools, "package:results")).toContainText(
       "Shows and keeps results: widgets, Pages and recorded facts."
     );
@@ -147,7 +154,7 @@ test.describe("the Tools section of an agent, as rows", () => {
     );
     await expect(rowCount(tools, "own:demo.workflow_summary")).toHaveText("1/1");
     // At rest the page shows no check box and no id of a package's tool.
-    await expect(tools.getByRole("checkbox")).toHaveCount(0);
+    await expect(tools.locator("[data-package-tool]")).toHaveCount(0);
     await expect(tools).not.toContainText("show_view");
 
     // Results folded out: its tools, one of them on.
