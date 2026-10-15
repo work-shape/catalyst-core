@@ -56,7 +56,11 @@ export function createSkillAssetKind(options: {
       kind: "skill",
       plural: "skills",
       schema: skillConfigSchema,
-      nameRule: { pattern: SKILL_NAME_PATTERN, description: SKILL_NAME_RULE },
+      nameRule: {
+        pattern: SKILL_NAME_PATTERN,
+        description: SKILL_NAME_RULE,
+        schema: skillConfigSchema.shape.name
+      },
       actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).
       owners: ["instance", "workspace"],

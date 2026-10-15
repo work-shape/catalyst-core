@@ -524,7 +524,7 @@ export class AssetWorkflow {
   async checkName(call: AssetCall, input: AssetAddress) {
     const target = await this.target(input);
     call.access.require(target.kind.actions.write, target.resource);
-    return nameCheckOf(target, call.access);
+    return nameCheckOf(target);
   }
 
   sync(call: AssetCall, input: AssetSyncInput) {

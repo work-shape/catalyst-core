@@ -117,27 +117,26 @@ export function requireFreeName(target: AssetTarget): void {
 }
 
 /**
- * Whether a create would take the target's name: the kind's rule for names, then the id. A
- * name a deleted asset holds is free to whoever reads that asset, whose create names the
- * revision of its delete; to anybody else it is answered as taken, as their create would be.
+ * A fresh create (`expectedRevision: null`) cannot take any stored name: names are unique
+ * per instance and kind, and deletion keeps the revision. The check asks the same write
+ * right as that create. Its refusal repeats only the submitted kind and name, through the
+ * same generic conflict as a non-reader's create: no title, owner, workspace, revision or
+ * deleted state. Active and deleted names therefore give a non-reader identical answers.
+ * Restoring a deleted asset names its deletion revision; that is not a fresh create.
  */
 export function nameCheckOf(
-  target: AssetTarget,
-  access: ActorAccess
+  target: AssetTarget
 ):
   | { available: true }
   | { available: false; reason: "name_invalid" | "name_taken"; message: string } {
   const issue = assetNameIssue(target.kind, target.name);
   if (issue) return { available: false, reason: "name_invalid", message: issue.message };
-  const held =
-    target.elsewhere ||
-    target.asset?.status === "active" ||
-    (target.asset !== undefined && !readsTarget(access, target));
+  const held = target.elsewhere || currentRevisionOf(target.asset) !== null;
   return held
     ? {
         available: false,
         reason: "name_taken",
-        message: `The ${target.kind.kind} id '${target.name}' is taken on this instance`
+        message: nameOnlyConflict(target).message
       }
     : { available: true };
 }

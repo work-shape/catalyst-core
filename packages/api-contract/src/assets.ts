@@ -374,7 +374,8 @@ export const validateAssetRequestSchema = z.object({
 
 /** A name a create would take, asked before the create. */
 export const checkAssetNameRequestSchema = z.object({
-  name: nameText(z.string().min(1).max(200)),
+  // The kind decides empty and long names; NUL uses the definition transport rule.
+  name: nameText(z.string()),
   workspaceId: workspaceIdSchema
 });
 

@@ -79,6 +79,14 @@ test("a new agent's address follows its name, names a taken one while typing and
   await nameField(dialog).fill(`Travel Expenses ${suffix}`);
   await expect(address(dialog)).toHaveValue(typed);
 
+  // The name check uses the agent schema too: path segments a browser drops are refused.
+  for (const invalid of [".", ".."]) {
+    await address(dialog).fill(invalid);
+    await expect(dialog.getByRole("alert")).toHaveText(/^This address does not work\./u);
+    await expect(proceed).toBeDisabled();
+  }
+  await address(dialog).fill(typed);
+
   // What it should do goes onto the new agent's page with its name; nothing is stored yet.
   await dialog
     .getByRole("textbox", { name: /^What should it do\?/u })
