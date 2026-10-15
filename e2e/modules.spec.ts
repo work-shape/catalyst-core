@@ -108,7 +108,7 @@ test("an operator reads the modules of the instance, in English and in German", 
 });
 
 // No module of the open platform owns an agent tool or a job kind. The two tests below serve
-// the one field an instance with such a module answers with, over the answer of the real API,
+// the fields an instance with such a module answers with, over the answer of the real API,
 // and everything else is the product: the stored agent, the editor, the save, the job row.
 // tests/module-off.test.ts holds the server's side with a module that owns both.
 
@@ -152,8 +152,26 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
           response,
           json: {
             ...body,
-            enabledToolNames: body.enabledToolNames.filter((name) => name !== staleTool),
-            moduleOffTools: [{ name: staleTool, module: "documents" }]
+            enabledToolNames: body.enabledToolNames.filter((name) => name !== staleTool)
+          }
+        });
+      }
+    );
+    // The agent's read reports the tool as one of a module that is off, while it still names it.
+    await page.route(
+      ({ pathname }) => pathname === `/api/v1/assets/agent/${agentName}`,
+      async (route) => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const response = await route.fetch();
+        const body: { config: { toolNames: string[] } } = await response.json();
+        await route.fulfill({
+          response,
+          json: {
+            ...body,
+            chatAvailable: true,
+            unavailableTools: body.config.toolNames.includes(staleTool)
+              ? [{ name: staleTool, reason: "module_off", module: "documents" }]
+              : []
           }
         });
       }
@@ -170,6 +188,11 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
     await expect(stale).toContainText(
       "Not available: the module Documents is off. Remove it to save."
     );
+    // The line at the top of the page names it with its reason.
+    await expect(form.locator("[data-agent-unavailable]")).toHaveText(
+      `Not available: ${staleTool} (module Documents is off)`
+    );
+    await expect(form.locator("[data-agent-chat-unavailable]")).toHaveCount(0);
     const toolCount = page
       .getByRole("navigation", { name: "On this page" })
       .locator("select option", {

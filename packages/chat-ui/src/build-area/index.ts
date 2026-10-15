@@ -1,4 +1,5 @@
 export { AgentEditor, type AgentAvailabilityChoice } from "./agent-editor";
+export { AgentUnavailableNotices } from "./agent-unavailable";
 export { AssetEditorShell } from "./asset-editor-shell";
 export { PlatformInstructionsBody } from "./platform-instructions";
 export { FieldRefusals } from "./asset-form-fields";

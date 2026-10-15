@@ -98,12 +98,15 @@ function instanceToolGroups(input: {
   selected: readonly string[];
   skillNames: readonly string[];
   locale: "en" | "de";
+  /** The names the stored agent holds that the instance cannot run. */
+  unavailable?: readonly string[];
   isOtherSource?: (name: string) => boolean;
 }): InstanceToolGroupView[] {
   const { references, selected, locale } = input;
   const offered = offeredTools(references);
   const offeredNames = new Set(offered.map((tool) => tool.name));
-  const off = new Set((references?.moduleOffTools ?? []).map((tool) => tool.name));
+  // What the stored agent names and the instance cannot run stands apart, with its reason.
+  const off = new Set(input.unavailable ?? []);
   const held = selected
     .filter(
       (name) => !offeredNames.has(name) && !off.has(name) && !(input.isOtherSource?.(name) ?? false)
@@ -150,6 +153,8 @@ export function toolPackages(input: {
   skillNames: readonly string[];
   locale: "en" | "de";
   connections?: ConnectionToolsRead;
+  /** The names the stored agent holds that the instance cannot run: no chip shows them. */
+  unavailable?: readonly string[];
   isOtherSource?: (name: string) => boolean;
 }): ToolPackageView[] {
   const { selected } = input;

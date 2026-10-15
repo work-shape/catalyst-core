@@ -48,6 +48,7 @@ import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
 import type { ConnectionToolChoice } from "./connection-tools";
 import { withImpliedTools } from "./instance-tools";
+import { AgentUnavailableNotices } from "./agent-unavailable";
 import { ToolPackagesSection } from "./tool-packages-section";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import { PlatformInstructions } from "./platform-instructions";
@@ -397,6 +398,7 @@ export function AgentEditor({
             selected={form.toolNames}
             skillNames={form.skillNames}
             connectionTools={connectionTools}
+            unavailable={frame.asset?.unavailableTools ?? []}
             isOtherSource={isAppToolName}
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
@@ -464,6 +466,7 @@ export function AgentEditor({
         form.description[locale].trim() || form.description[locale === "de" ? "en" : "de"].trim()
       }
       badges={isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
+      notices={<AgentUnavailableNotices status={frame.asset} />}
       headActions={
         <>
           {defaultError ? <FormNotice tone="error">{defaultError}</FormNotice> : null}

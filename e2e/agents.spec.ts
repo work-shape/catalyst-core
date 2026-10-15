@@ -173,6 +173,45 @@ test("a builder is led from a card to the agent's page in Studio", async ({
   await expect(card(page, OTHER_AGENT)).toBeVisible();
 });
 
+// A stored agent can name a model the instance no longer has (SA-0). Writes refuse such a
+// reference, so the read of the real API is served with the fields the server then adds.
+test("a builder reads on an agent's page what of it is unavailable and that it cannot chat", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route(
+    ({ pathname }) => pathname === "/api/v1/assets/agent/research_assistant",
+    async (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const response = await route.fetch();
+      const body: Record<string, unknown> = await response.json();
+      await route.fulfill({
+        response,
+        json: {
+          ...body,
+          chatAvailable: false,
+          unavailableTools: [{ name: "crm.lookup", reason: "unknown_tool" }],
+          unavailableSkills: [],
+          unavailableModels: [
+            { name: "retired-model", field: "modelBindingId", reason: "unknown_model" }
+          ]
+        }
+      });
+    }
+  );
+  await signIn(page, builder);
+  await page.goto("/build/agents/research_assistant");
+  const form = page.locator("form");
+
+  const notice = form.locator("[data-agent-chat-unavailable]");
+  await expect(notice).toContainText("This agent cannot chat");
+  await expect(notice).toContainText("Nobody can chat with it until its model is changed.");
+  await expect(form.locator("[data-agent-unavailable]")).toHaveText(
+    "Not available: crm.lookup (tool does not exist on this instance), " +
+      "retired-model (model does not exist on this instance)"
+  );
+});
+
 test("a builder who renames an agent in Studio finds the new name on its card", async ({
   page,
   // The probe agent is offered in every workspace while it exists, so the tests that count
