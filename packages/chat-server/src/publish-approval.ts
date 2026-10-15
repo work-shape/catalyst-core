@@ -1,6 +1,7 @@
 import {
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  WORKFLOW_MANIFEST_FILE,
   isJsonObject,
   type AssetKindRegistry,
   type ConfigAssetRevisionRecord,
@@ -77,7 +78,6 @@ export function publishApproval(
   return {
     kind: approval.kind,
     action: approval.approve,
-    resource: target.resource,
     subject
   };
 }
@@ -211,7 +211,7 @@ async function publishReview(
     title: subject.title,
     revision: subject.revision,
     liveRevision: subject.liveRevision,
-    files: await changedFiles(options, subject.assetId, next, live),
+    files: await changedFiles(options, subject, next, live),
     ...(reach
       ? {
           // Only what changes something: a reading call reaches nothing new.
@@ -254,7 +254,7 @@ function titleOf(
  */
 async function changedFiles(
   options: PublishApprovalKindsOptions,
-  assetId: string,
+  subject: Pick<PublishSubject, "assetId" | "kind">,
   next: ConfigAssetRevisionRecord | undefined,
   live: ConfigAssetRevisionRecord | undefined
 ): Promise<JsonObject[]> {
@@ -262,13 +262,18 @@ async function changedFiles(
     if (revision?.fileSetId) {
       const set = await options.files.getAssetFileSet({
         clientInstanceId: options.clientInstanceId,
-        assetId,
+        assetId: subject.assetId,
         fileSetId: revision.fileSetId
       });
       return new Map((set?.sourceFiles ?? []).map((file) => [file.path, file.sha256]));
     }
     const listed = configFilesSchema.safeParse(revision?.config).data?.files ?? [];
-    return new Map(listed.map((file) => [file.path, file.content]));
+    const contents = new Map(listed.map((file) => [file.path, file.content]));
+    // Workflows store their parsed manifest beside the step files, not in a file set.
+    if (subject.kind === WORKFLOW_ASSET_KIND && revision?.config?.manifest !== undefined) {
+      contents.set(WORKFLOW_MANIFEST_FILE, JSON.stringify(revision.config.manifest));
+    }
+    return contents;
   };
   const [after, before] = await Promise.all([files(next), files(live)]);
   const paths = [...new Set([...after.keys(), ...before.keys()])].sort();

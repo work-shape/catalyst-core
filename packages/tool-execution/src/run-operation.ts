@@ -557,9 +557,9 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
 }
 
 /**
- * Whether the caller's own call is the approval a guardrail asked for: they hold the right that
- * decides it, and the call is their own click in the interface or their answer in the CLI. An
- * agent's call, an MCP client's and a step of a run are never one.
+ * Whether the caller's own call is the approval a guardrail asked for: they hold the right at
+ * instance scope and clicked in the interface. A CLI origin never counts: the server cannot
+ * tell a person at a terminal from an agent driving it.
  */
 function approvedByCaller(
   context: RunContext,
@@ -570,9 +570,9 @@ function approvedByCaller(
   const { call } = context;
   return (
     policy.source === "guardrail" &&
-    (call.origin.kind === "user" || call.origin.kind === "cli") &&
+    call.origin.kind === "user" &&
     call.draft === undefined &&
-    access.authorize(approval.action, approval.resource ?? context.resource).allowed
+    access.authorize(approval.action).allowed
   );
 }
 

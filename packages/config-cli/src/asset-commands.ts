@@ -276,9 +276,16 @@ const VERBS: Record<string, Verb> = {
             }),
           "It may have been applied: run 'show' before sending it again."
         );
-        return settle(session, outcome, (output) => [
-          `Published revision ${output.publishedRevision} of ${session.kind.kind} '${name}'${output.replacedRevision === undefined ? "" : ` in place of revision ${output.replacedRevision}`}.`
-        ]);
+        return settle(
+          session,
+          outcome,
+          (output) => [
+            `Published revision ${output.publishedRevision} of ${session.kind.kind} '${name}'${output.replacedRevision === undefined ? "" : ` in place of revision ${output.replacedRevision}`}.`
+          ],
+          session.kind.actions.approve === undefined
+            ? undefined
+            : "If you are an instance approver, you can approve it in the Inbox."
+        );
       };
     }
   },
@@ -679,11 +686,12 @@ function filesRead(session: Session, from: string, files: number): number {
 function settle<Output>(
   session: Session,
   outcome: OperationOutcome<Output, { id: string; approvalRequestId?: string }>,
-  lines: (output: Output) => string[]
+  lines: (output: Output) => string[],
+  approvalHint?: string
 ): number {
   if (outcome.status === "pending_approval") {
     const { id, approvalRequestId } = outcome.run;
-    const text = `Waits for an approval on the instance; nothing has changed yet (${approvalRequestId === undefined ? "" : `request ${approvalRequestId}, `}Operation Run ${id}).`;
+    const text = `Waits for an approval on the instance; nothing has changed yet (${approvalRequestId === undefined ? "" : `request ${approvalRequestId}, `}Operation Run ${id}).${approvalHint ? ` ${approvalHint}` : ""}`;
     if (session.values.json)
       writeOutput(
         session.options,

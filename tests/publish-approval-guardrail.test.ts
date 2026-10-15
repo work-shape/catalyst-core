@@ -1,10 +1,15 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { PUBLISH_APPROVAL_GUARDRAIL, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import {
+  PUBLISH_APPROVAL_GUARDRAIL,
+  WORKFLOW_ASSET_KIND,
+  type OperationOrigin
+} from "@vivd-catalyst/core";
+import { runOperation } from "@vivd-catalyst/tool-execution";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { guardedEvents } from "./support/guardrails";
-import { getTestJobs } from "./support/test-instance";
+import { getTestJobs, getTestOperationCalls } from "./support/test-instance";
 import type { WorkflowFixture } from "./support/workflow-instance";
 import { notifyClients, readyWorkflows } from "./support/workflow-runs";
 
@@ -81,6 +86,62 @@ describe("publishing needs an instance admin's approval", () => {
       params: { name: PUBLISH_APPROVAL_GUARDRAIL.name },
       payload: { enabled }
     });
+
+  const publishAsAdmin = async (name: string, origin: OperationOrigin) => {
+    const calls = await getTestOperationCalls(t.instance);
+    return runOperation(
+      {
+        operation: "assets.publish",
+        effect: "changing",
+        input: { kind: "app", name, revision: 1, workspaceId: t.workspaceId },
+        actor: { ...t.admin, externalUserId: t.admin.id, authSource: "test", scopes: ["*"] },
+        origin,
+        workspaceId: t.workspaceId,
+        correlationId: `corr_${name}`
+      },
+      calls.deps
+    );
+  };
+
+  it("holds a workspace approver's own publish for an instance approver", async () => {
+    const grant = await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.kai.id,
+      action: "app.approve",
+      effect: "allow",
+      scopeKind: "workspace",
+      scopeId: t.workspaceId,
+      grantedBy: t.admin.id
+    });
+    try {
+      await created("workspace-approver");
+      const response = await t.publish(t.kai.id, "workspace-approver", 1);
+      expectStatus(response, 202);
+      const held = heldSchema.parse(response.json());
+      expect((await stored("workspace-approver"))?.publishedRevision).toBeUndefined();
+      expect(await request(t.kai.id, held.approvalRequestId)).toMatchObject({ canDecide: false });
+      expectStatus(await decide(t.kai.id, held.approvalRequestId, "approve"), 403);
+      expect(await request(t.admin.id, held.approvalRequestId)).toMatchObject({ canDecide: true });
+    } finally {
+      await t.stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });
+    }
+  });
+
+  it("never treats a CLI origin as self-approval, even for an instance approver", async () => {
+    await created("cli-approver");
+    const result = await publishAsAdmin("cli-approver", { kind: "cli" });
+    expect(result.result.status).toBe("pending_approval");
+    expect((await stored("cli-approver"))?.publishedRevision).toBeUndefined();
+  });
+
+  it("refuses an instance approver's MCP publish with the reason", async () => {
+    await created("mcp-refused");
+    const result = await publishAsAdmin("mcp-refused", { kind: "mcp", clientName: "test" });
+    expect(result.result).toMatchObject({ status: "denied" });
+    expect(result.run.error?.message).toContain("person's click");
+    expect((await stored("mcp-refused"))?.publishedRevision).toBeUndefined();
+  });
 
   it("holds a member's publish as an app_publish request the admin decides, and the member does not", async () => {
     await created("offers");

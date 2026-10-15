@@ -41,10 +41,8 @@ export interface OperationResource extends AccessResource {
 export interface OperationApproval {
   /** The kind of the approval request, such as `app_publish`. */
   kind: string;
-  /** The right that decides it, such as `app.approve`. */
+  /** The instance-level right that decides it, such as `app.approve`. */
   action: string;
-  /** What the right is decided on. The call's resource where absent. */
-  resource?: AccessResource;
   /**
    * What the request is about, frozen when it is filed, such as the revision a publish makes
    * live and the live one then. The request's kind reads it to show it and to tell whether
@@ -223,9 +221,9 @@ interface OperationDefinitionBase<Input, Output> {
   /**
    * Who decides a call of the operation that waits for an approval, where it is not every
    * holder of `operations.approve`: the kind its request is filed as, which the approvers'
-   * Inbox lists, and the right that decides it on the call's resource. A caller who holds that
-   * right answers a guardrail's `require_approval` with their own call, from the interface or
-   * the CLI: the run records them as caller and as approver, and no request is filed.
+   * Inbox lists, and the instance-level right that decides it. A caller who holds that right
+   * answers a guardrail's `require_approval` with their own click in the interface: the run
+   * records them as caller and as approver, and no request is filed. CLI calls never do this.
    */
   approval?(input: unknown): OperationApproval | undefined | Promise<OperationApproval | undefined>;
   /**

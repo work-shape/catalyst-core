@@ -2,8 +2,9 @@ import { writeError, type ConfigCommandOptions } from "./command-support";
 
 /**
  * The question a publish of an App or a Workflow asks in the terminal before it is sent: a
- * revision of either goes live only on a person's click or their answer here (GR-PUB-1). An
- * answer that is not yes publishes nothing. `--yes`, or a terminal nobody can answer, is
+ * yes submits the publish but never supplies an approval. With a publish guardrail on, even
+ * an admin's CLI publish waits in the Inbox. An answer that is not yes publishes nothing.
+ * `--yes`, or a terminal nobody can answer, is
  * refused until such a publish can wait as a confirmation in the person's Inbox (OP-4).
  * Answers whether the publish goes ahead; where it does not, it has said why.
  */
@@ -20,7 +21,7 @@ export async function askBeforePublish(
     return false;
   }
   const answer = await options.prompt(
-    `Publish revision ${revision} of ${kind} '${name}'? Its users are then served it, or an approver is asked first if you may not approve it yourself. [y/N] `
+    `Publish revision ${revision} of ${kind} '${name}'? If approval is required, this files a request in the Inbox. [y/N] `
   );
   if (/^y(?:es)?$/iu.test(answer.trim())) return true;
   writeError(options, "Nothing was published.");

@@ -1,5 +1,7 @@
 import {
   callTestPath,
+  getTestJobs,
+  listenTestInstance,
   createTestAssetKinds,
   createTestFetch,
   createTestInstance,
@@ -103,7 +105,7 @@ import {
 } from "./support/access-instance";
 import { IBAN as GUARDRAIL_IBAN, guardedEvents, ibanPattern } from "./support/guardrails";
 import { setupNamespaceHolder } from "./support/asset-operations";
-import { appFiles, setupAppInstance } from "./support/app-instance";
+import { appFiles, expectStatus, setupAppInstance } from "./support/app-instance";
 
 const servers: TestInstance[] = [];
 const temporaryDirectories: string[] = [];
@@ -3245,7 +3247,7 @@ describe("catalyst asset commands against an instance", () => {
       );
       expect(declined).toMatchObject({ code: 1, err: "Nothing was published.\n" });
       expect(declining.asked).toEqual([
-        "Publish revision 1 of app 'offers'? Its users are then served it, or an approver is asked first if you may not approve it yourself. [y/N] "
+        "Publish revision 1 of app 'offers'? If approval is required, this files a request in the Inbox. [y/N] "
       ]);
       expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
       const published = await cliAs(t.instance, t.admin.id, cwd, ["y"]).run(
@@ -3263,6 +3265,100 @@ describe("catalyst asset commands against an instance", () => {
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
       const shown = await run("apps", "show", "offers", "--files", ...workspace);
       expect(shown.out).toContain("index.html");
+    } finally {
+      await t.close();
+    }
+  });
+
+  it("an admin key's interactive CLI publish waits with its request id and Inbox instructions", async () => {
+    const t = await setupAppInstance({
+      modules: { personalApiKeys: { enabled: true } },
+      server(stores) {
+        const keys = {
+          secret: "a-test-service-access-token-secret-with-enough-length",
+          clientInstanceId: accessInstanceId,
+          apiAccessStore: stores.apiAccess,
+          personalApiKeys: { store: stores.personalApiKeys, users: stores.users }
+        };
+        return {
+          authAdapter: new CompositeAuthAdapter([
+            new HmacServiceAccessTokenAuthAdapter(keys),
+            recordAuthAdapter()
+          ]),
+          serviceAccessToken: { exchange: new ApiKeyAccessTokenExchange(keys) },
+          operations: { events: guardedEvents(stores, {}, { shipped: true }).events }
+        };
+      }
+    });
+    try {
+      expectStatus(
+        await t.putApp(t.admin.id, "cli-key-publish", appFiles("key", { id: "cli-key-publish" })),
+        200
+      );
+      const payload = {
+        name: "Publishing key",
+        scopes: ["app.read", "app.publish"],
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+      };
+      // A key cannot acquire the right that approves a publish.
+      expectStatus(
+        await t.call(t.admin.id, "me.api_keys.create", {
+          payload: { ...payload, scopes: [...payload.scopes, "app.approve"] }
+        }),
+        422
+      );
+      const issued = (await t.expectOk(t.admin.id, "me.api_keys.create", { payload })).json();
+      const url = await listenTestInstance(t.instance);
+      const err: string[] = [];
+      const questions: string[] = [];
+      const code = await runCli(
+        [
+          "app",
+          "publish",
+          "cli-key-publish",
+          "--revision",
+          "1",
+          "--workspace",
+          t.workspaceId,
+          "--instance",
+          url
+        ],
+        {
+          env: { CATALYST_API_KEY: issued.secret },
+          prompt(question) {
+            questions.push(question);
+            return Promise.resolve("yes");
+          },
+          stdout() {},
+          stderr: (text) => err.push(text),
+          fetchImpl(input, init) {
+            const request = new Request(input, init);
+            // Client assertions cannot change the authenticated origin into an app click.
+            request.headers.set("x-catalyst-interactive", "true");
+            request.headers.set("x-catalyst-origin", "user");
+            return fetch(request);
+          }
+        }
+      );
+      expect(code, err.join("")).toBe(3);
+      expect(questions).toHaveLength(1);
+      const [request] = await t.stores.approvals.listApprovalRequests({
+        clientInstanceId: accessInstanceId,
+        kinds: ["app_publish"],
+        status: "pending"
+      });
+      expect(request).toMatchObject({ requestedBy: { id: t.admin.id }, status: "pending" });
+      if (!request) throw new Error("Missing publish request");
+      expect(request.payload).toMatchObject({ origin: { kind: "cli" } });
+      expect(err.join("")).toContain(`request ${request.id}`);
+      expect(err.join("")).toContain("you can approve it in the Inbox");
+      expect((await t.listed("cli-key-publish")).publishedRevision).toBeUndefined();
+      await t.expectOk(t.admin.id, "approval_requests.decide", {
+        params: { requestId: request.id },
+        payload: { decision: "approve" }
+      });
+      await getTestJobs(t.instance).runDue();
+      expect((await t.listed("cli-key-publish")).publishedRevision).toBe(1);
     } finally {
       await t.close();
     }

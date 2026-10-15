@@ -25,7 +25,7 @@ export const platformAssetKindSchema = z.object({
     /**
      * Named by a kind whose publish a guardrail can hold for an approval: its holders decide
      * the request, and their own publish is the approval. A publish of such a kind goes live
-     * only on a person's click or their answer to the CLI's prompt.
+     * only on a person's click. A CLI submission waits when approval is required.
      */
     approve: z.string().optional(),
     /**
