@@ -301,4 +301,41 @@ describe("what a skill's folder may not hold", () => {
     });
     expect(taken.statusCode, taken.body).toBe(200);
   });
+
+  it("refuses a write of the config for the SKILL.md it leaves, with the frontmatter it keeps", async () => {
+    const world = await start();
+    const notes = "n".repeat(4_000);
+    const written = await put(world, {
+      files: [
+        {
+          path: "SKILL.md",
+          text: SKILL_MD.replace("---\n\n", `notes: ${notes}\n---\n\n`)
+        }
+      ],
+      expectedRevision: null
+    });
+    expect(written.statusCode, written.body).toBe(200);
+    const read = await get(world, false);
+    const {
+      files: _index,
+      frontmatter,
+      ...config
+    } = z.record(z.string(), z.json()).parse(read.config);
+    expect(frontmatter).toEqual({ notes });
+    // Under the limit without the frontmatter, over it with the frontmatter the write keeps.
+    const content = "x".repeat(2 * 1024 * 1024 - 2_000);
+
+    const refused = await refusal(
+      put(world, { config: { ...config, content }, expectedRevision: read.revision })
+    );
+    expect(refused.details).toMatchObject({ reason: "skill_file_too_large", path: "SKILL.md" });
+    expect((await get(world, false)).revision).toBe(read.revision);
+
+    // A write that clears the frontmatter leaves a SKILL.md under the limit.
+    const cleared = await put(world, {
+      config: { ...config, content, frontmatter: {} },
+      expectedRevision: read.revision
+    });
+    expect(cleared.statusCode, cleared.body).toBe(200);
+  });
 });

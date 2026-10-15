@@ -489,15 +489,17 @@ export function withCarriedSkillParts(
   beforeHasFiles: boolean
 ): JsonObject {
   const index = beforeHasFiles ? skillFileIndexOfConfig(before) : [];
-  // The folder the write leaves is checked as a write of the whole folder is: the config's own
-  // files, `SKILL.md` and the text resources, beside the files it keeps.
-  requireSkillFolder(skillFilesOfConfig(config), index);
   const indexed = withSkillFileIndex(config, index);
-  if ("frontmatter" in indexed) return indexed;
   const kept = z.object({ frontmatter: z.record(z.string(), z.json()) }).safeParse(before);
-  return kept.success && Object.keys(kept.data.frontmatter).length > 0
-    ? { ...indexed, frontmatter: kept.data.frontmatter }
-    : indexed;
+  const carried =
+    !("frontmatter" in indexed) && kept.success && Object.keys(kept.data.frontmatter).length > 0
+      ? { ...indexed, frontmatter: kept.data.frontmatter }
+      : indexed;
+  // The folder the write leaves is checked as a write of the whole folder is: the files of the
+  // config as it is stored, `SKILL.md` with the frontmatter it keeps and the text resources,
+  // beside the files it keeps.
+  requireSkillFolder(skillFilesOfConfig(carried), index);
+  return carried;
 }
 
 /** The config of a skill with the index of the files it does not hold, or without one. */
