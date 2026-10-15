@@ -1,6 +1,6 @@
 ---
 title: What the release contains
-description: What the current release contains and what it does not contain yet.
+description: What the current release contains.
 ---
 
 Workshape Catalyst is an early product: configuration keys and package APIs can still change between releases.
@@ -29,14 +29,5 @@ The open platform contains:
 - Docker images, Compose files, an explicit migration step, and the `/health` and `/ready` probes
 
 Document processing, the artifact helper commands for execution workspaces and the private data view are paid capabilities. They are not in the open repository.
-
-## Not In The Current Release
-
-- A connector for a plain HTTP or OpenAPI system. A Connection reaches a remote MCP server only.
-- Writing, testing or publishing a guardrail in the interface. Studio > Guardrails reads; the CLI writes.
-- A platform MCP server for a local agent such as Claude Code or Codex. A local agent works through `catalyst login` and the CLI.
-- Tools with the permission mode `approval_required`. An agent run cannot pause for a person's decision and continue afterwards, so startup refuses such a tool.
-- An approval for a call an agent makes. The operation policy value `approval` holds a person's call for a decision in the Inbox, see [Operation policy](/configure/release-config/#operation-policy). An agent's run cannot pause for such a decision and continue, so startup refuses a tool of the release whose calls would wait.
-- Editing a sent message and exporting a conversation.
 
 Each page of these docs describes the current release unless it says otherwise.

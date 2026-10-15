@@ -18,7 +18,7 @@ A team that keeps its tooling with its working copy installs the same file as a 
 
 The package installs from that one file. It depends on two third-party packages, `js-yaml` and `zod`, and on no private package: the asset schemas, the API contract and the API client it uses are built into it. No registry account and no token are needed to install it.
 
-## What it does today
+## What it does
 
 The `config` commands synchronize agents and skills between a folder and an instance. [Config assets](/configure/config-assets/) describes the working copy, the commands and what a push does.
 
@@ -172,10 +172,6 @@ The tool takes its key from the variable `CATALYST_API_KEY` when it is set, whic
 - The key is sent only to the instance you name, and only over HTTPS. Plain HTTP is accepted for `localhost`, `127.0.0.0/8` and `::1`.
 - The key is exchanged once for a short-lived access token. Every other request carries the token, not the key.
 - An error message never repeats the key, and the tool never prints it.
-
-## What is not in it
-
-`catalyst config local-key` is no longer a command of this tool. It created a key on a local development instance by reading the release config and its secrets, which the public tool does not do. A client repository runs its `config:local-key` script instead, which calls `catalyst-local-key` of the private `client-assembly` package.
 
 ## For maintainers
 
