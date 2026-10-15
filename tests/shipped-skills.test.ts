@@ -349,6 +349,72 @@ describe("the skills that ship with the platform", () => {
     expect(result.retained).toEqual(["spreadsheets"]);
     expect(await read(app, "spreadsheets")).toEqual(before);
   });
+  it.each(["active", "deleted before upgrade", "deleted after upgrade"])(
+    "starts and retains a workspace-owned skill that is %s without writing it",
+    async (state) => {
+      const earlier = await start(false);
+      const workspace = await earlier.call("workspaces.create", { payload: { name: "Team" } });
+      expect(workspace.statusCode, workspace.body).toBe(200);
+      const { id: workspaceId } = z.object({ id: z.string() }).parse(workspace.json());
+      const created = await earlier.call("assets.put", {
+        params: { kind: "skill", name: "pdf" },
+        payload: {
+          config: { name: "pdf", title: "PDF", description: "Ours.", content: "Ours." },
+          expectedRevision: null,
+          workspaceId
+        }
+      });
+      expect(created.statusCode, created.body).toBe(200);
+      const { revision } = z.object({ revision: z.number() }).parse(created.json());
+      const key = { clientInstanceId, kind: "skill", name: "pdf" };
+      const original = await earlier.stores.configAssets.getConfigAsset(key);
+      expect(original).toMatchObject({ scope: { kind: "workspace", workspaceId } });
+
+      if (state === "deleted after upgrade") {
+        await start(false, [artifactSkills]);
+        expect(await earlier.stores.configAssets.getConfigAsset(key)).toEqual(original);
+      }
+      if (state !== "active") {
+        const deleted = await earlier.call("assets.delete", {
+          params: { kind: "skill", name: "pdf" },
+          payload: { expectedRevision: revision, workspaceId }
+        });
+        expect(deleted.statusCode, deleted.body).toBe(200);
+      }
+      const before = await earlier.stores.configAssets.getConfigAsset(key);
+      const revisions = await earlier.stores.configAssets.listConfigAssetRevisions(key);
+      expect(before).toMatchObject({
+        status: state === "active" ? "active" : "deleted",
+        scope: { kind: "workspace", workspaceId }
+      });
+
+      for (let restart = 0; restart < 2; restart++) {
+        const upgraded = await start(false, [artifactSkills]);
+        // A real assembly start finishes, and its admin API remains usable.
+        expect(await shippedNames(upgraded)).toEqual([GUIDE]);
+        const response = await upgraded.call("assets.get", {
+          params: { kind: "skill", name: "pdf" },
+          query: { workspaceId }
+        });
+        expect(response.statusCode, response.body).toBe(state === "active" ? 200 : 404);
+        expect(await upgraded.stores.configAssets.getConfigAsset(key)).toEqual(before);
+        expect(await upgraded.stores.configAssets.listConfigAssetRevisions(key)).toEqual(revisions);
+        const result = await seedShippedSkills({
+          clientInstanceId,
+          stores: upgraded.stores,
+          skills: [platformDocsSkill, generalSkill("pdf", "pdf", ["read_skill"])]
+        });
+        expect(result).toEqual({
+          retained: ["pdf"],
+          created: [],
+          updated: [],
+          removed: [],
+          unlisted: []
+        });
+      }
+    }
+  );
+
   it("stores the skills a capability ships, with their icon and summary, where the instance has their tools", async () => {
     const app = await start(false, [artifactSkills]);
     // `spreadsheets` names `workspace.exec`, which an instance without Execution Workspaces

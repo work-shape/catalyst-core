@@ -28,7 +28,7 @@ const SYSTEM_ACTOR: AuditActor = { displayLabel: "System", roles: [] };
 
 /** What one start changed, by skill name. */
 export interface ShippedSkillSeedResult {
-  /** Instance-owned names kept intact until an administrator resolves the collision. */
+  /** Existing names kept intact when their content or owner conflicts with a shipped skill. */
   retained: string[];
   created: string[];
   updated: string[];
@@ -108,18 +108,18 @@ async function reconcile(input: SeedShippedSkillsInput): Promise<ShippedSkillSee
   const baseRevisions: Record<string, number | null> = {};
   for (const [name, config] of shipped) {
     const asset = stored.get(name);
-    if (asset && !isShipped(asset)) {
-      // Keep the instance's content and references usable, and leave the admin API available
-      // to resolve the collision. Starting a new release must not require deleting user work
-      // with the previous release running. A later start can seed the shipped skill once the
-      // instance copy has been renamed or removed through the product's asset workflow.
+    // Deleted rows keep their owner too: an instance upsert cannot reclaim a workspace name.
+    const row = asset ?? (await store.getConfigAsset({ clientInstanceId, kind: SKILL_KIND, name }));
+    if ((row && row.scope.kind !== "instance") || (asset && !isShipped(asset))) {
+      // Keep user content and ownership intact, and leave the admin API available to resolve
+      // collisions. Removing an instance copy lets a later start seed the shipped skill;
+      // a workspace's name remains with that workspace even after deletion.
       result.retained.push(name);
       continue;
     }
     if (asset && configValuesEqual(asset.config, config)) continue;
     // A skill the platform shipped once and dropped left a deleted row: the release that
     // brings it back continues its revisions.
-    const row = asset ?? (await store.getConfigAsset({ clientInstanceId, kind: SKILL_KIND, name }));
     mutations.push({ type: "upsert", kind: SKILL_KIND, name, config });
     baseRevisions[`${SKILL_KIND}:${name}`] = row?.revision ?? null;
     (asset ? result.updated : result.created).push(name);
