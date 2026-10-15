@@ -41,5 +41,9 @@ section: Changed
   which now only a superadmin does, and writing a grant for themselves, which another admin
   or a superadmin now writes. Rolling back restores the earlier rule; no data changes.
 - **Close the remaining rights races:** deletion admission and its mark share the rights
-  transaction; identity mappings cannot silently move between users; sign-in metadata and
+  transaction; identity mappings cannot silently move between users; new sign-in mappings and
   direct membership/provisioning writes take access, user, then identity/workspace locks.
+- **Existing sign-ins stay independent:** refreshing an already linked sign-in locks only its
+  user before its identity, so an unrelated rights write or password hash does not queue every
+  authenticated request. Creating a user, linking a sign-in and writing legacy grants still
+  take access first; a mapping changed during the lookup is re-read before anything is written.

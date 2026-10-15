@@ -506,6 +506,29 @@ describe("user administration: who may change a user", () => {
       "FORBIDDEN"
     ]);
   });
+
+  it("keeps the last active superadmin when the signed-in caller's stored account disappeared", async () => {
+    const fixture = await createFixture();
+    // The store also admits identities vouched for by sign-in without a stored holder.
+    // Such a caller is not evidence of another active superadmin in the instance.
+    fixture.beforeNextTransaction(async () => {
+      await fixture.store.workspaces.deletePersonalWorkspaceForUser({
+        clientInstanceId: fixture.clientInstanceId,
+        userId: asUserId(fixture.users.superadmin.id)
+      });
+      await fixture.store.users.deleteUser({
+        clientInstanceId: fixture.clientInstanceId,
+        userId: asUserId(fixture.users.superadmin.id)
+      });
+    });
+    const last = await fixture.server.call("users.delete", {
+      params: { userId: fixture.users.other.id },
+      headers: as.superadmin
+    });
+    expect(last.statusCode).toBe(422);
+    expect(errorOf(last).message).toBe("At least one active superadmin must remain");
+    expect(await fixture.user(fixture.users.other.id)).toMatchObject({ status: "active" });
+  });
 });
 
 const as = {

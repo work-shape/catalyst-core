@@ -16,18 +16,25 @@ async function observer(): Promise<postgres.Sql> {
   return sql;
 }
 
-/** Wait for this database's writer, or fail immediately if it bypasses the held lock. */
-async function untilBlocked(sql: postgres.Sql, finished: () => boolean): Promise<void> {
+/** Observe completion or a real database lock wait, without choosing a race by sleeping. */
+async function finishedOrBlocked(
+  sql: postgres.Sql,
+  finished: () => boolean
+): Promise<"completed" | "blocked"> {
   const deadline = Date.now() + 10_000;
   for (;;) {
     const [row] = await sql<Array<{ waiting: number }>>`
       select count(*)::int as waiting from pg_stat_activity
       where datname = current_database() and cardinality(pg_blocking_pids(pid)) > 0`;
-    if ((row?.waiting ?? 0) > 0) return;
-    if (finished()) throw new Error("The writer completed without waiting for the rights lock");
+    if ((row?.waiting ?? 0) > 0) return "blocked";
+    if (finished()) return "completed";
     if (Date.now() > deadline) throw new Error("The writer never waited for the rights lock");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
+}
+
+async function untilBlocked(sql: postgres.Sql, finished: () => boolean): Promise<void> {
+  expect(await finishedOrBlocked(sql, finished)).toBe("blocked");
 }
 
 describe("deletion admission under the rights locks", () => {
@@ -128,6 +135,148 @@ describe("an identity keeps its owner", () => {
 });
 
 describe("sign-in and identity writes use the same lock order", () => {
+  it("resolves an existing sign-in while another transaction holds the access lock", async () => {
+    const t = await setupAccessInstance();
+    const sql = await observer();
+    const identity = {
+      clientInstanceId,
+      userId: t.lena.id,
+      authSource: "oidc",
+      externalUserId: "ordinary-sign-in"
+    };
+    await t.stores.users.upsertUserIdentity(identity);
+    const blocker = await holdTransaction(
+      sql,
+      (tx) => tx`select pg_advisory_xact_lock(hashtextextended(${`access:${clientInstanceId}`}, 0))`
+    );
+    let finished = false;
+    const resolving = settled(
+      t.stores.users.resolveUserIdentity({
+        clientInstanceId,
+        authSource: identity.authSource,
+        externalUserId: identity.externalUserId,
+        displayLabel: "Updated sign-in label",
+        email: "lena@example.test",
+        emailVerified: true,
+        // An existing sign-in refreshes metadata, never the user's rights from these claims.
+        roles: ["superadmin"],
+        permissionRefs: ["unheld-reference"],
+        permissions: ["users.manage"]
+      })
+    ).then((result) => {
+      finished = true;
+      return result;
+    });
+    try {
+      expect(await finishedOrBlocked(sql, () => finished)).toBe("completed");
+    } finally {
+      await blocker.rollback();
+      await resolving;
+    }
+    const result = await resolving;
+    if (result.status === "rejected") throw result.reason;
+    expect(result.value.id).toBe(t.lena.id);
+    const user = await t.stores.users.getUser({ clientInstanceId, userId: t.lena.id });
+    expect(user).toMatchObject({
+      roles: ["user"],
+      permissionRefs: [],
+      permissions: [],
+      identities: [
+        { displayLabel: "Updated sign-in label", email: "lena@example.test", emailVerified: true }
+      ]
+    });
+    expect(user?.lastAuthenticatedAt).toBeDefined();
+  });
+
+  it.each(["user", "identity"] as const)(
+    "waits for the access lock to create a new %s",
+    async (created) => {
+      const t = await setupAccessInstance();
+      const sql = await observer();
+      const blocker = await holdTransaction(
+        sql,
+        (tx) =>
+          tx`select pg_advisory_xact_lock(hashtextextended(${`access:${clientInstanceId}`}, 0))`
+      );
+      let finished = false;
+      const resolving = settled(
+        t.stores.users.resolveUserIdentity({
+          clientInstanceId,
+          authSource: "oidc",
+          externalUserId: `new-${created}`,
+          ...(created === "identity" ? { sourceUserId: t.lena.id } : {}),
+          displayLabel: "New sign-in",
+          roles: ["user"],
+          permissionRefs: [],
+          permissions: []
+        })
+      ).then((result) => {
+        finished = true;
+        return result;
+      });
+      try {
+        await untilBlocked(sql, () => finished);
+      } finally {
+        await blocker.rollback();
+        await resolving;
+      }
+      const result = await resolving;
+      if (result.status === "rejected") throw result.reason;
+      if (created === "identity") expect(result.value.id).toBe(t.lena.id);
+    }
+  );
+
+  it("rechecks the owner after waiting for a mapping that was removed and linked elsewhere", async () => {
+    const t = await setupAccessInstance();
+    const sql = await observer();
+    const address = { clientInstanceId, authSource: "oidc", externalUserId: "linked-elsewhere" };
+    await t.stores.users.upsertUserIdentity({ ...address, userId: t.lena.id });
+    let ready: () => void = () => undefined;
+    const changed = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    let release: () => void = () => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const moving = settled(
+      t.stores.transaction(async (held) => {
+        await held.users.deleteUserIdentity({ ...address, userId: t.lena.id });
+        await held.users.upsertUserIdentity({ ...address, userId: t.kai.id });
+        ready();
+        await released;
+      })
+    );
+    await changed;
+    let finished = false;
+    const resolving = settled(
+      t.stores.users.resolveUserIdentity({
+        ...address,
+        displayLabel: "Current owner",
+        roles: ["user"],
+        permissionRefs: [],
+        permissions: []
+      })
+    ).then((result) => {
+      finished = true;
+      return result;
+    });
+    try {
+      await untilBlocked(sql, () => finished);
+    } finally {
+      release();
+      await Promise.all([moving, resolving]);
+    }
+    const moved = await moving;
+    if (moved.status === "rejected") throw moved.reason;
+    const resolved = await resolving;
+    if (resolved.status === "rejected") throw resolved.reason;
+    expect(resolved.value.id).toBe(t.kai.id);
+    expect(
+      (await t.stores.users.getUser({ clientInstanceId, userId: t.lena.id }))?.identities
+    ).toEqual([]);
+  });
+
   it("resolves a sign-in beside a guarded identity write without 40P01", async () => {
     const t = await setupAccessInstance();
     const sql = await observer();
