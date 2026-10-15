@@ -137,6 +137,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member of the day markers spec, whose conversation spans several days. No other
+      # spec uses this member.
+      - email: e2e-day-markers@example.test
+        displayLabel: E2E Zz Day Markers
+        passwordEnvName: E2E_DAY_MARKERS_PASSWORD
+        developmentPassword: e2e-day-markers-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The three people of the Apps spec. No other spec uses them: the admin builds and
       # publishes, the member uses what is published, and the builder is the one the spec shows
       # the draft without the publish right. No grant gives a right on Apps yet, so the builder

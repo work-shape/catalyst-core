@@ -19,6 +19,7 @@ import { AssistantActivityStatus } from "./assistant-activity-status";
 import { RetentionNotice } from "../conversation/retention-notice";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
+import { DayMarkersProvider, MessageDayMarker } from "./message-day-marker";
 import { useTranslation } from "../i18n";
 import { useKeepReadingPlace } from "./reading-place";
 import type { SendBlock } from "./send-block";
@@ -68,6 +69,7 @@ export function AssistantThread({
   messagesLoaded,
   threadLoading,
   loadedMessageCount,
+  messageTimes,
   conversationId,
   composerFocusRequestId,
   startComposerRef,
@@ -123,6 +125,8 @@ export function AssistantThread({
    * effect later, so its own empty state alone would show the start page for a frame.
    */
   loadedMessageCount: number;
+  /** When each stored message of the open conversation was written, by id: its day markers. */
+  messageTimes: Readonly<Record<string, string>>;
   /** The open conversation; undefined on the screen for a new one. */
   conversationId?: string;
   composerFocusRequestId: number;
@@ -223,15 +227,20 @@ export function AssistantThread({
             {messagesEnabled ? (
               <div className="flex flex-col gap-6 pb-12 empty:hidden md:pb-16">
                 <ToolSubjectsProvider agents={toolSubjectAgents}>
-                  <ThreadPrimitive.Messages>
-                    {() => (
-                      <ThreadMessage
-                        conversationRunning={conversationRunning}
-                        activeRunId={activeRunId}
-                        optimisticPending={optimisticPending}
-                      />
-                    )}
-                  </ThreadPrimitive.Messages>
+                  <DayMarkersProvider messageTimes={messageTimes}>
+                    <ThreadPrimitive.Messages>
+                      {() => (
+                        <>
+                          <MessageDayMarker />
+                          <ThreadMessage
+                            conversationRunning={conversationRunning}
+                            activeRunId={activeRunId}
+                            optimisticPending={optimisticPending}
+                          />
+                        </>
+                      )}
+                    </ThreadPrimitive.Messages>
+                  </DayMarkersProvider>
                 </ToolSubjectsProvider>
                 <RunActivityRow
                   activeRunId={activeRunId}

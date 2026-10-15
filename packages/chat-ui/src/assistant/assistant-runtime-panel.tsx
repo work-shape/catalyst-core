@@ -122,6 +122,11 @@ function AssistantRuntimePane({
     cancelSelectedRun: onCancelRun
   } = chat;
   const { t } = useTranslation();
+  const messageTimes = useMemo(
+    () =>
+      Object.fromEntries((chat.messages ?? []).map((message) => [message.id, message.createdAt])),
+    [chat.messages]
+  );
   const activeRef = useRef(true);
   const rootSubmitPendingRef = useRef(false);
   const [optimisticPending, setOptimisticPending] = useState(false);
@@ -433,6 +438,7 @@ function AssistantRuntimePane({
             messagesLoaded={messagesLoaded}
             threadLoading={snapshotStatus === "loading"}
             loadedMessageCount={initialMessages.length}
+            messageTimes={messageTimes}
             conversationId={selectedConversationId}
             composerFocusRequestId={composerFocusRequestId}
             startComposerRef={startComposerRef}

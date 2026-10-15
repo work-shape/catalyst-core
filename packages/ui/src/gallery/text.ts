@@ -224,6 +224,12 @@ export interface GalleryText
   countPending: string;
   today: string;
   yesterday: string;
+  /** The `TimeMarker` samples: a conversation over two days. */
+  timeMarkerDays: string;
+  timeMarkerYesterday: string;
+  timeMarkerToday: string;
+  timeMarkerFirst: string;
+  timeMarkerSecond: string;
   stateDraft: string;
   /** What a switched-on `RunLiveOnce` says it covers. */
   liveOnceOn: string;
@@ -480,6 +486,11 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     countPending: "3 requests wait",
     today: "Today",
     yesterday: "Yesterday",
+    timeMarkerDays: "A conversation over two days",
+    timeMarkerYesterday: "Yesterday 4:12 PM",
+    timeMarkerToday: "Today 10:47 AM",
+    timeMarkerFirst: "Which offers came in this week?",
+    timeMarkerSecond: "And which of them are still open?",
     stateDraft: "Draft",
     liveOnceOn: "Your next call runs live.",
     stateRunning: "Running",
@@ -734,6 +745,11 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     countPending: "3 Anfragen warten",
     today: "Heute",
     yesterday: "Gestern",
+    timeMarkerDays: "Eine Unterhaltung über zwei Tage",
+    timeMarkerYesterday: "Gestern 16:12",
+    timeMarkerToday: "Heute 10:47",
+    timeMarkerFirst: "Welche Angebote kamen diese Woche?",
+    timeMarkerSecond: "Und welche davon sind noch offen?",
     stateDraft: "Entwurf",
     liveOnceOn: "Dein nächster Aufruf läuft live.",
     stateRunning: "Läuft",

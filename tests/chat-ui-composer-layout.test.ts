@@ -435,6 +435,7 @@ describe("the retention line above the composer", () => {
             messagesEnabled: true,
             messagesLoaded: true,
             loadedMessageCount: 0,
+            messageTimes: {},
             composerFocusRequestId: 0,
             onCancelRun: noop,
             onSelectAgent: noop,

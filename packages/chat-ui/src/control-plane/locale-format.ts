@@ -5,9 +5,26 @@ export function formatDateTime(value: string, locale: LocaleCode): string {
   return new Date(value).toLocaleString(locale);
 }
 
-/** A moment as a sentence names it: the day in words and the time without seconds. */
-export function formatMoment(value: string, locale: LocaleCode): string {
-  return new Date(value).toLocaleString(locale, { dateStyle: "long", timeStyle: "short" });
+/**
+ * A moment as a sentence names it: the day in words and the time without seconds. Without a
+ * time zone it is the reader's.
+ */
+export function formatMoment(value: string, locale: LocaleCode, timeZone?: string): string {
+  return new Date(value).toLocaleString(locale, {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone
+  });
+}
+
+/** The time of day of a moment, without seconds: "10:47" in German, "10:47 AM" in English. */
+export function formatTimeOfDay(value: string, locale: LocaleCode, timeZone?: string): string {
+  return new Date(value).toLocaleTimeString(locale, { timeStyle: "short", timeZone });
+}
+
+/** The day of the week a moment falls on, in words: "Sonntag", "Sunday". */
+export function formatWeekday(value: string, locale: LocaleCode, timeZone?: string): string {
+  return new Date(value).toLocaleDateString(locale, { weekday: "long", timeZone });
 }
 
 /** A moment in a row that has little room: the month shortened, the time without seconds. */

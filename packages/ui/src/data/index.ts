@@ -32,6 +32,7 @@ export {
   type StepTone
 } from "./steps";
 export { LevelMeter, type LevelMeterProps, type LevelMeterScale } from "./level-meter";
+export { TimeMarker, type TimeMarkerProps } from "./time-marker";
 export {
   Table,
   TableBody,

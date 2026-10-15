@@ -17,6 +17,9 @@ export const conversation = defineTranslations({
     conversationOpenedGoTo: "Go to it",
     conversationOpenedWaits: "Changes reach it only once you go to it.",
     conversationUnread: "New response",
+    dayMarkerToday: "Today {time}",
+    dayMarkerWeekday: "{weekday} {time}",
+    dayMarkerYesterday: "Yesterday {time}",
     renameConversationField: "Conversation title",
     renameConversationMenuItem: "Rename conversation",
     deleteConversationDialogDescription:
@@ -42,6 +45,9 @@ export const conversation = defineTranslations({
     conversationOpenedGoTo: "Zur Seite",
     conversationOpenedWaits: "Änderungen kommen dort erst an, wenn du zur Seite wechselst.",
     conversationUnread: "Neue Antwort",
+    dayMarkerToday: "Heute {time}",
+    dayMarkerWeekday: "{weekday} {time}",
+    dayMarkerYesterday: "Gestern {time}",
     renameConversationField: "Titel der Unterhaltung",
     renameConversationMenuItem: "Unterhaltung umbenennen",
     deleteConversationDialogDescription:
