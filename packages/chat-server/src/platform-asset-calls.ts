@@ -1,17 +1,13 @@
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
 import {
   AppError,
-  createAuthorizer,
   isPageId,
   moduleOffError,
   operationDenialError,
   POLICY_VALUES,
   resolvePolicy,
   unknownToJsonValue,
-  type ActorAccess,
   type AuditRecorder,
-  type AuthenticatedIdentity,
-  type ConfigAssetRecord,
   type Conversation,
   type ConversationSubject,
   type JsonObject,
@@ -25,6 +21,7 @@ import {
   PLATFORM_ASSET_TOOLS,
   platformAssetWriteRefusal,
   type PlatformAssetCalls,
+  type PlatformAssetPut,
   type PlatformAssetFound,
   type PlatformCallableOperation
 } from "@vivd-catalyst/tool-execution";
@@ -43,6 +40,17 @@ import { readDefinitionName } from "./asset-kinds/shared";
 import { AssetWorkflow } from "./asset-workflow";
 import { callableByAudience, listingOrigin } from "./platform-operations-audience";
 import { readPlatformContext } from "./platform-context";
+import {
+  CREATED_FROM_CHAT,
+  accessOf,
+  createUnnamed,
+  ofInstance,
+  ownerOf,
+  requireOwnTranscript,
+  requireReadableSubject,
+  subjectTaken,
+  subjectUnavailable
+} from "./platform-asset-subject";
 import { findWorkspaceFiles } from "./workspace-files";
 import type { AssetWorkflowOptions } from "./types";
 
@@ -72,93 +80,6 @@ const stricterOf = (left: PolicyValue | undefined, right: PolicyValue): PolicyVa
 /** How many operations one list answers. The list has no pages, so this is its bound. */
 const CALLABLE_OPERATION_LIST_MAX = 200;
 
-type AssetOptions = Pick<
-  AssetWorkflowOptions,
-  "clientInstanceId" | "stores" | "authorizer" | "auditRecorder" | "configAssets" | "modules"
->;
-
-const accessOf = (options: AssetOptions, actor: AuthenticatedIdentity): Promise<ActorAccess> =>
-  (options.authorizer ?? createAuthorizer(options.stores.access)).forActor(actor);
-
-/** One refusal for a subject that does not exist and for one its caller may not read. */
-const subjectUnavailable = () =>
-  new AppError(
-    "NOT_FOUND",
-    "The subject of the conversation is not available",
-    { reason: "subject_unavailable" },
-    { exposeMessage: true }
-  );
-
-/**
- * Refuses a conversation about an asset its creator may not read. A kind the instance does
- * not have, an asset that does not exist and one the caller holds no read right on are told
- * the same way, so the refusal says nothing of what is stored. An asset of a kind without a
- * draft, such as an agent, may be a subject: the agent reads it, and its tools save drafts only.
- * The right is asked where the asset is: an asset a workspace owns is read with a right in
- * that workspace, as `assets.get` naming the workspace reads it.
- */
-export async function requireReadableSubject(
-  options: AssetWorkflowOptions,
-  actor: AuthenticatedIdentity,
-  subject: ConversationSubject
-): Promise<void> {
-  let decision: OperationAuthorization;
-  let asset: ConfigAssetRecord | undefined;
-  try {
-    asset = await options.configAssets.store.getConfigAsset({
-      clientInstanceId: options.clientInstanceId,
-      kind: subject.kind,
-      name: subject.name
-    });
-    decision = await new AssetWorkflow(options).authorizeRead(await accessOf(options, actor), {
-      kind: subject.kind,
-      name: subject.name,
-      ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
-    });
-  } catch {
-    // The kind is unknown here, or of a module that is off.
-    throw subjectUnavailable();
-  }
-  if (!decision.allowed) throw subjectUnavailable();
-  if (asset?.status !== "active") throw subjectUnavailable();
-}
-
-/**
- * Refuses to open or read an asset in a transcript that others read. A member of a Shared
- * Workspace need not hold the read right on the asset, so a conversation about one is its
- * creator's alone, as `createConversation` makes it.
- */
-export async function requireOwnTranscript(
-  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "stores">,
-  conversation: Conversation
-): Promise<void> {
-  if (conversation.visibility === "private") return;
-  const workspace = await options.stores.workspaces.getWorkspace(
-    options.clientInstanceId,
-    conversation.collaborationWorkspaceId
-  );
-  if (workspace?.kind === "personal") return;
-  throw new AppError(
-    "CONFLICT",
-    "This conversation is shared with its workspace, and an asset is opened and read only in a conversation of the person's own. Ask the person to start a new conversation, or to open the asset's page and choose Edit with the agent",
-    { reason: "subject_conversation_shared" },
-    { exposeMessage: true }
-  );
-}
-
-/** Whether an asset belongs to the whole instance, which only a person's step makes a subject. */
-async function ofInstance(
-  options: AssetWorkflowOptions,
-  named: ConversationSubject
-): Promise<boolean> {
-  const row = await options.configAssets.store.getConfigAsset({
-    clientInstanceId: options.clientInstanceId,
-    kind: named.kind,
-    name: named.name
-  });
-  return row?.scope.kind !== "workspace";
-}
-
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 /** The input or output of an operation as JSON Schema, where it can be told as one. */
@@ -178,7 +99,7 @@ function jsonSchemaOf(given: JsonObject | undefined, schema: z.ZodType): JsonObj
 const withoutSubject = () =>
   new AppError(
     "CONFLICT",
-    `This conversation is about no asset yet. Open the one to work on with ${PLATFORM_ASSET_TOOLS.open.name}, naming its kind and its name, and then change it`,
+    `This conversation is about no asset yet. Open the one to work on with ${PLATFORM_ASSET_TOOLS.open.name}, naming its kind and its name, and then change it. To make a new one, save it with ${PLATFORM_ASSET_TOOLS.put.name}, leaving 'expectedRevision' out and naming its 'kind' and 'name'`,
     { reason: "conversation_without_subject" },
     { exposeMessage: true }
   );
@@ -332,7 +253,8 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       config: read.config ?? {},
       revision: read.revision,
       ...(published === undefined ? {} : { publishedRevision: published }),
-      shows: published !== undefined && published === read.revision ? "published" : "draft"
+      shows: published !== undefined && published === read.revision ? "published" : "draft",
+      ...(address.workspaceId === undefined ? {} : { workspaceId: address.workspaceId })
     };
   }
 
@@ -361,6 +283,74 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       });
     }
   };
+
+  /** What a save writes: its config, or the files of a kind written as files. */
+  const contentOf = (input: PlatformAssetPut) => ({
+    ...(input.config === undefined ? {} : { config: input.config }),
+    ...(input.files === undefined ? {} : { files: input.files })
+  });
+
+  /** The kinds a first save of a conversation creates, as far as they exist here. */
+  const creatableKinds = () =>
+    existingKinds().filter((kind) => CREATED_FROM_CHAT.includes(kind.kind));
+
+  /**
+   * The first save of a conversation about no asset yet: it creates the asset the call names,
+   * as `assets.put` with no revision creates one, with the right, the checks and the audit of
+   * the person, and makes it the subject. The asset is this conversation's own, so the save is
+   * the person's step that makes even an asset of the instance the subject: nothing existed
+   * that it could reach (manager, 2026-10-14). An agent made so is offered nowhere.
+   */
+  async function create(
+    context: ToolExecutionContext,
+    input: PlatformAssetPut
+  ): ReturnType<PlatformAssetCalls["put"]> {
+    const conversation = await conversationOf(context);
+    if (conversation.subject) throw subjectTaken(conversation.subject);
+    const kind = creatableKinds().find((candidate) => candidate.kind === input.kind);
+    if (input.name === undefined || kind === undefined) {
+      throw createUnnamed(creatableKinds().map((each) => each.kind));
+    }
+    // The new asset becomes the subject, which a conversation others read never has.
+    await requireOwnTranscript(options, conversation);
+    const off = options.modules.offModuleOf("operation", ASSET_WRITE_OPERATION);
+    if (off !== undefined) throw moduleOffError(off);
+    const named = { kind: kind.kind, name: input.name };
+    const mismatch = input.config === undefined ? undefined : otherName(named, input.config);
+    if (mismatch) return { saved: false, issues: [mismatch] };
+    const call = await callOf(context);
+    const write = {
+      ...named,
+      ...ownerOf(kind, conversation),
+      ...contentOf(input),
+      expectedRevision: null,
+      ...(kind.hasWorkspaceAvailability ? { availableIn: "nowhere" as const } : {})
+    };
+    let revision: number;
+    try {
+      allowed(await workflow.authorizeRevisionWrite(call.access, write, "write"));
+      revision = (await workflow.put(call, write)).revision;
+    } catch (error) {
+      const refused = platformAssetWriteRefusal(error);
+      if (refused) return refused;
+      throw error;
+    }
+    await options.stores.conversations.setConversationSubject({
+      clientInstanceId: options.clientInstanceId,
+      conversationId: conversation.id,
+      subject: named
+    });
+    const read = await readAsset(context, conversation, named);
+    return {
+      saved: true,
+      revision,
+      created: true,
+      kind: named.kind,
+      name: named.name,
+      title: titleOf(named.kind, named.name, read.config),
+      ...ownerOf(kind, conversation)
+    };
+  }
 
   /** The one issue of a config that names another asset than the conversation is about. */
   const otherName = (subject: ConversationSubject, config: Record<string, unknown>) =>
@@ -440,8 +430,9 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     },
 
     async put(context, input) {
+      if (input.expectedRevision === undefined) return create(context, input);
       // The save reaches the subject and no asset the model names. An asset of the instance is
-      // the subject only where a person's step made it so: `open` moves no subject onto one.
+      // the subject only where a person's step, or this conversation's own first save, made it.
       const { subject, address, call } = await bound(context);
       const kind = options.configAssets.kinds.kinds.find(
         (candidate) => candidate.kind === subject.kind
@@ -459,9 +450,13 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       }
       const off = options.modules.offModuleOf("operation", ASSET_WRITE_OPERATION);
       if (off !== undefined) throw moduleOffError(off);
-      const mismatch = otherName(subject, input.config);
+      const mismatch = input.config === undefined ? undefined : otherName(subject, input.config);
       if (mismatch) return { saved: false, issues: [mismatch] };
-      const write = { ...address, config: input.config, expectedRevision: input.expectedRevision };
+      const write = {
+        ...address,
+        ...contentOf(input),
+        expectedRevision: input.expectedRevision
+      };
       try {
         allowed(await workflow.authorizeRevisionWrite(call.access, write, "write"));
         const written = await workflow.put(call, write);
@@ -593,13 +588,24 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       }
     },
 
-    async putPolicyFloor(conversationId) {
+    async putPolicyFloor(conversationId, input) {
       const conversation = await options.stores.conversations.getConversation(
         options.clientInstanceId,
         conversationId
       );
-      const subject = conversation?.subject;
-      return subject ? centralFloor([ASSET_WRITE_OPERATION], subject) : undefined;
+      if (!conversation) return undefined;
+      const subject = conversation.subject;
+      if (subject) return centralFloor([ASSET_WRITE_OPERATION], subject);
+      // The first save asks what a setting asks of the asset it names, where it would be, as
+      // `assets.put` of the API asks it: its name places it in a Namespace. A save that names
+      // no kind it creates is refused by the call itself.
+      const kind = creatableKinds().find((candidate) => candidate.kind === input.kind);
+      if (kind === undefined || input.name === undefined) return undefined;
+      return centralFloor([ASSET_WRITE_OPERATION], {
+        kind: kind.kind,
+        name: input.name,
+        ...ownerOf(kind, conversation)
+      });
     },
 
     async pageAppPolicyFloor(conversationId, write) {
@@ -624,15 +630,22 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       });
     },
 
-    async putBeforeEvents(conversationId, config) {
+    async putBeforeEvents(conversationId, input) {
       const conversation = await options.stores.conversations.getConversation(
         options.clientInstanceId,
         conversationId
       );
-      const subject = conversation?.subject;
-      // A conversation without a subject saves nothing: the save itself refuses it.
-      if (!subject) return [];
-      return [assetWriteEvent({ kind: subject.kind, name: subject.name, config })];
+      if (!conversation) return [];
+      // The first save names the asset it creates; any other save writes the subject. A save the
+      // call itself refuses has no event.
+      const target =
+        input.expectedRevision === undefined && !conversation.subject
+          ? input.kind !== undefined && input.name !== undefined
+            ? { kind: input.kind, name: input.name }
+            : undefined
+          : conversation.subject;
+      if (!target) return [];
+      return [assetWriteEvent({ ...target, ...contentOf(input) })];
     },
 
     async readContext(context) {

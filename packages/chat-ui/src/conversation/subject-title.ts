@@ -14,14 +14,34 @@ import type { SubjectAsset } from "./subject-run";
 
 /**
  * The saved state of an agent, under the key of every asset read: each save of the agent of
- * the conversation drops it, and what shows the agent shows it as it is now.
+ * the conversation drops it, and what shows the agent shows it as it is now. The agent of a
+ * conversation is the instance's or, where its first save made it, the conversation
+ * workspace's (WS-OWN-1a): the workspace's list says which, and the read asks there.
  */
-function useAgentAsset(agent: string, enabled: boolean) {
+function useAgentAsset(agent: string, workspaceId: string | undefined, enabled: boolean) {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   return useQuery({
-    queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, "standalone"), AGENT_ASSET_KIND, agent],
-    queryFn: ({ signal }) =>
-      client.assets.get({ params: { kind: AGENT_ASSET_KIND, name: agent }, signal }),
+    queryKey: [
+      ...workspaceQueryKeys.assets(apiBaseUrl, "standalone"),
+      AGENT_ASSET_KIND,
+      agent,
+      workspaceId ?? ""
+    ],
+    queryFn: async ({ signal }) => {
+      const params = { kind: AGENT_ASSET_KIND, name: agent };
+      if (workspaceId === undefined) {
+        return client.assets.get({ params, signal });
+      }
+      const here = await client.assets.list({
+        params: { kind: AGENT_ASSET_KIND },
+        query: { workspaceId, prefix: agent, limit: 50 },
+        signal
+      });
+      const owned = here.items.some(
+        (item) => item.name === agent && item.scope.kind === "workspace"
+      );
+      return client.assets.get({ params, ...(owned ? { query: { workspaceId } } : {}), signal });
+    },
     enabled,
     retry: retryUnlessGone,
     refetchOnMount: "always"
@@ -48,7 +68,7 @@ export function useSubjectTitle(
     kind === WORKFLOW_ASSET_KIND ? [name] : []
   );
   const app = useApp(workspaceId ?? "", name, kind === APP_ASSET_KIND && workspaceId !== undefined);
-  const agent = useAgentAsset(name, kind === AGENT_ASSET_KIND);
+  const agent = useAgentAsset(name, workspaceId, kind === AGENT_ASSET_KIND);
   if (kind === WORKFLOW_ASSET_KIND) {
     return workflowTitle ?? name;
   }

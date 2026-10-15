@@ -34,11 +34,13 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> extends Too
   /**
    * A policy value no call from one conversation is looser than, whatever the tool's own mode
    * says: a tool that stands for another operation answers here what that operation's policy
-   * asks for what the conversation reaches. Nothing where the conversation adds no floor.
+   * asks for what the conversation reaches, and for what the call's input names where it names
+   * the asset. Nothing where the conversation adds no floor.
    */
-  policyFloor?(call: {
-    conversationId: ConversationId;
-  }): PolicyValue | undefined | Promise<PolicyValue | undefined>;
+  policyFloor?(
+    call: { conversationId: ConversationId },
+    input: TInput
+  ): PolicyValue | undefined | Promise<PolicyValue | undefined>;
   /**
    * The before-events of a call beside `operation.before_call`: a tool that saves an asset
    * names `asset.before_write` for it, so the guardrails on asset writes answer an agent's save

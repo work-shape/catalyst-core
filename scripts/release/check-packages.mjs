@@ -33,8 +33,8 @@ const MAX_TARBALL_BYTES = 300_000;
 // (2026-10-14, the Knowledge Base migration).
 // Raised chat-ui to 1.3 MB on 2026-10-14 for the guardrail pages of EW-6a, the Studio scope
 // filter and workspace owners of WS-OWN-1a, Connect a local agent of CONNECT-1a, the tool chips
-// of TOOLS-1, Knowledge Bases of KB-1 and the New connection dialog of CS-5a; src/ and dist/
-// both count each line.
+// of TOOLS-1, Knowledge Bases of KB-1, the New connection dialog of CS-5a and the agent's opens
+// and first saves of NAV-2; src/ and dist/ both count each line.
 const MAX_TARBALL_BYTES_BY_DIR = {
   "chat-ui": 1_300_000,
   ui: 500_000,

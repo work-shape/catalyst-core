@@ -84,6 +84,24 @@ const ASSET = {
   }
 };
 
+/** One Workflow as the list of its kind names it. */
+function summaryOf(input: {
+  name: string;
+  title: string;
+  description?: string;
+  publishedRevision?: number;
+}) {
+  return {
+    id: `asset_${input.name}`,
+    kind: "workflow",
+    scope: { kind: "instance" },
+    revision: 1,
+    draftRevision: 1,
+    updatedAt: "2026-10-12T09:00:00.000Z",
+    ...input
+  };
+}
+
 /** The published inputs of "Open invoices": one month, as the list names them. */
 const MONTH_INPUTS = {
   type: "object",
@@ -131,6 +149,14 @@ function instance(
         };
       case "assets.get":
         return ASSET;
+      case "assets.list":
+        // A published Workflow is listed by the engine; one never published only here.
+        return {
+          items: [
+            summaryOf({ name: "month-end", title: "Month end", publishedRevision: 4 }),
+            summaryOf({ name: "first-draft", title: "First draft", description: "Not yet." })
+          ]
+        };
       case "workflows.list_step_runs": {
         const pages = answers.stepRunPages ?? [{ items: [] }];
         const current = pages[Math.min(page, pages.length - 1)];
@@ -149,7 +175,7 @@ function instance(
 }
 
 describe("the Workflow screens over the engine of an instance", () => {
-  it("lists what the engine lists, each Workflow with its latest run", async () => {
+  it("lists what the engine lists, each Workflow with its latest run, and the drafts never published", async () => {
     const { source } = instance();
     const list = await source.listWorkflows("cw_1", { limit: 50, cursor: undefined }, signal);
     expect(list.items).toEqual([
@@ -188,6 +214,18 @@ describe("the Workflow screens over the engine of an instance", () => {
         mayStart: true,
         startForm: { fields: [], unsupported: [] },
         lastRun: { id: "wfr_0", status: "failed", startedAt: "2026-10-11T09:00:00.000Z" }
+      },
+      // Never published: the engine names it nowhere, its asset lists it as a draft (NAV-2).
+      {
+        id: "first-draft",
+        name: "First draft",
+        description: "Not yet.",
+        published: false,
+        updatedAt: "2026-10-12T09:00:00.000Z",
+        startsByHand: false,
+        refusedFor: [],
+        mayStart: false,
+        startForm: { fields: [], unsupported: [] }
       }
     ]);
     expect(list.nextCursor).toBeUndefined();
