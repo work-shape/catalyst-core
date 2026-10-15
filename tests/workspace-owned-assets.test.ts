@@ -392,3 +392,146 @@ describe("a Build conversation about a workspace's agent", () => {
     expect(await refusal("other-agent")).toMatchObject({ code: "NOT_FOUND" });
   });
 });
+
+describe("the agent's first save of a conversation (NAV-2)", () => {
+  /** What a platform tool of Kai's conversation is called with. */
+  function kaiContext(t: AccessInstance, conversationId: string): ToolExecutionContext {
+    return {
+      user: {
+        id: t.kai.id,
+        externalUserId: t.kai.id,
+        displayLabel: t.kai.displayLabel,
+        roles: t.kai.roles,
+        permissions: t.kai.permissions,
+        permissionRefs: t.kai.permissionRefs,
+        clientInstanceId,
+        authSource: "test"
+      },
+      clientInstanceId,
+      correlationId: `corr_${randomUUID()}`,
+      toolRequest: {
+        toolName: "platform.assets.put",
+        toolCallId: asToolCallId(`call_${randomUUID()}`),
+        agentRunId: asAgentRunId(`run_${randomUUID()}`),
+        conversationId: asConversationId(conversationId),
+        agentName: "assistant",
+        input: {}
+      }
+    };
+  }
+
+  async function ownConversation(t: AccessInstance, workspaceId: CollaborationWorkspaceId) {
+    // The person's own conversation: a first save creates nothing in one its members read. The
+    // workspace starts its conversations private.
+    await t.expectOk(t.admin.id, "workspaces.update", {
+      params: { collaborationWorkspaceId: workspaceId },
+      payload: { defaultConversationVisibility: "private" }
+    });
+    const started = await t.expectOk(t.kai.id, "conversations.create", {
+      payload: { collaborationWorkspaceId: workspaceId }
+    });
+    return z.object({ id: z.string() }).parse(started.json()).id;
+  }
+
+  async function subjectOf(t: AccessInstance, conversationId: string) {
+    const conversation = await t.stores.conversations.getConversation(
+      clientInstanceId,
+      asConversationId(conversationId)
+    );
+    return conversation?.subject;
+  }
+
+  async function callsOf(t: AccessInstance) {
+    await t.instance.call("health.get");
+    const options = testServerOptions(t.instance);
+    if (!options) throw new Error("The instance has no server options");
+    return createPlatformAssetCalls(options);
+  }
+
+  it("creates an agent and a skill its workspace owns, offers the agent nowhere and records the person", async () => {
+    const { t, team } = await setup();
+    const calls = await callsOf(t);
+
+    const forAgent = await ownConversation(t, team);
+    const created = await calls.put(kaiContext(t, forAgent), {
+      kind: "agent",
+      name: "built-helper",
+      config: agent("built-helper", { displayName: "Built helper" })
+    });
+    expect(created).toEqual({
+      saved: true,
+      revision: 1,
+      created: true,
+      kind: "agent",
+      name: "built-helper",
+      title: "Built helper",
+      // The answer names the owner, so the page it opens reads the agent there.
+      workspaceId: team
+    });
+    expect(await ownerOf(t, "agent", "built-helper")).toEqual({
+      kind: "workspace",
+      workspaceId: team
+    });
+    expect(await subjectOf(t, forAgent)).toEqual({ kind: "agent", name: "built-helper" });
+    // Offered nowhere: not in its own workspace either, until a person places it.
+    expect(await offeredIn(t, "built-helper", team)).toBe(false);
+    // The person of the conversation made it, as a save through the API records.
+    const audited = await t.stores.audit.listAuditEvents({ clientInstanceId });
+    const made = audited.find(
+      (event) => event.type === "config_asset.updated" && event.metadata?.name === "built-helper"
+    );
+    expect(made?.actor?.userId).toBe(t.kai.id);
+
+    // A conversation that is about an asset makes no second one.
+    const again = calls.put(kaiContext(t, forAgent), {
+      kind: "skill",
+      name: "second-notes",
+      config: skill("second-notes")
+    });
+    await expect(again).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: { reason: "conversation_has_subject" }
+    });
+    expect(await ownerOf(t, "skill", "second-notes")).toBeUndefined();
+
+    const forSkill = await ownConversation(t, team);
+    expect(
+      await calls.put(kaiContext(t, forSkill), {
+        kind: "skill",
+        name: "built-notes",
+        config: skill("built-notes")
+      })
+    ).toMatchObject({ saved: true, created: true, kind: "skill", name: "built-notes" });
+    expect(await ownerOf(t, "skill", "built-notes")).toEqual({
+      kind: "workspace",
+      workspaceId: team
+    });
+  });
+
+  it("is refused where the person may not write, as the API refuses the same put", async () => {
+    const { t, other } = await setup();
+    await join(t, t.kai, other);
+    const calls = await callsOf(t);
+    const conversationId = await ownConversation(t, other);
+
+    const throughApi = await put(t, t.kai.id, "agent", agent("kai-elsewhere"), other);
+    expect(throughApi).toMatchObject({ status: 403, code: "FORBIDDEN" });
+    await expect(
+      calls.put(kaiContext(t, conversationId), {
+        kind: "agent",
+        name: "kai-elsewhere",
+        config: agent("kai-elsewhere")
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await ownerOf(t, "agent", "kai-elsewhere")).toBeUndefined();
+    expect(await subjectOf(t, conversationId)).toBeUndefined();
+
+    // A save that names no kind it may create, or no name, creates nothing.
+    for (const input of [{ kind: "agent" }, { kind: "connection", name: "nope" }]) {
+      await expect(calls.put(kaiContext(t, conversationId), input)).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+        details: { reason: "create_unnamed" }
+      });
+    }
+  });
+});

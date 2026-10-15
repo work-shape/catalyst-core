@@ -174,6 +174,11 @@ export const safeConfigSchema = z.object({
         })
       ),
       compactThresholdTokens: z.number().optional(),
+      /**
+       * The agent holds the platform's asset tools: a conversation with it creates and changes
+       * assets. The New buttons of Workflows and Studio open such a conversation in the dock.
+       */
+      buildsAssets: z.boolean().optional(),
       welcomeMessage: z.string().optional(),
       welcomeSubtitle: z.string().optional(),
       initialPrompts: z.array(

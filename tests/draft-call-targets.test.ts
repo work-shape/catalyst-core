@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { ApiKeyAccessTokenExchange, HmacServiceAccessTokenAuthAdapter } from "@vivd-catalyst/auth";
 import {
   createPlatformId,
   WORKFLOW_ASSET_KIND,
@@ -180,6 +181,100 @@ describe("a call made by a draft", () => {
         actor: event.actor?.principalId
       }));
   }
+
+  it.each(["personal key", "personal key token", "service key token"] as const)(
+    "refuses Run live once for a %s holding the write right, even without an HTTP route",
+    async (credential) => {
+      const t = await ready();
+      await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.write");
+      if (credential === "service key token") {
+        await t.stores.apiAccess.updateServicePrincipal({
+          clientInstanceId,
+          servicePrincipalId: t.principal.id,
+          permissions: ["config_assets.read", "config_assets.write"]
+        });
+      }
+      const secret =
+        credential === "service key token"
+          ? (
+              await t.stores.apiAccess.createApiCredential({
+                clientInstanceId,
+                servicePrincipalId: t.principal.id,
+                name: "Local agent",
+                scopes: ["config_assets:read", "config_assets:write"]
+              })
+            ).secret
+          : (
+              await t.stores.personalApiKeys.createPersonalApiKey({
+                clientInstanceId,
+                ownerUserId: t.root.id,
+                name: "Local agent",
+                scopes: ["workflow.read", "workflow.write"],
+                expiresAt: new Date(Date.now() + 60_000).toISOString()
+              })
+            ).secret;
+      const options = {
+        secret: "a-test-service-access-token-secret-with-enough-length",
+        clientInstanceId,
+        apiAccessStore: t.stores.apiAccess,
+        personalApiKeys: { store: t.stores.personalApiKeys, users: t.stores.users }
+      };
+      const issued = await new ApiKeyAccessTokenExchange(options).exchange(secret);
+      const actor =
+        credential === "personal key"
+          ? issued.identity
+          : await new HmacServiceAccessTokenAuthAdapter(options).authenticate({
+              headers: { authorization: `Bearer ${issued.accessToken}` },
+              clientInstanceId,
+              correlationId: "corr_key_live_once"
+            });
+      expect(actor.scopes).toEqual(
+        expect.arrayContaining(["config_assets:read", "config_assets:write"])
+      );
+      const access = await t.operationCalls.deps.authorizer.forActor(actor);
+      expect(
+        access.authorize("workflow.write", { kind: address.kind, name: address.name }).allowed
+      ).toBe(true);
+      // Neither a superadmin owner's rights nor an allow policy makes a key a person.
+      t.state.centralSettings = [{ operation: "assets.run_live_once", value: "allow" }];
+      const { result, run } = await runOperation(
+        {
+          operation: "assets.run_live_once",
+          effect: "changing",
+          input: { ...address, part: "send", expectedRevision: 1 },
+          actor,
+          origin: { kind: "user" },
+          correlationId: "corr_key_live_once",
+          idempotencyKey: crypto.randomUUID()
+        },
+        t.operationCalls.deps
+      );
+      expect(result).toMatchObject({
+        status: "denied",
+        reason: {
+          kind: "forbidden",
+          reason: "user_only",
+          message: "Run live once needs a person signed in to the app; API keys cannot use it"
+        }
+      });
+      expect(run.status).toBe("denied");
+      expect(await switchRows(t)).toEqual([]);
+      const listed = await runOperation(
+        {
+          operation: "assets.list_live_once",
+          effect: "reading",
+          input: address,
+          actor,
+          origin: { kind: "cli" },
+          correlationId: "corr_key_list_live_once"
+        },
+        t.operationCalls.deps
+      );
+      expect(listed.result).toMatchObject({ status: "done", output: { items: [] } });
+      expect((await stepCall(t)).result.status).toBe("dry_run");
+      expect(t.executed).toEqual([]);
+    }
+  );
 
   // Fails without DT-1a: the call was made and wrote to the outside system.
   it("answers a changing call with what it would have done, changes nothing and records dry_run", async () => {

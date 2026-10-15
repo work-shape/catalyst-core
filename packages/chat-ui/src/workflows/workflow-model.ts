@@ -87,6 +87,18 @@ export function workflowsRowShown(
 }
 
 /**
+ * Whether the list shows a Workflow to the reader: a published one to whoever the instance
+ * lists it to, a draft never published only to who may write Workflows (Platform Access
+ * check 44).
+ */
+export function listedToReader(
+  workflow: Pick<WorkflowView, "published">,
+  rights: Pick<WorkflowRights, "write">
+): boolean {
+  return workflow.published || rights.write;
+}
+
+/**
  * Whether a start stands on the page or the card of a Workflow: a revision is published, the
  * reader holds the right to start this Workflow, and its start form can ask for every input a
  * start needs.

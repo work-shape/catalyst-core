@@ -297,6 +297,10 @@ modules:
   # needs a Workflow stores and publishes its own.
   workflows:
     enabled: true
+  # Data Stores are on: an agent's first save makes one, and its page publishes it (NAV-2).
+  # Their Secret Store key and file storage are below.
+  dataStores:
+    enabled: true
   # Personal API keys are on: You > API keys issues one with the scopes a person ticks.
   personalApiKeys:
     enabled: true

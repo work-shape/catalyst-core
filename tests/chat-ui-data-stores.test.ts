@@ -209,8 +209,27 @@ function storeAsset(name: string): BuildAsset {
   };
 }
 
+/** A store the agent's first save made: a draft and no published revision (NAV-2). */
+function draftAsset(name: string): BuildAsset {
+  const stored = storeAsset(name);
+  return {
+    ...stored,
+    revision: 1,
+    draftRevision: 1,
+    scope: { kind: "workspace", workspaceId: "ws_1" },
+    config: {
+      ...stored.config,
+      migrations: [
+        { number: 1, name: "init", sha256: "0".repeat(64), sql: "create table visits ();" }
+      ]
+    }
+  };
+}
+
 interface RenderInput extends StoreAnswers {
   list?: BuildAssetRow[];
+  /** The page's store as a draft never published, with one migration. */
+  draft?: boolean;
   /** The instance has the module on and the reader may read stores. */
   on?: boolean;
   locale?: LocaleCode;
@@ -238,7 +257,7 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
     }),
     useAsset: (_kind, name) => ({
       status: "ready",
-      asset: storeAsset(name),
+      asset: input.draft ? draftAsset(name) : storeAsset(name),
       loadedAt: 1,
       reload: async () => "loaded"
     }),
@@ -451,6 +470,33 @@ describe("Data Stores in Build", () => {
     expect(german).toContain("Bereit");
     expect(german).toContain("8 MB von 500 MB");
     expect(german).toContain("etwa 1.240 Zeilen");
+  });
+});
+
+describe("A Data Store never published", () => {
+  it("shows its draft with the migrations a publish applies, and Publish, and reads no state of it", () => {
+    const states = {
+      "visit-log": {
+        status: "failed" as const,
+        message: "Data Store is not available",
+        retry: noop
+      }
+    };
+    for (const locale of ["en", "de"] as const) {
+      const markup = render(
+        { kindPath: "data-stores", name: "visit-log" },
+        { draft: true, states, locale }
+      );
+      expect(markup).toContain("data-data-store-draft");
+      expect(markup).toContain("0001_init.sql");
+      expect(markup).toContain("data-data-store-publish");
+      // Nothing of a database that does not exist yet is shown or said.
+      expect(markup).not.toContain("Data Store is not available");
+      expect(markup).not.toContain("data-data-store-state");
+    }
+    expect(
+      render({ kindPath: "data-stores", name: "visit-log" }, { draft: true, locale: "de" })
+    ).toContain("Entwurf · nicht veröffentlicht");
   });
 });
 
