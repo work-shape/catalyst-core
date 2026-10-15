@@ -29,6 +29,18 @@ catalyst config validate
 catalyst config push
 ```
 
+## Follow a held call
+
+A publish that waits for approval exits 3 and prints its Operation Run id. Follow it with:
+
+```sh
+catalyst operation show <run-id>
+catalyst requests
+catalyst requests --withdraw <request-id>
+```
+
+`operation show` prints the status, decision and any failure; add `--json` for the full record. It exits 3 while awaiting a decision, 1 for a failed, denied or expired run, and 0 otherwise. `requests` lists your requests in every state, including the decision; `--json` prints the list as JSON. Withdrawal needs a personal key with an asset write or delete scope (`config_assets:write`). Reading your own runs, listing and counting your own requests uses the `me:read` scope every personal key carries. Another person's run is not found, and their requests cannot be listed or withdrawn through your key.
+
 ## Log in
 
 On an instance with the module `personalApiKeys` on, a person logs the tool in with a key of their own:

@@ -46,6 +46,7 @@ export function ConnectionCreateForm({
   errors,
   busy,
   steps,
+  detailsOpen = false,
   onChange
 }: {
   fields: CreateFields;
@@ -58,13 +59,16 @@ export function ConnectionCreateForm({
   busy: boolean;
   /** The steps of the connect that runs, in their order. */
   steps: readonly { step: ConnectStep; state: ConnectStepState }[];
+  /** "Technical details" starts open, as for a form filled with an id or headers to look at. */
+  detailsOpen?: boolean;
   onChange(next: CreateFields): void;
 }) {
   const { t } = useTranslation();
   const rest = fields.form.connectorType === "http_api";
   const form = (next: Partial<ConnectionFormState>) =>
     onChange({ ...fields, form: { ...fields.form, ...next } });
-  const detailsWrong =
+  const detailsShown =
+    detailsOpen ||
     errors.id !== undefined ||
     errors.headerName !== undefined ||
     errors.headers !== undefined ||
@@ -119,7 +123,7 @@ export function ConnectionCreateForm({
           onChange={(event) => onChange({ ...fields, key: event.target.value })}
         />
       </Field>
-      <Disclosure defaultOpen={detailsWrong} key={String(detailsWrong)} disabled={busy}>
+      <Disclosure defaultOpen={detailsShown} key={String(detailsShown)} disabled={busy}>
         <DisclosureTrigger data-connection-details="">
           {t("connectionCreate.details")}
         </DisclosureTrigger>

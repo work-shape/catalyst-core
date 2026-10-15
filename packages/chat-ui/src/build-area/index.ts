@@ -16,8 +16,16 @@ export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
 export { type BuildAssetRead, type BuildList, type BuildSource } from "./build-data";
 export { BuildFrame } from "./build-frame";
 export * from "./connection-approval-model";
+export { ConnectionApprovalList } from "./connection-approval";
 export * from "./connection-connect";
 export { ConnectionCreateFlow } from "./connection-create-dialog";
+export { openConnectionDraft, readConnectionDraft, type ConnectionDraft } from "./connection-draft";
+export {
+  ConnectionDraftCard,
+  ConnectionDraftCardView,
+  ConnectionDraftHostProvider,
+  connectionDraftHost
+} from "./connection-draft-card";
 export { ConnectionEditor } from "./connection-editor";
 export * from "./connection-form-model";
 export type {
