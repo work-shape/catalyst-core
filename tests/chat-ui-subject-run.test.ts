@@ -134,6 +134,61 @@ describe("the subject a run opens", () => {
     ]);
   });
 
+  it("takes the first save that created an asset as its open, and no other save (NAV-2)", () => {
+    const put = (id: string, output: unknown): SubjectRunPart => ({
+      type: "tool_call",
+      toolCallId: id,
+      toolName: "platform.assets.put",
+      state: "output_available",
+      output
+    });
+    const created = {
+      saved: true,
+      revision: 1,
+      created: true,
+      kind: "workflow",
+      name: "new-close",
+      title: "New close"
+    };
+    const parts = [put("1", created), put("2", { saved: true, revision: 2 })];
+
+    expect(opensInRun(parts)).toEqual([
+      {
+        subject: { kind: "workflow", name: "new-close" },
+        title: "New close",
+        callId: "1",
+        awaitsPerson: false
+      }
+    ]);
+    expect(subjectOpenedInRun(parts)).toEqual({
+      subject: { kind: "workflow", name: "new-close" },
+      callId: "1"
+    });
+    expect(savedDraftCalls(parts)).toEqual(["1", "2"]);
+    expect(
+      standingAssetOpen({ toolName: "platform.assets.put", toolCallId: "1", result: created })
+    ).toMatchObject({ subject: { kind: "workflow", name: "new-close" }, title: "New close" });
+    expect(
+      standingAssetOpen({ toolName: "platform.assets.put", result: { saved: true, revision: 2 } })
+    ).toBeUndefined();
+    // A store the conversation's workspace owns says so: Studio reads it there.
+    expect(
+      standingAssetOpen({
+        toolName: "platform.assets.put",
+        toolCallId: "3",
+        result: {
+          saved: true,
+          revision: 1,
+          created: true,
+          kind: "data_store",
+          name: "orders",
+          title: "Orders",
+          workspaceId: "w1"
+        }
+      })
+    ).toMatchObject({ subject: { kind: "data_store", name: "orders" }, owner: "w1" });
+  });
+
   it("takes an open that stood as the line the thread shows, and nothing else", () => {
     const answer = { kind: "app", name: "calculator", title: "Calculator" };
     expect(
@@ -151,7 +206,7 @@ describe("the subject a run opens", () => {
     expect(standingAssetOpen({ toolName: "platform.assets.get", result: answer })).toBeUndefined();
   });
 
-  it("leads a Workflow, an App, an agent and a skill to their own pages", () => {
+  it("leads a Workflow, an App, an agent, a skill and a Data Store to their own pages", () => {
     const page = (kind: string) => assetPageRoute({ kind, name: "x" }, "w1");
 
     expect(page("workflow")).toEqual({
@@ -162,6 +217,11 @@ describe("the subject a run opens", () => {
     expect(page("app")).toEqual({ kind: "app-edit", collaborationWorkspaceId: "w1", app: "x" });
     expect(page("agent")).toEqual({ kind: "build-asset", assetKind: "agents", name: "x" });
     expect(page("skill")).toEqual({ kind: "build-asset", assetKind: "skills", name: "x" });
+    expect(page("data_store")).toEqual({
+      kind: "build-asset",
+      assetKind: "data-stores",
+      name: "x"
+    });
     // A kind without a page of its own leads nowhere; a workspace's page needs the workspace.
     expect(page("page")).toBeUndefined();
     expect(assetPageRoute({ kind: "workflow", name: "x" }, undefined)).toBeUndefined();

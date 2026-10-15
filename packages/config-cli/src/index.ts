@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import { RELEASE_VERSION } from "@vivd-catalyst/api-contract";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
+import { operationHelpText, runOperationCommand } from "./operation-commands";
+import type { CommandInput } from "./input";
 import type { AssetKindName } from "./command-support";
 import { loginCommand, logoutCommand } from "./login";
 import { isLocalAgentTool, SETUP_USAGE, setupCommand } from "./setup";
@@ -17,6 +19,7 @@ export * from "./working-copy";
 
 export interface CliRuntimeOptions {
   cwd?: string;
+  stdin?: CommandInput;
   fetchImpl?: typeof fetch;
   env?: Readonly<Record<string, string | undefined>>;
   stdout?: (text: string) => void;
@@ -92,7 +95,7 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   const stdout = runtime.stdout ?? ((text: string) => process.stdout.write(text));
   const stderr = runtime.stderr ?? ((text: string) => process.stderr.write(text));
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
-    stdout(`${assetHelpText}\n${helpText}`);
+    stdout(`${assetHelpText}\n${operationHelpText}\n${helpText}`);
     return 0;
   }
   if (argv[0] === "--version") {
@@ -101,6 +104,17 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   }
   if (argv[0] === "login" || argv[0] === "logout" || argv[0] === "setup") {
     return runLoginCommand(argv[0], argv.slice(1), runtime, stdout, stderr);
+  }
+  if (
+    argv[0] === "call" ||
+    (argv[0] === "connection" && ["secret", "test", "discover", "tools"].includes(argv[1] ?? ""))
+  ) {
+    return runOperationCommand(argv, {
+      ...runtime,
+      cwd: runtime.cwd ?? process.cwd(),
+      stdout,
+      stderr
+    });
   }
   if (argv[0] !== "config") {
     return runAssetCommand(argv, {

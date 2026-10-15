@@ -9,6 +9,7 @@ import {
 } from "./scripts/test-postgres-capacity.mjs";
 
 const sourceAlias = {
+  "@work-shape/catalyst-cli": "packages/config-cli/src/index.ts",
   "@vivd-catalyst/agent-runtime": "packages/agent-runtime/src/index.ts",
   "@vivd-catalyst/asset-repo": "packages/asset-repo/src/index.ts",
   "@vivd-catalyst/asset-schemas": "packages/asset-schemas/src/index.ts",
