@@ -5,6 +5,7 @@ import { RELEASE_VERSION } from "@vivd-catalyst/api-contract";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
 import { operationHelpText, runOperationCommand } from "./operation-commands";
+import { isNamedCommand, namedHelpText, runNamedCommand } from "./named-commands";
 import type { CommandInput } from "./input";
 import type { AssetKindName } from "./command-support";
 import { loginCommand, logoutCommand } from "./login";
@@ -95,7 +96,7 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   const stdout = runtime.stdout ?? ((text: string) => process.stdout.write(text));
   const stderr = runtime.stderr ?? ((text: string) => process.stderr.write(text));
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
-    stdout(`${assetHelpText}\n${operationHelpText}\n${helpText}`);
+    stdout(`${assetHelpText}\n${operationHelpText}\n${namedHelpText}\n${helpText}`);
     return 0;
   }
   if (argv[0] === "--version") {
@@ -104,6 +105,14 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   }
   if (argv[0] === "login" || argv[0] === "logout" || argv[0] === "setup") {
     return runLoginCommand(argv[0], argv.slice(1), runtime, stdout, stderr);
+  }
+  if (isNamedCommand(argv)) {
+    return runNamedCommand(argv, {
+      ...runtime,
+      cwd: runtime.cwd ?? process.cwd(),
+      stdout,
+      stderr
+    });
   }
   if (
     argv[0] === "call" ||

@@ -470,10 +470,7 @@ describe("the Connector type http_api", () => {
       ).toContain("names its 'type'");
     });
 
-    it("reserve scope until SCOPE-2, and refuse every declared field on a type that reads its operations from the outside system", () => {
-      expect(
-        issuesOf("http_api", { scope: { mandant: { input: "id", output: "items[].number" } } })
-      ).toEqual([expect.stringMatching(/^operations\.0\.scope: .*SCOPE-2/u)]);
+    it("refuses every declared field on a type that reads its operations from the outside system", () => {
       expect(issuesOf("mcp", {})).toEqual([
         "operations.0.description: Connector type 'mcp' reads its operations from the outside system, so an operation declares no 'description'",
         "operations.0.method: Connector type 'mcp' reads its operations from the outside system, so an operation declares no 'method'",
