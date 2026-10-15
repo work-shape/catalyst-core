@@ -15,6 +15,13 @@ import { compareBaseline } from "./baseline.mjs";
 const root = process.cwd();
 const target = process.argv[2] ?? "";
 const here = dirname(fileURLToPath(import.meta.url));
+// Whole package scopes keep baseline counts exact. Children inherit the same selection.
+const scopeFlag = process.argv.find((argument) => argument.startsWith("--scope-file="));
+/** @type {string[] | undefined} */
+const scopes = scopeFlag ? JSON.parse(readFileSync(scopeFlag.slice(13), "utf8")) : undefined;
+/** @param {string} file */
+const inScope = (file) =>
+  !scopes || scopes.some((scope) => file === scope || file.startsWith(`${scope}/`));
 const formatted = "js,jsx,mjs,cjs,ts,tsx,mts,cts,json,css,scss,html,yml,yaml".split(",");
 
 // The type checks and each part of the lint keep whole TypeScript programs in memory. Measured
@@ -161,7 +168,13 @@ const startPart = (index) =>
   new Promise((done, failed) => {
     const child = spawn(
       process.execPath,
-      [...process.execArgv, process.argv[1] ?? "", "lint", `${partFlag}${index}`],
+      [
+        ...process.execArgv,
+        process.argv[1] ?? "",
+        "lint",
+        `${partFlag}${index}`,
+        ...(scopeFlag ? [scopeFlag] : [])
+      ],
       { cwd: root, stdio: ["ignore", "pipe", "inherit"] }
     );
     /** @type {Buffer[]} */
@@ -201,7 +214,7 @@ if (target === "format") {
     }
   }
 } else if (target === "lint") {
-  const lintable = files.filter((file) => /\.(?:[cm]?[jt]s|[jt]sx)$/.test(file));
+  const lintable = files.filter((file) => inScope(file) && /\.(?:[cm]?[jt]s|[jt]sx)$/.test(file));
   const parts = Math.ceil(lintable.length / lintFilesPerProcess);
   const own = process.argv.find((argument) => argument.startsWith(partFlag));
   if (own) {
@@ -340,6 +353,7 @@ if (target === "format") {
       ? ["tsconfig.tests.json"]
       : files.filter(
           (file) =>
+            inScope(file) &&
             /^(?:packages|clients)\/[^/]+\/tsconfig\.json$/.test(file) &&
             readJson(`${dirname(file)}/package.json`).scripts?.typecheck?.startsWith("tsc ")
         );
@@ -373,7 +387,19 @@ if (target === "format") {
 
 if (process.argv.includes("--measure")) console.log(JSON.stringify(findings, null, 2));
 else if (!process.argv.includes("--write")) {
-  const errors = compareBaseline(findings, readJson("quality-baseline.json"), target);
+  /** @type {import("./baseline.mjs").Baseline} */
+  const baseline = readJson("quality-baseline.json");
+  // Knip still resolves the complete workspace, then reports only selected package scopes.
+  // Per-file and literal-text scopes are descendants of those package paths.
+  const scopedFindings = findings.filter((finding) => inScope(finding.scope));
+  const errors = compareBaseline(
+    scopedFindings,
+    {
+      ...baseline,
+      entries: baseline.entries.filter((entry) => inScope(entry.scope))
+    },
+    target
+  );
   console.log(
     `${target}: ${findings.length} measured findings; ${errors.length} baseline differences`
   );

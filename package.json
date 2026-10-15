@@ -43,7 +43,8 @@
     "typecheck:packages": "catalyst-quality types:packages",
     "typecheck:tests": "catalyst-quality types:tests",
     "typecheck:docs": "pnpm --filter @vivd-catalyst/docs typecheck",
-    "kit:release": "pnpm --filter @vivd-catalyst/app-kit release"
+    "kit:release": "pnpm --filter @vivd-catalyst/app-kit release",
+    "check:affected": "node scripts/check-affected.mjs"
   },
   "devDependencies": {
     "@assistant-ui/react": "^0.14.26",

@@ -44,6 +44,26 @@ Default standalone login users:
 The example values are `superadmin@example.test` / `demo-superadmin-password` and
 `user@example.test` / `demo-user-password`.
 
+Builder's pre-review check (from this repository's root):
+
+```bash
+git fetch origin main
+pnpm check:affected
+```
+
+This checks packages changed since the merge base with `origin/main`, plus every dependent in
+our workspace graph. It includes staged, unstaged and untracked edits. It builds their dependency
+prerequisites, checks package types, lints complete package scopes against the quality baseline,
+and runs tests whose imports reach those packages (including through test support). Knip resolves
+the whole workspace before findings are restricted to selected scopes. Set
+`POSTGRES_STORE_TEST_DATABASE_URL` for database tests, as with `pnpm test`.
+
+Shared configuration and tooling changes conservatively select all packages and tests. Changes
+to root tests also run the whole shared test type/lint scope so baseline counts remain exact.
+Docs and change files alone select no packages. Use `pnpm check:affected --list` to inspect the
+selection, or `AFFECTED_BASE=<ref>` for a different comparison base. The full integration and
+browser checks still run in the landing batch.
+
 Useful checks:
 
 ```bash
