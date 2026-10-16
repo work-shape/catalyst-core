@@ -88,15 +88,25 @@ function widenFrom(width: number): CSSProperties & { "--dock-from": string } {
   return { "--dock-from": `${width}px` };
 }
 
-/** The head of the dock: what it holds, the way to its chat route, and close. */
+/**
+ * The head of the dock: what it holds, the way to its chat route, and close. A conversation
+ * about an asset is named by its agent, with the agent's mark, and the asset under it.
+ */
 export function DockHead({
   title,
+  mark,
+  subtitle,
+  subjectKind,
   over,
   onShowPage,
   onOpenFullChat,
   onClose
 }: {
   title: string;
+  mark?: ReactNode;
+  subtitle?: string;
+  /** The kind of the asset the conversation is about, where the head names it. */
+  subjectKind?: string;
   over: boolean;
   onShowPage(): void;
   /** Absent while the dock holds no conversation. */
@@ -122,7 +132,11 @@ export function DockHead({
           </>
         ) : undefined
       }
+      icon={mark}
       title={title}
+      subtitle={subtitle}
+      data-testid="dock-head"
+      data-subject-kind={subjectKind}
       actions={
         onOpenFullChat === undefined ? undefined : (
           <IconButton label={t("dock.openFullChat")} onClick={onOpenFullChat}>
@@ -166,7 +180,9 @@ export function DockPage({
         }
       }}
       className={cn(
-        "relative h-full min-h-0 min-w-0 flex-1",
+        // What the page pins, such as an asset's head on the sticky layer, stays inside the
+        // page: the dock that lies over it covers it whole.
+        "relative isolate h-full min-h-0 min-w-0 flex-1",
         arrival === "in" && "[--duration-loading-delay:0ms] motion-safe:animate-dock-page-in"
       )}
     >

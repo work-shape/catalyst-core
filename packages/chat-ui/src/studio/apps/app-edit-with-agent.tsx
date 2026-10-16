@@ -9,8 +9,8 @@ import { PageHeaderAction } from "./page-header-action";
 
 /**
  * "Edit with the agent" in the head of an App, for a reader who may write it: it makes a
- * conversation about the App and opens it, with the App's draft beside it. The screen is left
- * once the conversation opens; only a refusal comes back here, said in a dialog.
+ * conversation about the App and opens it in the dock beside the App's draft, which stays the
+ * page. A refusal is said in a dialog.
  */
 export function AppEditWithAgentAction({ app }: { app: string }) {
   const { t } = useTranslation();

@@ -209,13 +209,10 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     );
     expect(thread.conversation.subject).toEqual({ kind: "workflow", name: id });
     expect(thread.conversation.collaborationWorkspaceId).toBe(workspaceId);
-    // The conversation says what it is about before its first message, and leads back.
-    const subjectLine = page.getByTestId("conversation-subject");
-    await expect(subjectLine).toContainText(`Working on: ${NAME}`);
-    await expect(subjectLine.getByRole("link", { name: NAME, exact: true })).toHaveAttribute(
-      "href",
-      workflowPath
-    );
+    // The dock's head says what the conversation is about before its first message.
+    const dockHead = page.getByTestId("dock-head");
+    await expect(dockHead).toHaveAttribute("data-subject-kind", "workflow");
+    await expect(dockHead).toContainText(`Working on: ${NAME}`);
     // The Workflow is its page: nothing opens beside the dock.
     await expect(workflowPage.getByTestId("workflow-canvas")).toBeVisible();
     await expect(page.locator("aside[data-surface-kind]")).toHaveCount(0);
@@ -325,7 +322,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(page).toHaveURL(
       (url) => url.pathname === personalWorkflow && url.searchParams.get("chat") === waitingId
     );
-    await expect(subject).toHaveAttribute("data-subject-kind", "workflow");
+    await expect(dockHead).toHaveAttribute("data-subject-kind", "workflow");
     await expect(chip).toHaveCount(0);
     const confirmed = threadSchema.parse(
       await (
@@ -343,8 +340,8 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     );
     await sendToolCall(page, "platform.assets.open", { kind: "workflow", name: id });
     await expect(page.getByTestId("asset-opened-line").last()).toHaveText(`Opened ${NAME}`);
-    await expect(subject).toHaveAttribute("data-subject-kind", "workflow");
-    await expect(subject).toContainText(NAME);
+    await expect(dockHead).toHaveAttribute("data-subject-kind", "workflow");
+    await expect(dockHead).toContainText(NAME);
     expect(new URL(page.url()).pathname).toBe(personalWorkflow);
     await expect(page.getByTestId("asset-opened-chip")).toHaveCount(0);
     await shootThemes(page, "workflow-from-chat", async () => {
@@ -371,11 +368,11 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
         url.pathname === "/build/agents/research_assistant" &&
         url.searchParams.get("chat") === agentConversation
     );
-    await expect(subject).toHaveAttribute("data-subject-kind", "agent");
+    await expect(dockHead).toHaveAttribute("data-subject-kind", "agent");
     const editorReady = async () => {
       await expect(page.getByTestId("asset-opened-line").last()).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      await expect(subject).toContainText("Research Assistant");
+      await expect(dockHead).toContainText("Research Assistant");
     };
     await editorReady();
     await shootThemes(page, "agent-from-chat", editorReady);

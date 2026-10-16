@@ -254,10 +254,10 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   const draftPath = `/w/${workspaceId}/app-drafts/${appId}`;
   await head.getByRole("button", { name: "Edit with the agent", exact: true }).click();
   await expect(page).toHaveURL((url) => url.pathname === draftPath && url.searchParams.has("chat"));
-  const subject = page.getByTestId("conversation-subject");
+  // The dock's head says what the conversation is about.
+  const subject = page.getByTestId("dock-head");
   await expect(subject).toHaveAttribute("data-subject-kind", "app");
-  await expect(subject).toContainText("Working on:");
-  await expect(subject.getByRole("link", { name: appName, exact: true })).toBeVisible();
+  await expect(subject).toContainText(`Working on: ${appName}`);
   // Nothing opens beside the dock: the App's page is the draft.
   await expect(page.locator("aside[data-surface-kind]")).toHaveCount(0);
   const draft = page.getByTestId("app-edit");

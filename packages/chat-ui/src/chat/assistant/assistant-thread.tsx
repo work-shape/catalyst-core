@@ -26,6 +26,7 @@ import type { SendBlock } from "./send-block";
 import { useMoveWithPanels } from "../surface/panel-move";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 import { ToolSubjectsProvider } from "./tool-subjects";
+import { subjectStarters } from "../dock/subject-starters";
 
 /** How long the composer takes to settle at the bottom after the first message. */
 const COMPOSER_SETTLE_MS = 220;
@@ -54,6 +55,7 @@ export function AssistantThread({
   notice,
   newConversationPrivate,
   subjectLine,
+  subjectKind,
   retainedUntil,
   draftAttachments,
   localUploadingAttachments,
@@ -103,6 +105,8 @@ export function AssistantThread({
   newConversationPrivate?: boolean;
   /** What the open conversation is about, where it is about an asset. */
   subjectLine?: ReactNode;
+  /** The kind of the asset the open conversation is about: its starters replace the agent's. */
+  subjectKind?: string;
   /** The open conversation's retention date. */
   retainedUntil?: string;
   draftAttachments: DraftAttachment[];
@@ -323,6 +327,7 @@ export function AssistantThread({
               <ThreadStartBlock
                 initialPrompts={initialPrompts}
                 starters={agent?.starters ?? []}
+                subjectKind={subjectKind}
                 onStarterChosen={() => {
                   // The request stands in the composer now: the person goes on writing there.
                   window.requestAnimationFrame(() => {
@@ -480,17 +485,42 @@ export function ThreadWelcomeHeading({
 const suggestionChipClassName =
   "inline-flex min-h-8 max-w-full items-center rounded-full border px-3 py-1 text-left text-body transition-colors hover:bg-state-hover focus-visible:focus-ring";
 
-/** What the start page offers under the composer: the starters, then the agent's own prompts. */
+/**
+ * What the start page offers under the composer: the starters, then the agent's own prompts.
+ * A conversation about an App or a Workflow offers what a person changes on it instead.
+ */
 export function ThreadStartBlock({
   initialPrompts,
   starters,
+  subjectKind,
   onStarterChosen
 }: {
   initialPrompts: Array<{ title: string; prompt: string }>;
   starters: NonNullable<SafeConfig["agents"][number]["starters"]>;
+  /** The kind of the asset the conversation is about. */
+  subjectKind?: string;
   onStarterChosen(): void;
 }) {
   const { t } = useTranslation();
+  const kindStarters = subjectStarters(subjectKind);
+  if (kindStarters !== undefined) {
+    return (
+      <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
+        <StarterList label={t("chatStarters")}>
+          {kindStarters.map(({ icon: Icon, title, hint, prompt }) => (
+            <ThreadPrimitive.Suggestion key={title} prompt={t(prompt)} asChild>
+              <Starter
+                icon={<Icon aria-hidden="true" className="size-5 text-muted-foreground" />}
+                title={t(title)}
+                hint={t(hint)}
+                onClick={onStarterChosen}
+              />
+            </ThreadPrimitive.Suggestion>
+          ))}
+        </StarterList>
+      </div>
+    );
+  }
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
       {/* What the agent's skills offer to begin with. Choosing one fills the composer and

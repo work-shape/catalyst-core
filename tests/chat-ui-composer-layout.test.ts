@@ -497,7 +497,8 @@ function EmptyConversation({ children }: { children: ReactNode }) {
 
 function startPage(
   of: Pick<StarterAgent, "starters"> & Partial<Pick<StarterAgent, "initialPrompts">>,
-  locale: "en" | "de" = "en"
+  locale: "en" | "de" = "en",
+  subjectKind?: string
 ): string {
   return renderToStaticMarkup(
     createElement(
@@ -509,6 +510,7 @@ function startPage(
         createElement(ThreadStartBlock, {
           initialPrompts: of.initialPrompts ?? [],
           starters: of.starters ?? [],
+          subjectKind,
           onStarterChosen: noStarterAction
         })
       )
@@ -567,5 +569,49 @@ describe("starters on the empty chat", () => {
       expect(startersOf(markup)).toBeUndefined();
       expect(markup).not.toContain("data-skill-icon");
     }
+  });
+});
+
+describe("starters of a conversation about an asset", () => {
+  const agentStarters = [{ skillName: "sheets", title: "Build a sheet", prompt: "Build a sheet." }];
+  const titles = (markup: string | undefined) =>
+    [...(markup ?? "").matchAll(/<span class="truncate text-label">([^<]*)<\/span>/gu)].map(
+      ([, title]) => title
+    );
+
+  it("offers what a person changes on an App, in place of the agent's starters and prompts", () => {
+    const markup = startPage(
+      { starters: agentStarters, initialPrompts: [{ title: "Check weather", prompt: "Check." }] },
+      "en",
+      "app"
+    );
+
+    expect(titles(startersOf(markup))).toEqual(["Add a field", "Change the look"]);
+    expect(markup).not.toContain("Build a sheet");
+    expect(markup).not.toContain("Check weather");
+  });
+
+  it("offers what a person changes on a Workflow", () => {
+    expect(titles(startersOf(startPage({ starters: [] }, "en", "workflow")))).toEqual([
+      "Add a step",
+      "Run a test"
+    ]);
+  });
+
+  it("speaks German", () => {
+    expect(titles(startersOf(startPage({ starters: [] }, "de", "app")))).toEqual([
+      "Feld hinzufügen",
+      "Aussehen ändern"
+    ]);
+    expect(titles(startersOf(startPage({ starters: [] }, "de", "workflow")))).toEqual([
+      "Schritt hinzufügen",
+      "Testlauf starten"
+    ]);
+  });
+
+  it("keeps the agent's starters for a kind without its own", () => {
+    expect(titles(startersOf(startPage({ starters: agentStarters }, "en", "agent")))).toEqual([
+      "Build a sheet"
+    ]);
   });
 });

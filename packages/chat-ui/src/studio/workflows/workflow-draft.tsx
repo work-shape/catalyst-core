@@ -44,7 +44,7 @@ export function useEditWithAgent(
     start() {
       setBusy(true);
       setError(undefined);
-      // The page is left once the conversation opens: only a refusal comes back here.
+      // The conversation opens in the dock beside this page; a refusal is said here.
       editWithAgent(workflow)
         .catch((failure: unknown) => {
           setError(

@@ -40,7 +40,7 @@ export const conversation = defineTranslations({
     conversationRetentionNoticeKeptByMessage:
       "{hint}. Mit einer neuen Nachricht bleibt diese Unterhaltung erhalten.",
     conversationSubjectOther: "In dieser Unterhaltung geht es um „{name}“.",
-    conversationSubjectWorkingOn: "In Arbeit:",
+    conversationSubjectWorkingOn: "Arbeitet an:",
     conversationOpened: "{name} geöffnet",
     conversationOpenedGoTo: "Zur Seite",
     conversationOpenedWaits: "Änderungen kommen dort erst an, wenn du zur Seite wechselst.",

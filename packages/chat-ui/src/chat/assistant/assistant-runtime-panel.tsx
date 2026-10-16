@@ -20,6 +20,7 @@ import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { transcriptMessageTimes } from "./thread-time";
 import { useRegisterToolDisplayActions } from "../../shared/domain-ui-widgets";
 import { useConversationSubject } from "../conversation/use-conversation-subject";
+import { useReportDockSubject } from "../dock/dock-subject";
 import { useFollowUpQueueModel } from "../conversation/use-follow-up-queue";
 import { FollowUpQueueProvider } from "./follow-up-queue";
 import {
@@ -174,6 +175,7 @@ function AssistantRuntimePane({
     storedSubject: selectedConversationSubject,
     workspaceId: collaborationWorkspaceId
   });
+  useReportDockSubject(conversationSubject);
   const pendingOpen = agentOpens.pending;
   useAutoOpenPageSurface(activeRun, selectedConversationId);
 
@@ -427,7 +429,8 @@ function AssistantRuntimePane({
                         }}
                       />
                     )}
-                    {conversationSubject === undefined ? null : (
+                    {/* In the dock its head says what the conversation is about. */}
+                    {conversationSubject === undefined || docked ? null : (
                       <ConversationSubjectLine
                         subject={conversationSubject.subject}
                         title={conversationSubject.title}
@@ -438,6 +441,7 @@ function AssistantRuntimePane({
                   </>
                 )
               }
+              subjectKind={conversationSubject?.subject.kind}
               retainedUntil={selectedConversationRetainedUntil}
               draftAttachments={draftAttachments}
               localUploadingAttachments={localUploadingAttachments}

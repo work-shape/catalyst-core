@@ -137,7 +137,7 @@ test("what a plain chat opened becomes an App without a question, and its next s
   await expect(
     draftDocument(page).getByRole("heading", { name: "Margin calculator" })
   ).toBeVisible();
-  const subject = page.getByTestId("conversation-subject");
+  const subject = page.getByTestId("dock-head");
   await expect(subject).toHaveAttribute("data-subject-kind", "app");
   await expect(subject).toContainText(appTitle);
   await expect(page.getByRole("dialog")).toHaveCount(0);

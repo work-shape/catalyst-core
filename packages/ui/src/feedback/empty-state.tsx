@@ -43,7 +43,13 @@ export function EmptyState({
       <p className="max-w-md text-body text-muted-foreground">{children}</p>
       {action === undefined ? null : <div className="flex">{action}</div>}
       {presets === undefined ? null : (
-        <div className={cn("flex max-w-xl flex-wrap gap-2", layout === "page" && "justify-center")}>
+        // The full width up to its limit: a starter list sizes its columns by the room it is given.
+        <div
+          className={cn(
+            "flex w-full max-w-xl flex-wrap gap-2",
+            layout === "page" && "justify-center"
+          )}
+        >
           {presets}
         </div>
       )}

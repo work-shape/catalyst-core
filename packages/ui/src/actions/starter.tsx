@@ -46,11 +46,18 @@ export interface StarterListProps {
   className?: string;
 }
 
-/** Starters side by side in two columns, one column where the room is narrow. */
+/**
+ * Starters side by side in two columns, one column where the room is narrow. The list's own
+ * width decides, not the window's: in a dock beside a page it keeps one column at any window.
+ */
 export function StarterList({ label, children, className }: StarterListProps) {
   return (
-    <div role="group" aria-label={label} className={cn("grid gap-2 sm:grid-cols-2", className)}>
-      {children}
+    <div
+      role="group"
+      aria-label={label}
+      className={cn("@container/starters w-full min-w-0", className)}
+    >
+      <div className="grid gap-2 @[32.5rem]/starters:grid-cols-2">{children}</div>
     </div>
   );
 }

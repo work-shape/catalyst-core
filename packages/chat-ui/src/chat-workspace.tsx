@@ -379,11 +379,11 @@ function ChatWorkspaceContent({
   const dockConversationId = dock.conversationId;
   // The dock names its conversation by the loaded thread, and by its row until then.
   const dockTitle =
-    dockConversationId === undefined
-      ? t("nav.newChat")
-      : chat.selectedConversationTitle ||
-        rail.conversations.find(({ id }) => id === dockConversationId)?.title ||
-        t("dock.chat");
+    chat.selectedConversationTitle ||
+    rail.conversations.find(({ id }) => id === dockConversationId)?.title;
+  const dockAgent = model.config.config.agents.find(
+    ({ name }) => name === model.config.activeAgentName
+  )?.displayName;
 
   const pageHost = {
     viewer: { kind: "member" as const, id: model.auth.user.id, displayName: userLabel },
@@ -563,6 +563,7 @@ function ChatWorkspaceContent({
                         view={{ ...dockView, mode: dockView.mode }}
                         dock={dock}
                         title={dockTitle}
+                        agent={dockAgent}
                         onOpenFullChat={
                           dockConversationId === undefined
                             ? undefined

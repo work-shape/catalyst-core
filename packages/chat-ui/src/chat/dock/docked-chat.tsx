@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { PanelRight } from "lucide-react";
-import { PageHeaderShellAction, SplitHandle } from "@work-shape/catalyst-ui";
+import { Bot, PanelRight } from "lucide-react";
+import { Avatar, PageHeaderShellAction, SplitHandle } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+import type { ConversationSubjectState } from "../conversation/use-conversation-subject";
 import { SurfaceSlot } from "../surface/surface-slot";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { ChatColumn, DockHead, DockPage, DockPageAction, type ChatColumnMode } from "./chat-dock";
+import { DockSubjectContext } from "./dock-subject";
 import { useDockArrival, useDockWidth } from "./use-dock-layout";
 
 /** How the shell lays out the conversation and the page for the dock. */
@@ -51,23 +53,33 @@ export function useChatDockView({
   return { mode, layout, arrival, arrived, measure };
 }
 
-/** The conversation's column with the dock's head and the handle that resizes it. */
+/**
+ * The conversation's column with the dock's head and the handle that resizes it. A conversation
+ * about an asset is named in the head by its agent, with the agent's mark, and "Working on:"
+ * the asset, as the conversation reports it.
+ */
 export function DockedChat({
   view,
   dock,
   title,
+  agent,
   onOpenFullChat,
   children
 }: {
   view: ChatDockView & { mode: ChatColumnMode };
   dock: WorkspaceDock;
-  title: string;
+  /** The conversation's title, where it has one. */
+  title: string | undefined;
+  /** The name people read for the conversation's agent. */
+  agent: string | undefined;
   /** Absent while the dock holds no conversation. */
   onOpenFullChat?: () => void;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
   const { layout } = view;
+  const [subject, reportSubject] = useState<ConversationSubjectState>();
+  const subjectAgent = subject === undefined ? undefined : agent;
   return (
     <ChatColumn
       mode={view.mode}
@@ -78,7 +90,21 @@ export function DockedChat({
       onArrived={view.arrived}
       head={
         <DockHead
-          title={title}
+          title={
+            subjectAgent ??
+            (dock.conversationId === undefined ? t("nav.newChat") : title || t("dock.chat"))
+          }
+          mark={
+            subjectAgent === undefined ? undefined : (
+              <Avatar kind="agent" size="sm" name={subjectAgent} icon={<Bot />} />
+            )
+          }
+          subtitle={
+            subjectAgent === undefined || subject === undefined
+              ? undefined
+              : `${t("conversationSubjectWorkingOn")} ${subject.title}`
+          }
+          subjectKind={subjectAgent === undefined ? undefined : subject?.subject.kind}
           over={layout.over}
           onShowPage={dock.showPage}
           onOpenFullChat={onOpenFullChat}
@@ -97,7 +123,7 @@ export function DockedChat({
         />
       }
     >
-      {children}
+      <DockSubjectContext.Provider value={reportSubject}>{children}</DockSubjectContext.Provider>
     </ChatColumn>
   );
 }
