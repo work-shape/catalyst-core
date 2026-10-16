@@ -217,8 +217,7 @@ export const modelGatewayRules = ({ root, rule, packageAt, keyName, loadedModule
           path !== `${modelProvider}/src/gateway.ts` &&
           path !== "packages/core/src/usage.ts" &&
           !path.startsWith("packages/usage-governance/src/") &&
-          path !== "packages/postgres-store/src/postgres-usage-ledger.ts" &&
-          path !== "packages/postgres-store/src/stores/usage.ts"
+          path !== "packages/postgres-store/src/postgres-usage-ledger.ts"
         );
       },
       (context, report) => {

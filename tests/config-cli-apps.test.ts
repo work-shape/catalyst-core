@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
-import type { Asset } from "@vivd-catalyst/api-contract";
-import type { PageBuildRunner } from "@vivd-catalyst/chat-server";
+import type { Asset } from "@work-shape/catalyst-api-contract";
+import type { PageBuildRunner } from "@work-shape/catalyst-server";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { publishReview, runCli } from "@work-shape/catalyst-cli";

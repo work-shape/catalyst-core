@@ -5,7 +5,7 @@ import {
   type Asset,
   type ConfigAssetRevision,
   type PlatformContext
-} from "@vivd-catalyst/api-contract";
+} from "@work-shape/catalyst-api-contract";
 import { ConfigApiError, type ConfigApi } from "./api";
 import {
   APP_STATE_FILE,

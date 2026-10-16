@@ -11,7 +11,7 @@ import {
   type OperationListScope
 } from "@work-shape/catalyst-core";
 import { readDefinitionField, readDefinitionName } from "./asset-kinds/shared";
-import { definitionsOf, type AssetSet, INVALID_ASSET_SET_MESSAGE } from "./asset-set";
+import { definitionsOf, type AssetSet, INVALID_ASSET_SET_MESSAGE } from "./assets/asset-set";
 import type { AssetWorkflowOptions } from "./types";
 
 /** Agents explicitly submitted for validation, even when their content is unchanged. */

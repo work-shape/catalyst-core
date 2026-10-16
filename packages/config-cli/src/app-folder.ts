@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import type { Asset, PlatformContext } from "@vivd-catalyst/api-contract";
+import type { Asset, PlatformContext } from "@work-shape/catalyst-api-contract";
 
 // The folder of one App on this machine: what `catalyst app pull` writes and `push` reads. The
 // folder holds the App's source files as they are, `app.yaml` at its root, and one file of
