@@ -258,7 +258,8 @@ jobs:
         with:
           # Every image of the job is a target of this one Dockerfile.
           cache-key: vivd-client.Dockerfile
-      - run: bash scripts/check-image-build.sh
+      - name: Images (retry registry failures only)
+        run: bash .github/scripts/check-images-with-retry.sh
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -337,7 +338,7 @@ jobs:
           E2E_SKIP_BUILD: "1"
           E2E_FULLY_PARALLEL: "1"
           SHARD: ${{ matrix.shard }}
-        run: pnpm test:e2e --retries=1 --reporter=list --workers=1 --shard="$SHARD/10" 2>&1 | tee browser-run.log
+        run: pnpm test:e2e --retries=1 --reporter=./e2e/ci-reporter.ts --workers=1 --shard="$SHARD/10" 2>&1 | tee browser-run.log
       - name: Keep traces and the server log of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

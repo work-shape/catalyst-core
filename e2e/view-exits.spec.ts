@@ -460,6 +460,7 @@ exitTest.describe("WebRTC from a view", () => {
 
   exitTest(
     "a view that runs scripts still sends WebRTC packets (known and open)",
+    { tag: "@known-open" },
     async ({ page, otherHost }) => {
       await openView(page, "html.rendered", webRtcScript(otherHost.stunServer));
       await expect(viewFrame(page).locator("body")).toHaveAttribute("data-offered", "true");
