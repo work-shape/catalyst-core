@@ -19,7 +19,7 @@ CAPABILITIES_ROOT, and DEPLOYMENT_ROOT.
 
 With GH_TOKEN (the existing cross-repository checkout token), reuses successful
 check.yml runs at both pinned SHAs, builds their packages, and keeps all deployment
-checks. Missing or unreadable CI evidence runs both full checks. --full always
+checks. Dirty sources or missing/unreadable CI evidence run both full checks. --full always
 runs both full checks. The token needs Actions read access to both repositories;
 this command never changes its permissions.
 USAGE
@@ -242,7 +242,7 @@ successful_check_run() {
   printf '%s\n' "$run_id"
 }
 
-if [[ "$full" == "0" ]] \
+if [[ "$full" == "0" && ! -s "$status_snapshot_dir/platform.before" && ! -s "$status_snapshot_dir/capabilities.before" ]] \
   && platform_run="$(successful_check_run work-shape/catalyst-core "$PLATFORM_REF")" \
   && capabilities_run="$(successful_check_run work-shape/catalyst-capabilities "$CAPABILITIES_REF")"; then
   log_step "Reuse platform check: work-shape/catalyst-core run $platform_run at $PLATFORM_REF"
@@ -252,7 +252,7 @@ if [[ "$full" == "0" ]] \
   log_step "Build capabilities packages for deployment assembly"
   run_pnpm --dir "$capabilities_root" build
 else
-  log_step "Run full checks (--full requested or successful CI evidence unavailable)"
+  log_step "Run full checks (--full requested, dirty sources, or successful CI evidence unavailable)"
   log_step "Run platform check"
   run_pnpm --dir "$platform_root" check
 

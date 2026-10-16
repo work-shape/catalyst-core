@@ -81,6 +81,14 @@ else
 fi
 CURL
 chmod +x "$scratch/bin/"*
+# CI evidence only applies to the committed source tree.
+for repo in platform capabilities deployment.fixture; do
+  git -C "$root/$repo" add .
+  git -C "$root/$repo" -c user.name=Fixture -c user.email=fixture@example.test commit -qm fixtures
+done
+printf 'PLATFORM_REF=%s\nCAPABILITIES_REF=%s\n' \
+  "$(git -C "$root/platform" rev-parse HEAD)" \
+  "$(git -C "$root/capabilities" rev-parse HEAD)" > "$deployment/deploy/release.refs"
 export PATH="$scratch/bin:$PATH"
 export COMMAND_LOG="$scratch/commands" LOOKUP_LOG="$scratch/lookups"
 export GH_TOKEN=fixture-token
@@ -109,15 +117,17 @@ for scenario in green dispatch; do
   grep -Fq 'Reuse platform check: work-shape/catalyst-core run 4711' "$scratch/output"
   grep -Fq 'Reuse capabilities check: work-shape/catalyst-capabilities run 4711' "$scratch/output"
 done
-for scenario in unknown capabilities-missing http-error invalid-json wrong-sha pr-only failed-job missing-job no-token full; do
+for scenario in unknown capabilities-missing http-error invalid-json wrong-sha pr-only failed-job missing-job no-token dirty full; do
   args=()
   [[ "$scenario" != full ]] || args=(--full)
-  if [[ "$scenario" == no-token ]]; then GH_TOKEN=""; else GH_TOKEN=fixture-token; fi
+  if [[ "$scenario" == no-token || "$scenario" == dirty ]]; then GH_TOKEN=""; else GH_TOKEN=fixture-token; fi
+  [[ "$scenario" != dirty ]] || touch "$root/platform/uncommitted.txt"
   run_case "$scenario" ${args[@]+"${args[@]}"}
+  [[ "$scenario" != dirty ]] || rm "$root/platform/uncommitted.txt"
   grep -Fq -- "--dir $root/platform check" "$COMMAND_LOG"
   grep -Fq -- "--dir $root/capabilities check" "$COMMAND_LOG"
   if grep -Fq 'Reuse platform' "$scratch/output"; then exit 1; fi
-  if [[ "$scenario" == full || "$scenario" == no-token ]]; then
+  if [[ "$scenario" == full || "$scenario" == no-token || "$scenario" == dirty ]]; then
     [[ ! -s "$LOOKUP_LOG" ]]
   fi
 done

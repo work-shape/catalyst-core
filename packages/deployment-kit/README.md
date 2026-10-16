@@ -177,5 +177,5 @@ The release gate accepts `--full` to force platform and capabilities checks. Wit
 full `check.yml` runs with a successful `check` job at both release SHAs and logs
 their run IDs. It still builds both repositories and runs every deployment check.
 PR runs do not qualify because they can select only some checks. Missing tokens,
-Actions read access, results or failed lookups fall back to both full checks; the
+Actions read access, results, dirty source checkouts or failed lookups fall back to both full checks; the
 kit does not change token permissions.
