@@ -131,7 +131,7 @@ function copyDeploymentFiles(root, destination) {
   }
 }
 
-function packPackages(repositories, outDir, skipBuild) {
+export function packPackages(repositories, outDir, skipBuild) {
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
   // The folder ignores itself, so the deployment needs no .gitignore entry for it.

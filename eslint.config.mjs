@@ -4,6 +4,11 @@ export default [
   ...config,
   { rules: { "catalyst/retired-terms": "error" } },
   {
+    // Release tooling reuses the kit in this checkout before its package is published.
+    files: ["scripts/release/check-fresh-resolution.mjs"],
+    rules: { "import-x/no-relative-packages": "off" }
+  },
+  {
     // The rule's vocabulary and its negative fixtures must keep naming the terms they reject.
     files: [
       "packages/quality-config/retired-terms-rule.mjs",

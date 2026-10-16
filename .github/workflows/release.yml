@@ -2,13 +2,32 @@ name: Release packages
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: npm-release
+  group: ${{ github.event_name == 'workflow_dispatch' && format('fresh-resolution-{0}', github.run_id) || 'npm-release' }}
   cancel-in-progress: false
 jobs:
+  fresh-resolution:
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-check
+        with:
+          build: "false"
+      - name: Verify the fresh-resolution gate
+        run: node --test scripts/release/fresh-resolution.test.mjs
+      - name: Build release packages from the frozen core lock
+        run: pnpm -r --filter './packages/*' build
+      - name: Build a consumer with freshly resolved third-party ranges
+        run: node scripts/release/check-fresh-resolution.mjs
   release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: fresh-resolution
     runs-on: ubuntu-latest
     timeout-minutes: 55
     permissions:

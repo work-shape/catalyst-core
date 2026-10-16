@@ -41,3 +41,12 @@ Use a core checkout installed from its frozen lock as the comparison reference. 
 committed lock records match but the installed graphs differ, check the installed
 `node_modules/.pnpm/lock.yaml`: pnpm can retain records from an earlier local resolution.
 A fresh install of that checkout from its frozen lock removes that stale reference graph.
+
+`release.yml` gates publication on one `fresh-resolution` job. It builds core from the
+frozen lock, reuses deployment kit `pack-local` to pack and substitute every release
+package, and installs the reference demo in a scratch directory without core's lockfile,
+source aliases or third-party overrides. It then runs the deployment's `build:server`
+and `build:ui` commands and requires their artifacts, as the kit's check does. Only
+Catalyst package overrides select local tarballs; third-party ranges resolve afresh.
+Dispatch `gh workflow run release.yml --ref <branch>` to prove this gate without
+publishing. Dispatches have their own concurrency group and cannot hold up a tag release.
