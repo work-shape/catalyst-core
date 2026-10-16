@@ -10,3 +10,5 @@ overrides:
   seroval@^1: 1.6.9
   find-my-way@^9: 9.7.0
   fast-uri@^3: 3.1.8
+  # Univer 0.25 pins nanoid 5.1.11 exactly (GHSA-28wg-ghj8-5hjv); drop with the move to Univer 1.
+  "@univerjs/core>nanoid": 5.1.16
