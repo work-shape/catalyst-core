@@ -1,9 +1,9 @@
-import { TOOL_GROUPS, localeCodes } from "@work-shape/catalyst-core";
 import type {
   AgentToolReference,
   ConfigAssetReferences,
   ToolGroupName
 } from "@work-shape/catalyst-api-client";
+import { TOOL_GROUPS, localeCodes } from "@work-shape/catalyst-core";
 import { isConnectionToolName, type ConnectionToolsRead } from "./connection-tools";
 
 // The tools of an agent's Tools section as the page shows them: one row per package ("Paket"),

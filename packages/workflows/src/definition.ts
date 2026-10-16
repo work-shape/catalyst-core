@@ -1,6 +1,5 @@
-import { NOTIFY_CHANNELS } from "@work-shape/catalyst-core";
-import { createHash } from "node:crypto";
 import {
+  NOTIFY_CHANNELS,
   WORKFLOW_DATASET_KEY,
   WORKFLOW_ERROR_CODES,
   WORKFLOW_STEP_TYPES,
@@ -19,6 +18,7 @@ import {
   type WorkflowStep,
   type WorkflowStepType
 } from "@work-shape/catalyst-core";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { codeFileIssue } from "./code-step";
 import { parseCron } from "./cron";

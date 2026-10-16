@@ -1,5 +1,5 @@
-import { ASSET_NAME_REFUSAL_REASONS } from "@work-shape/catalyst-core";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
+import { ASSET_NAME_REFUSAL_REASONS } from "@work-shape/catalyst-core";
 
 /** Where a new agent starts: everywhere, or in the shared workspace it was made in. */
 export type AvailableIn = "all" | { workspaceId: string };

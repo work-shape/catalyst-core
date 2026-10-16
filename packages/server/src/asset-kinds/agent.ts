@@ -1,4 +1,3 @@
-import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   assertSpendBudgetPricingCoverage,
@@ -10,14 +9,15 @@ import {
   AGENT_EDITABLE_FIELDS,
   AGENT_MODEL_SETTING_FIELDS,
   AppError,
+  ASSET_OWNER_KINDS,
   defineAssetKind,
   findNamespaceOfAssetName,
   KNOWLEDGE_BASE_ASSET_KIND,
   type AgentConfig,
-  type AssetValidationContext,
-  type AssetValidationIssue,
   type AgentEditableField,
   type AgentModelSettingField,
+  type AssetValidationContext,
+  type AssetValidationIssue,
   type Namespace
 } from "@work-shape/catalyst-core";
 import {

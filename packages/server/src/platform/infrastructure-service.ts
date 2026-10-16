@@ -1,4 +1,3 @@
-import { INFRASTRUCTURE_SECRET_STATES, INFRASTRUCTURE_WITHHELD_FIELDS } from "@work-shape/catalyst-core";
 import type {
   Infrastructure,
   InfrastructureCheck,
@@ -9,6 +8,8 @@ import type {
 } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  INFRASTRUCTURE_SECRET_STATES,
+  INFRASTRUCTURE_WITHHELD_FIELDS,
   JOB_WORKER_SILENT_MS,
   infrastructureCheckOutcome,
   isSecretName,
@@ -54,7 +55,7 @@ export interface InfrastructureEntry {
   endpointHost?: string;
   bucket?: string;
   /** The fields named in `InfrastructureProvider.withheld`. */
-  withheld?: readonly ((typeof INFRASTRUCTURE_WITHHELD_FIELDS)[number])[];
+  withheld?: readonly (typeof INFRASTRUCTURE_WITHHELD_FIELDS)[number][];
   /**
    * The secrets it takes: the name the config gives and the key of the config that gives it.
    * A name the platform fixes itself, such as `DATABASE_URL`, has no key.

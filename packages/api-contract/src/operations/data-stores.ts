@@ -1,4 +1,10 @@
-import { DATA_STORE_CONDITIONS, DATA_STORE_INSERT_CONFLICT_MODES, DATA_STORE_MIGRATION_OUTCOMES, DATA_STORE_SCALAR_TYPES, LISTED_DATA_STORE_STATUSES } from "@work-shape/catalyst-asset-schemas";
+import {
+  DATA_STORE_CONDITIONS,
+  DATA_STORE_INSERT_CONFLICT_MODES,
+  DATA_STORE_MIGRATION_OUTCOMES,
+  DATA_STORE_SCALAR_TYPES,
+  LISTED_DATA_STORE_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { defineRegisteredOperation, json } from "./define-operation";
 
@@ -88,8 +94,6 @@ const dataStorePreviewQuerySchema = z.object({
   table: tableNameSchema,
   limit: z.coerce.number().int().min(1).max(DATA_STORE_PREVIEW_MAX_ROWS).optional()
 });
-
-
 
 const dataStoreStateResponseSchema = z.object({
   /** The id of the store's asset. */

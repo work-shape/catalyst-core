@@ -1,6 +1,9 @@
-import { APPROVAL_CHECK_STATUSES, APPROVAL_REQUEST_STATUSES } from "@work-shape/catalyst-asset-schemas";
-import { timestampSchema } from "./shared";
+import {
+  APPROVAL_CHECK_STATUSES,
+  APPROVAL_REQUEST_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
+import { timestampSchema } from "./shared";
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 

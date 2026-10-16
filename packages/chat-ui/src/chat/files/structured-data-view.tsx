@@ -1,7 +1,5 @@
-import { localeCodes } from "@work-shape/catalyst-core";
-import { Check, ClipboardCopy, FileSearch, TriangleAlert } from "lucide-react";
-import { useState } from "react";
 import type { StructuredDataResourceResponse } from "@work-shape/catalyst-api-client";
+import { localeCodes } from "@work-shape/catalyst-core";
 import {
   Button,
   IconButton,
@@ -13,6 +11,8 @@ import {
   TooltipContent,
   TooltipTrigger
 } from "@work-shape/catalyst-ui";
+import { Check, ClipboardCopy, FileSearch, TriangleAlert } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "../../shared/i18n";
 import { formatStructuredDataValue, structuredDataToTsv } from "./resources-panel-model";
 

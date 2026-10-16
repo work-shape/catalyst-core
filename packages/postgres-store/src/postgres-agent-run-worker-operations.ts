@@ -1,8 +1,12 @@
-import { ACTIVE_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
-import { and, asc, eq, gt, inArray, lt, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
+  ACTIVE_AGENT_RUN_STATUSES,
   AppError,
   JobLeaseLostError,
+  asAgentRunId,
+  asConversationId,
+  asUserId,
+  createPlatformId,
+  subjectRowLeaseOwnerId,
   type AgentRun,
   type AgentRunError,
   type AgentRunJobClaim,
@@ -20,16 +24,12 @@ import {
   type FailLostAgentRunInput,
   type RenewAgentRunJobLeaseInput,
   type RequestAgentRunCancellationInput,
-  type RunObservation,
-  asAgentRunId,
-  asConversationId,
-  asUserId,
-  createPlatformId,
-  subjectRowLeaseOwnerId
+  type RunObservation
 } from "@work-shape/catalyst-core";
+import { and, asc, sql as drizzleSql, eq, gt, inArray, lt, type SQL } from "drizzle-orm";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
-import { withdrawUnclaimedWorkspaceCommandsOfRuns } from "./postgres-execution-workspace-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
+import { withdrawUnclaimedWorkspaceCommandsOfRuns } from "./postgres-execution-workspace-operations";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
   agentRunObservations,
@@ -40,7 +40,15 @@ import {
   platformJobs
 } from "./schema";
 
-const STARTED_STATUSES: AgentRun["status"][] = ["running", "waiting_for_permission", "cancelling"];
+const STARTED_STATUSES: readonly AgentRun["status"][] = [
+  "running",
+  "waiting_for_permission",
+  "cancelling"
+] as const satisfies readonly AgentRun["status"][];
+const CLAIMED_STATUSES = [
+  "running",
+  "waiting_for_permission"
+] as const satisfies readonly AgentRun["status"][];
 
 /**
  * A run is executed only by the attempt whose claim moves the row from queued to running here.
@@ -240,9 +248,7 @@ async function insertClaimedRunObservation(
         eq(agentRuns.lastSequence, event.sequence - 1),
         // A run that was asked to cancel ends as cancelled and as nothing else. What it
         // still writes on its way there is stored.
-        endsOrSuspendsRun(event)
-          ? inArray(agentRuns.status, ["running", "waiting_for_permission"])
-          : undefined
+        endsOrSuspendsRun(event) ? inArray(agentRuns.status, CLAIMED_STATUSES) : undefined
       )
     )
     .returning();

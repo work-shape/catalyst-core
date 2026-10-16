@@ -1,16 +1,15 @@
-import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
-import { createHash } from "node:crypto";
-import { z } from "zod";
 import {
   AppError,
+  ASSET_OWNER_KINDS,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_RESERVED_SCHEMA,
   readYamlData,
-  type AssetScope,
   type AssetValidationIssue,
   type DataStoreAppliedMigration,
   type JsonObject
 } from "@work-shape/catalyst-core";
+import { createHash } from "node:crypto";
+import { z } from "zod";
 
 // What a Data Store's folder is read into: the definition a revision holds as its config.
 // Everything here is checked and bounded before a statement is sent to a database.

@@ -127,8 +127,7 @@ export interface ConnectionCatalog {
 }
 
 /** Whether an accepted operation can be called now, and if not, why. Only `ready` is callable. */
-export type ConnectionOperationStatus =
-  (typeof CONNECTION_OPERATION_STATUSES)[number];
+export type ConnectionOperationStatus = (typeof CONNECTION_OPERATION_STATUSES)[number];
 
 /**
  * Why a call of a Connection is refused or fails, each with the error code it travels under.

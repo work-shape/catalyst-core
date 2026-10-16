@@ -1,8 +1,12 @@
-import { ACCESS_SOURCES, GRANT_EFFECTS, GRANT_HOLDER_KINDS, GRANT_SCOPE_KINDS, PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
+  ACCESS_SOURCES,
+  GRANT_EFFECTS,
+  GRANT_HOLDER_KINDS,
+  GRANT_SCOPE_KINDS,
   NAMESPACE_PREFIX_MAX_LENGTH,
   NAMESPACE_PREFIX_MIN_LENGTH,
-  NAMESPACE_PREFIX_PATTERN
+  NAMESPACE_PREFIX_PATTERN,
+  PRINCIPAL_HOLDER_KINDS
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { listQuerySchema, timestampSchema } from "./shared";

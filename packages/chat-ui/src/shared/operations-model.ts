@@ -1,5 +1,5 @@
-import { OPERATION_ORIGIN_KINDS, OPERATION_RUN_STATUSES } from "@work-shape/catalyst-core";
 import type { LocaleCode, OperationRunResource } from "@work-shape/catalyst-api-client";
+import { OPERATION_ORIGIN_KINDS, OPERATION_RUN_STATUSES } from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "./i18n";
 import { workspaceRoutePath } from "./routes";
@@ -24,7 +24,8 @@ export const operationEffectFilterLabelKeys: Record<OperationRunEffect, Translat
 export const operationRunStatuses = OPERATION_RUN_STATUSES satisfies readonly OperationRunStatus[];
 
 /** The seven places a call can come from, for the filter. */
-export const operationRunOriginKinds = OPERATION_ORIGIN_KINDS satisfies readonly OperationRunOriginKind[];
+export const operationRunOriginKinds =
+  OPERATION_ORIGIN_KINDS satisfies readonly OperationRunOriginKind[];
 
 export const operationStatusLabelKeys: Record<OperationRunStatus, TranslationKey> = {
   running: "operations.statusRunning",

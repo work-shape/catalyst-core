@@ -1,4 +1,9 @@
-import { ASSET_LIFECYCLES, ASSET_OWNER_KINDS, ASSET_REPRESENTATIONS, COLLABORATION_WORKSPACE_KINDS } from "@work-shape/catalyst-asset-schemas";
+import {
+  ASSET_LIFECYCLES,
+  ASSET_OWNER_KINDS,
+  ASSET_REPRESENTATIONS,
+  COLLABORATION_WORKSPACE_KINDS
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 
 /** One registered asset kind with the action names its rights are checked as. */

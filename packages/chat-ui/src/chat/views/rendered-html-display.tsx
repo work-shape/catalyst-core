@@ -1,8 +1,8 @@
+import { VIEW_SHELL_MESSAGES } from "@work-shape/catalyst-api-client";
 import { TOOL_DISPLAY_MODES } from "@work-shape/catalyst-core";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Banner, Spinner, useUiMode } from "@work-shape/catalyst-ui";
 import { THEME_TOKEN_NAMES } from "@work-shape/catalyst-ui/theme";
-import { VIEW_SHELL_MESSAGES } from "@work-shape/catalyst-api-client";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "../../shared/i18n";
 import { composeViewDocument, viewRunsScripts, type ViewDisplayKind } from "./view-document";
 import { useViewPolicy } from "./view-policy";

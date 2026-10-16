@@ -799,6 +799,69 @@ describe("quality collector", { timeout: 180_000 }, () => {
     expect(scopes).toContain("catalyst/console-boundary packages/alpha");
   });
 
+  it("ratchets repeated allowed-value lists across packages", () => {
+    const repeated = '["duplicate_first", "duplicate_second"]';
+    const fixtures = {
+      [`${source}/duplicate-values.ts`]: `declare const z: { enum(values: readonly string[]): unknown };
+export const values = ${repeated} as const satisfies readonly string[];
+export const schema = z
+  .enum(${repeated});
+`,
+      "packages/beta/src/duplicate-values.ts": `export type Value = "duplicate_second" | "duplicate_first";
+export const values = new Set(${repeated});
+`,
+      [`${source}/allowed-values.ts`]: `declare const configure: (value: string[]) => unknown;
+export const defaults = configure(${repeated});
+export const operation = { errors: ${repeated} };
+export type Answer = { ok: true; status: "duplicate_first" | "duplicate_second" } | { ok: false };
+`,
+      "packages/asset-schemas/src/contract-values.ts": `export const VALUES = ${repeated} as const;\n`,
+      ...Object.fromEntries(
+        ["asset-schemas", "app-kit", "asset-repo", "ui"].map((name) => [
+          `packages/${name}/package.json`,
+          JSON.stringify({ name: `@fixture/${name}` })
+        ])
+      ),
+      ...Object.fromEntries(
+        ["app-kit", "asset-repo", "ui"].map((name) => [
+          `packages/${name}/src/duplicate-values.ts`,
+          `export const values = ${repeated} as const;\n`
+        ])
+      )
+    };
+    try {
+      write(fixtures);
+      expect(
+        measure("lint").filter((finding) => finding.startsWith("catalyst/duplicate-literal-list "))
+      ).toEqual([
+        ...Array.from(
+          { length: 2 },
+          () => `catalyst/duplicate-literal-list ${source}/duplicate-values.ts`
+        ),
+        ...Array.from(
+          { length: 2 },
+          () => "catalyst/duplicate-literal-list packages/beta/src/duplicate-values.ts"
+        )
+      ]);
+      const unbaselined = collect("lint");
+      expect(unbaselined.status).toBe(1);
+      expect(unbaselined.stderr).toContain(
+        "lint|catalyst/duplicate-literal-list|packages/beta: measured 2, baseline 0; repair the increase"
+      );
+      // A selected package must still see an existing copy outside its scope.
+      write({ "duplicate-scope.json": JSON.stringify(["packages/alpha"]) });
+      const scoped = collect("lint", "--scope-file=duplicate-scope.json");
+      expect(scoped.status).toBe(1);
+      expect(scoped.stderr).toContain(
+        "lint|catalyst/duplicate-literal-list|packages/alpha: measured 2, baseline 0; repair the increase"
+      );
+      expect(scoped.stderr).not.toContain("lint|catalyst/duplicate-literal-list|packages/beta");
+    } finally {
+      for (const file of [...Object.keys(fixtures), "duplicate-scope.json"])
+        rmSync(join(directory, file), { force: true });
+    }
+  });
+
   it("ratchets retired terms in identifiers, strings, templates and JSX per package", () => {
     const fixtures = {
       [`${source}/retired-identifiers.ts`]: `export interface Namespace { namespaceId: string }

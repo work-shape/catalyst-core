@@ -6,6 +6,7 @@ import {
   type ClientInstanceId,
   type ConversationAttachment,
   type ConversationAttachmentId,
+  type ConversationAttachmentStatus,
   type ConversationId,
   type CreateConversationAttachmentInput,
   type DraftAttachment,
@@ -437,7 +438,7 @@ export async function listConversationAttachmentsWithoutJob(
     .where(
       and(
         eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-        inArray(conversationAttachments.status, ["queued", "preprocessing"]),
+        inArray(conversationAttachments.status, PENDING_ATTACHMENT_STATUSES),
         input.formats && input.formats.length > 0
           ? inArray(conversationAttachments.format, [...input.formats])
           : undefined,
@@ -585,3 +586,8 @@ export async function findConversationAttachmentByFile(
     .limit(1);
   return row ? mapConversationAttachment(row) : undefined;
 }
+
+const PENDING_ATTACHMENT_STATUSES = [
+  "queued",
+  "preprocessing"
+] as const satisfies readonly ConversationAttachmentStatus[];

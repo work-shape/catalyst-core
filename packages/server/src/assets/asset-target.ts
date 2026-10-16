@@ -1,10 +1,10 @@
-import { ASSET_NAME_REFUSAL_REASONS } from "@work-shape/catalyst-core";
 import {
+  ASSET_NAME_REFUSAL_REASONS,
   AppError,
   INSTANCE_ASSET_SCOPE,
   asCollaborationWorkspaceId,
-  assetScopesEqual,
   assetNameIssue,
+  assetScopesEqual,
   auditActorFromIdentity,
   type AccessResource,
   type ActorAccess,
@@ -12,8 +12,9 @@ import {
   type ConfigAssetRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
-import { accessResource, type AssetCall } from "./asset-access";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
+import type { AssetWorkflowOptions } from "../types";
+import { accessResource, type AssetCall } from "./asset-access";
 import {
   currentRevisionOf,
   nameOnlyConflict,
@@ -21,7 +22,6 @@ import {
   revisionConflictOf
 } from "./asset-revision";
 import { assertScopeCanOwn } from "./config-asset-writer";
-import type { AssetWorkflowOptions } from "../types";
 
 // What the address of a call comes to, and what every write asks of it before it writes.
 

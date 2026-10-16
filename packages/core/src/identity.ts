@@ -1,5 +1,5 @@
-import { AUTH_PRINCIPAL_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
+  AUTH_PRINCIPAL_KINDS,
   AUTH_SCOPE_WILDCARD,
   CHAT_SESSION_AUTH_SCOPES,
   FIRST_PARTY_AUTH_SCOPES,

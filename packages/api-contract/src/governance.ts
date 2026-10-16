@@ -1,8 +1,15 @@
-import { AUDIT_ACTOR_KINDS, AUDIT_OUTCOMES, AUDIT_TIERS, MODEL_USAGE_EVENT_STATUSES, MODEL_USAGE_SOURCES, USAGE_COST_STATUSES } from "@work-shape/catalyst-asset-schemas";
-import { timestampSchema } from "./shared";
+import {
+  AUDIT_ACTOR_KINDS,
+  AUDIT_OUTCOMES,
+  AUDIT_TIERS,
+  MODEL_USAGE_EVENT_STATUSES,
+  MODEL_USAGE_SOURCES,
+  USAGE_COST_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { usageSafeguardsSchema } from "./configuration";
 import { auditActorSchema } from "./identity";
+import { timestampSchema } from "./shared";
 
 export const auditEventSchema = z.object({
   id: z.string(),

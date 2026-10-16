@@ -1,10 +1,10 @@
 import { THEME_MODE_PREFERENCES } from "@work-shape/catalyst-asset-schemas";
-import type { ClientInstanceConfig } from "./schemas";
 import {
   resolveConfigLocale,
   resolveLocalizedString,
   type ConfigLocaleInput
 } from "./localization";
+import type { ClientInstanceConfig } from "./schemas";
 
 export interface ClientBranding {
   environment: ClientInstanceConfig["clientInstance"]["environment"];

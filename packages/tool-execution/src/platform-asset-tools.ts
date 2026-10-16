@@ -1,8 +1,9 @@
-import { APP_MODES, OPERATIONS_AUDIENCES, OPERATION_EFFECTS } from "@work-shape/catalyst-core";
-import { z } from "zod";
 import {
+  APP_MODES,
   AppError,
   isAppError,
+  OPERATION_EFFECTS,
+  OPERATIONS_AUDIENCES,
   SUBJECT_TOOL_PREFIX,
   type ConversationId,
   type ConversationSubject,
@@ -12,6 +13,7 @@ import {
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import { z } from "zod";
 import type { PageAppCalls } from "./page-app-tool";
 import type { PlatformDiscoveryCalls } from "./platform-discovery-tools";
 

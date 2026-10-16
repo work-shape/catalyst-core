@@ -1,5 +1,5 @@
+import type { ConnectionOperationDetail } from "@work-shape/catalyst-api-client";
 import { CONNECTION_EXPOSURES } from "@work-shape/catalyst-core";
-import type { ReactNode } from "react";
 import {
   Badge,
   Button,
@@ -10,7 +10,7 @@ import {
   List,
   type BadgeTone
 } from "@work-shape/catalyst-ui";
-import type { ConnectionOperationDetail } from "@work-shape/catalyst-api-client";
+import type { ReactNode } from "react";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { operationTitle } from "./connection-approval-model";

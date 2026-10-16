@@ -1,17 +1,17 @@
 import { CONFIG_ASSET_KINDS } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "@work-shape/catalyst-core";
 import {
-  agentConfigSchema,
-  skillConfigSchema,
-  type AgentConfig,
-  type SkillConfig
-} from "./schemas";
-import {
   findAgentModelReferenceIssues,
   findDefaultAgentReferenceIssues,
   findDuplicates,
   findMissingAgentSkillReferences
 } from "./reference-validation";
+import {
+  agentConfigSchema,
+  skillConfigSchema,
+  type AgentConfig,
+  type SkillConfig
+} from "./schemas";
 
 import { findAgentToolReferenceIssues } from "./agent-tool-references";
 

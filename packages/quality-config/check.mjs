@@ -9,6 +9,7 @@ import { ESLint } from "eslint";
 import { getFileInfo } from "prettier";
 import ts from "typescript";
 import { compareBaseline } from "./baseline.mjs";
+import { duplicateLiteralLists } from "./duplicate-literals-rule.mjs";
 import { syncSourcePaths } from "./source-aliases.mjs";
 
 /** @typedef {import("./baseline.mjs").Finding & { file: string, detail: string }} Finding */
@@ -251,6 +252,14 @@ if (target === "aliases") {
   for (const part of linted)
     for (const message of part.messages) report(message.rule, message.file, message.detail);
   const results = linted.flatMap((part) => part.files.map((filePath) => ({ filePath })));
+
+  // Collect across the complete repository before filtering scopes: a copy outside the
+  // selected package must still make a new duplicate inside it fail.
+  const listSources = files
+    .filter((file) => /^packages\/[^/]+\/src\/.*\.tsx?$/u.test(file))
+    .map((file) => ({ file, text: readFileSync(file, "utf8") }));
+  for (const finding of duplicateLiteralLists(listSources))
+    report("catalyst/duplicate-literal-list", finding.file, finding.detail);
 
   // Knip owns unused files, exports and dependencies. The collector below checks workspace
   // import declarations too, including clients, scripts and MDX that Knip does not cover.

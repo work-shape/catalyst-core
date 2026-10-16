@@ -1,10 +1,10 @@
 import { OPENAI_COMPATIBLE_APIS } from "@work-shape/catalyst-asset-schemas";
-import { z } from "zod";
 import {
   PROVIDER_REGIONS,
   REASONING_EFFORTS,
   type ModelProviderConfig
 } from "@work-shape/catalyst-core";
+import { z } from "zod";
 
 /** The model a `deterministic` entry answers with when it names none. */
 const DETERMINISTIC_MODEL = "deterministic-local";

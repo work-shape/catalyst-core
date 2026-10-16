@@ -1,6 +1,6 @@
-import { LIVE_JOB_STATUSES } from "@work-shape/catalyst-core";
 import {
   AppError,
+  LIVE_JOB_STATUSES,
   WORKSPACE_COMMAND_JOB_KIND,
   asExecutionWorkspaceId,
   asWorkspaceCommandId,
@@ -28,6 +28,12 @@ import { requireActiveWorkspace } from "./postgres-execution-workspace-metadata"
 import { mapWorkspaceCommand } from "./rows";
 import { executionWorkspaces, workspaceCommands } from "./schema";
 import { platformJobs } from "./schema/jobs";
+
+const ACTIVE_COMMAND_STATUSES = [
+  "queued",
+  "running",
+  "cancelling"
+] as const satisfies readonly WorkspaceCommand["status"][];
 
 export async function enqueueWorkspaceCommand(
   db: PostgresConnection,
@@ -213,7 +219,7 @@ export async function listWorkspaceCommandsWithoutJob(
     .where(
       and(
         eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
-        inArray(workspaceCommands.status, ["queued", "running", "cancelling"]),
+        inArray(workspaceCommands.status, ACTIVE_COMMAND_STATUSES),
         drizzleSql`not exists (
           select 1 from platform_jobs job
           where job.client_instance_id = ${workspaceCommands.clientInstanceId}

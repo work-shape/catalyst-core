@@ -1,5 +1,5 @@
-import { APP_ACTION_CALL_STATUSES } from "@work-shape/catalyst-core";
 import type { AppAction, AppMode } from "@work-shape/catalyst-api-client";
+import { APP_ACTION_CALL_STATUSES } from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../../shared/i18n";
 import { PAGE_ADDRESS_LIFETIME_MS, PAGE_ADDRESS_RENEWAL_MARGIN_MS } from "../pages/page-address";

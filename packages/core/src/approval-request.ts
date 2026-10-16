@@ -1,14 +1,17 @@
-import { APPROVAL_CHECK_STATUSES, APPROVAL_EXECUTIONS, APPROVAL_REQUEST_STATUSES } from "@work-shape/catalyst-asset-schemas";
-import type { AgentRunId, ClientInstanceId, ConversationId, ToolCallId } from "./ids";
+import {
+  APPROVAL_CHECK_STATUSES,
+  APPROVAL_EXECUTIONS,
+  APPROVAL_REQUEST_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 import type { AuthenticatedUser } from "./identity";
+import type { AgentRunId, ClientInstanceId, ConversationId, ToolCallId } from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 
 // An Approval Request as data: what is stored and shown. Who handles and stores one is in
 // `approval-requests.ts`, which a module that only reads a request does not need to import.
 
-export type ApprovalRequestStatus =
-  (typeof APPROVAL_REQUEST_STATUSES)[number];
+export type ApprovalRequestStatus = (typeof APPROVAL_REQUEST_STATUSES)[number];
 
 export interface ApprovalCheckResult {
   id: string;

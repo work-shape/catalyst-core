@@ -1,4 +1,8 @@
-import { POLICY_VALUES, READING_POLICY_VALUES, THEME_MODE_PREFERENCES } from "@work-shape/catalyst-asset-schemas";
+import {
+  POLICY_VALUES,
+  READING_POLICY_VALUES,
+  THEME_MODE_PREFERENCES
+} from "@work-shape/catalyst-asset-schemas";
 import type {
   AgentConfig,
   AgentRuntimeConfig,

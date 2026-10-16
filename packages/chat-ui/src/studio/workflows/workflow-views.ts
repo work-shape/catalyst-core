@@ -1,4 +1,11 @@
-import { NOTIFY_CHANNELS, OPERATION_EFFECTS, OPERATION_TARGETS, WORKFLOW_RESERVED_STEP_TYPES, WORKFLOW_RUN_STATUSES, WORKFLOW_STEP_TYPES } from "@work-shape/catalyst-core";
+import {
+  NOTIFY_CHANNELS,
+  OPERATION_EFFECTS,
+  OPERATION_TARGETS,
+  WORKFLOW_RESERVED_STEP_TYPES,
+  WORKFLOW_RUN_STATUSES,
+  WORKFLOW_STEP_TYPES
+} from "@work-shape/catalyst-core";
 // What the Workflow screens show: a Workflow, its steps, a run and its step runs, in the
 // screens' own shapes. The data module maps what the instance answers onto these, so no screen
 // reads a type of the API contract.
@@ -135,8 +142,7 @@ export interface WorkflowStartIssue {
   principalDisplayLabel?: string;
 }
 
-export type WorkflowRunStatus =
-  (typeof WORKFLOW_RUN_STATUSES)[number];
+export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
 
 type WorkflowStepRunStatus = Exclude<WorkflowRunStatus, "limit_reached">;
 

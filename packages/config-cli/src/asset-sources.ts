@@ -1,12 +1,15 @@
-import { ASSET_REPRESENTATIONS } from "@work-shape/catalyst-asset-schemas";
-import { readFile, stat } from "node:fs/promises";
-import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import {
   ASSET_PUT_FILES_MAX_BYTES,
   ASSET_SYNC_ITEM_MAX_BYTES,
   FILE_SET_MAX_FILES
 } from "@work-shape/catalyst-api-contract";
-import { loadYamlData, parseSkillMarkdown } from "@work-shape/catalyst-asset-schemas";
+import {
+  ASSET_REPRESENTATIONS,
+  loadYamlData,
+  parseSkillMarkdown
+} from "@work-shape/catalyst-asset-schemas";
+import { readFile, stat } from "node:fs/promises";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { GUARDRAIL_FILE, readGuardrailFolder } from "./guardrail-files";
 import { readSkillResources, walkFiles } from "./working-copy";
 

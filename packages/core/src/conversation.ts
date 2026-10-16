@@ -1,6 +1,7 @@
 import { CHAT_MESSAGE_ROLES, CONVERSATION_VISIBILITIES } from "@work-shape/catalyst-asset-schemas";
-import type { StorePage } from "./paging";
 import type { ActiveRunSummary, AgentRunProjection } from "./agent-runtime";
+import type { SkillResourceConfig } from "./config";
+import type { AgentRunWriteFence } from "./identity";
 import type {
   AgentRunId,
   ClientInstanceId,
@@ -8,9 +9,8 @@ import type {
   ConversationId,
   MessageId
 } from "./ids";
-import type { AgentRunWriteFence } from "./identity";
-import type { SkillResourceConfig } from "./config";
 import type { JsonObject, JsonValue } from "./json";
+import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
 
 export type ConversationStatus = "active" | "deleted" | "retention_expired";

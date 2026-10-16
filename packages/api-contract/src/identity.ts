@@ -1,7 +1,15 @@
-import { ADMINISTERED_USER_STATUSES, API_CREDENTIAL_SCOPES, AUTH_PRINCIPAL_KINDS, DELETION_STATES, SERVICE_PRINCIPAL_PERMISSIONS, SERVICE_PRINCIPAL_STATUSES, USER_STATUSES } from "@work-shape/catalyst-asset-schemas";
-import { timestampSchema } from "./shared";
-import { FIRST_PARTY_AUTH_SCOPES } from "@work-shape/catalyst-asset-schemas";
+import {
+  ADMINISTERED_USER_STATUSES,
+  API_CREDENTIAL_SCOPES,
+  AUTH_PRINCIPAL_KINDS,
+  DELETION_STATES,
+  FIRST_PARTY_AUTH_SCOPES,
+  SERVICE_PRINCIPAL_PERMISSIONS,
+  SERVICE_PRINCIPAL_STATUSES,
+  USER_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
+import { timestampSchema } from "./shared";
 
 export const authScopeSchema = z.enum(FIRST_PARTY_AUTH_SCOPES);
 

@@ -1,10 +1,10 @@
-import { KNOWLEDGE_CHECK_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
+import { KNOWLEDGE_CHECK_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
-import type { ActorAccess } from "./permissions";
+import type { ConnectionsStore } from "./connections";
 import type { DataStoreRows, DataStoreStatement } from "./data-stores";
 import type { ClientInstanceId } from "./ids";
-import type { ConnectionsStore } from "./connections";
+import type { ActorAccess } from "./permissions";
 import type { ISODateString } from "./time";
 
 // The names and shapes of a Knowledge Base that more than one package reads: the asset kind,

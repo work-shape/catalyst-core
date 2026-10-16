@@ -1,9 +1,9 @@
-import { localeCodes } from "@work-shape/catalyst-core";
 import {
   appErrorCodeSchema,
   type ApiErrorCode,
   type LocaleCode
 } from "@work-shape/catalyst-api-client";
+import { localeCodes } from "@work-shape/catalyst-core";
 import type { ThemeModePreference } from "./theme";
 
 export const STANDALONE_AUTH_SOURCE = "better-auth";

@@ -1,7 +1,8 @@
-import { GUARDRAIL_OUTCOMES, OPERATION_ORIGIN_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
   GUARDRAIL_NAME_MAX_LENGTH,
-  GUARDRAIL_NAME_PATTERN
+  GUARDRAIL_NAME_PATTERN,
+  GUARDRAIL_OUTCOMES,
+  OPERATION_ORIGIN_KINDS
 } from "@work-shape/catalyst-asset-schemas";
 import type { AssetScope } from "./asset-kinds";
 import type { GuardrailEvent } from "./guardrail-events";
@@ -37,8 +38,8 @@ export const GUARDRAIL_ACTIONS = {
 export const GUARDRAIL_ORIGINS = ["release", "asset"] as const;
 export type GuardrailOrigin = (typeof GUARDRAIL_ORIGINS)[number];
 
-export { GUARDRAIL_NAME_MAX_LENGTH, GUARDRAIL_NAME_PATTERN };
 export * from "./guardrail-events";
+export { GUARDRAIL_NAME_MAX_LENGTH, GUARDRAIL_NAME_PATTERN };
 export const GUARDRAIL_NAME_RULE =
   "Guardrail name must be lowercase words of letters and digits joined by hyphens or underscores";
 
@@ -72,7 +73,8 @@ export const GUARDRAIL_FILTER_KEYS = {
 } as const satisfies Record<GuardrailEvent, readonly (keyof GuardrailFilter)[]>;
 
 /** Where a call can come from, as a filter's `origin` names it. */
-export const GUARDRAIL_FILTER_ORIGINS = OPERATION_ORIGIN_KINDS satisfies readonly OperationOrigin["kind"][];
+export const GUARDRAIL_FILTER_ORIGINS =
+  OPERATION_ORIGIN_KINDS satisfies readonly OperationOrigin["kind"][];
 
 /**
  * What a hit does. `allow` lets the action go on and never overrides another guardrail's

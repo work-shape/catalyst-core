@@ -1,11 +1,14 @@
-import { ASSET_NAME_REFUSAL_REASONS, ASSET_SYNC_CHANGE_TYPES } from "@work-shape/catalyst-asset-schemas";
+import {
+  ASSET_NAME_REFUSAL_REASONS,
+  ASSET_SYNC_CHANGE_TYPES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import {
   agentAvailabilitySchema,
   configAssetConfigSchema,
-  unavailableToolSchema,
+  unavailableModelSchema,
   unavailableSkillSchema,
-  unavailableModelSchema
+  unavailableToolSchema
 } from "./configuration";
 import { timestampSchema } from "./shared";
 

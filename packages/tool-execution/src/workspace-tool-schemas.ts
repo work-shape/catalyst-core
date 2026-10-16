@@ -1,6 +1,10 @@
-import { ARTIFACT_PREVIEW_STATUSES, SUPPORTED_IMAGE_MIME_TYPES, WORKSPACE_COMMAND_STATUSES } from "@work-shape/catalyst-core";
-import { z } from "zod";
 import type { JsonObject } from "@work-shape/catalyst-core";
+import {
+  ARTIFACT_PREVIEW_STATUSES,
+  SUPPORTED_IMAGE_MIME_TYPES,
+  WORKSPACE_COMMAND_STATUSES
+} from "@work-shape/catalyst-core";
+import { z } from "zod";
 
 export interface WorkspaceCommandServiceLimits {
   defaultTimeoutSeconds: number;

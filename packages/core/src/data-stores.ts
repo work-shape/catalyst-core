@@ -1,12 +1,16 @@
-import { DATA_STORE_INSERT_CONFLICT_MODES, DATA_STORE_LOAD_CONFLICT_MODES, DATA_STORE_SCALAR_TYPES } from "@work-shape/catalyst-asset-schemas";
-import type { OperationScope } from "./identity";
-import { workflowDatasetReferenceSchema } from "./workflows";
+import {
+  DATA_STORE_INSERT_CONFLICT_MODES,
+  DATA_STORE_LOAD_CONFLICT_MODES,
+  DATA_STORE_SCALAR_TYPES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
 import type { DataStoreRecord } from "./data-store-records";
 import { AppError, isAppError, type AppErrorCode } from "./errors";
+import type { OperationScope } from "./identity";
 import type { ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
+import { workflowDatasetReferenceSchema } from "./workflows";
 
 // The names and shapes of a Data Store that more than one package reads: the asset kind,
 // what its operations and jobs are called, and the handle a caller reaches the rows of one

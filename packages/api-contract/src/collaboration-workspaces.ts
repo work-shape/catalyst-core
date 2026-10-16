@@ -1,7 +1,14 @@
-import { COLLABORATION_WORKSPACE_KINDS, DELETION_STATES, WORKSPACE_ACCENT_COLORS, WORKSPACE_ACCESS_STATES, WORKSPACE_MEMBERSHIP_ROLES, WORKSPACE_VISIBILITIES } from "@work-shape/catalyst-asset-schemas";
-import { timestampSchema } from "./shared";
+import {
+  COLLABORATION_WORKSPACE_KINDS,
+  DELETION_STATES,
+  WORKSPACE_ACCENT_COLORS,
+  WORKSPACE_ACCESS_STATES,
+  WORKSPACE_MEMBERSHIP_ROLES,
+  WORKSPACE_VISIBILITIES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { conversationVisibilitySchema } from "./conversations";
+import { timestampSchema } from "./shared";
 
 export const workspaceVisibilitySchema = z.enum(WORKSPACE_VISIBILITIES);
 export const workspaceMembershipRoleSchema = z.enum(WORKSPACE_MEMBERSHIP_ROLES);

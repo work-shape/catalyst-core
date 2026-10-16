@@ -1,17 +1,17 @@
 import { AUDIT_EVENT_STATUSES, AUTH_PRINCIPAL_KINDS } from "@work-shape/catalyst-asset-schemas";
-import type { StorePage } from "./paging";
 import {
   getAuthPrincipal,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
-  type AuthenticatedIdentity,
   type ActingServicePrincipal,
+  type AuthenticatedIdentity,
   type AuthenticatedUser,
   type DelegatedActor,
   type UserRole
 } from "./identity";
 import type { ApiCredentialId, AuditEventId, ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
+import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
 
 export type { AuditEventName } from "./events";

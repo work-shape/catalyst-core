@@ -15,14 +15,14 @@ import {
   type RuntimeAssetSnapshot,
   type SkillConfig
 } from "@work-shape/catalyst-core";
-import type { AgentConfig, ClientInstanceConfig } from "./schemas";
 import { createClientBranding } from "./branding";
-import { getModelSelectionForAgent, resolveModelBinding } from "./selectors";
 import {
   resolveConfigLocale,
   resolveLocalizedString,
   type ConfigLocaleInput
 } from "./localization";
+import type { AgentConfig, ClientInstanceConfig } from "./schemas";
+import { getModelSelectionForAgent, resolveModelBinding } from "./selectors";
 
 /** The tool that saves and creates assets: an agent that lists it builds them. */
 const ASSET_PUT_TOOL = `${SUBJECT_TOOL_PREFIX}put`;

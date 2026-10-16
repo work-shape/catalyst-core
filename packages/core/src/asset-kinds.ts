@@ -1,5 +1,8 @@
-import { ASSET_LIFECYCLES, ASSET_REPRESENTATIONS } from "@work-shape/catalyst-asset-schemas";
-import { isStorableText } from "@work-shape/catalyst-asset-schemas";
+import {
+  ASSET_LIFECYCLES,
+  ASSET_REPRESENTATIONS,
+  isStorableText
+} from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 import type { CollaborationWorkspaceId } from "./ids";
 import type { LocaleCode } from "./localization";

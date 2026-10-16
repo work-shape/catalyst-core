@@ -1,4 +1,3 @@
-import { APP_MODES } from "@work-shape/catalyst-core";
 import { APP_ASSET_KIND, type AppActionPermission } from "@work-shape/catalyst-api-contract";
 import {
   appActionInputAsZod,
@@ -8,6 +7,7 @@ import {
 } from "@work-shape/catalyst-app-build";
 import {
   APP_ACTION_OPERATION_PREFIX,
+  APP_MODES,
   AppError,
   POLICY_VALUES,
   appActionOperationName,
@@ -20,6 +20,7 @@ import {
   type ClientInstanceId,
   type ConfigAssetRecord,
   type ConfigAssetStore,
+  type DataStoreReference,
   type DataToolDescriptor,
   type DataToolSource,
   type Logger,
@@ -29,7 +30,6 @@ import {
   type OperationDefinition,
   type OperationOrigin,
   type OperationRegistry,
-  type DataStoreReference,
   type OperationResource,
   type OperationSource,
   type PolicyDefaults,

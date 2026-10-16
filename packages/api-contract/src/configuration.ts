@@ -1,7 +1,20 @@
-import { AGENT_AVAILABILITY_MODES, AGENT_EDITABLE_FIELDS, CONFIG_ASSET_CHANGE_OPERATIONS, CONFIG_ASSET_KINDS, MODEL_USAGE_TIERS, OPERATION_EFFECTS, PROVIDER_REGIONS, REASONING_EFFORTS, THEME_MODE_PREFERENCES, TOOL_GROUPS, WORKSPACE_SECTIONS, localeCodes } from "@work-shape/catalyst-asset-schemas";
-import { timestampSchema } from "./shared";
+import {
+  AGENT_AVAILABILITY_MODES,
+  AGENT_EDITABLE_FIELDS,
+  CONFIG_ASSET_CHANGE_OPERATIONS,
+  CONFIG_ASSET_KINDS,
+  MODEL_USAGE_TIERS,
+  OPERATION_EFFECTS,
+  PROVIDER_REGIONS,
+  REASONING_EFFORTS,
+  THEME_MODE_PREFERENCES,
+  TOOL_GROUPS,
+  WORKSPACE_SECTIONS,
+  localeCodes
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { auditActorSchema } from "./identity";
+import { timestampSchema } from "./shared";
 
 export const localeCodeSchema = z.enum(localeCodes);
 
@@ -200,9 +213,7 @@ export const safeConfigSchema = z.object({
             /** The system behind the Connection, where it names one. It only picks an icon. */
             service: z.string().optional(),
             connectorType: z.string().optional(),
-            tools: z.array(
-              z.object({ toolName: z.string(), effect: z.enum(OPERATION_EFFECTS) })
-            )
+            tools: z.array(z.object({ toolName: z.string(), effect: z.enum(OPERATION_EFFECTS) }))
           })
         )
         .optional()

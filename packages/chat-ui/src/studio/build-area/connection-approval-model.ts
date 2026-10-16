@@ -1,5 +1,5 @@
 import type { ConnectionDiscoveredTool } from "@work-shape/catalyst-api-client";
-import { readYamlData } from "@work-shape/catalyst-core";
+import { readYamlData, type ConnectionExposure } from "@work-shape/catalyst-core";
 import type { ApprovedOperation } from "./connection-form-model";
 
 // The list a person approves the tools of a Connection in, at once: the tools an MCP server
@@ -7,7 +7,11 @@ import type { ApprovedOperation } from "./connection-form-model";
 // the selection, these functions read and make it.
 
 /** The surfaces the one "may use" row opens the approved tools to. `outside` is set on the page. */
-export const APPROVAL_SURFACES = ["agent", "bridge", "workflow"] as const;
+export const APPROVAL_SURFACES = [
+  "agent",
+  "bridge",
+  "workflow"
+] as const satisfies readonly ConnectionExposure[];
 export type ApprovalSurface = (typeof APPROVAL_SURFACES)[number];
 
 /** Agents may use what is approved, unless the person says otherwise. */

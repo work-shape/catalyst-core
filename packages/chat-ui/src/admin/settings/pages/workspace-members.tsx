@@ -1,6 +1,3 @@
-import { WORKSPACE_MEMBERSHIP_ROLES } from "@work-shape/catalyst-core";
-import { Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import type {
   CollaborationWorkspaceWithRole,
   LocaleCode,
@@ -9,6 +6,7 @@ import type {
   WorkspaceMemberCandidate,
   WorkspaceMembershipRole
 } from "@work-shape/catalyst-api-client";
+import { WORKSPACE_MEMBERSHIP_ROLES } from "@work-shape/catalyst-core";
 import {
   Avatar,
   Banner,
@@ -23,6 +21,8 @@ import {
   Select,
   SkeletonList
 } from "@work-shape/catalyst-ui";
+import { Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useCollaborationWorkspaceMutations } from "../../../shared/api/collaboration-workspace-mutations";
 import {
   useCollaborationWorkspaceAccessRequestsQuery,

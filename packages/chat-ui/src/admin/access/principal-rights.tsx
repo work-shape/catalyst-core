@@ -1,7 +1,5 @@
-import { USER_STATUSES } from "@work-shape/catalyst-core";
-import { Box, Plus } from "lucide-react";
-import { useId, useState, type FormEvent } from "react";
 import type { AssetSummary } from "@work-shape/catalyst-api-client";
+import { USER_STATUSES } from "@work-shape/catalyst-core";
 import {
   Badge,
   Banner,
@@ -22,6 +20,15 @@ import {
   Section,
   SkeletonList
 } from "@work-shape/catalyst-ui";
+import { Box, Plus } from "lucide-react";
+import { useId, useState, type FormEvent } from "react";
+import {
+  useTranslation,
+  type TranslationContextValue,
+  type TranslationKey
+} from "../../shared/i18n";
+import { formatDate } from "../../shared/locale-format";
+import { assetKindLabelKey } from "./grant-words";
 import {
   grantableResources,
   principalGrantFailure,
@@ -29,14 +36,7 @@ import {
   type PrincipalGrantKind,
   type PrincipalGrantView
 } from "./principal-grants-model";
-import { assetKindLabelKey } from "./grant-words";
 import { actionLabel, rightVerb, verbKeys } from "./right-words";
-import {
-  useTranslation,
-  type TranslationContextValue,
-  type TranslationKey
-} from "../../shared/i18n";
-import { formatDate } from "../../shared/locale-format";
 
 type Translate = TranslationContextValue["t"];
 

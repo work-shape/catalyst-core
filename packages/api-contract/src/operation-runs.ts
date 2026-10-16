@@ -1,4 +1,11 @@
-import { OPERATION_EFFECTS, OPERATION_RUN_DECISION_MODES, OPERATION_RUN_DECISION_REASONS, OPERATION_RUN_STATUSES, OPERATION_TARGETS, PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-asset-schemas";
+import {
+  OPERATION_EFFECTS,
+  OPERATION_RUN_DECISION_MODES,
+  OPERATION_RUN_DECISION_REASONS,
+  OPERATION_RUN_STATUSES,
+  OPERATION_TARGETS,
+  PRINCIPAL_HOLDER_KINDS
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { timestampSchema } from "./shared";
 
@@ -103,9 +110,7 @@ export const operationRunSchema = z.object({
        * `approved_by_caller`: a guardrail asked for an approval and the caller holds the right
        * that decides it, so their own call was the approval; `by` is caller and approver.
        */
-      reason: z
-        .enum(OPERATION_RUN_DECISION_REASONS)
-        .optional(),
+      reason: z.enum(OPERATION_RUN_DECISION_REASONS).optional(),
       by: z.string(),
       /** The name of who decided, where the decision was another person's. */
       byLabel: z.string().optional(),

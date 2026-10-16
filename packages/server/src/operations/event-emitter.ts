@@ -1,5 +1,5 @@
-import { AUDIT_EVENT_STATUSES } from "@work-shape/catalyst-core";
 import {
+  AUDIT_EVENT_STATUSES,
   EVENTS,
   PLATFORM_EVENT_ALLOW,
   auditActorFromIdentity,

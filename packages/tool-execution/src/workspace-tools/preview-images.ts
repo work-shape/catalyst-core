@@ -1,10 +1,7 @@
-import { SUPPORTED_IMAGE_MIME_TYPES } from "@work-shape/catalyst-core";
-import { createHash } from "node:crypto";
-import { posix as path } from "node:path";
-import type { z } from "zod";
 import {
   type ManagedArtifactId,
   type ManagedArtifactRecord,
+  SUPPORTED_IMAGE_MIME_TYPES,
   type SupportedImageMimeType,
   type ToolExecutionContext,
   type ToolHandlerResult,
@@ -13,13 +10,16 @@ import {
   readObjectBytes
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import { createHash } from "node:crypto";
+import { posix as path } from "node:path";
+import type { z } from "zod";
 import { resolveWorkspacePreviewImages } from "../workspace-preview-images";
+import { failed, normalizeWorkspaceFilePath } from "../workspace-tool-results";
 import {
   workspacePreviewImagesInputJsonSchema,
   workspacePreviewImagesInputSchema,
   workspacePreviewImagesOutputSchema
 } from "../workspace-tool-schemas";
-import { failed, normalizeWorkspaceFilePath } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
 import { resolveWorkspaceHandle } from "./workspace";
 

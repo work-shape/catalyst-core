@@ -1,9 +1,10 @@
-import { WORKFLOW_RUN_MODES, WORKFLOW_TRIGGER_KINDS } from "@work-shape/catalyst-core";
 import type { Asset } from "@work-shape/catalyst-api-client";
-import { WORKFLOW_ACTIONS } from "@work-shape/catalyst-core";
 import {
   CONNECTION_OPERATION_PREFIX,
   DATA_STORE_OPERATION_PREFIX,
+  WORKFLOW_ACTIONS,
+  WORKFLOW_RUN_MODES,
+  WORKFLOW_TRIGGER_KINDS,
   type WorkflowBlockStepRunView,
   type WorkflowLoopCounts,
   type WorkflowRunLineage,
@@ -13,20 +14,20 @@ import {
   type WorkflowStepRunPlacement,
   type WorkflowStepRunStatus
 } from "@work-shape/catalyst-core";
+import { NO_START_FORM, nameFromId, startFormOf, type StartForm } from "./start-form";
 import type {
   WorkflowBranchView,
   WorkflowFailureReason,
   WorkflowListItem,
   WorkflowOutputPreview,
   WorkflowRunView,
+  WorkflowStartIssue,
   WorkflowStepKind,
   WorkflowStepRunView,
   WorkflowStepSource,
   WorkflowStepView,
-  WorkflowStartIssue,
   WorkflowView
 } from "./workflow-views";
-import { NO_START_FORM, nameFromId, startFormOf, type StartForm } from "./start-form";
 
 // The mapping from what the instance answers to what a screen shows. A change of the contract
 // is made here and in the source that calls it, and in no screen.

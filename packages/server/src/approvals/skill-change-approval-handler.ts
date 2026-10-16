@@ -1,8 +1,19 @@
-import { CONFIG_ASSET_KINDS, SKILL_CHANGE_TYPES } from "@work-shape/catalyst-core";
-import { z } from "zod";
+import {
+  agentConfigSchema,
+  applySkillChange,
+  assertSkillChangeScope,
+  createSkillChangePreview,
+  guardrailFieldOf,
+  guardrailStringsOf,
+  skillChangeOperationsSchema,
+  skillConfigSchema,
+  skillNameSchema
+} from "@work-shape/catalyst-config-schema";
 import {
   AppError,
+  CONFIG_ASSET_KINDS,
   INSTANCE_ASSET_SCOPE,
+  SKILL_CHANGE_TYPES,
   auditActorFromUser,
   isJsonObject,
   unknownToJsonValue,
@@ -15,17 +26,7 @@ import {
   type ConfigAssetRevisionRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
-import {
-  agentConfigSchema,
-  applySkillChange,
-  assertSkillChangeScope,
-  createSkillChangePreview,
-  guardrailFieldOf,
-  guardrailStringsOf,
-  skillChangeOperationsSchema,
-  skillConfigSchema,
-  skillNameSchema
-} from "@work-shape/catalyst-config-schema";
+import { z } from "zod";
 import {
   applyValidatedConfigAssetMutations,
   type ConfigAssetWriterOptions

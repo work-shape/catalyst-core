@@ -1,7 +1,8 @@
-import { AUTH_PRINCIPAL_KINDS, OPERATION_EFFECTS, OPERATION_ORIGIN_KINDS } from "@work-shape/catalyst-core";
-import { z } from "zod";
 import {
+  AUTH_PRINCIPAL_KINDS,
   AppError,
+  OPERATION_EFFECTS,
+  OPERATION_ORIGIN_KINDS,
   approvalExecutionOf,
   asUserId,
   isAppError,
@@ -37,8 +38,9 @@ import {
   type RunOperationDeps,
   type WaitingOperationCall
 } from "@work-shape/catalyst-tool-execution";
-import { HELD_ASSET_OPERATION, type HeldAssetPreviewer } from "./held-asset-preview";
+import { z } from "zod";
 import { executeApprovedOperationCallJob } from "../jobs/job-kinds";
+import { HELD_ASSET_OPERATION, type HeldAssetPreviewer } from "./held-asset-preview";
 import type { HeldCallApprovalKind } from "./held-call-kind";
 import { PUBLISH_APPROVAL_KINDS } from "./publish-approval";
 

@@ -1,4 +1,6 @@
 import {
+  createModelUsageWindowBounds,
+  isBilledAsFast,
   MODEL_CALL_RESERVED_OUTPUT_TOKENS,
   ModelNotPricedError,
   ModelUsageLimitReachedError,
@@ -13,6 +15,7 @@ import {
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventRecordInput,
+  type ModelUsageEventStatus,
   type ModelUsageEventStore,
   type ModelUsageRecorder,
   type ModelUsageRefusal,
@@ -24,9 +27,7 @@ import {
   type UsageCostRecord,
   type UsageRateCardConfig,
   type UsageRateCardTokenRatesConfig,
-  type UsageSafeguardsConfig,
-  createModelUsageWindowBounds,
-  isBilledAsFast
+  type UsageSafeguardsConfig
 } from "@work-shape/catalyst-core";
 import { calculateUsageCost, normalizeCount, priceTokens, totalComponents } from "./cost";
 
@@ -216,7 +217,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       clientInstanceId: admitted.clientInstanceId,
       id: admitted.id,
       // Recovery may have taken a call that ran very long as abandoned. It ends all the same.
-      from: ["pending", "abandoned"],
+      from: ["pending", "abandoned"] satisfies ModelUsageEventStatus[],
       status: usage ? "settled" : "failed",
       settlement,
       counted: usage ? countedOf(settlement, admitted.reserved) : NOTHING_COUNTED

@@ -1,4 +1,9 @@
-import { COLLABORATION_WORKSPACE_KINDS, WORKSPACE_ACCENT_COLORS, WORKSPACE_MEMBERSHIP_ROLES, WORKSPACE_VISIBILITIES } from "@work-shape/catalyst-asset-schemas";
+import {
+  COLLABORATION_WORKSPACE_KINDS,
+  WORKSPACE_ACCENT_COLORS,
+  WORKSPACE_MEMBERSHIP_ROLES,
+  WORKSPACE_VISIBILITIES
+} from "@work-shape/catalyst-asset-schemas";
 import type { ConversationVisibility } from "./conversation";
 import { AppError } from "./errors";
 import type {

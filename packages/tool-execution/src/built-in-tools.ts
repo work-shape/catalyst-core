@@ -1,12 +1,11 @@
-import { TOOL_DISPLAY_MODES } from "@work-shape/catalyst-core";
-import { z } from "zod";
-import { createPlatformId } from "@work-shape/catalyst-core";
+import { createPlatformId, TOOL_DISPLAY_MODES } from "@work-shape/catalyst-core";
 import {
   defineTool,
   toolSuccess,
   type AnyToolDefinition,
   type ToolAssemblyDefinition
 } from "@work-shape/catalyst-tool-sdk";
+import { z } from "zod";
 import { createPageSaveTool, type PageSaveToolOptions } from "./page-save-tool";
 
 /** The part of the instance's `views` config the tool tells the agent about. */

@@ -1,5 +1,3 @@
-import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
-import { useState } from "react";
 import type {
   AdministeredUser,
   ConfigAssetSummary,
@@ -7,6 +5,7 @@ import type {
   NamespaceWithUsage,
   PermissionGrantRow
 } from "@work-shape/catalyst-api-client";
+import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import {
   Badge,
   Banner,
@@ -26,13 +25,14 @@ import {
   TableHeader,
   TableRow
 } from "@work-shape/catalyst-ui";
+import { useState } from "react";
 import { DocsReference } from "../../shared/docs-links";
-import { modelDisplayLabel } from "../../shared/model-label";
 import {
   useTranslation,
   type TranslationContextValue,
   type TranslationKey
 } from "../../shared/i18n";
+import { modelDisplayLabel } from "../../shared/model-label";
 import {
   assetNameValid,
   checkAsset,

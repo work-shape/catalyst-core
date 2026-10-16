@@ -1,35 +1,35 @@
-import { WORKSPACE_SECTIONS } from "@work-shape/catalyst-core";
-import { paginate, pageScope } from "../http/paging";
 import { DEFAULT_LIST_LIMIT, apiOperations } from "@work-shape/catalyst-api-contract";
 import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
-import { agentConnections } from "../connections/agent-connections";
-import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
-import { accessResource } from "../assets/asset-access";
-import { listedTo } from "../assets/asset-read-service";
 import {
   AppError,
+  WORKSPACE_SECTIONS,
   asCollaborationWorkspaceId,
   asUserId,
-  type CollaborationWorkspaceId,
   getSubjectUserId,
   hasAuthScope,
   isAuthenticatedServicePrincipal,
   type ActorAccess,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
+  type CollaborationWorkspaceId,
   type OperationExecutionContext,
   type OperationResource
 } from "@work-shape/catalyst-core";
+import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
+import { accessResource } from "../assets/asset-access";
+import { listedTo } from "../assets/asset-read-service";
+import { agentConnections } from "../connections/agent-connections";
+import { pageScope, paginate } from "../http/paging";
+import type { Route } from "../http/route";
+import type { ChatServerOptions } from "../types";
 import {
   CollaborationWorkspaceWorkflow,
   type WorkspaceChangeCall
 } from "../workspaces/collaboration-workspace-service";
-import type { Route } from "../http/route";
-import { deletionState } from "./deletion-answer";
-import { requirePathParam, resolveRequestLocale } from "./request-context";
-import type { ChatServerOptions } from "../types";
 import { requireWorkspaceAccess } from "../workspaces/workspace-access";
 import { findWorkspaceFiles } from "../workspaces/workspace-files";
+import { deletionState } from "./deletion-answer";
+import { requirePathParam, resolveRequestLocale } from "./request-context";
 
 /** The agent kind and the right that writes one, as the kind registers them. */
 const AGENT_KIND = "agent";

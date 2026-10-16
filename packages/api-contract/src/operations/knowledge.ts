@@ -1,4 +1,7 @@
-import { DATA_STORE_SCALAR_TYPES, KNOWLEDGE_BASE_STATUSES } from "@work-shape/catalyst-asset-schemas";
+import {
+  DATA_STORE_SCALAR_TYPES,
+  KNOWLEDGE_BASE_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { defineRegisteredOperation, json } from "./define-operation";
 

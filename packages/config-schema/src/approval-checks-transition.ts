@@ -1,11 +1,11 @@
 import { APPROVAL_CHECK_FAILURE_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
-import { z } from "zod";
 import {
   AppError,
   GUARDRAIL_NAME_MAX_LENGTH,
   GUARDRAIL_NAME_PATTERN,
   GUARDRAIL_NAME_RULE
 } from "@work-shape/catalyst-core";
+import { z } from "zod";
 import { invalidConfigError } from "./config-errors";
 import type { ReleaseGuardrailConfig } from "./guardrail-schema";
 

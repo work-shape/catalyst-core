@@ -1,14 +1,17 @@
-import { ACCESS_SOURCES, GRANT_EFFECTS, GRANT_HOLDER_KINDS, GRANT_SCOPE_KINDS, PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
+  ACCESS_SOURCES,
   ACTIONS,
+  SERVICE_PRINCIPAL_PERMISSIONS as CONTRACT_SERVICE_PRINCIPAL_PERMISSIONS,
+  GRANT_EFFECTS,
+  GRANT_HOLDER_KINDS,
+  GRANT_SCOPE_KINDS,
   NAMESPACE_PREFIX_MAX_LENGTH,
   NAMESPACE_PREFIX_MIN_LENGTH,
   NAMESPACE_PREFIX_PATTERN,
+  PRINCIPAL_HOLDER_KINDS,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
-import { operationDenialError } from "./operation-denial";
-import { personalApiKeyCovers, personalApiKeyNamesAction } from "./personal-api-keys";
 import {
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
@@ -16,7 +19,9 @@ import {
   type AuthenticatedUser
 } from "./identity";
 import type { ClientInstanceId, UserId } from "./ids";
+import { operationDenialError } from "./operation-denial";
 import type { StorePage } from "./paging";
+import { personalApiKeyCovers, personalApiKeyNamesAction } from "./personal-api-keys";
 import type { RightsLock } from "./rights-lock";
 import type { ISODateString } from "./time";
 
@@ -33,6 +38,9 @@ export const PERMISSIONS = [
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
+
+export const SERVICE_PRINCIPAL_PERMISSIONS =
+  CONTRACT_SERVICE_PRINCIPAL_PERMISSIONS satisfies readonly Permission[];
 
 export { ACTIONS, type PlatformAction };
 

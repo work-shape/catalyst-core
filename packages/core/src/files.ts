@@ -1,4 +1,15 @@
-import { ARTIFACT_PREVIEW_IMAGE_FORMATS, ARTIFACT_PREVIEW_IMAGE_MIME_TYPES, ARTIFACT_PREVIEW_STATUSES, CONVERSATION_ATTACHMENT_STATUSES, SUPPORTED_IMAGE_MIME_TYPES, TOOL_DISPLAY_MODES } from "@work-shape/catalyst-asset-schemas";
+import {
+  ARTIFACT_PREVIEW_IMAGE_FORMATS,
+  ARTIFACT_PREVIEW_IMAGE_MIME_TYPES,
+  ARTIFACT_PREVIEW_STATUSES,
+  CONVERSATION_ATTACHMENT_STATUSES,
+  SUPPORTED_IMAGE_MIME_TYPES,
+  TOOL_DISPLAY_MODES
+} from "@work-shape/catalyst-asset-schemas";
+import type {
+  ArtifactPreviewImagePageRef,
+  ArtifactPreviewModelImageInput
+} from "./artifact-preview-pages";
 import type {
   ClientInstanceId,
   CollaborationWorkspaceId,
@@ -9,10 +20,6 @@ import type {
   MessageId,
   UserId
 } from "./ids";
-import type {
-  ArtifactPreviewImagePageRef,
-  ArtifactPreviewModelImageInput
-} from "./artifact-preview-pages";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 
@@ -226,8 +233,7 @@ export function isImageFileFormat(
   return format === "png" || format === "jpeg" || format === "webp" || format === "gif";
 }
 
-export type ConversationAttachmentStatus =
-  (typeof CONVERSATION_ATTACHMENT_STATUSES)[number];
+export type ConversationAttachmentStatus = (typeof CONVERSATION_ATTACHMENT_STATUSES)[number];
 
 export interface AttachmentWarning {
   code: string;

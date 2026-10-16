@@ -1,4 +1,10 @@
-import { OPERATION_RUN_DECISION_MODES, OPERATION_RUN_DECISION_REASONS, OPERATION_RUN_STATUSES, OPERATION_TARGETS, PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-asset-schemas";
+import {
+  OPERATION_RUN_DECISION_MODES,
+  OPERATION_RUN_DECISION_REASONS,
+  OPERATION_RUN_STATUSES,
+  OPERATION_TARGETS,
+  PRINCIPAL_HOLDER_KINDS
+} from "@work-shape/catalyst-asset-schemas";
 import type { DelegatedActor } from "./identity";
 import type {
   ClientInstanceId,
@@ -44,8 +50,7 @@ export interface OperationRunActor {
  * a guardrail asked for an approval and the caller holds the right that decides it, so their
  * own call was the approval (`approval` of the operation's definition).
  */
-export type OperationRunDecisionReason =
-  (typeof OPERATION_RUN_DECISION_REASONS)[number];
+export type OperationRunDecisionReason = (typeof OPERATION_RUN_DECISION_REASONS)[number];
 
 export interface OperationRunDecision {
   /**

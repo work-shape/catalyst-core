@@ -1,10 +1,10 @@
-import { APP_MODES } from "@work-shape/catalyst-core";
 import {
   ApiError,
   type AssetSummary,
   type CollaborationWorkspaceAgents,
   type PlatformContext
 } from "@work-shape/catalyst-api-client";
+import { APP_MODES } from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../../shared/i18n";
 
 /** The four rights of an App, by the names the instance decides them under. */

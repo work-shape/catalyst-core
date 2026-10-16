@@ -1,9 +1,8 @@
-import { POLICY_VALUES } from "@work-shape/catalyst-asset-schemas";
 import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
+  POLICY_VALUES,
   type OperationEffect
 } from "@work-shape/catalyst-asset-schemas";
-import type { OperationDenial } from "./operation-denial";
 import type { ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { ActingServicePrincipal, AuthenticatedIdentity, RuntimeCallContext } from "./identity";
 import type {
@@ -13,6 +12,7 @@ import type {
   OperationRunId,
   ToolCallId
 } from "./ids";
+import type { OperationDenial } from "./operation-denial";
 import type { StructuredResultPublication } from "./structured-result";
 import type { ISODateString } from "./time";
 import type { ToolExecutionRequest, ToolExecutionResult } from "./tool-execution";

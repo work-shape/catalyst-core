@@ -1,6 +1,6 @@
+import type { ClientInstanceId, FileSetId, ServedFileSetAsset } from "@work-shape/catalyst-core";
 import { APP_MODES } from "@work-shape/catalyst-core";
 import { createHash, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
-import type { ClientInstanceId, FileSetId, ServedFileSetAsset } from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 // Serving a Page: the files of one file set, to the frame that shows it and to nobody else.

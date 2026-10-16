@@ -1,8 +1,8 @@
-import { SUPPORTED_IMAGE_MIME_TYPES } from "@work-shape/catalyst-core";
 import type { ArtifactPreviewResponse } from "@work-shape/catalyst-api-client";
 import {
   ARTIFACT_PREVIEW_MAX_PAGES,
-  resolveFilePreviewCapability
+  resolveFilePreviewCapability,
+  SUPPORTED_IMAGE_MIME_TYPES
 } from "@work-shape/catalyst-core";
 import { resolveFileType, type FileType } from "../files/file-type";
 

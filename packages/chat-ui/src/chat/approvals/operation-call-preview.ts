@@ -1,4 +1,10 @@
-import { APPROVAL_EXECUTIONS, OPERATION_EFFECTS, OPERATION_ORIGIN_KINDS, PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-core";
+import {
+  APPROVAL_EXECUTIONS,
+  OPERATION_EFFECTS,
+  OPERATION_ORIGIN_KINDS,
+  PRINCIPAL_HOLDER_KINDS,
+  type PolicySource
+} from "@work-shape/catalyst-core";
 const originKinds = OPERATION_ORIGIN_KINDS;
 
 type OperationCallOriginKind = (typeof originKinds)[number];
@@ -14,8 +20,7 @@ interface OperationCallInput {
 }
 
 /** What became of a call once its request was decided or ended. */
-export type OperationCallOutcome =
-  (typeof APPROVAL_EXECUTIONS)[number];
+export type OperationCallOutcome = (typeof APPROVAL_EXECUTIONS)[number];
 
 const outcomes: readonly OperationCallOutcome[] = [...APPROVAL_EXECUTIONS];
 
@@ -99,7 +104,11 @@ export interface PublishReview {
 }
 
 /** The values of `heldBy` that are a standing rule of the instance, not one finding. */
-const standingRules = ["instance_default", "declared_default", "central_setting"];
+const standingRules: readonly string[] = [
+  "instance_default",
+  "declared_default",
+  "central_setting"
+] as const satisfies readonly PolicySource[];
 
 export interface OperationCallPreview {
   runId: string;

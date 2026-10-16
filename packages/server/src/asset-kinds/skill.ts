@@ -1,4 +1,3 @@
-import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import {
   SKILL_NAME_PATTERN,
   SKILL_NAME_RULE,
@@ -6,8 +5,9 @@ import {
   skillPortabilityIssues,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
-import { AppError, defineAssetKind } from "@work-shape/catalyst-core";
+import { ASSET_OWNER_KINDS, AppError, defineAssetKind } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import { readDefinitionField, readDefinitionName, type WorkflowAssetKind } from "./shared";
 import {
   SKILL_MANIFEST_FILE,
   readSkillFiles,
@@ -18,7 +18,6 @@ import {
   withCarriedSkillParts,
   withSkillFileIndex
 } from "./skill-files";
-import { readDefinitionField, readDefinitionName, type WorkflowAssetKind } from "./shared";
 
 /**
  * The refusal of every write to a skill that ships with the platform: a release replaces it,

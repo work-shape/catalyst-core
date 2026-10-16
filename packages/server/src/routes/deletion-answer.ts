@@ -1,6 +1,6 @@
 import { DELETION_STATES } from "@work-shape/catalyst-core";
-import { DEFERRED } from "../http/route";
 import type { DeletionOutcome } from "../deletion/subject-deletion";
+import { DEFERRED } from "../http/route";
 
 /** The answer of a delete operation: its result, or `202` when the deletion's job took over. */
 export function deletionAnswer<Result>(outcome: DeletionOutcome<Result>): Result | typeof DEFERRED {

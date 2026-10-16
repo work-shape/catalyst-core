@@ -1,7 +1,7 @@
-import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import {
   APP_ACTION_NAME_PATTERN,
   DATA_STORE_SCALAR_TYPES,
+  OPERATION_EFFECTS,
   readYamlData,
   type JsonObject,
   type JsonValue

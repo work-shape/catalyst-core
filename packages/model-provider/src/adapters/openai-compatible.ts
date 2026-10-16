@@ -1,12 +1,12 @@
-import { MODEL_PROVIDER_AUTH_MODES } from "@work-shape/catalyst-core";
-import { z } from "zod";
 import {
+  MODEL_PROVIDER_AUTH_MODES,
   defineProvider,
   providerCheckResultOfStatus,
   secretRef,
   type ProviderCheckContext,
   type ProviderCheckResult
 } from "@work-shape/catalyst-core";
+import { z } from "zod";
 import {
   OpenAiCompatibleChatProvider,
   openAiCompatibleCapabilities

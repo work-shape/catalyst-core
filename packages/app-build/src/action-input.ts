@@ -1,7 +1,8 @@
-import { DATA_STORE_INSERT_CONFLICT_MODES, OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import {
   APP_ACTION_NAME_PATTERN,
+  DATA_STORE_INSERT_CONFLICT_MODES,
   DATA_STORE_SCALAR_TYPES,
+  OPERATION_EFFECTS,
   type DataStoreParameter,
   type DataStoreReference,
   type JsonObject,

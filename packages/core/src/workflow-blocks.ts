@@ -1,4 +1,3 @@
-import { WORKFLOW_RESERVED_STEP_TYPES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import type { JsonValue } from "./json";
 import { WORKFLOW_ERROR_CODES, WORKFLOW_STEP_TYPES, type WorkflowStep } from "./workflows";

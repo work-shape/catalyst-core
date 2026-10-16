@@ -1,5 +1,4 @@
 import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
-import type { ReactNode } from "react";
 import {
   Badge,
   Checkbox,
@@ -8,6 +7,7 @@ import {
   DisclosureContent,
   DisclosureTrigger
 } from "@work-shape/catalyst-ui";
+import type { ReactNode } from "react";
 import { useTranslation } from "../../shared/i18n";
 
 // What every source of tools in an agent's Tools section is built from: a folding sub-group

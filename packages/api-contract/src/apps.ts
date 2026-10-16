@@ -1,4 +1,8 @@
-import { APP_ACTION_CALL_STATUSES, APP_MODES, OPERATION_EFFECTS } from "@work-shape/catalyst-asset-schemas";
+import {
+  APP_ACTION_CALL_STATUSES,
+  APP_MODES,
+  OPERATION_EFFECTS
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { appActionPermissionSchema } from "./app-bridge";
 import { operationTargetSchema } from "./operation-runs";

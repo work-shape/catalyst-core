@@ -1,6 +1,9 @@
-import { AGENT_EDITABLE_FIELDS, MODEL_PROVIDER_AUTH_MODES, MODEL_USAGE_TIERS, OPENAI_COMPATIBLE_APIS } from "@work-shape/catalyst-asset-schemas";
 import {
+  AGENT_EDITABLE_FIELDS,
   AGENT_STARTERS_MAX,
+  MODEL_PROVIDER_AUTH_MODES,
+  MODEL_USAGE_TIERS,
+  OPENAI_COMPATIBLE_APIS,
   REASONING_EFFORTS,
   SKILL_ORIGINS,
   SKILL_RESOURCE_MEDIA_TYPES,
@@ -13,9 +16,9 @@ import {
   type ReasoningEffortConfig,
   type SkillConfig,
   type SkillOrigin,
-  type SkillStarterConfig,
   type SkillResourceConfig,
-  type SkillResourceMediaType
+  type SkillResourceMediaType,
+  type SkillStarterConfig
 } from "@work-shape/catalyst-asset-schemas";
 import type { LocalizationConfig, LocalizedStringConfig } from "./localization";
 import type { ProviderRegion } from "./providers";
@@ -238,9 +241,9 @@ export {
   type ReasoningEffortConfig,
   type SkillConfig,
   type SkillOrigin,
-  type SkillStarterConfig,
   type SkillResourceConfig,
-  type SkillResourceMediaType
+  type SkillResourceMediaType,
+  type SkillStarterConfig
 };
 
 export type { LocalizationConfig, LocalizedStringConfig };

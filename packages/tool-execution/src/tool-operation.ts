@@ -1,15 +1,15 @@
-import { OPERATION_DENIAL_REASONS, OPERATION_EFFECTS } from "@work-shape/catalyst-core";
-import { ZodError, z } from "zod";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  KNOWLEDGE_OPERATION_PREFIX,
+  KNOWLEDGE_QUERY_TOOL_NAME,
+  OPERATION_DENIAL_REASONS,
+  OPERATION_EFFECTS,
   PERMISSION_REF_ACTION_PREFIX,
   answerAsTool,
   isAppError,
   isAuthenticatedServicePrincipal,
   isDataToolName,
-  KNOWLEDGE_OPERATION_PREFIX,
-  KNOWLEDGE_QUERY_TOOL_NAME,
   knowledgeToolCall,
   operationCallFromToolRequest,
   operationDenialError,
@@ -34,6 +34,7 @@ import {
   type ToolPermissionMode
 } from "@work-shape/catalyst-core";
 import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import { ZodError, z } from "zod";
 import type { OperationOutcome, RunOperationDeps } from "./operation-execution";
 import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";

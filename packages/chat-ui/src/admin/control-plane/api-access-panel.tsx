@@ -1,6 +1,3 @@
-import { SERVICE_PRINCIPAL_STATUSES } from "@work-shape/catalyst-core";
-import { KeyRound, Pencil, Plus, ShieldCheck } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import type {
   ApiCredential,
   ApiCredentialScope,
@@ -12,6 +9,7 @@ import type {
   ServicePrincipalPermission,
   UpdateServicePrincipalRequest
 } from "@work-shape/catalyst-api-client";
+import { SERVICE_PRINCIPAL_STATUSES } from "@work-shape/catalyst-core";
 import {
   Badge,
   Banner,
@@ -35,6 +33,9 @@ import {
   TableRow,
   Textarea
 } from "@work-shape/catalyst-ui";
+import { KeyRound, Pencil, Plus, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useTranslation } from "../../shared/i18n";
 import {
   constrainCredentialScopes,
   copyStateFor,
@@ -44,12 +45,11 @@ import {
   optionalTrimmedValue,
   PERMISSION_WORDS,
   SCOPE_LABELS,
-  SERVICE_PRINCIPAL_PERMISSION_OPTIONS,
   scopesAllowedByPermissions,
+  SERVICE_PRINCIPAL_PERMISSION_OPTIONS,
   type RecordedSecretCopy
 } from "./api-access-model";
 import { copySecretField, SecretFields, type RevealedSecret } from "./api-access-secret-fields";
-import { useTranslation } from "../../shared/i18n";
 
 /** What the reader may change on the page; the instance decides each call itself. */
 interface ApiAccessRights {
@@ -511,7 +511,9 @@ function PrincipalForm({
   const { t } = useTranslation();
   const [name, setName] = useState(principal?.displayLabel ?? "");
   const [description, setDescription] = useState(principal?.description ?? "");
-  const [status, setStatus] = useState<(typeof SERVICE_PRINCIPAL_STATUSES)[number]>(principal?.status ?? "active");
+  const [status, setStatus] = useState<(typeof SERVICE_PRINCIPAL_STATUSES)[number]>(
+    principal?.status ?? "active"
+  );
   const [permissions, setPermissions] = useState<ServicePrincipalPermission[]>(
     principal?.permissions ?? DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS
   );
@@ -537,7 +539,9 @@ function PrincipalForm({
       <Field label={t("apiAccessStatus")}>
         <Select
           value={status}
-          onChange={(event) => setStatus(event.target.value as (typeof SERVICE_PRINCIPAL_STATUSES)[number])}
+          onChange={(event) =>
+            setStatus(event.target.value as (typeof SERVICE_PRINCIPAL_STATUSES)[number])
+          }
         >
           <option value="active">{t("apiAccessActive")}</option>
           <option value="disabled">{t("apiAccessDisabled")}</option>

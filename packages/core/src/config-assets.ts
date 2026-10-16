@@ -1,9 +1,12 @@
-import { AGENT_AVAILABILITY_MODES, ASSET_REPO_BUNDLE_KINDS, CONFIG_ASSET_CHANGE_OPERATIONS } from "@work-shape/catalyst-asset-schemas";
+import {
+  AGENT_AVAILABILITY_MODES,
+  ASSET_REPO_BUNDLE_KINDS,
+  CONFIG_ASSET_CHANGE_OPERATIONS
+} from "@work-shape/catalyst-asset-schemas";
 import type { AssetScope } from "./asset-kinds";
-import type { StorePage } from "./paging";
 import type { AuditActor } from "./audit";
-import type { AgentConfig, SkillConfig } from "./config";
 import type { CollaborationWorkspaceKind } from "./collaboration-workspace";
+import type { AgentConfig, SkillConfig } from "./config";
 import type {
   ClientInstanceId,
   CollaborationWorkspaceId,
@@ -12,6 +15,7 @@ import type {
 } from "./ids";
 import type { JsonObject } from "./json";
 import { assetObjectPrefix, type FileSetId } from "./pages";
+import type { StorePage } from "./paging";
 
 /**
  * The id of a registered asset kind, such as `agent`. The registry of the instance says which

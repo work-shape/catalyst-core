@@ -1,22 +1,22 @@
-import { CONNECTION_NETWORKS } from "@work-shape/catalyst-core";
-import { BlockList, isIP } from "node:net";
 import {
   AppError,
+  CONNECTION_NETWORKS,
   EGRESS_DENIED,
   EGRESS_PROTOCOLS,
   EGRESS_UNRESOLVED,
   egressSettingFor,
+  normalizeEgressHost,
   type EgressChecker,
   type EgressGrant,
   type EgressProtocol,
-  type EgressTarget,
-  normalizeEgressHost
+  type EgressTarget
 } from "@work-shape/catalyst-core";
 import {
   embeddedIpv4AddressesOf,
   isBlockedIpAddress,
   nodeWebFetchAddressResolver
 } from "@work-shape/catalyst-web-access";
+import { BlockList, isIP } from "node:net";
 
 // The one egress checker. Every connection a Connection opens passes `check` first, whatever
 // its Connector type. The list is the operator's and is deny by default.

@@ -1,9 +1,10 @@
-import { ATTACHMENT_CREATE_OUTCOMES } from "@work-shape/catalyst-core";
-import { createHash } from "node:crypto";
 import {
   AppError,
+  ATTACHMENT_CREATE_OUTCOMES,
   defineJobHandler,
   defineJobKind,
+  isAppError,
+  readObjectBytes,
   type AttachmentManifest,
   type ClientInstanceId,
   type ConversationAttachment,
@@ -25,31 +26,23 @@ import {
   type ModelSystemPurpose,
   type ModuleDefinition,
   type ModuleSnapshot,
+  type ObjectStorage,
   type PlatformFileStore,
   type ProviderRegion,
   type RegisteredJobHandler,
   type RegisteredProviderDefinition,
   type RetriedJob,
   type SecretResolver,
-  type ShippedSkill,
-  isAppError,
-  readObjectBytes,
-  type ObjectStorage
+  type ShippedSkill
 } from "@work-shape/catalyst-core";
 import type {
   DataSourceDescribeInput,
   DataSourceDescribeResult,
   DataSourceQueryInput,
   DataSourceQueryResult,
-  DataSourceRegistry,
-  DataSourceRegistration
+  DataSourceRegistration,
+  DataSourceRegistry
 } from "@work-shape/catalyst-postgres-connector";
-import {
-  defineTool,
-  defineConfiguredTool,
-  toolFailed,
-  toolSuccess
-} from "@work-shape/catalyst-tool-sdk";
 import type {
   AnyConfiguredToolDefinition,
   AnyToolDefinition,
@@ -57,24 +50,36 @@ import type {
   ToolAssemblyDefinition,
   ToolDefinition
 } from "@work-shape/catalyst-tool-sdk";
+import {
+  defineConfiguredTool,
+  defineTool,
+  toolFailed,
+  toolSuccess
+} from "@work-shape/catalyst-tool-sdk";
+import { createHash } from "node:crypto";
 
+export { defineConfiguredTool, defineTool, toolFailed, toolSuccess };
 export type {
   DataSourceDescribeInput,
   DataSourceDescribeResult,
   DataSourceQueryInput,
   DataSourceQueryResult,
-  DataSourceRegistry,
-  DataSourceRegistration
+  DataSourceRegistration,
+  DataSourceRegistry
 };
-export { defineTool, defineConfiguredTool, toolFailed, toolSuccess };
 // A capability declares its job kinds with `defineJobKind`, enqueues through `jobs` on its
 // context and serves them from its own worker process with `defineJobHandler`.
 export { defineJobHandler, defineJobKind };
-export type { Job, JobControl, JobHandler, JobKind, RegisteredJobHandler, RetriedJob };
 export type {
   AnyConfiguredToolDefinition,
   AnyToolDefinition,
   ConfiguredToolDefinition,
+  Job,
+  JobControl,
+  JobHandler,
+  JobKind,
+  RegisteredJobHandler,
+  RetriedJob,
   ToolAssemblyDefinition,
   ToolDefinition
 };

@@ -16,8 +16,7 @@ export type OperationDenial =
        * one a person calls (`auth: "user"`), and the caller is a service principal, whatever
        * right it holds.
        */
-      reason:
-        (typeof OPERATION_DENIAL_REASONS)[number];
+      reason: (typeof OPERATION_DENIAL_REASONS)[number];
       /**
        * What the refusal says, where a rule refused that no right a caller can be granted
        * opens. Without it the refusal names the missing right.

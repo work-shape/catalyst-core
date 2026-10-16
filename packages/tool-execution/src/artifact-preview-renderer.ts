@@ -1,4 +1,3 @@
-import { ARTIFACT_PREVIEW_IMAGE_MIME_TYPES } from "@work-shape/catalyst-core";
 import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
@@ -8,6 +7,8 @@ import type {
   ArtifactPreviewImageFormat,
   ArtifactPreviewSourceKind
 } from "@work-shape/catalyst-core";
+import { ARTIFACT_PREVIEW_IMAGE_MIME_TYPES } from "@work-shape/catalyst-core";
+import { previewFailure } from "./artifact-preview-failures";
 import {
   boundedPdfPageResolution,
   convertOfficeDocument,
@@ -18,7 +19,6 @@ import {
   NativeProcessError,
   renderPdfPage
 } from "./native-document";
-import { previewFailure } from "./artifact-preview-failures";
 import {
   formatSpreadsheetRangeSelector,
   parseSpreadsheetRangeSelector,

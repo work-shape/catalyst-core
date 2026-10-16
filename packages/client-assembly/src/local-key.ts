@@ -1,7 +1,3 @@
-import { API_CREDENTIAL_SCOPES, SERVICE_PRINCIPAL_PERMISSIONS } from "@work-shape/catalyst-core";
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { parseArgs } from "node:util";
 import {
   completedOutput,
   createApiClient,
@@ -10,7 +6,15 @@ import {
   type ApiClientOptions
 } from "@work-shape/catalyst-api-client";
 import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
-import { createEnvironmentSecretResolver, resolveOptionalSecret } from "@work-shape/catalyst-core";
+import {
+  API_CREDENTIAL_SCOPES,
+  createEnvironmentSecretResolver,
+  resolveOptionalSecret,
+  SERVICE_PRINCIPAL_PERMISSIONS
+} from "@work-shape/catalyst-core";
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 
 /** The variable the `catalyst` command line tool reads its key from. */

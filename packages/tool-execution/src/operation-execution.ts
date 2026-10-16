@@ -1,15 +1,15 @@
-import { OPERATION_DENIAL_REASONS } from "@work-shape/catalyst-core";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  OPERATION_DENIAL_REASONS,
   PLATFORM_EVENT_ALLOW,
+  connectionCallReasonOf,
+  dataStoreRefusalOf,
   isAppError,
   isAuthenticatedServicePrincipal,
   isToolOperationAnswer,
   moduleOffError,
   operationDenialError,
-  connectionCallReasonOf,
-  dataStoreRefusalOf,
   toErrorEnvelope,
   unknownToJsonValue,
   type AccessDecision,
@@ -19,6 +19,7 @@ import {
   type CentralPolicySetting,
   type ClientInstanceId,
   type CollaborationWorkspaceId,
+  type ConversationId,
   type JsonObject,
   type JsonValue,
   type LiveOnceSwitchStore,
@@ -47,8 +48,7 @@ import {
   type PlatformEventName,
   type PolicyDefaults,
   type PolicySource,
-  type ToolExecutionResult,
-  type ConversationId
+  type ToolExecutionResult
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { failureLogFields } from "./tool-failure-log";

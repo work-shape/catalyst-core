@@ -1,5 +1,8 @@
-import { DATA_STORE_INSERT_CONFLICT_MODES, OPERATION_EFFECTS } from "@work-shape/catalyst-core";
-import { DATA_STORE_SCALAR_TYPES } from "@work-shape/catalyst-core";
+import {
+  DATA_STORE_INSERT_CONFLICT_MODES,
+  DATA_STORE_SCALAR_TYPES,
+  OPERATION_EFFECTS
+} from "@work-shape/catalyst-core";
 import { APP_ACTION_MAX_PARAMETERS, type SqlActionParameter } from "./action-input";
 
 // The statement of an `sql` action: one file `actions/<name>.sql`. Its first lines are the

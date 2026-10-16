@@ -1,4 +1,7 @@
 import { TOOL_GROUPS } from "@work-shape/catalyst-asset-schemas";
+import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
+import type { OperationBeforeEvent } from "./guardrail-events";
+import type { RuntimeCallContext } from "./identity";
 import type {
   AgentRunId,
   CollaborationWorkspaceId,
@@ -6,11 +9,8 @@ import type {
   OperationRunId,
   ToolCallId
 } from "./ids";
-import type { OperationBeforeEvent } from "./guardrail-events";
 import type { JsonObject, JsonValue } from "./json";
-import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { StructuredResultPublication } from "./structured-result";
-import type { RuntimeCallContext } from "./identity";
 
 export type ToolPermissionMode = "allow" | "deny" | "approval_required";
 

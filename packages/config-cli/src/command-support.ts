@@ -1,17 +1,17 @@
-import { CONFIG_ASSET_KINDS } from "@work-shape/catalyst-asset-schemas";
-import { credentialOrigin, readStoredCredential } from "./credentials";
-import { readConfigCliEnv, type ConfigCliEnv } from "./env";
-import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { BODY_TOO_LARGE_REASON, UNKNOWN_OPERATION_REASON } from "@work-shape/catalyst-api-contract";
 import {
+  CONFIG_ASSET_KINDS,
   agentConfigSchema,
   skillConfigSchema,
   type AgentConfig,
   type SkillConfig
 } from "@work-shape/catalyst-asset-schemas";
-import { BODY_TOO_LARGE_REASON, UNKNOWN_OPERATION_REASON } from "@work-shape/catalyst-api-contract";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { ConfigApiError, createConfigApi, type ConfigApi } from "./api";
+import { credentialOrigin, readStoredCredential } from "./credentials";
+import { readConfigCliEnv, type ConfigCliEnv } from "./env";
 import {
   GUARDRAIL_CHECK_FILE,
   GUARDRAIL_FILE,
@@ -31,9 +31,9 @@ import {
   WorkingCopyValidationError,
   readManifest,
   readManifestIfPresent,
-  resolveInstance,
   readStateFile,
   readWorkingCopy,
+  resolveInstance,
   writeStateFile,
   type DeletedAssetBaseline,
   type InstanceBaseline,

@@ -1,5 +1,6 @@
-import { WORKSPACE_ACCESS_STATES, WORKSPACE_MEMBERSHIP_ROLES } from "@work-shape/catalyst-core";
 import {
+  WORKSPACE_ACCESS_STATES,
+  WORKSPACE_MEMBERSHIP_ROLES,
   type ActorAccess,
   type AuditRecorder,
   type AuthenticatedUser,

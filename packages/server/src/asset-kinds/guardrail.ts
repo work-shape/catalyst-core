@@ -1,6 +1,6 @@
-import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import { guardrailConfigSchema, guardrailNameSchema } from "@work-shape/catalyst-config-schema";
 import {
+  ASSET_OWNER_KINDS,
   AppError,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_OPERATION_PREFIX,

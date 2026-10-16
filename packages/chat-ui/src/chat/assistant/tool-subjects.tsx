@@ -1,6 +1,6 @@
+import type { SafeConfig } from "@work-shape/catalyst-api-client";
 import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import type { SafeConfig } from "@work-shape/catalyst-api-client";
 import {
   connectionCategory,
   connectionNameOfTool,

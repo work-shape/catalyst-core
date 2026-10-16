@@ -1,6 +1,6 @@
-import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import {
   AppError,
+  ASSET_OWNER_KINDS,
   defineAssetKind,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,

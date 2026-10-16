@@ -1,13 +1,17 @@
-import { DATABASE_RELATION_TYPES } from "@work-shape/catalyst-core";
-import postgres from "postgres";
-import { z } from "zod";
 import type {
   DataSourceConfig,
   PostgresDataSourceConfig,
   SecretResolver
 } from "@work-shape/catalyst-core";
-import { AppError, isSecretName, SecretNotResolvedError } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  DATABASE_RELATION_TYPES,
+  isSecretName,
+  SecretNotResolvedError
+} from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import postgres from "postgres";
+import { z } from "zod";
 
 export interface DataSourceRegistration {
   name: string;

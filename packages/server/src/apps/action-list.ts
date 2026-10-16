@@ -1,4 +1,3 @@
-import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import {
   APP_ASSET_KIND,
   type AppAction,
@@ -17,6 +16,7 @@ import {
   CONNECTION_ASSET_KIND,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
+  OPERATION_EFFECTS,
   appActionOperationName,
   connectionOperationName,
   draftCallTarget,

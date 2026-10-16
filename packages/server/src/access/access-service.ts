@@ -1,35 +1,36 @@
-import { PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-core";
 import {
   AppError,
-  userInDeletionError,
   asUserId,
   auditActorFromUser,
-  requireAuthScope,
   isAuthenticatedServicePrincipal,
   isGrantableAction,
   isGrantableAt,
   isPlatformAction,
   isPrincipalGrantableAction,
-  moduleOffError,
   isSuperadmin,
   listAccessEntries,
+  moduleOffError,
+  PRINCIPAL_HOLDER_KINDS,
+  requireAuthScope,
+  userInDeletionError,
   type AccessEntry,
   type AccessHolder,
   type ActorAccess,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
-  type OperationAuthorization,
-  type OperationExecutionContext,
   type GrantScopeAsset,
   type HeldRight,
   type JsonObject,
   type Namespace,
   type NamespaceUsage,
+  type OperationAuthorization,
+  type OperationExecutionContext,
   type PermissionGrant,
   type ServicePrincipalRecord,
   type StorePage,
   type UserRecord
 } from "@work-shape/catalyst-core";
+import type { ChatServerOptions } from "../types";
 import { SERVICE_PRINCIPALS_ACTION } from "./api-access-administration-service";
 import {
   authorizePrincipalHolderWrite,
@@ -41,15 +42,14 @@ import {
   seesPrincipals
 } from "./grant-holder-rules";
 import { authorizeHeldRightsWithin } from "./held-rights-within";
+import { namespaceLists, type NamespaceListsCommand } from "./namespace-lists";
 import { rightAtScope, scopeAssets } from "./person-rights";
 import {
   assetRight,
   authorizeGivingToPrincipal,
   type PrincipalRightsOptions
 } from "./principal-rights";
-import { namespaceLists, type NamespaceListsCommand } from "./namespace-lists";
 import { withRightsHeld } from "./rights-held";
-import type { ChatServerOptions } from "../types";
 
 type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
 /**

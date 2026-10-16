@@ -1,8 +1,7 @@
-import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
-import { createHash } from "node:crypto";
 import {
   CONNECTION_OPERATION_NAME_MAX_LENGTH,
   CONNECTION_OPERATION_NAME_PATTERN,
+  OPERATION_EFFECTS,
   type ConnectionCatalog,
   type ConnectionCatalogEntry,
   type ConnectionOperationConfig,
@@ -13,6 +12,7 @@ import {
   type JsonObject,
   type JsonValue
 } from "@work-shape/catalyst-core";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   compileJsonSchema,

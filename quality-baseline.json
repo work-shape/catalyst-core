@@ -453,14 +453,14 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "packages/api-contract",
-      "count": 69,
+      "count": 68,
       "owner": "NS-RETIRE"
     },
     {
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "packages/asset-schemas",
-      "count": 3,
+      "count": 4,
       "owner": "NS-RETIRE"
     },
     {
@@ -495,7 +495,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "packages/core",
-      "count": 80,
+      "count": 79,
       "owner": "NS-RETIRE"
     },
     {
@@ -532,6 +532,104 @@
       "scope": "tests",
       "count": 865,
       "owner": "NS-RETIRE"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/api-contract",
+      "count": 6,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/chat-ui",
+      "count": 40,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/client-assembly",
+      "count": 1,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/config-cli",
+      "count": 2,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/connections",
+      "count": 3,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/core",
+      "count": 20,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/data-stores",
+      "count": 4,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/model-provider",
+      "count": 2,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/postgres-connector",
+      "count": 5,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/postgres-store",
+      "count": 4,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/server",
+      "count": 16,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/tool-execution",
+      "count": 9,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/usage-governance",
+      "count": 1,
+      "owner": "D5-after-freeze"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/duplicate-literal-list",
+      "scope": "packages/web-access",
+      "count": 3,
+      "owner": "D5-after-freeze"
     }
   ],
   "acceptedRaises": [
@@ -565,10 +663,10 @@
     },
     {
       "key": "lint|catalyst/retired-terms|packages/asset-schemas",
-      "to": 3,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
-      "acceptedBy": "manager (D4′, 2026-10-15)",
-      "date": "2026-10-15"
+      "to": 4,
+      "reason": "D5 moves the existing grant-scope values into asset-schemas without removing the retired namespace value; the former api-contract and core copies are removed.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/server",
@@ -639,6 +737,104 @@
       "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/api-contract",
+      "to": 6,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/chat-ui",
+      "to": 40,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/client-assembly",
+      "to": 1,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/config-cli",
+      "to": 2,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/connections",
+      "to": 3,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/core",
+      "to": 20,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/data-stores",
+      "to": 4,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/model-provider",
+      "to": 2,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/postgres-connector",
+      "to": 5,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/postgres-store",
+      "to": 4,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/server",
+      "to": 16,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/tool-execution",
+      "to": 9,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/usage-governance",
+      "to": 1,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
+    },
+    {
+      "key": "lint|catalyst/duplicate-literal-list|packages/web-access",
+      "to": 3,
+      "reason": "Initial measured duplicate-list ratchet required by freeze D5; preserves disagreements and lists outside its inventory.",
+      "acceptedBy": "manager (freeze D5 spec, 2026-10-15)",
+      "date": "2026-10-16"
     }
   ]
 }
