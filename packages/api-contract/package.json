@@ -27,7 +27,7 @@
     "./openapi.json": "./openapi.json"
   },
   "publishConfig": {
-    "access": "restricted",
+    "access": "public",
     "registry": "https://registry.npmjs.org/",
     "exports": {
       ".": {

@@ -2,6 +2,11 @@
   "name": "@work-shape/catalyst-config-schema",
   "version": "0.7.0",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/work-shape/catalyst-core",
+    "directory": "packages/config-schema"
+  },
   "type": "module",
   "sideEffects": false,
   "engines": {

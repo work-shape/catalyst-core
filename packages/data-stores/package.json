@@ -2,6 +2,11 @@
   "name": "@work-shape/catalyst-data-stores",
   "version": "0.7.0",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/work-shape/catalyst-core",
+    "directory": "packages/data-stores"
+  },
   "type": "module",
   "sideEffects": false,
   "engines": {

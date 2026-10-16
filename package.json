@@ -45,7 +45,11 @@
     "typecheck:tests": "catalyst-quality types:tests",
     "typecheck:docs": "pnpm --filter @work-shape/catalyst-docs typecheck",
     "kit:release": "pnpm --filter @work-shape/catalyst-app-kit release",
-    "check:affected": "node scripts/check-affected.mjs"
+    "check:affected": "node scripts/check-affected.mjs",
+    "release:guard": "node scripts/release/guard.mjs",
+    "release:publish": "node scripts/release/publish.mjs",
+    "test:release": "node --test scripts/release/release.test.mjs",
+    "test:release:mirror": "node --test scripts/release/mirror-proof.test.mjs"
   },
   "devDependencies": {
     "@assistant-ui/react": "^0.14.26",
@@ -74,6 +78,7 @@
     "vite": "^8.0.16",
     "vitest": "^4.1.8",
     "xlsx": "0.18.5",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "yaml": "2.9.1"
   }
 }

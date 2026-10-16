@@ -2,7 +2,7 @@
 // Single source for the publish metadata every platform package shares. Checks that the
 // package manifests match it; `--write` applies it. The registry is one line here; licence
 // and access are set per package group.
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -11,30 +11,23 @@ export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../.."
 // Licence and registry access are set per package group. A package in no group is private
 // product code: no licence, and only people of the organisation may install it.
 const DEFAULT_GROUP = { license: "UNLICENSED", access: "restricted" };
-const PACKAGE_GROUPS = [
-  // The public command line tool. Its tarball is checked by check-public-tarball.mjs.
-  { license: "MIT", access: "public", dirs: ["config-cli"] },
-  // The source the public tool is bundled from. It is MIT with the tool. Publishing these
-  // as packages of their own is a later decision, so the registry access stays restricted.
-  {
-    license: "MIT",
-    access: "restricted",
-    dirs: ["asset-schemas", "api-contract", "api-client"]
-  }
-];
+export const PUBLIC_PACKAGE_DIRS = ["config-cli", "asset-schemas", "api-contract", "api-client"];
 
-/** The licence and the registry access of one package folder. */
-export function packageGroup(dir) {
-  const group = PACKAGE_GROUPS.find(({ dirs }) => dirs.includes(dir)) ?? DEFAULT_GROUP;
-  return { license: group.license, access: group.access };
+export function isCapabilities(root) {
+  return (
+    JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).name ===
+    "vivd-catalyst-capabilities"
+  );
 }
 
-/** The package folders that carry an MIT licence, and so a LICENSE file. */
-export const MIT_PACKAGE_DIRS = PACKAGE_GROUPS.filter(({ license }) => license === "MIT").flatMap(
-  ({ dirs }) => dirs
-);
+/** The licence and the registry access of one package folder. */
+export function packageGroup(dir, root = repoRoot) {
+  return !isCapabilities(root) && PUBLIC_PACKAGE_DIRS.includes(dir)
+    ? { license: "MIT", access: "public" }
+    : DEFAULT_GROUP;
+}
+
 const REGISTRY = "https://registry.npmjs.org/";
-const REPOSITORY_URL = "https://github.com/work-shape/catalyst";
 const NODE_ENGINE = ">=22";
 
 // Packages under packages/ that are not published, with the reason.
@@ -80,13 +73,11 @@ const OVERRIDES = {
     files: ["dist", "migrations", "src/migration-statements.js", "src/migration-statements.d.ts"]
   },
   // Shell scripts, host files and Node checks, shipped as they are: nothing is built.
-  // Deployments use it from the platform checkout until it can be published; deleting
-  // `heldBack` is the whole switch.
+  "artifact-helpers": { files: ["dist", "skills"], sideEffects: undefined },
   "deployment-kit": {
     files: ["bin", "lib", "host", "verify", "dev"],
     sideEffects: undefined,
-    assetsOnly: true,
-    heldBack: true
+    assetsOnly: true
   }
 };
 
@@ -107,20 +98,19 @@ const KEY_ORDER = [
   "publishConfig"
 ];
 
-export function listPackages() {
-  return readdirSync(resolve(repoRoot, "packages"), { withFileTypes: true })
+export function listPackages(root = repoRoot) {
+  return readdirSync(resolve(root, "packages"), { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => {
-      const manifestPath = resolve(repoRoot, "packages", entry.name, "package.json");
+      const manifestPath = resolve(root, "packages", entry.name, "package.json");
       return {
         dir: entry.name,
         root: dirname(manifestPath),
         manifestPath,
         manifest: JSON.parse(readFileSync(manifestPath, "utf8")),
-        publishable: !(entry.name in UNPUBLISHED),
-        group: packageGroup(entry.name),
-        assetsOnly: OVERRIDES[entry.name]?.assetsOnly === true,
-        heldBack: OVERRIDES[entry.name]?.heldBack === true
+        publishable: isCapabilities(root) || !(entry.name in UNPUBLISHED),
+        group: packageGroup(entry.name, root),
+        assetsOnly: OVERRIDES[entry.name]?.assetsOnly === true
       };
     })
     .sort((left, right) => left.dir.localeCompare(right.dir));
@@ -142,29 +132,39 @@ export function publishedExports(exports) {
   );
 }
 
-export function withPublishMetadata(dir, manifest) {
+export function withPublishMetadata(dir, manifest, root = repoRoot) {
   const override = OVERRIDES[dir] ?? {};
-  const group = packageGroup(dir);
+  const group = packageGroup(dir, root);
+  const repository =
+    group.access === "public"
+      ? "catalyst"
+      : isCapabilities(root)
+        ? "catalyst-capabilities"
+        : "catalyst-core";
   const next = {
     ...manifest,
     license: group.license,
-    repository: MIT_PACKAGE_DIRS.includes(dir)
-      ? { type: "git", url: REPOSITORY_URL, directory: `packages/${dir}` }
-      : undefined,
+    repository: {
+      type: "git",
+      url: `https://github.com/work-shape/${repository}`,
+      directory: `packages/${dir}`
+    },
     sideEffects: "sideEffects" in override ? override.sideEffects : false,
     engines: { node: NODE_ENGINE },
-    files: override.files ?? ["dist"],
+    // VP-5 adds the shipped Dockerfile. Include it as soon as it exists, never an empty path.
+    files: [
+      ...(override.files ?? ["dist"]),
+      ...(dir === "deployment-kit" && existsSync(resolve(root, "packages", dir, "docker"))
+        ? ["docker"]
+        : [])
+    ],
     publishConfig: {
       access: group.access,
       registry: REGISTRY,
       exports: publishedExports(manifest.exports)
     }
   };
-  if (override.heldBack) {
-    next.private = true;
-  } else {
-    delete next.private;
-  }
+  delete next.private;
 
   const ordered = {};
   for (const key of [...KEY_ORDER, ...Object.keys(next)]) {
@@ -180,13 +180,13 @@ function serialize(manifest) {
 }
 
 // Returns the directories whose manifest differs from the shared metadata.
-export function findMetadataDrift({ write = false } = {}) {
+export function findMetadataDrift({ write = false, root = repoRoot } = {}) {
   const drifted = [];
-  for (const pkg of listPackages()) {
+  for (const pkg of listPackages(root)) {
     if (!pkg.publishable) {
       continue;
     }
-    const expected = serialize(withPublishMetadata(pkg.dir, pkg.manifest));
+    const expected = serialize(withPublishMetadata(pkg.dir, pkg.manifest, root));
     if (expected === serialize(pkg.manifest)) {
       continue;
     }
@@ -200,7 +200,10 @@ export function findMetadataDrift({ write = false } = {}) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const write = process.argv.includes("--write");
-  const drifted = findMetadataDrift({ write });
+  const rootIndex = process.argv.indexOf("--root");
+  if (rootIndex !== -1 && !process.argv[rootIndex + 1]) throw new Error("--root needs a directory");
+  const root = rootIndex === -1 ? repoRoot : resolve(process.argv[rootIndex + 1]);
+  const drifted = findMetadataDrift({ write, root });
   if (drifted.length === 0) {
     console.log("package-metadata: all publishable manifests match");
   } else if (write) {

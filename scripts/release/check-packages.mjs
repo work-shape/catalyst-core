@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { guard } from "./guard.mjs";
 import { inspectPublicPackage, PUBLIC_TOOL_DIR } from "./check-public-tarball.mjs";
 import { findMetadataDrift, listPackages, repoRoot, UNPUBLISHED } from "./package-metadata.mjs";
 
@@ -36,6 +37,9 @@ const MAX_TARBALL_BYTES = 300_000;
 // components in published packages and the original source during workspace development. It
 // packs to about 540 kB since; its limit went back to 650 kB on 2026-10-15 (Felix approved).
 const MAX_TARBALL_BYTES_BY_DIR = {
+  // First capability publication: 32 standalone helper command bundles plus shipped skills
+  // pack to 5.9 MB (2026-10-16). Keep that existing build shape within a measured budget.
+  "artifact-helpers": 6_500_000,
   "chat-ui": 650_000,
   ui: 500_000,
   // Raised on 2026-10-14 for App Kit 1.4.0 and the guardrail assets of EW-6a. Follow-up
@@ -98,9 +102,7 @@ function inspectTarball(pkg, tarball, lockstepVersion, publishedNames) {
   if (manifestText.includes("workspace:")) {
     report("packed manifest still contains a workspace: specifier");
   }
-  if (Boolean(manifest.private) !== pkg.heldBack) {
-    report(pkg.heldBack ? "held back but not marked private" : "packed manifest is private");
-  }
+  if (manifest.private) report("packed manifest is private");
   if (manifest.version !== lockstepVersion) {
     report(`version ${manifest.version} is not the lockstep version ${lockstepVersion}`);
   }
@@ -173,7 +175,10 @@ function inspectTarball(pkg, tarball, lockstepVersion, publishedNames) {
 function checkConsumer(tarballs, workDir) {
   const consumerDir = join(workDir, "consumer");
   mkdirSync(consumerDir);
-  const names = CONSUMER_SET.map((dir) => tarballs.get(dir).name);
+  const names = [
+    ...CONSUMER_SET.map((dir) => tarballs.get(dir).name),
+    ...[...tarballs.values()].filter((pkg) => pkg.companion).map((pkg) => pkg.name)
+  ];
   const kitName = tarballs.get(DEPLOYMENT_KIT).name;
   const fileSpecifiers = Object.fromEntries(
     [...tarballs.values()].map(({ name, tarball }) => [name, `file:${tarball}`])
@@ -263,11 +268,21 @@ function checkConsumer(tarballs, workDir) {
   console.log("catalyst-deploy bin runs from node_modules/.bin");
 }
 
-const packages = listPackages();
+const rootIndex = process.argv.indexOf("--root");
+const companionRoot = rootIndex === -1 ? undefined : resolve(process.argv[rootIndex + 1]);
+guard([repoRoot, ...(companionRoot ? [companionRoot] : [])]);
+run(process.execPath, ["--test", "scripts/release/release.test.mjs"], { stdio: "inherit" });
+const packages = [
+  ...listPackages(),
+  ...(companionRoot ? listPackages(companionRoot).map((pkg) => ({ ...pkg, companion: true })) : [])
+];
 const publishable = packages.filter((pkg) => pkg.publishable);
 
 step("Package metadata");
-const drifted = findMetadataDrift();
+const drifted = [
+  ...findMetadataDrift(),
+  ...(companionRoot ? findMetadataDrift({ root: companionRoot }) : [])
+];
 if (drifted.length > 0) {
   problems.push(`metadata out of date in ${drifted.join(", ")}; run pnpm release:metadata`);
 }
@@ -286,6 +301,8 @@ if (!skipBuild) {
   run("pnpm", ["-r", "--filter", "./packages/*", ...exclusions, "build"], {
     stdio: ["ignore", "ignore", "inherit"]
   });
+  if (companionRoot)
+    run("pnpm", ["build"], { cwd: companionRoot, stdio: ["ignore", "ignore", "inherit"] });
 }
 
 const workDir = mkdtempSync(join(tmpdir(), "catalyst-release-check-"));
@@ -304,6 +321,7 @@ try {
     const tarball = join(destination, readdirSync(destination)[0]);
     tarballs.set(pkg.dir, {
       tarball,
+      companion: pkg.companion,
       ...inspectTarball(pkg, tarball, lockstepVersion, publishedNames)
     });
   }

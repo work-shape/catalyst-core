@@ -1,0 +1,81 @@
+name: Release packages
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: platform
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tag, branch, versions and green Check
+        id: release
+        working-directory: platform
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release/context.mjs
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          package_json_file: platform/package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: platform/pnpm-lock.yaml
+      - name: npm with trusted publishing support
+        run: npm install --global npm@11.21.1
+      - name: Build, inspect packages and consumer, guard visibility
+        working-directory: platform
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm release:guard
+          pnpm release:check
+          node scripts/release/notes.mjs "$VERSION" > "$RUNNER_TEMP/release-notes.md"
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: work-shape/catalyst
+          ref: main
+          path: public
+          fetch-depth: 0
+          ssh-key: ${{ secrets.PUBLIC_MIRROR_KEY }}
+      - name: Mirror approved public source and tag
+        working-directory: platform
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release/mirror.mjs ../public
+      - name: Wait for all four public packages
+        working-directory: platform
+        run: pnpm release:publish --group public --wait
+      - name: Publish restricted packages and check anonymous 404
+        working-directory: platform
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm release:publish --group restricted
+      - name: GitHub release (rerunnable)
+        working-directory: platform
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            args=()
+            if [[ "$TAG" == *-rc.* ]]; then args+=(--prerelease); fi
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md" "${args[@]}"
+          fi
