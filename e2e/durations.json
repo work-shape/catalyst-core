@@ -56,7 +56,6 @@
     "[chromium] › chat-standalone.spec.ts › a superadmin manages a shared workspace without being a member": 2300,
     "[chromium] › chat-standalone.spec.ts › a surface yields Escape to the layer above it, returns the focus to its opener and takes a covered chat out of reach": 4900,
     "[chromium] › chat-standalone.spec.ts › a tap opens the agent icon's list and chooses from it": 3500,
-    "[chromium] › chat-standalone.spec.ts › active runs block Enter without clearing the draft @chat-state": 5100,
     "[chromium] › chat-standalone.spec.ts › admin sees billed usage and can manage users": 2700,
     "[chromium] › chat-standalone.spec.ts › an agent is chosen with the keyboard alone: arrows, a typed name, Enter and Escape": 2900,
     "[chromium] › chat-standalone.spec.ts › an agent list opened right after a conversation stays open": 3800,

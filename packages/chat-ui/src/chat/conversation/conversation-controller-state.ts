@@ -3,6 +3,7 @@ import type {
   AgentRun,
   AgentRunProjection,
   Conversation,
+  ConversationFollowUp,
   ConversationThreadSnapshot,
   Message,
   RunObservation
@@ -28,6 +29,8 @@ export interface ConversationControllerState {
   connectionStatus: ConversationConnectionStatus;
   conversation?: Conversation;
   messages: Message[];
+  /** The pending follow-up messages, oldest first. */
+  followUps: ConversationFollowUp[];
   completedRunProjections?: Record<string, AgentRunProjection>;
   activeRun?: {
     run: ConversationControllerRunSummary;
@@ -61,7 +64,8 @@ export function createInitialControllerState(): ConversationControllerState {
   return {
     snapshotStatus: "ready",
     connectionStatus: "idle",
-    messages: []
+    messages: [],
+    followUps: []
   };
 }
 
@@ -172,6 +176,7 @@ export function createControllerStateFromSnapshot(
       : "idle",
     conversation: snapshot.conversation,
     messages: snapshot.messages,
+    followUps: sortFollowUps(snapshot.followUps ?? []),
     completedRunProjections: snapshot.completedRunProjections,
     ...(snapshotRun
       ? {
@@ -233,6 +238,7 @@ export function applyRunObservationToControllerState(
       ...state,
       connectionStatus: isTerminalObservation(observation) ? "caught_up" : "connected",
       messages: nextMessages,
+      followUps: applyObservationToFollowUps(state.followUps, observation),
       activeRun: {
         run: nextRun,
         projection,
@@ -319,6 +325,23 @@ function applyObservationToMessages(messages: Message[], observation: RunObserva
     return messages.map((candidate) => (candidate.id === message.id ? message : candidate));
   }
   return [...messages, message];
+}
+
+/** A changed follow-up stays in the list while it is pending and leaves it otherwise. */
+function applyObservationToFollowUps(
+  followUps: ConversationFollowUp[],
+  observation: RunObservation
+): ConversationFollowUp[] {
+  const event = observation.payload;
+  if (event.type !== "follow_up_changed") {
+    return followUps;
+  }
+  const others = followUps.filter((followUp) => followUp.id !== event.followUp.id);
+  return event.followUp.status === "pending" ? sortFollowUps([...others, event.followUp]) : others;
+}
+
+function sortFollowUps(followUps: ConversationFollowUp[]): ConversationFollowUp[] {
+  return [...followUps].sort((left, right) => left.position - right.position);
 }
 
 function applyObservationStatus(

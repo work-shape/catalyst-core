@@ -56,6 +56,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["a reply with remote images, also in a Mermaid diagram, makes no request outside"]
   },
   {
+    name: "planted-send-now-failure",
+    reason:
+      "Chromium's own log line for the Send now request the picture test aborts on purpose, to " +
+      "show the queue's error line.",
+    matches: REQUEST_FAILED,
+    path: /^\/api\/v1\/conversations\/[^/]+\/follow-ups\/dispatch$/u,
+    tests: ["pictures of the queue's passing states"]
+  },
+  {
     name: "signed-out-session",
     reason:
       "Chromium's own log line, written by no script: every page asks who is signed in, and " +

@@ -275,6 +275,25 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The two people of the follow-up queue spec, used by no other spec: one queues messages
+      # in a shared conversation, the other watches them arrive. The labels sort after every
+      # other for the reason given above.
+      - email: e2e-follow-ups@example.test
+        displayLabel: E2E Zz Follow-ups
+        passwordEnvName: E2E_FOLLOW_UPS_PASSWORD
+        developmentPassword: e2e-follow-ups-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
+      - email: e2e-follow-ups-member@example.test
+        displayLabel: E2E Zz Follow-ups Member
+        passwordEnvName: E2E_FOLLOW_UPS_MEMBER_PASSWORD
+        developmentPassword: e2e-follow-ups-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900

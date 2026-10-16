@@ -93,7 +93,6 @@ describe("send block", () => {
   const { t } = createTranslationContext("en");
   const unblocked: Parameters<typeof resolveSendBlock>[0] = {
     sending: false,
-    conversationRunning: false,
     workspaceBlock: undefined,
     snapshotStatus: "ready",
     noAgentsMessage: undefined,
@@ -134,11 +133,6 @@ describe("send block", () => {
       name: "the workspace refuses",
       input: { workspaceBlock: { reason: "Workspaces could not be loaded.", loading: false } },
       expected: { reason: "Workspaces could not be loaded.", loading: false }
-    },
-    {
-      name: "a run is active",
-      input: { conversationRunning: true, snapshotStatus: "loading" },
-      expected: { reason: t("conversationStillRunning"), loading: false }
     },
     {
       name: "no agent is available",
@@ -236,7 +230,6 @@ describe("composer send during a block", () => {
   function threadBlock(snapshotStatus: "loading" | "ready" | "error"): SendBlock | undefined {
     return resolveSendBlock({
       sending: false,
-      conversationRunning: false,
       workspaceBlock: undefined,
       snapshotStatus,
       noAgentsMessage: undefined,

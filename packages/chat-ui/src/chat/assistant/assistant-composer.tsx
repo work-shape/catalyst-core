@@ -1,9 +1,14 @@
-import { ComposerPrimitive, useAuiState, useComposer } from "@assistant-ui/react";
+import {
+  ComposerPrimitive,
+  useAuiState,
+  useComposer,
+  useComposerRuntime
+} from "@assistant-ui/react";
 import { AlertCircle, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment } from "@work-shape/catalyst-api-client";
-import { Button, cn, Spinner } from "@work-shape/catalyst-ui";
+import { Button, ComposerFrame, cn, Spinner } from "@work-shape/catalyst-ui";
 import { scrollEdgeFadeStyle, useScrollEdgeFade } from "@work-shape/catalyst-ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { AttachmentPreview } from "../files/attachment-preview";
@@ -13,8 +18,9 @@ import { ContextIndicator } from "./context-indicator";
 import { useComposerFocusRequest } from "./composer-focus-request";
 import { ModelPicker } from "./model-picker";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
+import { FollowUpQueue, useFollowUpQueue } from "./follow-up-queue";
 import { shouldQueueSend, type SendBlock } from "./send-block";
-import { isComposerBlockedByActiveRun, shouldShowCancelAction } from "./thread-activity";
+import { composerActions } from "./thread-activity";
 
 export interface LocalUploadingAttachment {
   id: string;
@@ -96,6 +102,22 @@ export function AssistantComposer({
   const hasAttachments = attachments.length > 0 || localUploadingAttachments.length > 0;
   const submitBlocked = Boolean(sendBlock);
   const [composerExpanded, setComposerExpanded] = useState(false);
+  const composerRuntime = useComposerRuntime();
+  const followUps = useFollowUpQueue();
+  // While a run goes, a message waits in the conversation's queue and starts as the next turn.
+  const queuesFollowUp = Boolean(conversationRunning && followUps);
+  const queueFollowUp = useCallback(() => {
+    const text = currentText.trim();
+    if (!followUps || followUps.queueing || text.length === 0) {
+      return;
+    }
+    followUps.queue(text, () => {
+      // Text typed while the message went out stays in the field.
+      if (composerRuntime.getState().text === currentText) {
+        composerRuntime.setText("");
+      }
+    });
+  }, [composerRuntime, currentText, followUps]);
   const queueSend = useCallback(() => {
     if (shouldQueueSend({ sendBlock, sendQueued, text: currentText, runtimeReady })) {
       onQueueSend(currentText);
@@ -103,9 +125,12 @@ export function AssistantComposer({
   }, [currentText, onQueueSend, runtimeReady, sendBlock, sendQueued]);
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
-      if (submitBlocked) {
+      if (submitBlocked || queuesFollowUp) {
         event.preventDefault();
         event.stopPropagation();
+        if (!submitBlocked) {
+          queueFollowUp();
+        }
         return;
       }
       if (onSubmitMessage?.(currentText)) {
@@ -113,7 +138,7 @@ export function AssistantComposer({
         event.stopPropagation();
       }
     },
-    [currentText, onSubmitMessage, submitBlocked]
+    [currentText, onSubmitMessage, queueFollowUp, queuesFollowUp, submitBlocked]
   );
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -128,6 +153,11 @@ export function AssistantComposer({
         return;
       }
 
+      if (queuesFollowUp && !submitBlocked) {
+        event.preventDefault();
+        queueFollowUp();
+        return;
+      }
       if (submitBlocked || !runtimeReady) {
         event.preventDefault();
         queueSend();
@@ -140,7 +170,15 @@ export function AssistantComposer({
       event.preventDefault();
       onSubmitMessage(currentText);
     },
-    [currentText, onSubmitMessage, queueSend, runtimeReady, submitBlocked]
+    [
+      currentText,
+      onSubmitMessage,
+      queueFollowUp,
+      queueSend,
+      queuesFollowUp,
+      runtimeReady,
+      submitBlocked
+    ]
   );
 
   const inputFade = useScrollEdgeFade<HTMLTextAreaElement>();
@@ -225,6 +263,7 @@ export function AssistantComposer({
 
   return (
     <ComposerPrimitive.Root className="relative grid w-full gap-2" onSubmitCapture={handleSubmit}>
+      <FollowUpQueue />
       <ComposerPrimitive.Attachments>
         {() => <AttachmentPreview removable />}
       </ComposerPrimitive.Attachments>
@@ -237,13 +276,9 @@ export function AssistantComposer({
         />
       ) : null}
       <ComposerPrimitive.AttachmentDropzone disabled asChild>
-        <div
+        <ComposerFrame
           ref={composerShellRef}
-          className={cn(
-            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 rounded-xl border bg-popover p-1.5 shadow-raised transition-colors",
-            // The composer holds the focus most of the time: its line steps up and no ring shows.
-            "focus-within:border-input"
-          )}
+          className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1"
         >
           {attachmentsEnabled ? (
             <>
@@ -329,12 +364,15 @@ export function AssistantComposer({
               conversationRunning={conversationRunning}
               optimisticPending={optimisticPending}
               currentText={currentText}
+              canQueueFollowUp={Boolean(followUps)}
+              queueingFollowUp={followUps?.queueing ?? false}
               onCancelRun={onCancelRun}
+              onQueueFollowUp={queueFollowUp}
               onQueueSend={queueSend}
               onSubmitMessage={onSubmitMessage}
             />
           </div>
-        </div>
+        </ComposerFrame>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   );
@@ -604,7 +642,10 @@ function ComposerAction({
   conversationRunning,
   optimisticPending,
   currentText,
+  canQueueFollowUp,
+  queueingFollowUp,
   onCancelRun,
+  onQueueFollowUp,
   onQueueSend,
   onSubmitMessage
 }: {
@@ -613,56 +654,86 @@ function ComposerAction({
   conversationRunning?: boolean;
   optimisticPending?: boolean;
   currentText: string;
+  /** A message sent while the run goes waits in the conversation's queue. */
+  canQueueFollowUp: boolean;
+  queueingFollowUp: boolean;
   onCancelRun: () => void;
+  onQueueFollowUp: () => void;
   onQueueSend: () => void;
   onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
   const threadRunning = useAuiState((state) => state.thread.isRunning);
-  const activeRunBlocked = isComposerBlockedByActiveRun({ conversationRunning });
-  const showCancelAction = shouldShowCancelAction({
+  const emptyText = currentText.trim().length === 0;
+  const actions = composerActions({
     conversationRunning,
     optimisticPending,
-    threadRunning
+    threadRunning,
+    canQueue: canQueueFollowUp,
+    hasText: !emptyText
   });
-  const effectiveDisabledReason =
-    sendBlock?.reason ?? (activeRunBlocked ? t("conversationStillRunning") : undefined);
   // During a loading block the control stays usable: a click is remembered like an Enter.
-  const queuesSend = Boolean(sendBlock?.loading) && !activeRunBlocked;
-  const emptyText = currentText.trim().length === 0;
+  const queuesSend = Boolean(sendBlock?.loading);
   const sendDisabled = queuesSend
     ? emptyText
-    : Boolean(sendBlock) || activeRunBlocked || Boolean(onSubmitMessage && emptyText);
+    : Boolean(sendBlock) || Boolean(onSubmitMessage && emptyText);
   const handleSendClick = useCallback(() => {
     onSubmitMessage?.(currentText);
   }, [currentText, onSubmitMessage]);
-  const cancelButton = (
-    <Button
-      type="button"
-      size="icon"
-      className="absolute inset-0 size-9 border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground"
-      aria-label={t("stopGenerating")}
-      onClick={onCancelRun}
-    >
-      <Square size={14} className="fill-current" aria-hidden="true" />
-    </Button>
-  );
+  const stopButton = (placement: "alone" | "beside") => {
+    const button = (
+      <Button
+        type="button"
+        size="icon"
+        variant={placement === "alone" ? "solid" : "secondary"}
+        className={cn("size-9", placement === "alone" && "absolute inset-0")}
+        aria-label={t("stopGenerating")}
+        title={t("stopGenerating")}
+        onClick={onCancelRun}
+      >
+        <Square size={14} className="fill-current" aria-hidden="true" />
+      </Button>
+    );
+    return threadRunning ? (
+      <ComposerPrimitive.Cancel asChild>{button}</ComposerPrimitive.Cancel>
+    ) : (
+      button
+    );
+  };
+
+  if (actions === "stop-and-send") {
+    return (
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        {stopButton("beside")}
+        <Button
+          type="button"
+          size="icon"
+          variant="solid"
+          className="size-9"
+          aria-label={t("followUpSend")}
+          title={sendBlock?.reason ?? t("followUpSend")}
+          disabled={Boolean(sendBlock)}
+          loading={queueingFollowUp}
+          onClick={onQueueFollowUp}
+        >
+          <Send size={17} aria-hidden="true" />
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="relative ml-auto size-9">
-      {showCancelAction ? (
-        threadRunning ? (
-          <ComposerPrimitive.Cancel asChild>{cancelButton}</ComposerPrimitive.Cancel>
-        ) : (
-          cancelButton
-        )
+      {actions === "stop" ? (
+        stopButton("alone")
       ) : queuesSend ? (
         <Button
           type="button"
           size="icon"
-          className="absolute inset-0 size-9 border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground"
+          variant="solid"
+          className="absolute inset-0 size-9"
           aria-label={t("sendMessage")}
-          title={effectiveDisabledReason}
+          title={sendBlock?.reason}
           disabled={sendDisabled}
           loading={sendQueued}
           onClick={onQueueSend}
@@ -673,9 +744,10 @@ function ComposerAction({
         <Button
           type="button"
           size="icon"
-          className="absolute inset-0 size-9 border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground"
+          variant="solid"
+          className="absolute inset-0 size-9"
           aria-label={t("sendMessage")}
-          title={effectiveDisabledReason ?? t("sendMessage")}
+          title={sendBlock?.reason ?? t("sendMessage")}
           disabled={sendDisabled}
           onClick={handleSendClick}
         >
@@ -686,9 +758,10 @@ function ComposerAction({
           <Button
             type="button"
             size="icon"
-            className="absolute inset-0 size-9 border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground"
+            variant="solid"
+            className="absolute inset-0 size-9"
             aria-label={t("sendMessage")}
-            title={effectiveDisabledReason ?? t("sendMessage")}
+            title={sendBlock?.reason ?? t("sendMessage")}
             disabled={sendDisabled}
           >
             <Send size={17} aria-hidden="true" />

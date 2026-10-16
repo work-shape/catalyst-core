@@ -52,6 +52,7 @@ import { useDraftAttachmentController } from "../conversation/draft-attachment-c
 import { clearRunCursors } from "../conversation/run-connection-manager";
 import { useAgentOpens } from "../conversation/use-agent-opens";
 import { useConversationController } from "../conversation/use-conversation-controller";
+import { useFollowUpSource } from "../conversation/use-follow-up-queue";
 import { useChatFileDropzone } from "../files/chat-file-dropzone";
 import { inboxRailEntry } from "../inbox/inbox-model";
 import { useToolDisplayPanel } from "../tools/tool-display-panel";
@@ -230,6 +231,11 @@ export function useWorkspaceChatModel({
     refreshSnapshot: workspaceCache.refreshThreadSnapshot,
     onToolCallCompleted: workspaceCache.invalidateConversationResources,
     onTerminalObservation: workspaceCache.invalidateTerminalRunObservation
+  });
+  const followUpSource = useFollowUpSource({
+    followUps: controller.followUps,
+    currentUserId: meQuery.data?.id,
+    refreshThread: workspaceCache.refreshThreadSnapshot
   });
   const conversationsQuery = railConversations.query;
   const serverConversations = conversationsQuery.data?.conversations ?? NO_CONVERSATIONS;
@@ -900,6 +906,7 @@ export function useWorkspaceChatModel({
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,
       conversationRunning: selectedConversationRunning,
       activeRun: controller.activeRun,
+      followUpSource,
       sendBlock: workspaceSendBlock({
         attachmentBlockedReason: draftAttachmentController.sendBlockedReason,
         selectedConversationId,

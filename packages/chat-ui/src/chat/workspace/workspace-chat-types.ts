@@ -8,6 +8,7 @@ import {
   type SafeConfig,
   type StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
+import type { FollowUpSource } from "../conversation/use-follow-up-queue";
 import type { ThemeInputs } from "@work-shape/catalyst-ui/theme";
 import { type ControlPlaneModel } from "../../admin/control-plane/control-plane-model";
 import { type CollaborationWorkspaceModel } from "../../shared/collaboration-workspace/collaboration-workspace-model";
@@ -250,6 +251,8 @@ export interface SelectedChatModel {
   localUploadingAttachments: LocalUploadingAttachment[];
   conversationRunning: boolean;
   activeRun: ConversationControllerState["activeRun"];
+  /** The open conversation's queue of follow-up messages. */
+  followUpSource: FollowUpSource;
   sendBlock: SendBlock | undefined;
   attachmentsEnabled: boolean;
   attachmentAccept: string;

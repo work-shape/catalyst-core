@@ -1,4 +1,9 @@
 export { Checkbox, type CheckboxProps, type CheckboxState } from "./checkbox";
+export {
+  ComposerFrame,
+  type ComposerFrameProps,
+  type ComposerFrameVariant
+} from "./composer-frame";
 export { Field, type FieldLayout, type FieldProps } from "./field";
 export {
   Input,

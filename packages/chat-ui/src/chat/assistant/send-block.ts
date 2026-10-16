@@ -11,11 +11,13 @@ export interface SendBlock {
   loading: boolean;
 }
 
-/** The one block that applies to the composer, in the order the user should hear about them. */
+/**
+ * The one block that applies to the composer, in the order the user should hear about them. A
+ * run that is going blocks nothing: a message sent meanwhile waits in the follow-up queue.
+ */
 export function resolveSendBlock(input: {
   /** A first message of this pane is on its way to the server. */
   sending: boolean;
-  conversationRunning: boolean;
   workspaceBlock: SendBlock | undefined;
   snapshotStatus: ConversationSnapshotStatus;
   noAgentsMessage: string | undefined;
@@ -30,9 +32,6 @@ export function resolveSendBlock(input: {
   if (input.sending) {
     // Not a loading block: the message is already sent, so waiting would send it again.
     return { reason: input.t("loadingConversation"), loading: false };
-  }
-  if (input.conversationRunning) {
-    return { reason: input.t("conversationStillRunning"), loading: false };
   }
   if (input.workspaceBlock) {
     return input.workspaceBlock;

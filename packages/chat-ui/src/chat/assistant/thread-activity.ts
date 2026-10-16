@@ -69,18 +69,28 @@ export function findRunActivity(
   return lastPart?.type === "reasoning" ? { kind: "reasoning" } : undefined;
 }
 
-export function isComposerBlockedByActiveRun({
-  conversationRunning
-}: Pick<ThreadActivityInput, "conversationRunning">): boolean {
-  return Boolean(conversationRunning);
-}
-
 export function shouldShowCancelAction({
   conversationRunning,
   optimisticPending,
   threadRunning
 }: ThreadActivityInput): boolean {
   return Boolean(conversationRunning || (optimisticPending && threadRunning));
+}
+
+/** The buttons at the composer's end: Send, Stop, or Stop with Send beside it. */
+export type ComposerActions = "send" | "stop" | "stop-and-send";
+
+/**
+ * While a run goes, Send stays beside Stop as soon as there is something to send: the message
+ * then waits in the queue. Without text, or where nothing can queue, Stop stands alone.
+ */
+export function composerActions(
+  input: ThreadActivityInput & { canQueue: boolean; hasText: boolean }
+): ComposerActions {
+  if (!shouldShowCancelAction(input)) {
+    return "send";
+  }
+  return input.canQueue && input.conversationRunning && input.hasText ? "stop-and-send" : "stop";
 }
 
 function isUnfinishedToolCall(part: ThreadActivityPart): boolean {

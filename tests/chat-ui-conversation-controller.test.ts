@@ -8,8 +8,10 @@ import {
   createControllerStateFromSnapshot,
   createInitialControllerState,
   resolveRunConnectionTarget,
-  staleThreadReread
+  staleThreadReread,
+  terminalRunNotice
 } from "./support/chat-ui";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 
 describe("chat UI conversation controller", () => {
   it("shows the preparing tool until the real tool call starts", () => {
@@ -45,6 +47,98 @@ describe("chat UI conversation controller", () => {
     ).state;
 
     expect(state.activeRun?.projection.preparingTool).toBeUndefined();
+  });
+
+  describe("the notice of an ended run, live and after a reload", () => {
+    const en = createTranslationContext("en").t;
+    const de = createTranslationContext("de").t;
+    const interrupted = {
+      en: "The reply was interrupted. Please send your message again.",
+      de: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut."
+    };
+    const stopped = { en: "The reply was stopped.", de: "Die Antwort wurde gestoppt." };
+    /** What the worker stores when a run breaks (`agent-runtime/src/agent-run-worker.ts`). */
+    const workerFailures = [
+      { code: "INTERNAL", message: "Agent run failed", category: "internal_error" },
+      {
+        code: "OBSERVATION_PERSISTENCE_FAILED",
+        message: "Agent run failed",
+        category: "internal_error"
+      },
+      {
+        code: "AGENT_RUN_EXECUTOR_ENDED",
+        message: "Agent run executor ended without a terminal event",
+        category: "internal_error"
+      },
+      {
+        code: "AGENT_RUN_ABORTED",
+        message: "Agent run execution was interrupted",
+        category: "abort_error"
+      }
+    ] as const;
+
+    function notices(state: ReturnType<typeof createInitialControllerState>) {
+      return { en: terminalRunNotice(state.error, en), de: terminalRunNotice(state.error, de) };
+    }
+
+    it("reads a failure as interrupted in the person's language, never as stopped", () => {
+      for (const error of workerFailures) {
+        const live = applyRunObservationToControllerState(
+          createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
+          createObservation({ sequence: 2, type: "run_failed", payload: { error } })
+        ).state;
+        expect(notices(live)).toEqual(interrupted);
+
+        const reloaded = createControllerStateFromSnapshot(
+          createSnapshot({ lastSequence: 2, text: "", runStatus: "failed", error })
+        );
+        expect(notices(reloaded)).toEqual(interrupted);
+      }
+    });
+
+    it("reads a cancellation as stopped, live and after a reload", () => {
+      const live = applyRunObservationToControllerState(
+        createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
+        createObservation({
+          sequence: 2,
+          type: "run_cancelled",
+          payload: { reason: "user_requested" }
+        })
+      ).state;
+      expect(notices(live)).toEqual(stopped);
+
+      const reloaded = createControllerStateFromSnapshot(
+        createSnapshot({ lastSequence: 2, text: "", runStatus: "cancelled" })
+      );
+      expect(notices(reloaded)).toEqual(stopped);
+    });
+  });
+
+  it("keeps the thread's pending follow-ups and applies each change to them in place", () => {
+    const first = createFollowUp({ id: "fu_1", position: 1 });
+    const second = createFollowUp({ id: "fu_2", position: 2 });
+    const state = createControllerStateFromSnapshot({
+      ...createSnapshot({ lastSequence: 2, text: "" }),
+      followUps: [second, first]
+    });
+    expect(state.followUps.map((followUp) => followUp.id)).toEqual(["fu_1", "fu_2"]);
+
+    const third = createFollowUp({ id: "fu_3", position: 3 });
+    const queued = applyRunObservationToControllerState(
+      state,
+      createObservation({ sequence: 3, type: "follow_up_changed", payload: { followUp: third } })
+    ).state;
+    expect(queued.followUps.map((followUp) => followUp.id)).toEqual(["fu_1", "fu_2", "fu_3"]);
+
+    const withdrawn = applyRunObservationToControllerState(
+      queued,
+      createObservation({
+        sequence: 4,
+        type: "follow_up_changed",
+        payload: { followUp: { ...first, status: "cancelled" } }
+      })
+    ).state;
+    expect(withdrawn.followUps.map((followUp) => followUp.id)).toEqual(["fu_2", "fu_3"]);
   });
 
   it("ignores duplicate or already-applied run observations", () => {
@@ -658,7 +752,12 @@ describe("chat UI conversation controller", () => {
     expect(controllerStateForConversation(left, "conv_1")).toBe(left);
 
     const selected = controllerStateForConversation(left, "conv_2");
-    expect(selected).toEqual({ snapshotStatus: "loading", connectionStatus: "idle", messages: [] });
+    expect(selected).toEqual({
+      snapshotStatus: "loading",
+      connectionStatus: "idle",
+      messages: [],
+      followUps: []
+    });
     expect(toUiMessages(selected.messages, selected.activeRun)).toEqual([]);
     // A first conversation, before its thread answers once, is loading as well.
     const first = controllerStateForConversation(createInitialControllerState(), "conv_2", true);
@@ -766,6 +865,28 @@ function createSnapshot({
       updatedAt: "2026-06-26T10:00:00.000Z"
     },
     serverTime: "2026-06-26T10:00:00.000Z"
+  };
+}
+
+function createFollowUp({
+  id,
+  position
+}: {
+  id: string;
+  position: number;
+}): NonNullable<ConversationThreadSnapshot["followUps"]>[number] {
+  return {
+    id,
+    clientInstanceId: "client_1",
+    conversationId: "conv_1",
+    authorUserId: "user_1",
+    text: `Queued ${id}`,
+    mode: "queue",
+    status: "pending",
+    position,
+    agentName: "test_agent",
+    createdAt: "2026-06-26T10:00:00.000Z",
+    updatedAt: "2026-06-26T10:00:00.000Z"
   };
 }
 

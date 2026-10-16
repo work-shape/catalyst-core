@@ -7,8 +7,8 @@ import {
   isRecentlyActiveAssistantRunId,
   rememberRecentlyActiveAssistantRunId,
   ToolActivityLabelsProvider,
+  composerActions,
   findRunActivity,
-  isComposerBlockedByActiveRun,
   isThreadBusy,
   shouldShowCancelAction,
   shouldShowRunActivity
@@ -137,9 +137,22 @@ describe("chat UI thread activity", () => {
     expect(renderActivityStatus({})).toContain(">0s<");
   });
 
-  it("blocks sending whenever the durable conversation run is active", () => {
-    expect(isComposerBlockedByActiveRun({ conversationRunning: true })).toBe(true);
-    expect(isComposerBlockedByActiveRun({ conversationRunning: false })).toBe(false);
+  it("keeps Send beside Stop while a run goes and there is a message to queue", () => {
+    const running = { conversationRunning: true, canQueue: true, hasText: true };
+    expect(composerActions(running)).toBe("stop-and-send");
+    expect(composerActions({ ...running, hasText: false })).toBe("stop");
+    // A thread that cannot queue, such as a first message still starting, only stops.
+    expect(composerActions({ ...running, canQueue: false })).toBe("stop");
+    expect(
+      composerActions({
+        conversationRunning: false,
+        optimisticPending: true,
+        threadRunning: true,
+        canQueue: true,
+        hasText: true
+      })
+    ).toBe("stop");
+    expect(composerActions({ ...running, conversationRunning: false })).toBe("send");
   });
 
   it("shows cancel for durable runs and pending starts, but not stale local state", () => {

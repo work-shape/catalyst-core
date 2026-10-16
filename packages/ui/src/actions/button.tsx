@@ -4,12 +4,14 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "../cn";
 import { Spinner } from "../feedback/spinner";
 
-export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "link";
+export type ButtonVariant =
+  "primary" | "solid" | "secondary" | "outline" | "ghost" | "danger" | "link";
 export type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 // A button is a pill. The filled variants are a surface: a fill, a hairline and the control
 // edge, which a press takes away. Primary and danger are tinted, not solid: a soft fill of
-// their colour, its line and its strong text. Ghost and link stay flat until hovered.
+// their colour, its line and its strong text. Solid is the one full fill, in the text colour, for
+// the action a composer is there for: sending and stopping. Ghost and link stay flat until hovered.
 const buttonVariants = cva(
   "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-transparent text-label whitespace-nowrap transition-[color,background-color,border-color,box-shadow] focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
@@ -17,6 +19,7 @@ const buttonVariants = cva(
       variant: {
         primary:
           "border-primary-border bg-primary-soft text-primary-soft-foreground shadow-control hover:bg-primary/20 active:bg-primary/25 active:shadow-none",
+        solid: "bg-foreground text-background hover:bg-foreground/90 active:bg-foreground",
         secondary:
           "border-input bg-secondary text-secondary-foreground shadow-control hover:bg-state-pressed active:shadow-none",
         outline:

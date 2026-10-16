@@ -1133,57 +1133,6 @@ test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ pa
   await expect(input).toHaveValue("");
 });
 
-test(
-  "active runs block Enter without clearing the draft",
-  { tag: "@chat-state" },
-  async ({ page }) => {
-    await signInViaUi(page, normalUser);
-    // The run has to be going from the first Enter until the test stops it. Its answer is held
-    // back for that time, so the page has no stream to render and the test is as quick on a
-    // slow machine as on a fast one. Without the hold the steps below took about five seconds
-    // on the hosted runner, as long as the run of the 240 words this test used to send, and the
-    // run ended under the click on Stop.
-    const releaseAnswer = await holdAnswer(page);
-    const answeredEventStreams = countResponses(page, "GET", isRunEventsPath);
-    await page.goto("/");
-
-    const input = page.getByPlaceholder("Message");
-    const suffix = Date.now();
-    await input.fill(longRunMessage(`active-run-guard-${suffix}`));
-    await input.press("Enter");
-    await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
-    const stopButton = page.getByRole("button", { name: "Stop generating" });
-    await expect(stopButton).toBeVisible();
-
-    const conversationId = currentConversationId(page);
-    const runPath = `/api/v1/conversations/${conversationId}/runs`;
-    let followUpRunRequests = 0;
-    page.on("request", (request) => {
-      if (request.method() === "POST" && new URL(request.url()).pathname === runPath) {
-        followUpRunRequests += 1;
-      }
-    });
-
-    const followUpDraft = `Keep this draft ${suffix}`;
-    await input.fill(followUpDraft);
-    await input.press("Enter");
-    await page.waitForTimeout(250);
-
-    expect(followUpRunRequests).toBe(0);
-    await expect(input).toHaveValue(followUpDraft);
-    await expect(page.getByText("Conversation already has an active agent run")).toHaveCount(0);
-
-    // Nothing above depended on how fast the page renders an answer: none has reached it. And
-    // the run is still there to stop, so a run that ended early fails here instead of passing.
-    expect(answeredEventStreams()).toBe(0);
-    await expect(stopButton).toBeVisible();
-    await stopButton.click();
-    releaseAnswer();
-    await expect(page.getByRole("button", { name: "Send message" })).toBeVisible();
-    await expect(input).toHaveValue(followUpDraft);
-  }
-);
-
 test("links in user messages keep the bubble foreground contrast", async ({ page }) => {
   await signInViaApi(page, normalUser);
   await page.goto("/");

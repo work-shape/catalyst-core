@@ -96,10 +96,10 @@ const MODEL_NOT_PRICED_CODE = "MODEL_NOT_PRICED";
 
 /**
  * What the person reads above the composer when a run ended as failed or cancelled. The
- * reason of a cancellation and the message of an interruption are written for operators, so
- * the person reads a sentence in their language instead. A model without a price is named
- * with its remedy to someone who sees the usage of the instance; anyone else reads what they
- * can do themselves.
+ * reason of a cancellation and the message of any failure but an application's refusal are
+ * written for operators, so the person reads a sentence in their language instead. A model
+ * without a price is named with its remedy to someone who sees the usage of the instance;
+ * anyone else reads what they can do themselves.
  */
 export function terminalRunNotice(
   error: ConversationControllerState["error"],
@@ -111,7 +111,10 @@ export function terminalRunNotice(
   if (error.code === MODEL_NOT_PRICED_CODE) {
     return t(viewer.seesRateCard ? "runModelNotPricedOperator" : "runModelNotPriced");
   }
-  if (error.category !== "runtime_interrupted") return error.message;
+  // Only a refusal of the application speaks to the person. An internal, aborted or unknown
+  // failure carries the worker's words, such as "Agent run failed": it reads as interrupted.
+  // Only a cancellation says stopped.
+  if (error.category === "app_error") return error.message;
   if (error.code === RUN_NOT_STARTED_CODE) return t("runNotStarted");
   if (error.code === RUN_COMMAND_NOT_TAKEN_CODE) return t("runCommandNotTaken");
   if (error.tool !== undefined && error.code === RUN_TOOL_SILENT_CODE)

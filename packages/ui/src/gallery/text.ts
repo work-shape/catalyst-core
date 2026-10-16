@@ -52,6 +52,10 @@ export interface GalleryText
   publish: string;
   learnMore: string;
   saving: string;
+  send: string;
+  composerMessage: string;
+  composerQueued: string;
+  composerQueuedMessage: string;
   disabled: string;
   settings: string;
   addItem: string;
@@ -277,6 +281,10 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     publish: "Publish",
     learnMore: "Learn more",
     saving: "Saving",
+    send: "Send",
+    composerMessage: "Message",
+    composerQueued: "Queued",
+    composerQueuedMessage: "Also list the open offers.",
     disabled: "Disabled",
     settings: "Settings",
     addItem: "Add",
@@ -537,6 +545,10 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     publish: "Veröffentlichen",
     learnMore: "Mehr erfahren",
     saving: "Wird gespeichert",
+    send: "Senden",
+    composerMessage: "Nachricht",
+    composerQueued: "In der Warteschlange",
+    composerQueuedMessage: "Liste auch die offenen Angebote auf.",
     disabled: "Deaktiviert",
     settings: "Einstellungen",
     addItem: "Hinzufügen",

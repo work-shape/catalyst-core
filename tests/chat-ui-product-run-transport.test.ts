@@ -220,6 +220,72 @@ describe("chat UI product run transport", () => {
     expect(chunks).toEqual([]);
   });
 
+  it("asks an open conversation to queue the message and hands a queued answer on", async () => {
+    const bodies: unknown[] = [];
+    const queued: string[] = [];
+    const submitted: string[] = [];
+    const followUp = {
+      id: "fu_1",
+      clientInstanceId: "client_1",
+      conversationId: "conv_existing",
+      authorUserId: "user_1",
+      text: "Next question",
+      mode: "queue" as const,
+      status: "pending" as const,
+      position: 1,
+      agentName: "agent_a",
+      createdAt: "2026-06-26T10:00:00.000Z",
+      updatedAt: "2026-06-26T10:00:00.000Z"
+    };
+    const client = {
+      conversations: {
+        runs: {
+          async create(): Promise<StartConversationRunResponse> {
+            throw new Error("createRun should not be called");
+          },
+          async start(input: { body: unknown }) {
+            bodies.push(input.body);
+            return { followUp };
+          }
+        }
+      }
+    };
+    const transport = new ProductConversationRunTransport({
+      client,
+      selectedConversationId: "conv_existing",
+      locale: "en",
+      createIdempotencyKey: () => "idem-queued",
+      onMessageSubmitted: (conversationId) => submitted.push(conversationId),
+      onRunStarted: () => {
+        throw new Error("no run started");
+      },
+      onFollowUpQueued: (answer) => queued.push(answer.id)
+    });
+    const message = createUserMessage("user_msg_queued", "Next question");
+
+    const chunks = await drainStream(
+      await transport.sendMessages({
+        trigger: "submit-message",
+        chatId: "chat",
+        messageId: message.id,
+        messages: [message],
+        abortSignal: undefined
+      })
+    );
+
+    expect(bodies).toEqual([
+      {
+        idempotencyKey: "idem-queued",
+        locale: "en",
+        message: { text: "Next question" },
+        followUp: "queue"
+      }
+    ]);
+    expect(submitted).toEqual(["conv_existing"]);
+    expect(queued).toEqual(["fu_1"]);
+    expect(chunks).toEqual([]);
+  });
+
   it("rejects an active-run submission before calling the API", async () => {
     let apiCalls = 0;
     const client = {

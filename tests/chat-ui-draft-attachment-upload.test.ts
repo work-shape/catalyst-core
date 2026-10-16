@@ -227,6 +227,18 @@ describe("the notice of a run that ended as failed or cancelled", () => {
     );
   });
 
+  it("reads an internal, aborted or unknown failure as interrupted, never as stopped or by the worker's words", () => {
+    for (const category of ["internal_error", "abort_error", "unknown_error"]) {
+      const failed = { class: "run_failed" as const, message: "Agent run failed", category };
+      expect(terminalRunNotice(failed, en)).toBe(
+        "The reply was interrupted. Please send your message again."
+      );
+      expect(terminalRunNotice(failed, de)).toBe(
+        "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut."
+      );
+    }
+  });
+
   it("shows the message of any other failure, and nothing for an error that ended no run", () => {
     const failed = { ...interrupted, message: "Budget is used up", category: "app_error" };
 

@@ -58,6 +58,7 @@ function FilePickerSample({ text }: { text: GalleryText }) {
 
 const buttonVariants: readonly ButtonVariant[] = [
   "primary",
+  "solid",
   "secondary",
   "outline",
   "ghost",
@@ -73,6 +74,9 @@ function buttonLabel(variant: ButtonVariant, text: GalleryText): string {
   }
   if (variant === "link") {
     return text.learnMore;
+  }
+  if (variant === "solid") {
+    return text.send;
   }
   return variant === "primary" ? text.save : text.cancel;
 }

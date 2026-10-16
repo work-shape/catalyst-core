@@ -38,6 +38,12 @@
       "@work-shape/catalyst-chat-ui/tool-decision-model": [
         "packages/chat-ui/src/chat/approvals/tool-decision-model.ts"
       ],
+      "@work-shape/catalyst-chat-ui/follow-up-queue": [
+        "packages/chat-ui/src/chat/assistant/follow-up-queue.tsx"
+      ],
+      "@work-shape/catalyst-chat-ui/follow-up-queue-state": [
+        "packages/chat-ui/src/chat/conversation/follow-up-queue-state.ts"
+      ],
       "@work-shape/catalyst-chat-ui/tool-decision-card": [
         "packages/chat-ui/src/chat/approvals/tool-decision-card.tsx"
       ],

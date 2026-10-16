@@ -1,7 +1,8 @@
-import { Search } from "lucide-react";
+import { Search, Send } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { Checkbox } from "../forms/checkbox";
+import { ComposerFrame } from "../forms/composer-frame";
 import { Field } from "../forms/field";
 import { Input, Textarea } from "../forms/input";
 import { NameWithAddress, addressOf, type NameAndAddress } from "../forms/name-with-address";
@@ -243,6 +244,26 @@ export const formsGallery: GalleryGroup = {
           <Textarea aria-label={text.instructions} defaultValue={text.instructionsSample} />
           <Textarea aria-label={text.instructions} variant="code" defaultValue={text.codeSample} />
           <Textarea aria-label={text.instructions} defaultValue={text.invalidValue} invalid />
+        </div>
+      )
+    },
+    {
+      name: "ComposerFrame",
+      components: ["ComposerFrame"],
+      render: (text) => (
+        <div className="grid max-w-md gap-2">
+          <ComposerFrame variant="tray" className="grid gap-1">
+            <span className="px-2 text-label">{text.composerQueued}</span>
+            <span className="px-2 pb-1 text-body text-muted-foreground">
+              {text.composerQueuedMessage}
+            </span>
+          </ComposerFrame>
+          <ComposerFrame className="flex items-end gap-1">
+            <Textarea aria-label={text.composerMessage} className="min-h-9 flex-1" />
+            <Button variant="solid" size="icon" aria-label={text.send}>
+              <Send aria-hidden="true" />
+            </Button>
+          </ComposerFrame>
         </div>
       )
     },

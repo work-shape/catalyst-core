@@ -95,6 +95,12 @@
     "./tool-decision-model": {
       "development": "./src/chat/approvals/tool-decision-model.ts"
     },
+    "./follow-up-queue": {
+      "development": "./src/chat/assistant/follow-up-queue.tsx"
+    },
+    "./follow-up-queue-state": {
+      "development": "./src/chat/conversation/follow-up-queue-state.ts"
+    },
     "./workspace-api-client": {
       "development": "./src/shared/api/workspace-api-client.tsx"
     },

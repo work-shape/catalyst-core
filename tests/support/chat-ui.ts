@@ -122,8 +122,8 @@ export {
   shouldQueueSend
 } from "../../packages/chat-ui/src/chat/assistant/send-block";
 export {
+  composerActions,
   findRunActivity,
-  isComposerBlockedByActiveRun,
   isThreadBusy,
   shouldShowCancelAction,
   shouldShowRunActivity
