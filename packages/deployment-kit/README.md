@@ -130,6 +130,9 @@ notes of `work-shape/catalyst-core` and `work-shape/catalyst-capabilities` after
 version up to `VERSION`, or their addresses where `gh` cannot read them. Run it from the
 deployment repo, for example `pnpm exec catalyst-deploy bump 0.8.0`, review the printed release
 notes, and commit `package.json` and `pnpm-lock.yaml` together. CI installs that lockfile frozen.
+pnpm can drop the integrity of URL tarballs when resolving changed pins. The kit restores
+SheetJS's verified integrity after resolution and refuses unauthenticated URL tarballs; a
+failed integrity check restores the previous manifest and lockfile.
 To return to an earlier package release, bump to its exact version in a new commit; rolling
 back an operated deployment uses the earlier tag's digest manifest.
 

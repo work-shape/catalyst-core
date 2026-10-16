@@ -277,6 +277,22 @@ describe("the commands of a deployment that installs released packages", () => {
     assert.doesNotMatch(result.stdout, /v0\.7\.0|v0\.9\.0/u);
   });
 
+  test("bump preserves SheetJS integrity when a pin change re-resolves an existing lock", () => {
+    const { root } = packageDeployment("bump-sheetjs", pinned("0.7.0"));
+    const [[tarball, integrity]] = KNOWN_INTEGRITY;
+    const lock = (hash) =>
+      `lockfileVersion: '9.0'\npackages:\n  xlsx@${tarball}:\n    resolution: {${hash}tarball: ${tarball}}\n`;
+    writeFileSync(join(root, "pnpm-lock.yaml"), lock(`integrity: ${integrity}, `));
+    // pnpm's URL re-resolution drops the hash even with --lockfile-only.
+    const bin = fakeTools("bump-sheetjs", { published: "all", writesLock: lock("") });
+    const result = deploy(root, ["bump", "0.8.0"], bin);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(readFileSync(join(root, "package.json"), "utf8")), pinned("0.8.0"));
+    const bumpedLock = readFileSync(join(root, "pnpm-lock.yaml"), "utf8");
+    assert.equal(urlTarballs(bumpedLock).get(tarball), integrity);
+    assert.deepEqual(integrityProblems(bumpedLock), []);
+  });
+
   test("bump puts everything back when the new lockfile loses a tarball's integrity", () => {
     const { root } = packageDeployment("bump-integrity", pinned("0.7.0"));
     const tarball = "https://cdn.example.test/xlsx.tgz";

@@ -194,9 +194,15 @@ function checkConsumer(tarballs, workDir) {
         name: "release-check-consumer",
         private: true,
         type: "module",
-        dependencies: Object.fromEntries(
-          [...names, kitName].map((name) => [name, fileSpecifiers[name]])
-        ),
+        dependencies: {
+          ...Object.fromEntries(
+            [...names, kitName, tarballs.get("chat-ui").name, tarballs.get("ui").name].map(
+              (name) => [name, fileSpecifiers[name]]
+            )
+          ),
+          react: "19.2.7",
+          "react-dom": "19.2.7"
+        },
         // Workspace dependencies of the consumer set resolve to the packed tarballs too,
         // so nothing has to exist on a registry yet.
         pnpm: { overrides: fileSpecifiers }
@@ -253,6 +259,13 @@ function checkConsumer(tarballs, workDir) {
     ...inConsumer,
     stdio: ["ignore", "ignore", "inherit"]
   });
+  process.stdout.write(
+    run(
+      "node",
+      [resolve(repoRoot, "scripts/release/check-react-peers.mjs"), consumerDir],
+      inConsumer
+    )
+  );
   process.stdout.write(run("node", ["check.mjs"], inConsumer));
   run("node", [resolve(repoRoot, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.json"], {
     ...inConsumer,

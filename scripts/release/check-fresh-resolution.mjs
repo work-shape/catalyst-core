@@ -68,6 +68,15 @@ export async function checkFreshResolution(
     await step("Fresh install: no core lockfile, workspace links or third-party overrides", () =>
       run("pnpm", ["install", "--ignore-workspace", "--no-frozen-lockfile"], { cwd: consumer })
     );
+    await step("Require one host React for chat-ui and ui", () =>
+      run(
+        process.execPath,
+        [resolve(repoRoot, "scripts/release/check-react-peers.mjs"), consumer],
+        {
+          cwd: consumer
+        }
+      )
+    );
     for (const target of ["server", "ui"]) {
       await step(`Build deployment ${target} from installed release tarballs`, () =>
         run("pnpm", ["run", `build:${target}`], { cwd: consumer })

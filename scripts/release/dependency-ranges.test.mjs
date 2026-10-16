@@ -9,8 +9,6 @@ const exact = new Set([
   "better-auth",
   "zod",
   "drizzle-orm",
-  "react",
-  "react-dom",
   "fastify",
   "@fastify/cors",
   "@fastify/multipart"
@@ -36,6 +34,12 @@ test("published runtime dependencies and peers stay on the tested auth, data, va
     if (manifest.private) continue;
     for (const section of ["dependencies", "peerDependencies"]) {
       for (const [name, range] of Object.entries(manifest[section] ?? {})) {
+        if (["react", "react-dom"].includes(name)) {
+          assert.equal(section, "peerDependencies", `${manifest.name} must use the host React`);
+          assert.equal(range, "^19.2.7");
+          assert.equal(manifest.devDependencies[name], "19.2.7");
+          continue;
+        }
         if (!exact.has(name) && !patch.has(name) && !name.startsWith("@better-auth/")) continue;
         const label = `${manifest.name} ${section}.${name}`;
         const pinned = exact.has(name) || name.startsWith("@better-auth/");

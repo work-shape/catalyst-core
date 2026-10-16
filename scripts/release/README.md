@@ -73,7 +73,7 @@ range test checks their starting versions against core's lock):
 | better-auth                                   | 1.6.22              | 1.7.10 calls Zod APIs absent from core's 4.4.3; its @better-auth/* dependencies are already exact. |
 | zod                                           | 4.4.3 (retained)    | Schema identity and validation must agree across packages and auth.                                |
 | drizzle-orm                                   | 0.45.2              | Pre-1.0 ORM and auth adapter contracts move in patch releases.                                     |
-| react, react-dom (including UI peers)         | 19.2.7              | Renderer and hooks must agree; 19.3.x was not core's tested runtime.                               |
+| react, react-dom                              | ^19.2.7 (peers)     | The host owns the renderer and hooks; UI packages build and test with dev dependencies at 19.2.7.  |
 | fastify                                       | 5.12.7              | Request/auth boundary and emitted server types must match the tested security patch.               |
 | @fastify/cors, @fastify/multipart             | 11.2.0, 9.4.0       | Credentialed origins and upload parsing sit on the HTTP/data boundary.                             |
 | postgres                                      | ~3.4.9              | DB protocol, transactions and value conversion must stay on the tested minor.                      |

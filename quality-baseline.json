@@ -241,20 +241,6 @@
     },
     {
       "target": "lint",
-      "rule": "knip/dependencies",
-      "scope": "clients/chat-standalone",
-      "count": 2,
-      "owner": "CB-8b"
-    },
-    {
-      "target": "lint",
-      "rule": "knip/devDependencies",
-      "scope": "clients/chat-standalone",
-      "count": 2,
-      "owner": "CB-8b"
-    },
-    {
-      "target": "lint",
       "rule": "knip/devDependencies",
       "scope": "packages/docs",
       "count": 1,

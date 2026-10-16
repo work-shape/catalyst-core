@@ -32,7 +32,12 @@ function fixture(t) {
   write("clients/demo/pnpm-lock.yaml", "poison: consumer-lock\n");
   write("clients/demo/package.json", {
     name: "test-consumer",
-    dependencies: { "@work-shape/catalyst-core": "workspace:*", zod: "^4.4.3" },
+    dependencies: {
+      "@work-shape/catalyst-core": "workspace:*",
+      zod: "^4.4.3",
+      react: "^19.2.7",
+      "react-dom": "^19.2.7"
+    },
     scripts: { "build:server": "tsup src/server.ts", "build:ui": "vite build" }
   });
   return root;
@@ -59,6 +64,8 @@ test("packs the local release and installs a lock-free consumer before both depl
         assert.equal(existsSync(join(cwd, "node_modules")), false);
         const manifest = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8"));
         assert.equal(manifest.dependencies.zod, "^4.4.3");
+        assert.equal(manifest.dependencies.react, "^19.2.7");
+        assert.equal(manifest.dependencies["react-dom"], "^19.2.7");
         assert.deepEqual(Object.keys(manifest.pnpm.overrides), ["@work-shape/catalyst-core"]);
         const specifier = manifest.dependencies["@work-shape/catalyst-core"];
         assert.match(specifier, /^file:\.local-packages\/.+\.tgz$/u);
@@ -75,6 +82,10 @@ test("packs the local release and installs a lock-free consumer before both depl
       calls.push(["smoke"]);
     }
   );
+  const peerCheck = calls.splice(1, 1)[0];
+  assert.equal(peerCheck[0], process.execPath);
+  assert.match(peerCheck[1], /check-react-peers\.mjs$/u);
+  assert.equal(peerCheck[2], consumer);
   assert.deepEqual(calls, [
     ["pnpm", "install", "--ignore-workspace", "--no-frozen-lockfile"],
     ["pnpm", "run", "build:server"],
