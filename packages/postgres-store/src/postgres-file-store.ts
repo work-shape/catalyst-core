@@ -1,66 +1,42 @@
 import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  ne,
-  notExists,
-  notInArray,
-  sql as drizzleSql
-} from "drizzle-orm";
-import { type PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import {
   AppError,
   artifactPreviewJobDedupeKey,
-  asConversationAttachmentId,
-  asConversationId,
+  createPlatformId,
   renderArtifactPreviewJob,
-  type SubjectRowClaim,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type ClaimArtifactPreviewJobInput,
   type ClientInstanceId,
   type CollaborationWorkspaceId,
-  type UserId,
   type CompleteClaimedArtifactPreviewJobInput,
   type ConversationAttachment,
   type ConversationAttachmentId,
   type ConversationId,
   type CreateConversationAttachmentInput,
-  type EnqueueArtifactPreviewJobInput,
-  type EnsureManagedArtifactInput,
   type CreateManagedArtifactInput,
   type CreateManagedFileInput,
-  type FailClaimedArtifactPreviewJobInput,
-  type MarkClaimedArtifactPreviewJobUnsupportedInput,
-  type PlatformFileStore,
   type DraftAttachment,
+  type EnqueueArtifactPreviewJobInput,
+  type EnsureManagedArtifactInput,
+  type FailClaimedArtifactPreviewJobInput,
   type ManagedArtifactId,
   type ManagedArtifactKind,
   type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
+  type MarkClaimedArtifactPreviewJobUnsupportedInput,
   type MessageId,
   type OrphanedManagedFile,
+  type PlatformFileStore,
   type RenewClaimedArtifactPreviewJobLeaseInput,
+  type SubjectRowClaim,
   type UpdateConversationAttachmentInput,
-  type WriteArtifactPreviewManifestInput,
-  createPlatformId
+  type UserId,
+  type WriteArtifactPreviewManifestInput
 } from "@work-shape/catalyst-core";
-import {
-  lockActiveConversation,
-  requireActiveConversationLock,
-  touchConversation
-} from "./postgres-conversation-operations";
+import { and, asc, desc, eq, gt, inArray, lt, ne, notExists, notInArray } from "drizzle-orm";
 import { enqueueJob } from "./jobs/store";
-import { conversationsPendingCleanup } from "./postgres-pending-cleanup";
-import { mapConversationAttachment, mapManagedArtifact, mapManagedFile } from "./rows";
 import {
   claimArtifactPreviewJob as claimPostgresArtifactPreviewJob,
   completeClaimedArtifactPreviewJob as completeClaimedPostgresArtifactPreviewJob,
@@ -68,38 +44,46 @@ import {
   failClaimedArtifactPreviewJob as failClaimedPostgresArtifactPreviewJob,
   getArtifactPreviewJob as getPostgresArtifactPreviewJob,
   getArtifactPreviewManifest as getPostgresArtifactPreviewManifest,
-  markClaimedArtifactPreviewJobUnsupported as markClaimedPostgresArtifactPreviewJobUnsupported,
   listArtifactPreviewJobIdsWithoutJob,
-  restoreFailedArtifactPreviewJob,
+  markClaimedArtifactPreviewJobUnsupported as markClaimedPostgresArtifactPreviewJobUnsupported,
   renewClaimedArtifactPreviewJobLease as renewClaimedPostgresArtifactPreviewJobLease,
+  restoreFailedArtifactPreviewJob,
   writeArtifactPreviewManifest as writePostgresArtifactPreviewManifest
 } from "./postgres-artifact-preview-operations";
 import {
-  artifactPreviewJobs,
-  artifactPreviewManifests,
-  conversations,
-  conversationAttachments,
-  managedArtifacts,
-  managedFiles,
-  schema
-} from "./schema";
+  claimConversationAttachmentForPreprocessing,
+  claimReadyDraftAttachmentsForMessage,
+  completeClaimedConversationAttachment,
+  createConversationAttachment,
+  deleteDraftAttachment,
+  failClaimedConversationAttachment,
+  findConversationAttachmentByChecksum,
+  findConversationAttachmentByFile,
+  findReadyConversationAttachmentByFile,
+  getConversationAttachment,
+  listConversationAttachmentsWithoutJob,
+  listDraftAttachments,
+  listSentConversationAttachments,
+  reactivateDraftAttachment,
+  renewClaimedConversationAttachmentLease,
+  updateConversationAttachment
+} from "./postgres-conversation-attachment-operations";
+import {
+  requireActiveConversationLock,
+  touchConversation
+} from "./postgres-conversation-operations";
 import type { PostgresConnection as PostgresStoreConnection } from "./postgres-database";
-
-type PostgresConnection = PostgresJsDatabase<typeof schema>;
-
-function leaseExpiry(leaseMs: number) {
-  return drizzleSql`now() + make_interval(secs => ${leaseMs}::double precision / 1000)`;
-}
-
-interface PostgresPlatformFileStoreCallbacks {
-  /** Tells the job workers of this process that the store enqueued a job. */
-  jobsEnqueued(): void;
-  touchConversation(
-    clientInstanceId: ClientInstanceId,
-    conversationId: ConversationId,
-    updatedAt: Date
-  ): Promise<void>;
-}
+import {
+  type PostgresConnection,
+  type PostgresPlatformFileStoreCallbacks
+} from "./postgres-file-store-types";
+import {
+  listConversationManagedObjectsForDeletion,
+  listConversationsPendingObjectCleanup,
+  markConversationManagedObjectsDeleted
+} from "./postgres-managed-object-cleanup";
+import { mapManagedArtifact, mapManagedFile } from "./rows";
+import { conversationAttachments, conversations, managedArtifacts, managedFiles } from "./schema";
 
 function createPostgresPlatformFileStore(
   db: PostgresConnection,
@@ -496,94 +480,28 @@ class PostgresPlatformFileStore implements PlatformFileStore {
   async createConversationAttachment(
     input: CreateConversationAttachmentInput
   ): Promise<ConversationAttachment> {
-    const row = await this.db.transaction(async (tx) => {
-      // The lock keeps expiry from deciding that the Conversation is an abandoned draft while
-      // this upload is on its way in.
-      if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
-        throw new AppError("NOT_FOUND", "Conversation is not available");
-      }
-      const now = new Date();
-      const [attachment] = await tx
-        .insert(conversationAttachments)
-        .values({
-          id: createPlatformId<"ConversationAttachmentId">("att"),
-          clientInstanceId: input.clientInstanceId,
-          conversationId: input.conversationId,
-          fileId: input.fileId,
-          filename: input.filename,
-          mimeType: input.mimeType ?? null,
-          byteSize: input.byteSize,
-          checksum: input.checksum,
-          status: input.status,
-          format: input.format ?? null,
-          artifactRefs: input.artifactRefs ?? {},
-          processingMetadata: input.processingMetadata ?? {},
-          warnings: input.warnings ?? [],
-          error: input.error ?? null,
-          createdAt: now,
-          updatedAt: now
-        })
-        .returning();
-      await touchConversation(tx, input.clientInstanceId, input.conversationId, now);
-      return attachment;
-    });
-    return mapConversationAttachment(row);
+    return createConversationAttachment(this.db, input);
   }
 
   async getConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     attachmentId: ConversationAttachmentId;
   }): Promise<ConversationAttachment | undefined> {
-    const [row] = await this.db
-      .select()
-      .from(conversationAttachments)
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.id, input.attachmentId),
-          ne(conversationAttachments.status, "deleted")
-        )
-      )
-      .limit(1);
-    return row ? mapConversationAttachment(row) : undefined;
+    return getConversationAttachment(this.db, input);
   }
 
   async listDraftAttachments(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<DraftAttachment[]> {
-    const rows = await this.db
-      .select()
-      .from(conversationAttachments)
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.conversationId, input.conversationId),
-          isNull(conversationAttachments.messageId),
-          ne(conversationAttachments.status, "deleted")
-        )
-      )
-      .orderBy(asc(conversationAttachments.createdAt));
-    return rows.map(mapConversationAttachment) as DraftAttachment[];
+    return listDraftAttachments(this.db, input);
   }
 
   async listSentConversationAttachments(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<ConversationAttachment[]> {
-    const rows = await this.db
-      .select()
-      .from(conversationAttachments)
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.conversationId, input.conversationId),
-          isNotNull(conversationAttachments.messageId),
-          ne(conversationAttachments.status, "deleted")
-        )
-      )
-      .orderBy(desc(conversationAttachments.createdAt));
-    return rows.map(mapConversationAttachment);
+    return listSentConversationAttachments(this.db, input);
   }
 
   async findConversationAttachmentByChecksum(input: {
@@ -591,87 +509,13 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     conversationId: ConversationId;
     checksum: string;
   }): Promise<ConversationAttachment | undefined> {
-    const [row] = await this.db
-      .select()
-      .from(conversationAttachments)
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.conversationId, input.conversationId),
-          eq(conversationAttachments.checksum, input.checksum)
-        )
-      )
-      .orderBy(desc(conversationAttachments.createdAt))
-      .limit(1);
-    return row ? mapConversationAttachment(row) : undefined;
+    return findConversationAttachmentByChecksum(this.db, input);
   }
 
   async updateConversationAttachment(
     input: UpdateConversationAttachmentInput
   ): Promise<ConversationAttachment> {
-    const set: Partial<typeof conversationAttachments.$inferInsert> = {
-      updatedAt: new Date()
-    };
-    if (input.status !== undefined) {
-      set.status = input.status;
-    }
-    if (input.format !== undefined) {
-      set.format = input.format;
-    }
-    if (input.artifactRefs !== undefined) {
-      set.artifactRefs = input.artifactRefs;
-    }
-    if (input.processingMetadata !== undefined) {
-      set.processingMetadata = input.processingMetadata;
-    }
-    if (input.warnings !== undefined) {
-      set.warnings = input.warnings;
-    }
-    if (input.error !== undefined) {
-      set.error = input.error;
-    }
-    if (input.processingOwnerId !== undefined) {
-      set.processingOwnerId = input.processingOwnerId;
-    }
-    if (input.processingLeaseToken !== undefined) {
-      set.processingLeaseToken = input.processingLeaseToken;
-    }
-    if (input.processingLeaseExpiresAt !== undefined) {
-      set.processingLeaseExpiresAt = input.processingLeaseExpiresAt
-        ? new Date(input.processingLeaseExpiresAt)
-        : null;
-    }
-    if (input.processingAttempts !== undefined) {
-      set.processingAttempts = input.processingAttempts;
-    }
-    if (input.preprocessingStartedAt !== undefined) {
-      set.preprocessingStartedAt = input.preprocessingStartedAt
-        ? new Date(input.preprocessingStartedAt)
-        : null;
-    }
-    if (input.preprocessingCompletedAt !== undefined) {
-      set.preprocessingCompletedAt = input.preprocessingCompletedAt
-        ? new Date(input.preprocessingCompletedAt)
-        : null;
-    }
-    if (input.deletedAt !== undefined) {
-      set.deletedAt = new Date(input.deletedAt);
-    }
-
-    const [row] = await this.db
-      .update(conversationAttachments)
-      .set(set)
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.id, input.attachmentId)
-        )
-      )
-      .returning();
-    if (!row) {
-      throw new AppError("NOT_FOUND", "Attachment is not available");
-    }
-    return mapConversationAttachment(row);
+    return updateConversationAttachment(this.db, input);
   }
 
   async reactivateDraftAttachment(input: {
@@ -680,51 +524,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     attachmentId: ConversationAttachmentId;
     status: "queued" | "ready" | "unsupported";
   }): Promise<ConversationAttachment> {
-    const row = await this.db.transaction(async (tx) => {
-      if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
-        throw new AppError("NOT_FOUND", "Conversation is not available");
-      }
-      const [attachment] = await tx
-        .update(conversationAttachments)
-        .set({
-          status: input.status,
-          deletedAt: null,
-          updatedAt: new Date()
-        })
-        .where(
-          and(
-            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-            eq(conversationAttachments.conversationId, input.conversationId),
-            eq(conversationAttachments.id, input.attachmentId),
-            isNull(conversationAttachments.messageId),
-            eq(conversationAttachments.status, "deleted")
-          )
-        )
-        .returning();
-      if (!attachment) {
-        throw new AppError("NOT_FOUND", "Draft attachment is not available");
-      }
-      await tx
-        .update(managedFiles)
-        .set({
-          status: "available",
-          deletedAt: null
-        })
-        .where(
-          and(
-            eq(managedFiles.clientInstanceId, input.clientInstanceId),
-            eq(managedFiles.id, attachment.fileId)
-          )
-        );
-      await touchConversation(
-        tx,
-        input.clientInstanceId,
-        input.conversationId,
-        attachment.updatedAt
-      );
-      return attachment;
-    });
-    return mapConversationAttachment(row);
+    return reactivateDraftAttachment(this.db, input);
   }
 
   async deleteDraftAttachment(input: {
@@ -733,28 +533,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     attachmentId: ConversationAttachmentId;
     deletedAt: string;
   }): Promise<ConversationAttachment> {
-    const deletedAt = new Date(input.deletedAt);
-    const [row] = await this.db
-      .update(conversationAttachments)
-      .set({
-        status: "deleted",
-        deletedAt,
-        updatedAt: deletedAt
-      })
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.conversationId, input.conversationId),
-          eq(conversationAttachments.id, input.attachmentId),
-          isNull(conversationAttachments.messageId)
-        )
-      )
-      .returning();
-    if (!row) {
-      throw new AppError("NOT_FOUND", "Draft attachment is not available");
-    }
-    await this.callbacks.touchConversation(input.clientInstanceId, input.conversationId, deletedAt);
-    return mapConversationAttachment(row);
+    return deleteDraftAttachment(this.db, this.callbacks, input);
   }
 
   async claimReadyDraftAttachmentsForMessage(input: {
@@ -763,23 +542,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     messageId: MessageId;
     claimedAt: string;
   }): Promise<ConversationAttachment[]> {
-    const claimedAt = new Date(input.claimedAt);
-    const rows = await this.db
-      .update(conversationAttachments)
-      .set({
-        messageId: input.messageId,
-        updatedAt: claimedAt
-      })
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.conversationId, input.conversationId),
-          eq(conversationAttachments.status, "ready"),
-          isNull(conversationAttachments.messageId)
-        )
-      )
-      .returning();
-    return rows.map(mapConversationAttachment);
+    return claimReadyDraftAttachmentsForMessage(this.db, input);
   }
 
   /**
@@ -795,48 +558,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     leaseToken: string;
     leaseMs: number;
   }): Promise<SubjectRowClaim<ConversationAttachment>> {
-    const ofRow = and(
-      eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-      eq(conversationAttachments.id, input.attachmentId)
-    );
-    const [claimed] = await this.db
-      .update(conversationAttachments)
-      .set({
-        status: "preprocessing",
-        processingOwnerId: input.leaseOwnerId,
-        processingLeaseToken: input.leaseToken,
-        processingLeaseExpiresAt: leaseExpiry(input.leaseMs),
-        processingAttempts: drizzleSql`${conversationAttachments.processingAttempts} + 1`,
-        preprocessingStartedAt: drizzleSql`coalesce(${conversationAttachments.preprocessingStartedAt}, now())`,
-        updatedAt: drizzleSql`now()`,
-        error: null
-      })
-      .where(
-        and(
-          ofRow,
-          drizzleSql`(
-            ${conversationAttachments.status} = 'queued'
-            or (
-              ${conversationAttachments.status} = 'preprocessing'
-              and (
-                ${conversationAttachments.processingLeaseExpiresAt} is null
-                or ${conversationAttachments.processingLeaseExpiresAt} <= now()
-                or ${conversationAttachments.processingOwnerId} = ${input.leaseOwnerId}
-              )
-            )
-          )`
-        )
-      )
-      .returning();
-    if (claimed) return { status: "claimed", row: mapConversationAttachment(claimed) };
-    const [current] = await this.db
-      .select({ status: conversationAttachments.status })
-      .from(conversationAttachments)
-      .where(ofRow)
-      .limit(1);
-    return current?.status === "queued" || current?.status === "preprocessing"
-      ? { status: "held" }
-      : { status: "finished" };
+    return claimConversationAttachmentForPreprocessing(this.db, input);
   }
 
   async renewClaimedConversationAttachmentLease(input: {
@@ -845,19 +567,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     leaseToken: string;
     leaseMs: number;
   }): Promise<boolean> {
-    const rows = await this.db
-      .update(conversationAttachments)
-      .set({ processingLeaseExpiresAt: leaseExpiry(input.leaseMs) })
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.id, input.attachmentId),
-          eq(conversationAttachments.status, "preprocessing"),
-          eq(conversationAttachments.processingLeaseToken, input.leaseToken)
-        )
-      )
-      .returning({ id: conversationAttachments.id });
-    return rows.length > 0;
+    return renewClaimedConversationAttachmentLease(this.db, input);
   }
 
   async listConversationAttachmentsWithoutJob(input: {
@@ -866,34 +576,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     formats?: readonly string[];
     limit: number;
   }): Promise<Array<{ id: ConversationAttachmentId; conversationId: ConversationId }>> {
-    const rows = await this.db
-      .select({
-        id: conversationAttachments.id,
-        conversationId: conversationAttachments.conversationId
-      })
-      .from(conversationAttachments)
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          inArray(conversationAttachments.status, ["queued", "preprocessing"]),
-          input.formats && input.formats.length > 0
-            ? inArray(conversationAttachments.format, [...input.formats])
-            : undefined,
-          drizzleSql`not exists (
-            select 1 from platform_jobs job
-            where job.client_instance_id = ${conversationAttachments.clientInstanceId}
-              and job.kind = ${input.jobKind}
-              and job.dedupe_key = ${input.jobKind} || ':' || ${conversationAttachments.id}
-              and job.status in ('queued', 'running')
-          )`
-        )
-      )
-      .orderBy(asc(conversationAttachments.createdAt), asc(conversationAttachments.id))
-      .limit(input.limit);
-    return rows.map((row) => ({
-      id: asConversationAttachmentId(row.id),
-      conversationId: asConversationId(row.conversationId)
-    }));
+    return listConversationAttachmentsWithoutJob(this.db, input);
   }
 
   async completeClaimedConversationAttachment(input: {
@@ -905,35 +588,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     warnings: ConversationAttachment["warnings"];
     completedAt: string;
   }): Promise<ConversationAttachment> {
-    const completedAt = new Date(input.completedAt);
-    const processingMetadata = input.processingMetadata ?? {};
-    const [row] = await this.db
-      .update(conversationAttachments)
-      .set({
-        status: "ready",
-        artifactRefs: input.artifactRefs,
-        processingMetadata,
-        warnings: input.warnings,
-        error: null,
-        processingOwnerId: null,
-        processingLeaseToken: null,
-        processingLeaseExpiresAt: null,
-        preprocessingCompletedAt: completedAt,
-        updatedAt: completedAt
-      })
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.id, input.attachmentId),
-          eq(conversationAttachments.status, "preprocessing"),
-          eq(conversationAttachments.processingLeaseToken, input.leaseToken)
-        )
-      )
-      .returning();
-    if (!row) {
-      throw new AppError("CONFLICT", "Attachment processing lease is no longer active");
-    }
-    return mapConversationAttachment(row);
+    return completeClaimedConversationAttachment(this.db, input);
   }
 
   async failClaimedConversationAttachment(input: {
@@ -943,31 +598,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     error: NonNullable<ConversationAttachment["error"]>;
     completedAt: string;
   }): Promise<ConversationAttachment> {
-    const completedAt = new Date(input.completedAt);
-    const [row] = await this.db
-      .update(conversationAttachments)
-      .set({
-        status: "failed",
-        error: input.error,
-        processingOwnerId: null,
-        processingLeaseToken: null,
-        processingLeaseExpiresAt: null,
-        preprocessingCompletedAt: completedAt,
-        updatedAt: completedAt
-      })
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.id, input.attachmentId),
-          eq(conversationAttachments.status, "preprocessing"),
-          eq(conversationAttachments.processingLeaseToken, input.leaseToken)
-        )
-      )
-      .returning();
-    if (!row) {
-      throw new AppError("CONFLICT", "Attachment processing lease is no longer active");
-    }
-    return mapConversationAttachment(row);
+    return failClaimedConversationAttachment(this.db, input);
   }
 
   async findReadyConversationAttachmentByFile(input: {
@@ -975,20 +606,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     conversationId: ConversationId;
     fileId: ManagedFileId;
   }): Promise<ConversationAttachment | undefined> {
-    const [row] = await this.db
-      .select()
-      .from(conversationAttachments)
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.conversationId, input.conversationId),
-          eq(conversationAttachments.fileId, input.fileId),
-          eq(conversationAttachments.status, "ready")
-        )
-      )
-      .orderBy(desc(conversationAttachments.updatedAt))
-      .limit(1);
-    return row ? mapConversationAttachment(row) : undefined;
+    return findReadyConversationAttachmentByFile(this.db, input);
   }
 
   async findConversationAttachmentByFile(input: {
@@ -996,20 +614,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     conversationId: ConversationId;
     fileId: ManagedFileId;
   }): Promise<ConversationAttachment | undefined> {
-    const [row] = await this.db
-      .select()
-      .from(conversationAttachments)
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          eq(conversationAttachments.conversationId, input.conversationId),
-          eq(conversationAttachments.fileId, input.fileId),
-          ne(conversationAttachments.status, "deleted")
-        )
-      )
-      .orderBy(desc(conversationAttachments.updatedAt))
-      .limit(1);
-    return row ? mapConversationAttachment(row) : undefined;
+    return findConversationAttachmentByFile(this.db, input);
   }
 
   async markConversationManagedObjectsDeleted(input: {
@@ -1017,98 +622,14 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     conversationId: ConversationId;
     deletedAt: string;
   }): Promise<ManagedObjectDeletionResult> {
-    const deletedAt = new Date(input.deletedAt);
-    return this.db.transaction(async (tx) => {
-      await tx
-        .select({ id: conversations.id })
-        .from(conversations)
-        .where(
-          and(
-            eq(conversations.clientInstanceId, input.clientInstanceId),
-            eq(conversations.id, input.conversationId)
-          )
-        )
-        .for("update")
-        .limit(1);
-      const deletion = await collectConversationManagedObjectsForDeletion(tx, input);
-      const fileIds = deletion.files.map((file) => file.id);
-
-      await tx
-        .update(conversationAttachments)
-        .set({
-          status: "deleted",
-          deletedAt,
-          updatedAt: deletedAt
-        })
-        .where(
-          and(
-            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-            eq(conversationAttachments.conversationId, input.conversationId),
-            ne(conversationAttachments.status, "deleted")
-          )
-        );
-      if (fileIds.length > 0) {
-        await tx
-          .update(managedFiles)
-          .set({
-            status: "deleted",
-            deletedAt
-          })
-          .where(
-            and(
-              eq(managedFiles.clientInstanceId, input.clientInstanceId),
-              inArray(managedFiles.id, fileIds)
-            )
-          );
-      }
-      await tx
-        .delete(artifactPreviewJobs)
-        .where(
-          and(
-            eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
-            eq(artifactPreviewJobs.conversationId, input.conversationId)
-          )
-        );
-      await tx
-        .delete(artifactPreviewManifests)
-        .where(
-          and(
-            eq(artifactPreviewManifests.clientInstanceId, input.clientInstanceId),
-            eq(artifactPreviewManifests.conversationId, input.conversationId)
-          )
-        );
-      await tx
-        .update(managedArtifacts)
-        .set({
-          status: "deleted",
-          deletedAt
-        })
-        .where(
-          and(
-            eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
-            eq(managedArtifacts.conversationId, input.conversationId),
-            ne(managedArtifacts.status, "deleted")
-          )
-        );
-
-      return {
-        attachmentCount: deletion.attachments.length,
-        fileObjectKeys: uniqueStrings(deletion.files.map((file) => file.objectKey)),
-        artifactObjectKeys: uniqueStrings(deletion.artifacts.map((artifact) => artifact.objectKey))
-      };
-    });
+    return markConversationManagedObjectsDeleted(this.db, input);
   }
 
   async listConversationManagedObjectsForDeletion(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<ManagedObjectDeletionResult> {
-    const deletion = await collectConversationManagedObjectsForDeletion(this.db, input);
-    return {
-      attachmentCount: deletion.attachments.length,
-      fileObjectKeys: uniqueStrings(deletion.files.map((file) => file.objectKey)),
-      artifactObjectKeys: uniqueStrings(deletion.artifacts.map((artifact) => artifact.objectKey))
-    };
+    return listConversationManagedObjectsForDeletion(this.db, input);
   }
 
   async listConversationsPendingObjectCleanup(input: {
@@ -1117,23 +638,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     createdByUserId?: UserId;
     limit: number;
   }): Promise<ConversationId[]> {
-    if (input.limit <= 0) {
-      return [];
-    }
-    const rows = await this.db
-      .select({ id: drizzleSql<string>`pending.id` })
-      .from(
-        drizzleSql`(${conversationsPendingCleanup({
-          clientInstanceId: input.clientInstanceId,
-          collaborationWorkspaceId: input.collaborationWorkspaceId,
-          createdByUserId: input.createdByUserId,
-          executionWorkspaces:
-            input.collaborationWorkspaceId !== undefined || input.createdByUserId !== undefined
-        })}) pending`
-      )
-      .orderBy(drizzleSql`pending.deleted_at asc`, drizzleSql`pending.id asc`)
-      .limit(input.limit);
-    return rows.map((row) => asConversationId(row.id));
+    return listConversationsPendingObjectCleanup(this.db, input);
   }
 }
 
@@ -1150,77 +655,6 @@ function managedArtifactMatchesEnsureInput(
     artifact.checksum === input.checksum &&
     artifact.status === "available"
   );
-}
-
-type PostgresFileStoreDatabase =
-  PostgresConnection | Parameters<Parameters<PostgresConnection["transaction"]>[0]>[0];
-
-async function collectConversationManagedObjectsForDeletion(
-  db: PostgresFileStoreDatabase,
-  input: {
-    clientInstanceId: ClientInstanceId;
-    conversationId: ConversationId;
-  }
-): Promise<{
-  attachments: Array<typeof conversationAttachments.$inferSelect>;
-  files: Array<typeof managedFiles.$inferSelect>;
-  artifacts: Array<typeof managedArtifacts.$inferSelect>;
-}> {
-  const attachments = await db
-    .select()
-    .from(conversationAttachments)
-    .where(
-      and(
-        eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-        eq(conversationAttachments.conversationId, input.conversationId)
-      )
-    );
-  const fileIds = [...new Set(attachments.map((attachment) => attachment.fileId))];
-  const artifacts = await db
-    .select()
-    .from(managedArtifacts)
-    .where(
-      and(
-        eq(managedArtifacts.clientInstanceId, input.clientInstanceId),
-        eq(managedArtifacts.conversationId, input.conversationId),
-        ne(managedArtifacts.status, "deleted")
-      )
-    );
-
-  let files: Array<typeof managedFiles.$inferSelect> = [];
-  if (fileIds.length > 0) {
-    const sharedAttachmentRows = await db
-      .select({ fileId: conversationAttachments.fileId })
-      .from(conversationAttachments)
-      .where(
-        and(
-          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-          inArray(conversationAttachments.fileId, fileIds),
-          ne(conversationAttachments.conversationId, input.conversationId),
-          ne(conversationAttachments.status, "deleted")
-        )
-      );
-    const sharedFileIds = new Set(sharedAttachmentRows.map((attachment) => attachment.fileId));
-    const deletableFileIds = fileIds.filter((fileId) => !sharedFileIds.has(fileId));
-    if (deletableFileIds.length > 0) {
-      files = await db
-        .select()
-        .from(managedFiles)
-        .where(
-          and(
-            eq(managedFiles.clientInstanceId, input.clientInstanceId),
-            inArray(managedFiles.id, deletableFileIds),
-            ne(managedFiles.status, "deleted")
-          )
-        );
-    }
-  }
-
-  return { attachments, files, artifacts };
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values)];
 }
 
 /** `jobsEnqueued` is called after the store enqueued a job, as the jobs store reports its own. */

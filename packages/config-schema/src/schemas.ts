@@ -1,13 +1,12 @@
-import { z } from "zod";
 import type {
   AgentConfig,
-  DataSourceConfig,
-  CapabilityConfigMap,
-  LocalizationConfig,
   AgentRuntimeConfig,
+  CapabilityConfigMap,
+  DataSourceConfig,
   ExecutionWorkspacesConfig,
-  ModelContextConfig,
+  LocalizationConfig,
   ModelBindingConfig,
+  ModelContextConfig,
   ModelProviderConfig,
   SkillConfig,
   SkillResourceConfig,
@@ -18,11 +17,9 @@ import type {
   UsageSafeguardsConfig,
   WebAccessConfig
 } from "@work-shape/catalyst-core";
-import {
-  AGENT_EDITABLE_FIELDS,
-  isSecretName,
-  SECRET_NAME_EXPECTATION
-} from "@work-shape/catalyst-core";
+import { AGENT_EDITABLE_FIELDS } from "@work-shape/catalyst-core";
+import { z } from "zod";
+import { developmentAuthConfigSchema, standaloneAuthConfigSchema } from "./auth-schema";
 import {
   egressConfigSchema,
   releaseConnectionsConfigSchema,
@@ -33,54 +30,19 @@ import { releaseGuardrailsConfigSchema } from "./guardrail-schema";
 import { infrastructureConfigSchema } from "./infrastructure";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 import { knowledgeConfigSchema, modelBindingConfigSchema } from "./model-binding-schema";
-
-export const userIdentitySchema = z.object({
-  id: z.string().min(1).default("dev-user"),
-  externalUserId: z.string().min(1).default("dev-user"),
-  displayLabel: z.string().min(1).default("Development User"),
-  email: z.string().email().optional(),
-  emailVerified: z.boolean().optional(),
-  roles: z.array(z.string().min(1)).default(["user", "admin"]),
-  permissionRefs: z.array(z.string().min(1)).default([]),
-  permissions: z.array(z.string().min(1)).default([]),
-  authSource: z.string().min(1).default("development")
-});
-
-const defaultDevelopmentUser = {
-  id: "dev-user",
-  externalUserId: "dev-user",
-  displayLabel: "Development User",
-  roles: ["user", "admin"],
-  permissionRefs: [],
-  permissions: [],
-  authSource: "development"
-};
-
-const developmentAuthConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  user: userIdentitySchema.default(defaultDevelopmentUser),
-  users: z.array(userIdentitySchema).default([]),
-  defaultUserId: z.string().min(1).optional()
-});
-
-const standaloneSeedUserSchema = z.object({
-  email: z.string().email(),
-  emailEnvName: z.string().min(1).optional(),
-  displayLabel: z.string().min(1),
-  /** The name of a secret, never the password. A refused name is not repeated in a message. */
-  passwordEnvName: z.string().min(1).refine(isSecretName, SECRET_NAME_EXPECTATION),
-  developmentPassword: z.string().min(8).optional(),
-  roles: z.array(z.string().min(1)).default(["user"]),
-  permissionRefs: z.array(z.string().min(1)).default([]),
-  permissions: z.array(z.string().min(1)).default([])
-});
-
-const standaloneAuthConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  baseUrl: z.string().url().optional(),
-  trustedOrigins: z.array(z.string().url()).default([]),
-  seedUsers: z.array(standaloneSeedUserSchema).default([])
-});
+import {
+  agentRuntimeConfigSchema,
+  conversationTitleConfigSchema,
+  executionWorkspacesConfigSchema,
+  modelContextConfigSchema,
+  webAccessConfigSchema,
+  workflowsConfigSchema
+} from "./runtime-schema";
+import {
+  usageBudgetConfigSchema,
+  usageCostConfigSchema,
+  usageSafeguardsConfigSchema
+} from "./usage-schema";
 
 const toolInstanceConfigSchema = z
   .object({
@@ -215,368 +177,23 @@ export {
   agentConfigSchema,
   formatSkillMarkdown,
   parseSkillMarkdown as parseSkillManifest,
-  SkillMarkdownError,
-  type SkillFileEntry,
   SKILL_NAME_PATTERN,
   SKILL_NAME_RULE,
   skillConfigSchema,
   skillFileEntrySchema,
   skillFileFrontmatterSchema,
-  skillPortabilityIssues,
+  SkillMarkdownError,
   skillNameSchema,
+  skillPortabilityIssues,
   skillResourceConfigSchema,
   skillResourceMediaTypeForPath,
   skillResourcePathSchema,
   WORKFLOW_NAME_PATTERN,
   WORKFLOW_NAME_RULE,
   workflowConfigSchema,
+  type SkillFileEntry,
   type WorkflowAssetConfig
 } from "@work-shape/catalyst-asset-schemas";
-
-export const usageBudgetConfigSchema = z
-  .object({
-    dailySpendLimit: z.number().positive().optional(),
-    monthlySpendLimit: z.number().positive().optional(),
-    costSafetyMultiplier: z.number().min(1).default(1)
-  })
-  .default({ costSafetyMultiplier: 1 });
-
-export const usageSafeguardsConfigSchema = z
-  .object({
-    modelCallsPerDay: z.number().int().positive().optional(),
-    tokensPerDay: z.number().int().positive().optional(),
-    tokensPerMonth: z.number().int().positive().optional()
-  })
-  .default({});
-
-const usageRateCardTokenRatesShape = {
-  uncachedInputPricePerMillionTokens: z.number().nonnegative(),
-  cachedInputPricePerMillionTokens: z.number().nonnegative(),
-  outputPricePerMillionTokens: z.number().nonnegative()
-};
-
-export const usageRateCardConfigSchema = z.object({
-  id: z.string().min(1),
-  version: z.string().min(1),
-  currency: z
-    .string()
-    .regex(/^[A-Z]{3}$/u)
-    .default("USD"),
-  models: z
-    .array(
-      z.object({
-        providerId: z.string().min(1),
-        model: z.string().min(1),
-        ...usageRateCardTokenRatesShape,
-        fast: z.object(usageRateCardTokenRatesShape).optional()
-      })
-    )
-    .default([]),
-  webSearch: z
-    .array(
-      z.object({
-        providerId: z.string().min(1),
-        model: z.string().min(1).optional(),
-        pricePerCall: z.number().nonnegative()
-      })
-    )
-    .default([])
-});
-
-export const usageCostConfigSchema = z
-  .object({
-    customer: usageRateCardConfigSchema.optional()
-  })
-  .default({});
-
-export const conversationTitleConfigSchema = z
-  .object({
-    enabled: z.boolean().default(true),
-    modelProviderId: z.string().min(1).optional(),
-    modelBindingId: z.string().min(1).optional(),
-    model: z.string().min(1).optional()
-  })
-  .default({
-    enabled: true
-  });
-
-export const agentRuntimeConfigSchema = z
-  .object({
-    maxSteps: z.number().int().positive().default(64),
-    repeatedToolCallLimit: z.number().int().positive().default(3),
-    /** How long a run waits for its agent's data tools to be read. See the agent runtime. */
-    dataToolDescribeTimeoutMs: z.number().int().positive().default(10_000)
-  })
-  .default({
-    maxSteps: 64,
-    repeatedToolCallLimit: 3,
-    dataToolDescribeTimeoutMs: 10_000
-  });
-
-export const modelContextConfigSchema = z
-  .object({
-    toolOutput: z
-      .object({
-        maxTokens: z.number().int().positive().default(60000),
-        maxBytes: z.number().int().positive().optional()
-      })
-      .default({
-        maxTokens: 60000
-      })
-  })
-  .default({
-    toolOutput: {
-      maxTokens: 60000
-    }
-  });
-
-const REMOVED_WEB_SEARCH_KEYS = ["mode", "managedProvider"] as const;
-
-/**
- * The instance switch for web search. The two keys that chose between a provider's own search
- * and a managed one are refused by name: a model's adapter declares whether it can search.
- * One issue names every removed key that is present, because startup reports the first issue.
- */
-const webSearchConfigSchema = z.preprocess(
-  (raw, context) => {
-    if (typeof raw === "object" && raw !== null) {
-      const present = REMOVED_WEB_SEARCH_KEYS.filter((key) => key in raw).map(
-        (key) => `'webAccess.search.${key}'`
-      );
-      if (present.length > 0) {
-        const several = present.length > 1;
-        context.addIssue({
-          code: "custom",
-          message: `${present.join(" and ")} ${several ? "were" : "was"} removed: whether a model can search the web is declared by its provider, and 'webAccess.search.enabled' is the only switch. Delete the ${several ? "keys" : "key"}`
-        });
-      }
-    }
-    return raw;
-  },
-  z.object({ enabled: z.boolean().default(false) }).default({ enabled: false })
-);
-
-export const webAccessConfigSchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    search: webSearchConfigSchema,
-    fetch: z
-      .object({
-        enabled: z.boolean().default(false),
-        timeoutMs: z.number().int().positive().max(30000).default(10000),
-        maxResponseBytes: z
-          .number()
-          .int()
-          .positive()
-          .max(5 * 1024 * 1024)
-          .default(1024 * 1024),
-        maxTextCharacters: z.number().int().positive().max(200000).default(20000),
-        maxRedirects: z.number().int().nonnegative().max(10).default(5)
-      })
-      .default({
-        enabled: false,
-        timeoutMs: 10000,
-        maxResponseBytes: 1024 * 1024,
-        maxTextCharacters: 20000,
-        maxRedirects: 5
-      })
-  })
-  .default({
-    enabled: false,
-    search: {
-      enabled: false
-    },
-    fetch: {
-      enabled: false,
-      timeoutMs: 10000,
-      maxResponseBytes: 1024 * 1024,
-      maxTextCharacters: 20000,
-      maxRedirects: 5
-    }
-  });
-
-/**
- * The sandbox of a Workflow's code step. A code step runs one script on the input its
- * Workflow hands it, so its container gets far less than the container of an agent's command
- * (`infrastructure.sandbox`): a script that needs more is a release's decision to raise here.
- * The command worker runs the containers, so these are limits of its host.
- */
-export const workflowsConfigSchema = z
-  .strictObject({
-    codeSteps: z
-      .strictObject({
-        /** How many code steps one command worker runs at once. */
-        slots: z.number().int().positive().max(64).default(4),
-        /** The memory of one code step's container, with no swap beyond it. */
-        memoryBytes: z
-          .number()
-          .int()
-          .min(64 * 1024 * 1024)
-          .default(512 * 1024 * 1024),
-        /** Half a core: four steps at once take two cores of the host at most. */
-        cpuCount: z.number().positive().default(0.5),
-        /** Room for an interpreter and its threads, and an end to a script that forks. */
-        pidsLimit: z.number().int().positive().default(64),
-        /** After this long a script is stopped and its step fails. */
-        timeoutSeconds: z.number().int().positive().max(900).default(60),
-        /**
-         * The size of the script's working directory, which is memory and no disk: the
-         * script, its input and its result of at most 256 KiB each, and room to work in. It
-         * counts against `memoryBytes`, so it is part of that number and no number beside it.
-         * A script that fills it reads "no space left".
-         */
-        scratchBytes: z
-          .number()
-          .int()
-          .min(4 * 1024 * 1024)
-          .default(64 * 1024 * 1024)
-      })
-      .prefault({})
-      .refine((codeSteps) => codeSteps.scratchBytes * 2 <= codeSteps.memoryBytes, {
-        path: ["scratchBytes"],
-        message:
-          "scratchBytes is memory of the code step and at most half of memoryBytes: the script itself needs the rest"
-      })
-  })
-  .prefault({});
-
-export const executionWorkspacesConfigSchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    sourceFiles: z
-      .object({
-        maxFileBytes: z
-          .number()
-          .int()
-          .positive()
-          .default(25 * 1024 * 1024)
-      })
-      .default({
-        maxFileBytes: 25 * 1024 * 1024
-      }),
-    command: z
-      .object({
-        defaultTimeoutSeconds: z.number().int().positive().default(60),
-        maxTimeoutSeconds: z.number().int().positive().default(300),
-        idleTimeoutSeconds: z.number().int().positive().default(30),
-        maxStdoutBytes: z
-          .number()
-          .int()
-          .positive()
-          .default(64 * 1024),
-        maxStderrBytes: z
-          .number()
-          .int()
-          .positive()
-          .default(64 * 1024),
-        maxWorkspaceBytes: z
-          .number()
-          .int()
-          .positive()
-          .default(100 * 1024 * 1024)
-      })
-      .default({
-        defaultTimeoutSeconds: 60,
-        maxTimeoutSeconds: 300,
-        idleTimeoutSeconds: 30,
-        maxStdoutBytes: 64 * 1024,
-        maxStderrBytes: 64 * 1024,
-        maxWorkspaceBytes: 100 * 1024 * 1024
-      }),
-    worker: z
-      .object({
-        concurrency: z.number().int().positive().default(1),
-        pollIntervalMs: z.number().int().positive().default(1000),
-        leaseDurationMs: z
-          .number()
-          .int()
-          .positive()
-          .default(10 * 60 * 1000),
-        heartbeatIntervalMs: z.number().int().positive().default(5000),
-        cancellationPollIntervalMs: z.number().int().positive().default(1000),
-        staleRecoveryIntervalMs: z.number().int().positive().default(30000),
-        staleRecoveryLimit: z.number().int().positive().default(50)
-      })
-      .default({
-        concurrency: 1,
-        pollIntervalMs: 1000,
-        leaseDurationMs: 10 * 60 * 1000,
-        heartbeatIntervalMs: 5000,
-        cancellationPollIntervalMs: 1000,
-        staleRecoveryIntervalMs: 30000,
-        staleRecoveryLimit: 50
-      }),
-    cleanup: z
-      .object({
-        deletedWorkspaceCleanupIntervalMs: z
-          .number()
-          .int()
-          .positive()
-          .default(60 * 60 * 1000),
-        deletedWorkspaceCleanupBatchSize: z.number().int().positive().default(100),
-        tempStateCleanupIntervalMs: z
-          .number()
-          .int()
-          .positive()
-          .default(10 * 60 * 1000),
-        hydratedWorkspaceIdleTtlMs: z
-          .number()
-          .int()
-          .nonnegative()
-          .default(60 * 60 * 1000)
-      })
-      .default({
-        deletedWorkspaceCleanupIntervalMs: 60 * 60 * 1000,
-        deletedWorkspaceCleanupBatchSize: 100,
-        tempStateCleanupIntervalMs: 10 * 60 * 1000,
-        hydratedWorkspaceIdleTtlMs: 60 * 60 * 1000
-      })
-  })
-  .superRefine((config, context) => {
-    if (config.command.defaultTimeoutSeconds > config.command.maxTimeoutSeconds) {
-      context.addIssue({
-        code: "custom",
-        path: ["command", "defaultTimeoutSeconds"],
-        message: "Default workspace command timeout must not exceed the maximum timeout"
-      });
-    }
-    if (config.worker.heartbeatIntervalMs >= config.worker.leaseDurationMs) {
-      context.addIssue({
-        code: "custom",
-        path: ["worker", "heartbeatIntervalMs"],
-        message: "Workspace command heartbeat interval must be shorter than the lease duration"
-      });
-    }
-  })
-  .default({
-    enabled: false,
-    sourceFiles: {
-      maxFileBytes: 25 * 1024 * 1024
-    },
-    command: {
-      defaultTimeoutSeconds: 60,
-      maxTimeoutSeconds: 300,
-      idleTimeoutSeconds: 30,
-      maxStdoutBytes: 64 * 1024,
-      maxStderrBytes: 64 * 1024,
-      maxWorkspaceBytes: 100 * 1024 * 1024
-    },
-    worker: {
-      concurrency: 1,
-      pollIntervalMs: 1000,
-      leaseDurationMs: 10 * 60 * 1000,
-      heartbeatIntervalMs: 5000,
-      cancellationPollIntervalMs: 1000,
-      staleRecoveryIntervalMs: 30000,
-      staleRecoveryLimit: 50
-    },
-    cleanup: {
-      deletedWorkspaceCleanupIntervalMs: 60 * 60 * 1000,
-      deletedWorkspaceCleanupBatchSize: 100,
-      tempStateCleanupIntervalMs: 10 * 60 * 1000,
-      hydratedWorkspaceIdleTtlMs: 60 * 60 * 1000
-    }
-  });
 
 // The base theme: warm paper neutrals with one restrained orange accent, and a warm near-black
 // in dark mode. An instance that sets no colours gets it; a customer theme replaces all seven.
@@ -615,6 +232,7 @@ function createUiThemeSchema(defaultTheme: typeof defaultLightUiTheme) {
 }
 
 const lightUiThemeSchema = createUiThemeSchema(defaultLightUiTheme);
+
 const darkUiThemeSchema = createUiThemeSchema(defaultDarkUiTheme);
 
 /**
@@ -726,6 +344,7 @@ export const modulesConfigSchema = z
   .default({});
 
 const perMinuteSchema = z.number().int().positive();
+
 /**
  * How often one caller may call one operation, per minute. The defaults stop spamming and
  * guessing only: nothing a person or a host backend does in ordinary use comes near them. A
@@ -930,27 +549,49 @@ export const clientInstanceConfigFileSchema = z.preprocess(
     })
 );
 
-export type UserIdentityConfig = z.infer<typeof userIdentitySchema>;
-export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;
 export type ToolInstanceConfig = z.infer<typeof toolInstanceConfigSchema>;
+
 export type {
   AgentConfig,
-  DataSourceConfig,
+  AgentRuntimeConfig,
   CapabilityConfigMap,
+  DataSourceConfig,
   ExecutionWorkspacesConfig,
   LocalizationConfig,
   ModelBindingConfig,
+  ModelContextConfig,
   ModelProviderConfig,
   SkillConfig,
   SkillResourceConfig,
   SkillResourceMediaType,
   UsageBudgetConfig,
-  AgentRuntimeConfig,
-  ModelContextConfig,
   UsageCostConfig,
   UsageRateCardConfig,
   UsageSafeguardsConfig,
   WebAccessConfig
 };
+
 export type RateLimitsConfig = z.infer<typeof rateLimitsConfigSchema>;
+
 export type ClientInstanceConfig = z.infer<typeof clientInstanceConfigSchema>;
+export {
+  userIdentitySchema,
+  type StandaloneSeedUserConfig,
+  type UserIdentityConfig
+} from "./auth-schema";
+
+export {
+  usageBudgetConfigSchema,
+  usageCostConfigSchema,
+  usageRateCardConfigSchema,
+  usageSafeguardsConfigSchema
+} from "./usage-schema";
+
+export {
+  agentRuntimeConfigSchema,
+  conversationTitleConfigSchema,
+  executionWorkspacesConfigSchema,
+  modelContextConfigSchema,
+  webAccessConfigSchema,
+  workflowsConfigSchema
+} from "./runtime-schema";
