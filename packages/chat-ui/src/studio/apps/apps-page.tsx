@@ -17,19 +17,17 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  EmptyState,
   IconButton,
   InlineError,
   Page,
   PageHeader,
-  SkeletonList,
-  Starter,
-  StarterList
+  SkeletonList
 } from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { formatUpdated } from "../build-area/build-model";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
+import { BuildWithAgentEmptyState, type BuildWithAgentCopy } from "../build-with-agent-empty";
 import { RouteLink } from "../route-link";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { useApp, useAppActions, useAppList, useAppWrites, type AppList } from "./app-data";
@@ -45,6 +43,27 @@ import {
   type AppState
 } from "./app-model";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
+
+/** Two Apps a business builds, as the chat's starters show what an agent does. */
+const APP_BUILD: BuildWithAgentCopy = {
+  text: "apps.empty",
+  action: "apps.buildWithAgent",
+  prompt: "apps.promptStart",
+  examples: [
+    {
+      icon: <Calculator aria-hidden="true" className="size-5 text-muted-foreground" />,
+      title: "apps.exampleFeeTitle",
+      hint: "apps.exampleFeeHint",
+      prompt: "apps.exampleFeePrompt"
+    },
+    {
+      icon: <CalendarDays aria-hidden="true" className="size-5 text-muted-foreground" />,
+      title: "apps.exampleLeaveTitle",
+      hint: "apps.exampleLeaveHint",
+      prompt: "apps.exampleLeavePrompt"
+    }
+  ]
+};
 
 /** The name people read of an App, or its id while it has none. */
 function appDisplayName(app: Pick<AssetSummary, "name" | "title">): string {
@@ -132,7 +151,9 @@ export function AppsPage() {
         now={now}
         onOpenRoute={show}
         onAction={act}
-        onBuildInChat={host.startChat}
+        // The agent opens in the dock, as a New button opens it. Where the dock creates nothing,
+        // in a workspace whose conversations its members read, a new chat opens instead.
+        onBuild={host.startNew ?? host.startChat}
       />
       {detailsOf ? (
         <AppDetailsDialog
@@ -166,7 +187,7 @@ export function AppsPageView({
   now,
   onOpenRoute,
   onAction,
-  onBuildInChat
+  onBuild
 }: {
   workspace: AppsWorkspace;
   rights: AppRights;
@@ -174,8 +195,8 @@ export function AppsPageView({
   now: Date;
   onOpenRoute(route: WorkspaceRoute): void;
   onAction(action: AppMenuAction, app: AssetSummary): void;
-  /** Opens a new conversation with this text in its composer. */
-  onBuildInChat(prompt: string): void;
+  /** Opens the agent with this text in its composer: offered to a reader who may build Apps. */
+  onBuild(prompt: string): void;
 }) {
   const { locale, t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -216,43 +237,12 @@ export function AppsPageView({
               <SkeletonList rows={4} />
             )
           ) : rows.length === 0 ? (
-            rights.write ? (
-              <EmptyState
-                icon={<LayoutGrid aria-hidden="true" />}
-                action={
-                  <Button onClick={() => onBuildInChat(t("apps.promptStart"))}>
-                    {t("apps.buildInChat")}
-                  </Button>
-                }
-                presets={
-                  // Two Apps a business builds, as the chat's starters show what an agent does.
-                  <StarterList label={t("apps.examples")} className="w-full">
-                    <Starter
-                      icon={
-                        <Calculator aria-hidden="true" className="size-5 text-muted-foreground" />
-                      }
-                      title={t("apps.exampleFeeTitle")}
-                      hint={t("apps.exampleFeeHint")}
-                      onClick={() => onBuildInChat(t("apps.exampleFeePrompt"))}
-                    />
-                    <Starter
-                      icon={
-                        <CalendarDays aria-hidden="true" className="size-5 text-muted-foreground" />
-                      }
-                      title={t("apps.exampleLeaveTitle")}
-                      hint={t("apps.exampleLeaveHint")}
-                      onClick={() => onBuildInChat(t("apps.exampleLeavePrompt"))}
-                    />
-                  </StarterList>
-                }
-              >
-                {t("apps.empty")}
-              </EmptyState>
-            ) : (
-              <EmptyState icon={<LayoutGrid aria-hidden="true" />}>
-                {t("apps.emptyReadOnly")}
-              </EmptyState>
-            )
+            <BuildWithAgentEmptyState
+              icon={<LayoutGrid aria-hidden="true" />}
+              readerText="apps.emptyReadOnly"
+              copy={APP_BUILD}
+              {...(rights.write ? { onBuild } : {})}
+            />
           ) : (
             <div className="grid min-w-0 gap-4">
               <ul aria-label={t("apps.title")} className="grid grid-cols-1 gap-4 @2xl:grid-cols-2">

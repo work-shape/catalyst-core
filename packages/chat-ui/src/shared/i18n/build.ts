@@ -3,6 +3,7 @@ import { defineTranslations } from "./translation-area";
 export const build = defineTranslations({
   en: {
     "build.assetActions": "More actions",
+    "build.examples": "Examples to start with",
     "build.changeCount": "{count} change",
     "build.changesCount": "{count} changes",
     "build.chooseSkills": "Choose skills",
@@ -135,6 +136,7 @@ export const build = defineTranslations({
   },
   de: {
     "build.assetActions": "Weitere Aktionen",
+    "build.examples": "Beispiele für den Einstieg",
     "build.changeCount": "{count} Änderung",
     "build.changesCount": "{count} Änderungen",
     "build.chooseSkills": "Skills auswählen",

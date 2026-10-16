@@ -47,6 +47,13 @@ async function personalWorkspaceId(page: Page): Promise<string> {
 
 const composerOf = (page: Page) => page.getByPlaceholder(/^(?:Message|Nachricht)$/u);
 
+/**
+ * The list's way to the agent: New, or while the instance has no Workflow yet, the empty list's
+ * offer, which stands in its place with the same start (UXA-3b).
+ */
+const NEW_WORKFLOW =
+  /^(?:New workflow|Neuer Workflow|Build one with the agent|Einen mit dem Agenten bauen)$/u;
+
 test("New workflow opens the dock, and the agent's first save creates the draft and moves there", async ({
   page
 }) => {
@@ -72,21 +79,18 @@ test("New workflow opens the dock, and the agent's first save creates the draft 
   // "New workflow" opens the dock with a started sentence and creates nothing; leaving the
   // list leaves it as it was.
   await page.goto(listPath);
-  const newWorkflow = page.getByRole("button", { name: "New workflow", exact: true }).first();
+  const newWorkflow = page.getByRole("button", { name: NEW_WORKFLOW }).first();
   await newWorkflow.click();
   await expect(composerOf(page)).toHaveValue("Build a new workflow that ");
   expect(new URL(page.url()).pathname).toBe(listPath);
   expect(await stored()).toBe(404);
   await shootLocales(page, "nav-2-new-workflow-dock", async () => {
-    await page
-      .getByRole("button", { name: /^(?:New workflow|Neuer Workflow)$/u })
-      .first()
-      .click();
+    await page.getByRole("button", { name: NEW_WORKFLOW }).first().click();
     await expect(composerOf(page)).toHaveValue(/^(?:Build a new workflow|Bau einen neuen)/u);
   });
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
   await page.goto(listPath);
-  await page.getByRole("button", { name: "New workflow", exact: true }).first().click();
+  await page.getByRole("button", { name: NEW_WORKFLOW }).first().click();
 
   // The agent's first save creates the draft of the instance, and the person moves to it.
   await sendToolCall(page, "platform.assets.put", {

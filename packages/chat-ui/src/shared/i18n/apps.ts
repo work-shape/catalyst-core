@@ -78,7 +78,7 @@ export const apps = defineTranslations({
     "apps.liveOnceOn": "Your next call runs live.",
     "apps.liveOnceStale":
       "The draft changed since this list was loaded. Look at it again and switch it on there.",
-    "apps.buildInChat": "Build an app in chat",
+    "apps.buildWithAgent": "Build one with the agent",
     "apps.changed": "Changed {when}",
     "apps.copyLink": "Copy link",
     "apps.delete": "Delete",
@@ -114,17 +114,17 @@ export const apps = defineTranslations({
     "apps.editWithAgentFailed": "The conversation could not be started.",
     "apps.editWithAgentRefused": "This app is not available to you for editing with the agent.",
     "apps.empty":
-      "No apps in this workspace yet. Describe a tool in chat and the agent builds it. Saved as an app, it is yours to use; publishing it decides who else sees it.",
-    "apps.emptyReadOnly": "No apps yet. A builder of this workspace can add one.",
+      "No apps in this workspace yet. Describe a tool to the agent and it builds it. Saved as an app, it is yours to use; publishing it decides who else sees it.",
+    "apps.emptyReadOnly":
+      "No apps yet. An app is a small tool for this workspace, such as a fee calculator or a leave request.",
     "apps.exampleFeeHint": "Hours times rate, with VAT and the total",
     "apps.exampleFeePrompt":
       "Build an app that calculates a client's fee from the hours worked and the hourly rate, adds VAT and shows the total.",
-    "apps.exampleFeeTitle": "Fee calculator from hours and rate",
+    "apps.exampleFeeTitle": "Fee calculator",
     "apps.exampleLeaveHint": "Dates, reason and the days left",
     "apps.exampleLeavePrompt":
       "Build an app where people of this workspace request leave with the dates and a reason, and see how many days they have left.",
     "apps.exampleLeaveTitle": "Leave request for the team",
-    "apps.examples": "Examples to start with",
     "apps.failed": "The app could not be loaded.",
     "apps.failedFileSet": "The app could not be loaded: the files of this revision are missing.",
     "apps.failedKit":
@@ -276,7 +276,7 @@ export const apps = defineTranslations({
     "apps.liveOnceOn": "Dein nächster Aufruf läuft live.",
     "apps.liveOnceStale":
       "Der Entwurf hat sich geändert, seit diese Liste geladen wurde. Sieh ihn dir erneut an und schalte es dort ein.",
-    "apps.buildInChat": "App im Chat bauen",
+    "apps.buildWithAgent": "Eine mit dem Agenten bauen",
     "apps.changed": "Geändert {when}",
     "apps.copyLink": "Link kopieren",
     "apps.delete": "Löschen",
@@ -314,18 +314,17 @@ export const apps = defineTranslations({
     "apps.editWithAgentRefused":
       "Diese App ist für dich nicht zum Bearbeiten mit dem Agenten verfügbar.",
     "apps.empty":
-      "In diesem Arbeitsbereich gibt es noch keine Apps. Beschreibe im Chat ein Werkzeug, und der Agent baut es. Speicherst du es als App, gehört sie dir; beim Veröffentlichen legst du fest, wer sie noch sieht.",
+      "In diesem Arbeitsbereich gibt es noch keine Apps. Beschreib dem Agenten ein Werkzeug, und er baut es. Speicherst du es als App, gehört sie dir; beim Veröffentlichen legst du fest, wer sie noch sieht.",
     "apps.emptyReadOnly":
-      "Noch keine Apps. Wer in diesem Arbeitsbereich bauen darf, kann eine hinzufügen.",
-    "apps.exampleFeeHint": "Stunden mal Satz, mit Umsatzsteuer und Summe",
+      "Noch keine Apps. Eine App ist ein kleines Werkzeug für diesen Arbeitsbereich, etwa ein Honorarrechner oder ein Urlaubsantrag.",
+    "apps.exampleFeeHint": "Stunden mal Satz, mit Umsatzsteuer",
     "apps.exampleFeePrompt":
       "Baue eine App, die das Honorar eines Mandanten aus den geleisteten Stunden und dem Stundensatz berechnet, die Umsatzsteuer aufschlägt und die Summe zeigt.",
-    "apps.exampleFeeTitle": "Honorarrechner aus Stunden und Satz",
+    "apps.exampleFeeTitle": "Honorarrechner",
     "apps.exampleLeaveHint": "Zeitraum, Grund und verbleibende Tage",
     "apps.exampleLeavePrompt":
       "Baue eine App, in der die Leute dieses Arbeitsbereichs Urlaub mit Zeitraum und Grund beantragen und sehen, wie viele Tage ihnen bleiben.",
     "apps.exampleLeaveTitle": "Urlaubsantrag fürs Team",
-    "apps.examples": "Beispiele für den Einstieg",
     "apps.failed": "Die App konnte nicht geladen werden.",
     "apps.failedFileSet":
       "Die App konnte nicht geladen werden: Die Dateien dieser Revision fehlen.",

@@ -1,4 +1,4 @@
-import { Play, Plus, Workflow } from "lucide-react";
+import { CalendarClock, Play, Plus, ReceiptText, Workflow } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import {
   Avatar,
@@ -11,7 +11,6 @@ import {
   CardReachable,
   CardTarget,
   CardTitle,
-  EmptyState,
   Page,
   PageHeader,
   SkeletonList
@@ -19,6 +18,7 @@ import {
 import { formatUpdated } from "../build-area/build-model";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
+import { BuildWithAgentEmptyState, type BuildWithAgentCopy } from "../build-with-agent-empty";
 import { RouteLink } from "../route-link";
 import { useStartRun } from "./start-run";
 import { useRunsAvailable, useWorkflowList, type WorkflowList } from "./workflow-data";
@@ -26,6 +26,27 @@ import { listedToReader, startOffered } from "./workflow-model";
 import type { WorkflowListItem } from "./workflow-views";
 import { LoadError, RunStateBadge, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
+
+/** Two Workflows a business builds: one on a schedule, one that acts on what it finds. */
+const WORKFLOW_BUILD: BuildWithAgentCopy = {
+  text: "workflows.empty",
+  action: "workflows.buildWithAgent",
+  prompt: "workflows.newPrompt",
+  examples: [
+    {
+      icon: <CalendarClock aria-hidden="true" className="size-5 text-muted-foreground" />,
+      title: "workflows.exampleSummaryTitle",
+      hint: "workflows.exampleSummaryHint",
+      prompt: "workflows.exampleSummaryPrompt"
+    },
+    {
+      icon: <ReceiptText aria-hidden="true" className="size-5 text-muted-foreground" />,
+      title: "workflows.exampleReminderTitle",
+      hint: "workflows.exampleReminderHint",
+      prompt: "workflows.exampleReminderPrompt"
+    }
+  ]
+};
 
 /** The Workflows of the open workspace, as far as the reader may read them. */
 export function WorkflowsPage() {
@@ -105,7 +126,9 @@ export function WorkflowsPageView({
         <PageHeader
           title={t("workflows.title")}
           description={t("workflows.description")}
-          primaryAction={newButton}
+          // The empty list offers the agent itself, so the head drops New once the list has
+          // answered with none. While it loads, New stands: making one never waits for the list.
+          primaryAction={rows?.length === 0 ? undefined : newButton}
         />
         {list.failed ? (
           <div className="mb-4">
@@ -117,9 +140,12 @@ export function WorkflowsPageView({
             <SkeletonList rows={4} />
           )
         ) : rows.length === 0 ? (
-          <EmptyState icon={<Workflow aria-hidden="true" />} action={newButton}>
-            {t(newButton ? "workflows.empty" : "workflows.emptyReadOnly")}
-          </EmptyState>
+          <BuildWithAgentEmptyState
+            icon={<Workflow aria-hidden="true" />}
+            readerText="workflows.emptyReadOnly"
+            copy={WORKFLOW_BUILD}
+            {...(onNew ? { onBuild: onNew } : {})}
+          />
         ) : (
           <div className="grid min-w-0 gap-4">
             <ul

@@ -405,6 +405,7 @@ function ChatWorkspaceContent({
     showRoute: model.route.showRoute,
     startChat: model.apps.startChat,
     editWithAgent: model.apps.editWithAgent,
+    ...(model.apps.startNew ? { startNew: model.apps.startNew } : {}),
     ...(canViewAudit(model.auth.user)
       ? { operations: { href: operationRunsHref(), runHref: operationRunHref } }
       : {})

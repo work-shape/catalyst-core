@@ -15,7 +15,7 @@ The agent builds it and shows it beside the chat. **Preview** ("Vorschau") shows
 
 The preview belongs to its conversation. It cannot change anything in other systems. To keep it, save it as an App.
 
-When you have no App yet, the **Apps** page offers **Build an app in chat** ("App im Chat bauen"), which starts a chat for this.
+When you have no App yet, the **Apps** page offers **Build one with the agent** ("Eine mit dem Agenten bauen") and two examples. Each opens the agent with your request already started.
 
 ## Keep it as an App
 

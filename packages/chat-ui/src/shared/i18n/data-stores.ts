@@ -22,10 +22,12 @@ export const dataStores = defineTranslations({
     "dataStores.conditionsTitle": "Open on the server",
     "dataStores.conditionTempFilesUnbounded": "Temporary files have no limit",
     "dataStores.description":
-      "Data stores are created with their migrations through the CLI or the API and cannot be changed here.",
+      "Where apps and workflows keep their records. This page shows what each store holds.",
     "dataStores.descriptionLabel": "Description",
     "dataStores.empty":
-      "No data stores yet. A data store is a database the platform hosts, in which apps and workflows keep their rows. A person with the right to create data stores adds one through the CLI or the API.",
+      "No data stores yet. A data store is a database in which apps and workflows keep their records. Describe one to the agent, and its first save creates it.",
+    "dataStores.emptyReadOnly":
+      "No data stores yet. A data store keeps records such as a client list or the hours per project, for apps and workflows to use.",
     "dataStores.kind": "Data stores",
     "dataStores.kindSingular": "Data store",
     "dataStores.draftUnpublished": "Draft · not published",
@@ -38,6 +40,15 @@ export const dataStores = defineTranslations({
     "dataStores.missing": "There is no data store with the id {name}.",
     "dataStores.nearLimit":
       "This store is at 80 percent of its size limit or above. Over the limit it refuses new rows and still answers reads.",
+    "dataStores.buildWithAgent": "Build one with the agent",
+    "dataStores.exampleClientsTitle": "Client list",
+    "dataStores.exampleClientsHint": "Name, contact and status of each client",
+    "dataStores.exampleClientsPrompt":
+      "Build a new data store that holds our clients with their name, contact person, email and status.",
+    "dataStores.exampleHoursTitle": "Hours per project",
+    "dataStores.exampleHoursHint": "Who worked how long on which project",
+    "dataStores.exampleHoursPrompt":
+      "Build a new data store that holds the hours worked per person and project, with the date and a note.",
     "dataStores.new": "New data store",
     "dataStores.newPrompt": "Build a new data store that holds ",
     "dataStores.nextMigration": "Next migration",
@@ -143,10 +154,12 @@ export const dataStores = defineTranslations({
     "dataStores.conditionsTitle": "Am Server offen",
     "dataStores.conditionTempFilesUnbounded": "Temporäre Dateien haben keine Grenze",
     "dataStores.description":
-      "Datenspeicher werden mit ihren Migrationen über die CLI oder die API angelegt und lassen sich hier nicht ändern.",
+      "Hier legen Apps und Workflows ihre Einträge ab. Diese Seite zeigt, was jeder Speicher enthält.",
     "dataStores.descriptionLabel": "Beschreibung",
     "dataStores.empty":
-      "Noch keine Datenspeicher. Ein Datenspeicher ist eine Datenbank der Plattform, in der Apps und Workflows ihre Zeilen ablegen. Wer das Recht hat, Datenspeicher anzulegen, legt ihn über die CLI oder die API an.",
+      "Noch keine Datenspeicher. Ein Datenspeicher ist eine Datenbank, in der Apps und Workflows ihre Einträge ablegen. Beschreib dem Agenten einen, und sein erstes Speichern legt ihn an.",
+    "dataStores.emptyReadOnly":
+      "Noch keine Datenspeicher. Ein Datenspeicher hält Einträge wie eine Kundenliste oder die Stunden je Projekt, mit denen Apps und Workflows arbeiten.",
     "dataStores.kind": "Datenspeicher",
     "dataStores.kindSingular": "Datenspeicher",
     "dataStores.draftUnpublished": "Entwurf · nicht veröffentlicht",
@@ -160,6 +173,15 @@ export const dataStores = defineTranslations({
     "dataStores.missing": "Es gibt keinen Datenspeicher mit der Kennung {name}.",
     "dataStores.nearLimit":
       "Dieser Speicher hat 80 Prozent seiner Größengrenze erreicht oder überschritten. Über der Grenze nimmt er keine neuen Zeilen an und beantwortet weiterhin Lesezugriffe.",
+    "dataStores.buildWithAgent": "Einen mit dem Agenten bauen",
+    "dataStores.exampleClientsTitle": "Kundenliste",
+    "dataStores.exampleClientsHint": "Name, Kontakt, Status je Kunde",
+    "dataStores.exampleClientsPrompt":
+      "Bau einen neuen Datenspeicher, der unsere Kunden mit Name, Ansprechperson, E-Mail und Status enthält.",
+    "dataStores.exampleHoursTitle": "Stunden je Projekt",
+    "dataStores.exampleHoursHint": "Zeiten je Person und Projekt",
+    "dataStores.exampleHoursPrompt":
+      "Bau einen neuen Datenspeicher, der die geleisteten Stunden je Person und Projekt mit Datum und Notiz enthält.",
     "dataStores.new": "Neuer Datenspeicher",
     "dataStores.newPrompt": "Bau einen neuen Datenspeicher, der ",
     "dataStores.nextMigration": "Nächste Migration",

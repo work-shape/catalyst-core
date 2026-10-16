@@ -10,6 +10,7 @@ import type {
 } from "../../shared/api/asset-writes";
 import type { TranslationKey } from "../../shared/i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
+import type { BuildWithAgentCopy } from "../build-with-agent-empty";
 import type { BuildNamespace, BuildScope } from "../../shared/build-rights";
 
 /** One asset as a list shows it: what the instance says of it without its content. */
@@ -161,6 +162,11 @@ interface BuildKindBase {
   description?: TranslationKey;
   /** The sentence of the empty list. An editable kind says it to a person who may create. */
   emptyText: TranslationKey;
+  /**
+   * What the empty list offers a person whose New opens the agent: the agent with two examples
+   * (UXA-3b). Everybody else reads `emptyText`, which then says what the kind is.
+   */
+  emptyBuild?: BuildWithAgentCopy;
   /** The kind's key in the icon registry: one icon per kind, the same everywhere. */
   icon: GenericIconKey;
   /** Rows show an avatar with the name's initials. Without it they show the kind's icon. */

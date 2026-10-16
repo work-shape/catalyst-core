@@ -232,6 +232,14 @@ interface RenderInput extends StoreAnswers {
   draft?: boolean;
   /** The instance has the module on and the reader may read stores. */
   on?: boolean;
+  /** The reader may create stores. */
+  canCreate?: boolean;
+  /** An agent here builds assets: New opens it with this text. */
+  buildWithAgent?(prompt: string): void;
+  /** Studio lists stores by owner, here the reader's Personal Workspace, behind a picker. */
+  scoped?: boolean;
+  /** The list has not answered yet. */
+  listLoading?: boolean;
   locale?: LocaleCode;
 }
 
@@ -241,7 +249,9 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
   const source: BuildSource = {
     kinds: [
       { kind: "agent", canCreate: false, canDelete: false },
-      ...(input.on === false ? [] : [{ kind: "data_store", canCreate: true, canDelete: true }])
+      ...(input.on === false
+        ? []
+        : [{ kind: "data_store", canCreate: input.canCreate ?? true, canDelete: true }])
     ],
     rights: {
       ...resolveBuildRights({ permissions: ["config_assets.write"] }, context),
@@ -252,7 +262,7 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
     error: undefined,
     reload: async () => undefined,
     useList: (kind) => ({
-      rows: kind === "data_store" ? (input.list ?? []) : [],
+      rows: kind !== "data_store" ? [] : input.listLoading ? undefined : (input.list ?? []),
       error: undefined,
       hasMore: false,
       loadingMore: false,
@@ -265,6 +275,14 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
       loadedAt: 1,
       reload: async () => "loaded"
     }),
+    ...(input.buildWithAgent ? { buildWithAgent: input.buildWithAgent } : {}),
+    ...(input.scoped
+      ? {
+          scope: { kind: "workspace" as const, workspaceId: "ws_1" },
+          scoped: () => true,
+          chooseScope: noop
+        }
+      : {}),
     exists: async () => true,
     checkName: async () => ({ available: true }),
     writes: {
@@ -384,17 +402,55 @@ describe("Data Stores in Build", () => {
     expect(list).not.toContain(">New ");
     expect(list).not.toContain("More actions");
     expect(list).toContain(
-      "Data stores are created with their migrations through the CLI or the API and cannot be changed here."
+      "Where apps and workflows keep their records. This page shows what each store holds."
     );
   });
 
-  it("says in the empty list what a store is and how one comes to exist, and has no item where the instance lists none", () => {
-    const empty = render({ kindPath: "data-stores" });
-    expect(empty).toContain("A data store is a database the platform hosts");
-    expect(empty).toContain(
-      "A person with the right to create data stores adds one through the CLI or the API."
+  it("offers whoever New opens the agent for the agent with two examples on the empty list, and tells everybody else what a store is", () => {
+    const builder = render({ kindPath: "data-stores" }, { buildWithAgent: noop });
+    expect(builder).toContain("Describe one to the agent, and its first save creates it.");
+    expect(builder).toContain(">Build one with the agent</button>");
+    expect(builder).toContain('aria-label="Examples to start with"');
+    expect(builder).toContain("Client list");
+    expect(builder).toContain("Hours per project");
+    expect(render({ kindPath: "data-stores" }, { buildWithAgent: noop, locale: "de" })).toContain(
+      ">Einen mit dem Agenten bauen</button>"
     );
-    expect(empty).not.toContain(">New ");
+
+    // Without the agent, and without the right to create, the list says what a store is: no
+    // way that is not there, and no word of who else could add one.
+    for (const reader of [
+      render({ kindPath: "data-stores" }),
+      render({ kindPath: "data-stores" }, { canCreate: false, buildWithAgent: noop })
+    ]) {
+      expect(reader).toContain(
+        "No data stores yet. A data store keeps records such as a client list or the hours per project, for apps and workflows to use."
+      );
+      expect(reader).not.toContain("Build one with the agent");
+      expect(reader).not.toContain("Client list");
+      expect(reader).not.toContain("CLI");
+      expect(reader).not.toContain(">New ");
+    }
+
+    // The offer is the one button for the call: the head's New stands once there are stores.
+    expect(builder).not.toContain("New data store");
+    const listed = render(
+      { kindPath: "data-stores" },
+      { buildWithAgent: noop, list: [storeRow("orders", { title: "Orders" })] }
+    );
+    expect(listed).toContain("New data store");
+    expect(listed).not.toContain("Build one with the agent");
+    // While the list loads, New stands: making one never waits for the answer.
+    expect(
+      render({ kindPath: "data-stores" }, { buildWithAgent: noop, listLoading: true })
+    ).toContain("New data store");
+
+    // Where a picker chooses the owner, an empty one offers the agent under the picker.
+    const scoped = render({ kindPath: "data-stores" }, { scoped: true, buildWithAgent: noop });
+    expect(scoped).toContain('aria-label="Scope: Personal"');
+    expect(scoped).toContain(">Build one with the agent</button>");
+    expect(scoped).toContain("Hours per project");
+    expect(scoped).not.toContain("New data store");
 
     const off = render({ kindPath: "data-stores" }, { on: false });
     expect(off).not.toContain("Data stores");

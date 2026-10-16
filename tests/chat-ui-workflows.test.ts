@@ -213,12 +213,44 @@ describe("the list of Workflows", () => {
     description: "Reads the clients and sends each of them a note."
   };
 
-  it("says in one sentence that a workspace has no Workflows, and offers nothing to build", () => {
+  it("tells whoever may not build what a Workflow is, and offers nothing to build", () => {
     const markup = render(listPage([]));
-    expect(markup).toContain(t("workflows.emptyReadOnly"));
+    expect(markup).toContain(
+      "No workflows yet. A workflow, for example, sends a summary every Monday or reminds clients of overdue invoices."
+    );
+    expect(markup).not.toContain("builder");
     expect(markup).toContain(t("workflows.description"));
     expect(markup).not.toContain("<button");
     expect(render(listPage([]), "de")).toContain(de("workflows.emptyReadOnly"));
+  });
+
+  it("offers a builder the agent with two examples on the empty list", () => {
+    const markup = render(createElement(WorkflowsPageView, { ...listPage([]).props, onNew: noop }));
+    expect(markup).toContain(t("workflows.empty"));
+    expect(markup).toContain(">Build one with the agent</button>");
+    expect(markup).toContain('aria-label="Examples to start with"');
+    expect(markup).toContain("Monday task summary");
+    expect(markup).toContain("Reminder of overdue invoices");
+    expect(markup).not.toContain(t("workflows.emptyReadOnly"));
+    const german = render(
+      createElement(WorkflowsPageView, { ...listPage([]).props, onNew: noop }),
+      "de"
+    );
+    expect(german).toContain(">Einen mit dem Agenten bauen</button>");
+    expect(german).toContain(de("workflows.exampleSummaryTitle"));
+  });
+
+  it("drops the head's New while the empty list offers the agent, and shows it once there are Workflows", () => {
+    const page = (rows: Parameters<typeof listPage>[0]) =>
+      render(createElement(WorkflowsPageView, { ...listPage(rows).props, onNew: noop }));
+    const empty = page([]);
+    expect(empty).toContain(">Build one with the agent</button>");
+    expect(empty).not.toContain(t("workflows.new"));
+    // While the list loads, New stands: making one never waits for the answer.
+    expect(page(undefined)).toContain(t("workflows.new"));
+    const listed = page([summary]);
+    expect(listed).toContain(t("workflows.new"));
+    expect(listed).not.toContain("Build one with the agent");
   });
 
   it("lists each Workflow by its name and its sentence, with a link to its page", () => {

@@ -89,6 +89,12 @@ interface AppsModel {
    * draft beside it. Rejects where the instance refuses the conversation.
    */
   editWithAgent(app: string): Promise<void>;
+  /**
+   * Opens the dock on the list with a new conversation with an agent that builds assets and
+   * `prompt` in its composer: its first save creates the App. Absent where no agent here builds
+   * them, or the person may write no App.
+   */
+  startNew?(prompt: string): void;
 }
 
 export interface WorkspaceAuthModel {

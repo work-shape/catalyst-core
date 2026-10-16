@@ -67,3 +67,47 @@ export async function shootLocales(
   await page.reload();
   await ready();
 }
+
+/**
+ * Pictures of a screen at 1280 and 390 pixels, light and dark, in English and German, where
+ * `E2E_SHOTS_DIR` names a folder. Each picture loads the address again and waits for `ready`;
+ * the page is left light, in English, at the width it had.
+ */
+export async function shootEverywhere(
+  page: Page,
+  name: string,
+  ready: () => Promise<void>
+): Promise<void> {
+  if (!shotsDir) {
+    return;
+  }
+  await mkdir(shotsDir, { recursive: true });
+  const size = page.viewportSize();
+  const show = async (theme: string, locale: string) => {
+    await page.evaluate(
+      ([themeValue, localeValue]) => {
+        window.localStorage.setItem("vivd-catalyst:theme", themeValue);
+        window.localStorage.setItem("vivd-catalyst:locale", localeValue);
+      },
+      [theme, locale] as const
+    );
+    await page.reload();
+    await ready();
+  };
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
+    for (const theme of ["light", "dark"]) {
+      for (const locale of ["en", "de"]) {
+        await show(theme, locale);
+        await page.screenshot({
+          path: join(shotsDir, `${name}-${width}-${theme}-${locale}.png`),
+          animations: "disabled"
+        });
+      }
+    }
+  }
+  if (size) {
+    await page.setViewportSize(size);
+  }
+  await show("light", "en");
+}

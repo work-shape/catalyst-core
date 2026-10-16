@@ -24,6 +24,12 @@ export interface AppsHost {
   /** Opens a new conversation of the workspace with this text in its composer. */
   startChat(prompt: string): void;
   /**
+   * Opens the dock on the list with a new conversation with an agent that builds assets and
+   * `prompt` in its composer; nothing is created until its first save. Absent where no such
+   * agent is offered or the reader may write no App: the empty list then opens the chat.
+   */
+  startNew?(prompt: string): void;
+  /**
    * Starts a conversation of the open workspace about this App and opens it: its agent reads
    * and saves the App's draft, which is shown beside it. Rejects where the instance refuses
    * the conversation. Absent where no conversation can be started.

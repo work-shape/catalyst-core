@@ -28,7 +28,7 @@ import {
   SubRail
 } from "@work-shape/catalyst-ui";
 import { formatDateTime } from "../../shared/locale-format";
-import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import { useTranslation } from "../../shared/i18n";
 import { holdLeaveGuard } from "../../shared/leave-guard";
 import {
   isEditableKind,
@@ -69,6 +69,7 @@ import {
   type BuildScope
 } from "../../shared/build-rights";
 import { scrollPageToTop } from "./build-scroll";
+import { BUILT_WITH_AGENT, BuildListEmpty } from "./build-list-empty";
 
 /** The commands the CLI entry names, in the order a person runs them. */
 const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst config push"];
@@ -77,15 +78,6 @@ const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst 
 type ListView = BuildListFilter;
 
 const firstListView: ListView = { text: "", namespace: undefined };
-
-/** The kinds an agent's first save creates, with the words of their New button and prompt. */
-const BUILT_WITH_AGENT: Readonly<
-  Record<string, { label: TranslationKey; prompt: TranslationKey } | undefined>
-> = {
-  agent: { label: "configNewAgent", prompt: "configNewAgentPrompt" },
-  skill: { label: "configNewSkill", prompt: "configNewSkillPrompt" },
-  data_store: { label: "dataStores.new", prompt: "dataStores.newPrompt" }
-};
 
 /** The value of the Namespace filter that narrows nothing. */
 const ALL_NAMESPACES = "";
@@ -528,11 +520,11 @@ function BuildList({
   const opens = opensAssets(entry);
   // Where an agent builds assets, "New" of a kind it creates opens it in the dock: its first
   // save creates the asset (NAV-2). Elsewhere a kind starts its asset in its dialog.
-  const withAgent = source.buildWithAgent ? BUILT_WITH_AGENT[entry.kind] : undefined;
-  const { buildWithAgent } = source;
+  const withAgent = state.canCreate ? BUILT_WITH_AGENT[entry.kind] : undefined;
+  const startWithAgent = withAgent ? source.buildWithAgent : undefined;
   const newButton =
-    state.canCreate && withAgent && buildWithAgent ? (
-      <Button onClick={() => buildWithAgent(t(withAgent.prompt))}>
+    withAgent && startWithAgent ? (
+      <Button onClick={() => startWithAgent(t(withAgent.prompt))}>
         <Plus aria-hidden="true" />
         {t(withAgent.label)}
       </Button>
@@ -543,6 +535,13 @@ function BuildList({
       </Button>
     ) : undefined;
   const listError = list.error ? <LoadError message={list.error} onRetry={list.retry} /> : null;
+  // Where the empty list offers the agent, the head's New would be a second button for the same
+  // call: the head drops it once the list has answered with none and no search narrows it.
+  // While it loads, New stands, so making one never waits for the list. A kind that offers the
+  // agent adds no rows of its own (`ListLead`).
+  const offerStands =
+    entry.emptyBuild && startWithAgent && !list.error && !filtered && list.rows?.length === 0;
+  const headNew = offerStands ? undefined : newButton;
 
   // The rows a kind adds come first, in the same list, under the same search and filters.
   const listBody = (lead: BuildListLead) => {
@@ -558,9 +557,7 @@ function BuildList({
             <SkeletonList rows={6} />
           )
         ) : rows.length === 0 && leadRows.length === 0 && !filtered && scopes.length < 2 ? (
-          <EmptyState icon={<RegistryIcon name={entry.icon} />} action={newButton}>
-            {t(editable && !state.canCreate ? editable.emptyReadOnlyText : entry.emptyText)}
-          </EmptyState>
+          <BuildListEmpty kind={kind} newButton={newButton} startWithAgent={startWithAgent} />
         ) : (
           <div className="grid min-w-0 gap-3">
             <FilterBar
@@ -626,7 +623,14 @@ function BuildList({
                 </>
               }
             />
-            {rows.length === 0 && leadRows.length === 0 ? (
+            {rows.length === 0 &&
+            leadRows.length === 0 &&
+            !filtered &&
+            entry.emptyBuild &&
+            startWithAgent ? (
+              // An empty scope of a kind the agent builds offers it under the scope's picker.
+              <BuildListEmpty kind={kind} newButton={newButton} startWithAgent={startWithAgent} />
+            ) : rows.length === 0 && leadRows.length === 0 ? (
               <EmptyState layout="inline" icon={<SearchX aria-hidden="true" />}>
                 {settledText.trim() !== ""
                   ? t("build.noMatch", { query: settledText.trim() })
@@ -728,7 +732,7 @@ function BuildList({
       <PageHeader
         title={t(entry.label)}
         description={entry.description ? t(entry.description) : undefined}
-        primaryAction={newButton}
+        primaryAction={headNew}
         overflow={
           editable && !editable.withoutCli ? (
             <DropdownMenu>

@@ -1,3 +1,4 @@
+import { Contact, Timer } from "lucide-react";
 import { Badge, Chip } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
@@ -88,7 +89,7 @@ function DataStoreRowMeasured({ name, useSource }: { name: string; useSource(): 
 /**
  * Data Stores in Build on the answers of `useSource`: a list, and a page that shows one store.
  * A store is made by its definition, which an agent or the API writes, so the kind has no
- * editor and no button that starts one. A row says what the definition says of the store, its
+ * editor: its New and its empty list open the agent where one builds here. A row says what the definition says of the store, its
  * name and its description, whom it belongs to, the store's state and size, and its tables and
  * rows as last measured.
  */
@@ -102,7 +103,26 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
     label: "dataStores.kind",
     description: "dataStores.description",
     searchLabel: "dataStores.search",
-    emptyText: "dataStores.empty",
+    emptyText: "dataStores.emptyReadOnly",
+    emptyBuild: {
+      text: "dataStores.empty",
+      action: "dataStores.buildWithAgent",
+      prompt: "dataStores.newPrompt",
+      examples: [
+        {
+          icon: <Contact aria-hidden="true" className="size-5 text-muted-foreground" />,
+          title: "dataStores.exampleClientsTitle",
+          hint: "dataStores.exampleClientsHint",
+          prompt: "dataStores.exampleClientsPrompt"
+        },
+        {
+          icon: <Timer aria-hidden="true" className="size-5 text-muted-foreground" />,
+          title: "dataStores.exampleHoursTitle",
+          hint: "dataStores.exampleHoursHint",
+          prompt: "dataStores.exampleHoursPrompt"
+        }
+      ]
+    },
     icon: "datastore",
     view: { Page: DataStoreAssetPage, missingText: "dataStores.missing" },
     rowText: (asset) => asset.description,

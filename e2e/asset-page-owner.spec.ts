@@ -36,7 +36,8 @@ test("a workspace's Data Store opens from the Working on line and by its address
   expect(created.ok(), await created.text()).toBe(true);
   const workspaceId = idSchema.parse(await created.json()).id;
 
-  // New data store in the workspace's Studio; the agent's first save opens its draft.
+  // The empty list's offer in the workspace's Studio (it stands in for New there); the agent's
+  // first save opens the draft.
   await page.goto(`/w/${workspaceId}`);
   // New goes to the agent where the workspace is the open one.
   await expect(page.getByRole("button", { name: "Switch workspace" })).toContainText(label);
@@ -47,7 +48,7 @@ test("a workspace's Data Store opens from the Working on line and by its address
     .click();
   await page.getByRole("button", { name: /^Scope: / }).click();
   await page.getByRole("option", { name: label }).click();
-  await page.getByRole("button", { name: "New data store", exact: true }).click();
+  await page.getByRole("button", { name: "Build one with the agent", exact: true }).click();
   await sendToolCall(page, "platform.assets.put", {
     kind: "data_store",
     name,

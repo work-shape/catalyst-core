@@ -55,7 +55,7 @@ function appsPage(rows: readonly AssetSummary[] | undefined, rights: AppRights, 
     now,
     onOpenRoute() {},
     onAction() {},
-    onBuildInChat() {}
+    onBuild() {}
   });
 }
 
@@ -180,24 +180,27 @@ describe("the Apps page", () => {
     expect(markup).toContain("Draft only");
   });
 
-  it("tells a builder how an App comes to be, with the way into the chat and two examples", () => {
+  it("tells a builder how an App comes to be, with the agent and two examples", () => {
     const markup = render(appsPage([], ALL));
 
     expect(markup).toContain(
-      "No apps in this workspace yet. Describe a tool in chat and the agent builds it. Saved as an app, it is yours to use; publishing it decides who else sees it."
+      "No apps in this workspace yet. Describe a tool to the agent and it builds it. Saved as an app, it is yours to use; publishing it decides who else sees it."
     );
-    expect(markup).toContain(">Build an app in chat</button>");
+    expect(markup).toContain(">Build one with the agent</button>");
     expect(markup).toContain('aria-label="Examples to start with"');
-    expect(markup).toContain("Fee calculator from hours and rate");
+    expect(markup).toContain(">Fee calculator<");
     expect(markup).toContain("Leave request for the team");
   });
 
-  it("tells everybody else who can add one, without an action", () => {
+  it("tells everybody else what an App is, without an action and without who could add one", () => {
     const markup = render(appsPage([], NO_APP_RIGHTS));
 
-    expect(markup).toContain("No apps yet. A builder of this workspace can add one.");
-    expect(markup).not.toContain("Build an app in chat");
-    expect(markup).not.toContain("Fee calculator from hours and rate");
+    expect(markup).toContain(
+      "No apps yet. An app is a small tool for this workspace, such as a fee calculator or a leave request."
+    );
+    expect(markup).not.toContain("builder");
+    expect(markup).not.toContain("Build one with the agent");
+    expect(markup).not.toContain(">Fee calculator<");
   });
 
   it("offers the next page while the instance holds more, and the way to ask again", () => {
@@ -212,7 +215,7 @@ describe("the Apps page", () => {
     const markup = render(appsPage([], ALL), "de");
 
     expect(markup).toContain(de("apps.empty"));
-    expect(markup).toContain(">App im Chat bauen</button>");
+    expect(markup).toContain(">Eine mit dem Agenten bauen</button>");
     expect(de("apps.empty")).not.toBe(t("apps.empty"));
     expect(render(appsPage([summary()], ALL), "de")).toContain("Veröffentlicht · Revision 2");
   });

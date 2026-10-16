@@ -833,7 +833,8 @@ export function useWorkspaceChatModel({
       enabled: appsEnabled,
       rights: appRights,
       startChat: startNewConversationWith,
-      editWithAgent: (app) => startConversationAbout({ kind: APP_ASSET_KIND, name: app })
+      editWithAgent: (app) => startConversationAbout({ kind: APP_ASSET_KIND, name: app }),
+      ...(buildWithAgent !== undefined && appRights.write ? { startNew: buildWithAgent } : {})
     },
     workflows: {
       access: workflowsOpen,

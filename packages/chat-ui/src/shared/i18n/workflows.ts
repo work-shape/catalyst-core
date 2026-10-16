@@ -115,9 +115,19 @@ export const workflows = defineTranslations({
     "workflows.edit.refused": "This workflow is not available to you for editing with the agent.",
     "workflows.edit.withAgent": "Edit with the agent",
     "workflows.moreActions": "More actions",
-    "workflows.emptyReadOnly": "No workflows yet. A builder of this workspace can add one.",
+    "workflows.emptyReadOnly":
+      "No workflows yet. A workflow, for example, sends a summary every Monday or reminds clients of overdue invoices.",
     "workflows.empty":
       "No workflows yet. Describe one to the agent, and its first save creates it.",
+    "workflows.buildWithAgent": "Build one with the agent",
+    "workflows.exampleSummaryTitle": "Monday task summary",
+    "workflows.exampleSummaryHint": "Open tasks per person, every Monday",
+    "workflows.exampleSummaryPrompt":
+      "Build a new workflow that runs every Monday at 8:00, collects last week's open tasks per person and sends me a summary.",
+    "workflows.exampleReminderTitle": "Reminder of overdue invoices",
+    "workflows.exampleReminderHint": "Each morning, a friendly note per client",
+    "workflows.exampleReminderPrompt":
+      "Build a new workflow that checks every morning which invoices are overdue and drafts a friendly reminder to each client.",
     "workflows.new": "New workflow",
     "workflows.newPrompt": "Build a new workflow that ",
     "workflows.failed": "The workflow could not be loaded.",
@@ -419,9 +429,18 @@ export const workflows = defineTranslations({
     "workflows.edit.withAgent": "Mit dem Agenten bearbeiten",
     "workflows.moreActions": "Weitere Aktionen",
     "workflows.emptyReadOnly":
-      "Noch keine Workflows. Wer in diesem Arbeitsbereich bauen darf, kann einen hinzufügen.",
+      "Noch keine Workflows. Ein Workflow schickt zum Beispiel jeden Montag eine Zusammenfassung oder erinnert Kunden an überfällige Rechnungen.",
     "workflows.empty":
       "Noch keine Workflows. Beschreib dem Agenten einen, und sein erstes Speichern legt ihn an.",
+    "workflows.buildWithAgent": "Einen mit dem Agenten bauen",
+    "workflows.exampleSummaryTitle": "Montagsübersicht",
+    "workflows.exampleSummaryHint": "Offene Aufgaben je Person, montags",
+    "workflows.exampleSummaryPrompt":
+      "Bau einen neuen Workflow, der jeden Montag um 8:00 die offenen Aufgaben der letzten Woche je Person sammelt und mir eine Zusammenfassung schickt.",
+    "workflows.exampleReminderTitle": "Zahlungserinnerungen",
+    "workflows.exampleReminderHint": "Jeden Morgen ein Hinweis je Kunde",
+    "workflows.exampleReminderPrompt":
+      "Bau einen neuen Workflow, der jeden Morgen prüft, welche Rechnungen überfällig sind, und für jeden Kunden eine freundliche Erinnerung entwirft.",
     "workflows.new": "Neuer Workflow",
     "workflows.newPrompt": "Bau einen neuen Workflow, der ",
     "workflows.failed": "Der Workflow konnte nicht geladen werden.",

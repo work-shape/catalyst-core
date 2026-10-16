@@ -82,10 +82,10 @@ describe("the words of Apps, the preview and saving", () => {
     const { en, de } = messages("apps.ts");
 
     expect(en.get("apps.empty")).toBe(
-      "No apps in this workspace yet. Describe a tool in chat and the agent builds it. Saved as an app, it is yours to use; publishing it decides who else sees it."
+      "No apps in this workspace yet. Describe a tool to the agent and it builds it. Saved as an app, it is yours to use; publishing it decides who else sees it."
     );
     expect(de.get("apps.empty")).toBe(
-      "In diesem Arbeitsbereich gibt es noch keine Apps. Beschreibe im Chat ein Werkzeug, und der Agent baut es. Speicherst du es als App, gehört sie dir; beim Veröffentlichen legst du fest, wer sie noch sieht."
+      "In diesem Arbeitsbereich gibt es noch keine Apps. Beschreib dem Agenten ein Werkzeug, und er baut es. Speicherst du es als App, gehört sie dir; beim Veröffentlichen legst du fest, wer sie noch sieht."
     );
     // The sentence it replaces said that saving made the App everyone's.
     expect(en.get("apps.empty")).not.toMatch(/everyone/u);
