@@ -5,8 +5,9 @@ import {
   skillPortabilityIssues,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
-import { AppError, defineAssetKind } from "@work-shape/catalyst-core";
+import { ASSET_OWNER_KINDS, AppError, defineAssetKind } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import { readDefinitionField, readDefinitionName, type WorkflowAssetKind } from "./shared";
 import {
   SKILL_MANIFEST_FILE,
   readSkillFiles,
@@ -17,7 +18,6 @@ import {
   withCarriedSkillParts,
   withSkillFileIndex
 } from "./skill-files";
-import { readDefinitionField, readDefinitionName, type WorkflowAssetKind } from "./shared";
 
 /**
  * The refusal of every write to a skill that ships with the platform: a release replaces it,
@@ -63,7 +63,7 @@ export function createSkillAssetKind(options: {
       },
       actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).
-      owners: ["instance", "workspace"],
+      owners: [...ASSET_OWNER_KINDS],
       validate: () => [],
       validateWrite: (context, skills) =>
         skills

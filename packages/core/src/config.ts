@@ -1,5 +1,9 @@
 import {
+  AGENT_EDITABLE_FIELDS,
   AGENT_STARTERS_MAX,
+  MODEL_PROVIDER_AUTH_MODES,
+  MODEL_USAGE_TIERS,
+  OPENAI_COMPATIBLE_APIS,
   REASONING_EFFORTS,
   SKILL_ORIGINS,
   SKILL_RESOURCE_MEDIA_TYPES,
@@ -12,14 +16,14 @@ import {
   type ReasoningEffortConfig,
   type SkillConfig,
   type SkillOrigin,
-  type SkillStarterConfig,
   type SkillResourceConfig,
-  type SkillResourceMediaType
+  type SkillResourceMediaType,
+  type SkillStarterConfig
 } from "@work-shape/catalyst-asset-schemas";
 import type { LocalizationConfig, LocalizedStringConfig } from "./localization";
 import type { ProviderRegion } from "./providers";
 
-export type ModelProviderAuthModeConfig = "bearer" | "api-key";
+export type ModelProviderAuthModeConfig = (typeof MODEL_PROVIDER_AUTH_MODES)[number];
 
 /**
  * What the product reads of one entry under `infrastructure.models`: its name, the registered
@@ -39,27 +43,14 @@ export interface ModelProviderConfig {
   contextManagement?: OpenAiCompatibleContextManagementConfig;
 }
 
-export type OpenAiCompatibleModelProviderApiConfig = "chat_completions" | "responses";
+export type OpenAiCompatibleModelProviderApiConfig = (typeof OPENAI_COMPATIBLE_APIS)[number];
 export interface OpenAiCompatibleContextManagementConfig {
   compaction?: {
     compactThresholdTokens: number;
   };
 }
 
-export const AGENT_EDITABLE_FIELDS = [
-  "displayName",
-  "description",
-  "welcomeMessage",
-  "welcomeSubtitle",
-  "instructions",
-  "modelBindingId",
-  "reasoningEffort",
-  "maxSteps",
-  "toolNames",
-  "skillNames",
-  "knowledgeBases",
-  "initialPrompts"
-] as const;
+export { AGENT_EDITABLE_FIELDS } from "@work-shape/catalyst-asset-schemas";
 export type AgentEditableField = (typeof AGENT_EDITABLE_FIELDS)[number];
 
 /** Governed by the `agent_models.manage` permission instead of `editableAgentFields`. */
@@ -113,14 +104,7 @@ export interface ModelBindingConfig {
   userSelectableReasoningEfforts?: ReasoningEffortConfig[];
 }
 
-export const MODEL_USAGE_TIERS = [
-  "very_low",
-  "low",
-  "moderate",
-  "elevated",
-  "high",
-  "very_high"
-] as const;
+export { MODEL_USAGE_TIERS } from "@work-shape/catalyst-asset-schemas";
 export type ModelUsageTier = (typeof MODEL_USAGE_TIERS)[number];
 
 /**
@@ -257,9 +241,9 @@ export {
   type ReasoningEffortConfig,
   type SkillConfig,
   type SkillOrigin,
-  type SkillStarterConfig,
   type SkillResourceConfig,
-  type SkillResourceMediaType
+  type SkillResourceMediaType,
+  type SkillStarterConfig
 };
 
 export type { LocalizationConfig, LocalizedStringConfig };

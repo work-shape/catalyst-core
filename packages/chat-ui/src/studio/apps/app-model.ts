@@ -4,6 +4,7 @@ import {
   type CollaborationWorkspaceAgents,
   type PlatformContext
 } from "@work-shape/catalyst-api-client";
+import { APP_MODES } from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../../shared/i18n";
 
 /** The four rights of an App, by the names the instance decides them under. */
@@ -247,7 +248,7 @@ export function appPreviewProblem(error: unknown): AppPreviewProblem {
 /** The sentence of each problem. The draft has its own for a reader who may not write. */
 export function appPreviewProblemText(
   problem: AppPreviewProblem,
-  mode: "published" | "draft"
+  mode: (typeof APP_MODES)[number]
 ): TranslationKey {
   switch (problem) {
     case "not_published":

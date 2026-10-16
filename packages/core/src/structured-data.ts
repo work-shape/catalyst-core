@@ -1,11 +1,12 @@
+import { STRUCTURED_DATA_REVIEW_REASONS } from "@work-shape/catalyst-asset-schemas";
+import type { ChatMessage } from "./conversation";
+import type { ConversationAttachment } from "./files";
 import type {
   ClientInstanceId,
   ConversationAttachmentId,
   ConversationId,
   StructuredDataResourceId
 } from "./ids";
-import type { ChatMessage } from "./conversation";
-import type { ConversationAttachment } from "./files";
 import type { ISODateString } from "./time";
 
 export const STRUCTURED_DATA_RESOURCE_DISPLAY_KIND = "structured_data.resource";
@@ -16,7 +17,7 @@ export type StructuredDataFieldSource = {
 };
 
 export type StructuredDataFieldAttention = {
-  reason: "uncertain" | "conflicting";
+  reason: (typeof STRUCTURED_DATA_REVIEW_REASONS)[number];
   message?: string;
 };
 

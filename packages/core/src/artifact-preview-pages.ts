@@ -1,6 +1,7 @@
+import { ARTIFACT_PREVIEW_IMAGE_MIME_TYPES } from "@work-shape/catalyst-asset-schemas";
 import type { ManagedArtifactId } from "./ids";
 
-export type ArtifactPreviewPageImageMimeType = "image/png" | "image/jpeg" | "image/webp";
+export type ArtifactPreviewPageImageMimeType = (typeof ARTIFACT_PREVIEW_IMAGE_MIME_TYPES)[number];
 
 /** One page, slide, sheet or range of a preview: the image a person is shown. */
 export interface ArtifactPreviewImagePageRef {

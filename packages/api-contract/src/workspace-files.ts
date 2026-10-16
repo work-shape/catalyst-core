@@ -1,8 +1,9 @@
+import { WORKSPACE_FILE_KINDS } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { listQuerySchema, timestampSchema } from "./shared";
 
 // Mirrors `FOUND_FILE_KINDS` of core.
-const workspaceFileKindSchema = z.enum(["page", "upload", "generated_file"]);
+const workspaceFileKindSchema = z.enum(WORKSPACE_FILE_KINDS);
 
 /**
  * A Page, an uploaded file or a file an agent made, in a conversation of the workspace that

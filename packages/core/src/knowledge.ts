@@ -1,9 +1,10 @@
 import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
+import { KNOWLEDGE_CHECK_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
-import type { ActorAccess } from "./permissions";
+import type { ConnectionsStore } from "./connections";
 import type { DataStoreRows, DataStoreStatement } from "./data-stores";
 import type { ClientInstanceId } from "./ids";
-import type { ConnectionsStore } from "./connections";
+import type { ActorAccess } from "./permissions";
 import type { ISODateString } from "./time";
 
 // The names and shapes of a Knowledge Base that more than one package reads: the asset kind,
@@ -91,7 +92,7 @@ export interface KnowledgeTableCheck {
  * read or the backend cannot be reached: a query then fails, and a publish is refused.
  */
 export interface KnowledgeCheckResult {
-  status: "ok" | "needs_attention";
+  status: (typeof KNOWLEDGE_CHECK_STATUSES)[number];
   /** Every described table, in the order of the definition. */
   tables: KnowledgeTableCheck[];
   /** Why the backend could not be asked at all, as a sentence. It names no row value. */

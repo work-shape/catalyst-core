@@ -98,3 +98,9 @@ capabilities `#platform-test-support` path remains outside package resolution.
 
 The dock-state route test keeps its relative import: adding a development export would make
 Knip treat that private module as public and hide an existing unused export.
+
+## Allowed-value lists
+
+`catalyst/duplicate-literal-list` compares literal enums, named arrays, sets, query subsets and literal type unions across package sources. It compares value sets even when their orders differ. Use the constants in `asset-schemas/src/contract-values.ts`, imported through core by private consumers. A subset keeps its own order and uses `as const satisfies readonly ParentValue[]`. Defaults, per-operation error declarations, utility-type field selections and discriminated object branches are outside the check. The Page kit, sandbox asset-repo command and UI library keep their dependency boundaries.
+
+The initial D5 baseline retains recorded disagreements, documented presentation orders and lists outside D5's inventory. It is a ratchet, not permission to reconcile their accepted values during the freeze. A scoped lint still compares against all package sources, so a copy outside the selected package is visible.

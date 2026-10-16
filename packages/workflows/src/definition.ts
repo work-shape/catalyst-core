@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import {
+  NOTIFY_CHANNELS,
   WORKFLOW_DATASET_KEY,
   WORKFLOW_ERROR_CODES,
   WORKFLOW_STEP_TYPES,
@@ -18,6 +18,7 @@ import {
   type WorkflowStep,
   type WorkflowStepType
 } from "@work-shape/catalyst-core";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { codeFileIssue } from "./code-step";
 import { parseCron } from "./cron";
@@ -136,7 +137,7 @@ const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
     z.strictObject({
       ...named,
       type: z.literal("notify"),
-      channel: z.enum(["inbox", "mail"]),
+      channel: z.enum(NOTIFY_CHANNELS),
       input: inputMappingSchema
     }),
     z.strictObject({

@@ -1,5 +1,6 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { SafeConfig } from "@work-shape/catalyst-api-client";
+import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import {
   connectionCategory,
   connectionNameOfTool,
@@ -10,7 +11,7 @@ import {
 export interface ConnectionToolSubject {
   connection: ConnectionFacts;
   /** Whether the call reads or changes. Unknown for a tool no listed agent holds any more. */
-  effect?: "reading" | "changing";
+  effect?: (typeof OPERATION_EFFECTS)[number];
 }
 
 /** Of an agent, only the Connections its tools reach are read. */

@@ -7,6 +7,7 @@ import {
 } from "@work-shape/catalyst-app-build";
 import {
   APP_ACTION_OPERATION_PREFIX,
+  APP_MODES,
   AppError,
   POLICY_VALUES,
   appActionOperationName,
@@ -19,6 +20,7 @@ import {
   type ClientInstanceId,
   type ConfigAssetRecord,
   type ConfigAssetStore,
+  type DataStoreReference,
   type DataToolDescriptor,
   type DataToolSource,
   type Logger,
@@ -28,7 +30,6 @@ import {
   type OperationDefinition,
   type OperationOrigin,
   type OperationRegistry,
-  type DataStoreReference,
   type OperationResource,
   type OperationSource,
   type PolicyDefaults,
@@ -386,7 +387,7 @@ export function authorizePublishedApp(
 export function appRevisionHost(
   appName: string,
   resource: OperationResource,
-  view: "published" | "draft",
+  view: (typeof APP_MODES)[number],
   /** The Data Stores the manifest of the revision lists (`declaredDataStoresOf`). */
   dataStores: readonly DataStoreReference[]
 ): AppActionHost {

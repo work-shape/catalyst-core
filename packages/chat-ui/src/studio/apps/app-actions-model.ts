@@ -1,4 +1,5 @@
 import type { AppAction, AppMode } from "@work-shape/catalyst-api-client";
+import { APP_ACTION_CALL_STATUSES } from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../../shared/i18n";
 import { PAGE_ADDRESS_LIFETIME_MS, PAGE_ADDRESS_RENEWAL_MARGIN_MS } from "../pages/page-address";
@@ -289,7 +290,7 @@ export function appActionTestOutcome(
     | {
         ok: true;
         result:
-          | { runId: string; status: "done" | "pending_approval"; result?: unknown }
+          | { runId: string; status: (typeof APP_ACTION_CALL_STATUSES)[number]; result?: unknown }
           | { status: "dry_run"; message: string; result: unknown };
       }
     | { ok: false; error: { code: string; message: string; runId?: string } }

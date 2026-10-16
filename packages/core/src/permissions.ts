@@ -1,13 +1,17 @@
 import {
+  ACCESS_SOURCES,
   ACTIONS,
+  SERVICE_PRINCIPAL_PERMISSIONS as CONTRACT_SERVICE_PRINCIPAL_PERMISSIONS,
+  GRANT_EFFECTS,
+  GRANT_HOLDER_KINDS,
+  GRANT_SCOPE_KINDS,
   NAMESPACE_PREFIX_MAX_LENGTH,
   NAMESPACE_PREFIX_MIN_LENGTH,
   NAMESPACE_PREFIX_PATTERN,
+  PRINCIPAL_HOLDER_KINDS,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
-import { operationDenialError } from "./operation-denial";
-import { personalApiKeyCovers, personalApiKeyNamesAction } from "./personal-api-keys";
 import {
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
@@ -15,7 +19,9 @@ import {
   type AuthenticatedUser
 } from "./identity";
 import type { ClientInstanceId, UserId } from "./ids";
+import { operationDenialError } from "./operation-denial";
 import type { StorePage } from "./paging";
+import { personalApiKeyCovers, personalApiKeyNamesAction } from "./personal-api-keys";
 import type { RightsLock } from "./rights-lock";
 import type { ISODateString } from "./time";
 
@@ -32,6 +38,9 @@ export const PERMISSIONS = [
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
+
+export const SERVICE_PRINCIPAL_PERMISSIONS =
+  CONTRACT_SERVICE_PRINCIPAL_PERMISSIONS satisfies readonly Permission[];
 
 export { ACTIONS, type PlatformAction };
 
@@ -116,11 +125,11 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<
 export interface PermissionGrant {
   id: string;
   clientInstanceId: ClientInstanceId;
-  holderKind: "user" | "service_principal" | "role" | "group";
+  holderKind: (typeof GRANT_HOLDER_KINDS)[number];
   holderId: string;
   action: string;
-  effect: "allow" | "deny";
-  scopeKind: "instance" | "workspace" | "namespace" | "asset";
+  effect: (typeof GRANT_EFFECTS)[number];
+  scopeKind: (typeof GRANT_SCOPE_KINDS)[number];
   scopeId?: string;
   namespace?: string;
   grantedBy: UserId;
@@ -150,7 +159,7 @@ export interface AccessResource {
  */
 export const WORKSPACE_MEMBER_ACTIONS = ["app.use"] as const satisfies readonly PlatformAction[];
 
-export type AccessSource = "role" | "legacy_ref" | "grant" | "membership";
+export type AccessSource = (typeof ACCESS_SOURCES)[number];
 
 export type AccessDecision =
   | { allowed: true; source: AccessSource }
@@ -174,7 +183,7 @@ export interface PersistedAccess {
 export interface AccessStore {
   loadPersistedAccess(input: {
     clientInstanceId: ClientInstanceId;
-    holder: { kind: "user" | "service_principal"; id: string };
+    holder: { kind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; id: string };
   }): Promise<PersistedAccess>;
 }
 
@@ -272,7 +281,7 @@ export function isSuperadmin(subject: { roles: readonly string[] }): boolean {
  * were moved into rows (AP-4) and are no source any more.
  */
 export interface AccessHolder {
-  kind: "user" | "service_principal";
+  kind: (typeof PRINCIPAL_HOLDER_KINDS)[number];
   id: string;
   clientInstanceId: ClientInstanceId;
   roles: readonly string[];
@@ -288,7 +297,7 @@ export interface AccessHolder {
 /** One thing a holder is allowed or denied, with the source that says so. */
 export interface AccessEntry {
   action: string;
-  effect: "allow" | "deny";
+  effect: (typeof GRANT_EFFECTS)[number];
   scopeKind: PermissionGrant["scopeKind"];
   scopeId?: string;
   namespace?: string;

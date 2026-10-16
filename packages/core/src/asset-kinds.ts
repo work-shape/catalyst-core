@@ -1,4 +1,8 @@
-import { isStorableText } from "@work-shape/catalyst-asset-schemas";
+import {
+  ASSET_LIFECYCLES,
+  ASSET_REPRESENTATIONS,
+  isStorableText
+} from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 import type { CollaborationWorkspaceId } from "./ids";
 import type { LocaleCode } from "./localization";
@@ -113,10 +117,10 @@ export interface AssetKindActions {
  * Which revision of an asset is live. `active`: the newest write is. `draft_published`: a
  * write moves a draft pointer, and a publish moves the pointer its users are served from.
  */
-export type AssetLifecycle = "active" | "draft_published";
+export type AssetLifecycle = (typeof ASSET_LIFECYCLES)[number];
 
 /** What a revision holds: its config alone, or a config with an immutable file set. */
-export type AssetRepresentation = "config" | "files";
+export type AssetRepresentation = (typeof ASSET_REPRESENTATIONS)[number];
 /**
  * Where the files of a revision of a `files` kind are kept: as a file set, or as a commit of
  * the repository of the asset, with the ledger of its bundles.

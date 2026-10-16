@@ -1,3 +1,4 @@
+import { CONNECTION_OPERATION_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import {
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
@@ -126,15 +127,7 @@ export interface ConnectionCatalog {
 }
 
 /** Whether an accepted operation can be called now, and if not, why. Only `ready` is callable. */
-export type ConnectionOperationStatus =
-  | "ready"
-  /** Accepted, a discovering type, and no discovery has pinned it yet. */
-  | "awaiting_discovery"
-  /** The catalog's fingerprint differs from the accepted one. */
-  | "needs_review"
-  /** Accepted, and the last discovery did not list it or listed a schema nothing can check. */
-  | "unknown"
-  | "disabled";
+export type ConnectionOperationStatus = (typeof CONNECTION_OPERATION_STATUSES)[number];
 
 /**
  * Why a call of a Connection is refused or fails, each with the error code it travels under.

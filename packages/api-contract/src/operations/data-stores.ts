@@ -1,3 +1,10 @@
+import {
+  DATA_STORE_CONDITIONS,
+  DATA_STORE_INSERT_CONFLICT_MODES,
+  DATA_STORE_MIGRATION_OUTCOMES,
+  DATA_STORE_SCALAR_TYPES,
+  LISTED_DATA_STORE_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { defineRegisteredOperation, json } from "./define-operation";
 
@@ -12,7 +19,7 @@ const DATA_STORE_INSERT_MAX_ROWS = 1_000;
 /** The most rows a preview answers. */
 const DATA_STORE_PREVIEW_MAX_ROWS = 50;
 
-const SCALAR_TYPES = ["text", "integer", "number", "boolean", "date", "timestamp"] as const;
+const SCALAR_TYPES = DATA_STORE_SCALAR_TYPES;
 const scalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const valueSchema = z.union([scalarSchema, z.array(scalarSchema)]);
 const columnTypeSchema = z.string();
@@ -50,7 +57,7 @@ const dataStoreInsertRequestSchema = z.strictObject({
   /** Every row names the same columns. */
   rows: z.array(rowSchema).min(1).max(DATA_STORE_INSERT_MAX_ROWS),
   /** What happens to a row a unique constraint refuses. `fail` when left out. */
-  onConflict: z.enum(["fail", "skip"]).optional()
+  onConflict: z.enum(DATA_STORE_INSERT_CONFLICT_MODES).optional()
 });
 
 const dataStoreInsertResponseSchema = z.object({
@@ -88,19 +95,13 @@ const dataStorePreviewQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(DATA_STORE_PREVIEW_MAX_ROWS).optional()
 });
 
-const DATA_STORE_CONDITIONS = [
-  "server_databases_open",
-  "sessions_open",
-  "temp_files_unbounded"
-] as const;
-
 const dataStoreStateResponseSchema = z.object({
   /** The id of the store's asset. */
   id: z.string(),
   /** The id operations and routes name the store by. */
   name: z.string(),
   /** `provisioning` until the database of the store is complete. */
-  status: z.enum(["provisioning", "ready"]),
+  status: z.enum(LISTED_DATA_STORE_STATUSES),
   /** The number of the last migration the database has applied. */
   level: z.number().int(),
   /** The number of the last migration of the published revision. */
@@ -117,7 +118,7 @@ const dataStoreStateResponseSchema = z.object({
   conditions: z.array(z.object({ code: z.enum(DATA_STORE_CONDITIONS), message: z.string() })),
   /** How the last attempt to bring the store to its published revision ended. */
   lastMigration: z.object({
-    outcome: z.enum(["none", "pending", "applied", "failed"]),
+    outcome: z.enum(DATA_STORE_MIGRATION_OUTCOMES),
     migration: z.object({ number: z.number().int(), name: z.string() }).optional(),
     failure: z.object({ code: z.string(), message: z.string() }).optional()
   })
@@ -137,7 +138,7 @@ const dataStoreListResponseSchema = z.object({
       name: z.string(),
       title: z.string(),
       description: z.string().optional(),
-      status: z.enum(["provisioning", "ready"]),
+      status: z.enum(LISTED_DATA_STORE_STATUSES),
       level: z.number().int(),
       /** What the last measurement found. Each is missing until a measurement read it. */
       sizeBytes: z.number().int().optional(),

@@ -1,7 +1,7 @@
-import { and, eq, inArray } from "drizzle-orm";
 import {
   LEGACY_PERMISSION_ACTIONS,
   PERMISSIONS,
+  PRINCIPAL_HOLDER_KINDS,
   createPlatformId,
   legacyGrantChange,
   legacyKeysHeld,
@@ -9,6 +9,7 @@ import {
   type ClientInstanceId,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
+import { and, eq, inArray } from "drizzle-orm";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { lockRights } from "./rights-lock";
 import { permissionGrants } from "./schema";
@@ -19,7 +20,10 @@ import { permissionGrants } from "./schema";
 // from them, are no longer written, and stay for one release so that the previous release
 // can still be rolled back to (`scripts/verify-permissions.ts --restore-legacy-columns`).
 
-type LegacyHolderKind = Extract<PermissionGrant["holderKind"], "user" | "service_principal">;
+type LegacyHolderKind = Extract<
+  PermissionGrant["holderKind"],
+  (typeof PRINCIPAL_HOLDER_KINDS)[number]
+>;
 
 const LEGACY_ACTIONS: string[] = PERMISSIONS.flatMap((key) => [...LEGACY_PERMISSION_ACTIONS[key]]);
 

@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { ENDED_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import { useEffect, useRef } from "react";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
@@ -22,7 +23,7 @@ export interface ConversationSubjectState {
   title: string;
 }
 
-const FINISHED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+const FINISHED_RUN_STATES = new Set<string>(ENDED_AGENT_RUN_STATUSES);
 
 /**
  * The asset the open conversation is about: the stored one, or the one the agent opened while

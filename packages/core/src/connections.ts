@@ -3,6 +3,12 @@ import {
   CONNECTION_HEALTH_STATES,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
+  CONNECTION_NETWORKS,
+  CONNECTION_OPERATION_POLICIES,
+  CONNECTION_ORIGINS,
+  CONNECTION_SECRET_STATES,
+  CONNECTOR_TEST_STATUSES,
+  OPERATION_EFFECTS,
   type ConnectionExposure,
   type ConnectionHealth
 } from "@work-shape/catalyst-asset-schemas";
@@ -62,7 +68,7 @@ export const CONNECTION_CREDENTIAL_WORDS = [
 ] as const;
 
 /** What an operation does to the outside system. A hint of that system never decides it. */
-export type ConnectionOperationEffect = "reading" | "changing";
+export type ConnectionOperationEffect = (typeof OPERATION_EFFECTS)[number];
 
 export { CONNECTION_EXPOSURES, type ConnectionExposure };
 
@@ -71,10 +77,10 @@ export { CONNECTION_EXPOSURES, type ConnectionExposure };
  * `approval` on a changing one. Loosening is the instance's central setting and never part of
  * a Connection.
  */
-export type ConnectionOperationPolicy = "deny" | "approval";
+export type ConnectionOperationPolicy = (typeof CONNECTION_OPERATION_POLICIES)[number];
 
 /** `release`: written by the release seed and read-only in the product. */
-export type ConnectionOrigin = "release" | "runtime";
+export type ConnectionOrigin = (typeof CONNECTION_ORIGINS)[number];
 
 /**
  * The opaque reference to the Connection's credential in the Secret Store. It is not a
@@ -266,7 +272,7 @@ export interface EgressGrant extends EgressTarget {
   address: string;
   family: 4 | 6;
   /** Whether the operator's list names the target as a private one. */
-  network: "public" | "private";
+  network: (typeof CONNECTION_NETWORKS)[number];
 }
 
 /**
@@ -308,7 +314,7 @@ export interface SecretBinding {
 export type SecretSource = "bootstrap" | "runtime";
 
 /** What anybody may learn of a secret: whether there is one, and its version. */
-export type SecretState = "set" | "not_set" | "unreadable";
+export type SecretState = (typeof CONNECTION_SECRET_STATES)[number];
 
 export interface SecretStatus {
   state: SecretState;
@@ -514,7 +520,7 @@ export interface ConnectorContext {
 }
 
 /** What a test of a Connection comes to. It never carries data of the outside system. */
-export type ConnectorTestStatus = "ready" | "unauthorized" | "network_denied" | "unavailable";
+export type ConnectorTestStatus = (typeof CONNECTOR_TEST_STATUSES)[number];
 
 interface ConnectorTypeBase {
   /** The id a Connection names as its `connectorType`. */

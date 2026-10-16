@@ -2,15 +2,16 @@ import {
   AGENT_RUN_CANCELLATION_CHECK_INTERVAL_MS,
   AGENT_RUN_INTERRUPTED_ERROR,
   AppError,
+  ENDED_AGENT_RUN_STATUSES,
   JobLeaseLostError,
   adoptAgentRunsSchedule,
   agentRunIdleError,
   agentRunUpkeepHandler,
   asAgentRunId,
+  createPlatformId,
   defineJobHandler,
   executeAgentRunJob,
   failAgentRunOfLostJob,
-  createPlatformId,
   getSubjectUserId,
   readAssistantFinalMetadata,
   runFailureCodeOf,
@@ -33,8 +34,8 @@ import {
   type StartAgentRunInput
 } from "@work-shape/catalyst-core";
 import { setTimeout as delay } from "node:timers/promises";
-import { readUserAttachmentManifest } from "./model-context-projection";
 import { LocalAgentRuntime, type LocalAgentRuntimeOptions } from "./local-agent-runtime";
+import { readUserAttachmentManifest } from "./model-context-projection";
 import type { AgentRunSignal } from "./store-backed-agent-runtime";
 
 // A run that stored no event for this long is ended as interrupted, so a model or a tool that
@@ -599,7 +600,7 @@ async function nextEventOrAbort(
   }
 }
 
-const ENDED_STATUSES = new Set<AgentRun["status"]>(["completed", "cancelled", "failed"]);
+const ENDED_STATUSES = new Set<AgentRun["status"]>(ENDED_AGENT_RUN_STATUSES);
 
 /** Keeps the tool calls that started and have not ended, with the name of their tool. */
 function noteToolCall(open: Map<string, string>, event: AgentRuntimeEvent): void {

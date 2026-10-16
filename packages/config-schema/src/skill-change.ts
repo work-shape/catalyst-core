@@ -1,15 +1,16 @@
-import { z } from "zod";
+import { SKILL_CHANGE_TYPES } from "@work-shape/catalyst-asset-schemas";
 import {
   AppError,
   type AgentConfig,
   type AgentSkillChangesPolicy,
   type SkillConfig
 } from "@work-shape/catalyst-core";
+import { z } from "zod";
 import {
   skillConfigSchema,
   skillNameSchema,
-  skillResourcePathSchema,
-  skillResourceMediaTypeForPath
+  skillResourceMediaTypeForPath,
+  skillResourcePathSchema
 } from "./schemas";
 
 /** The folder of a skill that holds what it runs. No proposal of an agent writes below it. */
@@ -76,7 +77,7 @@ export interface SkillChangePreview {
   skillTitle: string;
   isNewSkill: boolean;
   changes: Array<{
-    type: "replace" | "add" | "new_resource";
+    type: (typeof SKILL_CHANGE_TYPES)[number];
     target: string;
     sectionHeading?: string;
     before?: string;

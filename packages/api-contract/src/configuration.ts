@@ -1,8 +1,22 @@
-import { timestampSchema } from "./shared";
+import {
+  AGENT_AVAILABILITY_MODES,
+  AGENT_EDITABLE_FIELDS,
+  CONFIG_ASSET_CHANGE_OPERATIONS,
+  CONFIG_ASSET_KINDS,
+  MODEL_USAGE_TIERS,
+  OPERATION_EFFECTS,
+  PROVIDER_REGIONS,
+  REASONING_EFFORTS,
+  THEME_MODE_PREFERENCES,
+  TOOL_GROUPS,
+  WORKSPACE_SECTIONS,
+  localeCodes
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { auditActorSchema } from "./identity";
+import { timestampSchema } from "./shared";
 
-export const localeCodeSchema = z.enum(["en", "de"]);
+export const localeCodeSchema = z.enum(localeCodes);
 
 export const localizationSchema = z.object({
   locale: localeCodeSchema,
@@ -10,7 +24,7 @@ export const localizationSchema = z.object({
   supportedLocales: z.array(localeCodeSchema)
 });
 
-export const reasoningEffortSchema = z.enum(["none", "low", "medium", "high", "xhigh", "max"]);
+export const reasoningEffortSchema = z.enum(REASONING_EFFORTS);
 
 /**
  * The model and reasoning efforts a user last picked, which a new conversation starts from.
@@ -20,31 +34,11 @@ export const userModelPreferenceSchema = z.object({
   modelBindingId: z.string().min(1).optional(),
   reasoningEfforts: z.record(z.string().min(1), reasoningEffortSchema)
 });
-export const modelUsageTierSchema = z.enum([
-  "very_low",
-  "low",
-  "moderate",
-  "elevated",
-  "high",
-  "very_high"
-]);
+export const modelUsageTierSchema = z.enum(MODEL_USAGE_TIERS);
 /** Where a model's provider processes data. Absent for a provider inside the instance. */
-export const modelRegionSchema = z.enum(["eu", "global"]);
+export const modelRegionSchema = z.enum(PROVIDER_REGIONS);
 
-export const agentEditableFieldSchema = z.enum([
-  "displayName",
-  "description",
-  "welcomeMessage",
-  "welcomeSubtitle",
-  "instructions",
-  "modelBindingId",
-  "reasoningEffort",
-  "maxSteps",
-  "toolNames",
-  "skillNames",
-  "knowledgeBases",
-  "initialPrompts"
-]);
+export const agentEditableFieldSchema = z.enum(AGENT_EDITABLE_FIELDS);
 
 const editableAgentFieldsSchema = z.preprocess((value) => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -89,7 +83,7 @@ const clientUiBrandingSchema = z.object({
     mutedTextColor: z.string(),
     borderColor: z.string()
   }),
-  defaultThemeMode: z.enum(["light", "dark", "system"])
+  defaultThemeMode: z.enum(THEME_MODE_PREFERENCES)
 });
 
 export const clientBrandingSchema = clientUiBrandingSchema.extend({
@@ -219,9 +213,7 @@ export const safeConfigSchema = z.object({
             /** The system behind the Connection, where it names one. It only picks an icon. */
             service: z.string().optional(),
             connectorType: z.string().optional(),
-            tools: z.array(
-              z.object({ toolName: z.string(), effect: z.enum(["reading", "changing"]) })
-            )
+            tools: z.array(z.object({ toolName: z.string(), effect: z.enum(OPERATION_EFFECTS) }))
           })
         )
         .optional()
@@ -240,17 +232,17 @@ export const collaborationWorkspaceAgentsSchema = z.object({
    * Apps module is on, and `assets.list` lists the caller an App of this workspace or the
    * caller holds `app.write` in it or on one of its Apps. A member is never shown an empty row.
    */
-  visibleSections: z.array(z.enum(["agents", "apps"])),
+  visibleSections: z.array(z.enum(WORKSPACE_SECTIONS)),
   items: safeConfigSchema.shape.agents,
   nextCursor: z.string().optional()
 });
 
 export const usageSafeguardsSchema = safeConfigSchema.shape.usage.shape.safeguards;
 
-export const configAssetKindSchema = z.enum(["agent", "skill"]);
+export const configAssetKindSchema = z.enum(CONFIG_ASSET_KINDS);
 
 export const agentAvailabilitySchema = z.object({
-  mode: z.enum(["all", "selected"]),
+  mode: z.enum(AGENT_AVAILABILITY_MODES),
   personalWorkspaces: z.boolean(),
   collaborationWorkspaceIds: z.array(z.string())
 });
@@ -284,7 +276,7 @@ export const configAssetRevisionSchema = z.object({
    */
   assetId: z.string(),
   revision: z.number().int().positive(),
-  operation: z.enum(["create", "update", "delete", "revert"]),
+  operation: z.enum(CONFIG_ASSET_CHANGE_OPERATIONS),
   config: configAssetConfigSchema.nullable(),
   actor: auditActorSchema.nullable(),
   /** Where the revision came from: the approval that applied it, or the Page it copies. */
@@ -305,15 +297,7 @@ export const configAssetRevisionSchema = z.object({
 });
 
 /** Where the agent page shows a tool among the instance's tools; `instance` is its own tools. */
-export const toolGroupSchema = z.enum([
-  "documents",
-  "web",
-  "files",
-  "results",
-  "skills",
-  "platform",
-  "instance"
-]);
+export const toolGroupSchema = z.enum(TOOL_GROUPS);
 
 const toolTextSchema = z.object({ en: z.string(), de: z.string() });
 
@@ -329,7 +313,7 @@ export const agentToolReferenceSchema = z.object({
   /** A key of the icon registry of the UI library. */
   icon: z.string().optional(),
   /** Missing for a tool the instance enables and no code registers. */
-  effect: z.enum(["reading", "changing"]).optional(),
+  effect: z.enum(OPERATION_EFFECTS).optional(),
   /** The module whose switch governs the tool. A core tool has none. */
   module: z.string().optional()
 });

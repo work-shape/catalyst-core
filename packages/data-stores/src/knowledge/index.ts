@@ -1,5 +1,6 @@
 import {
   AppError,
+  ASSET_OWNER_KINDS,
   defineAssetKind,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
@@ -85,7 +86,7 @@ export function createKnowledgeBases(input: {
       },
       actions: KNOWLEDGE_BASE_ACTIONS,
       lifecycle: "draft_published",
-      owners: ["instance", "workspace"],
+      owners: [...ASSET_OWNER_KINDS],
       validate: () => [],
       summarize: (knowledgeBase) => ({
         name: knowledgeBase.name,

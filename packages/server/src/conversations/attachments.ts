@@ -6,6 +6,7 @@ import type {
   ManagedFileId,
   ManagedObjectDeletionResult
 } from "@work-shape/catalyst-core";
+import { ATTACHMENT_CREATE_OUTCOMES } from "@work-shape/catalyst-core";
 
 export interface UploadDraftAttachmentInput {
   conversationId: ConversationId;
@@ -37,7 +38,7 @@ export interface ReadConversationFileResult {
 
 export interface UploadDraftAttachmentResult {
   attachment: ConversationAttachment;
-  outcome: "created" | "already_available";
+  outcome: (typeof ATTACHMENT_CREATE_OUTCOMES)[number];
 }
 
 export interface ChatAttachmentService {

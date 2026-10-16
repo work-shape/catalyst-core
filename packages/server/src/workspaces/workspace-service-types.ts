@@ -1,4 +1,6 @@
 import {
+  WORKSPACE_ACCESS_STATES,
+  WORKSPACE_MEMBERSHIP_ROLES,
   type ActorAccess,
   type AuditRecorder,
   type AuthenticatedUser,
@@ -13,7 +15,7 @@ import {
 } from "@work-shape/catalyst-core";
 
 /** The least role a workspace operation asks of its caller. `member` is any role. */
-export type WorkspaceRoleNeeded = "member" | "admin" | "owner";
+export type WorkspaceRoleNeeded = (typeof WORKSPACE_MEMBERSHIP_ROLES)[number];
 
 /** What a changing workspace operation takes from its Operation Run. */
 export interface WorkspaceChangeCall {
@@ -38,7 +40,7 @@ export interface WorkspaceDirectoryItem {
   description: string | null;
   emoji: string | null;
   accentColor: WorkspaceAccentColor | null;
-  accessState: "member" | "request_pending" | "can_request";
+  accessState: (typeof WORKSPACE_ACCESS_STATES)[number];
   createdAt: ISODateString;
 }
 

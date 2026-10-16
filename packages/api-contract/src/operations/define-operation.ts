@@ -1,13 +1,14 @@
 import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
+  type AppErrorCode,
   type OperationEffect,
   type OperationScope,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
-import { operationRunSchema } from "../operation-runs";
-import { listEnvelopeSchema } from "../shared";
 import type { z } from "zod";
 import type { ApiErrorCode } from "../errors";
+import { operationRunSchema } from "../operation-runs";
+import { listEnvelopeSchema } from "../shared";
 
 /**
  * Every product operation's path starts here. The probes `/health` and `/ready` and the view
@@ -234,7 +235,10 @@ const REGISTERED_SECRET = {
 } as const;
 
 /** The error codes the policy of an instance adds to every operation of the registry. */
-const REGISTERED_ERRORS = ["POLICY_DENIED", "GUARDRAIL_BLOCKED"] as const;
+const REGISTERED_ERRORS = [
+  "POLICY_DENIED",
+  "GUARDRAIL_BLOCKED"
+] as const satisfies readonly AppErrorCode[];
 /** The error codes a changing operation of the registry adds for approvals and repeated calls. */
 const REGISTERED_CHANGING_ERRORS = [
   "DECLINED",
@@ -242,9 +246,12 @@ const REGISTERED_CHANGING_ERRORS = [
   "OPERATION_IN_PROGRESS",
   "OPERATION_EXPIRED",
   "OUTPUT_NOT_RETAINED"
-] as const;
+] as const satisfies readonly AppErrorCode[];
 /** The codes of a held call, which a call whose answer is a secret never is. */
-const HELD_CALL_ERRORS: readonly string[] = ["DECLINED", "OPERATION_EXPIRED"];
+const HELD_CALL_ERRORS: readonly string[] = [
+  "DECLINED",
+  "OPERATION_EXPIRED"
+] as const satisfies readonly AppErrorCode[];
 
 /**
  * An operation of the registry: every recorded call of it is an Operation Run, named by the

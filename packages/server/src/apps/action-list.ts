@@ -16,6 +16,7 @@ import {
   CONNECTION_ASSET_KIND,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
+  OPERATION_EFFECTS,
   appActionOperationName,
   connectionOperationName,
   draftCallTarget,
@@ -379,7 +380,7 @@ export class AppActionList {
    */
   private async agentTools(
     revisions: readonly ListedRevision[]
-  ): Promise<Map<string, "reading" | "changing">> {
+  ): Promise<Map<string, (typeof OPERATION_EFFECTS)[number]>> {
     const { connections } = this.options;
     if (!connections || revisions.every((revision) => revision.view === "draft")) {
       return new Map();

@@ -1,3 +1,8 @@
+import {
+  POLICY_VALUES,
+  READING_POLICY_VALUES,
+  THEME_MODE_PREFERENCES
+} from "@work-shape/catalyst-asset-schemas";
 import type {
   AgentConfig,
   AgentRuntimeConfig,
@@ -271,7 +276,7 @@ export const uiConfigSchema = z
     accentColor: z.string().min(1).default(defaultLightUiTheme.accentColor),
     theme: lightUiThemeSchema,
     darkTheme: darkUiThemeSchema,
-    defaultThemeMode: z.enum(["light", "dark", "system"]).default("system")
+    defaultThemeMode: z.enum(THEME_MODE_PREFERENCES).default("system")
   })
   .default({
     title: "Workshape Catalyst",
@@ -376,8 +381,8 @@ const policyConfigSchema = z
   .object({
     defaults: z
       .object({
-        reading: z.enum(["allow", "deny"]).default("allow"),
-        changing: z.enum(["allow", "confirm", "approval", "deny"]).default("confirm")
+        reading: z.enum(READING_POLICY_VALUES).default("allow"),
+        changing: z.enum(POLICY_VALUES).default("confirm")
       })
       .strict()
       .prefault({})

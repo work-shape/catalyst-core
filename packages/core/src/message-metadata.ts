@@ -1,3 +1,4 @@
+import { MESSAGE_FINISH_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import {
   APPROVAL_EXECUTIONS,
   approvalExecutionOf,
@@ -6,9 +7,9 @@ import {
   type ApprovalRequestStatus
 } from "./approval-request";
 import type { CreateMessageInput } from "./conversation";
-import { asMessageId } from "./ids";
 import type { AttachmentManifest } from "./files";
 import type { AgentRunId, MessageId, ToolCallId } from "./ids";
+import { asMessageId } from "./ids";
 import { isJsonObject, unknownToJsonValue, type JsonObject, type JsonValue } from "./json";
 import type { ToolExecutionResult } from "./tool-execution";
 import type { MessageCitation, WebSource, WebSourceProvider } from "./web-source";
@@ -57,7 +58,7 @@ export interface AgentRuntimeAssistantFinalMetadata {
   version: typeof MESSAGE_METADATA_VERSION;
   kind: "assistant_final";
   runId: AgentRunId | string;
-  finishStatus: "completed" | "cancelled";
+  finishStatus: (typeof MESSAGE_FINISH_STATUSES)[number];
   cancellationReason?: string;
   reasoning?: StoredReasoningSummary[];
   sources?: WebSource[];
@@ -242,7 +243,7 @@ export function createAssistantFinalMetadata(input: {
   reasoning?: readonly StoredReasoningSummary[];
   sources?: readonly WebSource[];
   citations?: readonly MessageCitation[];
-  finishStatus?: "completed" | "cancelled";
+  finishStatus?: (typeof MESSAGE_FINISH_STATUSES)[number];
   cancellationReason?: string;
   modelContext?: StoredModelContextSnapshot;
 }): JsonObject {

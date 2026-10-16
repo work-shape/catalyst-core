@@ -1,12 +1,13 @@
 import type { SecretKeyring } from "@work-shape/catalyst-connections";
 import {
+  ASSET_OWNER_KINDS,
+  AppError,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_JOB_KINDS,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_BASE_ASSET_KIND,
-  AppError,
   StoreBackedAuditRecorder,
   defineAssetKind,
   defineModule,
@@ -35,7 +36,9 @@ import { createDataStoreJobs, publishDataStore, retireDataStore } from "./jobs";
 import { createDataStoreKnowledgeBackend } from "./knowledge/backend";
 import { listDataStores } from "./list";
 import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
+import { ensureVectorExtension } from "./provisioning";
 import type { DataStoreDatasetReader, DataStoreLimits, DataStoreRuntime } from "./runtime";
+import { createDataStoreServer } from "./server";
 
 export { sizeLimitBytes } from "./definition";
 export { createKnowledgeBases, knowledgeOperationName, type KnowledgeBases } from "./knowledge";
@@ -51,8 +54,6 @@ export function dataStorePageOperationName(
 ): string {
   return `${DATA_STORE_OPERATION_PREFIX}${store}.${part}`;
 }
-import { ensureVectorExtension } from "./provisioning";
-import { createDataStoreServer } from "./server";
 
 /**
  * Data Stores: the asset kind `data_store`, a database of the platform per store, the jobs
@@ -187,7 +188,7 @@ export function createDataStores(input: {
       lifecycle: "draft_published",
       representation: "files",
       manifestFile: DATA_STORE_MANIFEST_FILE,
-      owners: ["instance", "workspace"],
+      owners: [...ASSET_OWNER_KINDS],
       validate: () => [],
       summarize: (store) => ({
         name: store.name,

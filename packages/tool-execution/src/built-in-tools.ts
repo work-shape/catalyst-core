@@ -1,11 +1,11 @@
-import { z } from "zod";
-import { createPlatformId } from "@work-shape/catalyst-core";
+import { createPlatformId, TOOL_DISPLAY_MODES } from "@work-shape/catalyst-core";
 import {
   defineTool,
   toolSuccess,
   type AnyToolDefinition,
   type ToolAssemblyDefinition
 } from "@work-shape/catalyst-tool-sdk";
+import { z } from "zod";
 import { createPageSaveTool, type PageSaveToolOptions } from "./page-save-tool";
 
 /** The part of the instance's `views` config the tool tells the agent about. */
@@ -37,7 +37,7 @@ function createShowViewInputSchema() {
         "Complete standalone HTML fragment or document to render for the user. Follow the layout, color, icon, and script rules in the tool description."
       ),
     mode: z
-      .enum(["inline", "side_panel", "fullscreen"])
+      .enum(TOOL_DISPLAY_MODES)
       .default("inline")
       .describe(
         "Where the widget renders. Keep inline, the default, so it sits inside your answer."
@@ -54,7 +54,7 @@ function createShowViewInputSchema() {
 const showViewOutputSchema = z.object({
   displayed: z.literal(true),
   displayId: z.string(),
-  mode: z.enum(["inline", "side_panel", "fullscreen"])
+  mode: z.enum(TOOL_DISPLAY_MODES)
 });
 
 /** What the built-in tools of a module need. A module whose entry is missing adds no tool. */

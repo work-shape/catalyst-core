@@ -1,4 +1,10 @@
 import {
+  INTERRUPTED_RUN_ERROR,
+  type OperationRun,
+  type OperationRunStatus,
+  type OperationRunStore
+} from "@work-shape/catalyst-core";
+import {
   and,
   asc,
   desc,
@@ -12,15 +18,16 @@ import {
   or,
   sql
 } from "drizzle-orm";
-import {
-  INTERRUPTED_RUN_ERROR,
-  type OperationRun,
-  type OperationRunStore
-} from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
 import { type PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
 import { operationRuns } from "./schema/operationRuns";
+
+const OPEN_RUN_STATUSES = [
+  "running",
+  "pending_confirmation",
+  "pending_approval"
+] as const satisfies readonly OperationRunStatus[];
 
 type OperationRunRow = typeof operationRuns.$inferSelect;
 type Input<Method extends keyof OperationRunStore> = Parameters<OperationRunStore[Method]>[0];
@@ -290,7 +297,10 @@ async function markOperationRunsExpired(
   db: PostgresConnection,
   input: Input<"markExpired">
 ): Promise<OperationRun[]> {
-  const waiting = ["pending_confirmation", "pending_approval"] as const;
+  const waiting = [
+    "pending_confirmation",
+    "pending_approval"
+  ] as const satisfies readonly OperationRunStatus[];
   const due = db
     .select({ id: operationRuns.id })
     .from(operationRuns)
@@ -359,7 +369,7 @@ async function deleteOperationRunsWithoutConversationOlderThan(
         eq(operationRuns.clientInstanceId, input.clientInstanceId),
         isNull(operationRuns.conversationId),
         // A run that still runs or waits is not history yet, whatever its age.
-        notInArray(operationRuns.status, ["running", "pending_confirmation", "pending_approval"]),
+        notInArray(operationRuns.status, [...OPEN_RUN_STATUSES]),
         // The cutoff is the database's: its clock stamped the rows.
         lt(operationRuns.createdAt, sql`now() - make_interval(days => ${input.days})`)
       )

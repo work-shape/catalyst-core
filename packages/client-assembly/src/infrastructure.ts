@@ -1,18 +1,10 @@
-import { readFile } from "node:fs/promises";
-import { z } from "zod";
-import {
-  checkSandboxJob,
-  checkSandboxSchedule,
-  InfrastructureWorkflow,
-  logProviderCheckChange,
-  type InfrastructureEntry
-} from "@work-shape/catalyst-server";
 import { getClientInstanceId, type ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createEnvironmentSecretResolver,
   createProvider,
   defineJobHandler,
   defineProvider,
+  INFRASTRUCTURE_WITHHELD_FIELDS,
   infrastructureCheckOutcome,
   ProviderRegistry,
   readDatabaseReadiness,
@@ -32,7 +24,16 @@ import {
 import { mailProviderDefinitions } from "@work-shape/catalyst-mail";
 import { modelProviderDefinitions } from "@work-shape/catalyst-model-provider";
 import { objectStorageProviderDefinitions } from "@work-shape/catalyst-object-storage";
+import {
+  checkSandboxJob,
+  checkSandboxSchedule,
+  InfrastructureWorkflow,
+  logProviderCheckChange,
+  type InfrastructureEntry
+} from "@work-shape/catalyst-server";
 import { sandboxProviderDefinitions } from "@work-shape/catalyst-tool-execution";
+import { readFile } from "node:fs/promises";
+import { z } from "zod";
 import type { ClientInstanceEnv } from "./env";
 
 /**
@@ -248,7 +249,7 @@ const PORTS_CHECKED_BY_THE_API: ReadonlySet<ProviderPort> = new Set([
   "models",
   "mail",
   "objectStorage"
-]);
+] as const satisfies readonly ProviderPort[]);
 
 /**
  * What Instance > Infrastructure lists: every configured entry of the section and the
@@ -313,7 +314,7 @@ function shownDescription(
 ): { shown: Partial<Record<ShownField, string>>; withheld: ShownField[] } {
   const shown: Partial<Record<ShownField, string>> = {};
   const withheld: ShownField[] = [];
-  for (const field of ["endpointHost", "bucket"] as const) {
+  for (const field of INFRASTRUCTURE_WITHHELD_FIELDS) {
     const value = description[field];
     if (value === undefined) {
       continue;

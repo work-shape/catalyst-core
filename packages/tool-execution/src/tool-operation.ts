@@ -1,14 +1,15 @@
-import { ZodError, z } from "zod";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  KNOWLEDGE_OPERATION_PREFIX,
+  KNOWLEDGE_QUERY_TOOL_NAME,
+  OPERATION_DENIAL_REASONS,
+  OPERATION_EFFECTS,
   PERMISSION_REF_ACTION_PREFIX,
   answerAsTool,
   isAppError,
   isAuthenticatedServicePrincipal,
   isDataToolName,
-  KNOWLEDGE_OPERATION_PREFIX,
-  KNOWLEDGE_QUERY_TOOL_NAME,
   knowledgeToolCall,
   operationCallFromToolRequest,
   operationDenialError,
@@ -33,6 +34,7 @@ import {
   type ToolPermissionMode
 } from "@work-shape/catalyst-core";
 import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import { ZodError, z } from "zod";
 import type { OperationOutcome, RunOperationDeps } from "./operation-execution";
 import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";
@@ -85,7 +87,7 @@ function declaredPolicy(mode: ToolPermissionMode | undefined): PolicyValue | und
   }
 }
 
-const effectSchema = z.enum(["reading", "changing"]);
+const effectSchema = z.enum(OPERATION_EFFECTS);
 
 /**
  * What is wrong with the effect a tool declares, or nothing. A tool is written outside this
@@ -342,15 +344,7 @@ function denialText(denial: OperationDenial, names: ToolCallNames): string {
 
 const forbiddenDetailsSchema = z.object({
   action: z.string().optional(),
-  reason: z.enum([
-    "no_grant",
-    "denied",
-    "unknown_action",
-    "holder_inactive",
-    "holder_not_administrable",
-    "user_only",
-    "outside_key_scope"
-  ])
+  reason: z.enum(OPERATION_DENIAL_REASONS)
 });
 const issuesSchema = z.object({
   issues: z.array(

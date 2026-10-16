@@ -1,4 +1,11 @@
-const originKinds = ["agent", "user", "cli", "mcp", "app", "workflow", "schedule"] as const;
+import {
+  APPROVAL_EXECUTIONS,
+  OPERATION_EFFECTS,
+  OPERATION_ORIGIN_KINDS,
+  PRINCIPAL_HOLDER_KINDS,
+  type PolicySource
+} from "@work-shape/catalyst-core";
+const originKinds = OPERATION_ORIGIN_KINDS;
 
 type OperationCallOriginKind = (typeof originKinds)[number];
 
@@ -13,17 +20,9 @@ interface OperationCallInput {
 }
 
 /** What became of a call once its request was decided or ended. */
-export type OperationCallOutcome =
-  "queued" | "done" | "failed" | "interrupted" | "refused" | "expired";
+export type OperationCallOutcome = (typeof APPROVAL_EXECUTIONS)[number];
 
-const outcomes: readonly OperationCallOutcome[] = [
-  "queued",
-  "done",
-  "failed",
-  "interrupted",
-  "refused",
-  "expired"
-];
+const outcomes: readonly OperationCallOutcome[] = [...APPROVAL_EXECUTIONS];
 
 /**
  * What became of the call of a request that is not pending, read from what the server recorded
@@ -105,13 +104,17 @@ export interface PublishReview {
 }
 
 /** The values of `heldBy` that are a standing rule of the instance, not one finding. */
-const standingRules = ["instance_default", "declared_default", "central_setting"];
+const standingRules: readonly string[] = [
+  "instance_default",
+  "declared_default",
+  "central_setting"
+] as const satisfies readonly PolicySource[];
 
 export interface OperationCallPreview {
   runId: string;
   operation: string;
-  effect: "reading" | "changing";
-  actor: { kind: "user" | "service_principal"; id: string; label: string };
+  effect: (typeof OPERATION_EFFECTS)[number];
+  actor: { kind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; id: string; label: string };
   origin: { kind: OperationCallOriginKind; agentName?: string; toolName?: string };
   workspaceId?: string;
   inputs: OperationCallInput[];

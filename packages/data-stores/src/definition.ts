@@ -1,15 +1,15 @@
-import { createHash } from "node:crypto";
-import { z } from "zod";
 import {
   AppError,
+  ASSET_OWNER_KINDS,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_RESERVED_SCHEMA,
   readYamlData,
-  type AssetScope,
   type AssetValidationIssue,
   type DataStoreAppliedMigration,
   type JsonObject
 } from "@work-shape/catalyst-core";
+import { createHash } from "node:crypto";
+import { z } from "zod";
 
 // What a Data Store's folder is read into: the definition a revision holds as its config.
 // Everything here is checked and bounded before a statement is sent to a database.
@@ -37,7 +37,7 @@ const BYTES_PER_UNIT = { MB: 1024 ** 2, GB: 1024 ** 3 } as const;
 const SIZE_LIMIT = /^([1-9]\d{0,5})(MB|GB)$/u;
 
 /** Who owns a store, as `store.yaml` may say it. The owner itself is the asset's. */
-const scopeSchema = z.enum(["instance", "workspace"] satisfies AssetScope["kind"][]);
+const scopeSchema = z.enum(ASSET_OWNER_KINDS);
 
 // Strict: a key the manifest does not know is refused, never ignored.
 const manifestSchema = z.strictObject({

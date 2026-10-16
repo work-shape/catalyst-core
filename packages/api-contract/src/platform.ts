@@ -1,3 +1,9 @@
+import {
+  ASSET_LIFECYCLES,
+  ASSET_OWNER_KINDS,
+  ASSET_REPRESENTATIONS,
+  COLLABORATION_WORKSPACE_KINDS
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 
 /** One registered asset kind with the action names its rights are checked as. */
@@ -8,14 +14,14 @@ export const platformAssetKindSchema = z.object({
    * `active`: the newest write is what the kind's users are served. `draft_published`: a write
    * moves a draft, and `assets.publish` moves what its users are served.
    */
-  lifecycle: z.enum(["active", "draft_published"]),
+  lifecycle: z.enum(ASSET_LIFECYCLES),
   /** `config`: a revision is its config. `files`: a revision holds a set of files beside it. */
-  representation: z.enum(["config", "files"]),
+  representation: z.enum(ASSET_REPRESENTATIONS),
   /**
    * Who may own an asset of the kind: the instance, a workspace, or either. An asset a
    * workspace owns is read and written by naming that workspace.
    */
-  owners: z.array(z.enum(["instance", "workspace"])),
+  owners: z.array(z.enum(ASSET_OWNER_KINDS)),
   actions: z.object({
     read: z.string(),
     write: z.string(),
@@ -64,7 +70,7 @@ export const platformContextNamespaceSchema = z.object({
 export const platformContextWorkspaceSchema = z.object({
   id: z.string(),
   name: z.string(),
-  kind: z.enum(["personal", "shared"]),
+  kind: z.enum(COLLABORATION_WORKSPACE_KINDS),
   /** The caller is a member: a new agent it makes there starts offered there. */
   member: z.boolean(),
   actions: z.array(z.string())

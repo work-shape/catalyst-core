@@ -1,4 +1,8 @@
-import type { StorePage } from "./paging";
+import {
+  MODEL_USAGE_EVENT_STATUSES,
+  MODEL_USAGE_SOURCES,
+  USAGE_COST_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 import type {
   AgentRunId,
   ClientInstanceId,
@@ -7,11 +11,12 @@ import type {
   ModelUsageEventId,
   UserId
 } from "./ids";
-import type { ISODateString } from "./time";
-import type { ProviderRegion } from "./providers";
 import type { JsonObject } from "./json";
+import type { StorePage } from "./paging";
+import type { ProviderRegion } from "./providers";
+import type { ISODateString } from "./time";
 
-export type ModelUsageSource = "provider_reported" | "not_reported" | "estimated";
+export type ModelUsageSource = (typeof MODEL_USAGE_SOURCES)[number];
 
 export interface ModelTokenUsage {
   inputTokens: number;
@@ -22,7 +27,7 @@ export interface ModelTokenUsage {
 }
 
 export type UsageCostRecordSource = "rate_card" | "backfilled" | "provider_reconciled";
-export type UsageCostRecordStatus = "settled" | "incomplete" | "unpriced";
+export type UsageCostRecordStatus = (typeof USAGE_COST_STATUSES)[number];
 export type UsageCostMissingMeter =
   "token_usage" | "cached_input_tokens" | "model_rate" | "fast_model_rate" | "web_search_rate";
 
@@ -72,7 +77,7 @@ export type UsageCostRecord = SettledUsageCostRecord | IncompleteUsageCostRecord
  * answer began; the event's `source` says which. `failed`: ended before any answer arrived.
  * `abandoned`: never ended as far as the instance knows, because its process went away.
  */
-export type ModelUsageEventStatus = "pending" | "settled" | "failed" | "abandoned";
+export type ModelUsageEventStatus = (typeof MODEL_USAGE_EVENT_STATUSES)[number];
 
 export interface ModelUsageEvent extends ModelTokenUsage {
   id: ModelUsageEventId;

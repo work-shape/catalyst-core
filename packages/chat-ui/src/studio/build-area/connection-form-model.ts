@@ -1,3 +1,4 @@
+import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 // The form of a Connection made on the instance, and what it writes. Pure: the page holds the
 // state, these functions read and make definitions. No function here holds a credential: the
 // secret is entered beside the definition and sent on its own.
@@ -31,7 +32,7 @@ export interface ConnectionFormState {
 /** One operation a write accepts, as the definition holds it. */
 interface AcceptedOperation {
   name: string;
-  effect: "reading" | "changing";
+  effect: (typeof OPERATION_EFFECTS)[number];
   exposure: string[];
   enabled: boolean;
   schemaFingerprint?: string;
@@ -185,7 +186,7 @@ function acceptedOperationsOf(config: Record<string, unknown>): AcceptedOperatio
 /** One operation a person approved: as it was discovered or declared. */
 export interface ApprovedOperation {
   name: string;
-  effect: "reading" | "changing";
+  effect: (typeof OPERATION_EFFECTS)[number];
   /** For a discovered tool: the fingerprint of the description the person saw. */
   schemaFingerprint?: string;
   /** For a declared operation: its declaration, such as the method, the path and the parameters. */

@@ -1,7 +1,8 @@
+import type { ConversationListItem } from "@work-shape/catalyst-api-client";
+import { WORKSPACE_VISIBILITIES } from "@work-shape/catalyst-core";
+import { cn, Input, RadioGroup, useScrollEdgeFade } from "@work-shape/catalyst-ui";
 import { Ban, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
-import type { ConversationListItem } from "@work-shape/catalyst-api-client";
-import { cn, Input, RadioGroup, useScrollEdgeFade } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
   collaborationWorkspaceAccentAttributes,
@@ -13,7 +14,7 @@ import {
   collaborationWorkspaceEmojiSuggestions
 } from "./collaboration-workspace-emoji";
 
-export type CollaborationWorkspaceVisibility = "discoverable" | "private";
+export type CollaborationWorkspaceVisibility = (typeof WORKSPACE_VISIBILITIES)[number];
 export type ConversationVisibility = ConversationListItem["visibility"];
 
 const accentLabelKeys: Record<CollaborationWorkspaceAccentColor, TranslationKey> = {

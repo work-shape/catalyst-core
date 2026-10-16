@@ -1,7 +1,3 @@
-import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, open, rm, statfs, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import {
   ASSET_REPO_BUNDLES_DIRECTORY,
   ASSET_REPO_COMMAND,
@@ -18,10 +14,15 @@ import {
   type AssetRepoRefusal,
   type CommitFolderRequest
 } from "@work-shape/catalyst-asset-repo";
+import { ASSET_REPO_BUNDLE_KINDS } from "@work-shape/catalyst-core";
 import {
   DEFAULT_WORKSPACE_COMMAND_PATH,
   type WorkspaceCommandProcessExecutor
 } from "@work-shape/catalyst-tool-execution";
+import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import { chmod, lstat, mkdir, mkdtemp, open, rm, statfs, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import { removeStalePageBuilds } from "../pages/page-build-sandbox";
 
@@ -68,7 +69,7 @@ const committedSchema = z.object({
   files: z.number().int().nonnegative(),
   bundle: z.object({
     file: z.string().min(1).max(256),
-    kind: z.enum(["full", "incremental"]),
+    kind: z.enum(ASSET_REPO_BUNDLE_KINDS),
     prerequisite: z.string().regex(OBJECT_ID).nullable(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/u),
     bytes: z.number().int().positive().max(ASSET_REPO_MAX_BUNDLE_BYTES)
@@ -121,7 +122,7 @@ export type AssetRepoCommitOutcome =
       tree: string;
       files: number;
       bundle: {
-        kind: "full" | "incremental";
+        kind: (typeof ASSET_REPO_BUNDLE_KINDS)[number];
         prerequisite: string | null;
         sha256: string;
         bytes: Uint8Array;

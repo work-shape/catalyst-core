@@ -1,3 +1,13 @@
+import {
+  AGENT_RUN_FAILURE_CATEGORIES,
+  AGENT_RUN_STATUSES,
+  LIVE_JOB_STATUSES,
+  TOOL_CALL_STATES
+} from "@work-shape/catalyst-asset-schemas";
+import type { ReasoningEffortConfig } from "./config";
+import type { AppendAssistantMessageInput, ChatMessage, CreateMessageInput } from "./conversation";
+import type { AttachmentManifest, ManagedFileRef, SubjectRowClaim } from "./files";
+import type { AuthPrincipal, AuthScope, DelegatedActor, RuntimeCallContext } from "./identity";
 import type {
   AgentRunId,
   ClientInstanceId,
@@ -6,16 +16,11 @@ import type {
   MessageId,
   ToolCallId
 } from "./ids";
-import type { JsonObject } from "./json";
-import type { ISODateString } from "./time";
-import type { ManagedFileRef } from "./files";
-import type { AttachmentManifest, SubjectRowClaim } from "./files";
-import type { AuthPrincipal, AuthScope, DelegatedActor, RuntimeCallContext } from "./identity";
-import type { LocaleCode } from "./localization";
-import type { ReasoningEffortConfig } from "./config";
-import type { ToolExecutionResult } from "./tool-execution";
-import type { AppendAssistantMessageInput, ChatMessage, CreateMessageInput } from "./conversation";
 import type { JobId } from "./jobs";
+import type { JsonObject } from "./json";
+import type { LocaleCode } from "./localization";
+import type { ISODateString } from "./time";
+import type { ToolExecutionResult } from "./tool-execution";
 
 export interface StartAgentRunInput {
   agentName: string;
@@ -42,17 +47,9 @@ export interface AgentRunHandle {
   startedAt: ISODateString;
 }
 
-export type AgentRunStatus =
-  | "queued"
-  | "running"
-  | "waiting_for_permission"
-  | "cancelling"
-  | "completed"
-  | "cancelled"
-  | "failed";
+export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
 
-export type AgentRunFailureCategory =
-  "app_error" | "internal_error" | "runtime_interrupted" | "abort_error" | "unknown_error";
+export type AgentRunFailureCategory = (typeof AGENT_RUN_FAILURE_CATEGORIES)[number];
 
 export interface AgentRunError {
   code: string;
@@ -128,7 +125,7 @@ export type AgentRunProjectionPart =
       toolCallId: ToolCallId;
       toolName: string;
       input?: unknown;
-      state: "input_available" | "waiting_for_permission" | "output_available" | "output_error";
+      state: (typeof TOOL_CALL_STATES)[number];
       output?: unknown;
       errorText?: string;
     };
@@ -153,7 +150,7 @@ export interface AgentRunProjection {
     toolCallId: ToolCallId;
     toolName: string;
     input?: unknown;
-    state: "input_available" | "waiting_for_permission" | "output_available" | "output_error";
+    state: (typeof TOOL_CALL_STATES)[number];
     output?: unknown;
     errorText?: string;
   }>;
@@ -348,7 +345,7 @@ export interface CreateAgentRunInput {
   reasoningEffort?: ReasoningEffortConfig;
   locale?: LocaleCode;
   authorization?: AgentRunAuthorization;
-  status?: "queued" | "running";
+  status?: (typeof LIVE_JOB_STATUSES)[number];
   idempotencyKey?: string;
   correlationId: string;
   startedAt?: ISODateString;

@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   AppError,
+  FAILED_JOB_STATUSES,
   type ClientInstanceId,
   type JobKindSummary,
   type JobOverview,
@@ -8,6 +8,7 @@ import {
   type JobStatus,
   type RetryJobResult
 } from "@work-shape/catalyst-core";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { keysetFilter } from "../paging";
 import type { PostgresConnection } from "../postgres-database";
 import { platformJobs } from "../schema/jobs";
@@ -15,8 +16,13 @@ import { platformJobs } from "../schema/jobs";
 type Input<Method extends keyof JobsStore> = Parameters<JobsStore[Method]>[0];
 
 /** The statuses an operator watches: what waits, what runs and what ended in an error. */
-const SUMMARIZED_STATUSES = ["queued", "running", "failed", "dead"] as const;
-const RETRYABLE_STATUSES = ["failed", "dead"] as const satisfies readonly JobStatus[];
+const SUMMARIZED_STATUSES = [
+  "queued",
+  "running",
+  "failed",
+  "dead"
+] as const satisfies readonly JobStatus[];
+const RETRYABLE_STATUSES = FAILED_JOB_STATUSES satisfies readonly JobStatus[];
 
 /**
  * What an operator is shown of a row. The payload and the error message are not selected, so

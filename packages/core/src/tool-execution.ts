@@ -1,3 +1,7 @@
+import { TOOL_GROUPS } from "@work-shape/catalyst-asset-schemas";
+import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
+import type { OperationBeforeEvent } from "./guardrail-events";
+import type { RuntimeCallContext } from "./identity";
 import type {
   AgentRunId,
   CollaborationWorkspaceId,
@@ -5,11 +9,8 @@ import type {
   OperationRunId,
   ToolCallId
 } from "./ids";
-import type { OperationBeforeEvent } from "./guardrail-events";
 import type { JsonObject, JsonValue } from "./json";
-import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { StructuredResultPublication } from "./structured-result";
-import type { RuntimeCallContext } from "./identity";
 
 export type ToolPermissionMode = "allow" | "deny" | "approval_required";
 
@@ -29,15 +30,7 @@ export interface ToolText {
  * Where the agent page shows a tool among the instance's tools. `instance` is the instance's own
  * tools, which its deployment registers; it is also where a tool without a group stands.
  */
-export const TOOL_GROUPS = [
-  "documents",
-  "web",
-  "files",
-  "results",
-  "skills",
-  "platform",
-  "instance"
-] as const;
+export { TOOL_GROUPS } from "@work-shape/catalyst-asset-schemas";
 
 export type ToolGroup = (typeof TOOL_GROUPS)[number];
 

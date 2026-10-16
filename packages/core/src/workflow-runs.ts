@@ -1,3 +1,4 @@
+import { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { ServicePrincipalRecord } from "./api-access";
 import type { ClientInstanceId, OperationRunId, WorkflowRunId, WorkflowStepRunId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
@@ -30,7 +31,7 @@ import type {
 export const WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS = 2_000;
 
 /** The statuses a run or a step run does not leave. */
-export const WORKFLOW_ENDED_STATUSES = ["done", "failed", "cancelled", "limit_reached"] as const;
+export { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-asset-schemas";
 
 export function isWorkflowRunEnded(status: WorkflowRunStatus): boolean {
   return WORKFLOW_ENDED_STATUSES.some((ended) => ended === status);

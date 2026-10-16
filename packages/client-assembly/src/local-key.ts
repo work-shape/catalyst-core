@@ -1,6 +1,3 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { parseArgs } from "node:util";
 import {
   completedOutput,
   createApiClient,
@@ -9,15 +6,23 @@ import {
   type ApiClientOptions
 } from "@work-shape/catalyst-api-client";
 import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
-import { createEnvironmentSecretResolver, resolveOptionalSecret } from "@work-shape/catalyst-core";
+import {
+  API_CREDENTIAL_SCOPES,
+  createEnvironmentSecretResolver,
+  resolveOptionalSecret,
+  SERVICE_PRINCIPAL_PERMISSIONS
+} from "@work-shape/catalyst-core";
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 
 /** The variable the `catalyst` command line tool reads its key from. */
 export const API_KEY_ENV_NAME = "CATALYST_API_KEY";
 
 const PRINCIPAL_LABEL = "Local config CLI";
-const PERMISSIONS = ["config_assets.read", "config_assets.release"] as const;
-const SCOPES = ["config_assets:read", "config_assets:release"] as const;
+const PERMISSIONS = SERVICE_PRINCIPAL_PERMISSIONS;
+const SCOPES = API_CREDENTIAL_SCOPES;
 
 type Env = Readonly<Record<string, string | undefined>>;
 

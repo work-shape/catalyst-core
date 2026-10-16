@@ -1,22 +1,24 @@
-import { auditActorFromUser, projectAgentRun } from "@work-shape/catalyst-core";
 import {
+  ACTIVE_AGENT_RUN_STATUSES,
   AppError,
-  type AgentRun,
+  auditActorFromUser,
+  getSubjectUserId,
+  projectAgentRun,
+  readAssistantFinalMetadata,
+  withoutAssistantProviderContinuation,
   type ActiveRunSummary,
-  type AgentRunProjection,
+  type AgentRun,
   type AgentRunId,
+  type AgentRunProjection,
   type AgentRunStatus,
   type AgentRuntimeCommand,
   type AgentRuntimeEvent,
   type AgentRuntimeObserveOptions,
   type AuthenticatedUser,
   type ChatMessage,
-  type ConversationThreadSnapshot,
   type ConversationId,
-  type RuntimeCallContext,
-  getSubjectUserId,
-  withoutAssistantProviderContinuation,
-  readAssistantFinalMetadata
+  type ConversationThreadSnapshot,
+  type RuntimeCallContext
 } from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "../types";
 import { ConversationWorkflow } from "./conversation-service";
@@ -378,10 +380,7 @@ function toPublicChatMessage(message: ChatMessage): ChatMessage {
 
 function isActiveAgentRunStatus(
   status: AgentRunStatus
-): status is Extract<
-  AgentRunStatus,
-  "queued" | "running" | "waiting_for_permission" | "cancelling"
-> {
+): status is Extract<AgentRunStatus, (typeof ACTIVE_AGENT_RUN_STATUSES)[number]> {
   return (
     status === "queued" ||
     status === "running" ||

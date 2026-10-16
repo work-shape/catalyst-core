@@ -1,12 +1,8 @@
 import {
-  POSTGRES_RESULT_MAX_BYTES,
-  POSTGRES_RESULT_MAX_ROWS,
-  POSTGRES_STATEMENT_TIMEOUT_MS
-} from "@work-shape/catalyst-postgres-connector";
-import {
   isAppError,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
+  KNOWLEDGE_BASE_STATUSES,
   KNOWLEDGE_OPERATION_PREFIX,
   KNOWLEDGE_QUERY_TOOL_NAME,
   knowledgeQueryOperationName,
@@ -19,6 +15,11 @@ import {
   type OperationResource,
   type OperationSource
 } from "@work-shape/catalyst-core";
+import {
+  POSTGRES_RESULT_MAX_BYTES,
+  POSTGRES_RESULT_MAX_ROWS,
+  POSTGRES_STATEMENT_TIMEOUT_MS
+} from "@work-shape/catalyst-postgres-connector";
 import { z } from "zod";
 import { queryInputSchema, rowsSchema, RUN_TIMEOUT_MS } from "../operations";
 import {
@@ -69,7 +70,7 @@ const stateOutputSchema = z.object({
   id: z.string(),
   name: z.string(),
   /** `unchecked` until the first check of the published revision. */
-  status: z.enum(["unchecked", "ok", "needs_attention"]),
+  status: z.enum(KNOWLEDGE_BASE_STATUSES),
   /** The revision the last check was of. */
   revision: z.number().int().optional(),
   checkedAt: z.string().optional(),

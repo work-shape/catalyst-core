@@ -1,34 +1,36 @@
 import {
   AppError,
-  userInDeletionError,
   asUserId,
   auditActorFromUser,
-  requireAuthScope,
   isAuthenticatedServicePrincipal,
   isGrantableAction,
   isGrantableAt,
   isPlatformAction,
   isPrincipalGrantableAction,
-  moduleOffError,
   isSuperadmin,
   listAccessEntries,
+  moduleOffError,
+  PRINCIPAL_HOLDER_KINDS,
+  requireAuthScope,
+  userInDeletionError,
   type AccessEntry,
   type AccessHolder,
   type ActorAccess,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
-  type OperationAuthorization,
-  type OperationExecutionContext,
   type GrantScopeAsset,
   type HeldRight,
   type JsonObject,
   type Namespace,
   type NamespaceUsage,
+  type OperationAuthorization,
+  type OperationExecutionContext,
   type PermissionGrant,
   type ServicePrincipalRecord,
   type StorePage,
   type UserRecord
 } from "@work-shape/catalyst-core";
+import type { ChatServerOptions } from "../types";
 import { SERVICE_PRINCIPALS_ACTION } from "./api-access-administration-service";
 import {
   authorizePrincipalHolderWrite,
@@ -40,15 +42,14 @@ import {
   seesPrincipals
 } from "./grant-holder-rules";
 import { authorizeHeldRightsWithin } from "./held-rights-within";
+import { namespaceLists, type NamespaceListsCommand } from "./namespace-lists";
 import { rightAtScope, scopeAssets } from "./person-rights";
 import {
   assetRight,
   authorizeGivingToPrincipal,
   type PrincipalRightsOptions
 } from "./principal-rights";
-import { namespaceLists, type NamespaceListsCommand } from "./namespace-lists";
 import { withRightsHeld } from "./rights-held";
-import type { ChatServerOptions } from "../types";
 
 type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
 /**
@@ -450,7 +451,7 @@ export class AccessWorkflow {
   async effective(
     actor: AuthenticatedUser,
     access: ActorAccess,
-    input: { holderKind: "user" | "service_principal"; holderId: string }
+    input: { holderKind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; holderId: string }
   ): Promise<{ holderActive: boolean; items: AccessEntry[] }> {
     // A person always reads their own rights. Other people remain behind user administration.
     if (input.holderKind === "user" && input.holderId !== actor.id) {
@@ -631,7 +632,7 @@ export class AccessWorkflow {
   private async findHolder(
     actor: AuthenticatedUser,
     access: ActorAccess,
-    input: { holderKind: "user" | "service_principal"; holderId: string }
+    input: { holderKind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; holderId: string }
   ): Promise<AccessHolder> {
     if (input.holderKind === "user") {
       const user = await this.findUser(input.holderId);

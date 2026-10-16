@@ -1,10 +1,11 @@
-import { z } from "zod";
+import { APPROVAL_CHECK_FAILURE_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
 import {
   AppError,
   GUARDRAIL_NAME_MAX_LENGTH,
   GUARDRAIL_NAME_PATTERN,
   GUARDRAIL_NAME_RULE
 } from "@work-shape/catalyst-core";
+import { z } from "zod";
 import { invalidConfigError } from "./config-errors";
 import type { ReleaseGuardrailConfig } from "./guardrail-schema";
 
@@ -19,7 +20,7 @@ const approvalCheckSchema = z.object({
   appliesTo: z.string().trim().min(1),
   modelBindingId: z.string().trim().min(1),
   instruction: z.string().trim().min(1),
-  onFail: z.enum(["warn", "block"])
+  onFail: z.enum(APPROVAL_CHECK_FAILURE_OUTCOMES)
 });
 
 /**

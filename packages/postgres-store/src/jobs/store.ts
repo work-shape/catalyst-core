@@ -1,8 +1,9 @@
-import { and, asc, eq, gt, inArray, lt, lte, not, sql } from "drizzle-orm";
 import {
   AppError,
+  FAILED_JOB_STATUSES,
   JOB_WITHDRAWN_ERROR_CODE,
   JOB_WORKER_SILENT_MS,
+  LIVE_JOB_STATUSES,
   createPlatformId,
   scheduleDedupeKey,
   type ClientInstanceId,
@@ -10,13 +11,15 @@ import {
   type Job,
   type JobId,
   type JobKind,
-  type JobSchedule,
   type JobKindActivity,
+  type JobSchedule,
+  type JobStatus,
   type JobWorkerReport,
   type JobsStore,
   type JsonObject,
   type PruneEndedJobsResult
 } from "@work-shape/catalyst-core";
+import { and, asc, eq, gt, inArray, lt, lte, not, sql } from "drizzle-orm";
 import type { PostgresConnection } from "../postgres-database";
 import { jobWorkerReports, platformJobs } from "../schema/jobs";
 import { productUsers } from "../schema/users";
@@ -141,7 +144,7 @@ export async function enqueueJob<Payload extends JsonObject>(
     eq(platformJobs.clientInstanceId, options.clientInstanceId),
     eq(platformJobs.kind, kind.kind),
     options.dedupeKey === undefined ? sql`false` : eq(platformJobs.dedupeKey, options.dedupeKey),
-    inArray(platformJobs.status, ["queued", "running"])
+    inArray(platformJobs.status, LIVE_JOB_STATUSES)
   );
   // The live job of a dedupe key can end between the refused insert and the read of it, so the
   // pair is tried again. Each round needs another job to end at that exact moment.
@@ -322,7 +325,7 @@ async function pruneEndedJobs(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId }
 ): Promise<PruneEndedJobsResult> {
-  const endedBefore = (statuses: JobRow["status"][], retentionDays: number) =>
+  const endedBefore = (statuses: readonly JobRow["status"][], retentionDays: number) =>
     db
       .delete(platformJobs)
       .where(
@@ -333,8 +336,8 @@ async function pruneEndedJobs(
           not(deadJobOfSubjectInDeletion)
         )
       );
-  const completed = await endedBefore(["succeeded", "cancelled"], COMPLETED_JOB_RETENTION_DAYS);
-  const failed = await endedBefore(["failed", "dead"], FAILED_JOB_RETENTION_DAYS);
+  const completed = await endedBefore(COMPLETED_JOB_STATUSES, COMPLETED_JOB_RETENTION_DAYS);
+  const failed = await endedBefore(FAILED_JOB_STATUSES, FAILED_JOB_RETENTION_DAYS);
   // One row per kind: it grows with the kinds of the product, not with time. The kinds of a
   // release that is gone would stay for good, so a report nobody renewed for a day is removed.
   await db
@@ -692,3 +695,5 @@ function backoff(kind: JobKind) {
     ${kind.backoff.baseMs}::double precision * power(2, greatest(${platformJobs.attempts} - 1, 0))
   ) / 1000)`;
 }
+
+const COMPLETED_JOB_STATUSES = ["succeeded", "cancelled"] as const satisfies readonly JobStatus[];

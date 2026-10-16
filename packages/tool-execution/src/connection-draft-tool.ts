@@ -1,16 +1,17 @@
-import { z } from "zod";
 import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   CONNECTION_CREDENTIAL_WORDS,
   CONNECTION_MAX_ACCEPTED_OPERATIONS,
   CONNECTION_NAME_MAX_LENGTH,
   findConnectorTypeIssues,
+  OPERATION_EFFECTS,
   type AssetValidationIssue,
   type ConnectionOperationConfig,
   type ConnectorTypeRegistry,
   type JsonObject
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import { z } from "zod";
 
 // The agent's draft of the tools of a REST API, as a card in the conversation (CS-5c). The agent
 // reads a vendor's API description and declares the operations; this tool checks them as a save
@@ -166,7 +167,7 @@ const operationSchema = z.object({
     .optional()
     .describe("The query parameters, by name."),
   effect: z
-    .enum(["reading", "changing"])
+    .enum(OPERATION_EFFECTS)
     .describe("reading. This first cut reads only; 'changing' is refused.")
 });
 
@@ -215,7 +216,7 @@ const outputSchema = z.object({
   operations: z.array(
     z.object({
       name: z.string(),
-      effect: z.enum(["reading", "changing"]),
+      effect: z.enum(OPERATION_EFFECTS),
       title: z.string().optional(),
       description: z.string().optional(),
       method: z.string().optional(),

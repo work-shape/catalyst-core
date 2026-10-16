@@ -1,5 +1,3 @@
-import { Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import type {
   CollaborationWorkspaceWithRole,
   LocaleCode,
@@ -8,6 +6,7 @@ import type {
   WorkspaceMemberCandidate,
   WorkspaceMembershipRole
 } from "@work-shape/catalyst-api-client";
+import { WORKSPACE_MEMBERSHIP_ROLES } from "@work-shape/catalyst-core";
 import {
   Avatar,
   Banner,
@@ -22,6 +21,8 @@ import {
   Select,
   SkeletonList
 } from "@work-shape/catalyst-ui";
+import { Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useCollaborationWorkspaceMutations } from "../../../shared/api/collaboration-workspace-mutations";
 import {
   useCollaborationWorkspaceAccessRequestsQuery,
@@ -43,7 +44,7 @@ const MEMBER_CANDIDATE_MIN_QUERY_CHARS = 2;
 /** How long typing rests before the candidate search is asked, so not every keystroke asks. */
 const MEMBER_CANDIDATE_DEBOUNCE_MS = 250;
 const noMemberCandidates: WorkspaceMemberCandidate[] = [];
-const memberRoles: readonly WorkspaceMembershipRole[] = ["owner", "admin", "member"];
+const memberRoles: readonly WorkspaceMembershipRole[] = [...WORKSPACE_MEMBERSHIP_ROLES];
 
 /**
  * Workspace > Members: who asked to join, above who belongs to the shared workspace. The

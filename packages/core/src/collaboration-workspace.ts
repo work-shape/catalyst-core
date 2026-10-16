@@ -1,3 +1,9 @@
+import {
+  COLLABORATION_WORKSPACE_KINDS,
+  WORKSPACE_ACCENT_COLORS,
+  WORKSPACE_MEMBERSHIP_ROLES,
+  WORKSPACE_VISIBILITIES
+} from "@work-shape/catalyst-asset-schemas";
 import type { ConversationVisibility } from "./conversation";
 import { AppError } from "./errors";
 import type {
@@ -9,30 +15,11 @@ import type {
 import { createPlatformId } from "./ids";
 import type { ISODateString } from "./time";
 
-export type CollaborationWorkspaceKind = "personal" | "shared";
-export type WorkspaceVisibility = "discoverable" | "private";
-export type WorkspaceMembershipRole = "owner" | "admin" | "member";
+export type CollaborationWorkspaceKind = (typeof COLLABORATION_WORKSPACE_KINDS)[number];
+export type WorkspaceVisibility = (typeof WORKSPACE_VISIBILITIES)[number];
+export type WorkspaceMembershipRole = (typeof WORKSPACE_MEMBERSHIP_ROLES)[number];
 
-export const WORKSPACE_ACCENT_COLORS = [
-  "garnet",
-  "ruby",
-  "mahogany",
-  "copper",
-  "amber",
-  "olive",
-  "jade",
-  "emerald",
-  "teal",
-  "turquoise",
-  "azure",
-  "sapphire",
-  "indigo",
-  "violet",
-  "magenta",
-  "rose",
-  "stone",
-  "slate"
-] as const;
+export { WORKSPACE_ACCENT_COLORS } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkspaceAccentColor = (typeof WORKSPACE_ACCENT_COLORS)[number];
 

@@ -1,3 +1,11 @@
+import {
+  NOTIFY_CHANNELS,
+  OPERATION_EFFECTS,
+  OPERATION_TARGETS,
+  WORKFLOW_RESERVED_STEP_TYPES,
+  WORKFLOW_RUN_STATUSES,
+  WORKFLOW_STEP_TYPES
+} from "@work-shape/catalyst-core";
 // What the Workflow screens show: a Workflow, its steps, a run and its step runs, in the
 // screens' own shapes. The data module maps what the instance answers onto these, so no screen
 // reads a type of the API contract.
@@ -26,18 +34,7 @@ export interface WorkflowListItem {
 }
 
 export type WorkflowStepKind =
-  | "trigger"
-  | "operation"
-  | "loop"
-  | "code"
-  | "agent"
-  | "notify"
-  | "output"
-  /** Starts another Workflow as a child run and waits for it. */
-  | "workflow"
-  /** Reserved in the contract: drawn, and run by no engine yet. */
-  | "condition"
-  | "parallel";
+  (typeof WORKFLOW_STEP_TYPES)[number] | (typeof WORKFLOW_RESERVED_STEP_TYPES)[number];
 
 /** One path of a `condition` (`then`, `else`) or of a `parallel` step. */
 export interface WorkflowBranchView {
@@ -62,7 +59,7 @@ export interface WorkflowStepView {
   name: string;
   description?: string;
   /** On an operation step: whether it reads or changes, where the instance says it. */
-  effect?: "reading" | "changing";
+  effect?: (typeof OPERATION_EFFECTS)[number];
   /** On an operation step: the name of what it works on, where the instance gives one. */
   source?: string;
   /** On an operation step: what kind of thing that is, as far as the operation's name says. */
@@ -84,7 +81,7 @@ export interface WorkflowStepView {
   /** On a loop: the steps it runs for each entry, in their order. */
   steps: readonly WorkflowStepView[];
   /** On a notice: where it goes. */
-  channel?: "inbox" | "mail";
+  channel?: (typeof NOTIFY_CHANNELS)[number];
   /** The steps whose results the step is given. */
   sources: readonly WorkflowStepSource[];
 }
@@ -135,7 +132,7 @@ export interface LiveOnceSwitchView {
 }
 
 /** Where the call of a step went: the live asset, its test target, or nowhere (simulated). */
-export type WorkflowStepTarget = "live" | "test" | "dry_run";
+export type WorkflowStepTarget = (typeof OPERATION_TARGETS)[number];
 
 /** One thing the instance refuses a start for: its code and its own sentence. */
 export interface WorkflowStartIssue {
@@ -145,8 +142,7 @@ export interface WorkflowStartIssue {
   principalDisplayLabel?: string;
 }
 
-export type WorkflowRunStatus =
-  "queued" | "running" | "waiting" | "done" | "failed" | "cancelled" | "limit_reached";
+export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
 
 type WorkflowStepRunStatus = Exclude<WorkflowRunStatus, "limit_reached">;
 
@@ -244,7 +240,7 @@ export interface WorkflowStepRunView {
   /** On the step run of a condition that has decided: the path it took. */
   taken?: string;
   /** On the step run of an operation step: what the call does and what it belongs to. */
-  effect?: "reading" | "changing";
+  effect?: (typeof OPERATION_EFFECTS)[number];
   source?: string;
   /** On the step run of an operation step: where its call went. */
   target?: WorkflowStepTarget;

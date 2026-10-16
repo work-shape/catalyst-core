@@ -3,10 +3,11 @@ import {
   type ApiErrorCode,
   type LocaleCode
 } from "@work-shape/catalyst-api-client";
+import { localeCodes } from "@work-shape/catalyst-core";
 import type { ThemeModePreference } from "./theme";
 
 export const STANDALONE_AUTH_SOURCE = "better-auth";
-export const DEFAULT_LOCALES: LocaleCode[] = ["en", "de"];
+export const DEFAULT_LOCALES: LocaleCode[] = [...localeCodes];
 
 const THEME_STORAGE_KEY = "vivd-catalyst:theme";
 const LOCALE_STORAGE_KEY = "vivd-catalyst:locale";

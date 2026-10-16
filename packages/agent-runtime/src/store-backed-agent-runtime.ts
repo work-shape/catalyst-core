@@ -1,15 +1,16 @@
 import {
   AppError,
+  ENDED_AGENT_RUN_STATUSES,
   type AgentRun,
   type AgentRunId,
-  type AgentRunStore,
   type AgentRunStatus,
+  type AgentRunStore,
   type AgentRuntime,
   type AgentRuntimeCommand,
   type AgentRuntimeEvent,
   type AgentRuntimeObserveOptions,
-  type RuntimeCallContext,
   type RunObservationStore,
+  type RuntimeCallContext,
   type StartAgentRunInput
 } from "@work-shape/catalyst-core";
 import { setTimeout as delay } from "node:timers/promises";
@@ -73,7 +74,7 @@ export interface StoreBackedAgentRuntimeOptions {
   cancellations?: AgentRunSignal;
 }
 
-const TERMINAL_STATUSES = new Set<AgentRunStatus>(["completed", "cancelled", "failed"]);
+const TERMINAL_STATUSES = new Set<AgentRunStatus>(ENDED_AGENT_RUN_STATUSES);
 
 /**
  * The API's side of a run. The run is a row and a job: a worker executes it and stores its

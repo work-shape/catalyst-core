@@ -1,8 +1,12 @@
+import {
+  AGENT_AVAILABILITY_MODES,
+  ASSET_REPO_BUNDLE_KINDS,
+  CONFIG_ASSET_CHANGE_OPERATIONS
+} from "@work-shape/catalyst-asset-schemas";
 import type { AssetScope } from "./asset-kinds";
-import type { StorePage } from "./paging";
 import type { AuditActor } from "./audit";
-import type { AgentConfig, SkillConfig } from "./config";
 import type { CollaborationWorkspaceKind } from "./collaboration-workspace";
+import type { AgentConfig, SkillConfig } from "./config";
 import type {
   ClientInstanceId,
   CollaborationWorkspaceId,
@@ -11,6 +15,7 @@ import type {
 } from "./ids";
 import type { JsonObject } from "./json";
 import { assetObjectPrefix, type FileSetId } from "./pages";
+import type { StorePage } from "./paging";
 
 /**
  * The id of a registered asset kind, such as `agent`. The registry of the instance says which
@@ -18,7 +23,7 @@ import { assetObjectPrefix, type FileSetId } from "./pages";
  */
 export type ConfigAssetKind = string;
 
-export type AgentAvailabilityMode = "all" | "selected";
+export type AgentAvailabilityMode = (typeof AGENT_AVAILABILITY_MODES)[number];
 
 /**
  * Where an agent may be used. Availability is an access rule: an agent without an availability
@@ -154,7 +159,7 @@ export interface ConfigAssetRevisionRecord {
   assetId: string;
   clientInstanceId: ClientInstanceId;
   revision: number;
-  operation: "create" | "update" | "delete" | "revert";
+  operation: (typeof CONFIG_ASSET_CHANGE_OPERATIONS)[number];
   config: JsonObject | null;
   /** The immutable file set of the revision, for a kind whose revisions hold files. */
   fileSetId?: FileSetId;
@@ -178,7 +183,7 @@ export interface AssetRepoBundle {
   /** Where the bytes are, in the `files` store: `assetRepoBundleObjectKey` of them. */
   objectKey: string;
   /** A full bundle stands on nothing; an incremental one on `prerequisiteCommit`. */
-  kind: "full" | "incremental";
+  kind: (typeof ASSET_REPO_BUNDLE_KINDS)[number];
   tipCommit: string;
   prerequisiteCommit?: string;
   bytes: number;

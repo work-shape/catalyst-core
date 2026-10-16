@@ -9,14 +9,15 @@ import {
   AGENT_EDITABLE_FIELDS,
   AGENT_MODEL_SETTING_FIELDS,
   AppError,
+  ASSET_OWNER_KINDS,
   defineAssetKind,
   findNamespaceOfAssetName,
   KNOWLEDGE_BASE_ASSET_KIND,
   type AgentConfig,
-  type AssetValidationContext,
-  type AssetValidationIssue,
   type AgentEditableField,
   type AgentModelSettingField,
+  type AssetValidationContext,
+  type AssetValidationIssue,
   type Namespace
 } from "@work-shape/catalyst-core";
 import {
@@ -53,7 +54,7 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       },
       actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).
-      owners: ["instance", "workspace"],
+      owners: [...ASSET_OWNER_KINDS],
       validate(context, agents) {
         const changed = agents.filter((agent) => context.changes("agent", agent.name));
         const skillNames = context

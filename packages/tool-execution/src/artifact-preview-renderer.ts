@@ -7,6 +7,8 @@ import type {
   ArtifactPreviewImageFormat,
   ArtifactPreviewSourceKind
 } from "@work-shape/catalyst-core";
+import { ARTIFACT_PREVIEW_IMAGE_MIME_TYPES } from "@work-shape/catalyst-core";
+import { previewFailure } from "./artifact-preview-failures";
 import {
   boundedPdfPageResolution,
   convertOfficeDocument,
@@ -17,7 +19,6 @@ import {
   NativeProcessError,
   renderPdfPage
 } from "./native-document";
-import { previewFailure } from "./artifact-preview-failures";
 import {
   formatSpreadsheetRangeSelector,
   parseSpreadsheetRangeSelector,
@@ -50,7 +51,7 @@ export interface ArtifactPreviewRenderInput {
 
 export interface ArtifactPreviewRenderedPage {
   bytes: Uint8Array;
-  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  mimeType: (typeof ARTIFACT_PREVIEW_IMAGE_MIME_TYPES)[number];
   pageNumber?: number;
   slideNumber?: number;
   sheet?: string;
@@ -63,7 +64,7 @@ export interface ArtifactPreviewRenderedPage {
 
 export interface ArtifactPreviewRenderedModelImage {
   bytes: Uint8Array;
-  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  mimeType: (typeof ARTIFACT_PREVIEW_IMAGE_MIME_TYPES)[number];
   width?: number;
   height?: number;
 }

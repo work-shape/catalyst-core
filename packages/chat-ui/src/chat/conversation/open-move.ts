@@ -1,7 +1,8 @@
 import type { Message } from "@work-shape/catalyst-api-client";
-import { readCompatibleMessageRunId } from "../assistant/assistant-message-compat";
+import { ENDED_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import { routeConversationId } from "../../shared/workspace-route";
+import { readCompatibleMessageRunId } from "../assistant/assistant-message-compat";
 import {
   assetPageRoute,
   sameAsset,
@@ -171,7 +172,7 @@ export interface WatchedRun {
   projection: { status: string; parts: readonly SubjectRunPart[] };
 }
 
-const ENDED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+const ENDED_RUN_STATES = new Set<string>(ENDED_AGENT_RUN_STATUSES);
 
 /**
  * The parts of the last run of the conversation: the run the thread watches, unless a later

@@ -1,10 +1,11 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
-import { useAppsHost } from "../apps/apps-host";
+import { OPERATIONS_AUDIENCES } from "@work-shape/catalyst-core";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import { useSettingsPage } from "../../shared/settings-page-context";
-import { useWorkflowsHost } from "../workflows/workflows-host";
 import { apiErrorCode } from "../../shared/workspace-utils";
+import { useAppsHost } from "../apps/apps-host";
+import { useWorkflowsHost } from "../workflows/workflows-host";
 import { instanceSentence } from "./build-refusals";
 
 /** The state of one Data Store, as `data_stores.get` answers it. */
@@ -69,7 +70,10 @@ export interface DataStoreSource {
    */
   useUsingPage(
     workspaceId: string | undefined
-  ): (kind: "app" | "workflow", name: string) => { href: string; open(): void } | undefined;
+  ): (
+    kind: (typeof OPERATIONS_AUDIENCES)[number],
+    name: string
+  ) => { href: string; open(): void } | undefined;
 }
 
 /**
@@ -145,7 +149,7 @@ export function useDataStoreSource(): DataStoreSource {
  * workspace is.
  */
 export function usingPageRoute(
-  kind: "app" | "workflow",
+  kind: (typeof OPERATIONS_AUDIENCES)[number],
   name: string,
   shown: { collaborationWorkspaceId: string | undefined; apps: boolean; workflows: boolean }
 ): WorkspaceRoute | undefined {

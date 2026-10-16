@@ -1,5 +1,3 @@
-import { MoreHorizontal, RotateCcw } from "lucide-react";
-import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
@@ -7,6 +5,7 @@ import {
   type JobKindSummary,
   type JobStatus
 } from "@work-shape/catalyst-api-client";
+import { FAILED_JOB_STATUSES } from "@work-shape/catalyst-core";
 import {
   Badge,
   Banner,
@@ -35,8 +34,10 @@ import {
   TabsTrigger,
   type BadgeTone
 } from "@work-shape/catalyst-ui";
-import { formatDateTime, formatElapsed } from "../../../shared/locale-format";
+import { MoreHorizontal, RotateCcw } from "lucide-react";
+import { useState } from "react";
 import { useTranslation, type TranslationKey } from "../../../shared/i18n";
+import { formatDateTime, formatElapsed } from "../../../shared/locale-format";
 import { useModuleName } from "../../../shared/module-texts";
 import { useSettingsPage } from "../../../shared/settings-page-context";
 
@@ -61,7 +62,7 @@ const JOBS_REFRESH_MS = 10_000;
 const jobTabs = [
   {
     id: "attention",
-    statuses: ["failed", "dead"],
+    statuses: [...FAILED_JOB_STATUSES],
     labelKey: "jobs.tabFailedAndDead",
     emptyKey: "jobs.emptyFailedAndDead"
   },

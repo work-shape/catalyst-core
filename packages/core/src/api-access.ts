@@ -1,9 +1,10 @@
+import { SERVICE_PRINCIPAL_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 import type { ApiCredentialId, ClientInstanceId, ServicePrincipalId, UserId } from "./ids";
 import { asApiCredentialId, createPlatformId } from "./ids";
 import type { ISODateString } from "./time";
 
-export type ServicePrincipalStatus = "active" | "disabled";
+export type ServicePrincipalStatus = (typeof SERVICE_PRINCIPAL_STATUSES)[number];
 
 /** What a principal's name looks like: a slug, as an asset's name is. */
 export const SERVICE_PRINCIPAL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/u;

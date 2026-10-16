@@ -1,9 +1,10 @@
+import { DATA_STORE_SCALAR_TYPES } from "@work-shape/catalyst-core";
 import { PostgresExecutorError } from "./errors";
 import { POSTGRES_PARAMETERS_MAX_COUNT } from "./limits";
 
 export type PostgresScalar = string | number | boolean | null;
 
-const SCALAR_TYPES = ["text", "integer", "number", "boolean", "date", "timestamp"] as const;
+const SCALAR_TYPES = DATA_STORE_SCALAR_TYPES;
 type PostgresScalarType = (typeof SCALAR_TYPES)[number];
 export type PostgresParameterType = PostgresScalarType | `${PostgresScalarType}[]`;
 

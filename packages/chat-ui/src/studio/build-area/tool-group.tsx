@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import {
   Badge,
   Checkbox,
@@ -7,6 +7,7 @@ import {
   DisclosureContent,
   DisclosureTrigger
 } from "@work-shape/catalyst-ui";
+import type { ReactNode } from "react";
 import { useTranslation } from "../../shared/i18n";
 
 // What every source of tools in an agent's Tools section is built from: a folding sub-group
@@ -20,7 +21,7 @@ export interface ToolGroupTool {
   /** What the check box is labelled with: the operation, or the action. */
   label: string;
   description?: string;
-  effect: "reading" | "changing";
+  effect: (typeof OPERATION_EFFECTS)[number];
 }
 
 /** A sub-group with more tools than this starts folded, with its count. */

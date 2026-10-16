@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import { THEME_MODES } from "@work-shape/catalyst-core";
 import { UiRoot, type UiRootProps } from "@work-shape/catalyst-ui";
+import { useEffect, useMemo, useState } from "react";
 import { TranslationProvider } from "../../../shared/i18n";
 import { uiLabelsFor } from "../../../shared/ui-labels";
 import type { WorkspaceRoute } from "../../../shared/workspace-route";
@@ -61,7 +62,7 @@ export function WorkflowSamples({
   locale: givenLocale
 }: {
   theme?: UiRootProps["theme"];
-  mode: "light" | "dark";
+  mode: (typeof THEME_MODES)[number];
   locale: LocaleCode;
 }) {
   const asked = useMemo(() => new URLSearchParams(window.location.search), []);

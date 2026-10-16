@@ -1,3 +1,4 @@
+import { OPERATION_DENIAL_REASONS } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 
 export type OperationDenial =
@@ -15,14 +16,7 @@ export type OperationDenial =
        * one a person calls (`auth: "user"`), and the caller is a service principal, whatever
        * right it holds.
        */
-      reason:
-        | "no_grant"
-        | "denied"
-        | "unknown_action"
-        | "holder_inactive"
-        | "holder_not_administrable"
-        | "user_only"
-        | "outside_key_scope";
+      reason: (typeof OPERATION_DENIAL_REASONS)[number];
       /**
        * What the refusal says, where a rule refused that no right a caller can be granted
        * opens. Without it the refusal names the missing right.

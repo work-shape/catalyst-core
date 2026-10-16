@@ -1,19 +1,3 @@
-import { z } from "zod";
-import {
-  AppError,
-  INSTANCE_ASSET_SCOPE,
-  auditActorFromUser,
-  isJsonObject,
-  unknownToJsonValue,
-  type ApprovalRequest,
-  type ApprovalRequestContext,
-  type ApprovalRequestHandler,
-  type AssetScope,
-  type AuthenticatedUser,
-  type ConfigAssetMutation,
-  type ConfigAssetRevisionRecord,
-  type JsonObject
-} from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   applySkillChange,
@@ -26,6 +10,24 @@ import {
   skillNameSchema
 } from "@work-shape/catalyst-config-schema";
 import {
+  AppError,
+  CONFIG_ASSET_KINDS,
+  INSTANCE_ASSET_SCOPE,
+  SKILL_CHANGE_TYPES,
+  auditActorFromUser,
+  isJsonObject,
+  unknownToJsonValue,
+  type ApprovalRequest,
+  type ApprovalRequestContext,
+  type ApprovalRequestHandler,
+  type AssetScope,
+  type AuthenticatedUser,
+  type ConfigAssetMutation,
+  type ConfigAssetRevisionRecord,
+  type JsonObject
+} from "@work-shape/catalyst-core";
+import { z } from "zod";
+import {
   applyValidatedConfigAssetMutations,
   type ConfigAssetWriterOptions
 } from "../assets/config-asset-writer";
@@ -36,7 +38,7 @@ const previewSchema = z.object({
   isNewSkill: z.boolean(),
   changes: z.array(
     z.object({
-      type: z.enum(["replace", "add", "new_resource"]),
+      type: z.enum(SKILL_CHANGE_TYPES),
       target: z.string(),
       sectionHeading: z.string().optional(),
       before: z.string().optional(),
@@ -352,7 +354,7 @@ export function createSkillChangeApprovalHandler(
    * leaves a base the store refuses, so it is never applied to content it did not read.
    */
   async function loadMutationSnapshot(names: { skillName: string; agentName: string }) {
-    const read = (kind: "skill" | "agent", name: string) =>
+    const read = (kind: (typeof CONFIG_ASSET_KINDS)[number], name: string) =>
       store.getConfigAsset({ clientInstanceId: options.clientInstanceId, kind, name });
     const [skill, agent] = await Promise.all([
       read("skill", names.skillName),
@@ -371,14 +373,14 @@ export function createSkillChangeApprovalHandler(
        */
       skill: skill?.status === "active" ? skillConfigSchema.parse(skill.config) : undefined,
       /** The last revision of the asset, a deleted one's included, or `null` for none. */
-      revisionOf: (kind: "skill" | "agent", name: string) =>
+      revisionOf: (kind: (typeof CONFIG_ASSET_KINDS)[number], name: string) =>
         revisions.get(`${kind}:${name}`) ?? null,
       /**
        * Who owns what the change writes. A skill keeps its owner, a deleted one's included; a
        * skill the change creates is owned by the owner of the agent that proposed it, so the
        * agent names a skill of its own owner.
        */
-      scopeOf: (kind: "skill" | "agent"): AssetScope =>
+      scopeOf: (kind: (typeof CONFIG_ASSET_KINDS)[number]): AssetScope =>
         (kind === "skill" ? skill?.scope : undefined) ?? agent?.scope ?? INSTANCE_ASSET_SCOPE
     };
   }

@@ -1,4 +1,8 @@
-import { DATA_STORE_ACTIONS, type ActorAccess } from "@work-shape/catalyst-core";
+import {
+  DATA_STORE_ACTIONS,
+  LISTED_DATA_STORE_STATUSES,
+  type ActorAccess
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { readStores } from "./operations";
 import type { DataStoreRuntime } from "./runtime";
@@ -10,7 +14,7 @@ const listedStoreSchema = z.object({
   name: z.string(),
   title: z.string(),
   description: z.string().optional(),
-  status: z.enum(["provisioning", "ready"]),
+  status: z.enum(LISTED_DATA_STORE_STATUSES),
   level: z.number().int(),
   sizeBytes: z.number().int().optional(),
   sizeLimitBytes: z.number().int(),

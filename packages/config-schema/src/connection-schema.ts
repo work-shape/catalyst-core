@@ -1,15 +1,21 @@
 import {
+  CONNECTION_NETWORKS,
+  CONNECTION_OPERATION_POLICIES,
+  CONNECTION_ORIGINS,
+  OPERATION_EFFECTS
+} from "@work-shape/catalyst-asset-schemas";
+import {
   CONNECTION_EXPOSURES,
   CONNECTION_MAX_ACCEPTED_OPERATIONS,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
   CONNECTION_NAME_RULE,
-  CONNECTION_SERVICE_PATTERN,
   CONNECTION_OPERATION_NAME_MAX_LENGTH,
   CONNECTION_OPERATION_NAME_PATTERN,
   CONNECTION_REFUSALS,
   CONNECTION_SCOPE_RESERVED,
   CONNECTION_SECRET_HANDLE_PATTERN,
+  CONNECTION_SERVICE_PATTERN,
   CONNECTOR_TYPE_PATTERN,
   EGRESS_PROTOCOLS,
   WORKFLOW_ERROR_CODES,
@@ -275,10 +281,10 @@ const connectionOperationSchema = z
           "Operation name must start with a letter and contain only letters, numbers, underscores, or hyphens"
       }),
     /** Required: no operation of a Connection exists without an effect. */
-    effect: z.enum(["reading", "changing"]),
+    effect: z.enum(OPERATION_EFFECTS),
     exposure: z.array(z.enum(CONNECTION_EXPOSURES)).default([]),
     enabled: z.boolean().default(true),
-    policy: z.enum(["deny", "approval"]).optional(),
+    policy: z.enum(CONNECTION_OPERATION_POLICIES).optional(),
     schemaFingerprint: z.string().min(1).max(200).optional(),
     /** The header that carries the idempotency key of a changing call to the outside system. */
     idempotencyKeyHeader: idempotencyKeyHeaderSchema.optional(),
@@ -314,7 +320,7 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
       })
       .default([]),
     enabled: z.boolean().default(true),
-    origin: z.enum(["release", "runtime"])
+    origin: z.enum(CONNECTION_ORIGINS)
   })
   .strict()
   .superRefine((connection, context) => {
@@ -370,10 +376,10 @@ const releaseConnectionOperationSchema = z
     ...operationDeclarationShape,
     name: connectionOperationSchema.shape.name,
     /** Required: the operator decides what an operation does, a hint of the system never. */
-    effect: z.enum(["reading", "changing"]),
+    effect: z.enum(OPERATION_EFFECTS),
     exposure: z.array(z.enum(CONNECTION_EXPOSURES)).default([]),
     /** Only tightens: `deny` on any operation, `approval` on a changing one. */
-    policy: z.enum(["deny", "approval"]).optional(),
+    policy: z.enum(CONNECTION_OPERATION_POLICIES).optional(),
     schemaFingerprint: z.string().min(1).max(200).optional(),
     /** The header that carries the idempotency key of a changing call to the outside system. */
     idempotencyKeyHeader: idempotencyKeyHeaderSchema.optional(),
@@ -472,7 +478,7 @@ const egressAllowEntrySchema = z
      * `private` says the target is inside the operator's own network. Its addresses must then
      * lie in `cidrs`. A `public` target is refused when it resolves to an inside address.
      */
-    network: z.enum(["public", "private"]).default("public"),
+    network: z.enum(CONNECTION_NETWORKS).default("public"),
     cidrs: z
       .array(z.string().regex(EGRESS_CIDR_PATTERN, { message: "A range is written as a CIDR" }))
       .default([])

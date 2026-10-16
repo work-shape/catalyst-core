@@ -1,9 +1,10 @@
-import { z } from "zod";
+import { OPENAI_COMPATIBLE_APIS } from "@work-shape/catalyst-asset-schemas";
 import {
   PROVIDER_REGIONS,
   REASONING_EFFORTS,
   type ModelProviderConfig
 } from "@work-shape/catalyst-core";
+import { z } from "zod";
 
 /** The model a `deterministic` entry answers with when it names none. */
 const DETERMINISTIC_MODEL = "deterministic-local";
@@ -22,7 +23,7 @@ const providerEntrySchema = z.looseObject(providerEntryFields);
 const modelEntrySchema = z.looseObject({
   ...providerEntryFields,
   model: z.string().min(1).optional(),
-  api: z.enum(["chat_completions", "responses"]).optional(),
+  api: z.enum(OPENAI_COMPATIBLE_APIS).optional(),
   reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
   contextManagement: z
     .object({

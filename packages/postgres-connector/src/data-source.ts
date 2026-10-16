@@ -1,12 +1,17 @@
-import postgres from "postgres";
-import { z } from "zod";
 import type {
   DataSourceConfig,
   PostgresDataSourceConfig,
   SecretResolver
 } from "@work-shape/catalyst-core";
-import { AppError, isSecretName, SecretNotResolvedError } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  DATABASE_RELATION_TYPES,
+  isSecretName,
+  SecretNotResolvedError
+} from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import postgres from "postgres";
+import { z } from "zod";
 
 export interface DataSourceRegistration {
   name: string;
@@ -31,7 +36,7 @@ export interface DataSourceDescribeInput {
 export interface DataSourceRelationSummary {
   schema: string;
   name: string;
-  type: "table" | "view" | "materialized_view" | "foreign_table";
+  type: (typeof DATABASE_RELATION_TYPES)[number];
   description?: string;
 }
 
@@ -110,7 +115,7 @@ const describeToolInputSchema = z.object({
 const relationSummarySchema = z.object({
   schema: z.string(),
   name: z.string(),
-  type: z.enum(["table", "view", "materialized_view", "foreign_table"]),
+  type: z.enum(DATABASE_RELATION_TYPES),
   description: z.string().optional()
 });
 

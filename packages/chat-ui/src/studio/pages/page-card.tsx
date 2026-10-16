@@ -1,5 +1,4 @@
-import { AppWindow, TriangleAlert } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { ENDED_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import {
   Button,
   Card,
@@ -8,8 +7,10 @@ import {
   DisclosureTrigger,
   Spinner
 } from "@work-shape/catalyst-ui";
-import { useTranslation } from "../../shared/i18n";
+import { AppWindow, TriangleAlert } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useToolDisplayPanel } from "../../chat/tools/tool-display-panel";
+import { useTranslation } from "../../shared/i18n";
 import { usePageConversationId } from "./page-host";
 import {
   buildErrorCountLabel,
@@ -169,7 +170,7 @@ interface WatchedRun {
   };
 }
 
-const FINISHED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+const FINISHED_RUN_STATES = new Set<string>(ENDED_AGENT_RUN_STATUSES);
 
 /**
  * Shows a Page beside the conversation when a run saves it: from the start of the save, as the

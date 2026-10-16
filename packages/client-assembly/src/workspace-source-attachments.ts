@@ -1,10 +1,11 @@
-import { posix as posixPath } from "node:path";
 import { resolveUploadFileContent } from "@work-shape/catalyst-capability-sdk";
 import {
   AppError,
+  ARTIFACT_PREVIEW_IMAGE_MIME_TYPES,
   asConversationAttachmentId,
   asManagedArtifactId,
   asManagedFileId,
+  readObjectBytes,
   type AttachmentManifest,
   type AttachmentManifestEntry,
   type ClientInstanceId,
@@ -15,22 +16,22 @@ import {
   type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedObjectDeletionResult,
-  type PlatformFileStore,
-  readObjectBytes,
-  type ObjectStorage
+  type ObjectStorage,
+  type PlatformFileStore
 } from "@work-shape/catalyst-core";
+import { EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE } from "@work-shape/catalyst-tool-execution";
+import { posix as posixPath } from "node:path";
 import type {
   ClientInstanceAttachmentHandler,
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
-import { EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE } from "@work-shape/catalyst-tool-execution";
 
 const WORKSPACE_SOURCE_ATTACHMENT_KIND = "workspace_source";
 const WORKSPACE_SOURCE_METADATA_SOURCE = "execution_workspace_source";
 const LEGACY_WORKSPACE_PREVIEW_ARTIFACT_METADATA_SOURCE = "execution_workspace_preview";
 const DEFAULT_WORKSPACE_SOURCE_MAX_FILE_BYTES = 25 * 1024 * 1024;
 const ARTIFACT_PREVIEW_OBJECT_KEY_PREFIX = "artifact-previews/";
-const ARTIFACT_PREVIEW_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const ARTIFACT_PREVIEW_IMAGE_MIME_TYPE_SET = new Set<string>(ARTIFACT_PREVIEW_IMAGE_MIME_TYPES);
 const ARTIFACT_PREVIEW_IMAGE_KINDS = new Set([
   "document.preview_page_image",
   "presentation.preview_slide_image",
@@ -213,7 +214,7 @@ async function isReadableArtifactPreviewImage(input: {
 }): Promise<boolean> {
   if (
     !ARTIFACT_PREVIEW_IMAGE_KINDS.has(input.artifact.kind) ||
-    !ARTIFACT_PREVIEW_IMAGE_MIME_TYPES.has(input.artifact.mimeType) ||
+    !ARTIFACT_PREVIEW_IMAGE_MIME_TYPE_SET.has(input.artifact.mimeType) ||
     !input.artifact.objectKey.startsWith(ARTIFACT_PREVIEW_OBJECT_KEY_PREFIX)
   ) {
     return false;

@@ -1,8 +1,24 @@
-import { timestampSchema } from "./shared";
+import {
+  AGENT_RUN_FAILURE_CATEGORIES,
+  AGENT_RUN_STATUSES,
+  ARTIFACT_PREVIEW_IMAGE_FORMATS,
+  ARTIFACT_PREVIEW_IMAGE_MIME_TYPES,
+  ATTACHMENT_CREATE_OUTCOMES,
+  CHAT_MESSAGE_ROLES,
+  CONVERSATION_ATTACHMENT_STATUSES,
+  CONVERSATION_VISIBILITIES,
+  DECIDED_APPROVAL_REQUEST_STATUSES,
+  ENDED_APPROVAL_EXECUTIONS,
+  MESSAGE_FINISH_STATUSES,
+  STRUCTURED_DATA_REVIEW_REASONS,
+  TOOL_CALL_STATES,
+  WEB_SOURCE_PROVIDERS
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { localeCodeSchema, reasoningEffortSchema } from "./configuration";
+import { timestampSchema } from "./shared";
 
-export const conversationVisibilitySchema = z.enum(["workspace", "private"]);
+export const conversationVisibilitySchema = z.enum(CONVERSATION_VISIBILITIES);
 
 /**
  * The asset a conversation is about, such as `{ kind: "workflow", name: "month-end" }`. The
@@ -59,7 +75,7 @@ export const webSourceSchema = z.object({
   id: z.string(),
   url: z.string(),
   title: z.string().optional(),
-  provider: z.enum(["openai-native", "serper", "tavily", "firecrawl", "browserbase", "direct"]),
+  provider: z.enum(WEB_SOURCE_PROVIDERS),
   query: z.string().optional(),
   retrievedAt: timestampSchema.optional(),
   snippet: z.string().optional(),
@@ -98,7 +114,7 @@ export const assistantFinalMessageMetadataSchema = z.object({
   version: messageMetadataVersionSchema,
   kind: z.literal("assistant_final"),
   runId: z.string(),
-  finishStatus: z.enum(["completed", "cancelled"]),
+  finishStatus: z.enum(MESSAGE_FINISH_STATUSES),
   cancellationReason: z.string().optional(),
   reasoning: z.array(storedReasoningSummarySchema).optional(),
   sources: z.array(webSourceSchema).optional(),
@@ -123,14 +139,7 @@ export const approvalDecisionMessageMetadataSchema = z.object({
   kind: z.literal("approval_decision"),
   requestId: z.string(),
   requestKind: z.string(),
-  status: z.enum([
-    "approved",
-    "rejected",
-    "changes_requested",
-    "superseded",
-    "withdrawn",
-    "reverted"
-  ]),
+  status: z.enum(DECIDED_APPROVAL_REQUEST_STATUSES),
   decidedBy: z.string(),
   decidedByLabel: z.string(),
   decidedAt: timestampSchema,
@@ -138,7 +147,7 @@ export const approvalDecisionMessageMetadataSchema = z.object({
   comment: z.string().optional(),
   requestedBy: z.string().optional(),
   /** What became of an approved change that ran after the decision. */
-  execution: z.enum(["done", "failed", "interrupted", "refused", "expired"]).optional()
+  execution: z.enum(ENDED_APPROVAL_EXECUTIONS).optional()
 });
 
 export const agentRuntimeMessageMetadataSchema = z.discriminatedUnion("kind", [
@@ -162,20 +171,13 @@ export const messageSchema = z.object({
   id: z.string(),
   conversationId: z.string(),
   clientInstanceId: z.string(),
-  role: z.enum(["user", "assistant", "system", "tool"]),
+  role: z.enum(CHAT_MESSAGE_ROLES),
   text: z.string(),
   createdAt: timestampSchema,
   metadata: messageMetadataSchema.optional()
 });
 
-export const draftAttachmentStatusSchema = z.enum([
-  "queued",
-  "preprocessing",
-  "ready",
-  "failed",
-  "unsupported",
-  "deleted"
-]);
+export const draftAttachmentStatusSchema = z.enum(CONVERSATION_ATTACHMENT_STATUSES);
 
 export const draftAttachmentSchema = z.object({
   id: z.string(),
@@ -202,7 +204,7 @@ export const draftAttachmentSchema = z.object({
 export const draftAttachmentUploadResponseSchema = z.object({
   attachment: draftAttachmentSchema,
   attachments: z.array(draftAttachmentSchema),
-  outcome: z.enum(["created", "already_available"]).optional()
+  outcome: z.enum(ATTACHMENT_CREATE_OUTCOMES).optional()
 });
 
 export type DraftAttachment = z.infer<typeof draftAttachmentSchema>;
@@ -296,7 +298,7 @@ export const structuredDataResourceResponseSchema = z.object({
           value: structuredDataValueSchema,
           attention: z
             .object({
-              reason: z.enum(["uncertain", "conflicting"]),
+              reason: z.enum(STRUCTURED_DATA_REVIEW_REASONS),
               message: z.string().optional()
             })
             .optional(),
@@ -319,7 +321,7 @@ export type StructuredDataResourceResponse = z.infer<typeof structuredDataResour
 
 export const artifactPreviewImagePageSchema = z.object({
   artifactId: z.string(),
-  mimeType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+  mimeType: z.enum(ARTIFACT_PREVIEW_IMAGE_MIME_TYPES),
   filename: z.string().optional(),
   pageNumber: z.number().int().positive().optional(),
   slideNumber: z.number().int().positive().optional(),
@@ -337,7 +339,7 @@ export const artifactPreviewReadyResponseSchema = z.object({
   status: z.literal("ready"),
   artifactId: z.string(),
   type: z.literal("image_pages"),
-  format: z.enum(["png", "webp", "jpeg"]),
+  format: z.enum(ARTIFACT_PREVIEW_IMAGE_FORMATS),
   pageCount: z.number().int().positive().optional(),
   truncated: z.boolean().optional(),
   pages: z.array(artifactPreviewImagePageSchema)
@@ -389,26 +391,12 @@ export const renameConversationRequestSchema = z.object({
   title: z.string().trim().min(1).max(120)
 });
 
-export const agentRunStatusSchema = z.enum([
-  "queued",
-  "running",
-  "waiting_for_permission",
-  "cancelling",
-  "completed",
-  "cancelled",
-  "failed"
-]);
+export const agentRunStatusSchema = z.enum(AGENT_RUN_STATUSES);
 
 export const agentRunErrorSchema = z.object({
   code: z.string(),
   message: z.string(),
-  category: z.enum([
-    "app_error",
-    "internal_error",
-    "runtime_interrupted",
-    "abort_error",
-    "unknown_error"
-  ]),
+  category: z.enum(AGENT_RUN_FAILURE_CATEGORIES),
   /** The tool a run waited on when it was ended for standing still: its name only. */
   tool: z.string().optional()
 });
@@ -551,12 +539,7 @@ export const activeRunSummarySchema = z.object({
   lastSequence: z.number().int().nonnegative()
 });
 
-const agentRunProjectionToolCallStateSchema = z.enum([
-  "input_available",
-  "waiting_for_permission",
-  "output_available",
-  "output_error"
-]);
+const agentRunProjectionToolCallStateSchema = z.enum(TOOL_CALL_STATES);
 
 export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
   z.object({

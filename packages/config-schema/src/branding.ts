@@ -1,9 +1,10 @@
-import type { ClientInstanceConfig } from "./schemas";
+import { THEME_MODE_PREFERENCES } from "@work-shape/catalyst-asset-schemas";
 import {
   resolveConfigLocale,
   resolveLocalizedString,
   type ConfigLocaleInput
 } from "./localization";
+import type { ClientInstanceConfig } from "./schemas";
 
 export interface ClientBranding {
   environment: ClientInstanceConfig["clientInstance"]["environment"];
@@ -42,7 +43,7 @@ export interface ClientBranding {
     mutedTextColor: string;
     borderColor: string;
   };
-  defaultThemeMode: "light" | "dark" | "system";
+  defaultThemeMode: (typeof THEME_MODE_PREFERENCES)[number];
   passwordResetEnabled: boolean;
 }
 

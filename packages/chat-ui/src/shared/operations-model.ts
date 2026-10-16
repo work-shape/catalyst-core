@@ -1,4 +1,5 @@
 import type { LocaleCode, OperationRunResource } from "@work-shape/catalyst-api-client";
+import { OPERATION_ORIGIN_KINDS, OPERATION_RUN_STATUSES } from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "./i18n";
 import { workspaceRoutePath } from "./routes";
@@ -20,26 +21,11 @@ export const operationEffectFilterLabelKeys: Record<OperationRunEffect, Translat
 };
 
 /** The statuses in the order a run passes through them, for the filter. */
-export const operationRunStatuses = [
-  "running",
-  "pending_confirmation",
-  "pending_approval",
-  "done",
-  "failed",
-  "denied",
-  "expired"
-] as const satisfies readonly OperationRunStatus[];
+export const operationRunStatuses = OPERATION_RUN_STATUSES satisfies readonly OperationRunStatus[];
 
 /** The seven places a call can come from, for the filter. */
-export const operationRunOriginKinds = [
-  "agent",
-  "user",
-  "cli",
-  "mcp",
-  "app",
-  "workflow",
-  "schedule"
-] as const satisfies readonly OperationRunOriginKind[];
+export const operationRunOriginKinds =
+  OPERATION_ORIGIN_KINDS satisfies readonly OperationRunOriginKind[];
 
 export const operationStatusLabelKeys: Record<OperationRunStatus, TranslationKey> = {
   running: "operations.statusRunning",

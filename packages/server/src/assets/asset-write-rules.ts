@@ -1,4 +1,13 @@
 import {
+  ASSET_RELEASE_SYNC_MAX_ITEMS,
+  ASSET_SYNC_MAX_ITEMS
+} from "@work-shape/catalyst-api-contract";
+import {
+  agentConfigSchema,
+  findAgentUserSelectableModelIssues
+} from "@work-shape/catalyst-config-schema";
+import {
+  ASSET_SYNC_CHANGE_TYPES,
   AppError,
   asCollaborationWorkspaceId,
   findNamespaceOfAssetName,
@@ -10,6 +19,7 @@ import {
   unknownToJsonValue,
   type AccessResource,
   type ActorAccess,
+  type AgentAvailability,
   type AgentConfig,
   type AssetScope,
   type AuditRecorder,
@@ -17,25 +27,17 @@ import {
   type ConfigAssetKind,
   type ConfigAssetRecord,
   type ConfigAssetState,
-  type AgentAvailability,
   type InitialAgentAvailability,
   type JsonObject,
   type Namespace,
   type OperationAuthorization,
   type RuntimeCallContext
 } from "@work-shape/catalyst-core";
-import {
-  ASSET_RELEASE_SYNC_MAX_ITEMS,
-  ASSET_SYNC_MAX_ITEMS
-} from "@work-shape/catalyst-api-contract";
-import {
-  agentConfigSchema,
-  findAgentUserSelectableModelIssues
-} from "@work-shape/catalyst-config-schema";
+import { recordGovernanceAccess } from "../access/governance-actions";
 import {
   findAgentToolValidation,
-  type AgentToolWarning,
-  type AgentToolValidationTargets
+  type AgentToolValidationTargets,
+  type AgentToolWarning
 } from "../agent-tool-validation";
 import { agentModelSettingValue } from "../asset-kinds/agent";
 import {
@@ -44,6 +46,7 @@ import {
   type AssetWriteSurface,
   type WorkflowAssetKind
 } from "../asset-kinds/shared";
+import type { AssetWorkflowOptions } from "../types";
 import { accessResource, decide, deleteDecision, errorIssues } from "./asset-access";
 import {
   INVALID_ASSET_SET_MESSAGE,
@@ -53,8 +56,6 @@ import {
   type AssetSet,
   type AssetSetIssue
 } from "./asset-set";
-import { recordGovernanceAccess } from "../access/governance-actions";
-import type { AssetWorkflowOptions } from "../types";
 
 /** The rules every write of an asset passes, whichever operation it arrives through. */
 
@@ -419,7 +420,7 @@ export function itemWriteDecision(
   access: ActorAccess,
   surface: AssetWriteSurface,
   target: { kind: WorkflowAssetKind; resource: AccessResource },
-  type: "put" | "delete"
+  type: (typeof ASSET_SYNC_CHANGE_TYPES)[number]
 ): OperationAuthorization {
   const { actions } = target.kind;
   const right =

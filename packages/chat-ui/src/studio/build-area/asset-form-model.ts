@@ -1,3 +1,4 @@
+import { AGENT_AVAILABILITY_MODES, localeCodes } from "@work-shape/catalyst-core";
 import { withCompanionTools, withImpliedTools } from "./instance-tools";
 
 export interface LocalizedPair<Value = string> {
@@ -38,7 +39,7 @@ export interface AgentFormState {
 
 /** Mirrors the availability contract; an agent without a stored row is hidden everywhere. */
 export interface AgentAvailabilityForm {
-  mode: "all" | "selected";
+  mode: (typeof AGENT_AVAILABILITY_MODES)[number];
   personalWorkspaces: boolean;
   collaborationWorkspaceIds: string[];
 }
@@ -391,7 +392,7 @@ function stringArray(value: unknown): string[] {
 }
 
 /** The two languages a localized text is written in. */
-export const ASSET_LANGUAGES = ["en", "de"] as const satisfies readonly (keyof LocalizedPair)[];
+export const ASSET_LANGUAGES = localeCodes satisfies readonly (keyof LocalizedPair)[];
 
 /** The localized texts of an agent that people read in chat, starter prompts included. */
 function agentLocalizedTexts(form: AgentFormState): LocalizedPair[] {

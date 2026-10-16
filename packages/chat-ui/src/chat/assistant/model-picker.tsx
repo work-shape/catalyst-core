@@ -1,22 +1,16 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { MODEL_USAGE_TIERS } from "@work-shape/catalyst-core";
 import { cn, LevelMeter, Popover, PopoverContent, PopoverTrigger } from "@work-shape/catalyst-ui";
-import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
-import { modelDisplayLabel } from "../../shared/model-label";
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import { modelDisplayLabel } from "../../shared/model-label";
+import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { EuResidencyBadge, ModelVendorIcon, modelVendorLabel } from "./model-vendor";
 
 type UsageTier = NonNullable<AgentSelectableModel["usageTier"]>;
 
 /** The usage tiers from least to most, as the meter on the model card counts them. */
-const usageTiers: readonly UsageTier[] = [
-  "very_low",
-  "low",
-  "moderate",
-  "elevated",
-  "high",
-  "very_high"
-];
+const usageTiers: readonly UsageTier[] = [...MODEL_USAGE_TIERS];
 const usageTierLabels: Record<UsageTier, TranslationKey> = {
   very_low: "modelUsageTierVeryLow",
   low: "modelUsageTierLow",

@@ -1,3 +1,4 @@
+import { OPERATION_EFFECTS, OPERATION_ORIGIN_KINDS } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { operationRunSchema, operationRunStatusSchema } from "../operation-runs";
 import { listQuerySchema, timestampSchema } from "../shared";
@@ -34,11 +35,11 @@ export const operationRunOperations = {
     query: listQuerySchema.extend({
       operation: z.string().min(1).optional(),
       /** Only reading calls or only changing ones. Without it the list holds both. */
-      effect: z.enum(["reading", "changing"]).optional(),
+      effect: z.enum(OPERATION_EFFECTS).optional(),
       status: operationRunStatusSchema.optional(),
       /** The id of the user or service principal that called. */
       actor: z.string().min(1).optional(),
-      origin: z.enum(["agent", "user", "cli", "mcp", "app", "workflow", "schedule"]).optional(),
+      origin: z.enum(OPERATION_ORIGIN_KINDS).optional(),
       workspaceId: z.string().min(1).optional(),
       /** Runs created at or after this moment. */
       since: timestampSchema.optional()

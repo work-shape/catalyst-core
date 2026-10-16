@@ -1,31 +1,30 @@
-import { containsPattern } from "./like-pattern";
-import { keysetFilter } from "./paging";
 import {
-  type StorePage,
+  ACTIVE_AGENT_RUN_STATUSES,
   AppError,
   createApprovalDecisionMessage,
-  type ApprovalRequest,
+  createPlatformId,
   type AppendAssistantMessageInput,
+  type ApprovalRequest,
   type ChatMessage,
   type ClientInstanceId,
   type CollaborationWorkspaceId,
   type Conversation,
   type ConversationId,
+  type ConversationListItem,
   type ConversationListScope,
+  type ConversationRetentionStore,
+  type ConversationsStore,
+  type ConversationStore,
   type CreateConversationInput,
   type CreateMessageInput,
   type ExpireConversationResult,
-  type MoveConversationInput,
-  type SetConversationSubjectInput,
-  type UserId,
-  createPlatformId,
-  type ConversationListItem,
-  type ConversationRetentionStore,
-  type ConversationStore,
   type FoundFile,
   type ModelProviderContinuationCheckpoint,
   type ModelProviderContinuationStore,
-  type ConversationsStore
+  type MoveConversationInput,
+  type SetConversationSubjectInput,
+  type StorePage,
+  type UserId
 } from "@work-shape/catalyst-core";
 import {
   and,
@@ -43,6 +42,8 @@ import {
   or,
   type SQL
 } from "drizzle-orm";
+import { containsPattern } from "./like-pattern";
+import { keysetFilter } from "./paging";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
@@ -50,8 +51,8 @@ import {
   collaborationWorkspaces,
   conversationAttachments,
   conversations,
-  modelProviderContinuations,
   messages,
+  modelProviderContinuations,
   productUsers,
   structuredDataResources
 } from "./schema";
@@ -344,7 +345,7 @@ function conversationRunsInProgress(db: PostgresConnection) {
       and(
         eq(agentRuns.clientInstanceId, conversations.clientInstanceId),
         eq(agentRuns.conversationId, conversations.id),
-        inArray(agentRuns.status, ["queued", "running", "waiting_for_permission", "cancelling"])
+        inArray(agentRuns.status, ACTIVE_AGENT_RUN_STATUSES)
       )
     );
 }

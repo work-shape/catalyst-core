@@ -1,3 +1,4 @@
+import { WORKSPACE_FILE_KINDS } from "@work-shape/catalyst-asset-schemas";
 import type { ClientInstanceId, CollaborationWorkspaceId, ConversationId } from "./ids";
 import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
@@ -8,7 +9,7 @@ import type { ISODateString } from "./time";
 // may read, and answers what they are called and where they live, never what they hold.
 
 /** A Page, a file somebody uploaded, or a file an agent made in an Execution Workspace. */
-export const FOUND_FILE_KINDS = ["page", "upload", "generated_file"] as const;
+export const FOUND_FILE_KINDS = WORKSPACE_FILE_KINDS;
 
 export type FoundFileKind = (typeof FOUND_FILE_KINDS)[number];
 

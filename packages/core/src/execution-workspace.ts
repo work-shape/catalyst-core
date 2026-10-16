@@ -1,3 +1,8 @@
+import {
+  ENDED_AGENT_RUN_STATUSES,
+  WORKSPACE_COMMAND_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
+import type { ManagedArtifactImagePagesPreview, SubjectRowClaim } from "./files";
 import type {
   AgentRunId,
   ClientInstanceId,
@@ -7,7 +12,6 @@ import type {
   ToolCallId,
   WorkspaceCommandId
 } from "./ids";
-import type { ManagedArtifactImagePagesPreview, SubjectRowClaim } from "./files";
 import type { JsonObject, JsonValue } from "./json";
 import type { ISODateString } from "./time";
 import type { ToolExecutionContext } from "./tool-execution";
@@ -60,8 +64,7 @@ export interface WorkspaceFile {
   deletedAt?: ISODateString;
 }
 
-export type WorkspaceCommandStatus =
-  "queued" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
+export type WorkspaceCommandStatus = (typeof WORKSPACE_COMMAND_STATUSES)[number];
 
 export interface WorkspaceCommandLimits {
   timeoutSeconds: number;
@@ -111,7 +114,7 @@ export interface WorkspaceCommandOutput {
 
 export interface WorkspaceCommandResult {
   commandId: WorkspaceCommandId;
-  status: Extract<WorkspaceCommandStatus, "completed" | "failed" | "cancelled">;
+  status: Extract<WorkspaceCommandStatus, (typeof ENDED_AGENT_RUN_STATUSES)[number]>;
   output?: WorkspaceCommandOutput;
   error?: WorkspaceCommandError;
 }

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type {
   AdministeredUser,
   ConfigAssetSummary,
@@ -6,6 +5,7 @@ import type {
   NamespaceWithUsage,
   PermissionGrantRow
 } from "@work-shape/catalyst-api-client";
+import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import {
   Badge,
   Banner,
@@ -25,13 +25,14 @@ import {
   TableHeader,
   TableRow
 } from "@work-shape/catalyst-ui";
+import { useState } from "react";
 import { DocsReference } from "../../shared/docs-links";
-import { modelDisplayLabel } from "../../shared/model-label";
 import {
   useTranslation,
   type TranslationContextValue,
   type TranslationKey
 } from "../../shared/i18n";
+import { modelDisplayLabel } from "../../shared/model-label";
 import {
   assetNameValid,
   checkAsset,
@@ -150,7 +151,7 @@ const BUILT_IN_KINDS: readonly CheckedKind[] = [
     plural: "agents",
     lifecycle: "active",
     representation: "config",
-    owners: ["instance", "workspace"],
+    owners: [...ASSET_OWNER_KINDS],
     actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
   },
   {
@@ -158,7 +159,7 @@ const BUILT_IN_KINDS: readonly CheckedKind[] = [
     plural: "skills",
     lifecycle: "active",
     representation: "config",
-    owners: ["instance", "workspace"],
+    owners: [...ASSET_OWNER_KINDS],
     actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" }
   }
 ];

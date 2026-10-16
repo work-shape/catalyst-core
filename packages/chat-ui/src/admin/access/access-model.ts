@@ -10,13 +10,17 @@ import {
   type PlatformContext
 } from "@work-shape/catalyst-api-client";
 import {
+  ACCESS_SOURCES,
+  CONFIG_ASSET_KINDS,
+  explainAccessEntries,
+  GRANT_EFFECTS,
+  GRANTABLE_ACTION_SCOPES,
+  GRANTABLE_ACTIONS,
   NAMESPACE_PREFIX_MAX_LENGTH,
   NAMESPACE_PREFIX_MIN_LENGTH,
   NAMESPACE_PREFIX_PATTERN,
-  GRANTABLE_ACTION_SCOPES,
-  GRANTABLE_ACTIONS,
-  explainAccessEntries,
-  type GrantableAction
+  type GrantableAction,
+  type PermissionGrant
 } from "@work-shape/catalyst-core";
 
 /** A kind of the instance's registry, with the actions its rights are checked as. */
@@ -84,7 +88,7 @@ export const GRANT_KINDS: readonly GrantKind[] = [
 ];
 
 /** Agents and skills: the two kinds every instance has, read with the agent configuration. */
-const CONFIG_ASSET_GRANT_KINDS = ["agent", "skill"] as const satisfies readonly GrantKind[];
+const CONFIG_ASSET_GRANT_KINDS = CONFIG_ASSET_KINDS satisfies readonly GrantKind[];
 
 export function isConfigAssetGrantKind(
   kind: GrantKind
@@ -97,7 +101,11 @@ export function isConfigAssetGrantKind(
  * first, then one asset, then the whole instance. A Namespace is not among them: it is
  * retired, and its rows are only listed and revoked until it goes.
  */
-const GRANT_SCOPE_KINDS = ["workspace", "asset", "instance"] as const;
+const GRANT_SCOPE_KINDS = [
+  "workspace",
+  "asset",
+  "instance"
+] as const satisfies readonly PermissionGrant["scopeKind"][];
 export type GrantScopeKind = (typeof GRANT_SCOPE_KINDS)[number];
 
 /** The rights of one kind, in the order the page lists them. */
@@ -308,7 +316,7 @@ export interface GrantForm {
   assetId: string | undefined;
   /** The Shared Workspace of a grant on what a workspace owns. */
   workspaceId: string | undefined;
-  effect: "allow" | "deny";
+  effect: (typeof GRANT_EFFECTS)[number];
 }
 
 /** A new right on agents, at the first place an agent right can be written. */
@@ -563,9 +571,7 @@ export interface CheckableAsset {
  * kinds checked here: it is the right to open what a workspace published, so it reads as the
  * grant it stands in for.
  */
-function checkedReason(
-  source: "role" | "legacy_ref" | "grant" | "membership"
-): "role" | "legacy" | "grant" {
+function checkedReason(source: (typeof ACCESS_SOURCES)[number]): "role" | "legacy" | "grant" {
   if (source === "legacy_ref") return "legacy";
   return source === "membership" ? "grant" : source;
 }

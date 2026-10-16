@@ -1,11 +1,16 @@
-import type { OperationScope } from "./identity";
-import { workflowDatasetReferenceSchema } from "./workflows";
+import {
+  DATA_STORE_INSERT_CONFLICT_MODES,
+  DATA_STORE_LOAD_CONFLICT_MODES,
+  DATA_STORE_SCALAR_TYPES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
 import type { DataStoreRecord } from "./data-store-records";
 import { AppError, isAppError, type AppErrorCode } from "./errors";
+import type { OperationScope } from "./identity";
 import type { ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
+import { workflowDatasetReferenceSchema } from "./workflows";
 
 // The names and shapes of a Data Store that more than one package reads: the asset kind,
 // what its operations and jobs are called, and the handle a caller reaches the rows of one
@@ -95,7 +100,7 @@ export const DATA_STORE_OPERATION_SCOPES = {
  * result. It does not protect a second run. `skip` on a table with a unique constraint over
  * what makes a row the same row is what makes a rerun, and next month's run, safe.
  */
-export const DATA_STORE_INSERT_CONFLICT_MODES = ["fail", "skip"] as const;
+export { DATA_STORE_INSERT_CONFLICT_MODES } from "@work-shape/catalyst-asset-schemas";
 
 export type DataStoreInsertConflictMode = (typeof DATA_STORE_INSERT_CONFLICT_MODES)[number];
 
@@ -129,7 +134,7 @@ export type DataStoreInsertResult = z.infer<typeof dataStoreInsertResultSchema>;
  * What `load` does with a row whose `key` a row of the table has. `update` writes the row of
  * the dataset over it. `skip` and `update` need `key`.
  */
-export const DATA_STORE_LOAD_CONFLICT_MODES = ["fail", "skip", "update"] as const;
+export { DATA_STORE_LOAD_CONFLICT_MODES } from "@work-shape/catalyst-asset-schemas";
 
 export type DataStoreLoadConflictMode = (typeof DATA_STORE_LOAD_CONFLICT_MODES)[number];
 
@@ -200,14 +205,7 @@ export const DATA_STORE_PREVIEW_ROW_LIMIT = 50;
  * backend a store has. A list of values of one type is the type followed by `[]`. Spec:
  * apps-and-pages.md, Named actions, `sql`.
  */
-export const DATA_STORE_SCALAR_TYPES = [
-  "text",
-  "integer",
-  "number",
-  "boolean",
-  "date",
-  "timestamp"
-] as const;
+export { DATA_STORE_SCALAR_TYPES } from "@work-shape/catalyst-asset-schemas";
 
 export type DataStoreScalarType = (typeof DATA_STORE_SCALAR_TYPES)[number];
 export type DataStoreParameterType = DataStoreScalarType | `${DataStoreScalarType}[]`;

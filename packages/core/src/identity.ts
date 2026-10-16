@@ -1,4 +1,5 @@
 import {
+  AUTH_PRINCIPAL_KINDS,
   AUTH_SCOPE_WILDCARD,
   CHAT_SESSION_AUTH_SCOPES,
   FIRST_PARTY_AUTH_SCOPES,
@@ -29,7 +30,7 @@ export {
 };
 export type AuthScope = FirstPartyAuthScope | (string & {});
 
-export type AuthPrincipalKind = "user" | "service";
+export type AuthPrincipalKind = (typeof AUTH_PRINCIPAL_KINDS)[number];
 
 export interface AuthPrincipal {
   kind: AuthPrincipalKind;

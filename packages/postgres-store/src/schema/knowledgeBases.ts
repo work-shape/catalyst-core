@@ -1,6 +1,7 @@
+import type { ClientInstanceId, KnowledgeTableCheck } from "@work-shape/catalyst-core";
+import { KNOWLEDGE_CHECK_STATUSES } from "@work-shape/catalyst-core";
 import { sql } from "drizzle-orm";
 import { check, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
-import type { ClientInstanceId, KnowledgeTableCheck } from "@work-shape/catalyst-core";
 
 /**
  * The last check of each Knowledge Base: whether every table it describes could be read, for
@@ -14,7 +15,7 @@ export const knowledgeBaseStates = pgTable(
     clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
     assetId: text("asset_id").notNull(),
     revision: integer("revision").notNull(),
-    status: text("status").$type<"ok" | "needs_attention">().notNull(),
+    status: text("status").$type<(typeof KNOWLEDGE_CHECK_STATUSES)[number]>().notNull(),
     tables: jsonb("tables").$type<KnowledgeTableCheck[]>().notNull(),
     problem: text("problem"),
     checkedAt: timestamp("checked_at", { withTimezone: true }).notNull()

@@ -1,5 +1,6 @@
 import {
   AppError,
+  WORKFLOW_ENDED_STATUSES,
   asUserId,
   auditActorFromIdentity,
   createPlatformId,
@@ -40,19 +41,19 @@ import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./defi
 import { WORKFLOW_RUN_LIMITS, WORKFLOW_STEP_JOB_SLOTS, type WorkflowRunLimits } from "./limits";
 import type { WorkflowOperationCalls } from "./operation-step";
 import { itemLabelOf } from "./references";
-import { principalActor } from "./run-identity";
-import { loopConcurrencyOf, withEveryBodyStep } from "./run-view";
 import { createBlockEnds } from "./run-blocks";
+import { principalActor } from "./run-identity";
 import {
   createRunOpening,
   type StartWorkflowRunInput,
   type TestWorkflowRunInput
 } from "./run-open";
 import { createStartCheck } from "./run-start";
+import { loopConcurrencyOf, withEveryBodyStep } from "./run-view";
 import { createScheduleTrigger } from "./schedule-trigger";
-import { workflowCodeJobKind, workflowStepJobKind } from "./step-job";
 import { createScheduledStart } from "./scheduled-start";
 import { createStepExecutor, type StepEnd, type WorkflowCodeRunner } from "./step-execution";
+import { workflowCodeJobKind, workflowStepJobKind } from "./step-job";
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
 // step run is executed by one job of the shared executor. A step ends in the transaction
@@ -169,7 +170,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     tx: PlatformStores,
     run: WorkflowRun,
     end: {
-      status: "done" | "failed" | "cancelled" | "limit_reached";
+      status: (typeof WORKFLOW_ENDED_STATUSES)[number];
       output?: JsonValue;
       error?: WorkflowRunError;
       cancelledBy?: WorkflowRun["cancelledBy"];

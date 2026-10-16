@@ -2,36 +2,36 @@
 
 Counts are exact by target, rule and package in each repository's `quality-baseline.json`. Literal interface text is scoped per folder. Zero counts are left out and fail on their first violation. Initially measured on platform `218cd58` and capabilities `d050a54` for CB-1a; counts below include CB-2 reductions.
 
-| Target         | Rule                                               | Tool              | Platform | Capabilities | Owners                                                                                                  |
-| -------------- | -------------------------------------------------- | ----------------- | -------: | -----------: | ------------------------------------------------------------------------------------------------------- |
-| format         | `prettier`                                         | Prettier          |        1 |          234 | CB-2, CB-6b, CB-8b, CS-5                                                                                |
-| lint           | `@typescript-eslint/ban-ts-comment`                | typescript-eslint |        1 |            0 | CB-2                                                                                                    |
-| lint           | `@typescript-eslint/no-floating-promises`          | typescript-eslint |       67 |            2 | CB-10a, CB-6b, EW-1, G-5c                                                                               |
-| lint           | `@typescript-eslint/no-misused-promises`           | typescript-eslint |       16 |            0 | G-5c                                                                                                    |
-| lint           | `@typescript-eslint/no-non-null-assertion`         | typescript-eslint |      205 |           10 | CB-1b, CB-2, PA-1b                                                                                      |
-| lint           | `@typescript-eslint/no-unnecessary-type-assertion` | typescript-eslint |      144 |           17 | CB-10a, CB-2, CB-6b, CB-7c, CB-8b, G-5c                                                                 |
-| lint           | `@typescript-eslint/no-unsafe-type-assertion`      | typescript-eslint |      244 |          276 | AP-1, CB-10a, CB-1b, CB-2, CB-3a, CB-4d, CB-6b, CB-7c, CB-8b, CS-2, EW-1, G-5c, PA-1b                   |
-| lint           | `@typescript-eslint/return-await`                  | typescript-eslint |        1 |            2 | CB-6b, PA-1b                                                                                            |
-| lint           | `catalyst/console-boundary`                        | ESLint plugin     |       25 |            2 | CB-8c                                                                                                   |
-| lint           | `catalyst/database-skip`                           | ESLint plugin     |       10 |            0 | CB-3b                                                                                                   |
-| lint           | `catalyst/env-boundary`                            | ESLint plugin     |        3 |           33 | CB-8c                                                                                                   |
-| lint           | `catalyst/fetch-boundary`                          | ESLint plugin     |       10 |            2 | CB-6a, CB-10a, PA-3                                                                                     |
-| lint           | `catalyst/host-object-boundary`                    | ESLint plugin     |        1 |            0 | CB-8c                                                                                                   |
-| lint           | `catalyst/memory-store`                            | ESLint plugin     |        6 |            0 | CB-3b                                                                                                   |
-| lint           | `catalyst/module-cycle`                            | Collector         |       12 |           11 | CB-8b, G-5c                                                                                             |
-| lint           | `eslint/inline-config`                             | ESLint            |        1 |            0 | G-5c                                                                                                    |
-| lint           | `import-x/no-relative-packages`                    | import-x          |      220 |           29 | CB-2, CB-8b                                                                                             |
-| lint           | `knip/binaries`                                    | Knip              |        0 |            1 | CB-2                                                                                                    |
-| lint           | `knip/dependencies`                                | Knip              |        3 |            0 | CB-4d, CB-8b                                                                                            |
-| lint           | `knip/devDependencies`                             | Knip              |        6 |            2 | CB-6b, CB-8b                                                                                            |
-| lint           | `knip/duplicates`                                  | Knip              |        1 |            0 | CS-5                                                                                                    |
-| lint           | `knip/exports`                                     | Knip              |       41 |           12 | CB-3a, CB-4b, CB-4d, CB-6b, CB-7c, CB-8b, G-5c                                                          |
-| lint           | `knip/files`                                       | Knip              |        1 |            1 | CB-4b, CB-8b                                                                                            |
-| lint           | `knip/types`                                       | Knip              |      139 |           33 | CB-10a, CB-4b, CB-4d, CB-7c, CB-8b, EW-1, G-5c                                                          |
-| lint           | `knip/unlisted`                                    | Knip              |       59 |            7 | CB-2                                                                                                    |
-| types:packages | `typescript/unused`                                | TypeScript        |       15 |           16 | CB-10a, CB-2, CB-3a, CB-4d, CB-7c, CB-8b, EW-1, G-5c                                                    |
-| types:tests    | `typescript/test-errors`                           | TypeScript        |      102 |           13 | CB-2b                                                                                                   |
-| types:tests    | `typescript/unused`                                | TypeScript        |       15 |           17 | CB-10a, CB-2, CB-3a, CB-4d, CB-7c, CB-8b, EW-1, G-5c                                                    |
+| Target         | Rule                                               | Tool              | Platform | Capabilities | Owners                                                                                |
+| -------------- | -------------------------------------------------- | ----------------- | -------: | -----------: | ------------------------------------------------------------------------------------- |
+| format         | `prettier`                                         | Prettier          |        1 |          234 | CB-2, CB-6b, CB-8b, CS-5                                                              |
+| lint           | `@typescript-eslint/ban-ts-comment`                | typescript-eslint |        1 |            0 | CB-2                                                                                  |
+| lint           | `@typescript-eslint/no-floating-promises`          | typescript-eslint |       67 |            2 | CB-10a, CB-6b, EW-1, G-5c                                                             |
+| lint           | `@typescript-eslint/no-misused-promises`           | typescript-eslint |       16 |            0 | G-5c                                                                                  |
+| lint           | `@typescript-eslint/no-non-null-assertion`         | typescript-eslint |      205 |           10 | CB-1b, CB-2, PA-1b                                                                    |
+| lint           | `@typescript-eslint/no-unnecessary-type-assertion` | typescript-eslint |      144 |           17 | CB-10a, CB-2, CB-6b, CB-7c, CB-8b, G-5c                                               |
+| lint           | `@typescript-eslint/no-unsafe-type-assertion`      | typescript-eslint |      244 |          276 | AP-1, CB-10a, CB-1b, CB-2, CB-3a, CB-4d, CB-6b, CB-7c, CB-8b, CS-2, EW-1, G-5c, PA-1b |
+| lint           | `@typescript-eslint/return-await`                  | typescript-eslint |        1 |            2 | CB-6b, PA-1b                                                                          |
+| lint           | `catalyst/console-boundary`                        | ESLint plugin     |       25 |            2 | CB-8c                                                                                 |
+| lint           | `catalyst/database-skip`                           | ESLint plugin     |       10 |            0 | CB-3b                                                                                 |
+| lint           | `catalyst/env-boundary`                            | ESLint plugin     |        3 |           33 | CB-8c                                                                                 |
+| lint           | `catalyst/fetch-boundary`                          | ESLint plugin     |       10 |            2 | CB-6a, CB-10a, PA-3                                                                   |
+| lint           | `catalyst/host-object-boundary`                    | ESLint plugin     |        1 |            0 | CB-8c                                                                                 |
+| lint           | `catalyst/memory-store`                            | ESLint plugin     |        6 |            0 | CB-3b                                                                                 |
+| lint           | `catalyst/module-cycle`                            | Collector         |       12 |           11 | CB-8b, G-5c                                                                           |
+| lint           | `eslint/inline-config`                             | ESLint            |        1 |            0 | G-5c                                                                                  |
+| lint           | `import-x/no-relative-packages`                    | import-x          |      220 |           29 | CB-2, CB-8b                                                                           |
+| lint           | `knip/binaries`                                    | Knip              |        0 |            1 | CB-2                                                                                  |
+| lint           | `knip/dependencies`                                | Knip              |        3 |            0 | CB-4d, CB-8b                                                                          |
+| lint           | `knip/devDependencies`                             | Knip              |        6 |            2 | CB-6b, CB-8b                                                                          |
+| lint           | `knip/duplicates`                                  | Knip              |        1 |            0 | CS-5                                                                                  |
+| lint           | `knip/exports`                                     | Knip              |       41 |           12 | CB-3a, CB-4b, CB-4d, CB-6b, CB-7c, CB-8b, G-5c                                        |
+| lint           | `knip/files`                                       | Knip              |        1 |            1 | CB-4b, CB-8b                                                                          |
+| lint           | `knip/types`                                       | Knip              |      139 |           33 | CB-10a, CB-4b, CB-4d, CB-7c, CB-8b, EW-1, G-5c                                        |
+| lint           | `knip/unlisted`                                    | Knip              |       59 |            7 | CB-2                                                                                  |
+| types:packages | `typescript/unused`                                | TypeScript        |       15 |           16 | CB-10a, CB-2, CB-3a, CB-4d, CB-7c, CB-8b, EW-1, G-5c                                  |
+| types:tests    | `typescript/test-errors`                           | TypeScript        |      102 |           13 | CB-2b                                                                                 |
+| types:tests    | `typescript/unused`                                | TypeScript        |       15 |           17 | CB-10a, CB-2, CB-3a, CB-4d, CB-7c, CB-8b, EW-1, G-5c                                  |
 
 Explicit `any`, unresolved imports, declared graph drift, package cycles, formatting suppressions and package type errors measure zero in both repositories.
 
@@ -50,3 +50,5 @@ CB-8a added the literal interface text rule with 144 findings, all in `packages/
 CB-3c replaced the inline Compose migration command with the client migration entry, which removed the two formatting findings in `clients/demo`.
 
 D4′ seeds `catalyst/retired-terms` on platform with 2,253 matching tokens in 21 package and root-folder scopes, owned by NS-RETIRE. The initial entries have one-time accepted raises for the new rule; later increases fail, and removals must lower the exact baseline. The rule is opt-in per repository and is enabled on platform only. No product identifier, route, schema, audit event or table is renamed or removed by the check.
+
+D5 introduces `catalyst/duplicate-literal-list`, with its first measured entries owned by `D5-after-freeze`. They retain the inventory's seven disagreements and pre-existing duplicate lists outside its scope. Canonical definitions in asset-schemas do not report findings. The rule compares value sets without changing their order, and every remaining consumer copy is counted per package. The one-time accepted raises introduce the rule; subsequent copies fail.

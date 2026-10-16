@@ -1,6 +1,7 @@
 import {
   APP_ACTION_NAME_PATTERN,
   DATA_STORE_SCALAR_TYPES,
+  OPERATION_EFFECTS,
   readYamlData,
   type JsonObject,
   type JsonValue
@@ -66,7 +67,7 @@ const actionFileFields = {
 const connectionActionFileSchema = z.strictObject({
   connection: z.string().min(1).max(64),
   operation: z.string().min(1).max(128),
-  effect: z.enum(["reading", "changing"]),
+  effect: z.enum(OPERATION_EFFECTS),
   ...actionFileFields
 });
 

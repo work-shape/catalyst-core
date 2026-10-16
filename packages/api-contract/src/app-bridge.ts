@@ -1,4 +1,10 @@
-import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@work-shape/catalyst-asset-schemas";
+import {
+  APP_ACTION_CALL_STATUSES,
+  IDEMPOTENCY_KEY_MAX_LENGTH,
+  POLICY_VALUES,
+  THEME_MODES,
+  WORKFLOW_RUN_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 
 // The bridge between a Page and the interface that shows it, as the interface reads it. A Page
@@ -103,14 +109,14 @@ export const appBridgeThemeSchema = z.strictObject({
   accentStrongColor: z.string()
 });
 
-export const appBridgeModeSchema = z.enum(["light", "dark"]);
+export const appBridgeModeSchema = z.enum(THEME_MODES);
 
 /**
  * What the viewer's call of one action would come to now, as the server computed it: it runs,
  * it runs as the viewer's own confirmation, it waits for another person's approval, or it is
  * refused. A hint for what a Page shows. The call itself is checked again when it is made.
  */
-export const appActionPermissionSchema = z.enum(["allow", "confirm", "approval", "deny"]);
+export const appActionPermissionSchema = z.enum(POLICY_VALUES);
 
 export type AppActionPermission = z.infer<typeof appActionPermissionSchema>;
 
@@ -139,7 +145,7 @@ export type AppBridgeContext = z.infer<typeof appBridgeContextSchema>;
 export const appWorkflowRunSchema = z.strictObject({
   id: z.string(),
   workflow: z.string(),
-  status: z.enum(["queued", "running", "waiting", "done", "failed", "cancelled", "limit_reached"]),
+  status: z.enum(WORKFLOW_RUN_STATUSES),
   output: z.unknown().optional(),
   outputTruncated: z.boolean().optional(),
   /** Why the run did not end `done`: a code and a sentence of the product. */
@@ -186,7 +192,7 @@ export const appBridgeHostMessageSchema = z.discriminatedUnion("type", [
       .union([
         z.strictObject({
           runId: z.string(),
-          status: z.enum(["done", "pending_approval"]),
+          status: z.enum(APP_ACTION_CALL_STATUSES),
           result: z.unknown().optional()
         }),
         // The answer of a draft: what the call would have done. Nothing was carried out.

@@ -1,3 +1,4 @@
+import { DATABASE_RELATION_TYPES } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { PostgresExecutorError } from "./errors";
 import { textArrayParameter, textParameter } from "./parameters";
@@ -6,7 +7,7 @@ import type { PostgresSession } from "./pool";
 export interface PostgresRelationSummary {
   schema: string;
   name: string;
-  type: "table" | "view" | "materialized_view" | "foreign_table";
+  type: (typeof DATABASE_RELATION_TYPES)[number];
   description?: string;
 }
 
@@ -31,7 +32,7 @@ export interface PostgresDescribeResult {
 const relationRow = z.object({
   schema: z.string(),
   name: z.string(),
-  type: z.enum(["table", "view", "materialized_view", "foreign_table"]),
+  type: z.enum(DATABASE_RELATION_TYPES),
   description: z.string().nullable()
 });
 const columnRow = z.object({

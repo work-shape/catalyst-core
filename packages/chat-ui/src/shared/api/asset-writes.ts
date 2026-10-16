@@ -1,4 +1,5 @@
 import type { ApiClient } from "@work-shape/catalyst-api-client";
+import { ASSET_NAME_REFUSAL_REASONS } from "@work-shape/catalyst-core";
 
 /** Where a new agent starts: everywhere, or in the shared workspace it was made in. */
 export type AvailableIn = "all" | { workspaceId: string };
@@ -6,7 +7,7 @@ export type AvailableIn = "all" | { workspaceId: string };
 /** What the instance says of a name a create would take. */
 export type NameCheckAnswer =
   | { available: true }
-  | { available: false; reason: "name_invalid" | "name_taken"; message: string };
+  | { available: false; reason: (typeof ASSET_NAME_REFUSAL_REASONS)[number]; message: string };
 
 /** Asks the instance whether a new asset of a kind could take the name. */
 export type CheckName = (name: string) => Promise<NameCheckAnswer>;
