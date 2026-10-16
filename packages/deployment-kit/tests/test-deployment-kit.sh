@@ -107,6 +107,7 @@ test_update_release() {
 set -euo pipefail
 [[ "${1:-}" == "pnpm" ]] && shift
 [[ "${1:-}" == "install" ]] || exit 2
+[[ " $* " == *" --link-workspace-packages "* ]] || exit 3
 deployment_package="$(find . -mindepth 2 -maxdepth 2 -path './deployment.*/package.json' -print -quit)"
 checksum="$(cksum platform/package.json capabilities/package.json "$deployment_package" \
   | cksum | awk '{print $1}')"

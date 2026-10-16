@@ -189,7 +189,9 @@ pnpm_cmd=(pnpm)
 if command -v corepack >/dev/null 2>&1; then
   pnpm_cmd=(corepack pnpm)
 fi
-(cd "$scratch" && "${pnpm_cmd[@]}" install --lockfile-only)
+# Deployments pin exact versions; while builds still use source refs, resolve matching
+# local packages rather than fetching the not-yet-published release from npm.
+(cd "$scratch" && "${pnpm_cmd[@]}" install --lockfile-only --link-workspace-packages)
 
 if [[ "$mode" == "check" ]]; then
   [[ -f "$committed_lockfile" ]] \
