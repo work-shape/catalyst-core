@@ -119,7 +119,8 @@ async function publishWorkflow(root: Page, id: string): Promise<string> {
 
 test("a member is shown no empty Apps or Workflows row, a builder is, and a Workflow given to read brings the member's row", async ({
   browser,
-  pageErrors
+  pageErrors,
+  accessState: _accessState
 }) => {
   test.setTimeout(90_000);
   const memberPage = await sessionOf(browser, pageErrors.watch, member);
@@ -159,11 +160,21 @@ test("a member is shown no empty Apps or Workflows row, a builder is, and a Work
     }
   );
   expect(granted.ok(), await granted.text()).toBe(true);
-  await openRail(memberPage);
-  await expectRows(memberPage, { apps: false, workflows: true });
-  await rail(memberPage).getByRole("button", { name: "Workflows", exact: true }).click();
-  await expect(memberPage).toHaveURL(/\/workflows$/u);
-  await expect(memberPage.getByText("Sidebar sections", { exact: true })).toBeVisible();
+  const grantId = z.object({ id: z.string() }).parse(await granted.json()).id;
+  try {
+    await openRail(memberPage);
+    await expectRows(memberPage, { apps: false, workflows: true });
+    await rail(memberPage).getByRole("button", { name: "Workflows", exact: true }).click();
+    await expect(memberPage).toHaveURL(/\/workflows$/u);
+    await expect(memberPage.getByText("Sidebar sections", { exact: true })).toBeVisible();
+  } finally {
+    const revoked = await requestWithOrigin(
+      root,
+      "delete",
+      `${apiBaseUrl}/api/v1/instance/access/grants/${grantId}`
+    );
+    expect(revoked.ok(), await revoked.text()).toBe(true);
+  }
 });
 
 test("a member with one agent has no Agents row, and New chat starts that agent", async ({

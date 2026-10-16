@@ -3,8 +3,10 @@ import postgres from "postgres";
 import { FIXTURE_SECRET_HANDLE } from "../tests/chat-ui-connection-fixtures";
 
 // Connections of the suite's Connector type `test`, planted in the store as the release seed
-// writes them. The type contacts nothing. A test that plants one takes the `releaseConnections`
-// fixture: an API process that starts meanwhile deletes Connections no release config names.
+// writes them. The type contacts nothing. Every test that plants or creates a Connection takes
+// `releaseConnections` (or the same access then Connection turns in a bounded step) until
+// cleanup: the list and rights picker are instance-wide, and an API process that starts
+// meanwhile deletes Connections no release config names.
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const databaseUrl =

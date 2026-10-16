@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test as base, type BrowserContext } from "@playwright/test";
@@ -494,8 +494,7 @@ function isAllowed(text: string, address: string, testTitle: string): boolean {
 }
 
 /**
- * How long a test waits for the instance's Namespaces and grants. Longer than the longest
- * test that holds them.
+ * The budget for one holder of the instance state, also used to reclaim an abandoned lock.
  */
 const ACCESS_STATE_WAIT_MS = 180_000;
 
@@ -524,22 +523,57 @@ export async function takeTurn(
   baseURL: string | undefined
 ): Promise<() => Promise<void>> {
   const lock = join(tmpdir(), `catalyst-e2e-${name}-${(baseURL ?? "").replace(/\W+/gu, "-")}`);
-  const waitUntil = Date.now() + ACCESS_STATE_WAIT_MS;
+  const testInfo = base.info();
+  // The sidecar keeps the directory empty, so abandoning a lock still uses atomic rmdir.
+  const holderPath = `${lock}.holder.json`;
   for (;;) {
     try {
       await mkdir(lock);
-      return () => rmdir(lock).catch(() => undefined);
-    } catch {
-      // A run that was killed leaves its lock behind: one older than any test is taken over.
-      const age = (await ageOf(lock)) ?? 0;
-      if (age > ACCESS_STATE_WAIT_MS) {
-        await rmdir(lock).catch(() => undefined);
-      } else if (Date.now() > waitUntil) {
-        throw new Error(`The turn "${name}" on the instance stayed taken: ${lock}`);
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
+        throw error;
+      }
+      // Queue time is unbounded: only the age of the current holder matters. Each new
+      // holder creates a fresh directory, so progress restarts the abandonment clock.
+      const age = await ageOf(lock);
+      if (age !== undefined && age > ACCESS_STATE_WAIT_MS) {
+        try {
+          await rmdir(lock);
+        } catch (cause) {
+          if (cause instanceof Error && "code" in cause && cause.code === "ENOENT") {
+            continue;
+          }
+          const holder = await readFile(holderPath, "utf8").catch(() => "unavailable");
+          throw new Error(
+            `The turn "${name}" on the instance could not reclaim a holder older than ${ACCESS_STATE_WAIT_MS} ms: ${lock}. Holder: ${holder}`,
+            { cause }
+          );
+        }
       } else {
         await pause();
       }
+      continue;
     }
+    try {
+      await writeFile(
+        holderPath,
+        JSON.stringify({
+          pid: process.pid,
+          worker: testInfo.workerIndex,
+          project: testInfo.project.name,
+          file: testInfo.file,
+          title: testInfo.title,
+          startedAt: new Date().toISOString()
+        })
+      );
+    } catch (error) {
+      await rmdir(lock);
+      throw error;
+    }
+    return async () => {
+      await rm(holderPath, { force: true });
+      await rmdir(lock).catch(() => undefined);
+    };
   }
 }
 
@@ -594,8 +628,8 @@ export const test = base.extend<{
         await release();
       }
     },
-    // The wait for another spec is not the test's own time.
-    { timeout: ACCESS_STATE_WAIT_MS + 10_000 }
+    // Healthy queue time is unbounded and does not consume the test's own timeout.
+    { timeout: 0 }
   ],
   /**
    * Asked for by a test that asserts the whole list of agents a member is offered, by count or
@@ -662,13 +696,17 @@ export const test = base.extend<{
     { timeout: 2 * ACCESS_STATE_WAIT_MS + 10_000 }
   ],
   /**
-   * Asked for by a test that puts a Connection or a Guardrail of origin `release` into the
-   * store by hand. An API process that starts makes the stored release Connections and
-   * Guardrails equal to its release config and deletes such a row, so a spec that starts an API
-   * takes the same turn while it starts (`takeTurn("release-connections", …)`).
+   * Asked for by every test that creates Connections (through the UI too), reads their whole
+   * list, or plants a Guardrail of origin `release`. Connections belong to the instance, so
+   * unique names and separate workspaces do not isolate an empty-list or rights assertion.
+   * Hold the turn until the test has removed its assets and grants. An API process that starts
+   * also reconciles release assets, so it takes the same turn while starting
+   * (`takeTurn("release-connections", …)`).
    */
   releaseConnections: [
-    async ({ baseURL }, use) => {
+    // Every Connection writer takes access first. An access holder must not sit behind a
+    // queue of editor tests while holding a lock that other rights tests need.
+    async ({ baseURL, accessState: _accessState }, use) => {
       const release = await takeTurn("release-connections", baseURL);
       try {
         await use();
@@ -676,7 +714,8 @@ export const test = base.extend<{
         await release();
       }
     },
-    { timeout: ACCESS_STATE_WAIT_MS + 10_000 }
+    // Healthy queue time is unbounded and does not consume the test's own timeout.
+    { timeout: 0 }
   ],
   pageErrors: [
     async ({ context }, use, testInfo) => {

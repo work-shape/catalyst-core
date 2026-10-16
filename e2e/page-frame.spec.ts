@@ -3,7 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import { ALLOWED_URL, plantConnection, removeConnection } from "./connection-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { z } from "zod";
-import { expect, test } from "./test";
+import { expect, takeTurn, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const admin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -124,63 +124,109 @@ test("in a narrow window the area's name stands beside the sidebar button, over 
 const LONG_TITLE =
   "Monthly check of every booking against the ledger and the open items of the quarter before it";
 
+interface HeadAssets {
+  skill: string;
+  app: string;
+  workspaceId: string;
+  connection: Parameters<typeof plantConnection>[0];
+}
+
+const headTest = test.extend<{ preparedHeadAssets: HeadAssets; headAssets: HeadAssets }>({
+  preparedHeadAssets: [
+    async ({ page }, use) => {
+      await page.setViewportSize(WIDE);
+      await signIn(page);
+
+      const run = randomUUID().slice(0, 8);
+      const skill = `e2e_frame_${run}`;
+      const skillUrl = `${apiBaseUrl}/api/v1/assets/skill/${skill}`;
+      const connection = {
+        id: `cfga_${randomUUID()}`,
+        name: `frame-business-${run}`,
+        displayName: LONG_TITLE,
+        url: ALLOWED_URL,
+        authScheme: "none" as const
+      };
+      const app = `frame-${run}`;
+
+      const written = await requestWithOrigin(page, "put", skillUrl, {
+        data: {
+          expectedRevision: await assetBaseRevision(page, skillUrl),
+          config: { name: skill, title: LONG_TITLE, description: "A probe.", content: "Text." }
+        }
+      });
+      expect(written.ok(), await written.text()).toBe(true);
+      try {
+        const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+          data: { name: `Frame ${run}` }
+        });
+        expect(created.ok(), await created.text()).toBe(true);
+        const workspaceId = z.object({ id: z.string() }).parse(await created.json()).id;
+        const appUrl = `${apiBaseUrl}/api/v1/assets/app/${app}`;
+        const saved = await requestWithOrigin(page, "put", appUrl, {
+          data: {
+            workspaceId,
+            expectedRevision: null,
+            files: [
+              {
+                path: "app.yaml",
+                text: `id: ${app}\nname: ${LONG_TITLE}\nkit: 1.2.0\nentry: index.html\n`
+              },
+              {
+                path: "index.html",
+                text: "<!doctype html><html><body><h1>Frame</h1></body></html>"
+              }
+            ]
+          },
+          timeout: 90_000
+        });
+        expect(saved.ok(), await saved.text()).toBe(true);
+        const published = await requestWithOrigin(page, "post", `${appUrl}/publish`, {
+          data: { workspaceId, revision: 1 }
+        });
+        expect(published.ok(), await published.text()).toBe(true);
+
+        await use({ skill, app, workspaceId, connection });
+      } finally {
+        await requestWithOrigin(page, "post", `${skillUrl}/delete`, {
+          data: { expectedRevision: await assetRevision(page, skillUrl) }
+        });
+      }
+    },
+    { timeout: 180_000 }
+  ],
+  headAssets: [
+    async ({ preparedHeadAssets, baseURL }, use) => {
+      // Build first, then wait outside the test timeout. Only the 120 s head checks and
+      // Connection cleanup hold these turns, below the 180 s abandoned-lock age.
+      const releaseAccess = await takeTurn("access", baseURL);
+      try {
+        const releaseConnections = await takeTurn("release-connections", baseURL);
+        try {
+          await plantConnection(preparedHeadAssets.connection);
+          await use(preparedHeadAssets);
+        } finally {
+          try {
+            await removeConnection(preparedHeadAssets.connection.id);
+          } finally {
+            await releaseConnections();
+          }
+        }
+      } finally {
+        await releaseAccess();
+      }
+    },
+    { timeout: 0 }
+  ]
+});
+
 // Fails with the head of two lines: under the name stood the kind and the technical id, and a
 // long name or many actions wrapped the head to a second and third row. The id is offered by
 // "Copy ID" in the head's menu and stands nowhere on the page (UXA-1a).
-test("the head of every asset page is one row as high as the header, and the id is behind Copy ID", async ({
-  page
-}) => {
-  test.setTimeout(180_000);
-  await page.setViewportSize(WIDE);
-  await signIn(page);
-
-  const run = randomUUID().slice(0, 8);
-  const skill = `e2e_frame_${run}`;
-  const skillUrl = `${apiBaseUrl}/api/v1/assets/skill/${skill}`;
-  const connection = {
-    id: `cfga_${randomUUID()}`,
-    name: `frame-business-${run}`,
-    displayName: LONG_TITLE,
-    url: ALLOWED_URL,
-    authScheme: "none" as const
-  };
-  const app = `frame-${run}`;
-
-  const written = await requestWithOrigin(page, "put", skillUrl, {
-    data: {
-      expectedRevision: await assetBaseRevision(page, skillUrl),
-      config: { name: skill, title: LONG_TITLE, description: "A probe.", content: "Text." }
-    }
-  });
-  expect(written.ok(), await written.text()).toBe(true);
-  await plantConnection(connection);
-  try {
-    const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
-      data: { name: `Frame ${run}` }
-    });
-    expect(created.ok(), await created.text()).toBe(true);
-    const workspaceId = z.object({ id: z.string() }).parse(await created.json()).id;
-    const appUrl = `${apiBaseUrl}/api/v1/assets/app/${app}`;
-    const saved = await requestWithOrigin(page, "put", appUrl, {
-      data: {
-        workspaceId,
-        expectedRevision: null,
-        files: [
-          {
-            path: "app.yaml",
-            text: `id: ${app}\nname: ${LONG_TITLE}\nkit: 1.2.0\nentry: index.html\n`
-          },
-          { path: "index.html", text: "<!doctype html><html><body><h1>Frame</h1></body></html>" }
-        ]
-      },
-      timeout: 90_000
-    });
-    expect(saved.ok(), await saved.text()).toBe(true);
-    const published = await requestWithOrigin(page, "post", `${appUrl}/publish`, {
-      data: { workspaceId, revision: 1 }
-    });
-    expect(published.ok(), await published.text()).toBe(true);
-
+headTest(
+  "the head of every asset page is one row as high as the header, and the id is behind Copy ID",
+  async ({ page, headAssets: { skill, app, workspaceId, connection } }) => {
+    headTest.setTimeout(120_000);
     const editors: { path: string; id?: string; wideOnly?: boolean }[] = [
       { path: "/build/agents/research_assistant", id: "research_assistant" },
       { path: `/build/skills/${skill}`, id: skill },
@@ -239,20 +285,16 @@ test("the head of every asset page is one row as high as the header, and the id 
     await expect(cut).toHaveAttribute("title", LONG_TITLE);
     expect(await cut.evaluate(lines)).toBe(2);
     expect(await cut.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
-  } finally {
-    await removeConnection(connection.id);
-    await requestWithOrigin(page, "post", `${skillUrl}/delete`, {
-      data: { expectedRevision: await assetRevision(page, skillUrl) }
-    });
   }
-});
+);
 
 // Fails with a head that cut the name first: at 390 px a run was named "Ru…" beside its chip
 // and the text of its way back. A Connection's head carries History and its menu, so under 768
 // px they go to a second row once they do not fit beside the arrow and the whole name; the row
 // then has its width back and gives way again in the same order.
 test("a narrowing head gives the chips, then the text of the way back, and the name gives way last", async ({
-  page
+  page,
+  releaseConnections: _releaseConnections
 }) => {
   await page.setViewportSize(WIDE);
   await signIn(page);
