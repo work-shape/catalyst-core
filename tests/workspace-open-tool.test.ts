@@ -64,6 +64,7 @@ const openOutputSchema = z.looseObject({
   pageId: z.string().optional(),
   number: z.number().optional(),
   fileSetId: z.string().optional(),
+  title: z.string().optional(),
   errors: z.array(issueSchema).optional()
 });
 
@@ -447,6 +448,29 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
       clientInstanceId: harness.clientInstanceId
     });
     expect(assets.filter((asset) => asset.kind === "app")).toEqual([]);
+  });
+
+  // OPEN-1f: what Save as app proposes. Fails without it: the open answered no name, and the
+  // dialog proposed the path.
+  it("answers the name the folder gives itself: its manifest's, else its HTML title, else none", async () => {
+    const harness = await createSaveHarness();
+    await harness.write("calculator", reactPage({ "index.tsx": fileRoute("/") }));
+    await harness.write("offers", {
+      "app.yaml": htmlManifest,
+      "index.html": "<!doctype html><title>Not the manifest's</title><h1>Offers</h1>"
+    });
+    await harness.write("weather", {
+      "index.html": "<!doctype html><title>\n  Wetter &amp; Wind </title><h1>Hamburg</h1>"
+    });
+    await harness.write("plain", { "index.html": "<!doctype html><h1>Hamburg</h1>" });
+
+    expect((await harness.open("calculator")).output?.title).toBe("Demo Page");
+    expect((await harness.open("offers")).output?.title).toBe("Demo Page");
+    expect((await harness.open("weather/index.html")).output?.title).toBe("Wetter & Wind");
+    const untitled = await harness.open("plain");
+    expect(untitled).toMatchObject({ status: "success", output: { number: 1 } });
+    // The manifest the build gives plain HTML names its entry file, which is no name.
+    expect(untitled.output).not.toHaveProperty("title");
   });
 
   it("refuses to open a file that is no HTML, and builds nothing for it", async () => {

@@ -19,6 +19,30 @@ export const PAGE_ACTION_OPERATION_PREFIX = "page_action.";
 
 /** The id of an App, as its manifest names it. */
 export const APP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/u;
+/** The longest App id. */
+const APP_ID_MAX_CHARS = 63;
+
+/**
+ * The id of an App, from the name people read for it: lowercase letters, digits and '-', at
+ * most 63 characters. German letters keep their sound; a name of no such letter is "app".
+ * Saving asks for the name alone, so the agent's `app.save` and a person's Save as app both
+ * take the id from here.
+ */
+export function appIdFromName(name: string): string {
+  const id = name
+    .toLowerCase()
+    .replaceAll("ä", "ae")
+    .replaceAll("ö", "oe")
+    .replaceAll("ü", "ue")
+    .replaceAll("ß", "ss")
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+/u, "")
+    .slice(0, APP_ID_MAX_CHARS)
+    .replace(/-+$/u, "");
+  return id === "" ? "app" : id;
+}
 /** The name of a named action: lowercase letters, digits, '-' and '_', at most 63. */
 export const APP_ACTION_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,62}$/u;
 

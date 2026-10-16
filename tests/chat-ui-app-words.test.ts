@@ -58,6 +58,26 @@ describe("the words of Apps, the preview and saving", () => {
     }
   });
 
+  // OPEN-1f: a member reads App, Entwurf and Vorschau, and no revision number. Fails without it:
+  // the preview card said "Revision 3", the panel "still shows revision 3", and Save as app
+  // asked for an ID.
+  it("name no revision and no ID in the preview and in Save as app", () => {
+    const preview = messages("pages.ts");
+    const save = messages("apps.ts");
+    for (const locale of locales) {
+      expect(
+        [...preview[locale]].filter(([, text]) => /revision|\{number\}/iu.test(text)),
+        `pages.ts ${locale}`
+      ).toEqual([]);
+      expect(
+        [...save[locale]].filter(
+          ([key, text]) => key.startsWith("apps.save") && /\bID\b|revision|\{number\}/iu.test(text)
+        ),
+        `apps.ts ${locale}`
+      ).toEqual([]);
+    }
+  });
+
   it("let the empty Apps list say a saved App is its builder's, and that publishing decides who else", () => {
     const { en, de } = messages("apps.ts");
 

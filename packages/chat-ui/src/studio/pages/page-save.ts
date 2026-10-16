@@ -33,6 +33,8 @@ export type PageSave =
       pageId: string;
       fileSetId: string;
       number: number;
+      /** The name the folder gives itself: its manifest's, or its HTML's title. */
+      title?: string;
       app?: PageSaveApp;
     }
   | { state: "errors"; name: string | undefined; errors: PageBuildError[] }
@@ -91,7 +93,7 @@ export function readPageSave(input: {
   }
   const container = isRecord(input.result) ? input.result : {};
   const output = isRecord(container.output) ? container.output : container;
-  const { pageId, fileSetId, number } = output;
+  const { pageId, fileSetId, number, title } = output;
   if (
     typeof pageId === "string" &&
     typeof fileSetId === "string" &&
@@ -100,10 +102,29 @@ export function readPageSave(input: {
     number > 0
   ) {
     const app = readSaveApp(output.app);
-    return { state: "built", name, pageId, fileSetId, number, ...(app ? { app } : {}) };
+    return {
+      state: "built",
+      name,
+      pageId,
+      fileSetId,
+      number,
+      ...(typeof title === "string" && title.trim() !== "" ? { title: title.trim() } : {}),
+      ...(app ? { app } : {})
+    };
   }
   const errors = readBuildErrors(output.errors);
   return errors ? { state: "errors", name, errors } : { state: "failed", name };
+}
+
+/**
+ * The name a built open is read by, on its card, in the panel head and in Save as app: the one
+ * the folder gives itself in its manifest or its HTML title, or else the name of the folder.
+ */
+export function builtPageName(
+  save: Extract<PageSave, { state: "built" }>,
+  t: TranslationContextValue["t"]
+): string {
+  return save.title ?? folderName(save.name) ?? t("pages.unnamed");
 }
 
 /** The surface of one saved revision. Its key names the revision, so each one opens once. */
@@ -115,12 +136,22 @@ export function pageSurface(
   return {
     kind: "page",
     key: `page:${save.pageId}:${save.fileSetId}`,
-    title: save.name ?? t("pages.unnamed"),
-    subtitle: t("pages.revision", { number: save.number }),
+    title: builtPageName(save, t),
+    ...(save.name === undefined ? {} : { path: save.name }),
     conversationId,
     pageId: save.pageId,
     fileSetId: save.fileSetId
   };
+}
+
+/** The last part of an opened path, without the extension of an HTML file. */
+function folderName(path: string | undefined): string | undefined {
+  const last = path
+    ?.replace(/\/+$/u, "")
+    .split("/")
+    .at(-1)
+    ?.replace(/\.html?$/iu, "");
+  return last === undefined || last === "" ? undefined : last;
 }
 
 /** One line for a number of build errors. */
@@ -206,7 +237,7 @@ export function pageSurfaceAfterRunCalls(input: {
       }
       input.handled.add(startKey);
       const samePageShown =
-        shown?.kind === "page" && save.name !== undefined && shown.title === save.name;
+        shown?.kind === "page" && save.name !== undefined && shown.path === save.name;
       if (!samePageShown) {
         next = pageBuildingSurface(callId, save, input.t);
       }
@@ -232,7 +263,7 @@ export function pageSurfaceAfterRunCalls(input: {
       save.state === "errors" &&
       shown?.kind === "page" &&
       save.name !== undefined &&
-      shown.title === save.name
+      shown.path === save.name
     ) {
       next = { ...shown, buildErrors: save.errors };
     }

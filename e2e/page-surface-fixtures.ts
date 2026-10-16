@@ -13,8 +13,8 @@ const pageBuilder = {
 
 /** The folder of the Execution Workspace the Page is written to. */
 const pageFolder = "revenue";
-/** What the preview is called: the path it opens. */
-export const pageName = pageFolder;
+/** What the preview is called: the name its manifest gives it, not the folder it opens. */
+export const pageName = "Revenue";
 
 const rootRoute = `import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
 
@@ -312,6 +312,17 @@ export async function savePage(page: Page): Promise<void> {
 /** The surface of the Page beside the conversation. */
 export function pageSurface(page: Page): Locator {
   return page.locator('aside[data-surface-kind="page"]');
+}
+
+/**
+ * Waits until the preview shows revision `number`. No member reads the number: the preview
+ * names it on its frame for tests alone.
+ */
+export async function expectShownRevision(surface: Locator, number: number): Promise<void> {
+  await expect(surface.locator("[data-page-view]")).toHaveAttribute(
+    "data-revision",
+    String(number)
+  );
 }
 
 /** The Page itself: the one frame inside the shell the instance answers with. */

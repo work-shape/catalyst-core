@@ -176,7 +176,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   const surface = pageSurface(page);
   await expect(surface).toBeVisible();
 
-  // Save as app asks for a name and an id and nothing else, and leads to the draft.
+  // Save as app asks for a name and nothing else, and leads to the draft.
   const saveAsApp = surface.getByRole("button", { name: /^(?:Save as app|Als App speichern)$/u });
   const saveDialog = page.getByRole("dialog");
   await saveAsApp.click();
@@ -191,10 +191,9 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     await saveAsApp.click();
     await expect(saveDialog).toBeVisible();
   });
-  // A name and an id, and no field for a scope.
-  await expect(saveDialog.getByRole("textbox")).toHaveCount(2);
+  // A name, and no field for an id or a scope.
+  await expect(saveDialog.getByRole("textbox")).toHaveCount(1);
   await saveDialog.getByRole("textbox", { name: /^Name/u }).fill(appName);
-  await expect(saveDialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
   await expect(saveDialog.getByRole("combobox")).toHaveCount(0);
   await saveDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));

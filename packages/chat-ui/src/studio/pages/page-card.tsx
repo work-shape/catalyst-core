@@ -15,6 +15,7 @@ import { useTranslation } from "../../shared/i18n";
 import { usePageConversationId } from "./page-host";
 import {
   buildErrorCountLabel,
+  builtPageName,
   pageSurface,
   pageSurfaceAfterRunCalls,
   readPageSave,
@@ -69,7 +70,9 @@ export function PageSaveCardView({
   onOpen?: () => void;
 }) {
   const { t } = useTranslation();
-  const name = save.name ?? t("pages.unnamed");
+  // What is built is read by its own name. Until then, and where the build refused it, the card
+  // names the path the agent opened.
+  const name = save.state === "built" ? builtPageName(save, t) : (save.name ?? t("pages.unnamed"));
 
   if (save.state === "built") {
     return (
@@ -77,17 +80,18 @@ export function PageSaveCardView({
         className="flex min-w-0 items-center gap-3 px-4 py-3 text-body"
         data-testid="page-card"
         data-state="built"
+        data-revision={save.number}
         role="group"
         aria-label={name}
       >
         <AppWindow aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
         <div className="grid min-w-0 flex-1 gap-0.5">
           <p className="truncate font-medium text-foreground">{name}</p>
-          <p className="truncate text-caption text-muted-foreground">
-            {save.app?.saved === true
-              ? t("pages.savedToApp", { number: save.number, title: save.app.title })
-              : t("pages.revision", { number: save.number })}
-          </p>
+          {save.app?.saved === true ? (
+            <p className="truncate text-caption text-muted-foreground">
+              {t("pages.savedToApp", { title: save.app.title })}
+            </p>
+          ) : null}
           {save.app?.saved === false ? (
             <p className="text-caption text-muted-foreground" data-testid="page-card-app-note">
               {t("pages.notSavedToApp", { title: save.app.title })}

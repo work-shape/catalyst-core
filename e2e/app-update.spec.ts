@@ -4,7 +4,9 @@ import type { FrameLocator, Page } from "@playwright/test";
 import { z } from "zod";
 import {
   builtPage,
+  expectShownRevision,
   overviewRoute,
+  pageName,
   pageSource,
   pageSurface,
   patchThatAdds,
@@ -146,7 +148,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await page.goto(`/w/${workspaceId}`);
   await writePageFiles(page, patchThatAdds(pageSource(FIRST_HEADING)));
   await savePage(page);
-  await expect(surface).toContainText("Revision 1");
+  await expectShownRevision(surface, 1);
   await expect(saveAsApp).toBeVisible();
   await expect(updateApp).toHaveCount(0);
   const conversationUrl = page.url();
@@ -158,7 +160,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   // It is saved as an App, and revision 1 is published.
   await saveAsApp.click();
   await dialog.getByRole("textbox", { name: /^Name/u }).fill(appName);
-  await expect(dialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
+  await expect(dialog.getByRole("textbox")).toHaveCount(1);
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
@@ -173,10 +175,10 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await openSurface();
   await rewritePageFile(page, "src/routes/index.tsx", overviewRoute("Offer calculator, wider"));
   await savePage(page);
-  await expect(surface).toContainText("Revision 2");
+  await expectShownRevision(surface, 2);
   await rewritePageFile(page, "src/routes/index.tsx", overviewRoute(THIRD_HEADING));
   await savePage(page);
-  await expect(surface).toContainText("Revision 3");
+  await expectShownRevision(surface, 3);
 
   // The header offers the update of the App, and Save as app no more.
   await expect(updateApp).toBeVisible();
@@ -242,7 +244,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await openSurface();
   await rewritePageFile(page, "src/routes/index.tsx", overviewRoute(FOURTH_HEADING));
   await savePage(page);
-  await expect(surface).toContainText("Revision 4");
+  await expectShownRevision(surface, 4);
   await updateApp.click();
   await expect(asked.getByRole("button", { name: "Update draft", exact: true })).toBeVisible();
 
@@ -357,7 +359,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await savePage(page);
   await rewritePageFile(page, "src/routes/index.tsx", overviewRoute(THIRD_HEADING));
   await savePage(page);
-  await expect(surface).toContainText("Revision 3");
+  await expectShownRevision(surface, 3);
   await expect(saveAsApp).toBeVisible();
   await expect(updateApp).toHaveCount(0);
 
@@ -371,7 +373,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   const untilOffered = async () => {
     await saveAsApp.click();
     await dialog.getByRole("textbox", { name: /^Name/u }).fill(appName);
-    await expect(dialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
+    await expect(dialog.getByRole("textbox")).toHaveCount(1);
     await dialog.getByRole("button", { name: /^(?:Save|Speichern)$/u }).click();
     await expect(offer).toBeVisible();
   };
@@ -385,7 +387,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   };
   await untilOffered();
   await expect(dialog).toContainText(
-    `The app “${appName}” already has this ID. Choose another ID to save a new app, or update that app from this preview.`
+    `This name is already taken by the app “${appName}”. Choose another name, or update the app.`
   );
   await shoot(page, "save-as-app-id-taken", ALL, async () => {
     await reopened();
@@ -435,7 +437,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await replace.click();
   const done = page.getByRole("dialog", { name: `The draft of “${appName}” is updated` });
   await expect(done).toContainText(
-    `The app keeps its name “${appName}”. The preview is called “revenue”.`
+    `The app keeps its name “${appName}”. The preview is called “${pageName}”.`
   );
   if (shotsDir) {
     await page.screenshot({

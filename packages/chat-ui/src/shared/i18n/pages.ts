@@ -15,14 +15,14 @@ export const pages = defineTranslations({
     "pages.cardErrors": "The preview could not be built",
     "pages.cardFailed": "The preview could not be opened",
     "pages.errorPlace": "{file}, line {line}",
-    "pages.errorsKeepRevision":
-      "The preview still shows revision {number}. Ask the agent to fix the errors.",
-    "pages.errorsKeepRevisionOne":
-      "The preview still shows revision {number}. Ask the agent to fix the error.",
+    "pages.errorsKeepShown":
+      "The preview still shows the last version. Ask the agent to fix the errors.",
+    "pages.errorsKeepShownOne":
+      "The preview still shows the last version. Ask the agent to fix the error.",
     "pages.errorsNothingSaved": "Nothing new is shown. Ask the agent to fix the errors.",
     "pages.errorsNothingSavedOne": "Nothing new is shown. Ask the agent to fix the error.",
     "pages.files": "Files",
-    "pages.filesEmpty": "This revision has no source files.",
+    "pages.filesEmpty": "This preview has no source files.",
     "pages.filesFailed": "The files could not be loaded.",
     "pages.filesList": "Source files",
     "pages.fileChanged": "Changed",
@@ -36,8 +36,7 @@ export const pages = defineTranslations({
     "pages.preview": "Preview",
     "pages.previewOf": "Preview of {name}",
     "pages.retry": "Try again",
-    "pages.revision": "Revision {number}",
-    "pages.savedToApp": "Revision {number}, saved to the draft of {title}",
+    "pages.savedToApp": "Saved to the draft of {title}",
     "pages.showFileList": "All files",
     "pages.shown": "Shown",
     "pages.unnamed": "Preview",
@@ -56,16 +55,16 @@ export const pages = defineTranslations({
     "pages.cardErrors": "Die Vorschau konnte nicht gebaut werden",
     "pages.cardFailed": "Die Vorschau konnte nicht geöffnet werden",
     "pages.errorPlace": "{file}, Zeile {line}",
-    "pages.errorsKeepRevision":
-      "Die Vorschau zeigt weiter Revision {number}. Bitte den Agenten, die Fehler zu beheben.",
-    "pages.errorsKeepRevisionOne":
-      "Die Vorschau zeigt weiter Revision {number}. Bitte den Agenten, den Fehler zu beheben.",
+    "pages.errorsKeepShown":
+      "Die Vorschau zeigt weiter den letzten Stand. Bitte den Agenten, die Fehler zu beheben.",
+    "pages.errorsKeepShownOne":
+      "Die Vorschau zeigt weiter den letzten Stand. Bitte den Agenten, den Fehler zu beheben.",
     "pages.errorsNothingSaved":
       "Es wird nichts Neues gezeigt. Bitte den Agenten, die Fehler zu beheben.",
     "pages.errorsNothingSavedOne":
       "Es wird nichts Neues gezeigt. Bitte den Agenten, den Fehler zu beheben.",
     "pages.files": "Dateien",
-    "pages.filesEmpty": "Diese Revision hat keine Quelldateien.",
+    "pages.filesEmpty": "Diese Vorschau hat keine Quelldateien.",
     "pages.filesFailed": "Die Dateien konnten nicht geladen werden.",
     "pages.filesList": "Quelldateien",
     "pages.fileChanged": "Geändert",
@@ -79,8 +78,7 @@ export const pages = defineTranslations({
     "pages.preview": "Vorschau",
     "pages.previewOf": "Vorschau von {name}",
     "pages.retry": "Erneut versuchen",
-    "pages.revision": "Revision {number}",
-    "pages.savedToApp": "Revision {number}, im Entwurf von {title} gespeichert",
+    "pages.savedToApp": "Im Entwurf von {title} gespeichert",
     "pages.showFileList": "Alle Dateien",
     "pages.shown": "Angezeigt",
     "pages.unnamed": "Vorschau",

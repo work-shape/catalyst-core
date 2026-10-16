@@ -4,6 +4,7 @@ import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
   PageSaveCardView,
   pageBuildingSurface,
+  pageSurface,
   pageBuildingSurfaceRendering,
   readPageSave,
   type PageSave
@@ -65,9 +66,10 @@ describe("the card of a save of a Page that became an App", () => {
     expect(intoApp).toMatchObject({ app: { title: "Offer desk", saved: true, revision: 3 } });
 
     const markup = card(intoApp, { onOpen: () => undefined });
-    expect(markup).toContain("Revision 2, saved to the draft of Offer desk");
+    expect(markup).toContain(">Saved to the draft of Offer desk</p>");
+    expect(markup).not.toMatch(/>[^<]*revision/iu);
     expect(markup).not.toContain("<button");
-    expect(card(intoApp, {}, "de")).toContain("Revision 2, im Entwurf von Offer desk gespeichert");
+    expect(card(intoApp, {}, "de")).toContain(">Im Entwurf von Offer desk gespeichert</p>");
 
     const notWritten = readPageSave({
       args: { name: "Offers" },
@@ -81,5 +83,31 @@ describe("the card of a save of a Page that became an App", () => {
     expect(card(notWritten, { onOpen: () => undefined })).toContain(
       "The draft of Offer desk was not changed. The agent says why."
     );
+  });
+});
+
+// OPEN-1f design review: one name for one thing. The card and the panel head read "umsatz", the
+// path the agent opened, while Save as app proposed "Umsatzübersicht 2026".
+describe("the name of a built preview", () => {
+  const opened = (output: Record<string, unknown>) =>
+    readPageSave({ args: { path: "apps/umsatz" }, result: { output } });
+
+  it("is the folder's own name on the card and in the panel head", () => {
+    const save = opened({ ...built.output, title: "Umsatzübersicht 2026" });
+    if (save.state !== "built") throw new Error("expected a built preview");
+
+    const surface = pageSurface("conv-1", save, t);
+    expect(surface).toMatchObject({ title: "Umsatzübersicht 2026", path: "apps/umsatz" });
+    const markup = render(createElement(PageSaveCardView, { save, shown: false }));
+    expect(markup).toContain('aria-label="Umsatzübersicht 2026"');
+    expect(markup).toContain(">Umsatzübersicht 2026</p>");
+    expect(markup).not.toContain("umsatz<");
+  });
+
+  it("stays the path where the build refused it, because nothing was built to name itself", () => {
+    const markup = render(
+      createElement(PageSaveCardView, { save: opened(refused.output), shown: false })
+    );
+    expect(markup).toContain('aria-label="apps/umsatz"');
   });
 });

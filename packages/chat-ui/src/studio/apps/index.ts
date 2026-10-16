@@ -16,8 +16,6 @@ export type { AppActionsRead } from "./app-data";
 export { AppEditFrame, appDraftIsAhead, PublishDialog } from "./app-edit";
 export { AppDeleteDialog, AppDetailsDialog, appLink } from "./app-header";
 export {
-  APP_ID_PATTERN,
-  appIdFromName,
   appManifestSummary,
   appPreviewProblem,
   appPreviewProblemText,
@@ -37,7 +35,7 @@ export { AppsHostProvider, type AppsHost } from "./apps-host";
 export { appRowRoute, AppsPageView } from "./apps-page";
 export { RevisionsDrawerView } from "./revisions-drawer";
 export { pageAppChoice } from "./page-app-action";
-export { SaveAsAppAction, SaveAsAppDialogView } from "./save-as-app-dialog";
+export { SaveAsAppAction, SaveAsAppDialogView, saveAsAppInput } from "./save-as-app-dialog";
 export { UpdateAppAction, UpdateAppDialogView } from "./update-app-dialog";
 // The address of the area and its row in the rail, which the same tests hold.
 export {

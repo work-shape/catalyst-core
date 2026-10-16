@@ -28,6 +28,12 @@ interface SurfaceSources {
    * revision that still stands.
    */
   page: {
+    /**
+     * The file or folder the agent opened. A later open of the same path is of this Page: its
+     * start leaves the revision shown, and its findings go under it. The title is the name the
+     * folder gives itself, which Save as app proposes.
+     */
+    path?: string;
     conversationId: string;
     pageId: string;
     fileSetId: string;

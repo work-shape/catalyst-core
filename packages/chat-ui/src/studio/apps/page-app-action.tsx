@@ -30,7 +30,7 @@ export function pageAppChoice(
 interface PageAppActionProps {
   conversationId: string;
   pageId: string;
-  /** The Page's title: the name Save as app proposes. */
+  /** The name the Page is read by, which Save as app proposes. */
   pageName: string;
 }
 
@@ -68,7 +68,7 @@ function PageAppActionOf({
         <SaveAsAppAction
           conversationId={conversationId}
           pageId={pageId}
-          pageName={pageName}
+          proposedName={pageName}
           onLink={setLinking}
         />
       ) : null}

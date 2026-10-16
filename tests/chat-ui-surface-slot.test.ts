@@ -64,7 +64,7 @@ describe("surface slot frame", () => {
       kind: "page",
       key: "page:page-1:set-2",
       title: "Angebotsvergleich",
-      subtitle: "Revision 2",
+      path: "angebote",
       conversationId: "conv-1",
       pageId: "page-1",
       fileSetId: "set-2"
@@ -88,7 +88,6 @@ describe("surface slot frame", () => {
     );
     const order = [
       ">Angebotsvergleich<",
-      ">Revision 2<",
       'aria-label="Content of the preview"',
       ">Preview<",
       ">Files<",
@@ -98,6 +97,8 @@ describe("surface slot frame", () => {
     ].map((text) => markup.indexOf(text));
 
     expect(order.every((position) => position >= 0)).toBe(true);
+    // A member reads no revision number in the head of the preview.
+    expect(markup).not.toMatch(/revision \d/iu);
     expect([...order].sort((left, right) => left - right)).toEqual(order);
     expect(markup).not.toContain("This content cannot be shown yet.");
     // The preview reaches the edges of the frame: its content has no inset of the frame's.
@@ -152,6 +153,15 @@ describe("surface slot frame", () => {
     expect(markup).toContain("Show chat");
     expect(markup).not.toContain("fullscreen");
     expect(markup).not.toContain("Close display panel");
+  });
+
+  // OPEN-1f design review: at 390 px "Show chat" left the title "u.". On a phone the title wins
+  // the row and the button keeps its icon, as in the dock's head.
+  it("keeps only the icon of Show chat on a phone", () => {
+    const markup = renderFrame(toolDisplay, "covering");
+
+    expect(markup).toMatch(/<button[^>]*class="[^"]*max-sm:hidden[^"]*"[^>]*>.*?Show chat/u);
+    expect(markup).toMatch(/<button[^>]*class="[^"]* sm:hidden"[^>]*aria-label="Show chat"/u);
   });
 
   // Fails without `under`: the frame knew the chat as the only thing a surface covers.

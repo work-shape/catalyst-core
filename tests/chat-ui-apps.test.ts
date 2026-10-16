@@ -11,8 +11,6 @@ import {
   AppDeleteDialog,
   appDraftIsAhead,
   AppEditFrame,
-  appIdFromName,
-  APP_ID_PATTERN,
   appLink,
   appManifestSummary,
   appPreviewProblem,
@@ -33,6 +31,7 @@ import {
   RevisionsDrawerView,
   SaveAsAppAction,
   SaveAsAppDialogView,
+  saveAsAppInput,
   type AppRights,
   type AppsHost,
   areaOfRoute,
@@ -623,7 +622,7 @@ describe("Save as app", () => {
     const control = createElement(SaveAsAppAction, {
       conversationId: "conv_1",
       pageId: "page_1",
-      pageName: "Angebotsrechner"
+      proposedName: "Angebotsrechner"
     });
     return render(value ? createElement(AppsHostProvider, { value, children: control }) : control);
   };
@@ -642,19 +641,17 @@ describe("Save as app", () => {
     expect(action(undefined)).toBe("");
   });
 
-  it("proposes an id from the name: lowercase letters, digits and hyphens", () => {
-    expect(appIdFromName("Angebotsrechner")).toBe("angebotsrechner");
-    expect(appIdFromName("  Größen & Maße 2026 ")).toBe("grossen-masse-2026");
-    expect(appIdFromName("Über_uns")).toBe("uber-uns");
-    expect(appIdFromName("???")).toBe("");
-    const long = appIdFromName("a".repeat(40) + " " + "b".repeat(40));
-    expect(long.length).toBeLessThanOrEqual(63);
-    expect(APP_ID_PATTERN.test(long)).toBe(true);
-    expect(APP_ID_PATTERN.test("-angebot")).toBe(false);
-    expect(APP_ID_PATTERN.test("Angebot")).toBe(false);
+  it("sends the name without its outer spaces and the id the agent's app.save makes of it", () => {
+    expect(saveAsAppInput("  Angebotsrechner 2026 ")).toEqual({
+      id: "angebotsrechner-2026",
+      name: "Angebotsrechner 2026"
+    });
+    expect(saveAsAppInput("Über_uns")?.id).toBe("ueber-uns");
+    expect(saveAsAppInput("   ")).toBeUndefined();
   });
 
-  it("asks for a name and an id, and for no scope", () => {
+  // OPEN-1f: saving asks for the name alone. Fails with the ID field the dialog had before.
+  it("asks for the name only: no id and no scope", () => {
     const markup = render(
       createElement(SaveAsAppDialogView, {
         workspaceName: "Nordlicht Beratung",
@@ -670,30 +667,49 @@ describe("Save as app", () => {
     expect(markup).toContain(
       "What this preview shows becomes the draft of a new app in Nordlicht Beratung. Nothing is published yet."
     );
+    expect(markup.match(/<input/gu)).toHaveLength(1);
     expect(markup).toContain('value="Angebotsrechner 2026"');
-    expect(markup).toContain('value="angebotsrechner-2026"');
-    expect(markup.match(/<input/gu)).toHaveLength(2);
+    expect(markup).not.toContain("angebotsrechner-2026");
+    expect(markup).not.toMatch(/>ID</u);
     expect(markup).not.toContain("<select");
     expect(markup).not.toMatch(/scope/iu);
   });
 
-  it("says at the id that it is taken", () => {
-    const markup = render(
+  const refusedAs = (proposedName: string, refusedName: string, field?: "name") =>
+    render(
       createElement(SaveAsAppDialogView, {
         workspaceName: "Nordlicht Beratung",
-        proposedName: "Angebotsrechner",
+        proposedName,
         saving: false,
-        failure: { field: "id", message: t("apps.saveIdTaken") },
+        failure: {
+          name: refusedName,
+          ...(field ? { field } : {}),
+          message: t(field ? "apps.saveNameTaken" : "apps.saveFailed")
+        },
         onClose() {},
         onSave() {}
       })
     );
 
-    expect(markup).toContain(
-      "An app with this ID already exists. Choose another ID to save this as a new app."
-    );
+  it("says at the name that it is taken", () => {
+    const markup = refusedAs("Angebotsrechner", "Angebotsrechner", "name");
+
+    expect(markup).toContain("This name is already taken. Choose another name.");
     expect(markup).toContain('aria-invalid="true"');
     // Nothing is offered about an App the reader may not write.
     expect(markup.match(/<button/gu)).toHaveLength(3);
+  });
+
+  // OPEN-1f design review: the refusal stayed under a name the person had changed since.
+  it("shows a refusal only while the field holds the name it was sent with", () => {
+    for (const field of ["name", undefined] as const) {
+      const markup = refusedAs("Angebotsrechner 2026", "Angebotsrechner", field);
+      expect(markup).not.toContain("already taken");
+      expect(markup).not.toContain("could not be saved");
+      expect(markup).not.toContain('aria-invalid="true"');
+    }
+    expect(refusedAs("Angebotsrechner ", "Angebotsrechner")).toContain(
+      "This could not be saved as an app."
+    );
   });
 });

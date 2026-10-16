@@ -224,9 +224,13 @@ export interface PageBuildIssue {
  * How a build ended. `saved`: the file set is stored. `errors`: the author's files do not
  * build, and nothing was stored. `failed`: the build itself gave no result, for example because
  * it was stopped at its time limit, and nothing was stored.
+ *
+ * `title` of a stored file set is the name the folder gives itself: the `name` of its own
+ * manifest, or else the `<title>` of the HTML file it opens. It is absent where the folder
+ * names none, and in results stored before it was added.
  */
 export type PageSaveOutcome =
-  | { status: "saved"; pageId: PageId; fileSetId: FileSetId; number: number }
+  | { status: "saved"; pageId: PageId; fileSetId: FileSetId; number: number; title?: string }
   | { status: "errors"; errors: PageBuildIssue[] }
   | PageBuildFailure;
 

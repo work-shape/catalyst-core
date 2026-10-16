@@ -26,7 +26,7 @@ The App is yours at once: it is in your **Apps** list and opens at its **draft**
 You can also save it yourself:
 
 1. In the preview's header, click **Save as app** ("Als App speichern").
-2. Give it a **Name** and an **ID**. The ID is part of the App's address and cannot change later.
+2. Check the **Name**. It is filled in with the name the App's folder gives itself, its `app.yaml` name or its HTML title, or else the folder's name. The App's address is made from the name, as when the agent saves it, and does not change later.
 3. Click **Save** ("Speichern").
 
 After that, each change you ask for in the same chat goes into the App's draft once the agent saves it again. When that did not happen, for example because someone changed the draft elsewhere, the preview offers **Update app** ("App aktualisieren"): **Replace draft** ("Entwurf ersetzen") puts what the preview shows now into the draft.

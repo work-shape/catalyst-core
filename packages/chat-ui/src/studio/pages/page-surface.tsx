@@ -316,17 +316,20 @@ export function PageSurfaceView({
   preview: ReactNode;
   files: ReactNode;
   buildErrors?: readonly PageBuildError[];
-  /** The number of the revision the preview shows, once it is known. */
+  /**
+   * The number of the revision the preview shows, once it is known. No member reads it: it
+   * stands on the frame for tests to wait on.
+   */
   revision?: number;
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col" data-page-view={view}>
+    <div className="flex h-full min-h-0 flex-col" data-page-view={view} data-revision={revision}>
       <div className="min-h-0 flex-1" hidden={view !== "preview"}>
         {preview}
       </div>
       {view === "files" ? <div className="min-h-0 flex-1">{files}</div> : null}
       {view === "preview" && buildErrors && buildErrors.length > 0 ? (
-        <PageBuildErrors errors={buildErrors} revision={revision} />
+        <PageBuildErrors errors={buildErrors} previewShown={revision !== undefined} />
       ) : null}
     </div>
   );
@@ -338,11 +341,11 @@ export function PageSurfaceView({
  */
 export function PageBuildErrors({
   errors,
-  revision
+  previewShown = false
 }: {
   errors: readonly PageBuildError[];
-  /** The number of the revision the preview shows, once it is known. */
-  revision?: number;
+  /** The instance said which revision the preview shows. */
+  previewShown?: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -353,13 +356,11 @@ export function PageBuildErrors({
           {buildErrorCountLabel(errors.length, t)}
         </span>
       </DisclosureTrigger>
-      {revision === undefined ? null : (
+      {previewShown ? (
         <p className="pb-1 pl-6 text-caption text-muted-foreground">
-          {t(errors.length === 1 ? "pages.errorsKeepRevisionOne" : "pages.errorsKeepRevision", {
-            number: revision
-          })}
+          {t(errors.length === 1 ? "pages.errorsKeepShownOne" : "pages.errorsKeepShown")}
         </p>
-      )}
+      ) : null}
       <DisclosureContent>
         <BuildErrorList errors={errors} className="max-h-40 overflow-y-auto pb-2" />
       </DisclosureContent>

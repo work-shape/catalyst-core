@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   APP_SAVE_TOOL_NAME,
+  appIdFromName,
   PAGE_FILE_SET_HELD_KEY,
   PAGE_NAME_MAX_CHARS,
   type ConversationId,
@@ -18,8 +19,6 @@ import { openedPageName } from "./workspace-open-tool";
 // next draft revision. Saving asks the person nothing: the name is its one input.
 
 export { APP_SAVE_TOOL_NAME };
-/** The longest App id. */
-const APP_ID_MAX_CHARS = 63;
 const APP_TITLE_MAX_CHARS = 120;
 
 /** What a save of the App did: the draft revision it wrote, or why it wrote none. */
@@ -77,26 +76,6 @@ export interface AppSaveCalls {
   appSavePolicyFloor(conversationId: ConversationId): Promise<PolicyValue | undefined>;
 }
 
-/**
- * The id of an App, from the name people read for it: lowercase letters, digits and '-', at
- * most 63 characters. German letters keep their sound; a name of no such letter is "app".
- */
-function appIdOf(title: string): string {
-  const id = title
-    .toLowerCase()
-    .replaceAll("ä", "ae")
-    .replaceAll("ö", "oe")
-    .replaceAll("ü", "ue")
-    .replaceAll("ß", "ss")
-    .normalize("NFKD")
-    .replace(/\p{M}+/gu, "")
-    .replace(/[^a-z0-9]+/gu, "-")
-    .replace(/^-+/u, "")
-    .slice(0, APP_ID_MAX_CHARS)
-    .replace(/-+$/u, "");
-  return id === "" ? "app" : id;
-}
-
 const inputSchema = z.object({
   path: z
     .string()
@@ -144,7 +123,7 @@ function saveOf(input: z.infer<typeof inputSchema>): AppSaveInput | { refusal: s
   const fileSetId = held.success ? held.data[PAGE_FILE_SET_HELD_KEY] : undefined;
   return {
     page: page.name,
-    name: appIdOf(input.name),
+    name: appIdFromName(input.name),
     title: input.name,
     ...(fileSetId === undefined ? {} : { fileSetId })
   };

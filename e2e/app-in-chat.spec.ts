@@ -1,6 +1,11 @@
 import type { FrameLocator, Page } from "@playwright/test";
 import { z } from "zod";
-import { pageSurface, plainPageSource, sendToolCall } from "./page-surface-fixtures";
+import {
+  expectShownRevision,
+  pageSurface,
+  plainPageSource,
+  sendToolCall
+} from "./page-surface-fixtures";
 import { shootLocales, shootThemes } from "./surface-shots";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
@@ -99,7 +104,7 @@ test("what a plain chat opened becomes an App without a question, and its next s
   await expect(building).toHaveCount(0);
   const surface = pageSurface(page);
   await expect(surface).toBeVisible();
-  await expect(surface).toContainText("Revision 1");
+  await expectShownRevision(surface, 1);
   await expect(
     documentIn(page, "page").getByRole("heading", { name: "Margin calculator" })
   ).toBeVisible();
@@ -149,7 +154,7 @@ test("what a plain chat opened becomes an App without a question, and its next s
   // A later open shows the change and writes nothing into the App.
   await writeFile(page, "index.html", indexWith(SECOND_HEADING));
   await sendToolCall(page, "workspace.open", { path: pageFolder });
-  await expect(page.getByTestId("page-card").last()).toContainText("Revision 2");
+  await expect(page.getByTestId("page-card").last()).toHaveAttribute("data-revision", "2");
   expect(await draftRevision()).toBe(1);
 
   // The next save writes the App's draft revision 2: the preview gives way to the draft page,
@@ -168,7 +173,7 @@ test("what a plain chat opened becomes an App without a question, and its next s
   await expect(draftDocument(page).getByRole("heading", { name: SECOND_HEADING })).toBeVisible();
   await writeFile(page, "index.html", indexWith(THIRD_HEADING));
   await sendToolCall(page, "workspace.open", { path: pageFolder });
-  await expect(page.getByTestId("page-card").last()).toContainText("Revision 3");
+  await expect(page.getByTestId("page-card").last()).toHaveAttribute("data-revision", "3");
   await sendToolCall(page, "app.save", { path: pageFolder, name: appTitle });
   await expect(draftDocument(page).getByRole("heading", { name: THIRD_HEADING })).toBeVisible();
   await expect(page.locator('aside[data-surface-kind="page"]')).toHaveCount(0);

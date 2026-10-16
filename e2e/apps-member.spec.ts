@@ -141,7 +141,7 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await surface.getByRole("button", { name: "Save as app" }).click();
   const saveDialog = page.getByRole("dialog");
   await saveDialog.getByRole("textbox", { name: /^Name/u }).fill(appName);
-  await expect(saveDialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
+  await expect(saveDialog.getByRole("textbox")).toHaveCount(1);
   await saveDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");

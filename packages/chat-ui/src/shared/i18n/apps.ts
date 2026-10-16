@@ -176,16 +176,10 @@ export const apps = defineTranslations({
       "What this preview shows becomes the draft of a new app in {workspace}. Nothing is published yet.",
     "apps.saveConfirm": "Save",
     "apps.saveFailed": "This could not be saved as an app.",
-    "apps.saveId": "ID",
-    "apps.saveIdHint":
-      "Lowercase letters, digits and hyphens. It is part of the app’s address and stays as it is.",
-    "apps.saveIdInvalid":
-      "Use lowercase letters, digits and hyphens, at most 63, not starting with a hyphen.",
-    "apps.saveIdTaken":
-      "An app with this ID already exists. Choose another ID to save this as a new app.",
-    "apps.saveIdTakenWritable":
-      "The app “{name}” already has this ID. Choose another ID to save a new app, or update that app from this preview.",
     "apps.saveName": "Name",
+    "apps.saveNameTaken": "This name is already taken. Choose another name.",
+    "apps.saveNameTakenWritable":
+      "This name is already taken by the app “{name}”. Choose another name, or update the app.",
     "apps.showMore": "Show more",
     "apps.starting": "The app is starting",
     "apps.title": "Apps",
@@ -385,16 +379,10 @@ export const apps = defineTranslations({
       "Was diese Vorschau zeigt, wird zum Entwurf einer neuen App in {workspace}. Veröffentlicht wird noch nichts.",
     "apps.saveConfirm": "Speichern",
     "apps.saveFailed": "Das konnte nicht als App gespeichert werden.",
-    "apps.saveId": "ID",
-    "apps.saveIdHint":
-      "Kleinbuchstaben, Ziffern und Bindestriche. Sie ist Teil der Adresse der App und bleibt, wie sie ist.",
-    "apps.saveIdInvalid":
-      "Verwende Kleinbuchstaben, Ziffern und Bindestriche, höchstens 63, nicht mit einem Bindestrich beginnend.",
-    "apps.saveIdTaken":
-      "Es gibt schon eine App mit dieser ID. Wähle eine andere ID, um das als neue App zu speichern.",
-    "apps.saveIdTakenWritable":
-      "Die App „{name}“ hat diese ID schon. Wähle eine andere ID für eine neue App, oder aktualisiere diese App aus dieser Vorschau.",
     "apps.saveName": "Name",
+    "apps.saveNameTaken": "Dieser Name ist schon vergeben. Wähle einen anderen Namen.",
+    "apps.saveNameTakenWritable":
+      "Dieser Name ist schon an die App „{name}“ vergeben. Wähle einen anderen Namen, oder aktualisiere die App.",
     "apps.showMore": "Mehr anzeigen",
     "apps.starting": "Die App wird gestartet",
     "apps.title": "Apps",

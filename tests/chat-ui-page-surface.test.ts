@@ -91,7 +91,7 @@ describe("a call of workspace.open", () => {
     expect(readPageSave({ args: {}, result: "no" }).state).toBe("failed");
   });
 
-  it("opens as a surface of exactly that revision, named after the Page", () => {
+  it("opens as a surface of exactly that revision, named after the Page, with no revision number", () => {
     const save = readPageSave({ args: { name: "Offers" }, result: built });
     if (save.state !== "built") {
       throw new Error("expected a revision");
@@ -101,7 +101,7 @@ describe("a call of workspace.open", () => {
       kind: "page",
       key: "page:page-1:set-2",
       title: "Offers",
-      subtitle: "Revision 2",
+      path: "Offers",
       conversationId: "conv-1",
       pageId: "page-1",
       fileSetId: "set-2"
@@ -136,7 +136,10 @@ describe("the calls of a run and the surface slot", () => {
     const handled = new Set<string>();
     const parts = [call("call-1", "output_available", built)];
 
-    expect(ask(parts, handled)).toMatchObject({ key: "page:page-1:set-2", subtitle: "Revision 2" });
+    expect(ask(parts, handled)).toMatchObject({ key: "page:page-1:set-2", title: "Offers" });
+    expect(ask([call("call-2", "output_available", built)], handled)).not.toHaveProperty(
+      "subtitle"
+    );
     expect(ask(parts, handled)).toBeUndefined();
   });
 
@@ -159,8 +162,11 @@ describe("the calls of a run and the surface slot", () => {
     ).toMatchObject({ key: "page:page-1:set-3" });
   });
 
+  // The panel reads the folder's own name, so a later open is matched by its path, not the title.
+  const named = { output: { ...built.output, title: "Angebote 2026" } };
+
   it("puts what the build found under the shown revision of the same Page", () => {
-    const save = readPageSave({ args: { name: "Offers" }, result: built });
+    const save = readPageSave({ args: { name: "Offers" }, result: named });
     if (save.state !== "built") {
       throw new Error("expected a revision");
     }
@@ -189,7 +195,7 @@ describe("the calls of a run and the surface slot", () => {
   });
 
   it("leaves the shown revision of the same Page in place while its next save builds", () => {
-    const save = readPageSave({ args: { name: "Offers" }, result: built });
+    const save = readPageSave({ args: { name: "Offers" }, result: named });
     if (save.state !== "built") {
       throw new Error("expected a revision");
     }
@@ -570,27 +576,28 @@ describe("the content of a Page surface", () => {
     expect(view({ view: "preview", buildErrors: errors.slice(0, 1) })).toContain("1 build error");
   });
 
-  it("says under the count which revision the preview still shows and what to do", () => {
+  it("says under the count that the preview still shows what it showed and what to do", () => {
     const shown = (count: number, locale?: "de") =>
       render(
-        createElement(PageBuildErrors, { errors: errors.slice(0, count), revision: 1 }),
+        createElement(PageBuildErrors, { errors: errors.slice(0, count), previewShown: true }),
         locale
       );
 
     // Outside the folded findings: the sentence is in the document while they are not.
     expect(shown(2)).toContain(
-      "The preview still shows revision 1. Ask the agent to fix the errors."
+      "The preview still shows the last version. Ask the agent to fix the errors."
     );
     expect(shown(2)).not.toContain("Expected");
     expect(shown(1)).toContain("Ask the agent to fix the error.");
     expect(shown(1, "de")).toContain(
-      "Die Vorschau zeigt weiter Revision 1. Bitte den Agenten, den Fehler zu beheben."
+      "Die Vorschau zeigt weiter den letzten Stand. Bitte den Agenten, den Fehler zu beheben."
     );
     expect(shown(2, "de")).toContain("Bitte den Agenten, die Fehler zu beheben.");
     expect(view({ view: "preview", buildErrors: errors, revision: 3 }, "de")).toContain(
-      "Die Vorschau zeigt weiter Revision 3."
+      "Die Vorschau zeigt weiter den letzten Stand."
     );
-    // Before the instance said which revision the frame holds, the line names none.
+    expect(shown(2)).not.toMatch(/>[^<]*revision/iu);
+    // Before the instance said which revision the frame holds, the line says nothing of it.
     expect(view({ view: "preview", buildErrors: errors })).not.toContain("still shows");
   });
 
@@ -698,7 +705,7 @@ describe("the files of a revision", () => {
     expect(filesView({ files: "loading" })).not.toContain("Source files");
     expect(filesView({ files: "failed" })).toContain("The files could not be loaded.");
     expect(filesView({ files: [], open: undefined })).toContain(
-      "This revision has no source files."
+      "This preview has no source files."
     );
     expect(filesView({ content: { status: "not-text" } })).toContain(
       "This file is not text and cannot be shown."
@@ -727,17 +734,17 @@ describe("the card of an open", () => {
     number: 2
   };
 
-  it("names the Page and its revision and opens it, unless it is the one shown", () => {
+  it("names the Page, no revision number, and opens it, unless it is the one shown", () => {
     const open = card(revision, { onOpen: () => undefined });
 
     expect(open).toContain(">Offers</p>");
-    expect(open).toContain("Revision 2");
+    expect(open).not.toMatch(/>[^<]*revision/iu);
     expect(open).toMatch(/<button[^>]*>Open<\/button>/u);
     const shown = card(revision, { shown: true, onOpen: () => undefined });
     expect(shown).toContain("Shown");
     expect(shown).not.toContain("<button");
     expect(card(revision, { onOpen: () => undefined }, "de")).toMatch(/>Öffnen<\/button>/u);
-    // Where there is no slot to open it in, the card names the revision and offers nothing.
+    // Where there is no slot to open it in, the card names the Page and offers nothing.
     expect(card(revision)).not.toContain("<button");
   });
 

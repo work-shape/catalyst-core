@@ -48,6 +48,7 @@ export {
   type AppActionInputSchema,
   type CompiledAppAction
 } from "./action-input";
+export { htmlTitle } from "./html";
 export { readPageBuildOutput, type PageBuildResultFile } from "./output";
 export { pageBuildCommandFile } from "./command-file";
 export type {

@@ -236,6 +236,33 @@ export function rewriteHtml(input: {
   return { html: rewritten, extracted, moduleScripts, staticReferences, errors };
 }
 
+/** How much of an HTML file is read for its title. The head, which holds it, comes first. */
+const TITLE_READ_BYTES = 64 * 1024;
+
+/**
+ * What the `<title>` of an HTML file says, as a browser shows it on its tab, or nothing where
+ * the file has none or an empty one. Only the start of the file is read.
+ */
+export function htmlTitle(bytes: Uint8Array): string | undefined {
+  const document = parse(new TextDecoder().decode(bytes.subarray(0, TITLE_READ_BYTES)));
+  const title = childElement(childElement(childElement(document, "html"), "head"), "title");
+  const text = (title?.childNodes ?? [])
+    .map((node) => ("value" in node ? node.value : ""))
+    .join("")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return text === "" ? undefined : text;
+}
+
+function childElement(
+  parent: { childNodes: Node[] } | undefined,
+  tagName: string
+): Element | undefined {
+  return parent?.childNodes.find(
+    (node): node is Element => "tagName" in node && node.tagName === tagName
+  );
+}
+
 /**
  * The HTML with `text` written where its head starts: after the `<head>` tag, or, in a file
  * without one, after `<html>`, after the doctype or at the very start. Wherever that is, the
@@ -243,12 +270,8 @@ export function rewriteHtml(input: {
  */
 export function withHeadStart(html: string, text: string): string {
   const document = parse(html, { sourceCodeLocationInfo: true });
-  const root = document.childNodes.find(
-    (node): node is Element => "tagName" in node && node.tagName === "html"
-  );
-  const head = root?.childNodes.find(
-    (node): node is Element => "tagName" in node && node.tagName === "head"
-  );
+  const root = childElement(document, "html");
+  const head = childElement(root, "head");
   const doctype = document.childNodes.find((node) => node.nodeName === "#documentType");
   const offset =
     head?.sourceCodeLocation?.startTag?.endOffset ??

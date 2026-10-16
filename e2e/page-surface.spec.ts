@@ -4,6 +4,7 @@ import { z } from "zod";
 import { exitTest as test } from "./exit-fixtures";
 import {
   builtPage,
+  expectShownRevision,
   openChat,
   overviewRoute,
   pageName,
@@ -59,7 +60,7 @@ test("a Page built in chat shows beside the conversation, changes with the next 
   const surface = pageSurface(page);
   await expect(surface).toBeVisible();
   await expect(surface).toHaveAccessibleName(pageName);
-  await expect(surface).toContainText("Revision 1");
+  await expectShownRevision(surface, 1);
   const built = builtPage(page);
   await expect(built.getByRole("heading", { name: "Revenue overview" })).toBeVisible();
   const card = page.getByTestId("page-card");
@@ -150,12 +151,12 @@ test("a Page built in chat shows beside the conversation, changes with the next 
   // The agent changes the Page: the next save is revision 2, on the route the reader was on.
   await rewritePageFile(page, "src/routes/index.tsx", overviewRoute("Revenue this year"));
   await savePage(page);
-  await expect(surface).toContainText("Revision 2");
+  await expectShownRevision(surface, 2);
   await expect(builtPage(page).getByRole("textbox", { name: "Rows as JSON" })).toBeVisible();
   await builtPage(page).getByText("Overview", { exact: true }).click();
   await expect(builtPage(page).getByRole("heading", { name: "Revenue this year" })).toBeVisible();
   await expect(card).toHaveCount(2);
-  await expect(card.last()).toContainText("Revision 2");
+  await expect(card.last()).toHaveAttribute("data-revision", "2");
   await expect(card.last()).toContainText("Shown");
   await expect(card.first().getByRole("button", { name: "Open" })).toBeVisible();
 
@@ -187,7 +188,7 @@ test("a Page built in chat shows beside the conversation, changes with the next 
   await expect(card).toHaveCount(2);
   await expect(pageSurface(page)).toBeHidden();
   await card.last().getByRole("button", { name: "Open" }).click();
-  await expect(pageSurface(page)).toContainText("Revision 2");
+  await expectShownRevision(pageSurface(page), 2);
   await expect(builtPage(page).getByRole("heading", { name: "Revenue this year" })).toBeVisible();
 
   // On a phone the Page covers the conversation and closes back to it.
@@ -520,13 +521,13 @@ test("a save the build refuses says what it found, in the thread and under the P
 
   // The revision that was built stays; the findings stand under it.
   const surface = pageSurface(page);
-  await expect(surface).toContainText("Revision 1");
+  await expectShownRevision(surface, 1);
   await expect(builtPage(page).getByRole("heading", { name: "Revenue overview" })).toBeVisible();
   const findings = surface.getByTestId("page-build-errors");
   await expect(findings).toContainText("1 build error");
   // What the viewer is looking at and what to do stands under the count, without unfolding.
   await expect(findings).toContainText(
-    "The preview still shows revision 1. Ask the agent to fix the error."
+    "The preview still shows the last version. Ask the agent to fix the error."
   );
   await findings.getByRole("button", { name: "1 build error" }).click();
   await expect(findings).toContainText("src/routes/index.tsx, line 5");
@@ -546,7 +547,7 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   await writePageFiles(page, patchThatAdds(pageSource("Revenue overview")));
   await savePage(page);
   const surface = pageSurface(page);
-  await expect(surface).toContainText("Revision 1");
+  await expectShownRevision(surface, 1);
 
   // Beside the Page the conversation has the same band and line on top as the Page, up to
   // the seam, so the thread does not show under the agent's name.
@@ -587,7 +588,7 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   // The agent saves again: the Page comes back, on the new revision.
   await rewritePageFile(page, "src/routes/index.tsx", overviewRoute("Revenue this year"));
   await savePage(page);
-  await expect(surface).toContainText("Revision 2");
+  await expectShownRevision(surface, 2);
   await expect(builtPage(page).getByRole("heading", { name: "Revenue this year" })).toBeVisible();
 
   // Leaving the conversation and coming back shows its cards and opens nothing.
@@ -604,5 +605,5 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   await expect(page.getByTestId("page-card")).toHaveCount(2);
   await expect(surface).toBeHidden();
   await page.getByTestId("page-card").last().getByRole("button", { name: "Open" }).click();
-  await expect(surface).toContainText("Revision 2");
+  await expectShownRevision(surface, 2);
 });

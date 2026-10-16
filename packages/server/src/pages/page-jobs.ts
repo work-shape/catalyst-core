@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  htmlTitle,
   PAGE_MANIFEST_FILE,
   plainHtmlManifestFile,
   type PageBuildLimits,
@@ -22,6 +23,7 @@ import {
   subjectDedupeKey,
   isJsonObject,
   unknownToJsonValue,
+  type JsonObject,
   type ClientInstanceId,
   type JobControl,
   type Logger,
@@ -185,10 +187,14 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
           }
           // An HTML file opened from a folder without a manifest is built as plain HTML.
           const { entry } = row.request;
-          const files =
+          const plainEntry =
             entry !== undefined && !snapshot.files.some((file) => file.path === PAGE_MANIFEST_FILE)
-              ? [...snapshot.files, plainHtmlManifestFile(entry)]
-              : snapshot.files;
+              ? entry
+              : undefined;
+          const files =
+            plainEntry === undefined
+              ? snapshot.files
+              : [...snapshot.files, plainHtmlManifestFile(plainEntry)];
           const outcome = await build({
             id: buildId,
             files,
@@ -262,6 +268,11 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
             if (conversationId === undefined) {
               return;
             }
+            // The plain HTML manifest names its entry file, which is no name to keep.
+            const title =
+              plainEntry === undefined
+                ? manifestName(manifest)
+                : openedHtmlTitle(snapshot.files, plainEntry);
             await storePageFileSet(
               options,
               {
@@ -283,7 +294,8 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
                       status: "saved",
                       pageId: page.id,
                       fileSetId: fileSet.id,
-                      number: fileSet.number
+                      number: fileSet.number,
+                      ...(title === undefined ? {} : { title })
                     },
                     finishedAt: new Date().toISOString()
                   });
@@ -558,6 +570,17 @@ export function createPageBuildClient(
       return result.status === "saved" ? foreign : result;
     }
   };
+}
+
+/** The name a folder's own manifest gives it. The build checked that it is text. */
+function manifestName(manifest: JsonObject): string | undefined {
+  return typeof manifest.name === "string" ? manifest.name : undefined;
+}
+
+/** What the `<title>` of the HTML file a plain folder opens says. */
+function openedHtmlTitle(files: readonly PageFile[], entry: string): string | undefined {
+  const html = files.find((file) => file.path === entry);
+  return html === undefined ? undefined : htmlTitle(html.bytes);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

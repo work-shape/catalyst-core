@@ -1,0 +1,5 @@
+---
+section: Changed
+---
+
+- **Apps:** Save as app asks for the name only. The ID field is gone: the id is made from the name exactly as `app.save` makes it, so German letters keep their sound ("Über uns" is `ueber-uns`, where the dialog made `uber-uns` before) and a name of no letter or digit is `app`. A name whose id an App already has is refused at the name ("This name is already taken."), with the offer to update that App where the reader may write it; the refusal goes once the name is changed. Apps that exist keep their ids. The name is filled in with the folder's `app.yaml` name, else the `<title>` of the HTML file it opens, else the folder's name; `workspace.open` answers that name as `title` beside the revision it shows. The preview card and the preview panel head read that same name, not the opened path, and name no revision number: the card reads the name alone, or "Saved to the draft of …", and a refused open says the preview still shows the last version. On a phone the panel head's "Show chat" keeps only its icon, so the name has the row.

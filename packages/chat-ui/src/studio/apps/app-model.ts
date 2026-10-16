@@ -125,27 +125,8 @@ export function appRowActions(
   ];
 }
 
-/** The id of an App as the instance accepts it: lowercase letters, digits and '-'. */
-export const APP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/u;
-const APP_ID_MAX = 63;
 /** The longest name people read, as the instance accepts it. */
 export const APP_NAME_MAX = 120;
-
-/**
- * An id made from the name people read: its words in lowercase, joined by hyphens, without
- * what an id cannot hold. The reader can change it before the App is saved.
- */
-export function appIdFromName(name: string): string {
-  return name
-    .normalize("NFKD")
-    .replace(/\p{M}+/gu, "")
-    .replace(/ß/gu, "ss")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .replace(/^-+/u, "")
-    .slice(0, APP_ID_MAX)
-    .replace(/-+$/u, "");
-}
 
 /**
  * The name people read of an App, from the config of its record: the title the build took

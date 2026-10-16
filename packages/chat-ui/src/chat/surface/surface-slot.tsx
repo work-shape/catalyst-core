@@ -312,10 +312,20 @@ export function SurfaceSlotFrame({
       className="overflow-hidden"
       leading={
         mode === "beside" ? undefined : (
-          <Button variant="ghost" size="sm" onClick={onShowChat}>
-            {under?.icon ?? <MessageSquare aria-hidden="true" />}
-            {under?.label ?? t("nav.showChat")}
-          </Button>
+          <>
+            <Button variant="ghost" size="sm" className="max-sm:hidden" onClick={onShowChat}>
+              {under?.icon ?? <MessageSquare aria-hidden="true" />}
+              {under?.label ?? t("nav.showChat")}
+            </Button>
+            {/* On a phone the surface's title wins the row: the button keeps its icon. */}
+            <IconButton
+              label={under?.label ?? t("nav.showChat")}
+              className="sm:hidden"
+              onClick={onShowChat}
+            >
+              {under?.icon ?? <MessageSquare aria-hidden="true" />}
+            </IconButton>
+          </>
         )
       }
       icon={rendering?.titleIcon}

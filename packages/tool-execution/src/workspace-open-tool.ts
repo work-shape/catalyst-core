@@ -72,7 +72,12 @@ const pageBuildIssueSchema = z.object({
 });
 
 const workspaceOpenOutputSchema = z.union([
-  z.object({ pageId: z.string(), number: z.number().int(), fileSetId: z.string() }),
+  z.object({
+    pageId: z.string(),
+    number: z.number().int(),
+    fileSetId: z.string(),
+    title: z.string().optional()
+  }),
   z.object({ errors: z.array(pageBuildIssueSchema) })
 ]);
 
@@ -102,7 +107,7 @@ export function createWorkspaceOpenTool(options: WorkspaceOpenToolOptions): AnyT
       "A plain HTML App names 'entry: index.html'; inline scripts and styles are allowed, inline event handler attributes such as onclick are not: add listeners in a script.",
       "With kit 1.2.0 or later plain HTML is given the look of the platform without asking for it, also when its script imports the kit to call an action: room around the body, the font and type sizes, the colours of the interface in light and dark, and styles for headings, text, links, lists, code, tables, buttons and form fields. Write plain elements and set no page margin, font or colour unless the App needs a look of its own. The App's class names are its own: the platform's stylesheet for plain HTML defines no class. A rule of the App's own wins when it stands outside any @layer or in a layer the App names itself; do not write the App's rules into @layer base or @layer components. An App that sets a background sets the text colour with it. For a colour use the custom properties --background, --foreground, --muted, --muted-foreground, --border, --primary and --accent-foreground, which follow light and dark; a fixed colour does not. Which stylesheet an HTML file gets is decided per file by what its scripts import: a file with a script that imports react, react/jsx-runtime, react-dom, react-dom/client, @work-shape/catalyst-app-kit/ui, @work-shape/catalyst-app-kit/router or @tanstack/react-router gets the kit's component stylesheet and none of these styles for plain elements, so build such an App with React unless it must be HTML; every other HTML file gets the styles for plain elements, also one whose script imports @work-shape/catalyst-app-kit for actions or the context, or drawChart from @work-shape/catalyst-app-kit/charts.",
       "Before you write an App's actions, read the page references/apps/build.md of the skill 'platform-docs' where you have that skill: it has a complete example of each kind.",
-      "Returns the revision shown, or the build errors with file and line. Fix the files and open them again; a failed build shows nothing new."
+      "Returns the revision shown with the name the folder gives itself (its app.yaml name or its HTML title), or the build errors with file and line. Fix the files and open them again; a failed build shows nothing new."
     ].join(" "),
     inputSchema: workspaceOpenInputSchema,
     outputSchema: workspaceOpenOutputSchema,
@@ -226,7 +231,12 @@ async function openInPreview(
     return refuse(outcome.errors);
   }
   return toolSuccess<WorkspaceOpenOutput>(
-    { pageId: outcome.pageId, number: outcome.number, fileSetId: outcome.fileSetId },
+    {
+      pageId: outcome.pageId,
+      number: outcome.number,
+      fileSetId: outcome.fileSetId,
+      ...(outcome.title === undefined ? {} : { title: outcome.title })
+    },
     {
       auditSummary: {
         action: WORKSPACE_OPEN_TOOL_NAME,
