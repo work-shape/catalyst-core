@@ -4508,7 +4508,7 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
   await searchUsers(page, resetUser.email);
   await page.getByRole("button", { name: `${resetUser.displayLabel} ${resetUser.email}` }).click();
-  await expect(page.getByRole("heading", { name: "Sign-in identities" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign-in methods" })).toBeVisible();
 
   const newPassword = `e2e-reset-${timestamp}`;
   await page.getByLabel("New password").fill(newPassword);

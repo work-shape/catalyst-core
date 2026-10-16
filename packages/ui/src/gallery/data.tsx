@@ -243,18 +243,19 @@ function ListRowSamples({ text }: { text: GalleryText }) {
 
 function AssetTable({ text }: { text: GalleryText }) {
   return (
+    // Narrow, Updated folds first, then Owner, then State, into the details under the name.
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>{text.tableName}</TableHead>
-          <TableHead>{text.tableOwner}</TableHead>
-          <TableHead>{text.tableState}</TableHead>
-          <TableHead>{text.tableUpdated}</TableHead>
+          <TableHead priority={2}>{text.tableOwner}</TableHead>
+          <TableHead priority={1}>{text.tableState}</TableHead>
+          <TableHead priority={3}>{text.tableUpdated}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         <TableRow>
-          <TableCell>
+          <TableCell rowDetail>
             <span className="flex items-center gap-2">
               <Avatar kind="agent" size="sm" name={text.rowAgent} />
               {text.rowAgent}
@@ -275,7 +276,7 @@ function AssetTable({ text }: { text: GalleryText }) {
           </TableCell>
         </TableRow>
         <TableRow>
-          <TableCell>
+          <TableCell rowDetail>
             <span className="flex items-center gap-2">
               <Avatar kind="agent" size="sm" name={text.rowWorkflow} />
               {text.rowWorkflow}
@@ -296,7 +297,7 @@ function AssetTable({ text }: { text: GalleryText }) {
           </TableCell>
         </TableRow>
         <TableRow>
-          <TableCell>
+          <TableCell rowDetail>
             <span className="flex items-center gap-2">
               <Avatar kind="app" size="sm" name={text.rowKnowledge} />
               {text.rowKnowledge}

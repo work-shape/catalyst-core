@@ -124,7 +124,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/chat-ui",
-      "count": 26,
+      "count": 25,
       "owner": "G-5c"
     },
     {
@@ -621,7 +621,7 @@
       "target": "ui-guard",
       "rule": "elements",
       "scope": "packages/chat-ui",
-      "count": 37,
+      "count": 34,
       "owner": "UI library migration (S9)"
     },
     {
@@ -663,7 +663,7 @@
       "target": "ui-guard",
       "rule": "palette",
       "scope": "packages/chat-ui",
-      "count": 14,
+      "count": 12,
       "owner": "UI library migration (S9)"
     },
     {

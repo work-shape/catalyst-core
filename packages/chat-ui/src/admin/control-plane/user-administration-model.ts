@@ -1,6 +1,5 @@
 import type {
   AdministeredUser,
-  AdministeredUserIdentity,
   CreateAdministeredUserRequest,
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
@@ -86,7 +85,31 @@ export const emptyIdentityForm: IdentityFormState = {
   emailVerified: false
 };
 
-export type UserStatusFilter = "all" | AdministeredUser["status"];
+/**
+ * How an account reads in the lists and its detail. An active account nobody has signed in to
+ * yet reads "invited": the contract keeps no invitation of its own (sending one is only an audit
+ * event), so the first sign-in is what tells an invited person from an active one.
+ */
+export type UserDisplayStatus = "invited" | AdministeredUser["status"];
+
+export function userDisplayStatus(user: AdministeredUser): UserDisplayStatus {
+  return user.status === "active" && !user.lastAuthenticatedAt ? "invited" : user.status;
+}
+
+export type UserStatusFilter = "all" | UserDisplayStatus;
+
+const USER_STATUS_FILTERS: readonly UserStatusFilter[] = [
+  "all",
+  "active",
+  "invited",
+  "disabled",
+  "deleting"
+];
+
+/** The status filter a select's value names, or every status for a value it does not know. */
+export function userStatusFilterOf(value: string): UserStatusFilter {
+  return USER_STATUS_FILTERS.find((filter) => filter === value) ?? "all";
+}
 
 export const DEFAULT_ROWS_PER_PAGE = 10;
 
@@ -108,7 +131,7 @@ export function filterUsers(
     ) {
       return false;
     }
-    if (filters.statusFilter !== "all" && user.status !== filters.statusFilter) {
+    if (filters.statusFilter !== "all" && userDisplayStatus(user) !== filters.statusFilter) {
       return false;
     }
     if (filters.roleFilter !== "all" && !user.roles.includes(filters.roleFilter)) {
@@ -132,10 +155,6 @@ export function roleFilterOptions(users: AdministeredUser[]): string[] {
 
     return left.localeCompare(right);
   });
-}
-
-export function distinctAuthSources(identities: AdministeredUserIdentity[]): string[] {
-  return [...new Set(identities.map((identity) => identity.authSource))];
 }
 
 /** The name of a sign-in source: the built-in password sign-in in words, any other as configured. */

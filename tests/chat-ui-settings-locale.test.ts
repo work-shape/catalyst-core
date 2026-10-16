@@ -39,7 +39,7 @@ const unused = async (): Promise<never> => {
 };
 
 describe("German Settings copy", () => {
-  it("renders Users, creation, search, auth methods, pagination and last activity in German", () => {
+  it("renders Users, creation, search, status, pagination and last activity in German", () => {
     const markup = german(
       createElement(UserAdministrationPanel, {
         users: [user],
@@ -58,7 +58,7 @@ describe("German Settings copy", () => {
       "Benutzer",
       "Neuer Benutzer",
       "Benutzer suchen",
-      "Anmeldemethoden",
+      "Eingeladen",
       "Nächste Seite",
       "E2E Superadmin"
     ]) {
@@ -66,7 +66,7 @@ describe("German Settings copy", () => {
     }
     expect(markup).toMatch(/<h1[^>]*>Benutzer<\/h1>/u);
     expect(markup).toMatch(/<input[^>]*type="search"[^>]*aria-label="Benutzer suchen"/u);
-    expect(markup).toMatch(/<th[^>]*>Anmeldemethoden<\/th>/u);
+    expect(markup).toMatch(/<th[^>]*>Zuletzt aktiv<\/th>/u);
     expect(markup).toMatch(/<button[^>]*aria-label="Nächste Seite"/u);
     expect(markup).toContain(formatMomentShort(lastAuthenticatedAt, "de"));
   });

@@ -13,6 +13,7 @@ import {
   Banner,
   Button,
   Card,
+  Checkbox,
   Dialog,
   EmptyState,
   FilterBar,
@@ -34,14 +35,14 @@ import {
   DEFAULT_ROWS_PER_PAGE,
   accessLevelLabel,
   createEmptyCreateUserForm,
-  authSourceLabel,
-  distinctAuthSources,
   errorMessage,
   filterUsers,
   formToCreateInput,
   roleFilterOptions,
   roleLabel,
   rolesToAccessLevel,
+  userDisplayStatus,
+  userStatusFilterOf,
   type CreateUserFormState,
   type FormNoticeState,
   type UserStatusFilter
@@ -136,8 +137,15 @@ export function UserAdministrationPanel({
   const pageStart = (currentPage - 1) * rowsPerPage;
   const pageUsers = visibleUsers.slice(pageStart, pageStart + rowsPerPage);
   const selectedPageCount = pageUsers.filter((user) => selectedRowIds.has(user.id)).length;
-  const allPageRowsSelected = pageUsers.length > 0 && selectedPageCount === pageUsers.length;
-  const activeUserCount = users.filter((user) => user.status === "active").length;
+  const pageSelection =
+    pageUsers.length > 0 && selectedPageCount === pageUsers.length
+      ? true
+      : selectedPageCount > 0
+        ? "indeterminate"
+        : false;
+  const statuses = users.map(userDisplayStatus);
+  const activeUserCount = statuses.filter((status) => status === "active").length;
+  const invitedUserCount = statuses.filter((status) => status === "invited").length;
 
   function toggleRowSelection(userId: string, checked: boolean) {
     setSelectedRowIds((currentIds) => {
@@ -169,10 +177,14 @@ export function UserAdministrationPanel({
     <>
       <PageHeader
         title={t("settings.users")}
-        description={t("settings.usersSummary", {
-          total: users.length.toLocaleString(locale),
-          active: activeUserCount.toLocaleString(locale)
-        })}
+        description={t(
+          invitedUserCount > 0 ? "settings.usersSummaryInvited" : "settings.usersSummary",
+          {
+            total: users.length.toLocaleString(locale),
+            active: activeUserCount.toLocaleString(locale),
+            invited: invitedUserCount.toLocaleString(locale)
+          }
+        )}
         primaryAction={
           <Button type="button" onClick={() => setCreateOpen(true)}>
             <UserPlus aria-hidden="true" />
@@ -180,7 +192,7 @@ export function UserAdministrationPanel({
           </Button>
         }
       />
-      <div className="grid min-w-0 content-start gap-4">
+      <div className="grid min-w-0 grid-cols-1 content-start gap-4">
         <FilterBar
           search={
             <Input
@@ -198,10 +210,11 @@ export function UserAdministrationPanel({
                 className="w-full font-medium sm:w-40"
                 aria-label={t("settings.userFilterByStatus")}
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as UserStatusFilter)}
+                onChange={(event) => setStatusFilter(userStatusFilterOf(event.target.value))}
               >
                 <option value="all">{t("allStatuses")}</option>
                 <option value="active">{t("settings.statusActive")}</option>
+                <option value="invited">{t("settings.statusInvited")}</option>
                 <option value="disabled">{t("settings.statusDisabled")}</option>
               </Select>
               <Select
@@ -286,23 +299,28 @@ export function UserAdministrationPanel({
           ) : listView === "permissions" ? (
             <UserPermissionOverview users={visibleUsers} onSelectUser={setSelectedUserId} />
           ) : (
+            // The name keeps its full width: Last active folds first, then Access, then
+            // Status, each into the details under the name.
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10 px-4">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-sky-600"
+                    <Checkbox
                       aria-label={t("settings.userSelectVisible")}
-                      checked={allPageRowsSelected}
-                      onChange={(event) => togglePageSelection(event.target.checked)}
+                      checked={pageSelection}
+                      onCheckedChange={togglePageSelection}
                     />
                   </TableHead>
                   <TableHead className="px-4">{t("userRightsOverviewUser")}</TableHead>
-                  <TableHead className="px-4">{t("settings.userAccess")}</TableHead>
-                  <TableHead className="px-4">{t("settings.status")}</TableHead>
-                  <TableHead className="px-4">{t("settings.userSignInMethods")}</TableHead>
-                  <TableHead className="px-4">{t("settings.userLastActive")}</TableHead>
+                  <TableHead className="px-4" priority={2}>
+                    {t("settings.userAccess")}
+                  </TableHead>
+                  <TableHead className="px-4" priority={1}>
+                    {t("settings.status")}
+                  </TableHead>
+                  <TableHead className="px-4" priority={3}>
+                    {t("settings.userLastActive")}
+                  </TableHead>
                   <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
@@ -310,22 +328,20 @@ export function UserAdministrationPanel({
                 {pageUsers.map((user) => (
                   <TableRow
                     key={user.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className="cursor-pointer"
                     onClick={() => setSelectedUserId(user.id)}
                   >
                     <TableCell className="px-4" onClick={(event) => event.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        className="size-4 accent-sky-600"
+                      <Checkbox
                         aria-label={t("settings.userSelect", { name: user.displayLabel })}
                         checked={selectedRowIds.has(user.id)}
-                        onChange={(event) => toggleRowSelection(user.id, event.target.checked)}
+                        onCheckedChange={(checked) => toggleRowSelection(user.id, checked)}
                       />
                     </TableCell>
-                    <TableCell className="min-w-64 max-w-80 px-4">
+                    <TableCell className="px-4" rowDetail>
                       <Button
                         variant="ghost"
-                        className="h-auto w-full min-w-0 justify-start gap-3 rounded-none px-0 py-0 text-left"
+                        className="h-auto w-full min-w-0 justify-start gap-3 rounded-none px-0 py-0 text-left whitespace-normal"
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedUserId(user.id);
@@ -333,12 +349,12 @@ export function UserAdministrationPanel({
                       >
                         <UserAvatar displayLabel={user.displayLabel} />
                         <span className="grid min-w-0 gap-0.5">
-                          <span className="truncate font-medium" title={user.displayLabel}>
-                            {user.displayLabel}
-                          </span>
-                          <span className="truncate text-xs text-muted-foreground">
-                            {user.email ?? user.id}
-                          </span>
+                          <span className="font-medium wrap-anywhere">{user.displayLabel}</span>
+                          {user.email ? (
+                            <span className="text-caption text-muted-foreground wrap-anywhere">
+                              {user.email}
+                            </span>
+                          ) : null}
                         </span>
                       </Button>
                     </TableCell>
@@ -348,14 +364,7 @@ export function UserAdministrationPanel({
                       </Badge>
                     </TableCell>
                     <TableCell className="px-4">
-                      <StatusBadge status={user.status} />
-                    </TableCell>
-                    <TableCell className="px-4 text-muted-foreground">
-                      {user.identities.length > 0
-                        ? distinctAuthSources(user.identities)
-                            .map((source) => authSourceLabel(source, t))
-                            .join(", ")
-                        : t("settings.userSignInMethodsNone")}
+                      <StatusBadge status={userDisplayStatus(user)} />
                     </TableCell>
                     <TableCell className="px-4 whitespace-nowrap text-muted-foreground">
                       {user.lastAuthenticatedAt

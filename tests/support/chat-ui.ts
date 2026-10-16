@@ -30,10 +30,13 @@ export {
 } from "../../packages/chat-ui/src/admin/control-plane/personal-api-keys-model";
 export {
   authSourceLabel,
+  filterUsers,
   setUserPermission,
   USER_PERMISSIONS,
+  userDisplayStatus,
   userPermissionCopy,
-  userPermissionStates
+  userPermissionStates,
+  userStatusFilterOf
 } from "../../packages/chat-ui/src/admin/control-plane/user-administration-model";
 export { UserPermissionOverview } from "../../packages/chat-ui/src/admin/control-plane/user-permission-overview";
 export { UserPermissionsCard } from "../../packages/chat-ui/src/admin/control-plane/user-permissions-card";

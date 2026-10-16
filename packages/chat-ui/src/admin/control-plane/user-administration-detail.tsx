@@ -14,6 +14,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Checkbox,
   Dialog,
   Input,
   KeyValue,
@@ -28,6 +29,7 @@ import {
   formToIdentityInput,
   formToUpdateInput,
   generatePassword,
+  userDisplayStatus,
   userToForm,
   type FormNoticeState,
   type IdentityFormState,
@@ -93,9 +95,11 @@ export function UserDetail({
         <UserAvatar displayLabel={user.displayLabel} size="lg" />
         <div className="grid min-w-0 gap-0.5">
           <strong className="truncate text-lg font-semibold">{user.displayLabel}</strong>
-          <span className="truncate text-sm text-muted-foreground">{user.email ?? user.id}</span>
+          {user.email ? (
+            <span className="truncate text-sm text-muted-foreground">{user.email}</span>
+          ) : null}
         </div>
-        <StatusBadge status={user.status} />
+        <StatusBadge status={userDisplayStatus(user)} />
       </div>
 
       <div className="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
@@ -269,7 +273,7 @@ function IdentitiesCard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Link2 size={17} aria-hidden="true" />
-            {t("settings.userIdentities")}
+            {t("settings.userSignInMethods")}
           </CardTitle>
           <Button
             type="button"
@@ -387,14 +391,11 @@ function IdentitiesCard({
                 />
               </Field>
             </div>
-            <label className="inline-flex w-fit items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.emailVerified}
-                onChange={(event) => setForm({ ...form, emailVerified: event.target.checked })}
-              />
-              <span>{t("settings.userIdentityEmailVerified")}</span>
-            </label>
+            <Checkbox
+              label={t("settings.userIdentityEmailVerified")}
+              checked={form.emailVerified}
+              onCheckedChange={(emailVerified) => setForm({ ...form, emailVerified })}
+            />
             <div className="flex gap-2">
               <Button
                 type="submit"
@@ -684,9 +685,6 @@ function AccountMetaCard({ user }: { user: AdministeredUser }) {
       </CardHeader>
       <CardContent className="p-4 pt-2">
         <KeyValueList>
-          <KeyValue label={t("settings.userId")}>
-            <span className="font-mono text-xs break-all">{user.id}</span>
-          </KeyValue>
           <KeyValue label={t("settings.created")}>
             {formatMomentShort(user.createdAt, locale)}
           </KeyValue>

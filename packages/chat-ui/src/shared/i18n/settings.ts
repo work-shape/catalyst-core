@@ -88,6 +88,7 @@ export const settings = defineTranslations({
     "settings.statusActive": "Active",
     "settings.statusDeleting": "Being deleted",
     "settings.statusDisabled": "Disabled",
+    "settings.statusInvited": "Invited",
     "settings.time": "Time",
     "settings.updated": "Updated",
     "settings.usageBillable": "Billable",
@@ -195,8 +196,6 @@ export const settings = defineTranslations({
     "settings.userEmailPasswordHint": "Required for password sign-in.",
     "settings.userFilterByRole": "Filter by role",
     "settings.userFilterByStatus": "Filter by status",
-    "settings.userId": "User id",
-    "settings.userIdentities": "Sign-in identities",
     "settings.userIdentitiesDescription":
       "External auth systems can be linked here when password sign-in is not the right path.",
     "settings.userIdentitiesEmpty": "No identities yet — this user cannot sign in.",
@@ -238,11 +237,11 @@ export const settings = defineTranslations({
     "settings.userSelectedCount": "{count} selected",
     "settings.userSignInMethodPassword": "Password sign-in",
     "settings.userSignInMethods": "Sign-in methods",
-    "settings.userSignInMethodsNone": "None",
     "settings.userSuperadminOnly": "Only superadmins can manage superadmin users.",
     "settings.usersEmpty": "No users yet.",
     "settings.usersNoMatch": "No users match your search.",
-    "settings.usersSummary": "{total} users · {active} active"
+    "settings.usersSummary": "{total} users · {active} active",
+    "settings.usersSummaryInvited": "{total} users · {active} active · {invited} invited"
   },
   de: {
     "nav.build": "Studio",
@@ -328,6 +327,7 @@ export const settings = defineTranslations({
     "settings.statusActive": "Aktiv",
     "settings.statusDeleting": "Wird gelöscht",
     "settings.statusDisabled": "Deaktiviert",
+    "settings.statusInvited": "Eingeladen",
     "settings.time": "Zeit",
     "settings.updated": "Aktualisiert",
     "settings.usageBillable": "Kosten",
@@ -437,8 +437,6 @@ export const settings = defineTranslations({
     "settings.userEmailPasswordHint": "Für die Anmeldung per Passwort erforderlich.",
     "settings.userFilterByRole": "Nach Rolle filtern",
     "settings.userFilterByStatus": "Nach Status filtern",
-    "settings.userId": "Benutzer-ID",
-    "settings.userIdentities": "Anmeldeidentitäten",
     "settings.userIdentitiesDescription":
       "Hier kannst du externe Anmeldesysteme verknüpfen, wenn die Anmeldung per Passwort nicht passt.",
     "settings.userIdentitiesEmpty":
@@ -484,10 +482,10 @@ export const settings = defineTranslations({
     "settings.userSelectedCount": "{count} ausgewählt",
     "settings.userSignInMethodPassword": "Anmeldung per Passwort",
     "settings.userSignInMethods": "Anmeldemethoden",
-    "settings.userSignInMethodsNone": "Keine",
     "settings.userSuperadminOnly": "Nur Superadmins können Superadmin-Benutzer verwalten.",
     "settings.usersEmpty": "Noch keine Benutzer.",
     "settings.usersNoMatch": "Kein Benutzer passt zu deiner Suche.",
-    "settings.usersSummary": "{total} Benutzer · {active} aktiv"
+    "settings.usersSummary": "{total} Benutzer · {active} aktiv",
+    "settings.usersSummaryInvited": "{total} Benutzer · {active} aktiv · {invited} eingeladen"
   }
 });

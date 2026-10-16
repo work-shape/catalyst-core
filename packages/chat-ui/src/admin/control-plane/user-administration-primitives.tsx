@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import type { AdministeredUser } from "@work-shape/catalyst-api-client";
 import { Avatar, Badge, FormNotice as LibraryFormNotice } from "@work-shape/catalyst-ui";
-import type { FormNoticeState } from "./user-administration-model";
+import type { FormNoticeState, UserDisplayStatus } from "./user-administration-model";
 import { useTranslation } from "../../shared/i18n";
 
 export function Field({
@@ -40,17 +39,17 @@ export function UserAvatar({
   return <Avatar kind="person" size={size} name={displayLabel} />;
 }
 
-export function StatusBadge({ status }: { status: AdministeredUser["status"] }) {
+/** The status an account reads with, from `userDisplayStatus`. */
+export function StatusBadge({ status }: { status: UserDisplayStatus }) {
   const { t } = useTranslation();
-  if (status === "deleting") {
-    return <Badge tone="warning">{t("settings.statusDeleting")}</Badge>;
+  switch (status) {
+    case "active":
+      return <Badge tone="success">{t("settings.statusActive")}</Badge>;
+    case "invited":
+      return <Badge tone="info">{t("settings.statusInvited")}</Badge>;
+    case "disabled":
+      return <Badge appearance="outline">{t("settings.statusDisabled")}</Badge>;
+    case "deleting":
+      return <Badge tone="warning">{t("settings.statusDeleting")}</Badge>;
   }
-  return (
-    <Badge
-      tone={status === "active" ? "success" : "neutral"}
-      appearance={status === "active" ? "soft" : "outline"}
-    >
-      {t(status === "active" ? "settings.statusActive" : "settings.statusDisabled")}
-    </Badge>
-  );
 }

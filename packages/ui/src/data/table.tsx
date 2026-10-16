@@ -1,14 +1,29 @@
 import {
+  Children,
   forwardRef,
+  isValidElement,
+  useContext,
+  useLayoutEffect,
+  useRef,
   useState,
   type HTMLAttributes,
   type ReactNode,
   type TdHTMLAttributes,
   type ThHTMLAttributes
 } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../cn";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
 import { scrollEdgeFadeStyle, useScrollEdgeFade } from "../scroll-edge-fade";
+import {
+  FoldedValues,
+  TableColumnContext,
+  TableFoldContext,
+  TableRowFoldContext,
+  useColumnFold,
+  useColumnFolding,
+  useRowFolding
+} from "./table-fold";
 
 /** `default` rows are 40 px high; `compact` rows are 32 px, for many rows read as data. */
 export type TableDensity = "default" | "compact";
@@ -42,17 +57,20 @@ const stackClasses =
   "@max-2xl/table:[&_td[data-stacked=full]]:col-span-2";
 
 /**
- * Figures compared across rows. A table wider than its box scrolls sideways inside the box; the
+ * Figures compared across rows. A table wider than its box first folds the columns whose head
+ * has a `priority` into the details of each row, then scrolls sideways inside the box; the
  * page never scrolls sideways. An edge that hides columns or rows says so twice: the content
  * fades towards it, and a faint shade stands on a side that hides columns, since a fade alone
  * shows nothing where the cut falls between two columns.
  */
 export const Table = forwardRef<HTMLTableElement, TableProps>(function Table(
-  { className, density = "default", stickyHeader = false, narrow = "scroll", ...props },
+  { className, density = "default", stickyHeader = false, narrow = "scroll", children, ...props },
   ref
 ) {
   const sideways = useScrollEdgeFade<HTMLDivElement>([], "x");
   const down = useScrollEdgeFade<HTMLDivElement>([], "y");
+  const tableNode = useRef<HTMLTableElement | null>(null);
+  const fold = useColumnFolding(sideways.ref, tableNode);
   // The head row stands at the top edge and fades what scrolls under it itself.
   const fades = [
     sideways.style?.maskImage,
@@ -95,7 +113,14 @@ export const Table = forwardRef<HTMLTableElement, TableProps>(function Table(
         )}
       >
         <table
-          ref={ref}
+          ref={(node) => {
+            tableNode.current = node;
+            if (typeof ref === "function") {
+              ref(node);
+            } else if (ref) {
+              ref.current = node;
+            }
+          }}
           data-density={density}
           data-sticky-header={stickyHeader ? "" : undefined}
           className={cn(
@@ -104,7 +129,9 @@ export const Table = forwardRef<HTMLTableElement, TableProps>(function Table(
             className
           )}
           {...props}
-        />
+        >
+          <TableFoldContext value={fold}>{children}</TableFoldContext>
+        </table>
       </div>
       {sideways.overflow.above ? <EdgeShade side="start" /> : null}
       {sideways.overflow.below ? <EdgeShade side="end" /> : null}
@@ -141,14 +168,27 @@ export const TableBody = forwardRef<
   return <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />;
 });
 
+/**
+ * A row. Its heads and cells are its direct children, so each knows its column; a column that
+ * folds needs that.
+ */
 export const TableRow = forwardRef<HTMLTableRowElement, HTMLAttributes<HTMLTableRowElement>>(
-  function TableRow({ className, ...props }, ref) {
+  function TableRow({ className, children, ...props }, ref) {
+    const row = useRowFolding();
     return (
       <tr
         ref={ref}
         className={cn("border-b transition-colors hover:bg-state-hover", className)}
         {...props}
-      />
+      >
+        <TableRowFoldContext value={row}>
+          {Children.toArray(children).map((child, index) => (
+            <TableColumnContext key={isValidElement(child) ? child.key : index} value={index}>
+              {child}
+            </TableColumnContext>
+          ))}
+        </TableRowFoldContext>
+      </tr>
     );
   }
 );
@@ -160,15 +200,33 @@ const cellAligns: Record<TableAlign, string> = {
 
 export interface TableHeadProps extends Omit<ThHTMLAttributes<HTMLTableCellElement>, "align"> {
   align?: TableAlign;
+  /**
+   * Lets the column fold once the table cannot show every column at its full width. The
+   * highest number folds first; a column without a priority never folds. A folded column's
+   * values show in the details of each row, under this head's content, in the cell marked
+   * `rowDetail`. Each folded cell also stays in its column, hidden, where the table measures
+   * it, so its content renders twice: give such a column values, not controls with a state.
+   */
+  priority?: number;
 }
 
 export const TableHead = forwardRef<HTMLTableCellElement, TableHeadProps>(function TableHead(
-  { className, align = "start", ...props },
+  { className, align = "start", priority, children, ...props },
   ref
 ) {
+  const { index, fold, folded } = useColumnFold();
+  const register = fold?.register;
+  useLayoutEffect(() => {
+    if (priority === undefined || index === undefined || !register) {
+      return;
+    }
+    return register(index, { priority, label: children });
+  }, [register, index, priority, children]);
   return (
     <th
       ref={ref}
+      data-column={priority === undefined ? undefined : index}
+      data-folded={folded ? "" : undefined}
       className={cn(
         "h-10 px-3 align-middle text-caption font-medium whitespace-nowrap text-muted-foreground group-data-[density=compact]/table:h-8",
         // A collapsed border does not travel with a sticky cell, so the line under the head row
@@ -177,10 +235,13 @@ export const TableHead = forwardRef<HTMLTableCellElement, TableHeadProps>(functi
         // A row that scrolls under the head row fades into it and never meets its line cut.
         "group-data-sticky-header/table:after:pointer-events-none group-data-sticky-header/table:after:absolute group-data-sticky-header/table:after:inset-x-0 group-data-sticky-header/table:after:top-full group-data-sticky-header/table:after:h-3 group-data-sticky-header/table:after:bg-linear-to-b group-data-sticky-header/table:after:from-card group-data-sticky-header/table:after:to-transparent",
         cellAligns[align],
+        "data-folded:hidden",
         className
       )}
       {...props}
-    />
+    >
+      {children}
+    </th>
   );
 });
 
@@ -196,31 +257,45 @@ export interface TableCellProps extends Omit<TdHTMLAttributes<HTMLTableCellEleme
   truncate?: number;
   /** In a table with `narrow="stack"`, the cell takes a line of its own once the rows stack. */
   stacked?: "full";
+  /**
+   * The cell holds the row's details: the values of the columns that folded, each under its
+   * head's label, below the cell's own content. One cell per row, in a column that never folds.
+   */
+  rowDetail?: boolean;
 }
 
 export const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(function TableCell(
-  { className, align = "start", truncate, title, stacked, children, ...props },
+  { className, align = "start", truncate, title, stacked, rowDetail, children, ...props },
   ref
 ) {
+  const { index, fold, folded } = useColumnFold();
+  const row = useContext(TableRowFoldContext);
+  const content =
+    truncate === undefined ? (
+      children
+    ) : (
+      <CutValue width={truncate} whole={title ?? plainText(children)}>
+        {children}
+      </CutValue>
+    );
+  const slot = index === undefined ? undefined : row?.slots.get(index);
   return (
     <td
       ref={ref}
       title={truncate === undefined ? title : undefined}
       data-stacked={stacked}
+      data-folded={folded ? "" : undefined}
       className={cn(
         "px-3 py-2.5 align-middle group-data-[density=compact]/table:py-1.5",
         cellAligns[align],
+        "data-folded:hidden",
         className
       )}
       {...props}
     >
-      {truncate === undefined ? (
-        children
-      ) : (
-        <CutValue width={truncate} whole={title ?? plainText(children)}>
-          {children}
-        </CutValue>
-      )}
+      {content}
+      {folded && slot ? createPortal(content, slot) : null}
+      {rowDetail && fold ? <FoldedValues columns={fold.folded} /> : null}
     </td>
   );
 });
