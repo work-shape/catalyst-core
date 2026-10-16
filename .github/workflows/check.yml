@@ -227,6 +227,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/setup-check
+      - name: Registry retries and bounded release notes
+        run: node --test scripts/release/registry.test.mjs scripts/release/notes.test.mjs
       - name: Packages are fit to publish
         run: pnpm release:check --skip-build
   # Builds the API and UI images of the demo client in the layout of a deployment's build
