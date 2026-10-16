@@ -1,7 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadAppKitFiles } from "@work-shape/catalyst-server";
 import mainHashes from "./fixtures/app-kit-main-hashes.json";
@@ -64,4 +65,31 @@ describe("shared App Kit storage", () => {
       await rm(parent, { recursive: true, force: true });
     }
   });
+});
+
+it.each(["startup", "release"])("refuses an unreferenced shared file at %s", async (target) => {
+  const name = sha256(Buffer.from("unreferenced"));
+  const parent = await mkdtemp(join(tmpdir(), "app-kit-stray-"));
+  try {
+    const vendor = join(parent, "packages/server/vendor");
+    await cp(vendorRoot, vendor, { recursive: true });
+    await writeFile(join(vendor, "app-kit-shared", name), "unreferenced");
+    const error = `App Kit shared directory holds unreferenced files: ${name}. A released kit holds only files named by its manifests; restore the released files.`;
+    if (target === "startup") {
+      expect(() => loadAppKitFiles(join(vendor, "app-kit"))).toThrow(error);
+      return;
+    }
+
+    const kit = join(parent, "packages/app-kit");
+    await mkdir(join(kit, "scripts"), { recursive: true });
+    await cp("packages/app-kit/scripts/release.mjs", join(kit, "scripts/release.mjs"));
+    await symlink(resolve("packages/app-kit/node_modules"), join(kit, "node_modules"));
+    const result = spawnSync(process.execPath, [join(kit, "scripts/release.mjs")], {
+      encoding: "utf8"
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(error);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });

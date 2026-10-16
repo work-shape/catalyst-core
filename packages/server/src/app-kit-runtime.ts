@@ -92,6 +92,8 @@ type AppKitFiles = ReadonlyMap<string, ReadonlyMap<string, AppKitFile>>;
  */
 export function loadAppKitFiles(root: string = appKitRoot): AppKitFiles {
   const versions = new Map<string, ReadonlyMap<string, AppKitFile>>();
+  const sharedRoot = join(root, "../app-kit-shared");
+  const referenced = new Set<string>();
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) {
       continue;
@@ -118,7 +120,8 @@ export function loadAppKitFiles(root: string = appKitRoot): AppKitFiles {
     }
     const files = new Map<string, AppKitFile>();
     for (const file of manifest.files) {
-      const bytes = readFileSync(join(root, "../app-kit-shared", file.sha256));
+      referenced.add(file.sha256);
+      const bytes = readFileSync(join(sharedRoot, file.sha256));
       const sha256 = createHash("sha256").update(bytes).digest("hex");
       if (sha256 !== file.sha256) {
         throw new Error(
@@ -132,6 +135,14 @@ export function loadAppKitFiles(root: string = appKitRoot): AppKitFiles {
       contentType: contentTypeOf(APP_KIT_MANIFEST_FILE)
     });
     versions.set(manifest.version, files);
+  }
+  const unreferenced = readdirSync(sharedRoot)
+    .filter((name) => !referenced.has(name))
+    .sort();
+  if (unreferenced.length > 0) {
+    throw new Error(
+      `App Kit shared directory holds unreferenced files: ${unreferenced.join(", ")}. A released kit holds only files named by its manifests; restore the released files.`
+    );
   }
   return versions;
 }

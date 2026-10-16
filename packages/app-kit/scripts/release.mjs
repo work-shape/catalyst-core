@@ -57,6 +57,30 @@ const LIBRARIES = [
   "tw-animate-css"
 ];
 
+// Refuse leftover content before building or writing a new release. Every retained manifest
+// contributes references, including older versions whose files the current version no longer uses.
+const referenced = new Set();
+const retainedRoot = dirname(outputRoot);
+if (existsSync(retainedRoot)) {
+  for (const entry of readdirSync(retainedRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const manifest = JSON.parse(
+      readFileSync(join(retainedRoot, entry.name, "manifest.json"), "utf8")
+    );
+    for (const file of manifest.files) referenced.add(file.sha256);
+  }
+}
+const unreferenced = existsSync(sharedRoot)
+  ? readdirSync(sharedRoot)
+      .filter((name) => !referenced.has(name))
+      .sort()
+  : [];
+if (unreferenced.length > 0) {
+  throw new Error(
+    `App Kit shared directory holds unreferenced files: ${unreferenced.join(", ")}. A released kit holds only files named by its manifests; restore the released files.`
+  );
+}
+
 if (existsSync(outputRoot)) {
   console.error(
     `Kit version ${KIT_VERSION} is released: ${relative(platformRoot, outputRoot)} exists and is never rewritten. Raise KIT_VERSION in this script and add the version to RELEASED_KIT_VERSIONS.`
