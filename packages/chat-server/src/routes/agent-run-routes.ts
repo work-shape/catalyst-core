@@ -23,11 +23,11 @@ import {
   asToolCallId,
   requireAuthScope
 } from "@work-shape/catalyst-core";
-import { ConversationWorkflow } from "../conversations/conversation-workflow";
-import { RunObservationWorkflow } from "../conversations/run-observation-workflow";
-import { RunStartWorkflow } from "../conversations/run-start-workflow";
+import { ConversationWorkflow } from "../conversations/conversation-service";
+import { RunObservationWorkflow } from "../conversations/run-observation-service";
+import { RunStartWorkflow } from "../conversations/run-start-service";
 import type { Route } from "../http/route";
-import { conversationIdParam, withRequestLocale } from "../request-context";
+import { conversationIdParam, withRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerAgentRunRoutes(

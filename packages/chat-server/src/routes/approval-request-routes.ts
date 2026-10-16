@@ -1,7 +1,7 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { ApprovalRequestWorkflow } from "../approval-request-workflow";
+import { ApprovalRequestWorkflow } from "../approvals/approval-request-service";
 import type { Route } from "../http/route";
-import { requirePathParam } from "../request-context";
+import { requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerApprovalRequestRoutes(route: Route, options: ChatServerOptions): void {

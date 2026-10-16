@@ -28,7 +28,7 @@ import {
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
-import { decide } from "../asset-access";
+import { decide } from "../assets/asset-access";
 import type { ResolvedChatServerOptions } from "../types";
 import { appActionPermissions } from "./action-call";
 import {

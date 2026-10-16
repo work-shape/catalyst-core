@@ -6,7 +6,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { AppActionCalls } from "../apps/action-call";
 import { AppActionList } from "../apps/action-list";
-import { AppWorkflow } from "../apps/app-workflow";
+import { AppWorkflow } from "../apps/app-service";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
 

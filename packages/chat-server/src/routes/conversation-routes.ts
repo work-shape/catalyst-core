@@ -6,10 +6,10 @@ import {
   type AuthenticatedUser,
   isAuthenticatedServicePrincipal
 } from "@work-shape/catalyst-core";
-import { ConversationWorkflow } from "../conversations/conversation-workflow";
-import { RunObservationWorkflow } from "../conversations/run-observation-workflow";
+import { ConversationWorkflow } from "../conversations/conversation-service";
+import { RunObservationWorkflow } from "../conversations/run-observation-service";
 import type { Route } from "../http/route";
-import { conversationIdParam, withRequestLocale } from "../request-context";
+import { conversationIdParam, withRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerConversationRoutes(route: Route, options: ChatServerOptions): void {

@@ -12,7 +12,7 @@ import {
   type PlatformEventContext,
   type PlatformEventEmitter
 } from "@work-shape/catalyst-core";
-import type { GuardrailCallContext, GuardrailRunner } from "../guardrail-runner";
+import type { GuardrailCallContext, GuardrailRunner } from "../guardrails/guardrail-runner";
 
 const AUDIT_STATUSES: readonly AuditEventStatus[] = ["success", "failed", "denied"];
 

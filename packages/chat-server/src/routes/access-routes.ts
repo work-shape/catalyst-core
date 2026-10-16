@@ -9,9 +9,9 @@ import {
   type Namespace,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
-import { AccessWorkflow, type GrantViewContext } from "../access-workflow";
+import { AccessWorkflow, type GrantViewContext } from "../access/access-service";
 import type { Route } from "../http/route";
-import { requirePathParam } from "../request-context";
+import { requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 /**

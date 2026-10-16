@@ -39,12 +39,12 @@ import type {
   PlatformInstructions,
   WorkflowAssetKind
 } from "./asset-kinds/shared";
-import type { ChatAttachmentService } from "./attachments";
-import type { InfrastructureWorkflow } from "./infrastructure-workflow";
-import type { ConnectionManagementPort } from "./connection-management-port";
-import type { SystemModelGateway } from "./system-model-call";
-import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
-import type { AssetRepoCommitClient } from "./asset-repo-jobs";
+import type { ChatAttachmentService } from "./conversations/attachments";
+import type { InfrastructureWorkflow } from "./platform/infrastructure-service";
+import type { ConnectionManagementPort } from "./connections/connection-management-port";
+import type { SystemModelGateway } from "./guardrails/system-model-call";
+import type { ApprovalRequestWorkflowOptions } from "./approvals/approval-request-service";
+import type { AssetRepoCommitClient } from "./assets/asset-repo-jobs";
 
 export interface ConversationRetentionOptions {
   batchSize?: number;

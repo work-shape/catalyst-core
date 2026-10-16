@@ -9,9 +9,9 @@ import {
   type JobSchedule,
   type RegisteredJobHandler
 } from "@work-shape/catalyst-core";
-import { completeAccountDeletion, recordAccountDeletionStalled } from "./account-deletion";
-import { createConnectionDiscoveryJobs } from "./connection-jobs";
-import { ConversationWorkflow } from "./conversations/conversation-workflow";
+import { completeAccountDeletion, recordAccountDeletionStalled } from "./deletion/account-deletion";
+import { createConnectionDiscoveryJobs } from "./connections/connection-jobs";
+import { ConversationWorkflow } from "./conversations/conversation-service";
 import {
   adoptLegacyJobsJob,
   adoptLegacyJobsSchedule,
@@ -34,15 +34,18 @@ import {
   recoverAbandonedModelCallsJob,
   recoverAbandonedModelCallsSchedule,
   retiredRecoverAgentRunsJob
-} from "./job-kinds";
+} from "./jobs/job-kinds";
 import { createOperationCalls } from "./operations/operation-calls";
-import { createOperationRunJobs } from "./operation-run-jobs";
-import { ConversationRetentionWorkflow } from "./retention";
-import { deletionActor } from "./subject-deletion";
+import { createOperationRunJobs } from "./operations/operation-run-jobs";
+import { ConversationRetentionWorkflow } from "./deletion/retention";
+import { deletionActor } from "./deletion/subject-deletion";
 import type { ChatServerOptions, ConversationRetentionOptions } from "./types";
-import { createUsageAttributionBackfill, createUsageReconciliation } from "./usage-backfill";
-import { ExecutionWorkspaceCleanupWorkflow } from "./workspace-cleanup";
-import { completeWorkspaceDeletion, recordWorkspaceDeletionStalled } from "./workspace-deletion";
+import { createUsageAttributionBackfill, createUsageReconciliation } from "./jobs/usage-backfill";
+import { ExecutionWorkspaceCleanupWorkflow } from "./deletion/workspace-cleanup";
+import {
+  completeWorkspaceDeletion,
+  recordWorkspaceDeletionStalled
+} from "./deletion/workspace-deletion";
 
 /** The job kinds the API process serves, with their schedules. */
 export interface ChatServerJobs {

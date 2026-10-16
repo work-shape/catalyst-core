@@ -21,7 +21,7 @@ export {
   requireWorkflowRunAs,
   workflowRunAsPrincipal,
   type WorkflowRunAsOptions
-} from "./workflow-run-as";
+} from "./workflows/workflow-run-as";
 import { createHttpRuntime } from "./http/runtime";
 import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerOperationRunRoutes } from "./routes/operation-run-routes";
@@ -63,10 +63,13 @@ export type {
   ChatAttachmentService,
   UploadDraftAttachmentInput,
   UploadDraftAttachmentResult
-} from "./attachments";
-export type { ConversationCleanupRetrySummary } from "./conversation-cleanup";
-export type { ConversationRetentionRunSummary, OrphanedFileCleanupSummary } from "./retention";
-export { ConversationRetentionWorkflow } from "./retention";
+} from "./conversations/attachments";
+export type { ConversationCleanupRetrySummary } from "./deletion/conversation-cleanup";
+export type {
+  ConversationRetentionRunSummary,
+  OrphanedFileCleanupSummary
+} from "./deletion/retention";
+export { ConversationRetentionWorkflow } from "./deletion/retention";
 export { createChatServerJobs } from "./jobs";
 export { createOperationCalls };
 export {
@@ -83,7 +86,7 @@ export {
   HELD_OPERATION_CALLS_PER_ACTOR,
   HELD_OPERATION_CALLS_PER_INSTANCE,
   HELD_OPERATION_INPUT_MAX_BYTES
-} from "./operation-call-approval-handler";
+} from "./approvals/operation-call-approval-handler";
 export type { ChatServerJobOptions, ChatServerJobs } from "./jobs";
 export {
   DELETION_MAX_ATTEMPTS,
@@ -98,19 +101,19 @@ export {
   generateConversationTitleJob,
   pruneAuditEventsJob,
   pruneJobsJob
-} from "./job-kinds";
+} from "./jobs/job-kinds";
 export {
   INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS,
   InfrastructureWorkflow,
   logProviderCheckChange
-} from "./infrastructure-workflow";
-export type { InfrastructureEntry } from "./infrastructure-workflow";
+} from "./platform/infrastructure-service";
+export type { InfrastructureEntry } from "./platform/infrastructure-service";
 export {
   ExecutionWorkspaceCleanupWorkflow,
   cleanupExecutionWorkspaceForConversation
-} from "./workspace-cleanup";
-export type { ExecutionWorkspaceCleanupRunSummary } from "./workspace-cleanup";
-export { listConversationResources } from "./conversation-resources";
+} from "./deletion/workspace-cleanup";
+export type { ExecutionWorkspaceCleanupRunSummary } from "./deletion/workspace-cleanup";
+export { listConversationResources } from "./conversations/conversation-resources";
 export type {
   ChatServerOptions,
   OperationCalls,
@@ -119,15 +122,15 @@ export type {
 } from "./types";
 export { appKitFilesOf, loadAppKitFiles } from "./app-kit-runtime";
 export { loadViewRuntimeFiles } from "./view-runtime";
-import { holdsAppContentToken } from "./app-content";
+import { holdsAppContentToken } from "./pages/app-content";
 export {
   APP_CONTENT_TOKEN_TTL_SECONDS,
   APP_CONTENT_VIEWER_CHECK_MAX_ENTRIES,
   APP_CONTENT_VIEWER_CHECK_SECONDS,
   createAppContentViewerChecks,
   deriveAppContentKey
-} from "./app-content";
-export { storePageFileSet } from "./page-file-sets";
+} from "./pages/app-content";
+export { storePageFileSet } from "./pages/page-file-sets";
 export {
   APP_BUILD_WAIT_MS,
   createPageBuildClient,
@@ -142,7 +145,7 @@ export {
   pageBundleJob,
   type PageBuildClientOptions,
   type PageBundleJobsOptions
-} from "./page-jobs";
+} from "./pages/page-jobs";
 export {
   createSandboxPageBuild,
   PAGE_BUILD_STALE_MS,
@@ -151,7 +154,7 @@ export {
   type PageBuildRunner,
   type SandboxPageBuildInput,
   type SandboxPageBuildOptions
-} from "./page-build-sandbox";
+} from "./pages/page-build-sandbox";
 export {
   ASSET_REPO_COMMAND_TIMEOUT_MS,
   createSandboxAssetRepo,
@@ -159,7 +162,7 @@ export {
   type AssetRepoCommitOutcome,
   type AssetRepoCommitRunner,
   type SandboxAssetRepoOptions
-} from "./asset-repo-sandbox";
+} from "./assets/asset-repo-sandbox";
 export {
   ASSET_REPO_COMMIT_WAIT_MS,
   ASSET_REPO_SAVE_MAX_AGE_MS,
@@ -172,8 +175,8 @@ export {
   type AssetRepoCommitClient,
   type AssetRepoCommitClientOptions,
   type AssetRepoJobsOptions
-} from "./asset-repo-jobs";
-export type { PageFileInput, StorePageFileSetInput } from "./page-file-sets";
+} from "./assets/asset-repo-jobs";
+export type { PageFileInput, StorePageFileSetInput } from "./pages/page-file-sets";
 export { createInProcessRateLimiter } from "./http/rate-limit";
 export { createHttpRuntime } from "./http/runtime";
 export type { InProcessHttpServer } from "./http/runtime";
@@ -271,22 +274,22 @@ export async function createChatServer(
   return runtime;
 }
 
-export { GuardrailRunner } from "./guardrail-runner";
-export type { GuardrailCheckInput, GuardrailRunnerOptions } from "./guardrail-runner";
+export { GuardrailRunner } from "./guardrails/guardrail-runner";
+export type { GuardrailCheckInput, GuardrailRunnerOptions } from "./guardrails/guardrail-runner";
 
-export { ApprovalRequestWorkflow } from "./approval-request-workflow";
+export { ApprovalRequestWorkflow } from "./approvals/approval-request-service";
 export type {
   ApprovalRequestWorkflowOptions,
   ApprovalRequestView
-} from "./approval-request-workflow";
+} from "./approvals/approval-request-service";
 
-export * from "./skill-change-approval-handler";
-export { applyValidatedConfigAssetMutations } from "./config-asset-writer";
-export type { ConfigAssetWriterOptions } from "./config-asset-writer";
+export * from "./approvals/skill-change-approval-handler";
+export { applyValidatedConfigAssetMutations } from "./assets/config-asset-writer";
+export type { ConfigAssetWriterOptions } from "./assets/config-asset-writer";
 export { createAgentAssetKind } from "./asset-kinds/agent";
 export type { AgentAssetKindOptions } from "./asset-kinds/agent";
 export { createSkillAssetKind } from "./asset-kinds/skill";
-export { seedShippedSkills } from "./shipped-skill-seed";
+export { seedShippedSkills } from "./config-assets/shipped-skill-seed";
 export {
   APP_ACTIONS,
   APP_ASSET_KIND,
@@ -296,17 +299,20 @@ export {
   appConfigOf,
   createAppAssetKind
 } from "./apps/app-kind";
-export { ASSET_PUT_BODY_LIMIT_BYTES } from "./asset-files";
+export { ASSET_PUT_BODY_LIMIT_BYTES } from "./assets/asset-files";
 export { createConnectionAssetKind } from "./asset-kinds/connection";
 export { createGuardrailAssetKind } from "./asset-kinds/guardrail";
-export { seedReleaseGuardrails, type GuardrailSeedResult } from "./guardrail-release-seed";
+export {
+  seedReleaseGuardrails,
+  type GuardrailSeedResult
+} from "./guardrails/guardrail-release-seed";
 export type { ConnectionAssetKindOptions } from "./asset-kinds/connection";
 export type {
   ConnectionDiscoveryOutcome,
   ConnectionManagementPort
-} from "./connection-management-port";
-export { requestConnectionDiscovery } from "./connection-jobs";
-export type { WorkflowListEntry, WorkflowRunsPort } from "./workflow-runs-port";
+} from "./connections/connection-management-port";
+export { requestConnectionDiscovery } from "./connections/connection-jobs";
+export type { WorkflowListEntry, WorkflowRunsPort } from "./workflows/workflow-runs-port";
 export { createWorkflowRoutes } from "./routes/workflow-routes";
 export type {
   AgentToolReference,
@@ -329,5 +335,5 @@ function adaptLogger(logger: Logger): FastifyInstance["log"] {
     child: (bindings: Record<string, unknown>) => adaptLogger(logger.child(bindings))
   };
 }
-export { createPlatformAssetCalls } from "./platform-asset-calls";
+export { createPlatformAssetCalls } from "./platform/platform-asset-calls";
 export type { AssetWorkflowOptions } from "./types";

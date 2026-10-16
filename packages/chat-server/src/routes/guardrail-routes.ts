@@ -16,10 +16,10 @@ import {
   type ShippedGuardrail,
   type ShippedGuardrailSwitch
 } from "@work-shape/catalyst-core";
-import { accessResource, decide } from "../asset-access";
-import { AssetWorkflow } from "../asset-workflow";
-import { GuardrailRunner } from "../guardrail-runner";
-import { dryRunGuardrail, guardrailUnderTrial, testGuardrail } from "../guardrail-trial";
+import { accessResource, decide } from "../assets/asset-access";
+import { AssetWorkflow } from "../assets/asset-service";
+import { GuardrailRunner } from "../guardrails/guardrail-runner";
+import { dryRunGuardrail, guardrailUnderTrial, testGuardrail } from "../guardrails/guardrail-trial";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 

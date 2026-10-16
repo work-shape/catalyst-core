@@ -13,7 +13,7 @@ import {
   type OperationDefinition,
   type OperationRegistry
 } from "@work-shape/catalyst-core";
-import { decide } from "../asset-access";
+import { decide } from "../assets/asset-access";
 import { appResourceOf, authorizePublishedApp, requirePublishedRevision } from "./action-source";
 import { APP_ACTIONS } from "./app-kind";
 

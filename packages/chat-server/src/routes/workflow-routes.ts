@@ -13,10 +13,10 @@ import {
   type WorkflowRunView,
   type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
-import { decide } from "../asset-access";
+import { decide } from "../assets/asset-access";
 import type { ModuleRoutes, RouteRegistration } from "../http/route";
-import { listedWorkflowActions, workflowOf } from "../workflow-listing";
-import type { WorkflowRunsPort } from "../workflow-runs-port";
+import { listedWorkflowActions, workflowOf } from "../workflows/workflow-listing";
+import type { WorkflowRunsPort } from "../workflows/workflow-runs-port";
 
 /** The module these operations belong to. */
 const WORKFLOWS_MODULE = "workflows";

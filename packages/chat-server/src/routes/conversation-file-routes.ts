@@ -15,9 +15,9 @@ import {
   type ConversationAttachment,
   type ManagedArtifactRecord
 } from "@work-shape/catalyst-core";
-import { ConversationWorkflow } from "../conversations/conversation-workflow";
+import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { Route } from "../http/route";
-import { conversationIdParam, requirePathParam } from "../request-context";
+import { conversationIdParam, requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerConversationFileRoutes(route: Route, options: ChatServerOptions): void {

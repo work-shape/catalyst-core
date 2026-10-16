@@ -7,9 +7,9 @@ import {
   type OperationAuthorization,
   type OperationResource
 } from "@work-shape/catalyst-core";
-import { accessResource, decide } from "../asset-access";
-import { requestConnectionDiscovery } from "../connection-jobs";
-import type { ConnectionManagementPort } from "../connection-management-port";
+import { accessResource, decide } from "../assets/asset-access";
+import { requestConnectionDiscovery } from "../connections/connection-jobs";
+import type { ConnectionManagementPort } from "../connections/connection-management-port";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 

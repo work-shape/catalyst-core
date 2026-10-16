@@ -1,12 +1,12 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { asUserId } from "@work-shape/catalyst-core";
-import { recordGovernanceAccess } from "../governance-actions";
+import { recordGovernanceAccess } from "../access/governance-actions";
 import type { Route } from "../http/route";
 import { deletionState } from "./deletion-answer";
-import { requirePathParam } from "../request-context";
+import { requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
-import { UserAdministrationWorkflow } from "../user-administration-workflow";
-import { authorizeUserAdministration } from "../user-administration-rights";
+import { UserAdministrationWorkflow } from "../users/user-administration-service";
+import { authorizeUserAdministration } from "../access/user-administration-rights";
 
 /** What stands in the hashed input of a call where a password was. */
 const PASSWORD_MARK = "[password]";

@@ -1,6 +1,9 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { Route } from "../http/route";
-import { PersonalApiKeysWorkflow, authorizeOwnKeyChange } from "../personal-api-keys-workflow";
+import {
+  PersonalApiKeysWorkflow,
+  authorizeOwnKeyChange
+} from "../access/personal-api-keys-service";
 import type { ChatServerOptions } from "../types";
 
 /**

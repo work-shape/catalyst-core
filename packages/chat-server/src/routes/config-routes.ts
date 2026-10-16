@@ -5,10 +5,10 @@ import {
   moduleConfigKey,
   readDatabaseReadiness
 } from "@work-shape/catalyst-core";
-import { getWorkspaceAssetSnapshot } from "../agent-availability";
-import { agentConnections } from "../agent-connections";
+import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
+import { agentConnections } from "../connections/agent-connections";
 import type { Route } from "../http/route";
-import { resolveRequestLocale } from "../request-context";
+import { resolveRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerConfigRoutes(route: Route, options: ChatServerOptions): void {
