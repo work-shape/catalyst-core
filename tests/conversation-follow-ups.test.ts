@@ -36,9 +36,11 @@ afterEach(() => {
 /** One gate per actual model turn, so dispatch cannot finish a second turn in the assertions. */
 async function fixture(
   separate = false,
-  selection: { defaultEffortOnly?: boolean; attachments?: boolean } = {}
+  selection: { defaultEffortOnly?: boolean; attachments?: boolean; streaming?: boolean } = {}
 ) {
   const gates: Array<ReturnType<typeof deferred<void>>> = [];
+  let cleaningUp = false;
+  const deltaGates: Array<ReturnType<typeof deferred<void>>> = [];
   const completion: ModelCompletion = {
     text: "Done",
     toolCalls: [],
@@ -68,6 +70,14 @@ async function fixture(
           const gate = deferred<void>();
           gates.push(gate);
           yield { type: "text_delta", delta: "Working" };
+          if (selection.streaming) {
+            for (let batch = 0; batch < 4; batch++) {
+              const next = deferred<void>();
+              deltaGates.push(next);
+              if (!cleaningUp) await next.promise;
+              for (let delta = 0; delta < 16; delta++) yield { type: "text_delta", delta: " more" };
+            }
+          }
           await gate.promise;
           yield { type: "completed", completion };
         }
@@ -76,7 +86,11 @@ async function fixture(
     check: async () => ({ ok: true }),
     describe: () => ({})
   });
-  releaseOnCleanup.push(() => gates.forEach((gate) => gate.resolve()));
+  releaseOnCleanup.push(() => {
+    cleaningUp = true;
+    gates.forEach((gate) => gate.resolve());
+    deltaGates.forEach((gate) => gate.resolve());
+  });
   const objectRoot = selection.attachments
     ? await mkdtemp(join(tmpdir(), "fu-1a-attachments-"))
     : undefined;
@@ -156,6 +170,8 @@ async function fixture(
     first,
     run,
     until,
+    release: () => required(gates[0]).resolve(),
+    advance: () => required(deltaGates.at(-1)).resolve(),
     pending: () => app.stores.followUps.listPending(scope),
     messages: () => app.stores.conversations.listMessages(scope),
     async queue(text: string, as = "author", key: string = createPlatformId("send")) {
@@ -213,6 +229,125 @@ async function fixture(
 }
 
 describe("server follow-up queue on Postgres", () => {
+  // Repeat with fresh instances to exercise both queue/worker scheduling orders.
+  it.each([1, 2, 3, 4, 5, 6])(
+    "streams 64 deltas through concurrent queue edits, withdrawal and completion without sequence gaps or deadlocks (repetition %i)",
+    async () => {
+      const f = await fixture(false, { streaming: true });
+      const observations = (id = f.first.run.id) =>
+        f.app.stores.agentRuns.listRunObservations({
+          clientInstanceId: f.scope.clientInstanceId,
+          runId: asAgentRunId(id)
+        });
+      const streamed = async (count: number) =>
+        waitUntil(
+          async () =>
+            (await observations()).filter((event) => event.type === "message_delta").length >=
+            count,
+          `${count} deltas reached observers`
+        );
+      await streamed(1);
+      const [original] = await Promise.all([
+        f.queue("Original"),
+        Promise.resolve().then(() => f.advance())
+      ]);
+      await streamed(17);
+      const withdraw = () =>
+        f.app.call("conversations.follow_ups.withdraw", {
+          params: { conversationId: f.scope.conversationId, followUpId: original.id },
+          payload: {}
+        });
+      const [edited, withdrawn] = await Promise.all([
+        f.queue("Edited"),
+        withdraw(),
+        Promise.resolve().then(() => f.advance())
+      ]);
+      expect(withdrawn.statusCode, withdrawn.body).toBe(200);
+      await streamed(33);
+      const disposable = await f.queue("Withdraw during a write");
+      await f.app.stores.transaction(async (stores) => {
+        // Hold exactly the conversation lock that queue acceptance/editing holds.
+        await stores.followUps.getOldestPending(f.scope);
+        f.advance();
+        await waitUntil(
+          async () =>
+            (
+              await withTestSql(
+                (sql) => sql`
+          select pid from pg_stat_activity where datname = current_database()
+            and wait_event_type = 'Lock'
+            and (query ilike '%conversations%' or query ilike '%agent_run_observations%')
+        `
+              )
+            ).length > 0,
+          "worker waits on the held conversation"
+        );
+        // With the old order the worker already owns the run row: this write causes 40P01.
+        await stores.followUps.cancel({
+          ...f.scope,
+          followUpId: disposable.id,
+          authorUserId: f.author.id
+        });
+      });
+      await streamed(49);
+      f.advance();
+      await streamed(65);
+      f.release();
+      await f.until(f.first.run.id, "completed");
+      await f.dispatch();
+      const dispatched = required(
+        await f.app.stores.followUps.get({ ...f.scope, followUpId: edited.id })
+      );
+      expect(dispatched.status).toBe("dispatched");
+      const nextId = required(dispatched.dispatchedRunId);
+      // Finish the dispatched turn too; its first observation may be follow_up_changed.
+      await waitUntil(
+        async () => (await observations(nextId)).some((event) => event.type === "message_delta"),
+        "follow-up streams"
+      );
+      for (let batch = 0; batch < 4; batch++) {
+        f.advance();
+        await waitUntil(
+          async () =>
+            (await observations(nextId)).filter((event) => event.type === "message_delta").length >=
+            1 + (batch + 1) * 16,
+          "follow-up batch persisted"
+        );
+      }
+      await f.complete(nextId, 1);
+      for (const id of [f.first.run.id, nextId]) {
+        const events = await observations(id);
+        expect(events.map((event) => event.sequence)).toEqual(events.map((_, index) => index + 1));
+        expect(events.map((event) => event.payload.sequence)).toEqual(
+          events.map((event) => event.sequence)
+        );
+        expect(events.at(-1)?.type).toBe("run_completed");
+      }
+      expect(
+        (await observations())
+          .filter((event) => event.type === "follow_up_changed")
+          .map((event) => event.payload)
+      ).toEqual(
+        expect.arrayContaining(
+          [
+            { followUp: { id: original.id, status: "pending" } },
+            { followUp: { id: edited.id, status: "pending" } },
+            { followUp: { id: original.id, status: "cancelled" } },
+            { followUp: { id: disposable.id, status: "pending" } },
+            { followUp: { id: disposable.id, status: "cancelled" } }
+          ].map((event) =>
+            expect.objectContaining({ followUp: expect.objectContaining(event.followUp) })
+          )
+        )
+      );
+      expect(
+        (await f.messages())
+          .filter((message) => message.role === "user")
+          .map((message) => message.text)
+      ).toEqual(["First", "Edited"]);
+    }
+  );
+
   it("FU-1 stores a follow-up outside the transcript and dispatches its saved agent and model as its author", async () => {
     const f = await fixture();
     const item = await f.queue("Next", "other");

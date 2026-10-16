@@ -125,6 +125,7 @@ export async function appendClaimedRunObservation(
 ): Promise<RunObservation> {
   return db.transaction(async (tx) => {
     await requireJobLease(tx, input.lease);
+    await lockClaimedRunConversation(tx, input);
     return insertClaimedRunObservation(tx, input, input.event);
   });
 }
@@ -141,6 +142,7 @@ export async function appendClaimedAgentRunEnd(
 ): Promise<void> {
   await db.transaction(async (tx) => {
     await requireJobLease(tx, input.lease);
+    await lockClaimedRunConversation(tx, input);
     if (input.message) await insertClaimedAgentRunMessage(tx, input, input.message);
     let sequence: number | undefined;
     if (input.allocateSequence) {
@@ -293,8 +295,35 @@ export async function appendClaimedAgentRunMessage(
 ) {
   return db.transaction(async (tx) => {
     await requireJobLease(tx, input.lease);
+    await lockClaimedRunConversation(tx, input);
     return insertClaimedAgentRunMessage(tx, input, input.message);
   });
+}
+
+/**
+ * Queue changes lock conversation -> run. Worker writes must do the same, including
+ * observations: their conversation foreign key takes a key-share lock at insertion.
+ * Lock only the conversation in this join; the fenced write rechecks the run afterwards.
+ * Inactive conversations still admit terminal observations so deletion can end a run.
+ */
+async function lockClaimedRunConversation(
+  tx: PostgresConnection,
+  claim: ClaimedRun
+): Promise<void> {
+  const [conversation] = await tx
+    .select({ id: conversations.id })
+    .from(conversations)
+    .innerJoin(
+      agentRuns,
+      and(
+        eq(agentRuns.clientInstanceId, conversations.clientInstanceId),
+        eq(agentRuns.conversationId, conversations.id)
+      )
+    )
+    .where(claimedRunWhere(claim))
+    .for("update", { of: conversations })
+    .limit(1);
+  if (!conversation) throw new AppError("CONFLICT", "Agent run has ended");
 }
 
 async function insertClaimedAgentRunMessage(
