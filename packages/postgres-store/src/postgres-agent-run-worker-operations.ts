@@ -24,7 +24,6 @@ import {
   type ClientInstanceId,
   type FailLostAgentRunInput,
   type RenewAgentRunJobLeaseInput,
-  type RequestAgentRunCancellationInput,
   type RunObservation
 } from "@work-shape/catalyst-core";
 import { and, asc, sql as drizzleSql, eq, gt, inArray, lt, type SQL } from "drizzle-orm";
@@ -115,91 +114,6 @@ export async function renewAgentRunJobLease(
     )
     .returning({ id: agentRuns.id });
   return rows.length > 0;
-}
-
-export async function requestAgentRunCancellation(
-  db: PostgresConnection,
-  input: RequestAgentRunCancellationInput
-): Promise<AgentRun> {
-  return db.transaction(async (tx) => {
-    const locked = (await tx.execute(drizzleSql<{ status: AgentRun["status"] }>`
-      select status
-      from agent_runs
-      where client_instance_id = ${input.clientInstanceId}
-        and id = ${input.runId}
-      for update
-    `)) as unknown as Array<{ status: AgentRun["status"] }>;
-    const status = locked[0]?.status;
-    if (!status) throw new AppError("NOT_FOUND", "Agent run is not available");
-
-    const requestedAt = new Date(input.requestedAt);
-    if (status === "queued") {
-      const [row] = await tx
-        .update(agentRuns)
-        .set({
-          status: "cancelled",
-          cancellationRequestedAt: requestedAt,
-          cancellationReason: input.reason,
-          cancelledAt: requestedAt,
-          updatedAt: requestedAt,
-          lastSequence: drizzleSql<number>`${agentRuns.lastSequence} + 1`,
-          // A run queued again after a decision ends with nothing to go on from.
-          resumeState: null
-        })
-        .where(
-          and(
-            eq(agentRuns.clientInstanceId, input.clientInstanceId),
-            eq(agentRuns.id, input.runId),
-            eq(agentRuns.status, "queued")
-          )
-        )
-        .returning();
-      if (!row) throw new AppError("CONFLICT", "Agent run status changed during cancellation");
-      const event = {
-        type: "run_cancelled" as const,
-        runId: input.runId,
-        sequence: row.lastSequence,
-        createdAt: input.requestedAt,
-        ...(input.reason ? { reason: input.reason } : {})
-      };
-      await tx.insert(agentRunObservations).values({
-        clientInstanceId: row.clientInstanceId,
-        runId: row.id,
-        conversationId: row.conversationId,
-        ownerUserId: row.ownerUserId,
-        sequence: event.sequence,
-        type: event.type,
-        payload: event,
-        createdAt: requestedAt
-      });
-      return mapAgentRun(row);
-    }
-
-    if (status === "running" || status === "waiting_for_decision" || status === "cancelling") {
-      const [row] = await tx
-        .update(agentRuns)
-        .set({
-          status: "cancelling",
-          cancellationRequestedAt: requestedAt,
-          cancellationReason: input.reason,
-          updatedAt: requestedAt
-        })
-        .where(
-          and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId))
-        )
-        .returning();
-      return mapAgentRun(row);
-    }
-
-    const [row] = await tx
-      .select()
-      .from(agentRuns)
-      .where(
-        and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId))
-      )
-      .limit(1);
-    return mapAgentRun(row);
-  });
 }
 
 export async function appendClaimedRunObservation(

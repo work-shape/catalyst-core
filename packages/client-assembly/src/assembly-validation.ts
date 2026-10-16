@@ -2,10 +2,9 @@ import { findModelToolMaterializationIssues } from "@work-shape/catalyst-agent-r
 import {
   type ApprovalRequestHandlerRegistry,
   AppError,
-  resolvePolicy,
   type ModuleSnapshot
 } from "@work-shape/catalyst-core";
-import { toolEffectIssue, toolOperationPolicy } from "@work-shape/catalyst-tool-execution";
+import { toolEffectIssue } from "@work-shape/catalyst-tool-execution";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   type ModelBindingRef,
@@ -215,38 +214,10 @@ function findToolReferenceIssues(
       issues.push(
         `Tool '${tool.name}' requires approval and declares that it only reads. An approval holds a changing call: declare the effect 'changing' or another mode.`
       );
-    } else if (tool.enabled && provided && waitsForAPerson(config, provided)) {
-      issues.push(
-        provided.permission?.mode === undefined
-          ? `Tool '${tool.name}' declares no permission mode, so the instance default '${config.policy.defaults[provided.effect]}' for ${provided.effect} calls applies, and an agent's call cannot wait for a person yet. Declare permission.mode 'allow' or 'deny' on the tool, or set policy.defaults.${provided.effect}.`
-          : `Tool '${tool.name}' requires approval, but v1 client assembly does not support approval-required tool policies yet. They arrive with the pause of a run (OP-3).`
-      );
     }
   }
 
   return issues;
-}
-
-/**
- * Whether every call an agent makes of the tool would wait for a person by what the release
- * declares: the tool's own mode, or the instance default of its effect. An agent's run cannot
- * be held for that yet, so such a tool would never run.
- */
-function waitsForAPerson(config: ClientInstanceConfig, tool: AnyToolDefinition): boolean {
-  const resolution = resolvePolicy({
-    definition: toolOperationPolicy(tool),
-    // An agent's call: nobody is there to confirm it and its run cannot be held.
-    origin: { kind: "schedule", scheduleId: "startup" },
-    instanceDefaults: config.policy.defaults,
-    centralSettings: [],
-    callerCanConfirm: false,
-    canPause: false
-  });
-  return (
-    resolution.next === "await_approval" ||
-    resolution.next === "await_confirmation" ||
-    resolution.source === "surface_cannot_pause"
-  );
 }
 
 /**

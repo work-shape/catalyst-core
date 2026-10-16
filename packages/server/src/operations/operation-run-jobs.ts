@@ -87,8 +87,9 @@ export interface OperationRunJobOptions {
 }
 
 /**
- * Ends the runs that waited for an approval longer than they may: the run is `expired`, its
- * approval request `superseded`, and nothing is executed. A request whose run expired and
+ * Ends calls whose confirmation or approval deadline passed. The store atomically records
+ * expiry and queues any waiting Agent Run with its expired result; nothing executes here.
+ * An approval request is superseded. A request whose run expired and
  * that is still open, after a tick that was cut off between the two, is ended the same way
  * when somebody decides it.
  */
@@ -110,7 +111,7 @@ async function expireOperationRuns(
     expired += runs.length;
     if (runs.length < OPERATION_RUN_EXPIRE_BATCH_SIZE) break;
   }
-  if (expired > 0) logger.info({ expired }, "Expired operation runs that waited for an approval");
+  if (expired > 0) logger.info({ expired }, "Expired operation runs that waited for a decision");
   return expired;
 }
 

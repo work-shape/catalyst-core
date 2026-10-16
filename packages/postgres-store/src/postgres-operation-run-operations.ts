@@ -1,3 +1,4 @@
+import { expireOperationRunsAndResumeAgents } from "./postgres-operation-run-expiry";
 import {
   INTERRUPTED_RUN_ERROR,
   WAITING_OPERATION_RUN_STATUSES,
@@ -5,21 +6,7 @@ import {
   type OperationRunStatus,
   type OperationRunStore
 } from "@work-shape/catalyst-core";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNull,
-  lt,
-  lte,
-  ne,
-  notInArray,
-  or,
-  sql
-} from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { keysetFilter } from "./paging";
 import { type PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
@@ -310,36 +297,7 @@ async function markOperationRunsExpired(
   db: PostgresConnection,
   input: Input<"markExpired">
 ): Promise<OperationRun[]> {
-  // A confirmed call waits only for its Agent Run's worker: it was decided in time.
-  const undecided = or(
-    ne(operationRuns.status, "pending_confirmation"),
-    isNull(operationRuns.decision)
-  );
-  const due = db
-    .select({ id: operationRuns.id })
-    .from(operationRuns)
-    .where(
-      and(
-        eq(operationRuns.clientInstanceId, input.clientInstanceId),
-        inArray(operationRuns.status, WAITING_OPERATION_RUN_STATUSES),
-        lte(operationRuns.expiresAt, sql`now()`),
-        undecided
-      )
-    )
-    .orderBy(asc(operationRuns.expiresAt))
-    .limit(input.limit);
-  const rows = await db
-    .update(operationRuns)
-    .set({ status: "expired", finishedAt: sql`now()`, updatedAt: sql`now()` })
-    // The status is asked again: a run an approver took meanwhile is running, not expired.
-    .where(
-      and(
-        inArray(operationRuns.id, due),
-        inArray(operationRuns.status, WAITING_OPERATION_RUN_STATUSES),
-        undecided
-      )
-    )
-    .returning();
+  const rows = await expireOperationRunsAndResumeAgents(db, input);
   return rows.map(mapOperationRun);
 }
 

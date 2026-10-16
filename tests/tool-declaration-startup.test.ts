@@ -5,9 +5,8 @@ import { createTestConfig } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
 
 describe("what a tool must declare for an instance to start", () => {
-  // Fails before the fix: a tool without an effect started with the instance and every call
-  // of it ended as INTERNAL; a changing tool without a mode ran as if it had said `allow`.
-  it("rejects startup for a tool without an effect, and for a changing tool without a mode, by name", async () => {
+  // A changing tool without a mode now uses the instance confirmation default.
+  it("W1-8: rejects a missing effect and starts a changing tool using default confirmation", async () => {
     const changing = defineTool({
       name: "demo.modeless",
       effect: "changing",
@@ -39,16 +38,7 @@ describe("what a tool must declare for an instance to start", () => {
         ]
       }
     });
-    await expect(start(changing)).rejects.toMatchObject({
-      code: "VALIDATION_FAILED",
-      details: {
-        issues: [
-          {
-            message:
-              "Tool 'demo.modeless' declares no permission mode, so the instance default 'confirm' for changing calls applies, and an agent's call cannot wait for a person yet. Declare permission.mode 'allow' or 'deny' on the tool, or set policy.defaults.changing."
-          }
-        ]
-      }
-    });
+    const app = await start(changing);
+    await app.close();
   });
 });

@@ -159,7 +159,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/postgres-store",
-      "count": 39,
+      "count": 38,
       "owner": "CB-3a"
     },
     {

@@ -94,6 +94,8 @@ type CapabilitiesOptional<Input extends { capabilities: unknown }> = Omit<Input,
   Partial<Pick<Input, "capabilities">>;
 type TestAppInput = CapabilitiesOptional<CreateClientInstanceAppInput> & {
   seedAssets?: boolean;
+  /** A restarted API can settle waiting runs while no Agent Run worker is online. */
+  startAgentRunJobs?: boolean;
   fixtureFile?: string;
 };
 type TestExecutionInput = CapabilitiesOptional<
@@ -345,7 +347,7 @@ async function createConfiguredInstance(
     if (input.seedAssets !== false) await seedTestAssets(app);
     // Runs execute as jobs of this worker, as they do behind `listen`. The API's other jobs
     // stay with `getTestJobs`, so a test still decides when those run.
-    app.agentRunJobs?.start();
+    if (input.startAgentRunJobs !== false) app.agentRunJobs?.start();
     return bindInstance(app.store, {
       server: testFramework(app).app,
       runtime: app,

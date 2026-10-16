@@ -1,3 +1,4 @@
+import { requestAgentRunCancellation } from "./postgres-agent-run-cancellation";
 import { decideWaitingToolCall } from "./postgres-agent-run-decision-operations";
 import {
   appendClaimedAgentRunEnd,
@@ -10,8 +11,7 @@ import {
   failLostAgentRun,
   listAgentRunsInProgress,
   listAgentRunsWithoutJob,
-  renewAgentRunJobLease,
-  requestAgentRunCancellation
+  renewAgentRunJobLease
 } from "./postgres-agent-run-worker-operations";
 import { and, asc, desc, eq, gt, isNull, lt, sql as drizzleSql } from "drizzle-orm";
 import {

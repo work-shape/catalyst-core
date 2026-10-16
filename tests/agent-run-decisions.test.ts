@@ -15,7 +15,12 @@ import { injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createToolCallingModel, TOOL_CALLING_MODEL_PROVIDER } from "./support/held-model";
 import { fileTestDatabaseUrl } from "./support/test-database";
-import { createTestInstance, getTestConfig, type TestInstance } from "./support/test-instance";
+import {
+  createTestInstance,
+  getTestConfig,
+  getTestJobs,
+  type TestInstance
+} from "./support/test-instance";
 
 // An agent's call that waits for its own person's confirmation (EW-2a): the run pauses on it
 // and holds nothing, the person decides through `operations.decide`, and the run goes on in a
@@ -48,7 +53,7 @@ function person(id: string) {
   };
 }
 
-function startInstance(restarted: boolean): Promise<TestInstance> {
+function startInstance(restarted: boolean, startAgentRunJobs = true): Promise<TestInstance> {
   const config = createTestConfig({
     tools: [{ name: change.name, enabled: true }],
     toolNames: [change.name],
@@ -63,6 +68,7 @@ function startInstance(restarted: boolean): Promise<TestInstance> {
   };
   return createTestInstance({
     config,
+    startAgentRunJobs,
     env: {},
     capabilities: [model.capability],
     tools: [change],
@@ -148,9 +154,9 @@ async function fixture() {
         conversationId: asConversationId(conversationId)
       }),
     /** Stops the instance and starts it again on what it left in the database. */
-    async restart() {
+    async restart(startAgentRunJobs = true) {
       await app.close();
-      app = await startInstance(true);
+      app = await startInstance(true, startAgentRunJobs);
     }
   };
 }
@@ -314,6 +320,176 @@ describe("an agent's call that waits for its person's decision", () => {
     const types = (await f.events(said.runId)).map((event) => event.type);
     expect(types.filter((type) => type === "tool_decision_requested")).toHaveLength(2);
     expect(types.filter((type) => type === "tool_decision_recorded")).toHaveLength(2);
+    await f.app.close();
+  });
+
+  it("W1-6: expires an idle 24-hour confirmation and resumes with an expired result after restart", async () => {
+    const f = await fixture();
+    const said = await f.say('/tool demo.change {"text":"expired"}');
+    const waiting = await f.waitingCall(said.runId);
+    const lifetime = Date.parse(required(waiting.expiresAt)) - Date.parse(waiting.updatedAt);
+    expect(lifetime).toBeGreaterThan(24 * 60 * 60 * 1000 - 1000);
+    expect(lifetime).toBeLessThanOrEqual(24 * 60 * 60 * 1000);
+    await f.restart(false);
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+    try {
+      // Move the persisted deadline past the database clock, never fake the driver's timers.
+      await sql`update operation_runs set expires_at = now() - interval '1 second'
+        where id = ${waiting.id}`;
+      await getTestJobs(f.app).runDue();
+      expect(await f.callsOf(said.runId)).toMatchObject([{ id: waiting.id, status: "expired" }]);
+      expect(await f.agentRun(said.runId)).toMatchObject({ status: "queued" });
+      const [queued] = await sql<{ count: number }[]>`select count(*)::int as count
+        from platform_jobs where kind = 'agent_run.execute' and subject = ${said.runId}
+        and status = 'queued'`;
+      expect(queued?.count).toBe(1);
+      // A replayed sweep neither repeats the event nor queues a second resume.
+      expect(
+        await f.app.stores.operationRuns.markExpired({
+          clientInstanceId: f.clientInstanceId,
+          limit: 10
+        })
+      ).toEqual([]);
+      expect(
+        (await f.events(said.runId)).filter((event) => event.type === "tool_decision_recorded")
+      ).toMatchObject([{ operationRunId: waiting.id, outcome: "expired" }]);
+      expect((await f.decide(waiting.id, "confirm")).statusCode).toBe(409);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+    await f.restart();
+    await f.until(said.runId, "completed");
+    expect(executed).toEqual([]);
+    const messages = await f.messages(said.conversationId);
+    expect(messages.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+      "tool",
+      "assistant"
+    ]);
+    expect(messages.find((message) => message.role === "tool")?.text).toContain(
+      "expired. Nothing ran."
+    );
+    expect(messages.at(-1)?.text).toContain("expired. Nothing ran.");
+    expect(await f.callsOf(said.runId)).toMatchObject([{ id: waiting.id, status: "expired" }]);
+    await f.app.close();
+  });
+
+  it("W1-7: Stop settles a waiting run within one request without a worker and cannot resurrect it", async () => {
+    const f = await fixture();
+    const said = await f.say('/tool demo.change {"text":"cancelled"}');
+    const waiting = await f.waitingCall(said.runId);
+    await f.restart(false);
+    const stop = () =>
+      f.app.call("conversations.runs.cancel", {
+        params: { conversationId: said.conversationId, runId: said.runId },
+        payload: { reason: "Stop" }
+      });
+    const stopped = await stop();
+    expect(stopped.statusCode, stopped.body).toBe(200);
+    expect(stopped.json()).toMatchObject({ run: { id: said.runId, status: "cancelled" } });
+    expect(await f.agentRun(said.runId)).toMatchObject({ status: "cancelled" });
+    expect(await f.callsOf(said.runId)).toMatchObject([
+      { id: waiting.id, status: "denied", error: { reason: "cancelled" } }
+    ]);
+    expect((await f.events(said.runId)).slice(-2)).toMatchObject([
+      { type: "tool_decision_recorded", operationRunId: waiting.id, outcome: "cancelled" },
+      { type: "run_cancelled" }
+    ]);
+    const events = await f.events(said.runId);
+    expect(events.map((event) => event.sequence)).toEqual(events.map((_event, index) => index + 1));
+    expect((await stop()).statusCode).toBe(200);
+    expect(await f.events(said.runId)).toEqual(events);
+    expect((await f.decide(waiting.id, "confirm")).statusCode).toBe(409);
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+    try {
+      const [row] = await sql`select resume_state from agent_runs where id = ${said.runId}`;
+      expect(row?.resume_state).toBeNull();
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+    await f.restart();
+    expect(await f.agentRun(said.runId)).toMatchObject({ status: "cancelled" });
+    expect(executed).toEqual([]);
+    await f.app.close();
+  });
+
+  it("does not expire a confirmation decided before its deadline while its worker is offline", async () => {
+    const f = await fixture();
+    const said = await f.say('/tool demo.change {"text":"confirmed"}');
+    const waiting = await f.waitingCall(said.runId);
+    await f.restart(false);
+    expect((await f.decide(waiting.id, "confirm")).statusCode).toBe(200);
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+    try {
+      await sql`update operation_runs set expires_at = now() - interval '1 second' where id = ${waiting.id}`;
+      expect(
+        await f.app.stores.operationRuns.markExpired({
+          clientInstanceId: f.clientInstanceId,
+          limit: 10
+        })
+      ).toEqual([]);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+    await f.restart();
+    await f.until(said.runId, "completed");
+    expect(executed).toEqual(["confirmed"]);
+    await f.app.close();
+  });
+
+  it("settles Stop racing expiry without a worker and never executes the held call", async () => {
+    const f = await fixture();
+    const said = await f.say('/tool demo.change {"text":"race"}');
+    const waiting = await f.waitingCall(said.runId);
+    await f.restart(false);
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+    try {
+      await sql`update operation_runs set expires_at = now() - interval '1 second' where id = ${waiting.id}`;
+      const [stop] = await Promise.all([
+        f.app.call("conversations.runs.cancel", {
+          params: { conversationId: said.conversationId, runId: said.runId },
+          payload: {}
+        }),
+        f.app.stores.operationRuns.markExpired({ clientInstanceId: f.clientInstanceId, limit: 10 })
+      ]);
+      expect(stop.statusCode, stop.body).toBe(200);
+      expect(await f.agentRun(said.runId)).toMatchObject({ status: "cancelled" });
+      const call = required((await f.callsOf(said.runId)).find((call) => call.id === waiting.id));
+      expect(["denied", "expired"]).toContain(call.status);
+      if (call.status === "denied") expect(call.error?.reason).toBe("cancelled");
+      expect((await f.decide(waiting.id, "confirm")).statusCode).toBe(409);
+      const events = await f.events(said.runId);
+      expect(events.filter((event) => event.type === "tool_decision_recorded")).toHaveLength(1);
+      expect(events.at(-1)?.type).toBe("run_cancelled");
+      expect(events.map((event) => event.sequence)).toEqual(
+        events.map((_event, index) => index + 1)
+      );
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+    await f.restart();
+    expect(executed).toEqual([]);
+    await f.app.close();
+  });
+
+  it("Stop denies a confirmed call queued for an offline worker", async () => {
+    const f = await fixture();
+    const said = await f.say('/tool demo.change {"text":"stop-before-execute"}');
+    const waiting = await f.waitingCall(said.runId);
+    await f.restart(false);
+    expect((await f.decide(waiting.id, "confirm")).statusCode).toBe(200);
+    const stop = await f.app.call("conversations.runs.cancel", {
+      params: { conversationId: said.conversationId, runId: said.runId },
+      payload: {}
+    });
+    expect(stop.statusCode, stop.body).toBe(200);
+    expect(await f.callsOf(said.runId)).toMatchObject([
+      { id: waiting.id, status: "denied", error: { reason: "cancelled" } }
+    ]);
+    await f.restart();
+    expect(await f.agentRun(said.runId)).toMatchObject({ status: "cancelled" });
+    expect(executed).toEqual([]);
     await f.app.close();
   });
 

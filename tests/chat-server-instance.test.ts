@@ -691,9 +691,7 @@ describe("client instance app vertical slice", () => {
     });
   });
 
-  // Fails without the change: the gate read the tool's mode, not the policy of its operation,
-  // and said nothing of when held agent calls arrive.
-  it("rejects startup when an enabled changing tool declares an approval, naming OP-3", async () => {
+  it("W1-8: starts changing approval tools and still refuses reading approval tools", async () => {
     const start = (effect: "reading" | "changing") =>
       createTestInstance({
         config: createTestConfig({
@@ -714,20 +712,8 @@ describe("client instance app vertical slice", () => {
           })
         ]
       });
-
-    await expect(start("changing")).rejects.toMatchObject({
-      code: "VALIDATION_FAILED",
-      message: "Client instance assembly is invalid",
-      details: {
-        issues: [
-          {
-            message:
-              "Tool 'demo.approval' requires approval, but v1 client assembly does not support approval-required tool policies yet. They arrive with the pause of a run (OP-3)."
-          }
-        ]
-      }
-    });
-    // An approval cannot hold a read, so the mode would silently not apply.
+    const app = await start("changing");
+    await app.close();
     await expect(start("reading")).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
       details: {
