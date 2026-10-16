@@ -44,18 +44,9 @@ import {
   permissionGrants
 } from "./schema";
 import {
-  getConfigAssetPageOrigin as getPostgresConfigAssetPageOrigin,
-  listConfigAssetsFromPage as listPostgresConfigAssetsFromPage
-} from "./postgres-config-asset-origins";
-import { listConfigAssetPage as listPostgresConfigAssetPage } from "./postgres-config-asset-page";
-import {
   getConfigAssetRevision as getPostgresConfigAssetRevision,
   getConfigAssetRevisionById as getPostgresConfigAssetRevisionById
 } from "./postgres-config-asset-revisions";
-import {
-  listAgentAvailability as listPostgresAgentAvailability,
-  setAgentAvailability as setPostgresAgentAvailability
-} from "./postgres-agent-availability";
 import {
   discardConfigAssetDraft as discardPostgresConfigAssetDraft,
   unpublishConfigAsset as unpublishPostgresConfigAsset,
@@ -702,8 +693,17 @@ export async function findConfigAssetRow(
   return row;
 }
 
+// The composition root supplies operations whose query modules depend on this module.
 export function createPostgresConfigAssetsStore(
   db: PostgresConnection,
+  deps: Pick<
+    ConfigAssetStore,
+    | "getConfigAssetPageOrigin"
+    | "listConfigAssetsFromPage"
+    | "listConfigAssetPage"
+    | "listAgentAvailability"
+    | "setAgentAvailability"
+  >,
   inTransaction = false
 ): ConfigAssetStore {
   // The row of a save says which object may be in the store, so it is written for itself and
@@ -731,7 +731,7 @@ export function createPostgresConfigAssetsStore(
     async listConfigAssetPage(
       input: Parameters<ConfigAssetStore["listConfigAssetPage"]>[0]
     ): Promise<ConfigAssetRecord[]> {
-      return listPostgresConfigAssetPage(db, input);
+      return deps.listConfigAssetPage(input);
     },
     listPublishedConfigAssets: (input) => listPublishedConfigAssets(db, input),
     async getConfigAsset(
@@ -751,8 +751,8 @@ export function createPostgresConfigAssetsStore(
     },
     getConfigAssetRevisionById: (input) => getPostgresConfigAssetRevisionById(db, input),
     listConfigAssetsByKey: (input) => listConfigAssetsByKey(db, input),
-    listConfigAssetsFromPage: (input) => listPostgresConfigAssetsFromPage(db, input),
-    getConfigAssetPageOrigin: (input) => getPostgresConfigAssetPageOrigin(db, input),
+    listConfigAssetsFromPage: (input) => deps.listConfigAssetsFromPage(input),
+    getConfigAssetPageOrigin: (input) => deps.getConfigAssetPageOrigin(input),
     applyConfigAssetMutations: (input) => applyConfigAssetMutations(db, input),
     publishConfigAssetRevision: (input) => publishPostgresConfigAssetRevision(db, input),
     discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),
@@ -768,12 +768,12 @@ export function createPostgresConfigAssetsStore(
     async listAgentAvailability(
       input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]
     ): ReturnType<ConfigAssetStore["listAgentAvailability"]> {
-      return listPostgresAgentAvailability(db, input);
+      return deps.listAgentAvailability(input);
     },
     async setAgentAvailability(
       input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
     ): ReturnType<ConfigAssetStore["setAgentAvailability"]> {
-      return setPostgresAgentAvailability(db, input);
+      return deps.setAgentAvailability(input);
     }
   };
 }

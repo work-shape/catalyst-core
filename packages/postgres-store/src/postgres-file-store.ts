@@ -83,7 +83,7 @@ import {
   managedFiles,
   schema
 } from "./schema";
-import { type PostgresConnection } from "./postgres-database";
+import type { PostgresConnection as PostgresStoreConnection } from "./postgres-database";
 
 type PostgresConnection = PostgresJsDatabase<typeof schema>;
 
@@ -91,7 +91,7 @@ function leaseExpiry(leaseMs: number) {
   return drizzleSql`now() + make_interval(secs => ${leaseMs}::double precision / 1000)`;
 }
 
-export interface PostgresPlatformFileStoreCallbacks {
+interface PostgresPlatformFileStoreCallbacks {
   /** Tells the job workers of this process that the store enqueued a job. */
   jobsEnqueued(): void;
   touchConversation(
@@ -1225,7 +1225,7 @@ function uniqueStrings(values: string[]): string[] {
 
 /** `jobsEnqueued` is called after the store enqueued a job, as the jobs store reports its own. */
 export function createPostgresFilesStore(
-  db: PostgresConnection,
+  db: PostgresStoreConnection,
   jobsEnqueued: () => void
 ): PlatformFileStore {
   return createPostgresPlatformFileStore(db, {

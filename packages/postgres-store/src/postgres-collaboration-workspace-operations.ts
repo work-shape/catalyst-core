@@ -37,12 +37,6 @@ import {
   productUsers,
   userIdentities
 } from "./schema";
-import {
-  deleteWorkspace as deletePostgresWorkspace,
-  getWorkspaceInDeletion as getPostgresWorkspaceInDeletion,
-  lockWorkspacesForOwnerChange as lockPostgresWorkspacesForOwnerChange,
-  markWorkspaceDeletionRequested as markPostgresWorkspaceDeletionRequested
-} from "./postgres-workspace-deletion";
 
 type WorkspaceDatabase = PostgresConnection;
 
@@ -755,7 +749,17 @@ function accessRequestWhere(input: {
   );
 }
 
-export function createPostgresWorkspacesStore(db: PostgresConnection): CollaborationWorkspaceStore {
+// The composition root supplies operations whose query modules depend on this module.
+export function createPostgresWorkspacesStore(
+  db: PostgresConnection,
+  deps: Pick<
+    CollaborationWorkspaceStore,
+    | "deleteWorkspace"
+    | "getWorkspaceInDeletion"
+    | "lockWorkspacesForOwnerChange"
+    | "markWorkspaceDeletionRequested"
+  >
+): CollaborationWorkspaceStore {
   return {
     async createWorkspace(input: CreateWorkspaceInput): Promise<CollaborationWorkspace> {
       return createWorkspace(db, input);
@@ -787,22 +791,22 @@ export function createPostgresWorkspacesStore(db: PostgresConnection): Collabora
     async markWorkspaceDeletionRequested(
       input: Parameters<CollaborationWorkspaceStore["markWorkspaceDeletionRequested"]>[0]
     ): Promise<boolean> {
-      return markPostgresWorkspaceDeletionRequested(db, input);
+      return deps.markWorkspaceDeletionRequested(input);
     },
     async lockWorkspacesForOwnerChange(
       input: Parameters<CollaborationWorkspaceStore["lockWorkspacesForOwnerChange"]>[0]
     ): Promise<void> {
-      return lockPostgresWorkspacesForOwnerChange(db, input);
+      return deps.lockWorkspacesForOwnerChange(input);
     },
     async getWorkspaceInDeletion(
       input: Parameters<CollaborationWorkspaceStore["getWorkspaceInDeletion"]>[0]
     ): Promise<WorkspaceInDeletion | undefined> {
-      return getPostgresWorkspaceInDeletion(db, input);
+      return deps.getWorkspaceInDeletion(input);
     },
     async deleteWorkspace(
       input: Parameters<CollaborationWorkspaceStore["deleteWorkspace"]>[0]
     ): Promise<CollaborationWorkspace> {
-      return deletePostgresWorkspace(db, input);
+      return deps.deleteWorkspace(input);
     },
     async ensurePersonalWorkspace(
       input: Parameters<CollaborationWorkspaceStore["ensurePersonalWorkspace"]>[0]

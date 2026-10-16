@@ -55,12 +55,6 @@ import {
   productUsers,
   structuredDataResources
 } from "./schema";
-import { listConversationsWithActiveRun as listPostgresConversationsWithActiveRun } from "./postgres-conversation-list-operations";
-import { searchWorkspaceFiles as searchPostgresWorkspaceFiles } from "./postgres-file-search-operations";
-import {
-  deleteModelProviderContinuation as deletePostgresModelProviderContinuation,
-  getModelProviderContinuation as getPostgresModelProviderContinuation
-} from "./postgres-model-provider-continuation-operations";
 
 async function createConversation(
   db: PostgresConnection,
@@ -809,7 +803,17 @@ export async function touchConversation(
     );
 }
 
-export function createPostgresConversationsStore(db: PostgresConnection): ConversationsStore {
+// The composition root supplies operations whose query modules depend on this module.
+export function createPostgresConversationsStore(
+  db: PostgresConnection,
+  deps: Pick<
+    ConversationsStore,
+    | "listConversationsWithActiveRun"
+    | "searchWorkspaceFiles"
+    | "deleteModelProviderContinuation"
+    | "getModelProviderContinuation"
+  >
+): ConversationsStore {
   return {
     async createConversation(input: CreateConversationInput): Promise<Conversation> {
       return createConversation(db, input);
@@ -828,12 +832,12 @@ export function createPostgresConversationsStore(db: PostgresConnection): Conver
     async listConversationsWithActiveRun(
       input: Parameters<ConversationStore["listConversationsWithActiveRun"]>[0]
     ): Promise<ConversationListItem[]> {
-      return listPostgresConversationsWithActiveRun(db, input);
+      return deps.listConversationsWithActiveRun(input);
     },
     async searchWorkspaceFiles(
       input: Parameters<ConversationsStore["searchWorkspaceFiles"]>[0]
     ): Promise<FoundFile[]> {
-      return searchPostgresWorkspaceFiles(db, input);
+      return deps.searchWorkspaceFiles(input);
     },
     async listPrivateConversationsCreatedByUser(
       input: Parameters<ConversationStore["listPrivateConversationsCreatedByUser"]>[0]
@@ -889,12 +893,12 @@ export function createPostgresConversationsStore(db: PostgresConnection): Conver
     async getModelProviderContinuation(
       input: Parameters<ModelProviderContinuationStore["getModelProviderContinuation"]>[0]
     ): Promise<ModelProviderContinuationCheckpoint | undefined> {
-      return getPostgresModelProviderContinuation(db, input);
+      return deps.getModelProviderContinuation(input);
     },
     async deleteModelProviderContinuation(
       input: Parameters<ModelProviderContinuationStore["deleteModelProviderContinuation"]>[0]
     ): Promise<void> {
-      return deletePostgresModelProviderContinuation(db, input);
+      return deps.deleteModelProviderContinuation(input);
     },
     async deleteConversation(
       input: Parameters<ConversationStore["deleteConversation"]>[0]
