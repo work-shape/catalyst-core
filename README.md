@@ -114,15 +114,35 @@ and sets `E2E_EXTERNAL_POSTGRES=1`, so the runner starts no container there.
 
 ### Images of the hosted checks
 
-The checks here and the capabilities' start the instance's own Postgres image instead
+The checks here start the instance's own Postgres image instead
 (ADR-0023): `docker/postgres/Dockerfile`, the official image the live hosts ran plus pgvector,
 pinned by digest in `docker/postgres/pinned-image`. `.github/scripts/start-postgres.sh` and
 `pnpm check:local` read that file, and the demo Compose files repeat it. The workflow "Postgres
 image" checks the pinned image with `docker/postgres/check-image.sh`; when the Dockerfile changed,
 it builds the image, checks it, pushes it for amd64 and arm64 on a push to a branch of this
 repository and fails with the line to pin. Commit that line here and in the capabilities', the
-demo's and the deployments' files that name the digest. The package is the repository's; a job
-signs in to `ghcr.io` with its own token before it pulls.
+demo's and the deployments' files that name the digest.
+
+`work-shape/catalyst-postgres` is private and belongs to `work-shape/catalyst-core`.
+Before another repository consumes it, grant that repository **Read** under **Manage Actions
+access** in the [package settings](https://github.com/orgs/work-shape/packages/container/catalyst-postgres/settings).
+This applies to `catalyst-capabilities`, `deployment.catalyst` and
+`deployment.musterbau` when they switch to the pinned image. Keep core's existing
+publishing access. Repository transfers and image publication do not grant these other
+repositories access. Each consuming workflow also needs `packages: read` and must sign in
+with its own `GITHUB_TOKEN` before pulling (service containers use `credentials`). A successful
+registry login alone does not prove access to the package.
+
+If Actions reports `manifest unknown`, first inspect the exact pin with an authorized
+local Docker login: `docker manifest inspect "$(grep '^ghcr.io/' docker/postgres/pinned-image)"`.
+If the digest resolves locally, check the failing repository's Actions access and token
+permissions before rebuilding or changing the pin. A local pull uses the local credential;
+rerun the failing workflow to verify its repository token can pull too. Keep the package
+private; local Compose and checks that pull it require an authorized registry login as well.
+
+Capabilities CI currently starts stock Postgres 17.6 from public ECR. The deployments install
+versioned npm packages for their release checks and use stock Postgres in Compose. Granting
+package access does not switch those consumers to the pinned image.
 
 Images used as build inputs (`node`, `nginx`, `docker` in
 `docker/vivd-client.Dockerfile`) still come from Docker Hub, which by GitHub's account does not
