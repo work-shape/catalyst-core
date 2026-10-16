@@ -1,4 +1,4 @@
-import { Banner, Breadcrumb } from "@work-shape/catalyst-ui";
+import { Banner, Breadcrumb, Button, NotFound } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import { useStartRun } from "./start-run";
@@ -22,7 +22,7 @@ import { WorkflowHead } from "./workflow-head";
 import { useTestRun } from "./test-run";
 import { startOffered } from "./workflow-model";
 import type { WorkflowStartIssue, WorkflowStepView } from "./workflow-views";
-import { LoadError, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
+import { LoadError, WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
 const PROBLEM_SENTENCES: Readonly<Record<WorkflowReadProblem, TranslationKey>> = {
@@ -145,6 +145,30 @@ export function WorkflowPageView({
     workflow.refusedFor.length > 0 &&
     startOffered({ ...workflow, refusedFor: [] });
   const shown = read;
+  if (shown.problem === "missing") {
+    // No head: a title that waits for a record that never comes would stand there for good.
+    // A frame of its own, so the sentence takes the focus as the title of a page does.
+    return (
+      <WorkflowsFrame key="missing" label={t("workflows.title")} testId="workflow-page" fill>
+        <NotFound
+          action={
+            <Button asChild>
+              <a
+                {...routeLink(
+                  { kind: "workflows", collaborationWorkspaceId: workspaceId },
+                  onOpenRoute
+                )}
+              >
+                {t("workflows.backToList")}
+              </a>
+            </Button>
+          }
+        >
+          {t(PROBLEM_SENTENCES.missing)}
+        </NotFound>
+      </WorkflowsFrame>
+    );
+  }
   return (
     <WorkflowsFrame label={workflow?.name ?? t("workflows.title")} testId="workflow-page" fill>
       <WorkflowHead

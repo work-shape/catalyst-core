@@ -191,6 +191,8 @@ export interface GalleryText
   emptyPresetTriage: string;
   emptyInline: string;
   emptyNoRight: string;
+  notFound: string;
+  notFoundAction: string;
   layoutPage: string;
   layoutInline: string;
   layoutNoRight: string;
@@ -450,6 +452,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     emptyPresetTriage: "Mail triage",
     emptyInline: "Nothing scheduled.",
     emptyNoRight: "No apps yet. A builder of this workspace can add one.",
+    notFound: "There is no agent at this address.",
+    notFoundAction: "Back to Agents",
     layoutPage: "Page",
     layoutInline: "Inline",
     layoutNoRight: "Without the right to act",
@@ -714,6 +718,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     emptyPresetTriage: "E-Mail-Vorsortierung",
     emptyInline: "Nichts geplant.",
     emptyNoRight: "Noch keine Apps. Ein Builder dieses Workspace kann eine hinzufügen.",
+    notFound: "Unter dieser Adresse gibt es keinen Agenten.",
+    notFoundAction: "Zurück zu Agenten",
     layoutPage: "Seite",
     layoutInline: "Eingebettet",
     layoutNoRight: "Ohne Recht zu handeln",

@@ -347,6 +347,7 @@ export function BuildFrame({
             name={assetName}
             page={page}
             back={back}
+            toList={{ href: href({ kindPath: entry.path }), open: openList }}
             onUnsavedChange={setUnsaved}
             onDeleted={() => leaveTo(undefined)}
             onCopy={setCopying}

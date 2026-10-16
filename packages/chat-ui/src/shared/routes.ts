@@ -2,7 +2,15 @@ import { appInterfacePath, type AppMode } from "@work-shape/catalyst-api-client"
 
 /** The areas of the interface: what a route shows. */
 export type WorkspaceRouteView =
-  "chat" | "agents" | "apps" | "workflows" | "settings" | "inbox" | "build" | "ui-library";
+  | "chat"
+  | "agents"
+  | "apps"
+  | "workflows"
+  | "settings"
+  | "inbox"
+  | "build"
+  | "ui-library"
+  | "not-found";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -56,7 +64,9 @@ export type WorkspaceRoute =
   /** The gallery of the shared UI library. Administrators reach it by address; nothing links to it. */
   | { kind: "ui-library" }
   /** The Workflow screens on sample data, beside the UI library and for the same readers. */
-  | { kind: "workflow-samples" };
+  | { kind: "workflow-samples" }
+  /** An address no row resolves. It stays in the address bar and says so. */
+  | { kind: "not-found" };
 
 /** One address of an area: a path pattern, with `$name` for a segment that is read. A last
  * segment `$` alone reads everything after it, as the router's `_splat`. */
@@ -178,6 +188,9 @@ export function areaRoutePaths(): AreaRoutePath[] {
 
 /** The area a route belongs to: the row that holds an address of it. */
 export function areaOfRoute(route: WorkspaceRoute): WorkspaceRouteView {
+  if (route.kind === "not-found") {
+    return "not-found";
+  }
   const row = areaRoutes.find((candidate) =>
     candidate.paths.some((path) => path.route === route.kind)
   );
@@ -186,7 +199,7 @@ export function areaOfRoute(route: WorkspaceRoute): WorkspaceRouteView {
 
 /**
  * The route a path opens. An address that leads elsewhere opens what it leads to, so a shell
- * without a router follows the table too. A path no row resolves opens the application root.
+ * without a router follows the table too. A path no row resolves is not found.
  */
 export function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
   const segments = pathSegments(normalizePathname(pathname));
@@ -203,7 +216,7 @@ export function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
       return resolved;
     }
   }
-  return { kind: "collaboration-workspace-root" };
+  return { kind: "not-found" };
 }
 
 /** The address of a route, as the router takes it: the row's pattern and the route's fields. */
@@ -285,6 +298,7 @@ function routeOf(
     case "inbox":
     case "ui-library":
     case "workflow-samples":
+    case "not-found":
       return { kind };
     case "inbox-item":
       return itemId ? { kind, itemId } : undefined;

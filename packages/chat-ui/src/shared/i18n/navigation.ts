@@ -13,6 +13,7 @@ export const navigation = defineTranslations({
     "nav.loadMoreFailed": "More conversations could not be loaded.",
     "nav.loadingMore": "Loading",
     "nav.newChat": "New chat",
+    "nav.notFound": "There is no page at this address.",
     "nav.paletteConversations": "Conversations",
     "nav.paletteFailed": "Search is not available right now.",
     "nav.paletteNoMatch": 'No results for "{query}".',
@@ -25,6 +26,7 @@ export const navigation = defineTranslations({
     "nav.showChat": "Show chat",
     "nav.skipToContent": "Skip to content",
     "nav.surfaceNoRenderer": "This content cannot be shown yet.",
+    "nav.toChat": "To chat",
     "nav.workflows": "Workflows"
   },
   de: {
@@ -38,6 +40,7 @@ export const navigation = defineTranslations({
     "nav.loadMoreFailed": "Weitere Unterhaltungen konnten nicht geladen werden.",
     "nav.loadingMore": "Wird geladen",
     "nav.newChat": "Neuer Chat",
+    "nav.notFound": "Unter dieser Adresse gibt es keine Seite.",
     "nav.paletteConversations": "Unterhaltungen",
     "nav.paletteFailed": "Die Suche ist gerade nicht verfügbar.",
     "nav.paletteNoMatch": "Keine Treffer für „{query}“.",
@@ -50,6 +53,7 @@ export const navigation = defineTranslations({
     "nav.showChat": "Chat anzeigen",
     "nav.skipToContent": "Zum Inhalt springen",
     "nav.surfaceNoRenderer": "Dieser Inhalt kann noch nicht angezeigt werden.",
+    "nav.toChat": "Zum Chat",
     "nav.workflows": "Workflows"
   }
 });

@@ -516,8 +516,8 @@ export function useWorkspaceChatModel({
     () => resolveWorkflowRights(workflowsOpen === "open" ? platformContextQuery.data : undefined),
     [workflowsOpen, platformContextQuery.data]
   );
-  // With its module off, an address of the Apps or the Workflows area leads to the chat, as an
-  // unknown address does; so does an address of the Workflows for a person who may read none.
+  // With its module off, an address of the Apps or the Workflows area leads to the chat; so does
+  // an address of the Workflows for a person who may read none.
   const areaClosed =
     (view === "apps" && instanceModules !== undefined && !appsEnabled) ||
     (view === "workflows" && workflowsOpen === "closed");

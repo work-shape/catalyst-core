@@ -3163,9 +3163,9 @@ test("Studio opens on a list, and a list and an asset each have an address", asy
   // An address without an asset says so and leads back to the list.
   await page.goto("/build/agents/not_an_agent");
   await expect(
-    page.getByText("There is no agent with the id not_an_agent.", { exact: true })
+    page.getByRole("heading", { name: "There is no agent at this address.", level: 1 })
   ).toBeVisible();
-  await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
+  await page.getByRole("link", { name: "Back to Agents", exact: true }).click();
   await expect(page).toHaveURL(/\/build\/agents$/u);
 });
 

@@ -5,6 +5,7 @@ import { Banner, type BannerTone } from "../feedback/banner";
 import { EmptyState } from "../feedback/empty-state";
 import { FormNotice } from "../feedback/form-notice";
 import { InlineError } from "../feedback/inline-error";
+import { NotFound } from "../feedback/not-found";
 import { Progress } from "../feedback/progress";
 import { Skeleton, SkeletonChips, SkeletonList, SkeletonPage } from "../feedback/skeleton";
 import { Spinner, type SpinnerSize } from "../feedback/spinner";
@@ -161,6 +162,17 @@ export const feedbackGallery: GalleryGroup = {
             </EmptyState>
           </Samples>
         </>
+      )
+    },
+    {
+      name: "NotFound",
+      components: ["NotFound"],
+      render: (text) => (
+        <Samples>
+          <NotFound className="w-full" action={<Button>{text.notFoundAction}</Button>}>
+            {text.notFound}
+          </NotFound>
+        </Samples>
       )
     },
     {

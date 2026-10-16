@@ -61,7 +61,7 @@ describe("collaboration workspace routes", () => {
       conversationId: "conv_2"
     });
     expect(workspaceRouteFromPath("/")).toEqual({ kind: "collaboration-workspace-root" });
-    expect(workspaceRouteFromPath("/w/")).toEqual({ kind: "collaboration-workspace-root" });
+    expect(workspaceRouteFromPath("/w/")).toEqual({ kind: "not-found" });
   });
 
   it("leaves workspace-independent routes alone", () => {

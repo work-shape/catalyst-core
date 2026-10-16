@@ -14,11 +14,13 @@ import {
   FormNotice,
   IconButton,
   InlineError,
+  NotFound,
   Page,
   PageHeader,
   SkeletonPage
 } from "@work-shape/catalyst-ui";
 import type { AssetContent, AssetFileEntry } from "../../shared/api/asset-writes";
+import { opensHere } from "../apps/app-header";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
@@ -35,7 +37,7 @@ import { BuildHistory } from "./build-history";
 import type { VisibleBuildKind } from "./build-model";
 import { formatDateTime } from "../../shared/locale-format";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
-import { buildWorkspaceName } from "../../shared/build-rights";
+import { AGENT_ASSET_KIND, buildWorkspaceName } from "../../shared/build-rights";
 
 interface AssetPageProps {
   source: BuildSource;
@@ -146,12 +148,15 @@ export interface BuildAssetCopy {
 export function ExistingAssetPage({
   kind,
   name,
+  toList,
   onDeleted,
   onCopy,
   ...page
 }: AssetPageProps & {
   kind: VisibleBuildKind<BuildAssetKind>;
   name: string;
+  /** The kind's list: where a page without its asset leads. */
+  toList: { href: string; open(): void };
   onDeleted(): void;
   /** Starts a copy of an asset that ships with the platform. */
   onCopy(copy: BuildAssetCopy): void;
@@ -161,7 +166,36 @@ export function ExistingAssetPage({
   // The page starts again after a restore, so what it says of the restore is kept here.
   const [restored, setRestored] = useState<number>();
   usePageShown(page.page, read.status);
+  const { t } = useTranslation();
 
+  if (read.status === "missing" && entry.kind === AGENT_ASSET_KIND) {
+    // No head that names the address: the sentence and the way back to the list stand alone,
+    // in the middle of the page.
+    return (
+      <div ref={page.page.ref} className="flex min-h-full flex-col">
+        {page.page.above}
+        <NotFound
+          action={
+            <Button asChild>
+              <a
+                href={toList.href}
+                onClick={(event) => {
+                  if (opensHere(event)) {
+                    event.preventDefault();
+                    toList.open();
+                  }
+                }}
+              >
+                {t("build.backToList", { kind: t(entry.label) })}
+              </a>
+            </Button>
+          }
+        >
+          {t(entry.missingText)}
+        </NotFound>
+      </div>
+    );
+  }
   if (read.status === "ready") {
     return (
       // A newer read is another asset to the page: the form starts again from it.

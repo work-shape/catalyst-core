@@ -463,6 +463,17 @@ describe("the page of a Workflow", () => {
     expect(markup).not.toContain("notify-clients</");
   });
 
+  it("shows the not-found state for a Workflow that is not there, with the way to the list", () => {
+    const markup = render(page({ problem: "missing" }));
+    expect(markup).toContain("data-not-found");
+    expect(markup).toContain(`>${t("workflows.missing")}</h1>`);
+    // One step, and no head that waits for a name: no placeholder, no tabs, no start.
+    expect(markup).toMatch(/<a[^>]*href="\/w\/cw_1\/workflows"[^>]*>Back to Workflows<\/a>/u);
+    expect(markup).not.toContain("animate-pulse");
+    expect(markup).not.toContain(t("workflows.tabs"));
+    expect(markup).not.toContain('data-testid="workflow-canvas"');
+  });
+
   it.each([
     ["missing", "workflows.missing"],
     ["unavailable", "workflows.unavailable"],

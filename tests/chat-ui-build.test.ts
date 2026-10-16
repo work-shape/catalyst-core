@@ -472,11 +472,17 @@ describe("Studio frame", () => {
     expect(reader).not.toContain("New skill");
   });
 
-  it("names an address that has no asset", () => {
-    const missing = render({ kindPath: "agents", name: "gone" });
+  it("shows the not-found state at an agent's address that has no agent, without its id", () => {
+    const missing = render({ kindPath: "agents", name: "retired_helper" });
 
-    expect(missing).toContain("There is no agent with the id gone.");
-    expect(missing).toContain('aria-label="Back to Agents"');
+    expect(missing).toContain("data-not-found");
+    expect(missing).toContain(">There is no agent at this address.</h1>");
+    // One step, a link to the list, and no head with a way back beside it.
+    const action =
+      missing.match(/<a[^>]*href="\/build\/agents\/"[^>]*>Back to Agents<\/a>/u)?.[0] ?? "";
+    expect(action).toContain("bg-primary-soft");
+    expect(missing).not.toContain('aria-label="Back to Agents"');
+    expect(missing).not.toContain("retired_helper");
   });
 
   it("shows a skeleton until the instance said what the reader may do, and until a list arrived", () => {

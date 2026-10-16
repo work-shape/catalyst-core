@@ -506,6 +506,27 @@ describe("Banner", () => {
   });
 });
 
+describe("NotFound", () => {
+  it("is an icon, one sentence as the page's heading, and one next step", () => {
+    const markup = renderToStaticMarkup(
+      createElement(library.NotFound, {
+        action: createElement("button", { type: "button" }, "To chat"),
+        children: "There is no page at this address."
+      })
+    );
+
+    expect(markup).toMatch(/^<div data-not-found=""[^>]*><span[^>]*><svg[^>]*aria-hidden="true"/u);
+    expect(markup).toContain(">There is no page at this address.</h1>");
+    // The page's frame focuses the heading; like a page head's title, it shows no ring then.
+    expect(markup).toMatch(/<h1 class="[^"]*\boutline-none\b[^"]*">/u);
+    expect(markup.match(/<h1/gu)).toHaveLength(1);
+    expect(markup.match(/<button/gu)).toHaveLength(1);
+    expect(markup).toMatch(
+      /<\/h1><div[^>]*><button type="button">To chat<\/button><\/div><\/div>$/u
+    );
+  });
+});
+
 describe("SurfaceFrame", () => {
   it("puts its slots in one order under a header of the shared height", () => {
     const slot = (text: string) => createElement("span", null, text);

@@ -166,9 +166,9 @@ describe("the addresses of the Workflows area", () => {
     expect(areaOfRoute(route)).toBe("workflows");
   });
 
-  it("opens the application root for an address the area does not have", () => {
+  it("says not found for an address the area does not have", () => {
     expect(workspaceRouteFromPath("/w/cw_1/workflows/notify/runs/wr_7/more")).toEqual({
-      kind: "collaboration-workspace-root"
+      kind: "not-found"
     });
   });
 });

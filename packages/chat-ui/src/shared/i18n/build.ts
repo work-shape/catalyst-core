@@ -99,7 +99,7 @@ export const build = defineTranslations({
     "build.textsIn": "Texts in",
     "build.textMissing": "1 text is empty in this language",
     "build.textsMissing": "{count} texts are empty in this language",
-    "build.agentMissing": "There is no agent with the id {name}.",
+    "build.agentMissing": "There is no agent at this address.",
     "build.agentsEmpty":
       "No agents yet. An agent answers in chat with its own instructions, tools and skills.",
     "build.agentsEmptyReadOnly": "No agents yet.",
@@ -234,7 +234,7 @@ export const build = defineTranslations({
     "build.textsIn": "Texte in",
     "build.textMissing": "1 Text ist in dieser Sprache leer",
     "build.textsMissing": "{count} Texte sind in dieser Sprache leer",
-    "build.agentMissing": "Es gibt keinen Agenten mit der Kennung {name}.",
+    "build.agentMissing": "Unter dieser Adresse gibt es keinen Agenten.",
     "build.agentsEmpty":
       "Noch keine Agenten. Ein Agent antwortet im Chat mit eigenen Anweisungen, Werkzeugen und Skills.",
     "build.agentsEmptyReadOnly": "Noch keine Agenten.",

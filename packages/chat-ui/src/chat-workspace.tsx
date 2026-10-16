@@ -47,6 +47,7 @@ import { ViewPolicyProvider } from "./chat/views/view-policy";
 import { agentChipDisplayFor } from "./chat/workspace/agent-selector";
 import { ClientBrandingHeader } from "./chat/workspace/client-branding";
 import { ConversationPalette } from "./chat/workspace/conversation-palette";
+import { RouteNotFound } from "./chat/workspace/route-not-found";
 import { UserMenu } from "./chat/workspace/user-menu";
 import {
   ConfigCheckPanel,
@@ -714,7 +715,11 @@ function ChatWorkspaceContent({
                               />
                             ) : undefined
                           }
-                        />
+                        >
+                          {model.route.view === "not-found" ? (
+                            <RouteNotFound onOpenChat={startNewChat} />
+                          ) : null}
+                        </ControlPlaneRoutes>
                       </DockedPage>
                     )}
                   </ConnectionDraftHostProvider>

@@ -174,7 +174,7 @@ describe("area route table", () => {
     expect(workspaceRoutePath({ kind: "build" })).toBe("/build");
   });
 
-  it("opens the application root for an address no row resolves", () => {
+  it("says not found for an address no row resolves, and leaves the address as it is", () => {
     for (const path of [
       "/w/",
       "/w/cw_1/c",
@@ -182,9 +182,12 @@ describe("area route table", () => {
       "/c/a/b",
       "/admin/nothing",
       "/x",
-      "/build/a/b/c"
+      "/build/a/b/c",
+      // A Workflow's address names its workspace; without it there is no such page.
+      "/workflows/unknown"
     ]) {
-      expect(workspaceRouteFromPath(path)).toEqual({ kind: "collaboration-workspace-root" });
+      expect(workspaceRouteFromPath(path)).toEqual({ kind: "not-found" });
+      expect(areaOfRoute(workspaceRouteFromPath(path))).toBe("not-found");
     }
   });
 
