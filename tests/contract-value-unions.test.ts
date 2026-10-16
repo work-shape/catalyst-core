@@ -70,7 +70,7 @@ it("preserves the exported unions when contract lists become shared", () => {
   expectTypeOf<AgentRunStatus>().toEqualTypeOf<
     | "queued"
     | "running"
-    | "waiting_for_permission"
+    | "waiting_for_decision"
     | "cancelling"
     | "completed"
     | "cancelled"

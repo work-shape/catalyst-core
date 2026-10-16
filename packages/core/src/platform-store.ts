@@ -1,3 +1,4 @@
+import type { AgentRunDecisionStore } from "./agent-run-decision";
 import type { AgentRunStore, RunObservationStore } from "./agent-runtime";
 import type { AuditEventStore } from "./audit";
 import type {
@@ -41,7 +42,7 @@ export interface ConversationsStore
     ModelProviderContinuationStore,
     FileSearchStore {}
 
-export interface AgentRunsStore extends AgentRunStore, RunObservationStore {}
+export interface AgentRunsStore extends AgentRunStore, RunObservationStore, AgentRunDecisionStore {}
 
 export interface ApprovalsStore extends ApprovalRequestStore, ApprovalDecisionStore {}
 

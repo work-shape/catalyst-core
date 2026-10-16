@@ -19,12 +19,14 @@ import {
   type Logger,
   type ModuleSnapshot,
   type PlatformStores,
+  type ToolDecisionRunner,
   type ToolOperationRunner
 } from "@work-shape/catalyst-core";
 import type { ModelGateway } from "@work-shape/catalyst-model-provider";
 import { conversationToolNames } from "./conversation-offer";
 import {
   createBoundedDataToolSource,
+  createDecidedToolCallRunner,
   createToolOperationRunner,
   registerToolOperations,
   type ToolRegistry
@@ -127,6 +129,8 @@ export interface InstanceAgentTools {
   dataTools?: DataToolSource;
   dataToolDescribeTimeoutMs: number;
   runTool: ToolOperationRunner;
+  /** Carries out a call a run waited on once its person decided, in the run's worker. */
+  runDecidedTool: ToolDecisionRunner;
 }
 
 /**
@@ -162,6 +166,7 @@ export function createInstanceAgentTools(
       operationCalls.deps,
       tools,
       dataTools && { source: dataTools, describeTimeoutMs }
-    )
+    ),
+    runDecidedTool: createDecidedToolCallRunner(operationCalls.deps)
   };
 }

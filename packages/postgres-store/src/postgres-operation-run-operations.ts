@@ -1,5 +1,6 @@
 import {
   INTERRUPTED_RUN_ERROR,
+  WAITING_OPERATION_RUN_STATUSES,
   type OperationRun,
   type OperationRunStatus,
   type OperationRunStore
@@ -14,6 +15,7 @@ import {
   isNull,
   lt,
   lte,
+  ne,
   notInArray,
   or,
   sql
@@ -166,7 +168,9 @@ async function finishOperationRun(
             inputRef: end.inputRef,
             expiresAt: new Date(end.expiresAt)
           }
-        : { finishedAt }),
+        : end.status === "pending_confirmation"
+          ? { inputRef: end.inputRef, expiresAt: new Date(end.expiresAt) }
+          : { finishedAt }),
       ...(end.status === "done"
         ? {
             output: end.output,
@@ -261,12 +265,21 @@ async function resumeOperationRun(
     .update(operationRuns)
     .set({ status: "running", decision: input.decision, startedAt, updatedAt: startedAt })
     // Only a run that still waits and whose time has not run out is taken, so an approval and
-    // the expiry of the same run never both win.
+    // the expiry of the same run never both win. A confirmed call has had its decision in time
+    // and waits only for the worker of its Agent Run.
     .where(
       and(
         identity(input),
-        eq(operationRuns.status, "pending_approval"),
-        or(isNull(operationRuns.expiresAt), sql`${operationRuns.expiresAt} > now()`)
+        or(
+          and(
+            eq(operationRuns.status, "pending_approval"),
+            or(isNull(operationRuns.expiresAt), sql`${operationRuns.expiresAt} > now()`)
+          ),
+          and(
+            eq(operationRuns.status, "pending_confirmation"),
+            sql`${operationRuns.decision}->>'mode' = 'confirmed'`
+          )
+        )
       )
     )
     .returning();
@@ -288,7 +301,7 @@ async function endWaitingOperationRun(
       error: end.status === "denied" ? { ...end.error, denial: end.denial } : end.error,
       ...(input.decision ? { decision: input.decision } : {})
     })
-    .where(and(identity(input), eq(operationRuns.status, "pending_approval")))
+    .where(and(identity(input), inArray(operationRuns.status, WAITING_OPERATION_RUN_STATUSES)))
     .returning();
   return row ? mapOperationRun(row) : undefined;
 }
@@ -297,18 +310,20 @@ async function markOperationRunsExpired(
   db: PostgresConnection,
   input: Input<"markExpired">
 ): Promise<OperationRun[]> {
-  const waiting = [
-    "pending_confirmation",
-    "pending_approval"
-  ] as const satisfies readonly OperationRunStatus[];
+  // A confirmed call waits only for its Agent Run's worker: it was decided in time.
+  const undecided = or(
+    ne(operationRuns.status, "pending_confirmation"),
+    isNull(operationRuns.decision)
+  );
   const due = db
     .select({ id: operationRuns.id })
     .from(operationRuns)
     .where(
       and(
         eq(operationRuns.clientInstanceId, input.clientInstanceId),
-        inArray(operationRuns.status, waiting),
-        lte(operationRuns.expiresAt, sql`now()`)
+        inArray(operationRuns.status, WAITING_OPERATION_RUN_STATUSES),
+        lte(operationRuns.expiresAt, sql`now()`),
+        undecided
       )
     )
     .orderBy(asc(operationRuns.expiresAt))
@@ -317,7 +332,13 @@ async function markOperationRunsExpired(
     .update(operationRuns)
     .set({ status: "expired", finishedAt: sql`now()`, updatedAt: sql`now()` })
     // The status is asked again: a run an approver took meanwhile is running, not expired.
-    .where(and(inArray(operationRuns.id, due), inArray(operationRuns.status, waiting)))
+    .where(
+      and(
+        inArray(operationRuns.id, due),
+        inArray(operationRuns.status, WAITING_OPERATION_RUN_STATUSES),
+        undecided
+      )
+    )
     .returning();
   return rows.map(mapOperationRun);
 }
@@ -405,7 +426,7 @@ function identity(input: Pick<Input<"get">, "clientInstanceId" | "id">) {
   );
 }
 
-function mapOperationRun(row: OperationRunRow): OperationRun {
+export function mapOperationRun(row: OperationRunRow): OperationRun {
   return {
     id: row.id,
     clientInstanceId: row.clientInstanceId,

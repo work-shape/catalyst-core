@@ -7,6 +7,7 @@ import type {
   ProviderCheckResult,
   ReasoningEffortConfig,
   SupportedImageMimeType,
+  ToolInputParseErrorCode,
   WebSource
 } from "@work-shape/catalyst-core";
 
@@ -43,7 +44,7 @@ export interface ModelToolCall {
   toolName: string;
   input: unknown;
   inputParseError?: {
-    code: "invalid_json" | "invalid_text";
+    code: ToolInputParseErrorCode;
     message: string;
     rawInput?: string;
   };

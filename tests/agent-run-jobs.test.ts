@@ -5,11 +5,17 @@ import {
   AGENT_RUN_MAX_QUEUED_MS,
   asClientInstanceId,
   asToolCallId,
+  createPlatformId,
   type AgentRunAuthorization,
   type AgentRunJobLease,
+  type AgentRunResumeState,
+  type AgentRun,
+  type OperationRun,
+  type PlatformStores,
   type ModelProviderConfig,
   type RuntimeCallContext
 } from "@work-shape/catalyst-core";
+import { runCommandSchema } from "@work-shape/catalyst-api-contract";
 import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
 import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { afterEach, describe, expect, it } from "vitest";
@@ -405,25 +411,80 @@ describe("agent runs as claimed jobs", () => {
     expect(await fixture.jobs()).toMatchObject([{ status: "succeeded", attempts: 1 }]);
   });
 
-  it("fails a run that asks for a permission, which a worker cannot resume", async () => {
-    const fixture = await createFixture("permission");
+  it("lets a run that waits for a decision hold no lease, keep the conversation and resume in a new job", async () => {
+    const fixture = await createFixture("decision");
     const run = await fixture.accept();
+    const call = await waitingCall(fixture, run, db.store);
     const pass = fixture.worker().runDue();
     const execution = await fixture.executor.next();
-    execution.emit((base) => ({
-      type: "tool_permission_requested",
-      ...base,
-      toolCallId: asToolCallId("toolcall-1"),
-      toolName: "dangerous-tool",
-      reason: "Approval required"
-    }));
+    execution.delta("Let me change it.");
+    execution.waitForDecision(
+      {
+        toolCallId: asToolCallId("toolcall-1"),
+        toolName: "demo.change",
+        operationRunId: call.id,
+        operationId: "demo.change",
+        mode: "confirm",
+        inputPreview: { text: "one" },
+        expiresAt: required(call.expiresAt)
+      },
+      resumeState(call.id)
+    );
     await pass;
 
+    // The run waits, its job is done and nothing holds it: no worker, no lease.
     expect(await fixture.run(run)).toMatchObject({
-      status: "failed",
-      error: { code: "AGENT_RUN_PERMISSION_UNSUPPORTED" }
+      status: "waiting_for_decision",
+      lastSequence: 2
     });
-    expect(await fixture.eventTypes(run)).toEqual(["run_failed"]);
+    expect(await fixture.eventTypes(run)).toEqual(["message_delta", "tool_decision_requested"]);
+    expect(await fixture.jobs()).toMatchObject([{ status: "succeeded", lease_token: null }]);
+    const [row] = await db.sql<{ lease_token: string | null; resume_state: unknown }[]>`
+      select lease_token, resume_state from agent_runs where id = ${run.id}`;
+    expect(row).toEqual({ lease_token: null, resume_state: resumeState(call.id) });
+    // The conversation still has its run: another message starts none.
+    await expect(fixture.accept("Another one")).rejects.toMatchObject({ code: "CONFLICT" });
+    // No upkeep takes a waiting run for a lost or stuck one.
+    await fixture.acceptedAgo(run, AGENT_RUN_MAX_QUEUED_MS + AGENT_RUN_LEASE_MS);
+    await fixture.expireJobLeases();
+    await fixture.upkeepWorker().runDue();
+    expect(await fixture.run(run)).toMatchObject({ status: "waiting_for_decision" });
+    // A run command is only `continue` now: the old decision command is refused.
+    expect(
+      runCommandSchema.safeParse({
+        type: "tool_permission_decision",
+        toolCallId: "toolcall-1",
+        decision: "approve"
+      }).success
+    ).toBe(false);
+
+    // The person confirms: the run is queued with a new job, which resumes where it paused.
+    const decided = await db.store.agentRuns.decideWaitingToolCall({
+      clientInstanceId: fixture.clientInstanceId,
+      operationRunId: call.id,
+      deciderUserId: fixture.user.id,
+      decision: { mode: "confirmed", by: fixture.user.id, at: new Date().toISOString() }
+    });
+    expect(decided.agentRun).toMatchObject({ status: "queued", lastSequence: 3 });
+    const resumed = fixture.worker().runDue();
+    const second = await fixture.executor.next();
+    expect(second.input.resume).toEqual({ state: resumeState(call.id), lastSequence: 3 });
+    second.delta("Done.");
+    second.complete();
+    await resumed;
+
+    expect(await fixture.run(run)).toMatchObject({ status: "completed", lastSequence: 5 });
+    expect(await fixture.eventTypes(run)).toEqual([
+      "message_delta",
+      "tool_decision_requested",
+      "tool_decision_recorded",
+      "message_delta",
+      "run_completed"
+    ]);
+    const [ended] = await db.sql<{ resume_state: unknown }[]>`
+      select resume_state from agent_runs where id = ${run.id}`;
+    expect(ended).toEqual({ resume_state: null });
+    expect(await fixture.jobs()).toMatchObject([{ status: "succeeded" }, { status: "succeeded" }]);
   });
 
   it("fails a run whose execution ends without ending the run", async () => {
@@ -630,4 +691,61 @@ function leaseOf(job: AgentRunJobRecord): AgentRunJobLease {
 async function assistantTexts(fixture: Fixture): Promise<string[]> {
   const messages = await fixture.messages();
   return messages.filter((message) => message.role === "assistant").map((message) => message.text);
+}
+
+/** What a run that paused on its first call keeps, the call waiting on `operationRunId`. */
+function resumeState(operationRunId: OperationRun["id"]): AgentRunResumeState {
+  return {
+    version: 1,
+    step: 0,
+    stepMessageId: "msg_step",
+    modelInputFrom: { kind: "input" },
+    toolCalls: [{ toolCallId: "toolcall-1", toolName: "demo.change", input: { text: "one" } }],
+    doneToolCallIds: [],
+    waiting: [{ toolCallId: "toolcall-1", operationRunId, frozenInput: { text: "one" } }],
+    repeatedToolCalls: {},
+    compacted: false
+  };
+}
+
+/** The call the run's agent makes, waiting for the person's confirmation. */
+async function waitingCall(
+  fixture: Fixture,
+  run: AgentRun,
+  stores: PlatformStores
+): Promise<OperationRun> {
+  const created = required(
+    await stores.operationRuns.create({
+      id: createPlatformId<"OperationRunId">("oprun"),
+      clientInstanceId: fixture.clientInstanceId,
+      operation: "demo.change",
+      effect: "changing",
+      target: "live",
+      actor: { kind: "user", id: fixture.user.id, label: fixture.user.displayLabel },
+      ownerUserId: fixture.user.id,
+      origin: {
+        kind: "agent",
+        agentRunId: run.id,
+        conversationId: run.conversationId,
+        agentName: run.agentName,
+        toolCallId: asToolCallId("toolcall-1"),
+        toolName: "demo.change"
+      },
+      inputHash: "a".repeat(64),
+      correlationId: run.correlationId,
+      startedAt: new Date().toISOString()
+    })
+  );
+  return required(
+    await stores.operationRuns.finish({
+      clientInstanceId: fixture.clientInstanceId,
+      id: created.id,
+      end: {
+        status: "pending_confirmation",
+        inputRef: `agent_run:${run.id}`,
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        finishedAt: new Date().toISOString()
+      }
+    })
+  );
 }

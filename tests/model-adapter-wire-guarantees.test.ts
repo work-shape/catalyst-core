@@ -26,6 +26,26 @@ interface Sent {
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const userMessage: ModelMessage[] = [{ role: "user", content: "Say hello." }];
 
+/**
+ * The model input of a run that paused on a call for its person's decision and went on in
+ * another worker: rebuilt from the stored messages, two calls of one step and their results,
+ * one executed after the confirmation and one declined.
+ */
+const resumedTurn: ModelMessage[] = [
+  ...userMessage,
+  {
+    role: "assistant",
+    content: "",
+    toolCalls: [
+      { toolCallId: "call_one", toolName: "save_data", input: { text: "one" } },
+      { toolCallId: "call_two", toolName: "save_data", input: { text: "two" } }
+    ]
+  },
+  { role: "tool", toolCallId: "call_one", content: '{"saved":"one"}' },
+  { role: "tool", toolCallId: "call_two", content: "The user declined this call. Nothing ran." }
+];
+const saveData = { name: "save_data", description: "Saves data." };
+
 function openAiAnswer(api: Api): unknown {
   return api === "responses"
     ? { output_text: "Hello.", usage: { input_tokens: 3, output_tokens: 1, total_tokens: 4 } }
@@ -368,6 +388,42 @@ describe.each<Api>(["responses", "chat_completions"])("OpenAI-compatible wire: %
             .map((toolCall) => (isRecord(toolCall.function) ? toolCall.function : {}))[0];
     expect(call?.arguments).toBe('{"a":');
   });
+
+  it("sends the tool-result turn of a resumed run as its calls and their results, in order", async () => {
+    const sent = openAiProvider(() => Response.json(openAiAnswer(api)));
+    await azureDeployment().complete(
+      {
+        providerId: "azure",
+        model: "dev-gpt-6.1-sol",
+        tools: [saveData],
+        messages: resumedTurn
+      },
+      {}
+    );
+
+    if (api === "responses") {
+      const items = records(sent[0]?.body.input).filter((item) => item.role !== "user");
+      expect(items).toMatchObject([
+        { type: "function_call", call_id: "call_one", name: "save_data" },
+        { type: "function_call", call_id: "call_two", name: "save_data" },
+        { type: "function_call_output", call_id: "call_one", output: '{"saved":"one"}' },
+        { type: "function_call_output", call_id: "call_two" }
+      ]);
+    } else {
+      expect(sent[0]?.body.messages).toMatchObject([
+        { role: "user" },
+        {
+          role: "assistant",
+          tool_calls: [
+            { id: "call_one", function: { name: "save_data" } },
+            { id: "call_two", function: { name: "save_data" } }
+          ]
+        },
+        { role: "tool", tool_call_id: "call_one", content: '{"saved":"one"}' },
+        { role: "tool", tool_call_id: "call_two" }
+      ]);
+    }
+  });
 });
 
 describe("OpenAI Responses stream failures", () => {
@@ -548,6 +604,31 @@ describe("Google Vertex wire", () => {
       );
     }
   );
+
+  it("sends the tool-result turn of a resumed run with the names of its calls", async () => {
+    const { sent } = google();
+    const adapter = await vertex();
+    await adapter.complete({ ...request, tools: [saveData], messages: resumedTurn });
+
+    // The results of calls made together are one turn, each named by its call's function.
+    expect(sent[0]?.body.contents).toEqual([
+      { role: "user", parts: [{ text: "Say hello." }] },
+      {
+        role: "model",
+        parts: [
+          { functionCall: { name: "save_data", args: { text: "one" } } },
+          { functionCall: { name: "save_data", args: { text: "two" } } }
+        ]
+      },
+      {
+        role: "user",
+        parts: [
+          { functionResponse: { name: "save_data", response: { output: expect.anything() } } },
+          { functionResponse: { name: "save_data", response: { output: expect.anything() } } }
+        ]
+      }
+    ]);
+  });
 
   it("asks for no grounding, no cached content and no settings beyond the call", async () => {
     const { sent } = google();

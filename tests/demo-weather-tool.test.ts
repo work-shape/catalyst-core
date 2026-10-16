@@ -7,6 +7,7 @@ import {
   isJsonObject,
   type LocaleCode,
   type ToolExecutionContext,
+  type ToolDecisionWait,
   type ToolExecutionResult
 } from "@work-shape/catalyst-core";
 import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
@@ -87,7 +88,9 @@ describe("demo weather forecast tool", () => {
   });
 });
 
-async function runWeatherTool(locale?: LocaleCode): Promise<ToolExecutionResult> {
+async function runWeatherTool(
+  locale?: LocaleCode
+): Promise<ToolExecutionResult | ToolDecisionWait> {
   const context = createToolContext(locale);
   const runTool = createTestToolRunner({
     registry: new ToolRegistry({ tools: [weatherForecastTool] }),

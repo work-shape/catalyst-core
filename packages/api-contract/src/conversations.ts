@@ -1,3 +1,4 @@
+import { TOOL_DECISION_MODES, TOOL_DECISION_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
 import {
   AGENT_RUN_FAILURE_CATEGORIES,
   AGENT_RUN_STATUSES,
@@ -391,6 +392,9 @@ export const renameConversationRequestSchema = z.object({
   title: z.string().trim().min(1).max(120)
 });
 
+/** How a call waits: for its own person's confirmation, or for another person's approval. */
+export const toolDecisionModeSchema = z.enum(TOOL_DECISION_MODES);
+
 export const agentRunStatusSchema = z.enum(AGENT_RUN_STATUSES);
 
 export const agentRunErrorSchema = z.object({
@@ -454,14 +458,28 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     input: z.unknown()
   }),
   z.object({
-    type: z.literal("tool_permission_requested"),
+    type: z.literal("tool_decision_requested"),
     runId: z.string(),
     sequence: z.number(),
     createdAt: timestampSchema,
     toolCallId: z.string(),
     toolName: z.string(),
-    reason: z.string(),
-    preview: z.record(z.string(), z.unknown()).optional()
+    operationRunId: z.string(),
+    operationId: z.string(),
+    mode: toolDecisionModeSchema,
+    inputPreview: z.unknown(),
+    expiresAt: timestampSchema
+  }),
+  z.object({
+    type: z.literal("tool_decision_recorded"),
+    runId: z.string(),
+    sequence: z.number(),
+    createdAt: timestampSchema,
+    toolCallId: z.string(),
+    operationRunId: z.string(),
+    outcome: z.enum(TOOL_DECISION_OUTCOMES),
+    decidedBy: z.string().optional(),
+    reason: z.string().optional()
   }),
   z.object({
     type: z.literal("tool_call_completed"),
@@ -539,6 +557,15 @@ export const activeRunSummarySchema = z.object({
   lastSequence: z.number().int().nonnegative()
 });
 
+/** While a call waits for a decision: what the person is asked to decide. */
+const toolCallDecisionSchema = z.object({
+  operationRunId: z.string(),
+  operationId: z.string(),
+  mode: toolDecisionModeSchema,
+  inputPreview: z.unknown(),
+  expiresAt: timestampSchema
+});
+
 const agentRunProjectionToolCallStateSchema = z.enum(TOOL_CALL_STATES);
 
 export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
@@ -559,7 +586,8 @@ export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
     input: z.unknown().optional(),
     state: agentRunProjectionToolCallStateSchema,
     output: z.unknown().optional(),
-    errorText: z.string().optional()
+    errorText: z.string().optional(),
+    decision: toolCallDecisionSchema.optional()
   })
 ]);
 
@@ -590,7 +618,8 @@ export const agentRunProjectionSchema = z.object({
       input: z.unknown().optional(),
       state: agentRunProjectionToolCallStateSchema,
       output: z.unknown().optional(),
-      errorText: z.string().optional()
+      errorText: z.string().optional(),
+      decision: toolCallDecisionSchema.optional()
     })
   ),
   error: agentRunErrorSchema.optional()
@@ -630,17 +659,10 @@ export const createConversationRunRequestSchema = startConversationRunRequestSch
   conversation: createConversationRequestSchema.optional()
 });
 
-export const runCommandSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("tool_permission_decision"),
-    toolCallId: z.string().min(1),
-    approved: z.boolean(),
-    reason: z.string().min(1).optional()
-  }),
-  z.object({
-    type: z.literal("continue")
-  })
-]);
+// A decision on a waiting call is `operations.decide`, keyed by the call's Operation Run.
+export const runCommandSchema = z.object({
+  type: z.literal("continue")
+});
 
 export const runCommandRequestSchema = z.object({
   command: runCommandSchema

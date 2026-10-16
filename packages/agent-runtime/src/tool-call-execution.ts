@@ -2,6 +2,7 @@ import {
   type AgentRunId,
   type RuntimeCallContext,
   type StartAgentRunInput,
+  type ToolDecisionWait,
   type ToolExecutionResult,
   type ToolOperationRunner,
   asToolCallId
@@ -34,10 +35,10 @@ export async function executeToolCall(input: {
     limit: number;
   };
   beforeDispatch?: () => void | Promise<void>;
-}): Promise<{
-  result: ToolExecutionResult;
-  modelOutput: ModelOutputProjection;
-}> {
+}): Promise<
+  | { result: ToolExecutionResult; modelOutput: ModelOutputProjection }
+  | { waiting: ToolDecisionWait }
+> {
   const toolCallId = asToolCallId(input.toolCall.toolCallId);
   input.state.emit({
     type: "tool_call_started",
@@ -105,12 +106,31 @@ export async function executeToolCall(input: {
   await input.beforeDispatch?.();
   // The surface is asked before the input is read, so a call the agent may not make is
   // refused as that and not for its input.
-  const result = await input.runTool(request, input.context, {
+  const answer = await input.runTool(request, input.context, {
     unreadableInput: input.toolCall.inputParseError && {
       code: input.toolCall.inputParseError.code,
       message: input.toolCall.inputParseError.message
     }
   });
+  // The call waits for a decision: it has not run, and the run pauses on it.
+  if (answer.status === "waiting_for_decision") {
+    return { waiting: answer };
+  }
+  return emitToolCallEnd(input, answer);
+}
+
+/** Answers the agent what a call came to, with the event that ends the call. */
+export async function emitToolCallEnd(
+  input: {
+    modelContext: ModelContextProjectionOptions;
+    runId: AgentRunId;
+    startInput: StartAgentRunInput;
+    state: RunState;
+    toolCall: ModelToolCall;
+  },
+  result: ToolExecutionResult
+): Promise<{ result: ToolExecutionResult; modelOutput: ModelOutputProjection }> {
+  const toolCallId = asToolCallId(input.toolCall.toolCallId);
   const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
   logProjectionNotice(input, modelOutput);
   input.state.emit({

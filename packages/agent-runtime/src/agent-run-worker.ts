@@ -19,6 +19,7 @@ import {
   type AgentRunError,
   type AgentRunId,
   type AgentRunJobLease,
+  type AgentRunResumeState,
   type AgentRuntimeEvent,
   type AppendAssistantMessageInput,
   type AppendClaimedAgentRunEndInput,
@@ -59,6 +60,11 @@ export interface AgentRunExecution {
    * of the run, and the events end with `run_cancelled`.
    */
   cancel(reason: string | undefined): Promise<void>;
+  /**
+   * What the run keeps to go on once it waits for a decision: read when its
+   * `tool_decision_requested` event is stored, in the transaction that sets it waiting.
+   */
+  resumeState?(): AgentRunResumeState | undefined;
 }
 
 export type ExecuteAgentRun = (
@@ -136,7 +142,7 @@ export function createAgentRunJobs(options: AgentRunJobsOptions): AgentRunJobs {
             return;
           }
           const run = claim.row;
-          await executeClaimedRun(options, run, lease, control);
+          await executeClaimedRun(options, run, lease, control, claim.resumeState);
         },
         async onHeartbeat(job, mirror, txStores) {
           await txStores.agentRuns.renewAgentRunJobLease({
@@ -169,7 +175,8 @@ async function executeClaimedRun(
   options: AgentRunJobsOptions,
   run: AgentRun,
   lease: AgentRunJobLease,
-  control: JobControl
+  control: JobControl,
+  resumeState: AgentRunResumeState | undefined
 ): Promise<void> {
   const store = options.stores.agentRuns;
   const ofRun = { clientInstanceId: run.clientInstanceId, runId: run.id };
@@ -179,7 +186,9 @@ async function executeClaimedRun(
   let cancellation: { reason?: string } | undefined;
   let cancelExecution: ((reason: string | undefined) => Promise<void>) | undefined;
   let cancelSent = false;
+  // Set once the event that ends this execution is stored: the run ended, or waits for a decision.
   let terminalWritten = false;
+  let resumeStateOf: (() => AgentRunResumeState | undefined) | undefined;
 
   const stop = (cause: StopCause, reason: string) => {
     // The first cause stands, but a lost lease outranks the others: nothing more is stored.
@@ -267,17 +276,33 @@ async function executeClaimedRun(
    * answer, never an answer beside a failed run.
    */
   let heldEnd: RunWrite | undefined;
-  const storeWrite = (batch: RunWrite) =>
-    fenced(() => store.appendClaimedAgentRunEnd({ ...ofRun, lease, ...batch }));
+  const storeWrite = (batch: RunWrite) => {
+    // A run that pauses keeps where it goes on from, in the transaction that sets it waiting.
+    const resumeState =
+      batch.events.at(-1)?.type === "tool_decision_requested" ? resumeStateOf?.() : undefined;
+    return fenced(() =>
+      store.appendClaimedAgentRunEnd({
+        ...ofRun,
+        lease,
+        ...batch,
+        ...(resumeState ? { resumeState } : {})
+      })
+    );
+  };
   const write = async (batch: RunWrite): Promise<void> => {
     const last = batch.events.at(-1);
     try {
       await storeWrite(batch);
     } catch (error) {
-      // The store refuses to end a run as completed or failed once it was asked to cancel.
-      // The request came between the last look at the row and this event: the run ends as
-      // cancelled, with what it stored so far and what this write carries.
-      if (last?.type !== "run_completed" && last?.type !== "run_failed") throw error;
+      // The store refuses to end a run as completed or failed, or to let it wait, once it was
+      // asked to cancel. The request came between the last look at the row and this event:
+      // the run ends as cancelled, with what it stored so far and what this write carries.
+      if (
+        last?.type !== "run_completed" &&
+        last?.type !== "run_failed" &&
+        last?.type !== "tool_decision_requested"
+      )
+        throw error;
       if (error instanceof JobLeaseLostError) throw error;
       const latest = await store.getAgentRun(ofRun);
       if (latest?.status !== "cancelling") throw error;
@@ -372,7 +397,7 @@ async function executeClaimedRun(
   const closeRun = async (failure: AgentRunError): Promise<void> => {
     const latest = await store.getAgentRun(ofRun);
     if (!latest) return;
-    if (ENDED_STATUSES.has(latest.status)) {
+    if (ENDED_STATUSES.has(latest.status) || latest.status === "waiting_for_decision") {
       // Someone else ended the run, a worker of the previous release for one. Nothing is left
       // to store.
       terminalWritten = true;
@@ -397,7 +422,7 @@ async function executeClaimedRun(
 
   try {
     try {
-      const input = await reconstructInput(options, run);
+      const input = await reconstructInput(options, run, resumeState);
       const user = await options.loadCurrentUser(run);
       const authorization = requireAuthorization(run, user);
       const context: RuntimeCallContext = {
@@ -422,11 +447,12 @@ async function executeClaimedRun(
         })
       });
       cancelExecution = (reason) => execution.cancel(reason);
+      resumeStateOf = execution.resumeState;
       sendCancel();
       // The events are left the moment the run is stopped, whatever the execution does then.
       for await (const sourceEvent of eventsUntilAborted(
         execution.events,
-        run.id,
+        run,
         controller.signal
       )) {
         if (stopCause === "lease_lost") break;
@@ -434,9 +460,7 @@ async function executeClaimedRun(
         const event =
           sourceEvent.type === "run_failed" && (cancellation || stopCause)
             ? closingEvent(sourceEvent.sequence, sourceEvent.error)
-            : sourceEvent.type === "tool_permission_requested"
-              ? failedEvent(run, sourceEvent.sequence, now(), PERMISSION_UNSUPPORTED_ERROR)
-              : sourceEvent;
+            : sourceEvent;
         await append(event);
         if (terminalWritten) break;
       }
@@ -461,7 +485,8 @@ async function executeClaimedRun(
 
 async function reconstructInput(
   options: AgentRunJobsOptions,
-  run: AgentRun
+  run: AgentRun,
+  resumeState: AgentRunResumeState | undefined
 ): Promise<StartAgentRunInput> {
   const messages = await options.stores.conversations.listMessages({
     clientInstanceId: run.clientInstanceId,
@@ -480,6 +505,8 @@ async function reconstructInput(
     idempotencyKey: run.idempotencyKey,
     inputMessageId: run.inputMessageId,
     preparedRun: { id: run.id, startedAt: run.startedAt },
+    // A run that waited for a decision goes on where it paused, its events after the last one.
+    ...(resumeState ? { resume: { state: resumeState, lastSequence: run.lastSequence } } : {}),
     message: {
       text: message.text,
       attachmentManifest: attachmentManifest?.attachments.length ? attachmentManifest : undefined
@@ -549,18 +576,21 @@ export function createLocalAgentRunExecutor(
     const handle = await runtime.start(input, context);
     return {
       events: runtime.observe(handle.runId, context),
-      cancel: (reason) => runtime.cancel(handle.runId, reason, context)
+      cancel: (reason) => runtime.cancel(handle.runId, reason, context),
+      resumeState: () => runtime.resumeStateOf(handle.runId)
     };
   };
 }
 
 async function* eventsUntilAborted(
   source: AsyncIterable<AgentRuntimeEvent>,
-  runId: AgentRunId,
+  run: Pick<AgentRun, "id" | "lastSequence">,
   signal: AbortSignal
 ): AsyncIterable<AgentRuntimeEvent> {
+  const runId = run.id;
   const iterator = source[Symbol.asyncIterator]();
-  let lastSequence = 0;
+  // A resumed run's events go on after those it stored before it paused.
+  let lastSequence = run.lastSequence;
   while (true) {
     const next = await nextEventOrAbort(iterator, signal);
     if (next === "aborted") {
@@ -608,12 +638,6 @@ function noteToolCall(open: Map<string, string>, event: AgentRuntimeEvent): void
   else if (event.type === "tool_call_completed" || event.type === "tool_call_failed")
     open.delete(event.toolCallId);
 }
-
-const PERMISSION_UNSUPPORTED_ERROR: AgentRunError = {
-  code: "AGENT_RUN_PERMISSION_UNSUPPORTED",
-  message: "Permission-required tools are not supported by the Agent Worker yet",
-  category: "internal_error"
-};
 
 const EXECUTOR_ENDED_ERROR: AgentRunError = {
   code: "AGENT_RUN_EXECUTOR_ENDED",
@@ -682,9 +706,13 @@ function workerFailure(error: unknown): AgentRunError {
   };
 }
 
+/** An event that ends this execution of the run: the run ended, or waits for a decision. */
 function isTerminalEvent(event: AgentRuntimeEvent): boolean {
   return (
-    event.type === "run_completed" || event.type === "run_cancelled" || event.type === "run_failed"
+    event.type === "run_completed" ||
+    event.type === "run_cancelled" ||
+    event.type === "run_failed" ||
+    event.type === "tool_decision_requested"
   );
 }
 

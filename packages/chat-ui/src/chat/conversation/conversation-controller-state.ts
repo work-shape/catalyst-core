@@ -276,7 +276,7 @@ export function isLiveRunStatus(status: AgentRun["status"]): boolean {
   return (
     status === "queued" ||
     status === "running" ||
-    status === "waiting_for_permission" ||
+    status === "waiting_for_decision" ||
     status === "cancelling"
   );
 }

@@ -1,8 +1,31 @@
-import { OPERATION_EFFECTS, OPERATION_ORIGIN_KINDS } from "@work-shape/catalyst-asset-schemas";
+import {
+  OPERATION_CONFIRMATION_DECISIONS,
+  OPERATION_EFFECTS,
+  OPERATION_ORIGIN_KINDS
+} from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
+import { agentRunStatusSchema } from "../conversations";
 import { operationRunSchema, operationRunStatusSchema } from "../operation-runs";
 import { listQuerySchema, timestampSchema } from "../shared";
-import { defineOperation, json, page } from "./define-operation";
+import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
+
+/** A person's decision on a call their own Agent Run waits on. */
+const decideOperationRunRequestSchema = z.object({
+  decision: z.enum(OPERATION_CONFIRMATION_DECISIONS),
+  /** Why, for a decline: the agent reads it. */
+  reason: z.string().trim().min(1).max(500).optional()
+});
+
+const decideOperationRunResponseSchema = z.object({
+  /** The run of the decided call. A confirmed call is executed when its Agent Run resumes. */
+  run: operationRunSchema,
+  /** The Agent Run that waited: queued again once nothing it waits on is undecided. */
+  agentRun: z.object({
+    id: z.string(),
+    status: agentRunStatusSchema,
+    lastSequence: z.number().int().nonnegative()
+  })
+});
 
 export const operationRunOperations = {
   "operations.get_run": defineOperation({
@@ -47,5 +70,21 @@ export const operationRunOperations = {
     response: page(operationRunSchema, ["createdAt", "id"], true),
     errors: [],
     rateClass: "read"
+  }),
+  "operations.decide": defineRegisteredOperation({
+    id: "operations.decide",
+    method: "POST",
+    path: "/api/v1/operations/runs/:runId/decision",
+    summary: "Confirm or decline a call your own Agent Run waits on",
+    tag: "Operations",
+    auth: "user",
+    scope: "conversation:write",
+    // Only the person the Agent Run works for decides, which the operation checks itself.
+    requires: [],
+    effect: "changing",
+    body: decideOperationRunRequestSchema,
+    response: json(decideOperationRunResponseSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
   })
 } as const;

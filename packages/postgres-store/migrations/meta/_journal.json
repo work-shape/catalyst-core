@@ -596,6 +596,20 @@
       "when": 1792064970885,
       "tag": "0084_workspace_inspection_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1792135605515,
+      "tag": "0085_agent_run_resume_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1792135606084,
+      "tag": "0086_agent_run_waiting_for_decision_index",
+      "breakpoints": true
     }
   ]
 }

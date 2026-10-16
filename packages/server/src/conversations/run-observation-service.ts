@@ -384,7 +384,7 @@ function isActiveAgentRunStatus(
   return (
     status === "queued" ||
     status === "running" ||
-    status === "waiting_for_permission" ||
+    status === "waiting_for_decision" ||
     status === "cancelling"
   );
 }

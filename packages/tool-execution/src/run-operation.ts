@@ -54,6 +54,9 @@ import { hashInput } from "./input-hash";
  */
 const PENDING_APPROVAL_EXPIRES_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** How long a call an Agent Run holds waits for its person's confirmation (S8). */
+const PENDING_CONFIRMATION_EXPIRES_AFTER_MS = 24 * 60 * 60 * 1000;
+
 /** How often a call looks again when the holder of its key changed while it looked. */
 const IDEMPOTENCY_CLAIM_ATTEMPTS = 3;
 
@@ -482,7 +485,7 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return { ending: await simulateRun(context, policy) };
   }
   if (policy.next === "await_confirmation") {
-    throw new AppError("INTERNAL", "This surface cannot hold a call for a confirmation");
+    return { ending: await holdForConfirmation(context) };
   }
   if (policy.next === "await_approval") {
     const approval = await definition.approval?.(call.input);
@@ -553,6 +556,36 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       "decisionMode" in policy
         ? { mode: policy.decisionMode, reason: policy.decisionReason }
         : undefined
+  };
+}
+
+/**
+ * Holds the call of an Agent Run for its person's confirmation: the run pauses and keeps the
+ * input, and the call is executed once its person confirmed. Only the run's worker gets here
+ * (`canPause`). A call whose answer holds a secret, or a draft's call sent live, cannot wait.
+ */
+async function holdForConfirmation(context: RunContext): Promise<OperationEnding> {
+  const { run, definition, call, now } = context;
+  // A read that records only its refusals has no run that could wait.
+  if (definition.secret || call.draft || context.unrecorded || call.origin.kind !== "agent") {
+    return denyRun(context, { kind: "policy", operation: definition.name });
+  }
+  const expiresAt = new Date(now().getTime() + PENDING_CONFIRMATION_EXPIRES_AFTER_MS).toISOString();
+  const pending = await endRun(context, {
+    status: "pending_confirmation",
+    finishedAt: now().toISOString(),
+    inputRef: `agent_run:${call.origin.agentRunId}`,
+    expiresAt
+  });
+  return {
+    result: {
+      status: "pending_confirmation",
+      runId: run.id,
+      expiresAt,
+      preview: call.input,
+      inputHash: run.inputHash
+    },
+    run: pending
   };
 }
 

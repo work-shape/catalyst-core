@@ -16,6 +16,7 @@ import type { OperationDenial } from "./operation-denial";
 import type { StructuredResultPublication } from "./structured-result";
 import type { ISODateString } from "./time";
 import type { ToolExecutionRequest, ToolExecutionResult } from "./tool-execution";
+import type { ToolDecisionWait } from "./agent-run-resume";
 
 export { IDEMPOTENCY_KEY_MAX_LENGTH, type OperationEffect };
 
@@ -150,7 +151,7 @@ export type ToolOperationRunner = (
   request: ToolExecutionRequest,
   context: RuntimeCallContext,
   options?: Pick<OperationCallRuntime, "unreadableInput">
-) => Promise<ToolExecutionResult>;
+) => Promise<ToolExecutionResult | ToolDecisionWait>;
 
 export type OperationResult<TOutput = unknown> =
   | {

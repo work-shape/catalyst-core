@@ -4,7 +4,9 @@ import {
   systemClock,
   unknownToJsonValue,
   type AgentRunId,
+  type AgentRunResumeState,
   type LocaleCode,
+  type PausedToolCall,
   type RuntimeCallContext,
   type StartAgentRunInput
 } from "@work-shape/catalyst-core";
@@ -12,7 +14,9 @@ import {
   isModelProviderContinuationRejected,
   withStorableToolInput,
   type ModelCompletion,
-  type ModelMessage
+  type ModelMessage,
+  type ModelTool,
+  type ModelToolCall
 } from "@work-shape/catalyst-model-provider";
 import type { RunState } from "../run-state";
 import { createSystemInstructions } from "../system-instructions";
@@ -29,6 +33,7 @@ import {
   getSnapshotSkillMetadata
 } from "./model-input";
 import { isCancellationRequested, type RunEvents } from "./run-events";
+import { finishPausedStep, pauseRun, resumedModelMessages } from "./resume-entry";
 import type { ToolDispatch } from "./tool-dispatch";
 import type { LocalAgentRuntimeOptions } from "./run-events";
 
@@ -48,6 +53,19 @@ export class TurnLoop {
     input: StartAgentRunInput,
     context: RuntimeCallContext
   ): Promise<void> {
+    const setup = await this.prepareRun(runId, input, context);
+    const entry = input.resume
+      ? await this.resumeEntry(state, runId, input, context, setup, input.resume.state)
+      : await this.startEntry(runId, input, context, setup);
+    if (entry) await this.runSteps(state, runId, input, context, setup, entry);
+  }
+
+  /** What every step of the run uses: its agent, model, tools and the start of its input. */
+  private async prepareRun(
+    runId: AgentRunId,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext
+  ): Promise<RunSetup> {
     const assets = await this.options.assetSource.getSnapshot();
     const listed = getSnapshotAgentConfig(assets, input.agentName);
     // An agent whose definition lists the platform's tools is offered those it lists, the
@@ -116,14 +134,6 @@ export class TurnLoop {
       capabilities
     );
     const compactionEnabled = compactThresholdTokens !== undefined;
-    const history = await this.modelInput.loadModelHistory(
-      input,
-      context,
-      modelSelection.provider,
-      {
-        compactionEnabled
-      }
-    );
     const userContent = await createSubmittedUserMessageContent(
       input.message.text,
       input.message.attachmentManifest,
@@ -141,35 +151,43 @@ export class TurnLoop {
       })
     };
     const userMessage: ModelMessage = { role: "user", content: userContent };
-    let messages: ModelMessage[] = [systemMessage, ...history.messages, userMessage];
+    return {
+      modelSelection,
+      tools,
+      offeredDataTools,
+      compactThresholdTokens,
+      compactionEnabled,
+      systemMessage,
+      userMessage,
+      maxSteps: agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS
+    };
+  }
 
-    const repeatedToolCalls = new Map<string, number>();
-    const maxSteps = agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS;
-    let providerContinuation: ModelCompletion["continuation"] = history.providerContinuation;
-    // True until the first answer: only then does a request carry a continuation from an earlier run.
-    let carriesEarlierContinuation = providerContinuation !== undefined;
-    let runCompacted = false;
-    const callModel = () =>
-      this.modelInput.callModel(
-        runId,
-        input,
-        context,
-        messages,
-        modelSelection,
-        tools,
-        providerContinuation,
-        state,
-        this.runEvents
-      );
-
-    for (let step = 0; step < maxSteps; step += 1) {
-      const modelResult = await callModel().catch(async (error: unknown) => {
-        if (!carriesEarlierContinuation || !isModelProviderContinuationRejected(error)) {
-          throw error;
-        }
-        // The provider can never accept this continuation, so every message of the conversation
-        // would fail. Drop it and send the request once more from the conversation's history.
-        carriesEarlierContinuation = false;
+  /** A run that starts: the conversation's history, then its input message. */
+  private async startEntry(
+    runId: AgentRunId,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext,
+    setup: RunSetup
+  ): Promise<StepEntry> {
+    const { modelSelection, compactionEnabled, systemMessage, userMessage } = setup;
+    const history = await this.modelInput.loadModelHistory(
+      input,
+      context,
+      modelSelection.provider,
+      { compactionEnabled }
+    );
+    return {
+      messages: [systemMessage, ...history.messages, userMessage],
+      firstStep: 0,
+      repeatedToolCalls: new Map(),
+      providerContinuation: history.providerContinuation,
+      runCompacted: false,
+      modelInputFrom: { kind: "input" },
+      rebuildWithoutContinuation: async () => {
+        // The provider can never accept this continuation, so every message of the
+        // conversation would fail. Drop it and send the request once more from the
+        // conversation's history.
         await this.options.modelProviderContinuationStore?.deleteModelProviderContinuation({
           clientInstanceId: context.clientInstanceId,
           conversationId: input.conversationId,
@@ -189,13 +207,107 @@ export class TurnLoop {
           input,
           context,
           modelSelection.provider,
-          {
-            compactionEnabled,
-            withoutCheckpoint: true
-          }
+          { compactionEnabled, withoutCheckpoint: true }
         );
+        return [systemMessage, ...rebuilt.messages, userMessage];
+      }
+    };
+  }
+
+  /**
+   * A run that waited for a decision and was decided: the model's input as it was when the run
+   * paused, the paused step's calls answered, and the next step sent with the continuation of
+   * the paused step. `undefined` when the run stopped or waits again.
+   */
+  private async resumeEntry(
+    state: RunState,
+    runId: AgentRunId,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext,
+    setup: RunSetup,
+    resume: AgentRunResumeState
+  ): Promise<StepEntry | undefined> {
+    const messages = await resumedModelMessages({
+      runId,
+      startInput: input,
+      context,
+      resume,
+      modelInput: this.modelInput,
+      conversationHistory: this.options.conversationHistory,
+      provider: setup.modelSelection.provider,
+      compactionEnabled: setup.compactionEnabled,
+      systemMessage: setup.systemMessage,
+      userMessage: setup.userMessage
+    });
+    const repeatedToolCalls = new Map(Object.entries(resume.repeatedToolCalls));
+    const finished = await finishPausedStep({
+      runId,
+      startInput: input,
+      context,
+      state,
+      resume,
+      runDecidedTool: this.options.runDecidedTool,
+      modelInput: this.modelInput,
+      toolDispatch: this.toolDispatch,
+      repeatedToolCalls,
+      messages,
+      offeredDataTools: setup.offeredDataTools
+    });
+    if (finished.kind === "stopped") return undefined;
+    if (finished.kind === "paused") {
+      pauseRun(state, finished, {
+        ...resume,
+        doneToolCallIds: [...resume.doneToolCallIds, ...finished.answeredToolCallIds],
+        repeatedToolCalls: Object.fromEntries(repeatedToolCalls)
+      });
+      return undefined;
+    }
+    return {
+      messages,
+      firstStep: resume.step + 1,
+      repeatedToolCalls,
+      providerContinuation: resume.providerContinuation,
+      runCompacted: resume.compacted,
+      modelInputFrom: resume.modelInputFrom,
+      // A continuation the provider refuses is left out; the messages hold the run all the same.
+      rebuildWithoutContinuation: () => Promise.resolve(messages)
+    };
+  }
+
+  private async runSteps(
+    state: RunState,
+    runId: AgentRunId,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext,
+    setup: RunSetup,
+    entry: StepEntry
+  ): Promise<void> {
+    const { modelSelection, tools, offeredDataTools, compactThresholdTokens, maxSteps } = setup;
+    const { repeatedToolCalls } = entry;
+    let { messages, providerContinuation, runCompacted, modelInputFrom } = entry;
+    // True until the first answer: only then does a request carry a continuation from an earlier run.
+    let carriesEarlierContinuation = providerContinuation !== undefined;
+    const callModel = () =>
+      this.modelInput.callModel(
+        runId,
+        input,
+        context,
+        messages,
+        modelSelection,
+        tools,
+        providerContinuation,
+        state,
+        this.runEvents
+      );
+
+    for (let step = entry.firstStep; step < maxSteps; step += 1) {
+      const modelResult = await callModel().catch(async (error: unknown) => {
+        if (!carriesEarlierContinuation || !isModelProviderContinuationRejected(error)) {
+          throw error;
+        }
+        carriesEarlierContinuation = false;
+        messages = await entry.rebuildWithoutContinuation();
         providerContinuation = undefined;
-        messages = [systemMessage, ...rebuilt.messages, userMessage];
         return callModel();
       });
       carriesEarlierContinuation = false;
@@ -257,7 +369,7 @@ export class TurnLoop {
         toolCalls
       });
       await this.runEvents.beforeEffect("assistant_message", runId);
-      await this.options.conversationHistory.appendAssistantMessage({
+      const stepMessage = await this.options.conversationHistory.appendAssistantMessage({
         clientInstanceId: context.clientInstanceId,
         conversationId: input.conversationId,
         text: completion.text,
@@ -269,25 +381,78 @@ export class TurnLoop {
         }),
         providerContinuation: persistedContinuation
       });
+      if (compactedThisCall) {
+        modelInputFrom = { kind: "message", messageId: stepMessage.id };
+      }
 
-      if (
-        await this.toolDispatch.dispatchToolCalls(
-          runId,
-          input,
-          context,
-          state,
-          toolCalls,
-          repeatedToolCalls,
-          messages,
-          offeredDataTools
-        )
-      ) {
+      const outcome = await this.toolDispatch.dispatchToolCalls(
+        runId,
+        input,
+        context,
+        state,
+        toolCalls,
+        repeatedToolCalls,
+        messages,
+        offeredDataTools
+      );
+      if (outcome.kind === "stopped") return;
+      if (outcome.kind === "paused") {
+        pauseRun(state, outcome, {
+          step,
+          stepMessageId: stepMessage.id,
+          modelInputFrom,
+          toolCalls: toolCalls.map(toPausedToolCall),
+          doneToolCallIds: outcome.answeredToolCallIds,
+          repeatedToolCalls: Object.fromEntries(repeatedToolCalls),
+          ...(providerContinuation
+            ? {
+                providerContinuation: {
+                  providerId: providerContinuation.providerId,
+                  state: unknownToJsonValue(providerContinuation.state)
+                }
+              }
+            : {}),
+          compacted: runCompacted
+        });
         return;
       }
     }
 
     state.fail(new AppError("CONFLICT", `Agent exceeded the maximum step limit of ${maxSteps}`));
   }
+}
+
+/** What every step of a run uses. */
+interface RunSetup {
+  modelSelection: ReturnType<ModelInput["getModelSelectionForAgent"]>;
+  tools: ModelTool[];
+  offeredDataTools: ReadonlySet<string>;
+  compactThresholdTokens: number | undefined;
+  compactionEnabled: boolean;
+  systemMessage: ModelMessage;
+  userMessage: ModelMessage;
+  maxSteps: number;
+}
+
+/** Where the steps of a run start: a new run's first step, or the step after a paused one. */
+interface StepEntry {
+  messages: ModelMessage[];
+  firstStep: number;
+  repeatedToolCalls: Map<string, number>;
+  providerContinuation: ModelCompletion["continuation"];
+  runCompacted: boolean;
+  modelInputFrom: AgentRunResumeState["modelInputFrom"];
+  /** The messages to send when the provider refuses the continuation the first request carries. */
+  rebuildWithoutContinuation(): Promise<ModelMessage[]>;
+}
+
+function toPausedToolCall(toolCall: ModelToolCall): PausedToolCall {
+  return {
+    toolCallId: toolCall.toolCallId,
+    toolName: toolCall.toolName,
+    input: unknownToJsonValue(toolCall.input),
+    ...(toolCall.inputParseError ? { inputParseError: toolCall.inputParseError } : {})
+  };
 }
 
 function removePreCompactionMessages(messages: ModelMessage[]): void {

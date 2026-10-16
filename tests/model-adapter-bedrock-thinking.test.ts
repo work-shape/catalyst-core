@@ -152,6 +152,47 @@ describe("Bedrock adapter: thinking", () => {
     expect(answer.continuation).toEqual(completion.continuation);
   });
 
+  // A run that paused on a call for its person's decision goes on in another worker, later:
+  // the turn comes from the stored messages and the continuation from the run's resume state.
+  it("sends the turn of a resumed run back unchanged from what the run stored when it paused", async () => {
+    const replayed = replayModelAdapterRecording(
+      loadModelAdapterRecording("aws-bedrock", "thinking-tool-loop")
+    );
+    const streamed = (
+      await collect(
+        (await bedrock()).stream({
+          model: RECORDED_BEDROCK_PROFILE,
+          messages: [question],
+          tools: [weatherTool],
+          reasoningEffort: "medium"
+        })
+      )
+    ).at(-1);
+    if (streamed?.type !== "completed") throw new Error("The stream did not complete");
+    const first = streamed.completion;
+    // What the run kept is JSON in the database; nothing of the first adapter is left.
+    const stored: { continuation: ModelProviderContinuation } = JSON.parse(
+      JSON.stringify({ continuation: first.continuation })
+    );
+    const resumed = await bedrock();
+
+    const answer = await resumed.complete({
+      model: RECORDED_BEDROCK_PROFILE,
+      messages: [
+        question,
+        { role: "assistant", content: first.text, toolCalls: first.toolCalls },
+        { role: "tool", toolCallId: "toolu_bdrk_recorded_1", content: '{"temperatureC":18}' }
+      ],
+      tools: [weatherTool],
+      reasoningEffort: "medium",
+      continuation: stored.continuation
+    });
+
+    // The replay refuses the second exchange when one block of the turn differs.
+    expect(replayed.count()).toBe(2);
+    expect(answer.text).toBe("It is 18 degrees in Berlin.");
+  });
+
   it("keeps the thinking of an answer that is not streamed, in the order of its blocks", async () => {
     answerWith(() =>
       Response.json(

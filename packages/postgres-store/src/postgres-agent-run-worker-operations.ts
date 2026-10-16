@@ -11,6 +11,7 @@ import {
   type AgentRunError,
   type AgentRunJobClaim,
   type AgentRunJobLease,
+  type AgentRunResumeState,
   type AgentRunStore,
   type AgentRunWithoutJob,
   type AgentRunWriteFence,
@@ -40,15 +41,11 @@ import {
   platformJobs
 } from "./schema";
 
-const STARTED_STATUSES: readonly AgentRun["status"][] = [
-  "running",
-  "waiting_for_permission",
-  "cancelling"
-] as const satisfies readonly AgentRun["status"][];
-const CLAIMED_STATUSES = [
-  "running",
-  "waiting_for_permission"
-] as const satisfies readonly AgentRun["status"][];
+/**
+ * A run a worker holds. A run that waits for a decision holds no worker and no lease: it is
+ * queued again when it is decided.
+ */
+const STARTED_STATUSES: AgentRun["status"][] = ["running", "cancelling"];
 
 /**
  * A run is executed only by the attempt whose claim moves the row from queued to running here.
@@ -76,7 +73,13 @@ export async function claimAgentRunForJob(
     })
     .where(and(ofRow, eq(agentRuns.status, "queued")))
     .returning();
-  if (claimed) return { status: "claimed", row: mapAgentRun(claimed) };
+  if (claimed) {
+    return {
+      status: "claimed",
+      row: mapAgentRun(claimed),
+      ...(claimed.resumeState ? { resumeState: claimed.resumeState } : {})
+    };
+  }
   const [current] = await db
     .select({
       status: agentRuns.status,
@@ -139,7 +142,9 @@ export async function requestAgentRunCancellation(
           cancellationReason: input.reason,
           cancelledAt: requestedAt,
           updatedAt: requestedAt,
-          lastSequence: drizzleSql<number>`${agentRuns.lastSequence} + 1`
+          lastSequence: drizzleSql<number>`${agentRuns.lastSequence} + 1`,
+          // A run queued again after a decision ends with nothing to go on from.
+          resumeState: null
         })
         .where(
           and(
@@ -170,7 +175,7 @@ export async function requestAgentRunCancellation(
       return mapAgentRun(row);
     }
 
-    if (status === "running" || status === "waiting_for_permission" || status === "cancelling") {
+    if (status === "running" || status === "waiting_for_decision" || status === "cancelling") {
       const [row] = await tx
         .update(agentRuns)
         .set({
@@ -210,7 +215,8 @@ export async function appendClaimedRunObservation(
 /**
  * The end of a run in one transaction: its last assistant message, when one is given, and
  * its events through the one that ends it. All of it is stored or none of it, so a run never
- * shows a stored answer beside a run that did not end.
+ * shows a stored answer beside a run that did not end. A run that pauses for a decision ends
+ * its execution the same way, and keeps its resume state in the same transaction.
  */
 export async function appendClaimedAgentRunEnd(
   db: PostgresConnection,
@@ -219,27 +225,33 @@ export async function appendClaimedAgentRunEnd(
   await db.transaction(async (tx) => {
     await requireJobLease(tx, input.lease);
     if (input.message) await insertClaimedAgentRunMessage(tx, input, input.message);
-    for (const event of input.events) await insertClaimedRunObservation(tx, input, event);
+    for (const event of input.events) {
+      await insertClaimedRunObservation(tx, input, event, input.resumeState);
+    }
   });
 }
 
 async function insertClaimedRunObservation(
   tx: PostgresConnection,
   claim: ClaimedRun,
-  event: AgentRuntimeEvent
+  event: AgentRuntimeEvent,
+  resumeState?: AgentRunResumeState
 ): Promise<RunObservation> {
   if (event.runId !== claim.runId) {
     throw new AppError("VALIDATION_FAILED", "Run observation belongs to another agent run");
   }
-  const terminal = terminalStatusPatch(event);
+  if (event.type === "tool_decision_requested" && !resumeState) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "A run waits for a decision only with its resume state"
+    );
+  }
+  const terminal = terminalStatusPatch(event, resumeState);
   const [run] = await tx
     .update(agentRuns)
     .set({
       lastSequence: event.sequence,
       updatedAt: new Date(event.createdAt),
-      ...(event.type === "tool_permission_requested"
-        ? { status: "waiting_for_permission" as const }
-        : {}),
       ...terminal
     })
     .where(
@@ -248,7 +260,7 @@ async function insertClaimedRunObservation(
         eq(agentRuns.lastSequence, event.sequence - 1),
         // A run that was asked to cancel ends as cancelled and as nothing else. What it
         // still writes on its way there is stored.
-        endsOrSuspendsRun(event) ? inArray(agentRuns.status, CLAIMED_STATUSES) : undefined
+        endsOrSuspendsRun(event) ? eq(agentRuns.status, "running") : undefined
       )
     )
     .returning();
@@ -258,7 +270,7 @@ async function insertClaimedRunObservation(
       "Agent run has ended, was asked to cancel, or its sequence is stale"
     );
   }
-  if (terminal.status)
+  if (terminal.status && terminal.status !== "waiting_for_decision")
     await withdrawUnclaimedWorkspaceCommandsOfRuns(tx, {
       clientInstanceId: claim.clientInstanceId,
       runIds: [claim.runId]
@@ -428,7 +440,8 @@ export async function failLostAgentRun(
         leaseOwner: null,
         leaseToken: null,
         leaseExpiresAt: null,
-        heartbeatAt: null
+        heartbeatAt: null,
+        resumeState: null
       })
       .where(
         and(
@@ -474,9 +487,10 @@ export async function failAgentRunsQueuedTooLong(
   return failAgentRunsWhere(db, input, () =>
     and(
       eq(agentRuns.status, "queued"),
-      // `started_at` is when the run was accepted; a queued run has not been claimed.
+      // `updated_at` is when the run was accepted, or queued again after a decision; a queued
+      // run has not been claimed since.
       lt(
-        agentRuns.startedAt,
+        agentRuns.updatedAt,
         drizzleSql`now() - make_interval(secs => ${input.queuedMs}::double precision / 1000)`
       )
     )
@@ -529,7 +543,8 @@ async function failAgentRunsWhere(
         leaseOwner: null,
         leaseToken: null,
         leaseExpiresAt: null,
-        heartbeatAt: null
+        heartbeatAt: null,
+        resumeState: null
       })
       // The condition is read again under the row lock: a run that a worker claimed, renewed
       // or ended meanwhile stays as it is.
@@ -660,7 +675,7 @@ function endsOrSuspendsRun(event: AgentRuntimeEvent): boolean {
   return (
     event.type === "run_completed" ||
     event.type === "run_failed" ||
-    event.type === "tool_permission_requested"
+    event.type === "tool_decision_requested"
   );
 }
 
@@ -668,13 +683,24 @@ function leaseExpiry(leaseMs: number) {
   return drizzleSql<Date>`now() + make_interval(secs => ${leaseMs}::double precision / 1000)`;
 }
 
-function terminalStatusPatch(event: AgentRuntimeEvent): Partial<typeof agentRuns.$inferInsert> {
-  const terminal = {
+/**
+ * What an event that ends a run's execution sets: the run lets go of its worker. A run that
+ * ended keeps no resume state; one that waits for a decision keeps the one it was given.
+ */
+function terminalStatusPatch(
+  event: AgentRuntimeEvent,
+  resumeState: AgentRunResumeState | undefined
+): Partial<typeof agentRuns.$inferInsert> {
+  const released = {
     leaseOwner: null,
     leaseToken: null,
     leaseExpiresAt: null,
     heartbeatAt: null
   };
+  const terminal = { ...released, resumeState: null };
+  if (event.type === "tool_decision_requested") {
+    return { ...released, status: "waiting_for_decision", resumeState };
+  }
   if (event.type === "run_completed") {
     return { ...terminal, status: "completed", completedAt: new Date(event.createdAt) };
   }

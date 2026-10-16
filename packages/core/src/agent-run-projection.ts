@@ -73,13 +73,31 @@ export function applyAgentRunObservation(
       state: "input_available"
     });
   }
-  if (event.type === "tool_permission_requested") {
+  if (event.type === "tool_decision_requested") {
     upsertToolCall(activeToolCalls, parts, {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
       input: findToolCallInput(activeToolCalls, event.toolCallId),
-      state: "waiting_for_permission"
+      state: "waiting_for_decision",
+      decision: {
+        operationRunId: event.operationRunId,
+        operationId: event.operationId,
+        mode: event.mode,
+        inputPreview: event.inputPreview,
+        expiresAt: event.expiresAt
+      }
     });
+  }
+  if (event.type === "tool_decision_recorded") {
+    const waiting = activeToolCalls.find((entry) => entry.toolCallId === event.toolCallId);
+    if (waiting) {
+      upsertToolCall(activeToolCalls, parts, {
+        toolCallId: waiting.toolCallId,
+        toolName: waiting.toolName,
+        input: waiting.input,
+        state: "input_available"
+      });
+    }
   }
   if (event.type === "tool_call_completed") {
     upsertToolCall(activeToolCalls, parts, {
@@ -273,6 +291,15 @@ function statusAfterEvent(
   }
   if (event.type === "run_failed") {
     return "failed";
+  }
+  if (event.type === "tool_decision_requested") {
+    return "waiting_for_decision";
+  }
+  if (event.type === "tool_decision_recorded") {
+    return currentStatus === "waiting_for_decision" ? "queued" : currentStatus;
+  }
+  if (currentStatus === "waiting_for_decision" || currentStatus === "queued") {
+    return "running";
   }
   return currentStatus;
 }

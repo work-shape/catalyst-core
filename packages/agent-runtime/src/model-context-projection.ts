@@ -94,6 +94,46 @@ export async function projectAgentVisibleHistory(
   );
 }
 
+/**
+ * The messages a run wrote itself, as it sent them to the model while it worked: its steps
+ * with their tool calls and the results of those calls, images a tool loaded included. A run
+ * that resumes after a decision goes on from them, the calls of its paused step not all
+ * answered yet.
+ */
+export async function projectRunOwnMessages(
+  messages: ChatMessage[],
+  options: ModelContextProjectionOptions & {
+    /** The calls of one step as the model wrote them, in place of those its message keeps. */
+    stepToolCalls?: { messageId: string; toolCalls: ModelToolCall[] };
+  }
+): Promise<ModelMessage[]> {
+  const { stepToolCalls } = options;
+  const projected = await Promise.all(
+    messages.map(async (message): Promise<ModelMessage | undefined> => {
+      if (message.role === "tool") {
+        const metadata = readToolResultMetadata(message.metadata);
+        const result = metadata ? readToolExecutionResult(metadata.result) : undefined;
+        if (!metadata) return undefined;
+        return {
+          role: "tool",
+          toolCallId: metadata.toolCallId,
+          content: result
+            ? (await createModelVisibleToolOutput(result, options)).content
+            : typeof metadata.modelOutput === "string"
+              ? metadata.modelOutput
+              : message.text
+        };
+      }
+      if (message.role !== "assistant") return undefined;
+      if (message.id === stepToolCalls?.messageId) {
+        return { role: "assistant", content: message.text, toolCalls: stepToolCalls.toolCalls };
+      }
+      return toModelHistoryMessage(message, options);
+    })
+  );
+  return projected.filter((message): message is ModelMessage => message !== undefined);
+}
+
 /** Decisions are asynchronous observations, first consumed by the following user turn.
  * Move only this projection, before checkpoint/window selection: a decision during a
  * run must remain after every checkpoint that run could write without seeing it.

@@ -13,6 +13,7 @@ import {
   executeAgentRunJob,
   type AgentRun,
   type AgentRunAuthorization,
+  type AgentRunResumeState,
   type AgentRuntimeEvent,
   type AuthenticatedUser,
   type ChatMessage,
@@ -22,7 +23,8 @@ import {
   type JobWorker,
   type PlatformStores,
   type RuntimeCallContext,
-  type StartAgentRunInput
+  type StartAgentRunInput,
+  type ToolDecisionRequested
 } from "@work-shape/catalyst-core";
 import { deferred, required } from "./assertions";
 import type { useJobExecutorHarness } from "./job-executor-harness";
@@ -164,8 +166,11 @@ export function useAgentRunJobFixture(
         return harness.worker(db.store, clientInstanceId, jobs.handlers, jobs.schedules);
       },
       async acceptedAgo(run, ms) {
+        // A queued run waits from when it was queued last: accepted, or decided on.
         await db.sql`
-          update agent_runs set started_at = now() - make_interval(secs => ${ms / 1000})
+          update agent_runs
+          set started_at = now() - make_interval(secs => ${ms / 1000}),
+            updated_at = now() - make_interval(secs => ${ms / 1000})
           where id = ${run.id}`;
       },
       run: async (run) => required(await db.store.agentRuns.getAgentRun(ofRun(run))),
@@ -229,7 +234,7 @@ export interface AgentRunJobFixture {
    * of the runs and buries the jobs of lost workers.
    */
   upkeepWorker(): JobWorker;
-  /** As if the run had been accepted this long ago. */
+  /** As if the run had been accepted, or queued again, this long ago. */
   acceptedAgo(run: Pick<AgentRun, "id">, ms: number): Promise<void>;
   jobs(): Promise<AgentRunJobRecord[]>;
   /** As if the heartbeats had stopped for the lease time: the leases of the running jobs are over. */
@@ -243,7 +248,9 @@ class ControlledExecution {
   private wake: (() => void) | undefined;
   private readonly idleWaiters: Array<() => void> = [];
   private ended = false;
-  private sequence = 0;
+  // A resumed run's events go on after those it stored before it paused.
+  private sequence: number | undefined;
+  private resumeState: AgentRunResumeState | undefined;
   /** Resolves with the reason when the worker asks the execution to cancel. */
   readonly cancelRequested = deferred<string | undefined>();
 
@@ -319,6 +326,13 @@ class ControlledExecution {
     this.push(event(this.next()));
   }
 
+  /** Pauses the run on a call that waits for a decision, keeping what it goes on from. */
+  waitForDecision(requested: ToolDecisionRequested, resumeState: AgentRunResumeState): void {
+    this.resumeState = resumeState;
+    this.push({ type: "tool_decision_requested", ...this.next(), ...requested });
+    this.end();
+  }
+
   /** Ends the events without a terminal one. */
   end(): void {
     this.ended = true;
@@ -331,11 +345,12 @@ class ControlledExecution {
       this.cancelRequested.resolve(reason);
       this.push({ type: "run_cancelled", ...this.next(), ...(reason ? { reason } : {}) });
       this.end();
-    }
+    },
+    resumeState: () => this.resumeState
   };
 
   private next() {
-    this.sequence += 1;
+    this.sequence = (this.sequence ?? this.input.resume?.lastSequence ?? 0) + 1;
     return { runId: this.runId, sequence: this.sequence, createdAt: new Date().toISOString() };
   }
 

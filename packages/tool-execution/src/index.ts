@@ -69,3 +69,4 @@ export type {
 } from "./operation-execution";
 export * from "./tool-operation";
 export * from "./waiting-operation";
+export * from "./waiting-tool-call";

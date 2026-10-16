@@ -496,7 +496,7 @@ export type StructuredDataReviewReason = (typeof STRUCTURED_DATA_REVIEW_REASONS)
 export const AGENT_RUN_STATUSES = [
   "queued",
   "running",
-  "waiting_for_permission",
+  "waiting_for_decision",
   "cancelling",
   "completed",
   "cancelled",
@@ -513,9 +513,21 @@ export const AGENT_RUN_FAILURE_CATEGORIES = [
 ] as const;
 export type AgentRunFailureCategory = (typeof AGENT_RUN_FAILURE_CATEGORIES)[number];
 
+export const TOOL_INPUT_PARSE_ERROR_CODES = ["invalid_json", "invalid_text"] as const;
+export type ToolInputParseErrorCode = (typeof TOOL_INPUT_PARSE_ERROR_CODES)[number];
+
+export const WAITING_OPERATION_RUN_STATUSES = [
+  "pending_confirmation",
+  "pending_approval"
+] as const satisfies readonly OperationRunStatus[];
+
+export const OPERATION_CONFIRMATION_DECISIONS = ["confirm", "decline"] as const;
+export const TOOL_DECISION_MODES = ["confirm", "approval"] as const;
+export const TOOL_DECISION_OUTCOMES = ["confirmed", "declined", "expired", "cancelled"] as const;
+
 export const TOOL_CALL_STATES = [
   "input_available",
-  "waiting_for_permission",
+  "waiting_for_decision",
   "output_available",
   "output_error"
 ] as const;
@@ -770,7 +782,7 @@ export type EndedAgentRunStatus = (typeof ENDED_AGENT_RUN_STATUSES)[number];
 export const ACTIVE_AGENT_RUN_STATUSES = [
   "queued",
   "running",
-  "waiting_for_permission",
+  "waiting_for_decision",
   "cancelling"
 ] as const satisfies readonly AgentRunStatus[];
 export type ActiveAgentRunStatus = (typeof ACTIVE_AGENT_RUN_STATUSES)[number];

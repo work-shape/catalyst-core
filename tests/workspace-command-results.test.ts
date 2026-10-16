@@ -94,7 +94,9 @@ type ToolResult = Awaited<ReturnType<Harness["runTool"]>>;
 
 function commandIdOf(result: ToolResult): string {
   const commandId =
-    result.status === "success" ? undefined : jsonObjectOf(result.error.details).commandId;
+    result.status === "success" || result.status === "waiting_for_decision"
+      ? undefined
+      : jsonObjectOf(result.error.details).commandId;
   if (typeof commandId !== "string") {
     throw new Error("Expected the result to name its workspace command");
   }

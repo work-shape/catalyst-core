@@ -109,7 +109,8 @@ describe("client instance app vertical slice", () => {
       await withSql(async (sql) => {
         await sql`
           update agent_runs
-          set started_at = now() - make_interval(secs => ${AGENT_RUN_MAX_QUEUED_MS / 1000 + 1})
+          set started_at = now() - make_interval(secs => ${AGENT_RUN_MAX_QUEUED_MS / 1000 + 1}),
+            updated_at = now() - make_interval(secs => ${AGENT_RUN_MAX_QUEUED_MS / 1000 + 1})
           where id = ${started.run.id}`;
       });
       await getTestJobs(app).runDue();

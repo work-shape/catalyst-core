@@ -387,8 +387,8 @@ async function endUnrecorded(
   if (ended.status === "done") {
     return { ...context.run, status: "done", finishedAt: ended.finishedAt };
   }
-  if (ended.status === "pending_approval") {
-    throw new AppError("INTERNAL", "A reading call cannot wait for an approval");
+  if (ended.status === "pending_approval" || ended.status === "pending_confirmation") {
+    throw new AppError("INTERNAL", "A reading call cannot wait for a decision");
   }
   let recorded: OperationRun;
   try {

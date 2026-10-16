@@ -177,6 +177,7 @@ describe("the operation catalog", () => {
         "namespaces.list  GET /api/v1/instance/access/namespaces",
         "namespaces.update  PATCH /api/v1/instance/access/namespaces/:prefix",
         "openapi.get  GET /api/v1/openapi.json",
+        "operations.decide  POST /api/v1/operations/runs/:runId/decision",
         "operations.get_run  GET /api/v1/operations/runs/:runId",
         "operations.list_runs  GET /api/v1/operations/runs",
         "pages.files.get  GET /api/v1/conversations/:conversationId/pages/:pageId/file-sets/:fileSetId/source-file",
@@ -428,7 +429,7 @@ describe("a running instance", () => {
     // sync of assets came with them. Then the Pages of a conversation, and the check of a sync.
     // Then personal API keys and the connect code of the CLI, and the search of the Pages and
     // files of a workspace. Then the check of a new asset's name and the switch of a
-    // guardrail the release ships.
+    // guardrail the release ships. Then a person's decision on a call their Agent Run waits on.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -513,7 +514,8 @@ describe("a running instance", () => {
       "personal_api_keys.revoke",
       "workspaces.files.list",
       "conversations.subject.open",
-      "assets.check_name"
+      "assets.check_name",
+      "operations.decide"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

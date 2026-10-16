@@ -34,7 +34,7 @@ export async function listConversationsWithActiveRun(
       and(
         eq(agentRuns.clientInstanceId, conversations.clientInstanceId),
         eq(agentRuns.conversationId, conversations.id),
-        drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`
+        drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_decision', 'cancelling')`
       )
     )
     .where(listedConversations(db, input))

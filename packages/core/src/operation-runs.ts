@@ -18,7 +18,10 @@ import type { OperationEffect, OperationOrigin } from "./operations";
 import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
 
-export { OPERATION_RUN_STATUSES } from "@work-shape/catalyst-asset-schemas";
+export {
+  OPERATION_RUN_STATUSES,
+  WAITING_OPERATION_RUN_STATUSES
+} from "@work-shape/catalyst-asset-schemas";
 
 export type OperationRunStatus = (typeof OPERATION_RUN_STATUSES)[number];
 
@@ -161,7 +164,11 @@ export type NewOperationRun = Pick<
   takesInterrupted?: true;
 };
 
-/** How a running call ends for its caller: with an outcome, or waiting for an approval. */
+/**
+ * How a running call ends for its caller: with an outcome, or waiting for a decision. Only a
+ * call an Agent Run's worker makes waits for its caller's confirmation (`inputRef`
+ * `agent_run:<id>`): the run keeps the frozen input.
+ */
 export type OperationRunEnd = { finishedAt: ISODateString } & (
   | {
       status: "done";
@@ -178,6 +185,7 @@ export type OperationRunEnd = { finishedAt: ISODateString } & (
       inputRef: string;
       expiresAt: ISODateString;
     }
+  | { status: "pending_confirmation"; inputRef: string; expiresAt: ISODateString }
 );
 
 /**
@@ -240,9 +248,9 @@ export interface OperationRunStore {
     page?: StorePage;
   }): Promise<OperationRun[]>;
   /**
-   * Takes a run that waits for an approval, to execute its call: the one transition by which an
-   * approved call starts. `undefined` when the run does not wait any more, so of two takers
-   * one executes.
+   * Takes a run that waits for an approval, or a confirmed run that waits to be executed, to
+   * execute its call: the one transition by which a decided call starts. `undefined` when the
+   * run does not wait any more, so of two takers one executes.
    */
   resume(input: {
     clientInstanceId: ClientInstanceId;
@@ -250,7 +258,7 @@ export interface OperationRunStore {
     decision: OperationRunDecision;
     startedAt: ISODateString;
   }): Promise<OperationRun | undefined>;
-  /** Ends a run that waits for an approval without executing it. `undefined` when it does not wait. */
+  /** Ends a run that waits for a decision without executing it. `undefined` when it does not wait. */
   endWaiting(input: {
     clientInstanceId: ClientInstanceId;
     id: OperationRunId;
@@ -259,7 +267,8 @@ export interface OperationRunStore {
   }): Promise<OperationRun | undefined>;
   /**
    * Marks waiting runs whose time ran out by the database's clock and returns them, oldest
-   * first and at most `limit` of them.
+   * first and at most `limit` of them. A confirmed run that waits to be executed has had its
+   * decision and does not expire.
    */
   markExpired(input: {
     clientInstanceId: ClientInstanceId;

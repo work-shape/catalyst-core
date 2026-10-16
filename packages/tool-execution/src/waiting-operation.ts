@@ -7,6 +7,7 @@ import {
   type AuthenticatedIdentity,
   type JsonObject,
   type OperationCall,
+  type OperationCallRuntime,
   type OperationDefinition,
   type OperationDenial,
   type OperationRun,
@@ -23,6 +24,7 @@ import {
   failRun,
   OperationNotBegunError,
   requireModuleOn,
+  type OperationEnding,
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
@@ -57,7 +59,11 @@ export interface OperationDecider {
  * What became of a call that was approved. `refused` is a call that was not executed because
  * it may no longer run as the person who made it; `expired` one whose time ran out first.
  */
-export type ApprovedOperationEnd = { run?: OperationRun } & (
+export type ApprovedOperationEnd = {
+  run?: OperationRun;
+  /** What the call path answered, where the call was executed or refused on it. */
+  outcome?: OperationEnding;
+} & (
   | { execution: "done" }
   | { execution: "failed" | "interrupted" | "refused"; error: { code: string; message: string } }
   | { execution: "expired" }
@@ -109,6 +115,30 @@ export async function executeApprovedOperation(
 }
 
 /**
+ * Executes the call an Agent Run held for its person's confirmation, once the person
+ * confirmed: as `executeApprovedOperation` executes an approved call, asked again as the
+ * person is now and taken in one statement, with the decision the run holds. It runs in the
+ * worker of the Agent Run, with that run's hold and its person's language.
+ */
+export async function executeConfirmedOperation(
+  waiting: WaitingOperationCall,
+  deps: RunOperationDeps,
+  options: { signal?: AbortSignal; runtime?: Pick<OperationCallRuntime, "locale" | "runFence"> }
+): Promise<ApprovedOperationEnd> {
+  options.signal?.throwIfAborted();
+  const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: waiting.runId });
+  const decision = run?.decision;
+  if (run?.status !== "pending_confirmation" || decision?.mode !== "confirmed") {
+    return readApprovedOperationEnd(waiting.runId, deps);
+  }
+  const admitted = await admitAgain(run, waiting, deps, decision, options.runtime);
+  if ("end" in admitted) {
+    return admitted.end;
+  }
+  return executeWithinTime(admitted.context, decision, options.signal);
+}
+
+/**
  * What a run that does not wait any more says about its approved call. A run that is still
  * `running` is ended as interrupted: only the one executor of the run may ask.
  */
@@ -123,7 +153,11 @@ export async function readApprovedOperationEnd(
       error: { code: "NOT_FOUND", message: "The call of this request no longer exists." }
     };
   }
-  if (run.status === "expired" || run.status === "pending_approval") {
+  if (
+    run.status === "expired" ||
+    run.status === "pending_approval" ||
+    run.status === "pending_confirmation"
+  ) {
     // A run that still waits and could not be taken ran out of time; the expiry job marks it.
     return { execution: "expired", run };
   }
@@ -172,7 +206,8 @@ async function admitAgain(
   run: OperationRun,
   waiting: WaitingOperationCall,
   deps: RunOperationDeps,
-  decision: OperationRunDecision
+  decision: OperationRunDecision,
+  runtime: Pick<OperationCallRuntime, "locale" | "runFence"> = {}
 ): Promise<{ context: RunContext } | { end: ApprovedOperationEnd }> {
   const now = deps.now ?? (() => new Date());
   /** Ends the waiting run. Without a run to answer, the run did not wait any more. */
@@ -207,7 +242,7 @@ async function admitAgain(
       return refused(ended, (denied) => denied.error ?? UNKNOWN_END);
     }
   }
-  const found = await waitingContext(run, waiting, deps).catch((error: unknown) => {
+  const found = await waitingContext(run, waiting, deps, runtime).catch((error: unknown) => {
     if (error instanceof AppError && error.code === "NOT_FOUND") {
       return { gone: { code: error.code, message: error.message } };
     }
@@ -357,7 +392,8 @@ async function admitAgain(
 async function waitingContext(
   run: OperationRun,
   waiting: WaitingOperationCall,
-  deps: RunOperationDeps
+  deps: RunOperationDeps,
+  runtime: Pick<OperationCallRuntime, "locale" | "runFence">
 ): Promise<RunContext | { actorGone: true; definition: OperationDefinition }> {
   const { actor } = waiting.call;
   const definition = await deps.registry.resolve(run.operation);
@@ -391,8 +427,9 @@ async function waitingContext(
     resource: definition.resource(call.input),
     deps,
     // The call is executed later and elsewhere than it was made: nothing of the live call is
-    // left. Its time and its signal are set where it is executed.
-    runtime: {},
+    // left but, for a call an Agent Run's worker executes, that run's hold and language. Its
+    // time and its signal are set where it is executed.
+    runtime,
     // Its guardrails answer again before it is executed, and their hits were kept when it was
     // made.
     repeated: true
@@ -413,7 +450,11 @@ async function executeWithinTime(
   const stop = new AbortController();
   const context: RunContext = {
     ...admitted,
-    runtime: { signal: stop.signal, deadline: new Date(admitted.now().getTime() + timeoutMs) }
+    runtime: {
+      ...admitted.runtime,
+      signal: stop.signal,
+      deadline: new Date(admitted.now().getTime() + timeoutMs)
+    }
   };
   const access = await deps.authorizer.forActor(call.actor);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -493,13 +534,14 @@ async function executeWithinTime(
     const { result, run } = first;
     switch (result.status) {
       case "done":
-        return { execution: "done", run };
+        return { execution: "done", run, outcome: first };
       case "denied":
-        return { execution: "refused", run, error: run.error ?? UNKNOWN_END };
+        return { execution: "refused", run, outcome: first, error: run.error ?? UNKNOWN_END };
       case "failed":
         return {
           execution: "failed",
           run,
+          outcome: first,
           error: { code: result.error.code, message: result.error.message }
         };
       default:
@@ -574,9 +616,15 @@ export async function refuseWaitingOperation(
   });
 }
 
-/** Whether a waiting call was taken for execution: it ran, runs, or was cut off while running. */
+/**
+ * Whether a waiting call was taken for execution: it ran, runs, or was cut off while running.
+ * A confirmed call that still waits for its run's worker has its decision and was not taken.
+ */
 export function wasTakenForExecution(run: OperationRun | undefined): boolean {
-  return run?.decision?.mode === "approved";
+  return (
+    run?.decision?.mode === "approved" ||
+    (run?.decision?.mode === "confirmed" && run.status !== "pending_confirmation")
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

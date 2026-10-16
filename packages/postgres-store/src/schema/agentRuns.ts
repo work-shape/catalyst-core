@@ -9,7 +9,12 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { AgentRun, RunObservation, RunStartCommand } from "@work-shape/catalyst-core";
+import type {
+  AgentRun,
+  AgentRunResumeState,
+  RunObservation,
+  RunStartCommand
+} from "@work-shape/catalyst-core";
 import { conversations, messages } from "./conversations";
 
 export const agentRuns = pgTable(
@@ -44,12 +49,14 @@ export const agentRuns = pgTable(
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
     heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
     cancellationRequestedAt: timestamp("cancellation_requested_at", { withTimezone: true }),
-    cancellationReason: text("cancellation_reason")
+    cancellationReason: text("cancellation_reason"),
+    // What a run that waits for a decision keeps to go on; null otherwise (EW-2a).
+    resumeState: jsonb("resume_state").$type<AgentRunResumeState>()
   },
   (table) => [
     uniqueIndex("agent_runs_active_conversation_idx")
       .on(table.clientInstanceId, table.conversationId)
-      .where(sql`${table.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`),
+      .where(sql`${table.status} in ('queued', 'running', 'waiting_for_decision', 'cancelling')`),
     uniqueIndex("agent_runs_idempotency_idx")
       .on(table.clientInstanceId, table.conversationId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null`),

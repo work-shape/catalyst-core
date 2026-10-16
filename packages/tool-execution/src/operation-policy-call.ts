@@ -21,9 +21,9 @@ import type { RunContext } from "./operation-execution";
 
 /** What the policy is resolved from for this call, before a guardrail answered. */
 async function policyInputOf(
-  context: Pick<RunContext, "definition" | "call" | "resource" | "deps">
+  context: Pick<RunContext, "definition" | "call" | "resource" | "deps" | "runtime">
 ): Promise<PolicyInput> {
-  const { definition, call, resource, deps } = context;
+  const { definition, call, resource, deps, runtime } = context;
   const callFloor = await definition.policyFloorOf?.(call.origin, call.input);
   return {
     definition:
@@ -42,8 +42,9 @@ async function policyInputOf(
     // A step of a run of what is published carries no draft; one of a test run always does.
     publishedRun: call.origin.kind === "workflow" && call.draft === undefined,
     workflowDeleted: call.workflowDeleted === true,
-    // No surface can hold a call for its actor's confirmation before OP-3.
-    canPause: false
+    // Only an Agent Run's worker holds a call for its actor's confirmation: the run pauses
+    // and resumes when its person decided. The hold of the run says the worker makes the call.
+    canPause: call.origin.kind === "agent" && runtime.runFence?.runId === call.origin.agentRunId
   };
 }
 

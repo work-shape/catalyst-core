@@ -1,3 +1,4 @@
+import { decideWaitingToolCall } from "./postgres-agent-run-decision-operations";
 import {
   appendClaimedAgentRunEnd,
   appendClaimedAgentRunMessage,
@@ -164,7 +165,7 @@ async function prepareConversationRunStart(
         and(
           eq(agentRuns.clientInstanceId, input.clientInstanceId),
           eq(agentRuns.conversationId, input.conversationId),
-          drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`
+          drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_decision', 'cancelling')`
         )
       )
       .limit(1);
@@ -381,7 +382,7 @@ async function getActiveConversationAgentRun(
       and(
         eq(agentRuns.clientInstanceId, input.clientInstanceId),
         eq(agentRuns.conversationId, input.conversationId),
-        drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`
+        drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_decision', 'cancelling')`
       )
     )
     .limit(1);
@@ -638,6 +639,7 @@ export function createPostgresAgentRunsStore(
     async listAgentRunsWithoutJob(input: Parameters<AgentRunStore["listAgentRunsWithoutJob"]>[0]) {
       return listAgentRunsWithoutJob(db, input);
     },
+    decideWaitingToolCall: (input) => decideWaitingToolCall(db, input, enqueued),
     async requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun> {
       return requestAgentRunCancellation(db, input);
     },

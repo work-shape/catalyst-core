@@ -297,24 +297,15 @@ async function observeRun(eventsUrl, input) {
         if (!event) continue;
         events.push(event);
         if (
-          event.payload.type === "tool_permission_requested" &&
+          event.payload.type === "tool_decision_requested" &&
+          event.payload.mode === "confirm" &&
           autoApprove &&
-          event.payload.toolCallId
+          event.payload.operationRunId
         ) {
-          await requestJson(
-            `/api/v1/conversations/${input.conversationId}/runs/${input.runId}/commands`,
-            {
-              method: "POST",
-              body: {
-                command: {
-                  type: "tool_permission_decision",
-                  toolCallId: event.payload.toolCallId,
-                  approved: true,
-                  reason: "Approved by local live E2E harness"
-                }
-              }
-            }
-          );
+          await requestJson(`/api/v1/operations/runs/${event.payload.operationRunId}/decision`, {
+            method: "POST",
+            body: { decision: "confirm" }
+          });
         }
         if (["run_completed", "run_cancelled", "run_failed"].includes(event.payload.type)) {
           return events;
@@ -433,13 +424,13 @@ function buildToolTrace(events) {
       });
       continue;
     }
-    if (payload.type === "tool_permission_requested") {
+    if (payload.type === "tool_decision_requested") {
       toolCalls.set(payload.toolCallId, {
         ...toolCalls.get(payload.toolCallId),
         id: payload.toolCallId,
         name: payload.toolName,
-        input: payload.input ?? toolCalls.get(payload.toolCallId)?.input,
-        status: "permission_requested"
+        input: payload.inputPreview ?? toolCalls.get(payload.toolCallId)?.input,
+        status: "decision_requested"
       });
       continue;
     }

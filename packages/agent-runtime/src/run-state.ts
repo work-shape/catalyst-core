@@ -3,11 +3,13 @@ import {
   runFailureCodeOf,
   type AgentRunFailureCategory,
   type AgentRunId,
+  type AgentRunResumeState,
   type AgentRunStatus,
   type AgentRuntimeEvent,
   type AgentRuntimeObserveOptions,
   type ChatMessage,
-  type ISODateString
+  type ISODateString,
+  type ToolDecisionRequested
 } from "@work-shape/catalyst-core";
 
 type AgentRuntimeEventDraft = AgentRuntimeEvent extends infer TEvent
@@ -19,6 +21,8 @@ type AgentRuntimeEventDraft = AgentRuntimeEvent extends infer TEvent
 export interface RunStateOptions {
   onEvent?: (event: AgentRuntimeEvent) => void | Promise<void>;
   startedAt?: ISODateString;
+  /** The last event a resumed run stored: its events go on after it. */
+  startSequence?: number;
 }
 
 export interface RunFailureError {
@@ -41,9 +45,13 @@ export function toRunFailureError(error: unknown): RunFailureError {
   };
 }
 
+/** An event after which the run's execution emits nothing: it ended, or waits for a decision. */
 function isTerminalRunEvent(event: AgentRuntimeEvent): boolean {
   return (
-    event.type === "run_completed" || event.type === "run_cancelled" || event.type === "run_failed"
+    event.type === "run_completed" ||
+    event.type === "run_cancelled" ||
+    event.type === "run_failed" ||
+    event.type === "tool_decision_requested"
   );
 }
 
@@ -64,7 +72,8 @@ export class RunState {
   readonly runId: AgentRunId;
   readonly startedAt: ISODateString;
   private status: AgentRunStatus = "running";
-  private sequence = 0;
+  private sequence: number;
+  private resumeState: AgentRunResumeState | undefined;
   private closed = false;
   private cancellationStarted = false;
   private messageCompleted = false;
@@ -79,6 +88,7 @@ export class RunState {
   constructor(runId: AgentRunId, options: RunStateOptions = {}) {
     this.runId = runId;
     this.startedAt = options.startedAt ?? new Date().toISOString();
+    this.sequence = options.startSequence ?? 0;
     this.onEvent = options.onEvent;
   }
 
@@ -171,6 +181,25 @@ export class RunState {
       { allowDuringCancellation: true }
     );
     this.close();
+  }
+
+  /**
+   * Ends this execution of the run at a call that waits for a decision. The run keeps
+   * `resumeState` to go on from there once the call is decided.
+   */
+  waitForDecision(requested: ToolDecisionRequested, resumeState: AgentRunResumeState): void {
+    if (this.closed || this.cancellationStarted) {
+      return;
+    }
+    this.status = "waiting_for_decision";
+    this.resumeState = resumeState;
+    this.emitRuntimeEvent({ type: "tool_decision_requested", runId: this.runId, ...requested });
+    this.close();
+  }
+
+  /** What the run keeps to go on, once it waits for a decision. */
+  getResumeState(): AgentRunResumeState | undefined {
+    return this.resumeState;
   }
 
   cancel(reason?: string, partialMessage?: ChatMessage): void {

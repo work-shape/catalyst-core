@@ -20,7 +20,6 @@ import {
   asAgentRunId,
   asCollaborationWorkspaceId,
   asConversationId,
-  asToolCallId,
   requireAuthScope
 } from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-service";
@@ -143,7 +142,7 @@ export function registerAgentRunRoutes(
         runId,
         user,
         withRequestLocale(context, options, request, undefined),
-        toRuntimeRunCommand(body.command)
+        body.command
       );
       return runCommandResponseSchema.parse({ run });
     }
@@ -298,7 +297,7 @@ function isObservableRunStatus(status: string | undefined): boolean {
   return (
     status === "queued" ||
     status === "running" ||
-    status === "waiting_for_permission" ||
+    status === "waiting_for_decision" ||
     status === "cancelling"
   );
 }
@@ -313,25 +312,4 @@ function readAfterSequence(
   }
   const parsed = Number(rawValue);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function toRuntimeRunCommand(
-  command:
-    | {
-        type: "continue";
-      }
-    | {
-        type: "tool_permission_decision";
-        toolCallId: string;
-        approved: boolean;
-        reason?: string;
-      }
-) {
-  if (command.type === "continue") {
-    return command;
-  }
-  return {
-    ...command,
-    toolCallId: asToolCallId(command.toolCallId)
-  };
 }

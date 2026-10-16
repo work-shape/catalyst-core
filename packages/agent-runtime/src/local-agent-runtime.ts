@@ -2,6 +2,7 @@ import {
   AppError,
   type AgentRunHandle,
   type AgentRunId,
+  type AgentRunResumeState,
   type AgentRunStatus,
   type AgentRuntime,
   type AgentRuntimeCommand,
@@ -67,6 +68,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     }
     const state = new RunState(runId, {
       startedAt: input.preparedRun?.startedAt,
+      ...(input.resume ? { startSequence: input.resume.lastSequence } : {}),
       onEvent: (event) => this.runEvents.persistRunEvent(input, context, event)
     });
     if (this.options.agentRunStore && !input.preparedRun) {
@@ -156,6 +158,11 @@ export class LocalAgentRuntime implements AgentRuntime {
   ): AsyncIterable<AgentRuntimeEvent> {
     const state = this.getRun(runId);
     return state.observe(options);
+  }
+
+  /** What a run that waits for a decision keeps to go on, once it paused. */
+  resumeStateOf(runId: AgentRunId): AgentRunResumeState | undefined {
+    return this.runs.get(runId)?.getResumeState();
   }
 
   async getStatus(runId: AgentRunId, context: RuntimeCallContext): Promise<AgentRunStatus> {

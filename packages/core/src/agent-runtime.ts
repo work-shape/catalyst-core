@@ -21,6 +21,12 @@ import type { JsonObject } from "./json";
 import type { LocaleCode } from "./localization";
 import type { ISODateString } from "./time";
 import type { ToolExecutionResult } from "./tool-execution";
+import type {
+  AgentRunResume,
+  AgentRunResumeState,
+  ToolDecisionRecorded,
+  ToolDecisionRequested
+} from "./agent-run-resume";
 
 export interface StartAgentRunInput {
   agentName: string;
@@ -39,6 +45,8 @@ export interface StartAgentRunInput {
     files?: ManagedFileRef[];
     attachmentManifest?: AttachmentManifest;
   };
+  /** Set where the run waited for a decision and goes on where it stopped. */
+  resume?: AgentRunResume;
 }
 
 export interface AgentRunHandle {
@@ -128,6 +136,8 @@ export type AgentRunProjectionPart =
       state: (typeof TOOL_CALL_STATES)[number];
       output?: unknown;
       errorText?: string;
+      /** While the state is `waiting_for_decision`: what the person is asked to decide. */
+      decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
     };
 
 export interface AgentRunProjection {
@@ -153,6 +163,7 @@ export interface AgentRunProjection {
     state: (typeof TOOL_CALL_STATES)[number];
     output?: unknown;
     errorText?: string;
+    decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
   }>;
   error?: AgentRunError;
 }
@@ -197,16 +208,9 @@ export interface AgentRuntimeObserveOptions {
   afterSequence?: number;
 }
 
-export type AgentRuntimeCommand =
-  | {
-      type: "tool_permission_decision";
-      toolCallId: ToolCallId;
-      approved: boolean;
-      reason?: string;
-    }
-  | {
-      type: "continue";
-    };
+export type AgentRuntimeCommand = {
+  type: "continue";
+};
 
 export type AgentRuntimeEvent =
   | {
@@ -260,16 +264,18 @@ export type AgentRuntimeEvent =
       toolName: string;
       input: unknown;
     }
-  | {
-      type: "tool_permission_requested";
+  | ({
+      type: "tool_decision_requested";
       runId: AgentRunId;
       sequence: number;
       createdAt: ISODateString;
-      toolCallId: ToolCallId;
-      toolName: string;
-      reason: string;
-      preview?: JsonObject;
-    }
+    } & ToolDecisionRequested)
+  | ({
+      type: "tool_decision_recorded";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+    } & ToolDecisionRecorded)
   | {
       type: "tool_call_completed";
       runId: AgentRunId;
@@ -415,7 +421,14 @@ export interface ClaimAgentRunForJobInput {
  * `held`: a worker of the previous release holds the run under a live lease. `started`: the
  * run was started before and nothing holds it; it must not be executed again.
  */
-export type AgentRunJobClaim = SubjectRowClaim<AgentRun> | { status: "started" };
+/**
+ * A claimed run carries, beside its row, where it goes on when it waited for a decision. The
+ * resume state is read by its worker alone and never leaves the store with the run.
+ */
+export type AgentRunJobClaim =
+  | { status: "claimed"; row: AgentRun; resumeState?: AgentRunResumeState }
+  | Exclude<SubjectRowClaim<AgentRun>, { status: "claimed" }>
+  | { status: "started" };
 
 export interface RenewAgentRunJobLeaseInput {
   clientInstanceId: ClientInstanceId;
@@ -458,8 +471,10 @@ export interface AppendClaimedAgentRunEndInput {
   lease: AgentRunJobLease;
   /** The last assistant message of the run, when it wrote one. */
   message?: { role: "assistant" } & AppendAssistantMessageInput;
-  /** The events that follow, in order. The last one ends the run. */
+  /** The events that follow, in order. The last one ends the run, or sets it waiting for a decision. */
   events: AgentRuntimeEvent[];
+  /** What a run that ends waiting for a decision keeps to go on; required exactly then. */
+  resumeState?: AgentRunResumeState;
 }
 
 export interface FailLostAgentRunInput {

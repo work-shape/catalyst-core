@@ -13,6 +13,7 @@ import {
   type ModelProviderContinuationStore,
   type ModelProviderConfig,
   type RunObservationStore,
+  type ToolDecisionRunner,
   type ToolOperationRunner,
   type WebAccessConfig,
   type AgentRunId,
@@ -52,6 +53,11 @@ export interface LocalAgentRuntimeOptions {
   /** How long a run's start waits for `dataTools`. Without it `DATA_TOOL_DESCRIBE_TIMEOUT_MS`. */
   dataToolDescribeTimeoutMs?: number;
   runTool: ToolOperationRunner;
+  /**
+   * Carries out a call a resumed run waited on, once its person decided. Without it a runtime
+   * resumes no run: only an Agent Run's worker pauses one.
+   */
+  runDecidedTool?: ToolDecisionRunner;
   /**
    * What a conversation is offered beyond its agent's definition: the tools the server binds
    * to the subject of a conversation about an asset, and the skills the platform ships for

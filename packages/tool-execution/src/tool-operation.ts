@@ -15,6 +15,7 @@ import {
   operationDenialError,
   toErrorEnvelope,
   toolRequestFromOperationCall,
+  unknownToJsonValue,
   type ClientInstanceId,
   type DataToolDescriptor,
   type DataToolSource,
@@ -278,7 +279,7 @@ interface ToolCallNames {
  * ran answers in the words an agent has always read for it.
  */
 export function toolResultFromOperationResult(
-  outcome: OperationOutcome,
+  outcome: Pick<OperationOutcome, "result" | "toolResult">,
   names: ToolCallNames
 ): ToolExecutionResult {
   if (outcome.toolResult) {
@@ -495,6 +496,18 @@ export function createToolOperationRunner(
           unreadableInput: options.unreadableInput
         }
       );
+      const { result } = outcome;
+      if (result.status === "pending_confirmation") {
+        // The call waits for its person's confirmation: the run pauses here.
+        return {
+          status: "waiting_for_decision",
+          operationRunId: result.runId,
+          operationId: tool.name,
+          mode: "confirm",
+          frozenInput: unknownToJsonValue(result.preview),
+          expiresAt: result.expiresAt
+        };
+      }
       return toolResultFromOperationResult(outcome, names);
     } catch (error) {
       const refused = refusalBeforeRun(error, names);
