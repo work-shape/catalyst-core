@@ -24,6 +24,7 @@ import {
 } from "../deletion/workspace-deletion";
 import type { ChatServerOptions } from "../types";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
+import { recordWorkspaceChange } from "./workspace-service-audit";
 import {
   effectiveWorkspaceRole,
   requireWorkspaceAccess,
@@ -557,8 +558,7 @@ export class CollaborationWorkspaceWorkflow {
     return requestAccess(
       {
         options: this.options,
-        requireDiscoverableWorkspace: this.requireDiscoverableWorkspace.bind(this),
-        record: this.record.bind(this)
+        requireDiscoverableWorkspace: this.requireDiscoverableWorkspace.bind(this)
       },
       call,
       collaborationWorkspaceId
@@ -595,8 +595,7 @@ export class CollaborationWorkspaceWorkflow {
       {
         options: this.options,
         requireRole: this.requireRole.bind(this),
-        requireSharedWorkspace: this.requireSharedWorkspace.bind(this),
-        record: this.record.bind(this)
+        requireSharedWorkspace: this.requireSharedWorkspace.bind(this)
       },
       call,
       collaborationWorkspaceId,
@@ -612,8 +611,7 @@ export class CollaborationWorkspaceWorkflow {
     return declineAccessRequest(
       {
         options: this.options,
-        requireRole: this.requireRole.bind(this),
-        record: this.record.bind(this)
+        requireRole: this.requireRole.bind(this)
       },
       call,
       collaborationWorkspaceId,
@@ -770,15 +768,7 @@ export class CollaborationWorkspaceWorkflow {
     type: string,
     metadata?: Record<string, string | string[]>
   ): Promise<void> {
-    const { audit: auditRecorder } = call;
-    await auditRecorder.record({
-      type,
-      status: "success",
-      actor: auditActorFromUser(call.user),
-      subject: collaborationWorkspaceId,
-      correlationId: call.correlationId,
-      metadata
-    });
+    return recordWorkspaceChange(call, collaborationWorkspaceId, type, metadata);
   }
 }
 export {

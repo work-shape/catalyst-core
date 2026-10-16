@@ -657,9 +657,6 @@ function managedArtifactMatchesEnsureInput(
   );
 }
 
-type PostgresFileStoreDatabase =
-  PostgresConnection | Parameters<Parameters<PostgresConnection["transaction"]>[0]>[0];
-
 /** `jobsEnqueued` is called after the store enqueued a job, as the jobs store reports its own. */
 export function createPostgresFilesStore(
   db: PostgresStoreConnection,

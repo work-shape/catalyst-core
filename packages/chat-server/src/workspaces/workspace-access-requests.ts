@@ -1,3 +1,4 @@
+import { recordWorkspaceChange } from "./workspace-service-audit";
 import {
   AppError,
   asUserId,
@@ -54,10 +55,7 @@ export async function browseDirectory(
 }
 
 export async function requestAccess(
-  context: Pick<
-    WorkspaceAccessRequestContext,
-    "options" | "requireDiscoverableWorkspace" | "record"
-  >,
+  context: Pick<WorkspaceAccessRequestContext, "options" | "requireDiscoverableWorkspace">,
   call: WorkspaceChangeCall,
   collaborationWorkspaceId: CollaborationWorkspaceId
 ) {
@@ -86,9 +84,14 @@ export async function requestAccess(
     collaborationWorkspaceId,
     userId: subjectUserId
   });
-  await context.record(call, collaborationWorkspaceId, "collaboration_workspace.access_requested", {
-    targetUserId: subjectUserId
-  });
+  await recordWorkspaceChange(
+    call,
+    collaborationWorkspaceId,
+    "collaboration_workspace.access_requested",
+    {
+      targetUserId: subjectUserId
+    }
+  );
   return request;
 }
 
@@ -122,7 +125,7 @@ export async function listAccessRequests(
 export async function approveAccessRequestNow(
   context: Pick<
     WorkspaceAccessRequestContext,
-    "options" | "requireRole" | "requireSharedWorkspace" | "record"
+    "options" | "requireRole" | "requireSharedWorkspace"
   >,
   call: WorkspaceChangeCall,
   collaborationWorkspaceId: CollaborationWorkspaceId,
@@ -153,7 +156,7 @@ export async function approveAccessRequestNow(
     collaborationWorkspaceId,
     userId: targetUserId
   });
-  await context.record(
+  await recordWorkspaceChange(
     call,
     collaborationWorkspaceId,
     "collaboration_workspace.access_request_approved",
@@ -163,7 +166,7 @@ export async function approveAccessRequestNow(
 }
 
 export async function declineAccessRequest(
-  context: Pick<WorkspaceAccessRequestContext, "options" | "requireRole" | "record">,
+  context: Pick<WorkspaceAccessRequestContext, "options" | "requireRole">,
   call: WorkspaceChangeCall,
   collaborationWorkspaceId: CollaborationWorkspaceId,
   targetUserId: UserRecord["id"]
@@ -174,7 +177,7 @@ export async function declineAccessRequest(
     collaborationWorkspaceId,
     userId: targetUserId
   });
-  await context.record(
+  await recordWorkspaceChange(
     call,
     collaborationWorkspaceId,
     "collaboration_workspace.access_request_declined",
@@ -198,10 +201,4 @@ interface WorkspaceAccessRequestContext {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     needed: WorkspaceRoleNeeded
   ): Promise<WorkspaceAccess>;
-  record(
-    call: WorkspaceChangeCall,
-    collaborationWorkspaceId: CollaborationWorkspaceId,
-    type: string,
-    metadata?: Record<string, string | string[]>
-  ): Promise<void>;
 }

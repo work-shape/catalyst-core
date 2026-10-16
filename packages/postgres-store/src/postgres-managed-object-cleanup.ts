@@ -7,7 +7,6 @@ import {
   type UserId
 } from "@work-shape/catalyst-core";
 import { and, sql as drizzleSql, eq, inArray, ne } from "drizzle-orm";
-import { type PostgresFileStoreDatabase } from "./postgres-file-store";
 import { type PostgresConnection } from "./postgres-file-store-types";
 import { conversationsPendingCleanup } from "./postgres-pending-cleanup";
 import {
@@ -18,6 +17,9 @@ import {
   managedArtifacts,
   managedFiles
 } from "./schema";
+
+type PostgresFileStoreDatabase =
+  PostgresConnection | Parameters<Parameters<PostgresConnection["transaction"]>[0]>[0];
 
 async function collectConversationManagedObjectsForDeletion(
   db: PostgresFileStoreDatabase,
