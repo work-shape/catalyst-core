@@ -35,7 +35,7 @@ jobs:
   paths:
     if: github.event_name != 'pull_request' || github.event.label.name == 'ci'
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 3
+    timeout-minutes: 3 # check-limit
     outputs:
       code: ${{ steps.select.outputs.code }}
       browser: ${{ steps.select.outputs.browser }}
@@ -57,7 +57,7 @@ jobs:
   changes:
     needs: paths
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 3
+    timeout-minutes: 3 # check-limit
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -74,7 +74,7 @@ jobs:
     needs: paths
     if: needs.paths.outputs.code == 'true'
     runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 8
+    timeout-minutes: 8 # check-limit
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -99,7 +99,7 @@ jobs:
     needs: [paths, build]
     if: needs.paths.outputs.code == 'true'
     runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 9
+    timeout-minutes: 9 # check-limit
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -112,6 +112,15 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node packages/quality-config/baseline-guard.mjs "$BASE" "$HEAD"
+      # Dispatches have no PR title: every branch commit must be chore(limits).
+      # Main pushes compare the landed squash commit with its parent as a backstop.
+      - name: Check limits move only in a chore(limits) pull request
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && 'HEAD^' || 'origin/main') }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node packages/quality-config/limit-guard.mjs "$BASE" "$HEAD" "$PR_TITLE"
       - name: Lint
         run: pnpm lint
       - name: Package types
@@ -129,7 +138,7 @@ jobs:
     # Docs-only skips build; a failed code build must still fail the aggregate.
     if: ${{ !cancelled() && needs.paths.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 6
+    timeout-minutes: 6 # check-limit
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -150,7 +159,7 @@ jobs:
     needs: [paths, build]
     if: needs.paths.outputs.code == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 9
+    timeout-minutes: 9 # check-limit
     strategy:
       fail-fast: false
       matrix:
@@ -168,7 +177,7 @@ jobs:
           TOKEN: ${{ github.token }}
         run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
       - name: Database
-        timeout-minutes: 5
+        timeout-minutes: 5 # check-limit
         run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
       - name: Unit and database tests
         env:
@@ -181,7 +190,7 @@ jobs:
     needs: [paths, build]
     if: needs.paths.outputs.code == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 9
+    timeout-minutes: 9 # check-limit
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
     steps:
@@ -195,7 +204,7 @@ jobs:
           TOKEN: ${{ github.token }}
         run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
       - name: Database
-        timeout-minutes: 5
+        timeout-minutes: 5 # check-limit
         run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
       - name: Upgrade from oldest supported release
         run: pnpm test:upgrade
@@ -205,7 +214,7 @@ jobs:
     needs: [paths, build]
     if: needs.paths.outputs.code == 'true'
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 5
+    timeout-minutes: 5 # check-limit
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -228,7 +237,7 @@ jobs:
     needs: paths
     if: needs.paths.outputs.images == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 20
+    timeout-minutes: 20 # check-limit
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
       RUNNER_IMAGE_TAG: catalyst-runner-under-test:${{ github.run_id }}
@@ -241,7 +250,7 @@ jobs:
           TOKEN: ${{ github.token }}
         run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
       - name: Database
-        timeout-minutes: 5
+        timeout-minutes: 5 # check-limit
         run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
       # A BuildKit builder whose layer cache stays on Blacksmith between runs. It falls back to
       # the local builder when Blacksmith cannot set it up.
@@ -257,7 +266,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Commands in the runner image, worker not root
-        timeout-minutes: 5
+        timeout-minutes: 5 # check-limit
         env:
           CATALYST_RUNNER_IMAGE: ${{ env.RUNNER_IMAGE_TAG }}
           CATALYST_PAGE_BUILD_RUNNER_IMAGE: ${{ env.RUNNER_IMAGE_TAG }}
@@ -266,7 +275,7 @@ jobs:
           tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
           -t "in the runner image|gives the workspace"
       - name: Commands in the runner image, worker root
-        timeout-minutes: 5
+        timeout-minutes: 5 # check-limit
         run: >-
           sudo env "PATH=$PATH"
           "POSTGRES_STORE_TEST_DATABASE_URL=$POSTGRES_STORE_TEST_DATABASE_URL"
@@ -285,7 +294,7 @@ jobs:
     # Run 38778358978: groups 1 and 4 took 9:47 and 10:41; the other groups
     # took 3:44–7:36. Give only those two groups extra CPU; keep one worker.
     runs-on: ${{ matrix.runner || 'blacksmith-2vcpu-ubuntu-2404' }}
-    timeout-minutes: 15
+    timeout-minutes: 15 # check-limit
     strategy:
       fail-fast: false
       matrix:
@@ -306,7 +315,7 @@ jobs:
       # The suite's own database, with the names its runner expects on its default port. The
       # runner would otherwise start the demo Compose's Postgres itself.
       - name: Database
-        timeout-minutes: 5
+        timeout-minutes: 5 # check-limit
         run: .github/scripts/start-postgres.sh agent_chat agent_chat agent_chat 55433
       - uses: ./.github/actions/setup-check
       - name: Installed Playwright version
@@ -342,7 +351,7 @@ jobs:
     needs: [paths, browser-shard]
     if: ${{ always() && needs.paths.result == 'success' }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 2
+    timeout-minutes: 2 # check-limit
     steps:
       - name: Every selected shard passed
         env:
@@ -356,7 +365,7 @@ jobs:
       [paths, changes, build, static, docs, tests, upgrade, release, images, browser-shard, browser]
     if: ${{ always() && (github.event_name != 'pull_request' || github.event.label.name == 'ci') }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 2
+    timeout-minutes: 2 # check-limit
     steps:
       - name: Every selected check passed
         env:

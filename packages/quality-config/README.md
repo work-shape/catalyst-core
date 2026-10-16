@@ -83,6 +83,14 @@ The manager can accept one raise in `acceptedRaises` of `quality-baseline.json`,
 
 Owners are recorded per entry. Test compiler errors belong to CB-2b. Other test findings go to CB-2, browser findings to CB-1b, environment, console and host objects to CB-8c, provider fetch to CB-6a and CB-10a, CLI non-null assertions to PA-1b and its fetch to PA-3. Literal interface text has no entry: every finding is new and fails. Other cleanup findings use CB-8b. See [the measured baseline](BASELINE.md).
 
+## Check limits
+
+A check's limit (a size, length, baseline or timeout it holds the code to) moves only in a pull request of its own that Felix approved, and that pull request lands alone. Each such limit sits on a line that ends with the comment `check-limit` (after `//` or `#`): the tarball limits in `scripts/release/check-packages.mjs`, the test timeouts in `vitest.config.ts` and `playwright.config.ts`, and the job timeouts in `.github/workflows/check.yml`. A new limit gets the marker too.
+
+On a pull request, `limit-guard.mjs` compares the branch with the commit where it left its base. Each limit is known by its file and its place: the enclosing lines of smaller indentation (the job, the object) and its own words (the key), without numbers or punctuation; its value is the numbers on the line, read without digit separators. A limit whose value changed, that was added or removed, or whose marker was dropped has moved. A block that holds a limit is a table of limits: a line with a number added to it is a new limit and has moved, marked or not. Marking an unchanged line, writing `500_000` as `500000` or reordering a block, trailing commas included, is no move. A moved limit passes only when the pull request's title starts with `chore(limits)`, or, where no title is known (the landing lane), when every commit of the branch starts with `chore(limits)`. The hosted check reads the title when its run starts, so the title is set before the push. `platform/tests/limit-guard.test.ts` tests it.
+
+The static job runs the guard on `ci`-label pull request runs and full `workflow_dispatch` runs. Dispatches compare `origin/main` with the dispatched SHA and pass no PR title, so every branch commit must start with `chore(limits)` if a limit moves. This covers foundation changes, including workflow timeouts, that land through a full dispatch. Main pushes also compare the landed commit with `HEAD^` without a title; a squash commit carries the PR title. Release tag pushes skip the guard.
+
 ## Open points
 
 1. `rxjs` stays in chat-ui at 7.8.2: the program calls it unused, but the Univer packages require it as a peer. `@ai-sdk/react` was removed.

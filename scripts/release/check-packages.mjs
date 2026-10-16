@@ -21,7 +21,7 @@ const CONSUMER_SET = [
 ];
 // Installed next to them for its bin only; it has no module entry to import.
 const DEPLOYMENT_KIT = "deployment-kit";
-const MAX_TARBALL_BYTES = 300_000;
+const MAX_TARBALL_BYTES = 300_000; // check-limit
 // ui ships src/ next to dist/ for Tailwind scanning; chat-ui scans dist/ and ships only its
 // unbuilt stylesheet and Vite helpers beside it. server ships the pinned
 // view runtime it serves, about 230 kB packed, its own code, about 150 kB packed, and every
@@ -39,14 +39,14 @@ const MAX_TARBALL_BYTES = 300_000;
 const MAX_TARBALL_BYTES_BY_DIR = {
   // First capability publication: 32 standalone helper command bundles plus shipped skills
   // pack to 5.9 MB (2026-10-16). Keep that existing build shape within a measured budget.
-  "artifact-helpers": 6_500_000,
-  "chat-ui": 650_000,
-  ui: 500_000,
+  "artifact-helpers": 6_500_000, // check-limit
+  "chat-ui": 650_000, // check-limit
+  ui: 500_000, // check-limit
   // Raised on 2026-10-14 for App Kit 1.4.0 and the guardrail assets of EW-6a. Follow-up
   // KIT-SHARE-1: vendored App Kit versions share React and the chart engine; then lower the
   // limit again.
-  server: 2_700_000,
-  "postgres-store": 850_000
+  server: 2_700_000, // check-limit
+  "postgres-store": 850_000 // check-limit
 };
 const FORBIDDEN_FILES = [
   [/\.map$/u, "source map"],

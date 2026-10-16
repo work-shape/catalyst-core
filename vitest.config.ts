@@ -53,8 +53,8 @@ export default defineConfig({
     maxWorkers,
     // Close suite connections/held transactions before the file fixture is reset or dropped.
     sequence: { hooks: "stack" },
-    hookTimeout: 60000,
-    testTimeout: 30000,
+    hookTimeout: 60000, // check-limit
+    testTimeout: 30000, // check-limit
     include: ["tests/**/*.test.ts"]
   }
 });
