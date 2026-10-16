@@ -1,40 +1,21 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   APP_ASSET_KIND,
   type AgentRunProjection,
-  type ApiClient,
-  type ApiUser,
-  type CollaborationWorkspaceAgents,
   type ConversationListItem,
-  type DraftAttachment,
-  type LocaleCode,
-  type Message,
-  type SafeConfig,
   type StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
-import type { ThemeInputs } from "@work-shape/catalyst-ui/theme";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useControlPlaneModel } from "../../admin/control-plane/control-plane-model";
 import { useApprovalPendingCountQuery } from "../../shared/api/approval-request-api";
-import {
-  startApprovalRevision,
-  type ApprovalRevisionHost,
-  type ApprovalRevisionRunInput
-} from "../approvals/approval-revision-host";
-import {
-  createRunIdempotencyKey,
-  startProductConversationRun
-} from "../assistant/product-run-transport";
-import { resolveContextUsage } from "../assistant/context-usage";
-import type { SendBlock } from "../assistant/send-block";
+import { useRailConversations } from "../../shared/api/rail-conversations";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
-import { useConversationListRefresh } from "./use-conversation-list-refresh";
 import {
   useCancelRunMutation,
   useDeleteConversationMutation,
   useRenameConversationMutation,
   useWorkspaceSignOutMutation
 } from "../../shared/api/workspace-mutations";
-import { useRailConversations } from "../../shared/api/rail-conversations";
 import {
   useCollaborationWorkspaceAgentsQuery,
   usePlatformContextQuery,
@@ -44,52 +25,9 @@ import {
   useWorkspaceModelPreferenceQuery,
   useWorkspaceThreadQuery
 } from "../../shared/api/workspace-queries";
-import {
-  useCollaborationWorkspaceModel,
-  type CollaborationWorkspaceModel
-} from "../../shared/collaboration-workspace/collaboration-workspace-model";
-import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
-import type { ChatFileDropzoneController } from "../files/chat-file-dropzone";
-import type { ChatShellAdministration } from "../../shared/page-definition";
-import {
-  useControlPlaneModel,
-  type ControlPlaneModel
-} from "../../admin/control-plane/control-plane-model";
+import { useCollaborationWorkspaceModel } from "../../shared/collaboration-workspace/collaboration-workspace-model";
 import { canViewUsageGovernance } from "../../shared/governance";
-import { clearRunCursors } from "../conversation/run-connection-manager";
-import {
-  isLiveRunStatus,
-  type ConversationControllerState
-} from "../conversation/conversation-controller-state";
-import { useConversationController } from "../conversation/use-conversation-controller";
-import { useAgentOpens, type AgentOpens } from "../conversation/use-agent-opens";
-import { assetPageRoute } from "../conversation/subject-run";
-import { useDraftAttachmentController } from "../conversation/draft-attachment-controller";
-import { useChatFileDropzone } from "../files/chat-file-dropzone";
-import { useToolDisplayPanel } from "../tools/tool-display-panel";
-import type { ResolvedThemeMode } from "../../shared/theme";
-import type { WorkspaceView } from "./workspace-rail";
-import {
-  agentListStatus,
-  agentsRowShown,
-  buildingAgentNameFor,
-  type AgentListStatus
-} from "../../studio/agents/agents-model";
-import {
-  NO_APP_RIGHTS,
-  appsRowShown,
-  resolveAppRights,
-  type AppRights
-} from "../../studio/apps/app-model";
-import {
-  resolveWorkflowRights,
-  workflowsAccess,
-  workflowsRowShown,
-  type WorkflowRights,
-  type WorkflowsAccess
-} from "../../studio/workflows/workflow-model";
-import { inboxRailEntry } from "../inbox/inbox-model";
-import type { WorkspaceRoute } from "../../shared/workspace-route";
+import { createTranslationContext } from "../../shared/i18n";
 import { workspaceRoutePath } from "../../shared/routes";
 import {
   apiErrorStatus,
@@ -97,16 +35,53 @@ import {
   createEnvironmentDocumentTitle
 } from "../../shared/workspace-utils";
 import {
+  agentListStatus,
+  agentsRowShown,
+  buildingAgentNameFor
+} from "../../studio/agents/agents-model";
+import { appsRowShown, NO_APP_RIGHTS, resolveAppRights } from "../../studio/apps/app-model";
+import {
+  resolveWorkflowRights,
+  workflowsAccess,
+  workflowsRowShown
+} from "../../studio/workflows/workflow-model";
+import {
+  startApprovalRevision,
+  type ApprovalRevisionRunInput
+} from "../approvals/approval-revision-host";
+import { resolveContextUsage } from "../assistant/context-usage";
+import {
+  createRunIdempotencyKey,
+  startProductConversationRun
+} from "../assistant/product-run-transport";
+import { isLiveRunStatus } from "../conversation/conversation-controller-state";
+import { useDraftAttachmentController } from "../conversation/draft-attachment-controller";
+import { clearRunCursors } from "../conversation/run-connection-manager";
+import { assetPageRoute } from "../conversation/subject-run";
+import { useAgentOpens } from "../conversation/use-agent-opens";
+import { useConversationController } from "../conversation/use-conversation-controller";
+import { useChatFileDropzone } from "../files/chat-file-dropzone";
+import { inboxRailEntry } from "../inbox/inbox-model";
+import { useToolDisplayPanel } from "../tools/tool-display-panel";
+import {
   agentModelSelection,
   conversationModelPicks,
   modelReasoningEffortSelection,
   NO_MODEL_PICKS,
-  type AgentSelectableModel,
-  type ModelPicks,
-  type ReasoningEffort
+  type ModelPicks
 } from "./agent-model-selection";
+import { useConversationListRefresh } from "./use-conversation-list-refresh";
+import { useUnreadableDockConversation } from "./use-workspace-dock";
+import {
+  activeAgentNameFor,
+  isAbandonedDraftConversation,
+  terminalRunNotice,
+  WORKSPACE_AUTH_SCOPE,
+  workspaceScopedConfigFor
+} from "./workspace-chat-state";
+import type { WorkspaceChatModel, WorkspaceChatModelInput } from "./workspace-chat-types";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
-import { useUnreadableDockConversation, type WorkspaceDock } from "./use-workspace-dock";
+import { workspaceSendBlock } from "./workspace-send-block";
 import {
   useWorkspaceChromeState,
   useWorkspaceConversationActivityState,
@@ -115,328 +90,18 @@ import {
   useWorkspaceRouteState,
   useWorkspaceTheme
 } from "./workspace-ui-state";
-import { createTranslationContext, type TranslationContextValue } from "../../shared/i18n";
-import { workspaceSendBlock } from "./workspace-send-block";
-
-export const WORKSPACE_AUTH_SCOPE = "standalone";
-
-/**
- * Narrows the instance config to the agents the active Collaboration Workspace
- * offers. `getConfig` only knows the caller's Personal Workspace view, so it
- * stands in solely where that view is the right one: fixed-context sessions,
- * the Personal Workspace itself, and a failed workspace lookup. Anything else
- * waits for the workspace's own list instead of showing the wrong agents.
- */
-export function workspaceScopedConfigFor(input: {
-  config: SafeConfig | undefined;
-  collaborationWorkspacesAvailable: boolean;
-  workspaceAgents: CollaborationWorkspaceAgents | undefined;
-  instanceViewApplies: boolean;
-}): { config: SafeConfig | undefined; agentsLoading: boolean; workspaceScoped: boolean } {
-  const { config } = input;
-  if (!config || !input.collaborationWorkspacesAvailable) {
-    return { config, agentsLoading: false, workspaceScoped: false };
-  }
-  if (input.workspaceAgents) {
-    return {
-      config: {
-        ...config,
-        agents: input.workspaceAgents.items,
-        defaultAgentName: input.workspaceAgents.defaultAgentName
-      },
-      agentsLoading: false,
-      workspaceScoped: true
-    };
-  }
-  if (input.instanceViewApplies) {
-    return { config, agentsLoading: false, workspaceScoped: false };
-  }
-  return {
-    config: { ...config, agents: [], defaultAgentName: undefined },
-    agentsLoading: true,
-    workspaceScoped: true
-  };
-}
-
-/**
- * Whether the conversation on screen holds nothing the user would lose: it is the selected one,
- * its thread is loaded and empty, and no run is underway.
- */
-export function isAbandonedDraftConversation(input: {
-  conversationId: string;
-  selectedConversationId: string | undefined;
-  messagesLoaded: boolean;
-  messageCount: number;
-  running: boolean;
-}): boolean {
-  return (
-    input.conversationId === input.selectedConversationId &&
-    input.messagesLoaded &&
-    input.messageCount === 0 &&
-    !input.running
-  );
-}
-
-/**
- * The agent a new run would use: the user's pick while this workspace offers
- * it, otherwise the workspace default. Derived rather than stored, so switching
- * to a workspace without the picked agent never renders an unavailable one.
- */
-export function activeAgentNameFor(
-  config: Pick<SafeConfig, "agents" | "defaultAgentName"> | undefined,
-  selectedAgentName: string | undefined
-): string | undefined {
-  const agents = config?.agents ?? [];
-  const offered = (name: string | undefined) =>
-    name !== undefined && agents.some((agent) => agent.name === name);
-  return offered(selectedAgentName)
-    ? selectedAgentName
-    : offered(config?.defaultAgentName)
-      ? config?.defaultAgentName
-      : agents[0]?.name;
-}
-
-export interface WorkspaceChatModelInput {
-  administration: ChatShellAdministration | undefined;
-  manageDocumentTitle: boolean | undefined;
-  /** False for embedded token sessions, which stay fixed-context. */
-  collaborationWorkspacesAvailable: boolean;
-}
-
-export interface WorkspaceChatModel {
-  auth: WorkspaceAuthModel;
-  config: WorkspaceConfigModel;
-  route: WorkspaceRouteModel;
-  chrome: WorkspaceChromeModel;
-  collaborationWorkspace: CollaborationWorkspaceModel;
-  conversationRail: ConversationRailModel;
-  selectedChat: SelectedChatModel;
-  controlPlane: ControlPlaneModel;
-  toolDisplay: ToolDisplayModel;
-  approvalRevision: ApprovalRevisionHost;
-  agents: AgentsModel;
-  apps: AppsModel;
-  workflows: WorkflowsModel;
-}
-
-/** What the workspace knows about Workflows: whether the area is there, and the reader's rights. */
-interface WorkflowsModel {
-  access: WorkflowsAccess;
-  rights: WorkflowRights;
-  /**
-   * Starts a conversation of the open workspace about this Workflow and opens it. Rejects
-   * where the instance refuses the conversation.
-   */
-  editWithAgent(workflow: string): Promise<void>;
-  /**
-   * Opens the dock on the list with a new conversation with an agent that builds assets and
-   * `prompt` in its composer: its first save creates the Workflow. Absent where no agent here
-   * builds them, or the person may write no Workflow.
-   */
-  startNew?(prompt: string): void;
-}
-
-/** What the workspace knows for the Agents page. The agents themselves are the picker's. */
-interface AgentsModel {
-  /** How the open workspace's own list of agents stands. */
-  status: AgentListStatus;
-  retry(): void;
-  /** Opens a new conversation of the open workspace with this agent selected. */
-  startChat(agentName: string): void;
-}
-
-/** What the workspace knows about Apps: the module's state and the reader's rights. */
-interface AppsModel {
-  /** The Apps module is on and the session has workspaces to hold Apps. */
-  enabled: boolean;
-  rights: AppRights;
-  /** Opens a new conversation of the open workspace with this text in its composer. */
-  startChat(prompt: string): void;
-  /**
-   * Starts a conversation of the open workspace about this App and opens it, with the App's
-   * draft beside it. Rejects where the instance refuses the conversation.
-   */
-  editWithAgent(app: string): Promise<void>;
-}
-
-export interface WorkspaceAuthModel {
-  apiBaseUrl: string;
-  user: ApiUser | undefined;
-  loginRequired: boolean;
-  sessionUnavailable: boolean;
-  sessionRetrying: boolean;
-  signingOut: boolean;
-  signOut(): void;
-  /** Opens one of the user's own Settings pages. */
-  openSettings(page: OwnSettingsPage): void;
-  invalidateCurrentUser(): void;
-  retryCurrentUser(): void;
-}
-
-export interface WorkspaceConfigModel {
-  config: SafeConfig | undefined;
-  /**
-   * Why the configuration did not load. `outdated`: the answer or the path belongs to another
-   * release than this interface, so only a reload helps. `unavailable`: anything else.
-   */
-  failure: "outdated" | "unavailable" | undefined;
-  retrying: boolean;
-  retry(): void;
-  activeLocale: LocaleCode;
-  localePreference: LocaleCode | undefined;
-  supportedLocales: LocaleCode[];
-  resolvedThemeMode: ResolvedThemeMode;
-  /** The instance's theme inputs for the resolved mode; undefined until the config has loaded. */
-  theme: ThemeInputs | undefined;
-  activeAgentName: string | undefined;
-  selectAgentName(agentName: string | undefined): void;
-  selectLocale(locale: LocaleCode): void;
-  toggleTheme(): void;
-  attachmentsEnabled: boolean;
-  attachmentAccept: string;
-}
-
-/** The pages of the Settings group "You" that the account menu leads to. */
-type OwnSettingsPage = "profile" | "language-appearance";
-
-export interface WorkspaceRouteModel {
-  route: WorkspaceRoute;
-  view: WorkspaceView;
-  selectedConversationId: string | undefined;
-  /** The chat dock beside every page but the chat route. */
-  dock: WorkspaceDock;
-  canViewAdministration: boolean;
-  /** Opens a route by its value, as the command palette's "Go to" group does. */
-  showRoute(route: WorkspaceRoute): void;
-}
-
-export interface WorkspaceChromeModel {
-  sidebarCollapsed: boolean;
-  sidebarDrawerOpen: boolean;
-  composerFocusRequestId: number;
-  toggleSidebarCollapsed(): void;
-  openSidebarDrawer(): void;
-  closeSidebarDrawer(): void;
-  requestComposerFocus(): void;
-}
-
-export interface ConversationRailModel {
-  /** The conversations of the active workspace the rail has loaded, latest activity first. */
-  conversations: readonly ConversationListItem[];
-  /** The conversation on screen as a row, once its thread is there. */
-  openConversation: ConversationListItem | undefined;
-  /** The workspace holds older conversations than the loaded ones. */
-  hasMoreConversations: boolean;
-  loadingMoreConversations: boolean;
-  /** The last request for older conversations failed. The loaded ones stay. */
-  loadMoreConversationsFailed: boolean;
-  loadMoreConversations(): void;
-  /** How the list stands: still on its first load, failed without a list to show, or there. */
-  conversationsStatus: "loading" | "failed" | "ready";
-  reloadConversations(): void;
-  selectedConversationId: string | undefined;
-  canViewAdministration: boolean;
-  /** Present for a person who may decide requests or has made one: the Inbox row shows. */
-  inbox: { toDecide: number } | undefined;
-  /**
-   * The session has workspaces and the instance names the Agents row for the open one: two
-   * agents or more are available there, or the person may write one.
-   */
-  agents: boolean;
-  /**
-   * The Apps module is on and the instance names the Apps row for the open workspace: its Apps
-   * page lists the person an App, or the person may write one there.
-   */
-  apps: boolean;
-  /**
-   * The Workflows area is open to the person and the instance names them a Workflow or they
-   * may write one: the Workflows row shows.
-   */
-  workflows: boolean;
-  view: WorkspaceView;
-  creatingConversation: boolean;
-  deletingConversation: boolean;
-  canMoveConversation: boolean;
-  startNewConversation(): void;
-  selectConversation(conversationId: string): void;
-  renameConversation(conversationId: string, title: string): Promise<void>;
-  moveConversation(conversationId: string, title: string): void;
-  deleteConversation(conversationId: string): void;
-  selectWorkspaceView(view: WorkspaceView): void;
-}
-
-export interface SelectedChatModel {
-  client: ApiClient;
-  config: SafeConfig | undefined;
-  /** The active workspace's agent list has not arrived yet. */
-  agentsLoading: boolean;
-  /** `config.agents` is the active workspace's list rather than the instance view. */
-  agentsWorkspaceScoped: boolean;
-  collaborationWorkspaceId: string | undefined;
-  /** No conversation yet, and the Shared Workspace would start one as private. */
-  newConversationPrivate: boolean;
-  selectedConversationId: string | undefined;
-  /** The open conversation's retention date, once its thread has loaded. */
-  selectedConversationRetainedUntil: string | undefined;
-  /** The asset the open conversation is about, once its thread has loaded. */
-  selectedConversationSubject: { kind: string; name: string } | undefined;
-  /** The open conversation's title, once its thread has loaded. */
-  selectedConversationTitle: string | undefined;
-  /** The conversation stands in the dock of a page, not on its chat route. */
-  docked: boolean;
-  /** Goes to a route of the interface, such as the page of that asset. */
-  openRoute(route: WorkspaceRoute): void;
-  /** The assets the agent opened, and the way to their pages. */
-  agentOpens: AgentOpens;
-  messages: Message[] | undefined;
-  completedRunProjections: ConversationControllerState["completedRunProjections"];
-  messagesLoaded: boolean;
-  /** How far the selected conversation's thread is; "ready" while no conversation is selected. */
-  snapshotStatus: ConversationControllerState["snapshotStatus"];
-  notice: string | undefined;
-  draft: string;
-  composerFocusRequestId: number;
-  locale: LocaleCode;
-  selectedAgentName: string | undefined;
-  /** The active agent's own model first, then the models users may pick instead. */
-  selectableModels: AgentSelectableModel[];
-  selectedModelBindingId: string | undefined;
-  /** The effort a run with the selected model would use. */
-  selectedReasoningEffort: ReasoningEffort | undefined;
-  /** That effort when the user picked it; unset leaves the run to the model's default. */
-  requestedReasoningEffort: ReasoningEffort | undefined;
-  showContextIndicator: boolean;
-  contextSnapshot:
-    | {
-        inputTokens: number;
-        compactThresholdTokens: number;
-      }
-    | undefined;
-  selectAgentName(agentName: string): void;
-  selectModelBindingId(modelBindingId: string): void;
-  selectReasoningEffort(modelBindingId: string, effort: ReasoningEffort): void;
-  draftAttachments: DraftAttachment[];
-  localUploadingAttachments: LocalUploadingAttachment[];
-  conversationRunning: boolean;
-  activeRun: ConversationControllerState["activeRun"];
-  sendBlock: SendBlock | undefined;
-  attachmentsEnabled: boolean;
-  attachmentAccept: string;
-  fileDropzone: ChatFileDropzoneController;
-  changeDraft(value: string): void;
-  selectFiles(files: File[]): void;
-  removeDraftAttachment(attachmentId: string): void;
-  retryDraftAttachment(attachmentId: string): void;
-  conversationStarted(conversationId: string): void;
-  messageSubmitted(conversationId: string): void;
-  runStarted(response: StartConversationRunResponse): void;
-  streamError(conversationId: string, message: string, viewed: boolean): void;
-  cancelSelectedRun(): void;
-}
-
-export interface ToolDisplayModel {
-  open: boolean;
-}
+export {
+  activeAgentNameFor,
+  isAbandonedDraftConversation,
+  terminalRunNotice,
+  WORKSPACE_AUTH_SCOPE,
+  workspaceScopedConfigFor
+} from "./workspace-chat-state";
+export type {
+  SelectedChatModel,
+  WorkspaceChatModel,
+  WorkspaceChatModelInput
+} from "./workspace-chat-types";
 
 export function useWorkspaceChatModel({
   administration,
@@ -1457,38 +1122,3 @@ export function useWorkspaceChatModel({
 
 const NO_CONVERSATIONS: readonly ConversationListItem[] = [];
 const NO_RUN_PROJECTIONS: Readonly<Record<string, AgentRunProjection>> = {};
-
-// The code a run is failed with when no worker took it within its queue limit.
-const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";
-
-// The codes a run is failed with when it stood still while it waited for a tool (`@work-shape/catalyst-core`).
-const RUN_TOOL_SILENT_CODE = "AGENT_RUN_TOOL_SILENT";
-const RUN_COMMAND_NOT_TAKEN_CODE = "AGENT_RUN_COMMAND_NOT_TAKEN";
-
-// The code a run is failed with when its model has no price on the rate card (`@work-shape/catalyst-core`).
-const MODEL_NOT_PRICED_CODE = "MODEL_NOT_PRICED";
-
-/**
- * What the person reads above the composer when a run ended as failed or cancelled. The
- * reason of a cancellation and the message of an interruption are written for operators, so
- * the person reads a sentence in their language instead. A model without a price is named
- * with its remedy to someone who sees the usage of the instance; anyone else reads what they
- * can do themselves.
- */
-export function terminalRunNotice(
-  error: ConversationControllerState["error"],
-  t: TranslationContextValue["t"],
-  viewer: { seesRateCard: boolean } = { seesRateCard: false }
-): string | undefined {
-  if (error?.class === "run_cancelled") return t("runStopped");
-  if (error?.class !== "run_failed") return undefined;
-  if (error.code === MODEL_NOT_PRICED_CODE) {
-    return t(viewer.seesRateCard ? "runModelNotPricedOperator" : "runModelNotPriced");
-  }
-  if (error.category !== "runtime_interrupted") return error.message;
-  if (error.code === RUN_NOT_STARTED_CODE) return t("runNotStarted");
-  if (error.code === RUN_COMMAND_NOT_TAKEN_CODE) return t("runCommandNotTaken");
-  if (error.tool !== undefined && error.code === RUN_TOOL_SILENT_CODE)
-    return t("runToolSilent", { tool: error.tool });
-  return t("runInterrupted");
-}
