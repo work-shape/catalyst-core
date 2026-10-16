@@ -29,10 +29,11 @@ import {
   type WorkflowStagedCode,
   type WorkflowStepRun,
   type WorkflowStepRunId,
-  type WorkflowStepRunView
+  type WorkflowStepRunView,
+  type WorkflowRunDatasetsStore
 } from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 
 type Input<Method extends keyof WorkflowRunsStore> = Parameters<WorkflowRunsStore[Method]>[0];
@@ -154,7 +155,7 @@ const stepRunIs = (ref: Input<"getStepRun">) =>
 const notEnded = (column: typeof workflowRuns.status | typeof workflowStepRuns.status) =>
   notInArray(column, [...WORKFLOW_ENDED_STATUSES]);
 
-export async function createWorkflowRun(
+async function createWorkflowRun(
   db: PostgresConnection,
   run: Input<"createRun">
 ): Promise<WorkflowRun | undefined> {
@@ -186,7 +187,7 @@ export async function createWorkflowRun(
   return row ? mapRun(row) : undefined;
 }
 
-export async function readWorkflowScheduleState(
+async function readWorkflowScheduleState(
   db: PostgresConnection,
   input: Input<"readScheduleState">
 ): Promise<{ fired: boolean; open: boolean }> {
@@ -206,7 +207,7 @@ export async function readWorkflowScheduleState(
   return { fired: row?.fired ?? false, open: row?.open ?? false };
 }
 
-export async function lockWorkflowRun(
+async function lockWorkflowRun(
   db: PostgresConnection,
   ref: Input<"lockRun">
 ): Promise<WorkflowRun | undefined> {
@@ -214,7 +215,7 @@ export async function lockWorkflowRun(
   return row ? mapRun(row) : undefined;
 }
 
-export async function readWorkflowRun(
+async function readWorkflowRun(
   db: PostgresConnection,
   input: Input<"readRun">
 ): Promise<WorkflowRunView | undefined> {
@@ -225,7 +226,7 @@ export async function readWorkflowRun(
   return row ? { ...mapRun(row), ...mapPreview(row.preview) } : undefined;
 }
 
-export async function listWorkflowRuns(
+async function listWorkflowRuns(
   db: PostgresConnection,
   input: Input<"listRuns">
 ): Promise<WorkflowRunView[]> {
@@ -244,7 +245,7 @@ export async function listWorkflowRuns(
   return rows.map((row) => ({ ...mapRun(row), ...mapPreview(row.preview) }));
 }
 
-export async function listLastWorkflowRuns(
+async function listLastWorkflowRuns(
   db: PostgresConnection,
   input: Input<"listLastRuns">
 ): Promise<Map<string, WorkflowLastRun>> {
@@ -277,7 +278,7 @@ export async function listLastWorkflowRuns(
   return last;
 }
 
-export async function readWorkflowRunDefinition(
+async function readWorkflowRunDefinition(
   db: PostgresConnection,
   input: Input<"readRunDefinition">
 ): Promise<WorkflowManifest | undefined> {
@@ -288,7 +289,7 @@ export async function readWorkflowRunDefinition(
   return row?.definition;
 }
 
-export async function readWorkflowRunInput(
+async function readWorkflowRunInput(
   db: PostgresConnection,
   ref: Input<"readRunInput">
 ): Promise<JsonObject | undefined> {
@@ -296,7 +297,7 @@ export async function readWorkflowRunInput(
   return row?.input;
 }
 
-export async function markWorkflowRunRunning(
+async function markWorkflowRunRunning(
   db: PostgresConnection,
   ref: Input<"markRunRunning">
 ): Promise<void> {
@@ -306,10 +307,7 @@ export async function markWorkflowRunRunning(
     .where(and(runIs(ref), eq(workflowRuns.status, "queued")));
 }
 
-export async function endWorkflowRun(
-  db: PostgresConnection,
-  ref: Input<"endRun">
-): Promise<boolean> {
+async function endWorkflowRun(db: PostgresConnection, ref: Input<"endRun">): Promise<boolean> {
   const ended = await db
     .update(workflowRuns)
     .set({
@@ -326,7 +324,7 @@ export async function endWorkflowRun(
   return ended.length > 0;
 }
 
-export async function createWorkflowStepRun(
+async function createWorkflowStepRun(
   db: PostgresConnection,
   stepRun: Input<"createStepRun">
 ): Promise<WorkflowStepRun> {
@@ -355,7 +353,7 @@ export async function createWorkflowStepRun(
   return mapStepRun(row);
 }
 
-export async function getWorkflowStepRun(
+async function getWorkflowStepRun(
   db: PostgresConnection,
   ref: Input<"getStepRun">
 ): Promise<WorkflowStepRun | undefined> {
@@ -363,7 +361,7 @@ export async function getWorkflowStepRun(
   return row ? mapStepRun(row) : undefined;
 }
 
-export async function markWorkflowStepRunRunning(
+async function markWorkflowStepRunRunning(
   db: PostgresConnection,
   ref: Input<"markStepRunRunning">
 ): Promise<void> {
@@ -377,7 +375,7 @@ export async function markWorkflowStepRunRunning(
     .where(and(stepRunIs(ref), notEnded(workflowStepRuns.status)));
 }
 
-export async function endWorkflowStepRun(
+async function endWorkflowStepRun(
   db: PostgresConnection,
   ref: Input<"endStepRun">
 ): Promise<boolean> {
@@ -401,7 +399,7 @@ export async function endWorkflowStepRun(
   return ended.length > 0;
 }
 
-export async function markWorkflowLoopWaiting(
+async function markWorkflowLoopWaiting(
   db: PostgresConnection,
   ref: Input<"markLoopWaiting">
 ): Promise<void> {
@@ -417,7 +415,7 @@ export async function markWorkflowLoopWaiting(
     .where(and(stepRunIs(ref), eq(workflowStepRuns.status, "running")));
 }
 
-export async function stageWorkflowCodeStep(
+async function stageWorkflowCodeStep(
   db: PostgresConnection,
   ref: Input<"stageCodeStep">
 ): Promise<void> {
@@ -427,7 +425,7 @@ export async function stageWorkflowCodeStep(
     .where(and(stepRunIs(ref), eq(workflowStepRuns.status, "running")));
 }
 
-export async function readWorkflowStagedCode(
+async function readWorkflowStagedCode(
   db: PostgresConnection,
   ref: Input<"readStagedCode">
 ): Promise<WorkflowStagedCode | undefined> {
@@ -438,7 +436,7 @@ export async function readWorkflowStagedCode(
   return row?.staged ?? undefined;
 }
 
-export async function recordWorkflowCodeOutcome(
+async function recordWorkflowCodeOutcome(
   db: PostgresConnection,
   ref: Input<"recordCodeOutcome">
 ): Promise<boolean> {
@@ -456,7 +454,7 @@ export async function recordWorkflowCodeOutcome(
   return recorded.length > 0;
 }
 
-export async function readWorkflowCodeOutcome(
+async function readWorkflowCodeOutcome(
   db: PostgresConnection,
   ref: Input<"readCodeOutcome">
 ): Promise<WorkflowCodeOutcome | undefined> {
@@ -467,7 +465,7 @@ export async function readWorkflowCodeOutcome(
   return row?.outcome ?? undefined;
 }
 
-export async function noteWorkflowStepRunOperation(
+async function noteWorkflowStepRunOperation(
   db: PostgresConnection,
   ref: Input<"noteStepRunOperation">
 ): Promise<void> {
@@ -477,7 +475,7 @@ export async function noteWorkflowStepRunOperation(
     .where(and(stepRunIs(ref), notEnded(workflowStepRuns.status)));
 }
 
-export async function listOpenWorkflowStepRuns(
+async function listOpenWorkflowStepRuns(
   db: PostgresConnection,
   ref: Input<"listOpenStepRuns">
 ): Promise<WorkflowStepRun[]> {
@@ -495,7 +493,7 @@ export async function listOpenWorkflowStepRuns(
   return rows.map(mapStepRun);
 }
 
-export async function listWorkflowStepRuns(
+async function listWorkflowStepRuns(
   db: PostgresConnection,
   input: Input<"listStepRuns">
 ): Promise<WorkflowStepRunView[]> {
@@ -623,7 +621,7 @@ async function countWorkflowLoops(
   return counts;
 }
 
-export async function findWorkflowStepOutput(
+async function findWorkflowStepOutput(
   db: PostgresConnection,
   input: Input<"findStepOutput">
 ): Promise<{ value: JsonValue } | undefined> {
@@ -648,7 +646,7 @@ export async function findWorkflowStepOutput(
   return row?.output ?? undefined;
 }
 
-export async function countWorkflowLoopItemsStarted(
+async function countWorkflowLoopItemsStarted(
   db: PostgresConnection,
   ref: Input<"countLoopItemsStarted">
 ): Promise<number> {
@@ -664,7 +662,7 @@ export async function countWorkflowLoopItemsStarted(
   return row?.started ?? 0;
 }
 
-export async function countWorkflowLoopItems(
+async function countWorkflowLoopItems(
   db: PostgresConnection,
   ref: Input<"countLoopItems">
 ): Promise<number | undefined> {
@@ -677,7 +675,7 @@ export async function countWorkflowLoopItems(
   return row?.count ?? undefined;
 }
 
-export async function readWorkflowLoopItem(
+async function readWorkflowLoopItem(
   db: PostgresConnection,
   ref: Input<"readLoopItem">
 ): Promise<{ value: JsonValue } | undefined> {
@@ -692,7 +690,7 @@ export async function readWorkflowLoopItem(
   return { value: row.item };
 }
 
-export async function readWorkflowLoopCounts(
+async function readWorkflowLoopCounts(
   db: PostgresConnection,
   ref: Input<"readLoopCounts">
 ): Promise<WorkflowLoopCounts | undefined> {
@@ -703,7 +701,7 @@ export async function readWorkflowLoopCounts(
   return row ? (await countWorkflowLoops(db, [row.id])).get(row.id) : undefined;
 }
 
-export async function listWorkflowRunsWithDataEndedBefore(
+async function listWorkflowRunsWithDataEndedBefore(
   db: PostgresConnection,
   input: Input<"listRunsWithDataEndedBefore">
 ): Promise<WorkflowRunId[]> {
@@ -724,7 +722,7 @@ export async function listWorkflowRunsWithDataEndedBefore(
   return rows.map((row) => row.id);
 }
 
-export async function pruneWorkflowStepRunData(
+async function pruneWorkflowStepRunData(
   db: PostgresConnection,
   ref: Input<"pruneStepRunData">
 ): Promise<number> {
@@ -762,7 +760,7 @@ export async function pruneWorkflowStepRunData(
   return pruned.length;
 }
 
-export async function markWorkflowRunDataPruned(
+async function markWorkflowRunDataPruned(
   db: PostgresConnection,
   ref: Input<"markRunDataPruned">
 ): Promise<boolean> {
@@ -778,4 +776,46 @@ export async function markWorkflowRunDataPruned(
     )
     .returning({ id: workflowRuns.id });
   return pruned.length > 0;
+}
+
+export function createPostgresWorkflowRunsStore(db: PostgresConnection): WorkflowRunsStore {
+  return {
+    createRun: (run) => createWorkflowRun(db, run),
+    readScheduleState: (input) => readWorkflowScheduleState(db, input),
+    countLoopItemsStarted: (ref) => countWorkflowLoopItemsStarted(db, ref),
+    stageCodeStep: (ref) => stageWorkflowCodeStep(db, ref),
+    readStagedCode: (ref) => readWorkflowStagedCode(db, ref),
+    recordCodeOutcome: (ref) => recordWorkflowCodeOutcome(db, ref),
+    readCodeOutcome: (ref) => readWorkflowCodeOutcome(db, ref),
+    lockRun: (ref) => lockWorkflowRun(db, ref),
+    readRun: (input) => readWorkflowRun(db, input),
+    listRuns: (input) => listWorkflowRuns(db, input),
+    listLastRuns: (input) => listLastWorkflowRuns(db, input),
+    readRunInput: (ref) => readWorkflowRunInput(db, ref),
+    readRunDefinition: (input) => readWorkflowRunDefinition(db, input),
+    markRunRunning: (ref) => markWorkflowRunRunning(db, ref),
+    endRun: (ref) => endWorkflowRun(db, ref),
+    createStepRun: (stepRun) => createWorkflowStepRun(db, stepRun),
+    getStepRun: (ref) => getWorkflowStepRun(db, ref),
+    markStepRunRunning: (ref) => markWorkflowStepRunRunning(db, ref),
+    endStepRun: (ref) => endWorkflowStepRun(db, ref),
+    markLoopWaiting: (ref) => markWorkflowLoopWaiting(db, ref),
+    noteStepRunOperation: (ref) => noteWorkflowStepRunOperation(db, ref),
+    listOpenStepRuns: (ref) => listOpenWorkflowStepRuns(db, ref),
+    listRunsWithDataEndedBefore: (input) => listWorkflowRunsWithDataEndedBefore(db, input),
+    pruneStepRunData: (ref) => pruneWorkflowStepRunData(db, ref),
+    markRunDataPruned: (ref) => markWorkflowRunDataPruned(db, ref),
+    listStepRuns: (input) => listWorkflowStepRuns(db, input),
+    findStepOutput: (input) => findWorkflowStepOutput(db, input),
+    countLoopItems: (ref) => countWorkflowLoopItems(db, ref),
+    readLoopItem: (ref) => readWorkflowLoopItem(db, ref),
+    readLoopCounts: (ref) => readWorkflowLoopCounts(db, ref)
+  };
+}
+
+/** The datasets of Workflow Runs. It holds nothing until the slice that brings datasets. */
+export function createPostgresWorkflowRunDatasetsStore(
+  _db: PostgresConnection
+): WorkflowRunDatasetsStore {
+  return {};
 }

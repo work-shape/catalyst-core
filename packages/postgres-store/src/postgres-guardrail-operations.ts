@@ -6,8 +6,8 @@ import {
   type GuardrailStore,
   type ShippedGuardrailSwitch
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "../postgres-database";
-import { guardrailHits, shippedGuardrailSwitches } from "../schema/guardrails";
+import type { PostgresConnection } from "./postgres-database";
+import { guardrailHits, shippedGuardrailSwitches } from "./schema/guardrails";
 
 /** The only code that reads or writes `guardrail_hits`. */
 export function createPostgresGuardrailsStore(db: PostgresConnection): GuardrailStore {

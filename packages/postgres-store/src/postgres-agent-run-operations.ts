@@ -21,11 +21,19 @@ import {
   asConversationId,
   asMessageId,
   type RunStartCommand,
-  type UpdateAgentRunStatusInput
+  type UpdateAgentRunStatusInput,
+  type ChatMessage,
+  type AssertClaimedAgentRunInput,
+  type AgentRunStore,
+  type AppendClaimedAgentRunMessageInput,
+  type AppendClaimedRunObservationInput,
+  type RequestAgentRunCancellationInput,
+  type RunObservationStore,
+  type AgentRunsStore
 } from "@work-shape/catalyst-core";
 import { enqueueJob } from "./jobs/store";
 import { lockActiveConversation } from "./postgres-conversation-operations";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
   agentRunObservations,
@@ -36,7 +44,7 @@ import {
   runStartCommands
 } from "./schema";
 
-export async function claimRunStartCommand(
+async function claimRunStartCommand(
   db: PostgresConnection,
   input: ClaimRunStartCommandInput
 ): Promise<ClaimRunStartCommandResult> {
@@ -98,7 +106,7 @@ export async function claimRunStartCommand(
   };
 }
 
-export async function completeRunStartCommand(
+async function completeRunStartCommand(
   db: PostgresConnection,
   input: CompleteRunStartCommandInput
 ): Promise<RunStartCommand> {
@@ -119,14 +127,14 @@ export async function completeRunStartCommand(
   return mapRunStartCommand(row);
 }
 
-export async function releaseRunStartCommand(
+async function releaseRunStartCommand(
   db: PostgresConnection,
   input: ReleaseRunStartCommandInput
 ): Promise<void> {
   await db.delete(runStartCommands).where(runStartCommandPendingClaimWhere(input));
 }
 
-export async function prepareConversationRunStart(
+async function prepareConversationRunStart(
   db: PostgresConnection,
   input: PrepareConversationRunStartInput
 ): Promise<PreparedConversationRunStart> {
@@ -277,7 +285,7 @@ export async function prepareConversationRunStart(
   });
 }
 
-export async function createAgentRun(
+async function createAgentRun(
   db: PostgresConnection,
   input: CreateAgentRunInput
 ): Promise<AgentRun> {
@@ -306,7 +314,7 @@ export async function createAgentRun(
   return mapAgentRun(row);
 }
 
-export async function getAgentRun(
+async function getAgentRun(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -323,7 +331,7 @@ export async function getAgentRun(
   return row ? mapAgentRun(row) : undefined;
 }
 
-export async function getConversationAgentRun(
+async function getConversationAgentRun(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -345,7 +353,7 @@ export async function getConversationAgentRun(
   return row ? mapAgentRun(row) : undefined;
 }
 
-export async function getActiveConversationAgentRun(
+async function getActiveConversationAgentRun(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -366,7 +374,7 @@ export async function getActiveConversationAgentRun(
   return row ? mapAgentRun(row) : undefined;
 }
 
-export async function getLatestConversationAgentRun(
+async function getLatestConversationAgentRun(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -387,7 +395,7 @@ export async function getLatestConversationAgentRun(
   return row ? mapAgentRun(row) : undefined;
 }
 
-export async function updateAgentRunStatus(
+async function updateAgentRunStatus(
   db: PostgresConnection,
   input: UpdateAgentRunStatusInput
 ): Promise<AgentRun> {
@@ -412,22 +420,7 @@ export async function updateAgentRunStatus(
   return mapAgentRun(row);
 }
 
-export {
-  appendClaimedAgentRunEnd,
-  appendClaimedAgentRunMessage,
-  appendClaimedRunObservation,
-  assertClaimedAgentRun,
-  claimAgentRunForJob,
-  failAgentRunsQueuedTooLong,
-  failAgentRunsWithoutWorker,
-  failLostAgentRun,
-  listAgentRunsInProgress,
-  listAgentRunsWithoutJob,
-  renewAgentRunJobLease,
-  requestAgentRunCancellation
-} from "./postgres-agent-run-worker-operations";
-
-export async function appendRunObservation(
+async function appendRunObservation(
   db: PostgresConnection,
   input: AppendRunObservationInput
 ): Promise<RunObservation> {
@@ -475,7 +468,7 @@ export async function appendRunObservation(
   });
 }
 
-export async function listRunObservations(
+async function listRunObservations(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -551,5 +544,117 @@ function mapRunStartCommand(row: typeof runStartCommands.$inferSelect): RunStart
     runId: row.runId ? asAgentRunId(row.runId) : undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+/** `enqueued` is called for every job this store inserts, before its transaction commits. */
+export function createPostgresAgentRunsStore(
+  db: PostgresConnection,
+  enqueued: () => void
+): AgentRunsStore {
+  return {
+    async claimRunStartCommand(
+      input: ClaimRunStartCommandInput
+    ): Promise<ClaimRunStartCommandResult> {
+      return claimRunStartCommand(db, input);
+    },
+    async completeRunStartCommand(input: CompleteRunStartCommandInput) {
+      return completeRunStartCommand(db, input);
+    },
+    async releaseRunStartCommand(input: ReleaseRunStartCommandInput): Promise<void> {
+      return releaseRunStartCommand(db, input);
+    },
+    async prepareConversationRunStart(
+      input: Parameters<AgentRunStore["prepareConversationRunStart"]>[0]
+    ) {
+      const prepared = await prepareConversationRunStart(db, input);
+      if (prepared.run.status === "queued") enqueued();
+      return prepared;
+    },
+    async createAgentRun(input: Parameters<AgentRunStore["createAgentRun"]>[0]): Promise<AgentRun> {
+      return createAgentRun(db, input);
+    },
+    async getAgentRun(input: {
+      clientInstanceId: ClientInstanceId;
+      runId: AgentRunId;
+    }): Promise<AgentRun | undefined> {
+      return getAgentRun(db, input);
+    },
+    async getConversationAgentRun(input: {
+      clientInstanceId: ClientInstanceId;
+      conversationId: ConversationId;
+      runId: AgentRunId;
+    }): Promise<AgentRun | undefined> {
+      return getConversationAgentRun(db, input);
+    },
+    async getActiveConversationAgentRun(input: {
+      clientInstanceId: ClientInstanceId;
+      conversationId: ConversationId;
+      ownerUserId: string;
+    }): Promise<AgentRun | undefined> {
+      return getActiveConversationAgentRun(db, input);
+    },
+    async getLatestConversationAgentRun(
+      input: Parameters<AgentRunStore["getLatestConversationAgentRun"]>[0]
+    ): Promise<AgentRun | undefined> {
+      return getLatestConversationAgentRun(db, input);
+    },
+    async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
+      return updateAgentRunStatus(db, input);
+    },
+    async claimAgentRunForJob(input: Parameters<AgentRunStore["claimAgentRunForJob"]>[0]) {
+      return claimAgentRunForJob(db, input);
+    },
+    async renewAgentRunJobLease(input: Parameters<AgentRunStore["renewAgentRunJobLease"]>[0]) {
+      return renewAgentRunJobLease(db, input);
+    },
+    async failLostAgentRun(input: Parameters<AgentRunStore["failLostAgentRun"]>[0]) {
+      return failLostAgentRun(db, input);
+    },
+    async failAgentRunsQueuedTooLong(
+      input: Parameters<AgentRunStore["failAgentRunsQueuedTooLong"]>[0]
+    ) {
+      return failAgentRunsQueuedTooLong(db, input);
+    },
+    async failAgentRunsWithoutWorker(
+      input: Parameters<AgentRunStore["failAgentRunsWithoutWorker"]>[0]
+    ) {
+      return failAgentRunsWithoutWorker(db, input);
+    },
+    async listAgentRunsWithoutJob(input: Parameters<AgentRunStore["listAgentRunsWithoutJob"]>[0]) {
+      return listAgentRunsWithoutJob(db, input);
+    },
+    async requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun> {
+      return requestAgentRunCancellation(db, input);
+    },
+    async listAgentRunsInProgress(
+      input: Parameters<AgentRunsStore["listAgentRunsInProgress"]>[0]
+    ): Promise<AgentRun[]> {
+      return listAgentRunsInProgress(db, input);
+    },
+    async appendClaimedRunObservation(
+      input: AppendClaimedRunObservationInput
+    ): Promise<RunObservation> {
+      return appendClaimedRunObservation(db, input);
+    },
+    async assertClaimedAgentRun(input: AssertClaimedAgentRunInput): Promise<AgentRun> {
+      return assertClaimedAgentRun(db, input);
+    },
+    async appendClaimedAgentRunEnd(
+      input: Parameters<AgentRunStore["appendClaimedAgentRunEnd"]>[0]
+    ) {
+      return appendClaimedAgentRunEnd(db, input);
+    },
+    async appendClaimedAgentRunMessage(
+      input: AppendClaimedAgentRunMessageInput
+    ): Promise<ChatMessage> {
+      return appendClaimedAgentRunMessage(db, input);
+    },
+    async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {
+      return appendRunObservation(db, input);
+    },
+    async listRunObservations(input: Parameters<RunObservationStore["listRunObservations"]>[0]) {
+      return listRunObservations(db, input);
+    }
   };
 }

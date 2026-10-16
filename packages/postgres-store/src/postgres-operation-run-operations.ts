@@ -18,14 +18,14 @@ import {
   type OperationRunStore
 } from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
 import { operationRuns } from "./schema/operationRuns";
 
 type OperationRunRow = typeof operationRuns.$inferSelect;
 type Input<Method extends keyof OperationRunStore> = Parameters<OperationRunStore[Method]>[0];
 
-export async function createOperationRun(
+async function createOperationRun(
   db: PostgresConnection,
   run: Input<"create">
 ): Promise<OperationRun | undefined> {
@@ -94,7 +94,7 @@ export async function createOperationRun(
   return row ? mapOperationRun(row) : undefined;
 }
 
-export async function recordEndedOperationRun(
+async function recordEndedOperationRun(
   db: PostgresConnection,
   run: Input<"recordEnded">
 ): Promise<OperationRun> {
@@ -142,7 +142,7 @@ function conversationWorkspace(run: Pick<Input<"create">, "clientInstanceId" | "
           and ${conversations.id} = ${run.conversationId})`;
 }
 
-export async function finishOperationRun(
+async function finishOperationRun(
   db: PostgresConnection,
   input: Input<"finish">
 ): Promise<OperationRun | undefined> {
@@ -184,7 +184,7 @@ export async function finishOperationRun(
   return row ? mapOperationRun(row) : undefined;
 }
 
-export async function findOperationRunByIdempotencyKey(
+async function findOperationRunByIdempotencyKey(
   db: PostgresConnection,
   input: Input<"findByIdempotencyKey">
 ): Promise<OperationRun | undefined> {
@@ -203,7 +203,7 @@ export async function findOperationRunByIdempotencyKey(
   return row ? mapOperationRun(row) : undefined;
 }
 
-export async function getOperationRun(
+async function getOperationRun(
   db: PostgresConnection,
   input: Input<"get">
 ): Promise<OperationRun | undefined> {
@@ -211,7 +211,7 @@ export async function getOperationRun(
   return row ? mapOperationRun(row) : undefined;
 }
 
-export async function listOperationRuns(
+async function listOperationRuns(
   db: PostgresConnection,
   input: Input<"list">
 ): Promise<OperationRun[]> {
@@ -245,7 +245,7 @@ export async function listOperationRuns(
   return rows.map(mapOperationRun);
 }
 
-export async function resumeOperationRun(
+async function resumeOperationRun(
   db: PostgresConnection,
   input: Input<"resume">
 ): Promise<OperationRun | undefined> {
@@ -266,7 +266,7 @@ export async function resumeOperationRun(
   return row ? mapOperationRun(row) : undefined;
 }
 
-export async function endWaitingOperationRun(
+async function endWaitingOperationRun(
   db: PostgresConnection,
   input: Input<"endWaiting">
 ): Promise<OperationRun | undefined> {
@@ -286,7 +286,7 @@ export async function endWaitingOperationRun(
   return row ? mapOperationRun(row) : undefined;
 }
 
-export async function markOperationRunsExpired(
+async function markOperationRunsExpired(
   db: PostgresConnection,
   input: Input<"markExpired">
 ): Promise<OperationRun[]> {
@@ -312,7 +312,7 @@ export async function markOperationRunsExpired(
   return rows.map(mapOperationRun);
 }
 
-export async function listOperationRunsRunningSince(
+async function listOperationRunsRunningSince(
   db: PostgresConnection,
   input: Input<"listRunningSince">
 ): Promise<OperationRun[]> {
@@ -331,7 +331,7 @@ export async function listOperationRunsRunningSince(
   return rows.map(mapOperationRun);
 }
 
-export async function deleteOperationRunsOfConversations(
+async function deleteOperationRunsOfConversations(
   db: PostgresConnection,
   input: Input<"deleteOfConversations">
 ): Promise<number> {
@@ -347,7 +347,7 @@ export async function deleteOperationRunsOfConversations(
   return removed.count;
 }
 
-export async function deleteOperationRunsWithoutConversationOlderThan(
+async function deleteOperationRunsWithoutConversationOlderThan(
   db: PostgresConnection,
   input: Input<"deleteWithoutConversationOlderThan">
 ): Promise<number> {
@@ -370,7 +370,7 @@ export async function deleteOperationRunsWithoutConversationOlderThan(
   return removed.count;
 }
 
-export async function markOperationRunInterrupted(
+async function markOperationRunInterrupted(
   db: PostgresConnection,
   input: Input<"markInterrupted">
 ): Promise<OperationRun | undefined> {
@@ -432,5 +432,24 @@ function mapOperationRun(row: OperationRunRow): OperationRun {
     finishedAt: row.finishedAt?.toISOString(),
     expiresAt: row.expiresAt?.toISOString(),
     updatedAt: row.updatedAt.toISOString()
+  };
+}
+
+export function createPostgresOperationRunsStore(db: PostgresConnection): OperationRunStore {
+  return {
+    create: (run) => createOperationRun(db, run),
+    recordEnded: (run) => recordEndedOperationRun(db, run),
+    finish: (input) => finishOperationRun(db, input),
+    findByIdempotencyKey: (input) => findOperationRunByIdempotencyKey(db, input),
+    get: (input) => getOperationRun(db, input),
+    list: (input) => listOperationRuns(db, input),
+    resume: (input) => resumeOperationRun(db, input),
+    endWaiting: (input) => endWaitingOperationRun(db, input),
+    markExpired: (input) => markOperationRunsExpired(db, input),
+    listRunningSince: (input) => listOperationRunsRunningSince(db, input),
+    deleteOfConversations: (input) => deleteOperationRunsOfConversations(db, input),
+    deleteWithoutConversationOlderThan: (input) =>
+      deleteOperationRunsWithoutConversationOlderThan(db, input),
+    markInterrupted: (input) => markOperationRunInterrupted(db, input)
   };
 }

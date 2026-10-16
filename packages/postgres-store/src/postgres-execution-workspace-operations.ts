@@ -31,12 +31,17 @@ import {
   type WorkspaceFile,
   asExecutionWorkspaceId,
   asWorkspaceCommandId,
-  createPlatformId
+  createPlatformId,
+  type ExecutionWorkspaceCleanupStore,
+  type ExecutionWorkspaceFileStore,
+  type ExecutionWorkspaceMetadataStore,
+  type WorkspaceCommandStore,
+  type ExecutionWorkspacesStore
 } from "@work-shape/catalyst-core";
 import { withdrawQueuedJobs } from "./jobs/store";
 import { platformJobs } from "./schema/jobs";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { mapExecutionWorkspace, mapWorkspaceCommand, mapWorkspaceFile } from "./rows";
 import {
   conversations,
@@ -45,7 +50,7 @@ import {
   workspaceCommands
 } from "./schema";
 
-export async function ensureExecutionWorkspace(
+async function ensureExecutionWorkspace(
   db: PostgresConnection,
   input: EnsureExecutionWorkspaceInput
 ): Promise<ExecutionWorkspace> {
@@ -89,7 +94,7 @@ export async function ensureExecutionWorkspace(
   return mapExecutionWorkspace(existing);
 }
 
-export async function getExecutionWorkspace(
+async function getExecutionWorkspace(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -110,7 +115,7 @@ export async function getExecutionWorkspace(
   return row ? mapExecutionWorkspace(row) : undefined;
 }
 
-export async function getExecutionWorkspaceForConversation(
+async function getExecutionWorkspaceForConversation(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -131,7 +136,7 @@ export async function getExecutionWorkspaceForConversation(
   return row ? mapExecutionWorkspace(row) : undefined;
 }
 
-export async function findExecutionWorkspaceOfActiveConversation(
+async function findExecutionWorkspaceOfActiveConversation(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -142,7 +147,7 @@ export async function findExecutionWorkspaceOfActiveConversation(
   return getExecutionWorkspaceForConversation(db, input);
 }
 
-export async function upsertWorkspaceFile(
+async function upsertWorkspaceFile(
   db: PostgresConnection,
   input: UpsertWorkspaceFileInput
 ): Promise<WorkspaceFile> {
@@ -215,7 +220,7 @@ export async function upsertWorkspaceFile(
   });
 }
 
-export async function deleteWorkspaceFile(
+async function deleteWorkspaceFile(
   db: PostgresConnection,
   input: DeleteWorkspaceFileInput
 ): Promise<WorkspaceFile | undefined> {
@@ -272,7 +277,7 @@ export async function deleteWorkspaceFile(
   });
 }
 
-export async function listWorkspaceFiles(
+async function listWorkspaceFiles(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -294,7 +299,7 @@ export async function listWorkspaceFiles(
 }
 
 /** Served by the primary key of the table, (workspace_id, path): one row is read. */
-export async function getWorkspaceFile(
+async function getWorkspaceFile(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -317,7 +322,7 @@ export async function getWorkspaceFile(
   return row ? mapWorkspaceFile(row) : undefined;
 }
 
-export async function enqueueWorkspaceCommand(
+async function enqueueWorkspaceCommand(
   db: PostgresConnection,
   input: EnqueueWorkspaceCommandInput
 ): Promise<WorkspaceCommand> {
@@ -355,7 +360,7 @@ export async function enqueueWorkspaceCommand(
   });
 }
 
-export async function getWorkspaceCommand(
+async function getWorkspaceCommand(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -375,7 +380,7 @@ export async function getWorkspaceCommand(
   return row ? mapWorkspaceCommand(row) : undefined;
 }
 
-export async function countActiveWorkspaceCommands(
+async function countActiveWorkspaceCommands(
   db: PostgresConnection,
   input: CountActiveWorkspaceCommandsInput
 ): Promise<ActiveWorkspaceCommandCounts> {
@@ -422,7 +427,7 @@ export async function countActiveWorkspaceCommands(
  * is an earlier attempt of the same job. `attempts` counts every claim, so a row that comes back
  * with more than one ran before.
  */
-export async function claimWorkspaceCommand(
+async function claimWorkspaceCommand(
   db: PostgresConnection,
   input: ClaimWorkspaceCommandInput
 ): Promise<SubjectRowClaim<WorkspaceCommand>> {
@@ -471,7 +476,7 @@ export async function claimWorkspaceCommand(
     : { status: "finished" };
 }
 
-export async function renewClaimedWorkspaceCommandLease(
+async function renewClaimedWorkspaceCommandLease(
   db: PostgresConnection,
   input: RenewClaimedWorkspaceCommandLeaseInput
 ): Promise<boolean> {
@@ -491,7 +496,7 @@ export async function renewClaimedWorkspaceCommandLease(
  * Transition release only: the commands that are not finished and have no queued or running job
  * of `jobKind` under the command's dedupe key, oldest first.
  */
-export async function listWorkspaceCommandsWithoutJob(
+async function listWorkspaceCommandsWithoutJob(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; jobKind: string; limit: number }
 ): Promise<Array<Pick<WorkspaceCommand, "id" | "workspaceId">>> {
@@ -523,7 +528,7 @@ function leaseExpiry(leaseMs: number) {
   return drizzleSql`now() + make_interval(secs => ${leaseMs}::double precision / 1000)`;
 }
 
-export async function completeWorkspaceCommand(
+async function completeWorkspaceCommand(
   db: PostgresConnection,
   input: CompleteWorkspaceCommandInput
 ): Promise<WorkspaceCommand> {
@@ -551,7 +556,7 @@ export async function completeWorkspaceCommand(
   return mapWorkspaceCommand(row);
 }
 
-export async function failWorkspaceCommand(
+async function failWorkspaceCommand(
   db: PostgresConnection,
   input: FailWorkspaceCommandInput
 ): Promise<WorkspaceCommand> {
@@ -577,7 +582,7 @@ export async function failWorkspaceCommand(
   return mapWorkspaceCommand(row);
 }
 
-export async function requestWorkspaceCommandCancellation(
+async function requestWorkspaceCommandCancellation(
   db: PostgresConnection,
   input: RequestWorkspaceCommandCancellationInput
 ): Promise<WorkspaceCommand> {
@@ -638,7 +643,7 @@ export async function requestWorkspaceCommandCancellation(
   });
 }
 
-export async function giveUpUnclaimedWorkspaceCommand(
+async function giveUpUnclaimedWorkspaceCommand(
   db: PostgresConnection,
   input: RequestWorkspaceCommandCancellationInput
 ): Promise<WorkspaceCommand | undefined> {
@@ -719,7 +724,7 @@ export async function withdrawUnclaimedWorkspaceCommandsOfRuns(
   );
 }
 
-export async function hasUnclaimedWorkspaceCommand(
+async function hasUnclaimedWorkspaceCommand(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; agentRunId: AgentRunId }
 ): Promise<boolean> {
@@ -749,7 +754,7 @@ function withdrawCommandJobs(
   });
 }
 
-export async function cancelClaimedWorkspaceCommand(
+async function cancelClaimedWorkspaceCommand(
   db: PostgresConnection,
   input: CancelClaimedWorkspaceCommandInput
 ): Promise<WorkspaceCommand> {
@@ -775,7 +780,7 @@ export async function cancelClaimedWorkspaceCommand(
   return mapWorkspaceCommand(row);
 }
 
-export async function listExecutionWorkspaceCleanupTargets(
+async function listExecutionWorkspaceCleanupTargets(
   db: PostgresConnection,
   input: ListExecutionWorkspaceCleanupTargetsInput
 ): Promise<ExecutionWorkspaceCleanupTarget[]> {
@@ -814,14 +819,14 @@ export async function listExecutionWorkspaceCleanupTargets(
   }));
 }
 
-export async function listExecutionWorkspaceObjectsForDeletion(
+async function listExecutionWorkspaceObjectsForDeletion(
   db: PostgresConnection,
   input: ListExecutionWorkspaceObjectsForDeletionInput
 ): Promise<ExecutionWorkspaceDeletionSummary> {
   return collectExecutionWorkspaceDeletionSummary(db, input);
 }
 
-export async function markExecutionWorkspaceDeleted(
+async function markExecutionWorkspaceDeleted(
   db: PostgresConnection,
   input: MarkExecutionWorkspaceDeletedInput
 ): Promise<ExecutionWorkspaceDeletionSummary> {
@@ -1033,4 +1038,124 @@ function retainedObjectKeys(metadata: WorkspaceFile["metadata"] | undefined): st
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+export function createPostgresExecutionWorkspacesStore(
+  db: PostgresConnection
+): ExecutionWorkspacesStore {
+  return {
+    async ensureExecutionWorkspace(
+      input: Parameters<ExecutionWorkspaceMetadataStore["ensureExecutionWorkspace"]>[0]
+    ): Promise<ExecutionWorkspace> {
+      return ensureExecutionWorkspace(db, input);
+    },
+    async getExecutionWorkspace(input: {
+      clientInstanceId: ClientInstanceId;
+      workspaceId: ExecutionWorkspaceId;
+    }): Promise<ExecutionWorkspace | undefined> {
+      return getExecutionWorkspace(db, input);
+    },
+    async getExecutionWorkspaceForConversation(
+      input: Parameters<ExecutionWorkspaceMetadataStore["getExecutionWorkspaceForConversation"]>[0]
+    ): Promise<ExecutionWorkspace | undefined> {
+      return getExecutionWorkspaceForConversation(db, input);
+    },
+    async findExecutionWorkspaceOfActiveConversation(
+      input: Parameters<
+        ExecutionWorkspaceMetadataStore["findExecutionWorkspaceOfActiveConversation"]
+      >[0]
+    ): Promise<ExecutionWorkspace | undefined> {
+      return findExecutionWorkspaceOfActiveConversation(db, input);
+    },
+    async getWorkspaceFile(
+      input: Parameters<ExecutionWorkspaceFileStore["getWorkspaceFile"]>[0]
+    ): Promise<WorkspaceFile | undefined> {
+      return getWorkspaceFile(db, input);
+    },
+    async upsertWorkspaceFile(
+      input: Parameters<ExecutionWorkspaceFileStore["upsertWorkspaceFile"]>[0]
+    ): Promise<WorkspaceFile> {
+      return upsertWorkspaceFile(db, input);
+    },
+    async deleteWorkspaceFile(
+      input: Parameters<ExecutionWorkspaceFileStore["deleteWorkspaceFile"]>[0]
+    ): Promise<WorkspaceFile | undefined> {
+      return deleteWorkspaceFile(db, input);
+    },
+    async listWorkspaceFiles(
+      input: Parameters<ExecutionWorkspaceFileStore["listWorkspaceFiles"]>[0]
+    ): Promise<WorkspaceFile[]> {
+      return listWorkspaceFiles(db, input);
+    },
+    async countActiveWorkspaceCommands(
+      input: Parameters<WorkspaceCommandStore["countActiveWorkspaceCommands"]>[0]
+    ) {
+      return countActiveWorkspaceCommands(db, input);
+    },
+    async enqueueWorkspaceCommand(
+      input: Parameters<WorkspaceCommandStore["enqueueWorkspaceCommand"]>[0]
+    ): Promise<WorkspaceCommand> {
+      return enqueueWorkspaceCommand(db, input);
+    },
+    async getWorkspaceCommand(input: {
+      clientInstanceId: ClientInstanceId;
+      commandId: WorkspaceCommandId;
+    }): Promise<WorkspaceCommand | undefined> {
+      return getWorkspaceCommand(db, input);
+    },
+    async claimWorkspaceCommand(
+      input: Parameters<WorkspaceCommandStore["claimWorkspaceCommand"]>[0]
+    ) {
+      return claimWorkspaceCommand(db, input);
+    },
+    async renewClaimedWorkspaceCommandLease(
+      input: Parameters<WorkspaceCommandStore["renewClaimedWorkspaceCommandLease"]>[0]
+    ) {
+      return renewClaimedWorkspaceCommandLease(db, input);
+    },
+    async listWorkspaceCommandsWithoutJob(
+      input: Parameters<WorkspaceCommandStore["listWorkspaceCommandsWithoutJob"]>[0]
+    ) {
+      return listWorkspaceCommandsWithoutJob(db, input);
+    },
+    async completeWorkspaceCommand(
+      input: Parameters<WorkspaceCommandStore["completeWorkspaceCommand"]>[0]
+    ): Promise<WorkspaceCommand> {
+      return completeWorkspaceCommand(db, input);
+    },
+    async failWorkspaceCommand(
+      input: Parameters<WorkspaceCommandStore["failWorkspaceCommand"]>[0]
+    ): Promise<WorkspaceCommand> {
+      return failWorkspaceCommand(db, input);
+    },
+    async requestWorkspaceCommandCancellation(
+      input: Parameters<WorkspaceCommandStore["requestWorkspaceCommandCancellation"]>[0]
+    ): Promise<WorkspaceCommand> {
+      return requestWorkspaceCommandCancellation(db, input);
+    },
+    hasUnclaimedWorkspaceCommand: (input) => hasUnclaimedWorkspaceCommand(db, input),
+    giveUpUnclaimedWorkspaceCommand: (input) => giveUpUnclaimedWorkspaceCommand(db, input),
+    async cancelClaimedWorkspaceCommand(
+      input: Parameters<WorkspaceCommandStore["cancelClaimedWorkspaceCommand"]>[0]
+    ): Promise<WorkspaceCommand> {
+      return cancelClaimedWorkspaceCommand(db, input);
+    },
+    async listExecutionWorkspaceCleanupTargets(
+      input: Parameters<ExecutionWorkspaceCleanupStore["listExecutionWorkspaceCleanupTargets"]>[0]
+    ) {
+      return listExecutionWorkspaceCleanupTargets(db, input);
+    },
+    async listExecutionWorkspaceObjectsForDeletion(
+      input: Parameters<
+        ExecutionWorkspaceCleanupStore["listExecutionWorkspaceObjectsForDeletion"]
+      >[0]
+    ) {
+      return listExecutionWorkspaceObjectsForDeletion(db, input);
+    },
+    async markExecutionWorkspaceDeleted(
+      input: Parameters<ExecutionWorkspaceCleanupStore["markExecutionWorkspaceDeleted"]>[0]
+    ) {
+      return markExecutionWorkspaceDeleted(db, input);
+    }
+  };
 }

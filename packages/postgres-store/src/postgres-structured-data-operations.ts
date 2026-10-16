@@ -4,11 +4,11 @@ import {
   type StructuredDataResourceRecord,
   type StructuredDataStore
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { mapStructuredDataResource } from "./rows";
 import { structuredDataResources } from "./schema";
 
-export async function getStructuredDataResource(
+async function getStructuredDataResource(
   db: PostgresConnection,
   input: Parameters<StructuredDataStore["getStructuredDataResource"]>[0]
 ): Promise<StructuredDataResourceRecord | undefined> {
@@ -26,7 +26,7 @@ export async function getStructuredDataResource(
   return row ? mapStructuredDataResource(row) : undefined;
 }
 
-export async function listStructuredDataResources(
+async function listStructuredDataResources(
   db: PostgresConnection,
   input: Parameters<StructuredDataStore["listStructuredDataResources"]>[0]
 ): Promise<StructuredDataResourceRecord[]> {
@@ -43,7 +43,7 @@ export async function listStructuredDataResources(
   return rows.map(mapStructuredDataResource);
 }
 
-export async function publishStructuredDataResource(
+async function publishStructuredDataResource(
   db: PostgresConnection,
   input: Parameters<StructuredDataStore["publishStructuredDataResource"]>[0]
 ): Promise<StructuredDataResourceRecord> {
@@ -76,4 +76,24 @@ export async function publishStructuredDataResource(
     })
     .returning();
   return mapStructuredDataResource(row);
+}
+
+export function createPostgresStructuredDataStore(db: PostgresConnection): StructuredDataStore {
+  return {
+    async getStructuredDataResource(
+      input: Parameters<StructuredDataStore["getStructuredDataResource"]>[0]
+    ): Promise<StructuredDataResourceRecord | undefined> {
+      return getStructuredDataResource(db, input);
+    },
+    async listStructuredDataResources(
+      input: Parameters<StructuredDataStore["listStructuredDataResources"]>[0]
+    ): Promise<StructuredDataResourceRecord[]> {
+      return listStructuredDataResources(db, input);
+    },
+    async publishStructuredDataResource(
+      input: Parameters<StructuredDataStore["publishStructuredDataResource"]>[0]
+    ): Promise<StructuredDataResourceRecord> {
+      return publishStructuredDataResource(db, input);
+    }
+  };
 }

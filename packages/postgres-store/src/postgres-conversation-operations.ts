@@ -1,23 +1,7 @@
 import { containsPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import type { StorePage } from "@work-shape/catalyst-core";
 import {
-  and,
-  asc,
-  desc,
-  eq,
-  exists,
-  ilike,
-  inArray,
-  isNull,
-  lt,
-  lte,
-  ne,
-  notExists,
-  or,
-  type SQL
-} from "drizzle-orm";
-import {
+  type StorePage,
   AppError,
   createApprovalDecisionMessage,
   type ApprovalRequest,
@@ -34,9 +18,32 @@ import {
   type MoveConversationInput,
   type SetConversationSubjectInput,
   type UserId,
-  createPlatformId
+  createPlatformId,
+  type ConversationListItem,
+  type ConversationRetentionStore,
+  type ConversationStore,
+  type FoundFile,
+  type ModelProviderContinuationCheckpoint,
+  type ModelProviderContinuationStore,
+  type ConversationsStore
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  ne,
+  notExists,
+  or,
+  type SQL
+} from "drizzle-orm";
+import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
   agentRuns,
@@ -48,8 +55,14 @@ import {
   productUsers,
   structuredDataResources
 } from "./schema";
+import { listConversationsWithActiveRun as listPostgresConversationsWithActiveRun } from "./postgres-conversation-list-operations";
+import { searchWorkspaceFiles as searchPostgresWorkspaceFiles } from "./postgres-file-search-operations";
+import {
+  deleteModelProviderContinuation as deletePostgresModelProviderContinuation,
+  getModelProviderContinuation as getPostgresModelProviderContinuation
+} from "./postgres-model-provider-continuation-operations";
 
-export async function createConversation(
+async function createConversation(
   db: PostgresConnection,
   input: CreateConversationInput
 ): Promise<Conversation> {
@@ -75,7 +88,7 @@ export async function createConversation(
   return mapConversation(row);
 }
 
-export async function getConversation(
+async function getConversation(
   db: PostgresConnection,
   clientInstanceId: ClientInstanceId,
   conversationId: ConversationId
@@ -101,7 +114,7 @@ export type ListConversationsInput = {
   page?: StorePage;
 };
 
-export async function listConversationsForWorkspace(
+async function listConversationsForWorkspace(
   db: PostgresConnection,
   input: ListConversationsInput
 ): Promise<Conversation[]> {
@@ -171,7 +184,7 @@ function conversationDraftAttachments(db: PostgresConnection) {
     );
 }
 
-export async function listPrivateConversationsCreatedByUser(
+async function listPrivateConversationsCreatedByUser(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; userId: string }
 ): Promise<Conversation[]> {
@@ -189,7 +202,7 @@ export async function listPrivateConversationsCreatedByUser(
   return rows.map(mapConversation);
 }
 
-export async function moveConversation(
+async function moveConversation(
   db: PostgresConnection,
   input: MoveConversationInput
 ): Promise<Conversation> {
@@ -364,7 +377,7 @@ function conversationExpiryCriteria(
   };
 }
 
-export async function listExpiredConversations(
+async function listExpiredConversations(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -392,7 +405,7 @@ export async function listExpiredConversations(
   return rows.map(mapConversation);
 }
 
-export async function replaceConversationTitle(
+async function replaceConversationTitle(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -417,7 +430,7 @@ export async function replaceConversationTitle(
   return rows.length > 0;
 }
 
-export async function updateConversationTitle(
+async function updateConversationTitle(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -446,7 +459,7 @@ export async function updateConversationTitle(
   return mapConversation(row);
 }
 
-export async function setConversationSubject(
+async function setConversationSubject(
   db: PostgresConnection,
   input: SetConversationSubjectInput
 ): Promise<Conversation | undefined> {
@@ -503,14 +516,14 @@ export async function appendApprovalDecision(
   }
 }
 
-export async function appendMessage(
+async function appendMessage(
   db: PostgresConnection,
   input: CreateMessageInput
 ): Promise<ChatMessage> {
   return db.transaction(async (tx) => mapMessage(await appendMessageRecord(tx, input)));
 }
 
-export async function appendAssistantMessage(
+async function appendAssistantMessage(
   db: PostgresConnection,
   input: AppendAssistantMessageInput
 ): Promise<ChatMessage> {
@@ -582,7 +595,7 @@ async function appendMessageRecord(
   return row;
 }
 
-export async function listMessages(
+async function listMessages(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -607,7 +620,7 @@ export async function listMessages(
   return rows.map(mapMessage);
 }
 
-export async function listRecentMessages(
+async function listRecentMessages(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -634,7 +647,7 @@ export async function listRecentMessages(
   return rows.map(mapMessage).reverse();
 }
 
-export async function deleteConversation(
+async function deleteConversation(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -655,7 +668,7 @@ export async function deleteConversation(
   });
 }
 
-export async function expireConversation(
+async function expireConversation(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -794,4 +807,104 @@ export async function touchConversation(
         eq(conversations.id, conversationId)
       )
     );
+}
+
+export function createPostgresConversationsStore(db: PostgresConnection): ConversationsStore {
+  return {
+    async createConversation(input: CreateConversationInput): Promise<Conversation> {
+      return createConversation(db, input);
+    },
+    async getConversation(
+      clientInstanceId: ClientInstanceId,
+      conversationId: ConversationId
+    ): Promise<Conversation | undefined> {
+      return getConversation(db, clientInstanceId, conversationId);
+    },
+    async listConversationsForWorkspace(
+      input: Parameters<ConversationStore["listConversationsForWorkspace"]>[0]
+    ): Promise<Conversation[]> {
+      return listConversationsForWorkspace(db, input);
+    },
+    async listConversationsWithActiveRun(
+      input: Parameters<ConversationStore["listConversationsWithActiveRun"]>[0]
+    ): Promise<ConversationListItem[]> {
+      return listPostgresConversationsWithActiveRun(db, input);
+    },
+    async searchWorkspaceFiles(
+      input: Parameters<ConversationsStore["searchWorkspaceFiles"]>[0]
+    ): Promise<FoundFile[]> {
+      return searchPostgresWorkspaceFiles(db, input);
+    },
+    async listPrivateConversationsCreatedByUser(
+      input: Parameters<ConversationStore["listPrivateConversationsCreatedByUser"]>[0]
+    ): Promise<Conversation[]> {
+      return listPrivateConversationsCreatedByUser(db, input);
+    },
+    async moveConversation(
+      input: Parameters<ConversationStore["moveConversation"]>[0]
+    ): Promise<Conversation> {
+      return moveConversation(db, input);
+    },
+    async listExpiredConversations(input: {
+      clientInstanceId: ClientInstanceId;
+      now?: string;
+      abandonedBefore?: string;
+      limit: number;
+    }): Promise<Conversation[]> {
+      return listExpiredConversations(db, input);
+    },
+    async updateConversationTitle(input: {
+      clientInstanceId: ClientInstanceId;
+      conversationId: ConversationId;
+      title: string;
+      updatedAt: string;
+    }): Promise<Conversation> {
+      return updateConversationTitle(db, input);
+    },
+    async replaceConversationTitle(input): Promise<boolean> {
+      return replaceConversationTitle(db, input);
+    },
+    async setConversationSubject(input): Promise<Conversation | undefined> {
+      return setConversationSubject(db, input);
+    },
+    async appendMessage(input: CreateMessageInput): Promise<ChatMessage> {
+      return appendMessage(db, input);
+    },
+    async appendAssistantMessage(input: AppendAssistantMessageInput): Promise<ChatMessage> {
+      return appendAssistantMessage(db, input);
+    },
+    async listMessages(input: {
+      clientInstanceId: ClientInstanceId;
+      conversationId: ConversationId;
+    }): Promise<ChatMessage[]> {
+      return listMessages(db, input);
+    },
+    async listRecentMessages(input: {
+      clientInstanceId: ClientInstanceId;
+      conversationId: ConversationId;
+      limit: number;
+    }): Promise<ChatMessage[]> {
+      return listRecentMessages(db, input);
+    },
+    async getModelProviderContinuation(
+      input: Parameters<ModelProviderContinuationStore["getModelProviderContinuation"]>[0]
+    ): Promise<ModelProviderContinuationCheckpoint | undefined> {
+      return getPostgresModelProviderContinuation(db, input);
+    },
+    async deleteModelProviderContinuation(
+      input: Parameters<ModelProviderContinuationStore["deleteModelProviderContinuation"]>[0]
+    ): Promise<void> {
+      return deletePostgresModelProviderContinuation(db, input);
+    },
+    async deleteConversation(
+      input: Parameters<ConversationStore["deleteConversation"]>[0]
+    ): Promise<Conversation> {
+      return deleteConversation(db, input);
+    },
+    async expireConversation(
+      input: Parameters<ConversationRetentionStore["expireConversation"]>[0]
+    ): Promise<ExpireConversationResult> {
+      return expireConversation(db, input);
+    }
+  };
 }

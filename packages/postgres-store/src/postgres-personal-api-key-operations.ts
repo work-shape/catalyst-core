@@ -15,7 +15,7 @@ import {
   type ResolvedPersonalApiKey
 } from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { mapPersonalApiKey } from "./rows";
 import { lockRights } from "./rights-lock";
 import { apiConnectCodes, apiCredentials, productUsers } from "./schema";
@@ -25,7 +25,7 @@ const EXPIRED_CONNECT_CODE_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 type Input<Method extends keyof PersonalApiKeyStore> = Parameters<PersonalApiKeyStore[Method]>[0];
 
-export async function listPersonalApiKeys(
+async function listPersonalApiKeys(
   db: PostgresConnection,
   input: Input<"listPersonalApiKeys">
 ): Promise<PersonalApiKeyRecord[]> {
@@ -56,7 +56,7 @@ export async function listPersonalApiKeys(
   }));
 }
 
-export async function createPersonalApiKey(
+async function createPersonalApiKey(
   db: PostgresConnection,
   input: CreatePersonalApiKeyInput
 ): Promise<CreatedPersonalApiKey> {
@@ -124,7 +124,7 @@ async function insertPersonalApiKey(
   return { key: mapPersonalApiKey(row), secret: material.secret };
 }
 
-export async function revokePersonalApiKey(
+async function revokePersonalApiKey(
   db: PostgresConnection,
   input: Input<"revokePersonalApiKey">
 ): Promise<PersonalApiKeyRecord | undefined> {
@@ -144,7 +144,7 @@ export async function revokePersonalApiKey(
   return row ? mapPersonalApiKey(row) : undefined;
 }
 
-export async function resolvePersonalApiKey(
+async function resolvePersonalApiKey(
   db: PostgresConnection,
   input: Input<"resolvePersonalApiKey">
 ): Promise<ResolvedPersonalApiKey | undefined> {
@@ -162,7 +162,7 @@ export async function resolvePersonalApiKey(
   return row ? { key: mapPersonalApiKey(row), secretHash: row.secretHash } : undefined;
 }
 
-export async function markPersonalApiKeyUsed(
+async function markPersonalApiKeyUsed(
   db: PostgresConnection,
   input: Input<"markPersonalApiKeyUsed">
 ): Promise<void> {
@@ -178,7 +178,7 @@ export async function markPersonalApiKeyUsed(
     );
 }
 
-export async function startConnectCode(
+async function startConnectCode(
   db: PostgresConnection,
   input: Input<"startConnectCode">
 ): Promise<void> {
@@ -211,7 +211,7 @@ export async function startConnectCode(
   }
 }
 
-export async function findConnectCode(
+async function findConnectCode(
   db: PostgresConnection,
   input: Input<"findConnectCode">
 ): Promise<ConnectCodeRecord | undefined> {
@@ -230,7 +230,7 @@ export async function findConnectCode(
   return row ? mapConnectCode(row) : undefined;
 }
 
-export async function approveConnectCode(
+async function approveConnectCode(
   db: PostgresConnection,
   input: Input<"approveConnectCode">
 ): Promise<ConnectCodeRecord | undefined> {
@@ -259,7 +259,7 @@ export async function approveConnectCode(
   return row ? mapConnectCode(row) : undefined;
 }
 
-export async function redeemConnectCode(
+async function redeemConnectCode(
   db: PostgresConnection,
   input: Input<"redeemConnectCode">
 ): Promise<ConnectCodeRedemption> {
@@ -309,5 +309,19 @@ function mapConnectCode(row: typeof apiConnectCodes.$inferSelect): ConnectCodeRe
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
     ...(row.approvedAt === null ? {} : { approvedAt: row.approvedAt.toISOString() })
+  };
+}
+
+export function createPostgresPersonalApiKeyStore(db: PostgresConnection): PersonalApiKeyStore {
+  return {
+    listPersonalApiKeys: (input) => listPersonalApiKeys(db, input),
+    createPersonalApiKey: (input) => createPersonalApiKey(db, input),
+    revokePersonalApiKey: (input) => revokePersonalApiKey(db, input),
+    resolvePersonalApiKey: (input) => resolvePersonalApiKey(db, input),
+    markPersonalApiKeyUsed: (input) => markPersonalApiKeyUsed(db, input),
+    startConnectCode: (input) => startConnectCode(db, input),
+    findConnectCode: (input) => findConnectCode(db, input),
+    approveConnectCode: (input) => approveConnectCode(db, input),
+    redeemConnectCode: (input) => redeemConnectCode(db, input)
   };
 }

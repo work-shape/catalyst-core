@@ -13,7 +13,7 @@ import {
   notInArray,
   sql as drizzleSql
 } from "drizzle-orm";
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   AppError,
   artifactPreviewJobDedupeKey,
@@ -83,6 +83,7 @@ import {
   managedFiles,
   schema
 } from "./schema";
+import { type PostgresConnection } from "./postgres-database";
 
 type PostgresConnection = PostgresJsDatabase<typeof schema>;
 
@@ -100,7 +101,7 @@ export interface PostgresPlatformFileStoreCallbacks {
   ): Promise<void>;
 }
 
-export function createPostgresPlatformFileStore(
+function createPostgresPlatformFileStore(
   db: PostgresConnection,
   callbacks: PostgresPlatformFileStoreCallbacks
 ): PlatformFileStore {
@@ -1220,4 +1221,16 @@ async function collectConversationManagedObjectsForDeletion(
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+/** `jobsEnqueued` is called after the store enqueued a job, as the jobs store reports its own. */
+export function createPostgresFilesStore(
+  db: PostgresConnection,
+  jobsEnqueued: () => void
+): PlatformFileStore {
+  return createPostgresPlatformFileStore(db, {
+    jobsEnqueued,
+    touchConversation: (clientInstanceId, conversationId, updatedAt) =>
+      touchConversation(db, clientInstanceId, conversationId, updatedAt)
+  });
 }

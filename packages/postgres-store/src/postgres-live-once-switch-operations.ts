@@ -1,6 +1,6 @@
 import { and, desc, eq, notExists, sql } from "drizzle-orm";
-import type { LiveOnceSwitch, LiveOnceSwitchStore } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "./postgres-database";
+import { type LiveOnceSwitch, type LiveOnceSwitchStore } from "@work-shape/catalyst-core";
+import { type PostgresConnection } from "./postgres-database";
 import { configAssets } from "./schema/configAssets";
 import { liveOnceRuns, liveOnceSwitches } from "./schema/liveOnceSwitches";
 
@@ -11,7 +11,7 @@ type Input<Method extends keyof LiveOnceSwitchStore> = Parameters<LiveOnceSwitch
 /** How many bindings of one owner on one asset a page's read looks through. */
 const LIST_BINDINGS_MAX = 200;
 
-export async function switchLiveOnceOn(
+async function switchLiveOnceOn(
   db: PostgresConnection,
   input: Input<"switchOn">
 ): Promise<{ cleared: LiveOnceSwitch[] }> {
@@ -41,7 +41,7 @@ export async function switchLiveOnceOn(
   return { cleared };
 }
 
-export async function takeLiveOnceSwitch(
+async function takeLiveOnceSwitch(
   db: PostgresConnection,
   input: Input<"take">
 ): ReturnType<LiveOnceSwitchStore["take"]> {
@@ -117,7 +117,7 @@ async function bindingOf(
  * One owner's switches on the asset's current draft: each set one, and of each part the test
  * run that last used a switch on that draft.
  */
-export async function listLiveOnceSwitches(
+async function listLiveOnceSwitches(
   db: PostgresConnection,
   input: Input<"list">
 ): Promise<LiveOnceSwitch[]> {
@@ -156,7 +156,7 @@ export async function listLiveOnceSwitches(
   return [...set.map(({ row }) => mapSwitch(row)), ...[...lastUse.values()].map(mapBinding)];
 }
 
-export function clearStaleLiveOnceSwitches(
+function clearStaleLiveOnceSwitches(
   db: PostgresConnection,
   input: Input<"clearStale">
 ): Promise<LiveOnceSwitch[]> {
@@ -212,5 +212,14 @@ function mapBinding(row: RunRow): LiveOnceSwitch {
     switchedAt: row.switchedAt.toISOString(),
     usedByRunId: row.workflowRunId,
     usedAt: row.usedAt.toISOString()
+  };
+}
+
+export function createPostgresLiveOnceSwitchesStore(db: PostgresConnection): LiveOnceSwitchStore {
+  return {
+    switchOn: (input) => switchLiveOnceOn(db, input),
+    take: (input) => takeLiveOnceSwitch(db, input),
+    clearStale: (input) => clearStaleLiveOnceSwitches(db, input),
+    list: (input) => listLiveOnceSwitches(db, input)
   };
 }

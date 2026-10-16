@@ -4,8 +4,8 @@ import type {
   ConnectionsStore,
   StoredSecretRecord
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "../postgres-database";
-import { connectionState, secrets } from "../schema";
+import type { PostgresConnection } from "./postgres-database";
+import { connectionState, secrets } from "./schema";
 
 type SecretRow = typeof secrets.$inferSelect;
 type StateRow = typeof connectionState.$inferSelect;
