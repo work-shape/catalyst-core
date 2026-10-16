@@ -9,6 +9,7 @@ import {
   asApiCredentialId,
   asClientInstanceId,
   type CollaborationWorkspaceId,
+  type DataToolSource,
   asServicePrincipalId,
   authScopeForPermission,
   createAssetKindRegistry,
@@ -261,6 +262,10 @@ export interface AccessInstanceOptions {
   operations?: TestServerOptions["operations"];
   /** Tools an agent may name beside the two of the config, such as `read_skill`. */
   furtherToolNames?: string[];
+  /** All registered tools, including tools the instance does not enable. */
+  registeredToolNames?: string[];
+  /** Live data tools the instance exposes to agents. */
+  dataTools?: DataToolSource;
   /** Fields of `administration.agentConfiguration` that differ from the open default. */
   editingLimits?: EditingLimits;
   /** Kinds registered beside agent and skill. */
@@ -297,7 +302,12 @@ export async function setupAccessInstance(
     ],
     fastModeModelBindingIds: options.fastModeModelBindingIds ?? [],
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-    enabledToolNames: ["known.tool", "second.tool", ...furtherToolNames]
+    enabledToolNames: ["known.tool", "second.tool", ...furtherToolNames],
+    registeredToolNames: options.registeredToolNames ?? [
+      "known.tool",
+      "second.tool",
+      ...furtherToolNames
+    ]
   };
   const instance = await createTestInstanceWith(
     (stores) => ({
@@ -310,6 +320,7 @@ export async function setupAccessInstance(
       configAssets: {
         store: stores.configAssets,
         validationRefs,
+        ...(options.dataTools ? { dataTools: options.dataTools } : {}),
         ...(options.storedAssetSource
           ? {
               source: createStoredConfigAssetSource({

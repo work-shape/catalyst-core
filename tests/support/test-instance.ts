@@ -415,8 +415,7 @@ export function completeServerOptions(
     modules: options.modules ?? resolveInstanceModules(options.config, []).snapshot,
     stores: options.stores,
     configAssets: {
-      store: configAssets.store,
-      validationRefs: configAssets.validationRefs,
+      ...configAssets,
       source: configAssets.source ?? createStaticConfigAssetSource({}),
       kinds:
         configAssets.kinds ??

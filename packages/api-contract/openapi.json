@@ -22478,6 +22478,12 @@
           "valid": {
             "type": "boolean",
             "const": true
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetWarning"
+            }
           }
         },
         "required": [
@@ -29530,6 +29536,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AssetValidationIssue"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetWarning"
             }
           }
         },

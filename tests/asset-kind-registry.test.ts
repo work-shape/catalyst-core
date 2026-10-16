@@ -193,7 +193,7 @@ describe("asset kind registry", () => {
       issuesOf(agentKind, withSkills(), agent({ skillNames: ["research"], toolNames: ["web"] }))
     ).toEqual([
       { message: "Agent 'assistant' references missing skill 'research'" },
-      { message: "Agent 'assistant' references unavailable tool 'web'" },
+      { message: "Agent 'assistant' references unavailable tool 'web' in toolNames[0]" },
       { message: "Agent 'assistant' references skills but does not allow 'read_skill'" }
     ]);
     expect(issuesOf(agentKind, withSkills(), agent({ instructions: "" }))).toEqual([

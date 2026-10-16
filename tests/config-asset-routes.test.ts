@@ -1147,6 +1147,25 @@ describe("config asset admin routes", () => {
     expect(priced.statusCode).toBe(200);
   });
 
+  it("assets.validate reports an unavailable instruction tool with its line without writing", async () => {
+    const fixture = await createFixture();
+    const token = await mintToken(fixture.server);
+    const response = await request(fixture.server, token, "assets.validate", {
+      params: { kind: "agent" },
+      payload: { config: agentConfig("Help.\nUse known.missing.") }
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({
+      valid: false,
+      issues: expect.arrayContaining([
+        {
+          message:
+            "Agent 'assistant' references unavailable tool 'known.missing' in instructions line 2"
+        }
+      ])
+    });
+  });
+
   it.each([
     ["unknown tool", agentConfig("Invalid", { toolNames: ["missing.tool"] })],
     ["unknown skill", agentConfig("Invalid", { skillNames: ["missing-skill"] })],

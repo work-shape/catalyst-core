@@ -194,7 +194,7 @@ const VERBS: Record<string, Verb> = {
           session.values.json
             ? JSON.stringify(result, null, 2)
             : result.valid
-              ? "Valid."
+              ? ["Valid.", ...formatWarnings(result.warnings ?? [])].join("\n")
               : [
                   "Not valid:",
                   ...result.issues.map(

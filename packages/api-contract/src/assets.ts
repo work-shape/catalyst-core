@@ -415,7 +415,8 @@ export const assetValidationIssueSchema = z.object({
 
 export const validateAssetResponseSchema = z.object({
   valid: z.boolean(),
-  issues: z.array(assetValidationIssueSchema)
+  issues: z.array(assetValidationIssueSchema),
+  warnings: z.array(assetWarningSchema).optional()
 });
 
 /**
@@ -506,7 +507,10 @@ export const syncAssetsResponseSchema = z.object({
 });
 
 /** The answer for a batch a sync would apply. One it would refuse answers the sync's error. */
-export const checkAssetSyncResponseSchema = z.object({ valid: z.literal(true) });
+export const checkAssetSyncResponseSchema = z.object({
+  valid: z.literal(true),
+  warnings: z.array(assetWarningSchema).optional()
+});
 
 /**
  * One item of a refused `assets.sync`, in `details.items` of the error. Nothing of the batch

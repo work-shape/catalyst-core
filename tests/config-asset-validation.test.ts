@@ -35,6 +35,110 @@ describe("config asset bundle validation", () => {
 
   it.each([
     {
+      instructions: "Help.\nUse `page.save_as_app`.",
+      toolNames: [],
+      issue:
+        "Agent 'assistant' references unavailable tool 'page.save_as_app' in instructions line 2"
+    },
+    {
+      instructions: "Help.",
+      toolNames: ["page.save_as_app"],
+      issue: "Agent 'assistant' references unavailable tool 'page.save_as_app' in toolNames[0]"
+    }
+  ])("locates an unavailable explicit tool reference", ({ instructions, toolNames, issue }) => {
+    expect(
+      issueMessages(
+        validationError({
+          agents: [agent({ instructions, toolNames })],
+          skills: [],
+          defaultAgentName: "assistant",
+          refs: refs()
+        })
+      )
+    ).toContain(issue);
+  });
+
+  it.each([
+    "Use page.missing, (page.missing); page.missing!",
+    "Use `page.missing()`.",
+    "```text\npage.missing\n```"
+  ])("checks dotted tokens with punctuation and in code: %s", (instructions) => {
+    expect(
+      issueMessages(
+        validationError({
+          agents: [agent({ instructions })],
+          skills: [],
+          defaultAgentName: "assistant",
+          refs: refs()
+        })
+      )
+    ).toContainEqual(
+      expect.stringContaining("unavailable tool 'page.missing' in instructions line")
+    );
+  });
+
+  it("recognizes a registered tool group even when no tool in it is enabled", () => {
+    const error = validationError({
+      agents: [agent({ instructions: "Use workflow.run." })],
+      skills: [],
+      refs: refs()
+    });
+    expect(issueMessages(error)).toContain(
+      "Agent 'assistant' references unavailable tool 'workflow.run' in instructions line 1"
+    );
+  });
+
+  it("accepts enabled instruction tools without requiring them in toolNames", () => {
+    expect(() =>
+      validateConfigAssetBundle({
+        agents: [
+          agent({ instructions: "Use `page.save_as_app()` and `connection.crm.getRecord`." })
+        ],
+        skills: [],
+        defaultAgentName: "assistant",
+        refs: { ...refs(), enabledToolNames: ["page.save_as_app", "connection.crm.getRecord"] }
+      })
+    ).not.toThrow();
+  });
+
+  it("ignores non-tool prefixes, paths, URLs, emails, filenames and domain endings", () => {
+    expect(() =>
+      validateConfigAssetBundle({
+        agents: [
+          agent({
+            instructions: [
+              "ordinary.prose is prose, as is page.com.",
+              "Read `config.yaml`, `report.pdf`, `src/main.ts`, `https://example.com` and `toolNames`.",
+              "A pattern `page.*` is not an identifier; page.md and page.example.de are files or domains.",
+              "Read /page.missing, ./page.missing, C:\\page.missing, page.missing/path and person@page.missing.",
+              "Visit https://page.missing, https://example.com/page.missing and www.page.missing.",
+              "```ts",
+              "const name = `ordinary.prose`;",
+              "```",
+              "Use `search` and `read_skill`."
+            ].join("\n")
+          })
+        ],
+        skills: [],
+        defaultAgentName: "assistant",
+        refs: refs()
+      })
+    ).not.toThrow();
+  });
+
+  it("does not scan skills for tool names", () => {
+    expect(() =>
+      validateConfigAssetBundle({
+        agents: [agent()],
+        skills: [{ ...skill(), content: "Use page.missing and connection.absent.lookup." }],
+        defaultAgentName: "assistant",
+        refs: refs()
+      })
+    ).not.toThrow();
+  });
+
+  it.each([
+    {
       label: "traversal",
       resources: [{ path: "../secret.md", mediaType: "text/markdown", content: "no" }],
       issue: /normalized relative path/u
@@ -246,7 +350,8 @@ function refs() {
     modelProviderIds: ["provider-1"],
     modelBindingIds: ["binding-1"],
     fastModeModelBindingIds: [],
-    enabledToolNames: ["search", "read_skill"]
+    enabledToolNames: ["search", "read_skill", "page.save"],
+    registeredToolNames: ["search", "read_skill", "page.save", "page.save_as_app", "workflow.run"]
   };
 }
 

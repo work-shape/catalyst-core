@@ -20,7 +20,7 @@ import {
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
 import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
-import { setupAccessInstance } from "./support/access-instance";
+import { setupConnectionInstance } from "./support/connections";
 import {
   ECHO,
   WRITE,
@@ -460,15 +460,20 @@ describe("validation of an agent that lists data tools", () => {
       "unknown.tool"
     ]) {
       expect(issuesOf([name]), name).toEqual([
-        `Agent 'helper' references unavailable tool '${name}'`
+        `Agent 'helper' references unavailable tool '${name}' in toolNames[0]`
       ]);
     }
   });
 
   it("saves such an agent, and a Namespace allowlist still refuses a name it does not hold", async () => {
-    const t = await setupAccessInstance();
+    const t = await setupConnectionInstance({ dataTools: createFakeConnection().toolSource });
+    await t.seed("fake", {
+      origin: "runtime",
+      operations: [{ name: "echo", effect: "reading", exposure: ["agent"] }]
+    });
 
-    expect((await t.putAgent(t.admin.id, "helper", { toolNames: [ECHO] })).statusCode).toBe(200);
+    const saved = await t.putAgent(t.admin.id, "helper", { toolNames: [ECHO] });
+    expect(saved.statusCode, saved.body).toBe(200);
     await t.expectRefused(
       t.admin.id,
       "assets.put",

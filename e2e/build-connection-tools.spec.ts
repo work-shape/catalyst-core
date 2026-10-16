@@ -64,15 +64,21 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
     authScheme: "none" as const
   };
   const echo = `connection.${connection.name}.echo`;
-  // A tool of a Connection that does not exist: the agent holds it and nothing offers it.
-  const gone = "connection.e2e_gone.lookup";
+  const removedConnection = {
+    ...connection,
+    id: `cfga_${randomUUID()}`,
+    name: `e2e_${randomUUID().slice(0, 8)}`,
+    displayName: "Removed business"
+  };
+  const gone = `connection.${removedConnection.name}.echo`;
   const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
     data: { ...superadminUser, rememberMe: true }
   });
   expect(signedIn.ok()).toBe(true);
   await deleteAgent(page, name);
-  await plantConnection(connection);
   try {
+    await plantConnection(connection);
+    await plantConnection(removedConnection);
     const created = await requestWithOrigin(page, "put", agentPath(name), {
       data: {
         expectedRevision: await assetBaseRevision(page, agentPath(name)),
@@ -94,15 +100,6 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
     // Only what agents may call and is on and ready is offered: of the four operations, one.
     await expect(toolRow(tools, key)).toContainText("Sample business");
     await expect(toolRow(tools, key).locator("[data-tool-count]")).toHaveText("0/1");
-    // The name nothing offers stays, marked, in a group of its own.
-    const unavailable = tools.locator(`[data-unavailable-option="${gone}"]`);
-    await expect(unavailable).toContainText(gone);
-    const unavailableGroup = tools.locator('[data-tool-group="unavailable"]');
-    await expect(unavailableGroup.locator(`[data-unavailable-option="${gone}"]`)).toBeVisible();
-    await expect(unavailableGroup).toContainText(
-      "These tools are no longer offered to this agent. The agent keeps each one until you remove it."
-    );
-
     await switchToolPackage(tools, key, true);
     const panel = await openToolPackage(tools, key);
     const box = panel.getByRole("checkbox", { name: /^echo/u });
@@ -121,13 +118,22 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
     );
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     expect((await saved).status()).toBe(200);
-    // The instance holds both names: the added one and the one nothing offers.
+    // Both references must exist when the agent is saved.
     expect(
       field(field(await (await page.request.get(agentPath(name))).json(), "config"), "toolNames")
     ).toEqual([gone, echo]);
 
+    // Removing a Connection after the save leaves its tool on the agent, now unavailable.
+    await removeConnection(removedConnection.id);
     await page.reload();
     await expect(toolRow(tools, key).locator("[data-tool-count]")).toHaveText("1/1");
+    const unavailable = tools.locator(`[data-unavailable-option="${gone}"]`);
+    await expect(unavailable).toContainText(gone);
+    const unavailableGroup = tools.locator('[data-tool-group="unavailable"]');
+    await expect(unavailableGroup.locator(`[data-unavailable-option="${gone}"]`)).toBeVisible();
+    await expect(unavailableGroup).toContainText(
+      "These tools are no longer offered to this agent. The agent keeps each one until you remove it."
+    );
     await expect(unavailable).toBeVisible();
     await expectNoSidewaysScroll(page);
 
@@ -159,5 +165,6 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
   } finally {
     await deleteAgent(page, name);
     await removeConnection(connection.id);
+    await removeConnection(removedConnection.id);
   }
 });

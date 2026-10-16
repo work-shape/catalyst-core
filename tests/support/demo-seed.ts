@@ -19,7 +19,7 @@ import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile
 } from "@work-shape/catalyst-config-schema";
-import type { JobWorker, Logger } from "@work-shape/catalyst-core";
+import { type JobWorker, type Logger } from "@work-shape/catalyst-core";
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";

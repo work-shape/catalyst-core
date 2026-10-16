@@ -32,6 +32,11 @@ import {
   agentConfigSchema,
   findAgentUserSelectableModelIssues
 } from "@work-shape/catalyst-config-schema";
+import {
+  findAgentToolValidation,
+  type AgentToolWarning,
+  type AgentToolValidationTargets
+} from "../agent-tool-validation";
 import { agentModelSettingValue } from "../asset-kinds/agent";
 import {
   configValuesEqual,
@@ -610,24 +615,24 @@ export interface ChangedAgentRefusal {
 }
 
 /**
- * The rules for the agents a write adds or changes that are neither the schema's nor a
- * reference check: the user-selectable models, and the lists of the Namespace the agent is in.
- * Answers every refusal with its agent, and the Namespaces of the instance, which the kind's
- * own editing policy reads next.
- *
- * A Namespace's lists bind every writer, an instance administrator and the release sync
- * included. They only restrict: a null list allows everything, an empty one nothing. An
- * agent's tools are the names in its own `toolNames` and nothing else (a skill is text, and no
- * tool set is added by default), so the tool list is complete once those names are checked.
+ * Checks submitted agents' tool references and changed agents' models and editing limits.
+ * Returns refusals, callability warnings and scope records for the kind's editing policy.
+ * These limits bind every writer; null allows everything and an empty list nothing.
  */
 export async function findChangedAgentRefusals(
   options: AssetWorkflowOptions,
   access: ActorAccess,
   stored: AssetSet,
-  validated: AssetSet
-): Promise<{ namespaces: Namespace[]; modelIssues: string[]; refusals: ChangedAgentRefusal[] }> {
+  validated: AssetSet,
+  toolTargets: AgentToolValidationTargets
+): Promise<{
+  namespaces: Namespace[];
+  modelIssues: string[];
+  refusals: ChangedAgentRefusal[];
+  warnings: AgentToolWarning[];
+}> {
   const changed = changedAgents(stored, validated);
-  const refusals: ChangedAgentRefusal[] = [];
+  const { refusals, warnings } = await findAgentToolValidation(options, validated, toolTargets);
   // An agent's list of user-selectable models must name eligible bindings whenever it is
   // written. Unchanged lists are not re-checked, so a binding that later disappears or stops
   // being agent-selectable never blocks other edits; such ids are ignored at read time.
@@ -657,7 +662,7 @@ export async function findChangedAgentRefusals(
     const error = namespace && namespaceListRefusal(access, namespace, agent);
     if (error) refusals.push({ agentName: agent.name, error });
   }
-  return { namespaces, modelIssues, refusals };
+  return { namespaces, modelIssues, refusals, warnings };
 }
 
 /** Throws the first refusal of `findChangedAgentRefusals`: the model issues before the lists. */
@@ -665,9 +670,10 @@ export async function assertChangedAgentsAllowed(
   options: AssetWorkflowOptions,
   access: ActorAccess,
   stored: AssetSet,
-  validated: AssetSet
-): Promise<Namespace[]> {
-  const found = await findChangedAgentRefusals(options, access, stored, validated);
+  validated: AssetSet,
+  toolTargets: AgentToolValidationTargets
+): Promise<{ namespaces: Namespace[]; warnings: AgentToolWarning[] }> {
+  const found = await findChangedAgentRefusals(options, access, stored, validated, toolTargets);
   if (found.modelIssues.length > 0) {
     throw invalidAssetSet(found.modelIssues);
   }
@@ -675,7 +681,7 @@ export async function assertChangedAgentsAllowed(
   if (refusal) {
     throw refusal.error;
   }
-  return found.namespaces;
+  return found;
 }
 
 function invalidAssetSet(issues: readonly string[]): AppError {
@@ -772,17 +778,24 @@ export async function writeIssuesOf(
   access: ActorAccess,
   stored: AssetSet,
   found: ReturnType<typeof findAssetSetIssues>,
-  withinOwners: () => void
-): Promise<AssetSetIssue[]> {
+  withinOwners: () => void,
+  toolTargets: AgentToolValidationTargets
+): Promise<{ issues: AssetSetIssue[]; warnings: AgentToolWarning[] }> {
   try {
     const issues = found.validateWrite(stored);
-    if (issues.length > 0) return issues;
+    if (issues.length > 0) return { issues, warnings: [] };
     withinOwners();
-    const { refusals } = await findChangedAgentRefusals(options, access, stored, found.accepted);
-    return refusals.flatMap(({ error }) => errorIssues(error));
+    const { refusals, warnings } = await findChangedAgentRefusals(
+      options,
+      access,
+      stored,
+      found.accepted,
+      toolTargets
+    );
+    return { issues: refusals.flatMap(({ error }) => errorIssues(error)), warnings };
   } catch (error) {
     if (isAppError(error) && error.code === "VALIDATION_FAILED") {
-      return errorIssues(error);
+      return { issues: errorIssues(error), warnings: [] };
     }
     throw error;
   }

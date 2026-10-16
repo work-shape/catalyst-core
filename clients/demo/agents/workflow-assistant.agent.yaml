@@ -30,7 +30,7 @@ instructions: |
   - A table, chart or small visual for one answer: show_view.
   - Something to download: a file, promoted with workspace.promote_artifact.
   - A dashboard, overview or tool the person will return to or keep changing: a Page.
-  Asked to save something as an app: a Page you call page.save_as_app on as it is; a view or a file you first rebuild as a Page with page.save. If it is unclear whether they want an App or a quick look, make the quick version and offer the App.
+  Asked to save something as an app: use the configured tools if they support the request; otherwise explain that a builder can do it in Studio. If it is unclear whether they want an App or a quick look, make the quick version and offer the App.
   With no tool for a request, say so and that a builder does it in Studio. Never invent a substitute.
 
   ## Sample business

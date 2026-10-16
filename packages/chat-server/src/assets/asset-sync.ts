@@ -1,5 +1,6 @@
 import {
   AppError,
+  asCollaborationWorkspaceId,
   auditActorFromIdentity,
   findNamespaceOfAssetName,
   isAppError,
@@ -8,9 +9,10 @@ import {
   type ConfigAssetMutation,
   type PolicyTarget
 } from "@work-shape/catalyst-core";
+import type { AgentToolWarning } from "../agent-tool-validation";
 import { clearLiveOnceSwitches } from "./asset-after-write";
 import { z } from "zod";
-import { readDefinitionName } from "../asset-kinds/shared";
+import { configValuesEqual, readDefinitionName } from "../asset-kinds/shared";
 import {
   definitionsByName,
   findAssetSetIssues,
@@ -115,9 +117,9 @@ export async function checkAssetSync(
   options: AssetWorkflowOptions,
   call: AssetCall,
   input: AssetSyncInput
-): Promise<{ valid: true }> {
-  await checkBatch(options, withSyncCredential(call, input), input, "check");
-  return { valid: true };
+) {
+  const { warnings } = await checkBatch(options, withSyncCredential(call, input), input, "check");
+  return { valid: true as const, ...(warnings.length > 0 ? { warnings } : {}) };
 }
 
 /**
@@ -130,6 +132,7 @@ function withSyncCredential(call: AssetCall, input: AssetSyncInput): AssetCall {
 
 /** A batch every check accepted, with what the store is asked to write for it. */
 interface CheckedBatch {
+  warnings: AgentToolWarning[];
   planned: PlannedItem[];
   ready: ReadyItem[];
   storedDefault: string | null;
@@ -299,7 +302,25 @@ async function checkBatch(
   stopIfRefused(unplaced);
   stopIfRefused(writeIssues(() => found.validateWrite(stored.set)));
 
-  const changed = await findChangedAgentRefusals(options, call.access, stored.set, found.accepted);
+  const acceptedByName = definitionsByName(found.accepted);
+  const changed = await findChangedAgentRefusals(options, call.access, stored.set, found.accepted, {
+    names: ready()
+      .filter(
+        (entry) =>
+          entry.kind.kind === "agent" &&
+          entry.item.type === "put" &&
+          (purpose === "check" ||
+            !configValuesEqual(
+              storedByName("agent").get(entry.name),
+              acceptedByName("agent").get(entry.name)
+            ))
+      )
+      .map((entry) => entry.name),
+    scope:
+      input.workspaceId === undefined
+        ? {}
+        : { workspaceId: asCollaborationWorkspaceId(input.workspaceId) }
+  });
   const puts = putsByAsset(ready());
   for (const { agentName, error } of changed.refusals) {
     const entry = puts.get(assetKey("agent", agentName));
@@ -307,7 +328,6 @@ async function checkBatch(
     if (!entry || entry.refusal) throw error;
     entry.refusal = toRefusal(error);
   }
-  const acceptedByName = definitionsByName(found.accepted);
   for (const entry of ready()) {
     if (entry.item.type !== "put" || entry.refusal) continue;
     entry.refusal = refusalOf(() =>
@@ -342,6 +362,7 @@ async function checkBatch(
   // Asked here as well as by the writer, so that a check of the batch refuses it too.
   assertDefaultOwnedByInstance(kinds.kinds, mutations, stored.assets);
   return {
+    warnings: changed.warnings,
     planned,
     ready: ready(),
     storedDefault,
@@ -469,7 +490,7 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
       options,
       ready.filter((entry) => !entry.absent)
     )),
-    warnings: []
+    warnings: checked.warnings
   };
 }
 

@@ -1,6 +1,10 @@
 import type { AgentToolReference, ConfigAssetValidationRefs } from "@work-shape/catalyst-server";
 import { getEnabledToolNames, type ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
-import { REASONING_EFFORTS, type ModelProviderConfig } from "@work-shape/catalyst-core";
+import {
+  REASONING_EFFORTS,
+  type ModuleSnapshot,
+  type ModelProviderConfig
+} from "@work-shape/catalyst-core";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "@work-shape/catalyst-model-provider";
 import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import { agentListableToolNames } from "./platform-orientation";
@@ -12,7 +16,8 @@ import { agentListableToolNames } from "./platform-orientation";
  */
 export function createConfigAssetReferences(
   config: ClientInstanceConfig,
-  modelProviders: readonly ModelProviderConfig[]
+  modelProviders: readonly ModelProviderConfig[],
+  modules: ModuleSnapshot
 ) {
   const selectable = config.modelBindings.filter((binding) => binding.agentSelectable !== false);
   const validationRefs: ConfigAssetValidationRefs = {
@@ -27,13 +32,21 @@ export function createConfigAssetReferences(
     }),
     fastModeModelBindingIds: fastModeModelBindingIds(config),
     reasoningEfforts: [...REASONING_EFFORTS],
-    enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
+    enabledToolNames: agentListableToolNames(getEnabledToolNames(config)),
+    registeredToolNames: modules.modules.flatMap((module) => module.definition?.tools ?? [])
   };
   let described: AgentToolReference[] = [];
   return {
     validationRefs,
     tools: (): readonly AgentToolReference[] => described,
     describe(tools: readonly AnyToolDefinition[]): void {
+      validationRefs.registeredToolNames = [
+        ...new Set([
+          ...(validationRefs.registeredToolNames ?? []),
+          ...tools.map((tool) => tool.name),
+          ...MODEL_TOOL_REFERENCES.map((tool) => tool.name)
+        ])
+      ];
       described = agentToolReferences(validationRefs.enabledToolNames, tools);
     }
   };

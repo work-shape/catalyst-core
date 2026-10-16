@@ -1937,6 +1937,144 @@ describe("config CLI against an instance", () => {
     expect(await syncRuns(fixture)).toEqual([]);
   });
 
+  it.each([
+    {
+      label: "toolNames",
+      instructions: "Help.",
+      toolNames: ["known.missing"],
+      location: "toolNames[0]"
+    },
+    {
+      label: "instructions",
+      instructions: "Help.\nUse known.missing.",
+      toolNames: [],
+      location: "instructions line 2"
+    }
+  ])(
+    "validate and push refuse an unavailable tool in $label before sending a write",
+    async ({ instructions, toolNames, location }) => {
+      const syncs: unknown[] = [];
+      const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] }, syncs);
+      const directory = await createTemporaryDirectory();
+      await writeMinimalManifest(directory, "https://catalyst.test", "assistant");
+      await mkdir(resolve(directory, "agents"));
+      await writeFile(
+        resolve(directory, "agents/assistant.agent.yaml"),
+        serializeAgentYaml({
+          ...agentConfig(instructions),
+          toolNames
+        })
+      );
+      const output: string[] = [];
+      const options = {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_validate_tools" },
+        fetchImpl,
+        stdout: (text: string) => output.push(text),
+        stderr: (text: string) => output.push(text)
+      };
+      for (const command of ["validate", "push"] as const) {
+        output.length = 0;
+        expect(await runConfigCommand(command, options), output.join("")).toBe(1);
+        expect(output.join("")).toContain(
+          `Agent 'assistant' references unavailable tool 'known.missing' in ${location}`
+        );
+      }
+      expect(syncs).toEqual([]);
+      expect(
+        (
+          await fixture.store.configAssets.getConfigAssetState({
+            clientInstanceId: fixture.clientInstanceId
+          })
+        ).version
+      ).toBe(0);
+    }
+  );
+
+  it("validate and push accept a tool enabled on the target instance", async () => {
+    const syncs: unknown[] = [];
+    const { fetchImpl } = await instanceHolding({ agents: [], skills: [] }, syncs);
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test", "assistant");
+    await mkdir(resolve(directory, "agents"));
+    await writeFile(
+      resolve(directory, "agents/assistant.agent.yaml"),
+      serializeAgentYaml({
+        ...agentConfig("Use `known.tool`."),
+        toolNames: ["known.tool"]
+      })
+    );
+    const output: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_validate_tools" },
+      fetchImpl,
+      stdout: (text: string) => output.push(text),
+      stderr: (text: string) => output.push(text)
+    };
+    expect(await runConfigCommand("validate", options), output.join("")).toBe(0);
+    expect(syncs).toHaveLength(0);
+    expect(await runConfigCommand("push", options), output.join("")).toBe(0);
+    expect(syncs).toHaveLength(1);
+  });
+
+  it("validate and push display nonblocking tool warnings from the instance", async () => {
+    const syncs: unknown[] = [];
+    const { fetchImpl } = await instanceHolding({ agents: [], skills: [] }, syncs);
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test", "assistant");
+    await mkdir(resolve(directory, "agents"));
+    await writeFile(
+      resolve(directory, "agents/assistant.agent.yaml"),
+      serializeAgentYaml({
+        ...agentConfig("Use `known.tool`."),
+        toolNames: ["known.tool"]
+      })
+    );
+    const output: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_validate_tools" },
+      fetchImpl: async (resource: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const response = await fetchImpl(resource, init);
+        const url = resource instanceof Request ? resource.url : String(resource);
+        if (url.endsWith("/assets/sync/check")) {
+          return Response.json({
+            valid: true,
+            warnings: [
+              {
+                code: "tool_not_callable",
+                message: "Connection tool exists but is not callable now"
+              }
+            ]
+          });
+        }
+        if (url.endsWith("/assets/sync") && response.ok) {
+          const body = z.record(z.string(), z.unknown()).parse(await response.json());
+          return Response.json({
+            ...body,
+            warnings: [
+              {
+                code: "tool_not_callable",
+                message: "Connection tool exists but is not callable now"
+              }
+            ]
+          });
+        }
+        return response;
+      },
+      stdout: (text: string) => output.push(text),
+      stderr: (text: string) => output.push(text)
+    };
+    expect(await runConfigCommand("validate", options), output.join("")).toBe(0);
+    expect(output.join("")).toContain("Warning: Connection tool exists but is not callable now");
+    output.length = 0;
+    expect(syncs).toHaveLength(0);
+    expect(await runConfigCommand("push", options), output.join("")).toBe(0);
+    expect(syncs).toHaveLength(1);
+    expect(output.join("")).toContain("Warning: Connection tool exists but is not callable now");
+  });
+
   it("is told to push in parts where the release is larger than one request may be", async () => {
     const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] });
     const directory = await createTemporaryDirectory();
