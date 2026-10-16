@@ -44,12 +44,11 @@ const changed = [
 const packages = files
   .filter((file) => /^(?:packages|clients)\/[^/]+\/package\.json$/u.test(file))
   .map((file) => ({ dir: packageDirectory(file), ...JSON.parse(readFileSync(file, "utf8")) }));
-const graph = JSON.parse(readFileSync("quality-package-graph.json", "utf8"));
-// Manifests can add edges before the declared graph is updated; never under-select them.
+const graph = {};
+// Manifests are the source of the package graph.
 for (const pkg of packages)
   graph[pkg.name] = [
     ...new Set([
-      ...(graph[pkg.name] ?? []),
       ...["dependencies", "devDependencies", "peerDependencies"].flatMap((key) =>
         Object.entries(pkg[key] ?? {})
           .filter(([, version]) => String(version).startsWith("workspace:"))

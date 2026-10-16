@@ -29,7 +29,13 @@
       "development": "./src/gallery/index.tsx",
       "import": "./dist/gallery/index.js"
     },
-    "./styles.css": "./src/styles.css"
+    "./styles.css": "./src/styles.css",
+    "./chart-engine": {
+      "development": "./src/data/chart-engine.ts"
+    },
+    "./flow-layout": {
+      "development": "./src/flow/flow-layout.ts"
+    }
   },
   "publishConfig": {
     "access": "restricted",

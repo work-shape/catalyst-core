@@ -94,10 +94,6 @@ test("runner keeps root-test checks narrow, typechecks package consumers and exp
   write("tests/a.test.ts", 'import { value } from "../packages/a/index";\nvoid value;\n');
   write("tests/b.test.ts", "export {};\n");
   write("tsconfig.tests.json", JSON.stringify({ include: ["tests/**/*.ts"] }));
-  write(
-    "quality-package-graph.json",
-    JSON.stringify({ a: [], unrelated: [], "quality-config": [] })
-  );
   // The tooling self-check is separate from the package/test commands under observation.
   write("scripts/check-affected.test.mjs", "");
   const callsFile = join(root, "calls.log");
