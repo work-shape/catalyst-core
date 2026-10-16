@@ -46,11 +46,16 @@ A fresh install of that checkout from its frozen lock removes that stale referen
 frozen lock, reuses deployment kit `pack-local` to pack and substitute every release
 package, and installs the reference demo in a scratch directory without core's lockfile,
 source aliases or third-party overrides. It then runs the deployment's `build:server`
-and `build:ui` commands and requires their artifacts, as the kit's check does. It explicitly migrates the hosted
-test Postgres, starts the installed server, seeds a disposable standalone user through the
-normal startup seed, signs in over HTTP, and requires a session cookie plus a 200 from
-`GET /api/v1/me` (401 without the cookie). A build, readiness, sign-in or API failure blocks
-publication. The child server and scratch consumer are removed even on failure. Only
+and `build:ui` commands and requires their artifacts, as the kit's check does. It then runs
+the consumer through the deployments' own entries: `dist/migrate.js` (compose's `migrate`
+service) against a hosted test Postgres whose password the job generates,
+`dist/seed-auth.js` (the deployments' `seed:auth`) for a disposable standalone user, and
+`dist/server.js` until `/ready` answers 200. It signs in over HTTP and requires a session
+cookie plus a 200 from `GET /api/v1/me` (401 without the cookie). Any failure blocks
+publication and names its step on the run's summary page (`Fresh consumer gate failed at:
+<step>`); a failure after the server starts also prints the server's last 200 log lines.
+The child server and scratch consumer are removed even on failure. The job takes about two minutes
+(1 min 53 s on a dispatch, which also runs the drift proof below). Only
 Catalyst package overrides select local tarballs; third-party ranges resolve afresh.
 Dispatch `gh workflow run release.yml --ref <branch>` to prove this gate without
 publishing. Dispatches have their own concurrency group and cannot hold up a tag release.

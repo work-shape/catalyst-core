@@ -98,7 +98,16 @@ test("install and either build failure fail the gate and clean up", async (t) =>
           },
           async () => {}
         ),
-      new RegExp(`broken ${failure}`, "u")
+      (error) => {
+        assert.match(error.message, new RegExp(`broken ${failure}`, "u"));
+        assert.match(
+          error.step,
+          failure === "install"
+            ? /^Fresh install/u
+            : new RegExp(`^Build deployment ${failure.slice(6)}`, "u")
+        );
+        return true;
+      }
     );
     assert.equal(existsSync(consumer), false);
   }
@@ -202,8 +211,13 @@ test("release publication waits for fresh resolution; dispatch only proves the g
   assert.ok(
     gate.steps.some(
       ({ run }) =>
-        run === ".github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432"
+        run ===
+        '.github/scripts/start-postgres.sh catalyst "$FRESH_POSTGRES_PASSWORD" catalyst_test 5432'
     )
+  );
+  assert.ok(
+    gate.steps.some(({ run }) => run?.includes("openssl rand") && run.includes("::add-mask::")),
+    "the job generates its database password"
   );
   assert.ok(
     gate.steps.some(

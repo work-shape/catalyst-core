@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { localManifest, packPackages } from "../../packages/deployment-kit/lib/pack-local.mjs";
-import { smokeConsumer } from "./fresh-consumer-smoke.mjs";
+import { smokeConsumer, step } from "./fresh-consumer-smoke.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const runCommand = (command, args, options) =>
@@ -65,19 +65,23 @@ export async function checkFreshResolution(
       `${JSON.stringify({ compilerOptions }, null, 2)}\n`
     );
 
-    console.log("\n==> Fresh install: no core lockfile, workspace links or third-party overrides");
-    run("pnpm", ["install", "--ignore-workspace", "--no-frozen-lockfile"], { cwd: consumer });
+    await step("Fresh install: no core lockfile, workspace links or third-party overrides", () =>
+      run("pnpm", ["install", "--ignore-workspace", "--no-frozen-lockfile"], { cwd: consumer })
+    );
     for (const target of ["server", "ui"]) {
-      console.log(`\n==> Build deployment ${target} from installed release tarballs`);
-      run("pnpm", ["run", `build:${target}`], { cwd: consumer });
+      await step(`Build deployment ${target} from installed release tarballs`, () =>
+        run("pnpm", ["run", `build:${target}`], { cwd: consumer })
+      );
     }
     // The same artifacts required by catalyst-deploy check and the kit's Dockerfile.
-    for (const artifact of ["dist/server.js", "dist/client/index.html"]) {
-      const path = join(consumer, artifact);
-      if (!existsSync(path) || statSync(path).size === 0) {
-        throw new Error(`fresh-resolution: missing or empty build artifact: ${artifact}`);
+    await step("Require the deployment build artifacts", () => {
+      for (const artifact of ["dist/server.js", "dist/client/index.html"]) {
+        const path = join(consumer, artifact);
+        if (!existsSync(path) || statSync(path).size === 0) {
+          throw new Error(`fresh-resolution: missing or empty build artifact: ${artifact}`);
+        }
       }
-    }
+    });
     await smoke(consumer);
     console.log("\nfresh-resolution: builds, sign-in and authenticated /api/v1/me passed");
 
@@ -107,10 +111,23 @@ export async function checkFreshResolution(
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await checkFreshResolution(
-    repoRoot,
-    runCommand,
-    smokeConsumer,
-    process.argv.includes("--prove-auth-drift")
-  );
+  try {
+    await checkFreshResolution(
+      repoRoot,
+      runCommand,
+      smokeConsumer,
+      process.argv.includes("--prove-auth-drift")
+    );
+  } catch (error) {
+    const failed = error?.step ?? "outside a named step";
+    const message = (error?.message ?? String(error))
+      .split("\n")[0]
+      .replace(/^fresh-resolution: /u, "");
+    console.error(`\nfresh-resolution: FAILED at "${failed}": ${message}`);
+    // On a hosted runner the line is also an annotation on the run's summary page.
+    if (process.env.GITHUB_ACTIONS) {
+      console.log(`::error title=Fresh consumer gate failed at: ${failed}::${message}`);
+    }
+    process.exitCode = 1;
+  }
 }
