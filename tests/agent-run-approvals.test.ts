@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -5,6 +6,8 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
+  type AgentRunError,
+  type JobId,
   type AgentRunStatus,
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
@@ -192,6 +195,122 @@ describe("agent approval pause (operations checks 4, 5 and 6)", () => {
           expect(f.executed).toEqual(action === "approve" ? ["one"] : []);
         } else {
           expect((await f.run(said.runId)).status).toBe("cancelled");
+        }
+        expect(await f.app.stores.followUps.get({ ...scope, followUpId: item.id })).toMatchObject({
+          status: "cancelled"
+        });
+        const events = await f.events(said.runId);
+        expect(events.length).toBeGreaterThan(before.length);
+        expect(events.map((event) => event.sequence)).toEqual(events.map((_, i) => i + 1));
+      } finally {
+        if (pending) await pending;
+        await f.app.close();
+      }
+    }
+  );
+
+  it.each([
+    "expiry sweep",
+    "queued-too-long sweep",
+    "workerless sweep",
+    "failLostAgentRun"
+  ] as const)(
+    "%s takes the conversation before the run during a concurrent queue withdrawal",
+    async (action) => {
+      const f = await fixture(action === "expiry sweep");
+      let pending: Promise<PromiseSettledResult<unknown>[]> | undefined;
+      try {
+        const said = action === "expiry sweep" ? await f.say() : await f.startMessage("First");
+        const scope = {
+          clientInstanceId: f.clientInstanceId,
+          conversationId: asConversationId(said.conversationId)
+        };
+        const runId = asAgentRunId(said.runId);
+        const queued = await f.app.call("conversations.runs.start", {
+          params: { conversationId: said.conversationId },
+          payload: {
+            idempotencyKey: "sweep-queue-change",
+            message: { text: "Next" },
+            followUp: "queue"
+          }
+        });
+        expect(queued.statusCode, queued.body).toBe(200);
+        const item = required((await f.app.stores.followUps.listPending(scope))[0]);
+        const call = (await f.calls(said.runId))[0];
+        const jobId = await withTestSql(async (sql) => {
+          // Make only this run eligible, without advancing a worker's clock or timers.
+          if (action === "expiry sweep") {
+            await sql`update operation_runs set expires_at = now() - interval '1 second' where id = ${required(call).id}`;
+          } else if (action === "queued-too-long sweep") {
+            await sql`update agent_runs set updated_at = now() - interval '1 minute' where id = ${runId}`;
+          } else {
+            await sql`update agent_runs set status = 'running', lease_owner = 'lost-worker',
+              lease_token = 'lost-lease', lease_expires_at = now() - interval '1 second'
+              where id = ${runId}`;
+          }
+          const [job] = await sql<{ id: JobId }[]>`select id from platform_jobs
+            where client_instance_id = ${f.clientInstanceId} and kind = 'agent_run.execute'
+              and dedupe_key = ${`agent_run.execute:${runId}`}`;
+          return required(job).id;
+        });
+        const error: AgentRunError = {
+          code: "AGENT_RUN_WORKER_LOST",
+          message: "The worker is gone",
+          category: "runtime_interrupted"
+        };
+        const input = { clientInstanceId: f.clientInstanceId, limit: 1, error };
+        const before = await f.events(said.runId);
+        await f.app.stores.transaction(async (stores) => {
+          await stores.followUps.getOldestPending(scope);
+          const change = (() => {
+            switch (action) {
+              case "expiry sweep":
+                return f.app.stores.operationRuns.markExpired(input);
+              case "queued-too-long sweep":
+                return f.app.stores.agentRuns.failAgentRunsQueuedTooLong({
+                  ...input,
+                  queuedMs: 1000
+                });
+              case "workerless sweep":
+                return f.app.stores.agentRuns.failAgentRunsWithoutWorker({
+                  ...input,
+                  jobKind: "agent_run.execute"
+                });
+              case "failLostAgentRun":
+                return f.app.stores.agentRuns.failLostAgentRun({ ...input, runId, jobId });
+            }
+          })();
+          // Either transaction can be the victim of a reversed lock order: handle both now.
+          pending = Promise.allSettled([change]);
+          await waitUntil(
+            async () =>
+              (
+                await withTestSql(
+                  (sql) => sql`
+                select pid from pg_stat_activity
+                where datname = current_database() and wait_event_type = 'Lock'
+                  and cardinality(pg_blocking_pids(pid)) > 0
+                  and (query ilike '%conversations%' or query ilike '%agent_run_observations%')
+              `
+                )
+              ).length > 0,
+            `${action} is visibly blocked on the held conversation`
+          );
+          // Withdrawal takes the run while holding the conversation. A sweep that already
+          // owns the run deadlocks here (40P01); conversation -> run lets both commit.
+          await stores.followUps.cancel({ ...scope, followUpId: item.id });
+        });
+        const [outcome] = await required(pending);
+        expect(outcome, inspect(outcome, { depth: 5 })).toMatchObject({ status: "fulfilled" });
+        if (action === "expiry sweep") {
+          expect(outcome).toMatchObject({ value: [{ id: required(call).id, status: "expired" }] });
+          await f.until(said.runId, "completed");
+          expect(f.executed).toEqual([]);
+        } else {
+          expect(await f.run(said.runId)).toMatchObject({ status: "failed", error });
+          expect(
+            (await f.events(said.runId)).filter((event) => event.type === "run_failed")
+          ).toHaveLength(1);
         }
         expect(await f.app.stores.followUps.get({ ...scope, followUpId: item.id })).toMatchObject({
           status: "cancelled"
