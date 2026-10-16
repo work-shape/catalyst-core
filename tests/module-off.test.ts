@@ -455,6 +455,10 @@ describe("a module that is off", () => {
       toolCount: 1
     });
     expect(items[1]).toMatchObject({ shipped: true, operationCount: 1, toolCount: 0 });
+    // The exact asset-management count was formerly asserted by the Modules browser journey.
+    expect(items.find((item) => item.name === "assetManagement")).toMatchObject({
+      operationCount: 10
+    });
   });
 
   it("marks a module this build ships no code for", async () => {

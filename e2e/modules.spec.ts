@@ -53,32 +53,13 @@ test("an operator reads the modules of the instance, in English and in German", 
       .getByRole("navigation", { name: "Settings pages" })
       .getByRole("button", { name: "Modules" })
   ).toBeVisible();
-  // Every module the product knows has a row, in the order of the registry.
-  await expect(page.locator("[data-module]")).toHaveCount(10);
-  expect(
-    await page
-      .locator("[data-module]")
-      .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-module")))
-  ).toEqual([
-    "documents",
-    "resources",
-    "assetManagement",
-    "userInvitations",
-    "apps",
-    "connections",
-    "workflows",
-    "dataStores",
-    "knowledge",
-    "personalApiKeys"
-  ]);
-
+  // Inventory and exact operation counts live at the API seam in module-off.test.ts.
   const resources = moduleRow(page, "resources");
   await expect(resources).toContainText("Resources");
   await expect(resources).toContainText("On");
-  await expect(resources).toContainText("Operations: 1");
+  await expect(resources).toContainText(/Operations: \d+/u);
   await expect(resources).toContainText("modules.resources.enabled");
   await expect(moduleRow(page, "assetManagement")).toContainText("On");
-  await expect(moduleRow(page, "assetManagement")).toContainText("Operations: 10");
   // The open platform ships no code for documents, so it cannot be on here.
   const documents = moduleRow(page, "documents");
   await expect(documents).toContainText("Off");
@@ -99,7 +80,7 @@ test("an operator reads the modules of the instance, in English and in German", 
   await expect(page.getByRole("heading", { name: "Module", level: 1 })).toBeVisible();
   await expect(moduleRow(page, "resources")).toContainText("Inhalte");
   await expect(moduleRow(page, "resources")).toContainText("An");
-  await expect(moduleRow(page, "resources")).toContainText("Operationen: 1");
+  await expect(moduleRow(page, "resources")).toContainText(/Operationen: \d+/u);
   await expect(moduleRow(page, "documents")).toContainText("Aus");
   await expect(moduleRow(page, "documents")).toContainText("Nicht Teil dieses Builds");
   await expect(page.locator("[data-operator-managed]")).toContainText(

@@ -1,0 +1,4 @@
+{"role":"user","permissions":[]}
+{"role":"admin","permissions":["agent_skills.approve","config_assets.read","config_assets.write","usage.view","users.manage","audit.view"]}
+{"role":"superadmin","permissions":["agent_skills.approve","config_assets.read","config_assets.write","usage.view","users.manage","api_access.manage","agent_models.manage","audit.view"]}
+{"adminActions":["agent.read","agent.write","agent.delete","skill.read","skill.write","skill.delete","skill.approve","operations.approve","users.manage","usage.view","audit.view","service_principals.manage"]}

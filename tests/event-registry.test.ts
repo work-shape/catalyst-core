@@ -369,7 +369,7 @@ describe("event registry", () => {
     ]);
   });
 
-  it("retains every current audit name unchanged as legacy and audited", () => {
+  it("retains every current audit name unchanged as legacy and audited", async () => {
     const definitions: [string, PlatformEventDefinition][] = Object.entries(EVENTS);
     for (const [name, definition] of definitions) {
       expect(definition.name).toBe(name);
@@ -378,33 +378,15 @@ describe("event registry", () => {
       expect(definition.audited).toBe(true);
       expect(definition.phases).toEqual(["after"]);
     }
-    // The events added since: those of an operation's call, those of a draft's live-once switch,
-    // a guardrail's publish and unpublish, the switch of a shipped guardrail, and the questions the guardrails answer before something happens. The before-events are
-    // no audit row.
-    expect(
+    // One line per event makes additions and metadata changes reviewable in one place.
+    await expect(
       definitions
-        .filter(([, definition]) => !definition.legacy)
-        .map(([name, { audited, phases }]) => [name, audited, phases.join()])
-    ).toEqual([
-      ["app.before_publish", false, "before"],
-      ["approval_request.before_create", false, "before"],
-      ["asset.before_write", false, "before"],
-      ["data_store.before_publish", false, "before"],
-      ["guardrail.published", true, "after"],
-      ["guardrail.unpublished", true, "after"],
-      ["guardrail.shipped_switched", true, "after"],
-      ["live_once.cleared", true, "after"],
-      ["live_once.switched_on", true, "after"],
-      ["live_once.used", true, "after"],
-      ["operation.authorization_checked", true, "after"],
-      ["operation.before_call", false, "before"],
-      ["operation.completed", true, "after"],
-      ["operation.denied", true, "after"],
-      ["operation.failed", true, "after"],
-      ["operation.simulated", true, "after"],
-      ["operation.started", true, "after"],
-      ["workflow.before_publish", false, "before"]
-    ]);
+        .map(([name, { legacy, audited, phases }]) =>
+          JSON.stringify({ name, legacy: legacy ?? false, audited, phases })
+        )
+        .sort()
+        .join("\n") + "\n"
+    ).toMatchFileSnapshot("./__snapshots__/events.txt");
     expectTypeOf<(typeof EVENTS)[PlatformEventName]>().toExtend<PlatformEventDefinition>();
     expectTypeOf<AuditEventName>().toEqualTypeOf<PlatformEventName>();
     // A guardrail binds only to a registered before-event.

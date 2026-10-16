@@ -69,54 +69,26 @@ describe("the vocabulary of Connection rights", () => {
     expect(ROLE_DEFAULT_ACTIONS.user).toEqual([]);
   });
 
-  it("gives no legacy key a Connection right and no role another legacy key than before", () => {
+  it("gives no legacy key a Connection right and no role another legacy key than before", async () => {
     expect(
       Object.values(LEGACY_PERMISSION_ACTIONS)
         .flat()
         .filter((action) => action.startsWith("connection."))
     ).toEqual([]);
-    expect(ROLE_DEFAULT_PERMISSIONS).toEqual({
-      user: [],
-      admin: [
-        "agent_skills.approve",
-        "config_assets.read",
-        "config_assets.write",
-        "usage.view",
-        "users.manage",
-        "audit.view"
-      ],
-      superadmin: [
-        "agent_skills.approve",
-        "config_assets.read",
-        "config_assets.write",
-        "usage.view",
-        "users.manage",
-        "api_access.manage",
-        "agent_models.manage",
-        "audit.view"
-      ]
-    });
-    // What an administrator held before, action by action, is what the role holds now.
-    expect(
-      ROLE_DEFAULT_ACTIONS.admin.filter(
-        (action) =>
-          !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action)
-      )
-    ).toEqual([
-      "agent.read",
-      "agent.write",
-      "agent.delete",
-      "skill.read",
-      "skill.write",
-      "skill.delete",
-      "skill.approve",
-      "operations.approve",
-      "users.manage",
-      "usage.view",
-      "audit.view",
-      // RIGHTS-1a: no legacy key names it; the role holds it as an action.
-      "service_principals.manage"
-    ]);
+    // Snapshot the historical role vocabulary; keep the no-Connection-right invariant above.
+    await expect(
+      Object.entries(ROLE_DEFAULT_PERMISSIONS)
+        .map(([role, permissions]) => JSON.stringify({ role, permissions }))
+        .join("\n") +
+        "\n" +
+        JSON.stringify({
+          adminActions: ROLE_DEFAULT_ACTIONS.admin.filter(
+            (action) =>
+              !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action)
+          )
+        }) +
+        "\n"
+    ).toMatchFileSnapshot("./__snapshots__/rights.txt");
   });
 
   it("lets a grant row name reading and using, in a Namespace or on one Connection", () => {

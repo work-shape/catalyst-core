@@ -5,7 +5,11 @@ export default [
   { rules: { "catalyst/retired-terms": "error" } },
   {
     // The rule's vocabulary and its negative fixtures must keep naming the terms they reject.
-    files: ["packages/quality-config/retired-terms-rule.mjs", "tests/quality-collector.test.ts"],
+    files: [
+      "packages/quality-config/retired-terms-rule.mjs",
+      "tests/quality-collector.test.ts",
+      "tests/support/quality-lint-fixtures.ts"
+    ],
     rules: { "catalyst/retired-terms": "off" }
   }
 ];
