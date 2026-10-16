@@ -192,7 +192,14 @@ ignores itself. It copies the deployment's files to a scratch folder, points eve
 package there at its tarball (`file:` specifiers and overrides, a lockfile written for them) and
 runs the bake file there with every output set to the local engine (`type=docker`), the images tagged `pack-local` (`RELEASE_TAG` overrides
 it). Bake reads a Dockerfile outside the context only when allowed, so `pack-local` passes
-`--allow=fs.read` for the kit's `docker/` folder; CI, with the kit under `node_modules`, needs none. Nothing in the deployment changes, and `check` refuses such a manifest. The tarballs carry
+`--allow=fs.read` for the kit's `docker/` folder. In CI the kit is under `node_modules`,
+but the npm secret file is outside the work tree, so bake needs permission to read it:
+
+```sh
+docker buildx bake --allow=fs.read="$RUNNER_TEMP/.npmrc" --file deploy/docker-bake.hcl
+```
+
+Nothing in the deployment changes, and `check` refuses such a manifest. The tarballs carry
 the workspace's version, whatever the deployment pins.
 
 ## Backups
