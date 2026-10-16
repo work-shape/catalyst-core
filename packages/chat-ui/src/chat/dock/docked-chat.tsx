@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Bot, PanelRight } from "lucide-react";
+import { PanelRight } from "lucide-react";
 import { Avatar, PageHeaderShellAction, SplitHandle } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { ConversationSubjectState } from "../conversation/use-conversation-subject";
@@ -96,7 +96,7 @@ export function DockedChat({
           }
           mark={
             subjectAgent === undefined ? undefined : (
-              <Avatar kind="agent" size="sm" name={subjectAgent} icon={<Bot />} />
+              <Avatar kind="agent" size="sm" name={subjectAgent} />
             )
           }
           subtitle={

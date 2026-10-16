@@ -261,6 +261,7 @@ export function AgentEditor({
                   modelBindings={modelBindings}
                   reasoningEfforts={references?.reasoningEfforts ?? []}
                   editable={canEditModel}
+                  setByInstance={!canManageAgentModels}
                   onSelectDefault={(modelBindingId) =>
                     setForm((value) =>
                       selectAgentModelBinding(value, modelBindingId, {
@@ -613,6 +614,7 @@ function AgentModels({
   modelBindings,
   reasoningEfforts,
   editable,
+  setByInstance,
   onSelectDefault,
   onSetUserSelectable,
   onSetReasoningEffort
@@ -621,6 +623,8 @@ function AgentModels({
   modelBindings: readonly { id: string; model: string; label?: string }[];
   reasoningEfforts: readonly string[];
   editable: boolean;
+  /** The reader may not change the agent's models: the default model says why. */
+  setByInstance: boolean;
   onSelectDefault(modelBindingId: string): void;
   onSetUserSelectable(modelBindingId: string, userSelectable: boolean): void;
   onSetReasoningEffort(modelBindingId: string, reasoningEffort: string): void;
@@ -637,9 +641,6 @@ function AgentModels({
     )
   }));
   const others = rows.filter((row) => !row.isDefault && (editable || row.userSelectable));
-  const instanceDefaultLabel = form.modelProviderId
-    ? `${t("configInstanceDefault")} (${form.modelProviderId})`
-    : t("configInstanceDefault");
   const effortSelect = (bindingId: string, label: string) => (
     <Select
       size="sm"
@@ -660,13 +661,16 @@ function AgentModels({
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t("build.defaultModel")}>
+        <Field
+          label={t("build.defaultModel")}
+          hint={setByInstance ? t("build.modelSetByInstance") : undefined}
+        >
           <Select
             value={form.modelBindingId}
             disabled={!editable}
             onChange={(event) => onSelectDefault(event.target.value)}
           >
-            <option value="">{instanceDefaultLabel}</option>
+            <option value="">{t("configInstanceDefault")}</option>
             {rows.map((row) => (
               <option key={row.bindingId} value={row.bindingId}>
                 {row.label}
@@ -674,7 +678,7 @@ function AgentModels({
             ))}
           </Select>
         </Field>
-        <Field label={t("configReasoningEffort")}>
+        <Field label={t("configReasoningEffort")} hint={t("build.reasoningEffortHint")}>
           {effortSelect(form.modelBindingId, t("build.defaultModel"))}
         </Field>
       </div>

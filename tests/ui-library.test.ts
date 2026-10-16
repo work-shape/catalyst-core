@@ -362,10 +362,17 @@ describe("form components", () => {
       render(createElement(Avatar, { kind, name }));
 
     expect(avatar("person", "Maria Schmidt")).toMatch(/rounded-full[^>]*>MS</u);
-    for (const kind of ["workspace", "agent", "app", "workflow"] as const) {
+    for (const kind of ["workspace", "app", "workflow"] as const) {
       expect(avatar(kind, "marketing")).toMatch(/rounded-md[^>]*>MA</u);
     }
     expect(avatar("person", " ")).toContain(">?<");
+  });
+
+  it("draws every agent with the agent glyph, so it is the same mark wherever it is named", () => {
+    const agent = (name: string) => render(createElement(Avatar, { kind: "agent", name }));
+
+    expect(agent("Marketing")).toMatch(/rounded-md[^>]*><svg[^>]*lucide-bot/u);
+    expect(agent("Research Assistant")).toBe(agent("Marketing"));
   });
 });
 

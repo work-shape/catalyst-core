@@ -1,7 +1,7 @@
 import { forwardRef, useState, type ComponentPropsWithoutRef } from "react";
-import { Bot, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { SafeConfig } from "@work-shape/catalyst-api-client";
-import { Button, cn, Picker, type PickerOption } from "@work-shape/catalyst-ui";
+import { Avatar, Button, cn, Picker, type PickerOption } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 
 /** The start page introduces the agent; the header of a conversation only keeps its icon. */
@@ -138,18 +138,25 @@ function AgentChipContent({
   const iconOnlyOpen = !showName && picker?.open === true;
   return (
     <>
-      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-secondary text-foreground">
-        {/*
-          Alone, the icon is also the only sign that the list is open. Both
-          icons stay mounted: replacing the one under a resting pointer makes
-          the browser report the pointer as entering again, which would reopen
-          a list that Escape just closed.
-        */}
-        <Bot className={cn("size-4", iconOnlyOpen && "hidden")} aria-hidden="true" />
-        {showName ? null : (
-          <ChevronDown className={cn("size-4", !iconOnlyOpen && "hidden")} aria-hidden="true" />
-        )}
-      </span>
+      {/*
+        The agent's mark, as on the Agents page and in Studio. Alone, it is also the only sign
+        that the list is open. Both marks stay mounted and let the pointer through: replacing
+        the one under a resting pointer makes the browser report the pointer as entering again,
+        which would reopen a list that Escape just closed.
+      */}
+      <Avatar
+        kind="agent"
+        name={agentLabel}
+        className={cn("pointer-events-none", iconOnlyOpen && "hidden")}
+      />
+      {showName ? null : (
+        <Avatar
+          kind="agent"
+          name={agentLabel}
+          icon={<ChevronDown />}
+          className={cn("pointer-events-none", !iconOnlyOpen && "hidden")}
+        />
+      )}
       {showName ? (
         <span className="min-w-0 truncate text-label font-semibold">{agentLabel}</span>
       ) : null}

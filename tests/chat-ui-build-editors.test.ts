@@ -142,7 +142,7 @@ describe("agent page", () => {
       references: { reasoningEfforts: ["none", "low", "medium", "high", "xhigh"] }
     });
 
-    expect(markup).toContain("azure-eu");
+    expect(markup).toContain(">Instance default</option>");
     expect(markup).toContain('value="Help with the workflow."');
     expect(markup).toContain('<option value="high" selected="">high</option>');
     expect(markup).toContain('value="128"');
@@ -232,7 +232,9 @@ describe("agent page", () => {
     });
     const model = section(markup, "model");
 
-    expect(model).toContain("Instance default (azure-eu)");
+    // The instance's default model by name, never by the id of its provider.
+    expect(model).toContain(">Instance default</option>");
+    expect(model).not.toContain("azure-eu");
     expect(model.match(/<select[^>]*>/gu)?.every((select) => select.includes('disabled=""'))).toBe(
       true
     );
@@ -278,6 +280,7 @@ describe("agent page", () => {
     expect(fastSwitch(editable)).not.toContain('disabled=""');
     expect(editable).toContain("Fast runs are billed at a higher rate.");
     expect(editable).toContain('data-model-binding="plain"');
+    expect(editable).not.toContain("Set by your instance.");
 
     const readOnly = page(false);
     expect(readOnly).toContain('<option value="fast" selected="">GPT-fast</option>');
@@ -286,6 +289,7 @@ describe("agent page", () => {
     expect(readOnly).not.toContain('data-model-binding="plain"');
     expect(effortSelect(readOnly)).toContain('disabled=""');
     expect(fastSwitch(readOnly)).toContain('disabled=""');
+    expect(readOnly).toContain("Set by your instance.");
 
     // No fast-mode control for a binding that does not support it.
     expect(fastSwitch(page(true, "plain"))).toBeUndefined();
@@ -353,9 +357,8 @@ describe("agent page", () => {
     expect(editable).toContain(">Models people can choose in chat<");
     expect(editable).toContain('aria-label="GPT-5.6 Terra: Reasoning effort"');
     expect(editable).not.toContain("retired");
-    expect(editable).toContain(
-      "Users only see a model selector in the chat when at least one additional model is ticked."
-    );
+    expect(editable).toContain("People see a choice of models in the chat only when another");
+    expect(editable).toContain("Reasoning effort is how long the model thinks before it answers");
 
     // On the instance default every binding can still be offered.
     expect(models(page(true, "", ["luna"]))).toEqual([

@@ -3390,7 +3390,7 @@ test("superadmin manages config assets with validation and conflict protection",
     const defaultModel = form().getByRole("combobox", { name: /^Default model$/u });
     await expect(defaultModel).toHaveValue("");
     await expect(defaultModel.locator("option")).toHaveText([
-      "Instance default (local)",
+      "Instance default",
       "deterministic-local"
     ]);
     await expect(

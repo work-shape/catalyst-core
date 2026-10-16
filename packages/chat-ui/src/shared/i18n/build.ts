@@ -34,6 +34,9 @@ export const build = defineTranslations({
     "build.createPurpose": "What should it do?",
     "build.createNoNamespace": "No Namespace",
     "build.defaultModel": "Default model",
+    "build.modelSetByInstance": "Set by your instance.",
+    "build.reasoningEffortHint":
+      "Reasoning effort is how long the model thinks before it answers; more helps with hard questions but takes longer.",
     "build.discard": "Discard",
     "build.fallbackEnglish": "Empty in this language. People read the English text.",
     "build.fallbackGerman": "Empty in this language. People read the German text.",
@@ -168,6 +171,9 @@ export const build = defineTranslations({
     "build.createPurpose": "Was soll er tun?",
     "build.createNoNamespace": "Kein Namespace",
     "build.defaultModel": "Standardmodell",
+    "build.modelSetByInstance": "Von deiner Instanz festgelegt.",
+    "build.reasoningEffortHint":
+      "Der Denkaufwand bestimmt, wie lange das Modell vor der Antwort nachdenkt; mehr hilft bei schwierigen Fragen, dauert aber länger.",
     "build.discard": "Verwerfen",
     "build.fallbackEnglish": "In dieser Sprache leer. Es wird der englische Text gezeigt.",
     "build.fallbackGerman": "In dieser Sprache leer. Es wird der deutsche Text gezeigt.",

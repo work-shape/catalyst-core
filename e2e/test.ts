@@ -486,14 +486,16 @@ const allowedPageErrors: readonly AllowedPageError[] = [
   {
     name: "dock-conversation-not-readable",
     reason:
-      "Chromium's own log line: the address names a conversation of another person in the " +
-      "dock, the instance refuses its thread, and the dock opens empty, which the test asserts.",
+      "Chromium's own log line: the address names a conversation of another person, or one " +
+      "nobody has, in the dock, the instance refuses its thread, and the dock opens empty, " +
+      "which the test asserts or starts from.",
     matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(404).source}`, "u"),
     path: /^\/api\/v1\/conversations\/[^/]+\/(?:thread|draft-attachments|resources|runs)$/u,
     tests: [
       "a person who may not read the dock's conversation gets an empty dock and no error",
       "a link to a conversation the person may not read opens the empty dock at once, and a message typed meanwhile raises no error",
-      "on a slow connection, a message typed into the dock of a refused link is not sent"
+      "on a slow connection, a message typed into the dock of a refused link is not sent",
+      "an agent has the same mark on the Agents page, in Studio and in the dock"
     ]
   },
   {

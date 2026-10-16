@@ -168,7 +168,7 @@ function AgentCard({
     <Card padding="md" className="flex w-full min-w-0 flex-col">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar kind="agent" name={agent.displayName} icon={<Bot />} />
+          <Avatar kind="agent" name={agent.displayName} />
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <CardTitle id={titleId} clamp className="min-w-0">
               {agent.displayName}

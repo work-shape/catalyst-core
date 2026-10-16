@@ -65,7 +65,7 @@ export const configAssets = defineTranslations({
     configModelUserSelectable: "Selectable by users",
     configModels: "Models",
     configModelsHint:
-      'The default model runs the agent and is always available to users. Users only see a model selector in the chat when at least one additional model is ticked. Reasoning effort is set per model; "Model default" keeps the binding\'s own effort.',
+      "The default model runs the agent. People see a choice of models in the chat only when another model is ticked.",
     configName: "Name",
     configNewAgent: "New agent",
     configNewAgentPrompt: "Build a new agent that ",
@@ -227,7 +227,7 @@ export const configAssets = defineTranslations({
     configModelUserSelectable: "Für Nutzer wählbar",
     configModels: "Modelle",
     configModelsHint:
-      "Das Standardmodell führt den Agenten aus und steht Nutzern immer zur Verfügung. Nutzer sehen im Chat nur dann eine Modellauswahl, wenn mindestens ein weiteres Modell angehakt ist. Der Denkaufwand gilt je Modell; „Modellstandard“ übernimmt den Denkaufwand der Modellbindung.",
+      "Das Standardmodell führt den Agenten aus. Eine Modellauswahl sehen Leute im Chat nur, wenn ein weiteres Modell angehakt ist.",
     configName: "Name",
     configNewAgent: "Neuer Agent",
     configNewAgentPrompt: "Bau einen neuen Agenten, der ",

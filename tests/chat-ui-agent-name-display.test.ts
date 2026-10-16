@@ -189,7 +189,8 @@ describe("named agent chip on the start page", () => {
   it("gives a single agent's label the same icon and name as the picker", () => {
     const label = labelContent(renderStartPage(oneAgent));
 
-    expect(label).toContain("<svg");
+    // The agent's mark of the Agents page and Studio, not a mark of the chip's own.
+    expect(label).toMatch(/^<span aria-hidden="true" data-kind="agent"[^>]*><svg[^>]*lucide-bot/u);
     expect(label).toContain(">Catalyst Assistant<");
     expect(renderStartPage(severalAgents)).toContain(`${label}<svg`);
   });

@@ -1,11 +1,13 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { Bot } from "lucide-react";
 import { avatarGradient } from "../avatar-gradient";
 import { cn } from "../cn";
 
 /**
  * Who or what the avatar stands for. A person is a circle, every thing a rounded square. A
  * `service` is a service principal: it acts like a person and is none, so it is a square too
- * and never mistaken for one in a list that names both.
+ * and never mistaken for one in a list that names both. An agent shows the agent glyph, so it
+ * reads as the same agent on every page that names it.
  */
 export type AvatarKind = "person" | "workspace" | "agent" | "app" | "workflow" | "service";
 export type AvatarSize = "xs" | "sm" | "md" | "lg";
@@ -27,9 +29,9 @@ export interface AvatarProps extends Omit<HTMLAttributes<HTMLSpanElement>, "chil
   kind: AvatarKind;
   /** The name the initials are taken from. */
   name: string;
-  /** Shown in place of the initials. */
+  /** Shown in place of the initials or the agent glyph. */
   emoji?: string | null;
-  /** Shown in place of the initials and the emoji. */
+  /** Shown in place of the initials, the agent glyph and the emoji. */
   icon?: ReactNode;
   /** The object's own colour pair. Without it the avatar is a neutral grey with initials in the text colour. */
   accent?: AvatarAccent;
@@ -70,7 +72,7 @@ export function Avatar({
       }}
       {...props}
     >
-      {icon ?? (trimmedEmoji ? trimmedEmoji : initials(name))}
+      {icon ?? (trimmedEmoji || (kind === "agent" ? <Bot /> : initials(name)))}
     </span>
   );
 }
