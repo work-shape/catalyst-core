@@ -113,29 +113,41 @@ it("omits development-only subpaths without changing the published export surfac
   });
 });
 
-it("refuses stale paths through the CLI and repairs them with its documented write command", async () => {
-  const root = fixture({
-    "tsconfig.base.json": { compilerOptions: { paths: {} } },
-    "quality-baseline.json": { version: 1, entries: [] },
-    "scopes.json": [],
-    "packages/example/package.json": {
+it("names the alias repair command when sibling platform exports change", async () => {
+  const workspace = fixture({
+    "capabilities/tsconfig.base.json": { compilerOptions: { paths: {} } },
+    "capabilities/quality-baseline.json": { version: 1, entries: [] },
+    "capabilities/scopes.json": [],
+    "platform/packages/example/package.json": {
       name: "@work-shape/catalyst-example",
       exports: { ".": "./src/index.ts" }
     }
   });
+  const root = join(workspace, "capabilities");
   expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
   const command = fileURLToPath(new URL("../packages/quality-config/check.mjs", import.meta.url));
   const stale = spawnSync(process.execPath, [command, "aliases"], { cwd: root, encoding: "utf8" });
   expect(stale.status).toBe(1);
-  expect(stale.stderr).toContain("run catalyst-quality aliases --write");
+  expect(stale.stderr).toContain("pnpm exec catalyst-quality aliases --write");
+  const repair = () => spawnSync(process.execPath, [command, "aliases", "--write"], { cwd: root });
+  expect(repair().status).toBe(0);
+  expect(await syncSourcePaths(root)).toBe(true);
+
+  writeFileSync(
+    join(workspace, "platform/packages/example/package.json"),
+    JSON.stringify({
+      name: "@work-shape/catalyst-example",
+      exports: { ".": "./src/index.ts", "./new": "./src/new.ts" }
+    })
+  );
   const scopedLint = spawnSync(
     process.execPath,
     [command, "lint", `--scope-file=${join(root, "scopes.json")}`],
     { cwd: root, encoding: "utf8" }
   );
   expect(scopedLint.status).toBe(1);
-  expect(scopedLint.stderr).toContain("run catalyst-quality aliases --write");
-  const repair = spawnSync(process.execPath, [command, "aliases", "--write"], { cwd: root });
-  expect(repair.status).toBe(0);
+  expect(scopedLint.stderr).toContain("sibling platform package exports");
+  expect(scopedLint.stderr).toContain("pnpm exec catalyst-quality aliases --write");
+  expect(repair().status).toBe(0);
   expect(await syncSourcePaths(root)).toBe(true);
 });

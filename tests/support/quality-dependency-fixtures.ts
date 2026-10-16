@@ -1,4 +1,4 @@
-// Source-only runtime checks complement Knip: tests and the bundled CLI may use dev deps.
+// Workspace imports need declarations in every package folder, including clients and MDX.
 const source = "packages/alpha/src";
 export const workspaceDependencyFixtures: Record<string, string> = {
   "packages/alpha/package.json": JSON.stringify({
@@ -26,6 +26,7 @@ export const workspaceDependencyFixtures: Record<string, string> = {
     name: "@work-shape/catalyst-cli",
     devDependencies: { "@fixture/gamma": "workspace:*" }
   }),
+  "packages/config-cli/src/undeclared.ts": `export { value } from "@fixture/beta";\n`,
   "packages/config-cli/src/bundled.ts": `export { value } from "@fixture/gamma";\n`,
   [`${source}/dev-only-import.ts`]: `import { value } from "@fixture/gamma"; export { value };\n`,
   [`${source}/dev-only-type.ts`]: `export type Value = typeof import("@fixture/gamma").value;\n`,
@@ -34,5 +35,12 @@ export const workspaceDependencyFixtures: Record<string, string> = {
   [`${source}/allowed.test.ts`]: `export { value } from "@fixture/gamma";\n`,
   [`${source}/test-support/allowed.ts`]: `export { value } from "@fixture/gamma";\n`,
   [`${source}/dev-only-edge.ts`]: `export { value } from "@fixture/gamma";\n`,
+  "clients/demo/package.json": JSON.stringify({ name: "@fixture/demo" }),
+  "clients/demo/src/undeclared.ts": `export { value } from "@fixture/gamma";\n`,
+  "clients/demo/tools/undeclared.ts": `export { value } from "@fixture/gamma";\n`,
+  "clients/demo/seed/apps/example/src/index.ts": `export { value } from "@fixture/gamma";\n`,
+  "packages/delta/scripts/undeclared.mjs": `export { value } from "@fixture/gamma";\n`,
+  [`${source}/undeclared.mdx`]: `export { value } from "@fixture/beta";\n`,
+  "packages/alpha/scripts/allowed.mjs": `export { value } from "@fixture/gamma";\n`,
   "packages/gamma/src/index.ts": `export const value = 2;\n`
 };

@@ -15,6 +15,8 @@ import { syncSourcePaths } from "./source-aliases.mjs";
 
 const root = process.cwd();
 const target = process.argv[2] ?? "";
+const staleAliases =
+  "Source aliases differ from local or sibling platform package exports; run `pnpm exec catalyst-quality aliases --write` in this repository.";
 const here = dirname(fileURLToPath(import.meta.url));
 // Whole package scopes keep baseline counts exact. Children inherit the same selection.
 const scopeFlag = process.argv.find((argument) => argument.startsWith("--scope-file="));
@@ -193,9 +195,7 @@ if (target === "aliases") {
     !(await syncSourcePaths(root, process.argv.includes("--write"))) &&
     !process.argv.includes("--write")
   ) {
-    console.error(
-      "Source aliases differ from package exports; run catalyst-quality aliases --write"
-    );
+    console.error(staleAliases);
     process.exitCode = 1;
   }
 } else if (target === "format") {
@@ -226,9 +226,7 @@ if (target === "aliases") {
   }
 } else if (target === "lint") {
   if (!(await syncSourcePaths(root))) {
-    console.error(
-      "Source aliases differ from package exports; run catalyst-quality aliases --write"
-    );
+    console.error(staleAliases);
     process.exit(1);
   }
   const lintable = files.filter((file) => inScope(file) && /\.(?:[cm]?[jt]s|[jt]sx)$/.test(file));
@@ -254,7 +252,8 @@ if (target === "aliases") {
     for (const message of part.messages) report(message.rule, message.file, message.detail);
   const results = linted.flatMap((part) => part.files.map((filePath) => ({ filePath })));
 
-  // Knip owns unused files, exports and dependencies, and imports that no manifest declares.
+  // Knip owns unused files, exports and dependencies. The collector below checks workspace
+  // import declarations too, including clients, scripts and MDX that Knip does not cover.
   // It exits with 1 when it has findings.
   const knip = run(
     process.execPath,
@@ -276,8 +275,8 @@ if (target === "aliases") {
     }
   }
 
-  // Manifests are the only package graph. Knip rejects undeclared imports, but accepts
-  // devDependencies in src, so the collector enforces that runtime boundary here.
+  // Manifests are the only package graph. Every workspace import needs a declaration:
+  // runtime source needs a runtime dependency; tests, scripts and config may use dev deps.
   /** @type {Record<string, string[]>} */
   const graph = {};
   /** @type {Map<string, { name: string, file: string, development: Set<string>, workspaceDevelopment: Set<string>, runtime: Set<string> }>} */
@@ -311,31 +310,38 @@ if (target === "aliases") {
   for (const file of files.filter(
     (path) =>
       inScope(path) &&
-      /^(?:packages|clients)\/[^/]+\/src\//.test(path) &&
+      /^(?:packages|clients)\/[^/]+\//.test(path) &&
       /\.(?:[cm]?[jt]sx?|astro|mdx)$/.test(path) &&
-      !/(?:\.(?:test|spec|stories)\.[cm]?[jt]sx?$)|(?:^|\/)(?:tests?|__tests__|e2e|scripts|test-support)\//.test(
-        path
-      )
+      !path.startsWith("clients/demo/seed/apps/")
   )) {
     const directory = file.split("/").slice(0, 2).join("/");
     const manifest = manifests.get(directory);
-    // config-cli bundles these workspace packages into its public standalone executable.
-    if (!manifest || manifest.name === "@work-shape/catalyst-cli") continue;
+    if (!manifest) continue;
+    const path = relative(directory, file);
+    const inSource =
+      path.startsWith("src/") &&
+      !/(?:\.(?:test|spec|stories)\.[cm]?[jt]sx?$)|(?:^|\/)(?:tests?|__tests__|e2e|scripts|test-support)\//.test(
+        path
+      );
+    // config-cli bundles declared dev dependencies into its public standalone executable.
+    const devIsEnough = !inSource || manifest.name === "@work-shape/catalyst-cli";
     const imports = ts.preProcessFile(readFileSync(file, "utf8"), true, true).importedFiles;
     for (const name of new Set(
-      imports.map(({ fileName }) => fileName.match(/^@[^/]+\/[^/]+/)?.[0])
+      imports.map(({ fileName }) => fileName.match(/^@[\w.-]+\/[\w.-]+/)?.[0])
     )) {
       if (
-        name &&
-        manifest.development.has(name) &&
-        !manifest.runtime.has(name) &&
-        (name in graph || manifest.workspaceDevelopment.has(name))
+        !name ||
+        name === manifest.name ||
+        (!(name in graph) && !manifest.workspaceDevelopment.has(name)) ||
+        manifest.runtime.has(name) ||
+        (devIsEnough && manifest.development.has(name))
       )
-        report(
-          "catalyst/runtime-dependency",
-          file,
-          `${name} is only in devDependencies; source imports need dependencies or peerDependencies`
-        );
+        continue;
+      report(
+        inSource ? "catalyst/runtime-dependency" : "catalyst/workspace-dependency",
+        file,
+        `${name} ${manifest.development.has(name) ? "is only in devDependencies" : "is undeclared"}; imports need dependencies, peerDependencies or optionalDependencies${devIsEnough ? ", or devDependencies" : ""}`
+      );
     }
   }
   /**
