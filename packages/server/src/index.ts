@@ -3,7 +3,7 @@ import { registerApprovalRequestRoutes } from "./routes/approval-request-routes"
 import { createAuthorizer, normalizeAllowedOrigins } from "@work-shape/catalyst-core";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { LogController, type FastifyInstance } from "fastify";
 import { installErrorHandler } from "./errors";
 import { rememberFramework } from "./http/framework";
 import { createInProcessRateLimiter } from "./http/rate-limit";
@@ -209,7 +209,7 @@ export async function createChatServer(
     trustProxy: ["loopback", "uniquelocal"],
     // The address of a Page file holds the token that authorizes the request, and the
     // framework's request lines hold the address. So these requests are not logged.
-    disableRequestLogging: holdsAppContentToken,
+    logController: new LogController({ disableRequestLogging: holdsAppContentToken }),
     // An address the framework cannot read is answered without repeating it.
     frameworkErrors: createFrameworkErrorHandler(allowedOrigins)
   });

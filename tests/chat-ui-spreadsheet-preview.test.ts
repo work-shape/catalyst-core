@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { workbookToUniverSnapshot } from "../packages/chat-ui/src/chat/files/spreadsheet-preview";
 import { extractSpreadsheetVisuals } from "../packages/chat-ui/src/chat/files/spreadsheet-visuals";
 
@@ -19,6 +19,40 @@ const XLSX = requireFromChatUi("xlsx") as typeof import("xlsx");
 const JSZip = requireFromChatUi("jszip") as typeof import("jszip");
 
 describe("chat UI spreadsheet preview import", () => {
+  it.each(["biff8", "xlsx", "ods"] as const)(
+    "reads %s through the legacy fallback when the primary reader fails",
+    async (bookType) => {
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ["Planet", "Revenue", "Date"],
+          ["Earth", 1165.95, new Date(2026, 0, 2)]
+        ]),
+        "Orders"
+      );
+      const bytes = XLSX.write(workbook, { bookType, type: "array" });
+      const reader = new ExcelJS.Workbook().xlsx;
+      const load = vi.spyOn(reader, "load").mockRejectedValue(new Error("Primary reader failed"));
+      const getter = vi.spyOn(ExcelJS.Workbook.prototype, "xlsx", "get").mockReturnValue(reader);
+      try {
+        const snapshot = await workbookToUniverSnapshot(bytes);
+        const sheetId = snapshot.sheetOrder[0];
+        const sheet = sheetId ? snapshot.sheets[sheetId] : undefined;
+        if (!sheet) throw new Error("Expected the Orders sheet");
+
+        expect(load).toHaveBeenCalledOnce();
+        expect(sheet.name).toBe("Orders");
+        expect(sheet.cellData?.[0]?.[0]).toMatchObject({ v: "Planet", t: CellValueType.STRING });
+        expect(sheet.cellData?.[1]?.[1]).toMatchObject({ v: 1165.95, t: CellValueType.NUMBER });
+        expect(sheet.cellData?.[1]?.[2]).toMatchObject({ v: 46024, t: CellValueType.NUMBER });
+      } finally {
+        getter.mockRestore();
+        load.mockRestore();
+      }
+    }
+  );
+
   it("preserves normal XLSX cell styles and worksheet view settings", async () => {
     const workbook = new ExcelJS.Workbook();
     workbook.title = "Styled workbook";
@@ -207,7 +241,7 @@ describe("chat UI spreadsheet preview import", () => {
     expect(sheetSnapshot.rowData?.[2]).toBeUndefined();
   });
 
-  it("keeps the existing value preview fallback for legacy XLS files", async () => {
+  it.each(["biff8", "ods"] as const)("automatically falls back for %s files", async (bookType) => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
       workbook,
@@ -217,7 +251,7 @@ describe("chat UI spreadsheet preview import", () => {
       ]),
       "Orders"
     );
-    const bytes = XLSX.write(workbook, { bookType: "biff8", type: "array" });
+    const bytes = XLSX.write(workbook, { bookType, type: "array" });
 
     const snapshot = await workbookToUniverSnapshot(bytes);
     const sheet = snapshot.sheets[snapshot.sheetOrder[0]!]!;

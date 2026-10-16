@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Transform } from "node:stream";
+import type { FastifyRequest } from "fastify";
 import { pipeline } from "node:stream/promises";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { AppError, getSubjectUserId, type JsonObject } from "@work-shape/catalyst-core";
@@ -27,7 +28,7 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
     async ({ user, params, request }) => {
       const conversationId = conversationIdParam(params);
       await conversations.requireConversationAccess(conversationId, user);
-      const file = await request.file();
+      const file = await readMultipartFile(request);
       if (!file) {
         throw new AppError("VALIDATION_FAILED", "A file upload is required");
       }
@@ -104,6 +105,15 @@ function listed<Attachment extends { error?: JsonObject | null }>(attachments: A
 
 function attachmentIdParam(params: { attachmentId: string }): string {
   return requirePathParam(params.attachmentId, "Missing attachment id");
+}
+
+async function readMultipartFile(request: FastifyRequest) {
+  try {
+    return await request.file();
+  } catch {
+    // Parser failures describe untrusted bytes, so never expose the parser's message.
+    throw new AppError("BAD_REQUEST", "The multipart upload cannot be read");
+  }
 }
 
 async function stageMultipartFile(stream: NodeJS.ReadableStream): Promise<{

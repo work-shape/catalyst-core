@@ -6,3 +6,7 @@ packages:
 # fail the types of another, and a caret range lets a new package resolve the newer one.
 overrides:
   zod: 4.4.3
+  "@fastify/busboy@^3": 3.2.2
+  seroval@^1: 1.6.9
+  find-my-way@^9: 9.7.0
+  fast-uri@^3: 3.1.8

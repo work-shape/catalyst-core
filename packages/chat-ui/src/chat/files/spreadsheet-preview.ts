@@ -46,6 +46,10 @@ export async function workbookToUniverPreview(
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.load(buffer);
+    // ExcelJS accepts an ODS ZIP without worksheets; let the legacy reader handle it.
+    if (workbook.worksheets.length === 0) {
+      throw new Error("No XLSX worksheets");
+    }
   } catch {
     return {
       workbookData: await legacyWorkbookToUniverSnapshot(buffer),

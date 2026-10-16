@@ -51,7 +51,7 @@
     "@work-shape/catalyst-core": "workspace:*",
     "@work-shape/catalyst-config-schema": "workspace:*",
     "@work-shape/catalyst-tool-sdk": "workspace:*",
-    "xlsx": "0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.4.3"
   },
   "devDependencies": {
