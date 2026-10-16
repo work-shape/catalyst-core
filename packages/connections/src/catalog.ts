@@ -1,3 +1,4 @@
+import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import {
   CONNECTION_OPERATION_NAME_MAX_LENGTH,
@@ -89,7 +90,7 @@ const catalogSchema = z
           description: z.string(),
           inputSchema: jsonObjectSchema,
           outputSchema: jsonObjectSchema.optional(),
-          proposedEffect: z.enum(["reading", "changing"]),
+          proposedEffect: z.enum(OPERATION_EFFECTS),
           fingerprint: fingerprintSchema
         })
         .strict()

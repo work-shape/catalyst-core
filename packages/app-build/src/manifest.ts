@@ -1,3 +1,4 @@
+import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import { fileSetPathIssue, readYamlData } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
@@ -44,7 +45,7 @@ function eachOnce<Entry>(what: string, keyOf: (entry: Entry) => string) {
 const actionSchema = z.strictObject({
   name: identifier,
   file: relativeFile.optional(),
-  effect: z.enum(["reading", "changing"]),
+  effect: z.enum(OPERATION_EFFECTS),
   policy: z.string().min(1).max(64).optional(),
   connection: identifier.optional(),
   cache: z

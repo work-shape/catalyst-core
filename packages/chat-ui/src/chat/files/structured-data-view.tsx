@@ -1,3 +1,4 @@
+import { localeCodes } from "@work-shape/catalyst-core";
 import { Check, ClipboardCopy, FileSearch, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import type { StructuredDataResourceResponse } from "@work-shape/catalyst-api-client";
@@ -92,7 +93,7 @@ function StructuredDataFieldRow({
   onSourceOpen
 }: {
   field: StructuredDataResourceResponse["sections"][number]["fields"][number];
-  locale: "en" | "de";
+  locale: (typeof localeCodes)[number];
   onSourceOpen?: (source: StructuredDataSource) => void;
 }) {
   const { t } = useTranslation();

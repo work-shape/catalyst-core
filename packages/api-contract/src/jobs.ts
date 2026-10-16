@@ -1,14 +1,8 @@
+import { JOB_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { timestampSchema } from "./shared";
 
-export const jobStatusSchema = z.enum([
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-  "dead",
-  "cancelled"
-]);
+export const jobStatusSchema = z.enum(JOB_STATUSES);
 
 const anyJobStatus = jobStatusSchema.options.join("|");
 

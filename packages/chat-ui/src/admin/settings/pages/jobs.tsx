@@ -1,3 +1,4 @@
+import { FAILED_JOB_STATUSES } from "@work-shape/catalyst-core";
 import { MoreHorizontal, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -61,7 +62,7 @@ const JOBS_REFRESH_MS = 10_000;
 const jobTabs = [
   {
     id: "attention",
-    statuses: ["failed", "dead"],
+    statuses: [...FAILED_JOB_STATUSES],
     labelKey: "jobs.tabFailedAndDead",
     emptyKey: "jobs.emptyFailedAndDead"
   },

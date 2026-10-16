@@ -1,3 +1,4 @@
+import { DATABASE_RELATION_TYPES } from "@work-shape/catalyst-core";
 import postgres from "postgres";
 import { z } from "zod";
 import type {
@@ -31,7 +32,7 @@ export interface DataSourceDescribeInput {
 export interface DataSourceRelationSummary {
   schema: string;
   name: string;
-  type: "table" | "view" | "materialized_view" | "foreign_table";
+  type: (typeof DATABASE_RELATION_TYPES)[number];
   description?: string;
 }
 
@@ -110,7 +111,7 @@ const describeToolInputSchema = z.object({
 const relationSummarySchema = z.object({
   schema: z.string(),
   name: z.string(),
-  type: z.enum(["table", "view", "materialized_view", "foreign_table"]),
+  type: z.enum(DATABASE_RELATION_TYPES),
   description: z.string().optional()
 });
 

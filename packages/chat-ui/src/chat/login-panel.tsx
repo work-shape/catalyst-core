@@ -1,3 +1,4 @@
+import { localeCodes } from "@work-shape/catalyst-core";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createApiClient, signInWithEmail, type LocaleCode } from "@work-shape/catalyst-api-client";
@@ -22,7 +23,7 @@ import {
 import { uiLabelsFor } from "../shared/ui-labels";
 import { createEnvironmentDocumentTitle } from "../shared/workspace-utils";
 
-const DEFAULT_LOGIN_LOCALES: LocaleCode[] = ["en", "de"];
+const DEFAULT_LOGIN_LOCALES: LocaleCode[] = [...localeCodes];
 
 type LoginMode = "signIn" | "requestReset" | "setPassword";
 

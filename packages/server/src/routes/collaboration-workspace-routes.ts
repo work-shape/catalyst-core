@@ -1,3 +1,4 @@
+import { WORKSPACE_SECTIONS } from "@work-shape/catalyst-core";
 import { paginate, pageScope } from "../http/paging";
 import { DEFAULT_LIST_LIMIT, apiOperations } from "@work-shape/catalyst-api-contract";
 import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
@@ -110,8 +111,8 @@ async function workspaceSections(
   workspaceId: CollaborationWorkspaceId,
   availableAgents: number,
   caller: SectionCaller
-): Promise<Array<"agents" | "apps">> {
-  const sections: Array<"agents" | "apps"> = [];
+): Promise<Array<(typeof WORKSPACE_SECTIONS)[number]>> {
+  const sections: Array<(typeof WORKSPACE_SECTIONS)[number]> = [];
   if (agentsRowShown(availableAgents, workspaceId, caller)) {
     sections.push("agents");
   }

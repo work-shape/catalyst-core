@@ -1,3 +1,4 @@
+import { GUARDRAIL_HIT_OUTCOMES, GUARDRAIL_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { timestampSchema } from "../shared";
 import { defineRegisteredOperation, json } from "./define-operation";
@@ -14,7 +15,7 @@ export const guardrailHitSchema = z.object({
   id: z.string(),
   /** The before-event the guardrail answered at, such as `asset.before_write`. */
   event: z.string(),
-  outcome: z.enum(["warn", "require_approval", "block"]),
+  outcome: z.enum(GUARDRAIL_HIT_OUTCOMES),
   /** The guardrail's reason, one sentence. Empty where the check could not run and it warned. */
   message: z.string(),
   /**
@@ -57,7 +58,7 @@ export const GUARDRAIL_DRY_RUN_JUDGE_MAX = 200;
 /** The most subjects a dry run of a `pattern` evaluates, the newest first. */
 export const GUARDRAIL_DRY_RUN_PATTERN_MAX = 5_000;
 
-const guardrailOutcomeSchema = z.enum(["allow", "warn", "require_approval", "block"]);
+const guardrailOutcomeSchema = z.enum(GUARDRAIL_OUTCOMES);
 
 /** A revision of the Guardrail: the draft where none is named. */
 const guardrailRevisionSchema = z.number().int().positive().optional();

@@ -1,8 +1,9 @@
+import { OPERATION_EFFECTS, OPERATION_RUN_DECISION_MODES, OPERATION_RUN_DECISION_REASONS, OPERATION_RUN_STATUSES, OPERATION_TARGETS, PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { timestampSchema } from "./shared";
 
 /** Where a call goes or went (ADR-0031): the called asset, its test target, or nowhere. */
-export const operationTargetSchema = z.enum(["live", "test", "dry_run"]);
+export const operationTargetSchema = z.enum(OPERATION_TARGETS);
 
 export const operationRunOriginSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -51,15 +52,7 @@ export const operationRunOriginSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("schedule"), scheduleId: z.string() })
 ]);
 
-export const operationRunStatusSchema = z.enum([
-  "running",
-  "pending_confirmation",
-  "pending_approval",
-  "done",
-  "failed",
-  "denied",
-  "expired"
-]);
+export const operationRunStatusSchema = z.enum(OPERATION_RUN_STATUSES);
 
 /**
  * The record of one call of an operation, as a caller reads it. It names the input by its
@@ -68,10 +61,10 @@ export const operationRunStatusSchema = z.enum([
 export const operationRunSchema = z.object({
   id: z.string(),
   operation: z.string(),
-  effect: z.enum(["reading", "changing"]),
+  effect: z.enum(OPERATION_EFFECTS),
   status: operationRunStatusSchema,
   actor: z.object({
-    kind: z.enum(["user", "service_principal"]),
+    kind: z.enum(PRINCIPAL_HOLDER_KINDS),
     id: z.string(),
     label: z.string()
   }),
@@ -101,7 +94,7 @@ export const operationRunSchema = z.object({
   attempt: z.number().int().min(1),
   decision: z
     .object({
-      mode: z.enum(["direct", "confirmed", "approved", "declined"]),
+      mode: z.enum(OPERATION_RUN_DECISION_MODES),
       /**
        * `inherited_approval_not_applied`: the instance default asked for an approval and the
        * call ran on its caller's word, because its answer is a secret that is shown once.
@@ -111,7 +104,7 @@ export const operationRunSchema = z.object({
        * that decides it, so their own call was the approval; `by` is caller and approver.
        */
       reason: z
-        .enum(["inherited_approval_not_applied", "workflow_publish", "approved_by_caller"])
+        .enum(OPERATION_RUN_DECISION_REASONS)
         .optional(),
       by: z.string(),
       /** The name of who decided, where the decision was another person's. */

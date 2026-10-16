@@ -1,3 +1,4 @@
+import { INFRASTRUCTURE_WITHHELD_FIELDS } from "@work-shape/catalyst-core";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import {
@@ -313,7 +314,7 @@ function shownDescription(
 ): { shown: Partial<Record<ShownField, string>>; withheld: ShownField[] } {
   const shown: Partial<Record<ShownField, string>> = {};
   const withheld: ShownField[] = [];
-  for (const field of ["endpointHost", "bucket"] as const) {
+  for (const field of INFRASTRUCTURE_WITHHELD_FIELDS) {
     const value = description[field];
     if (value === undefined) {
       continue;

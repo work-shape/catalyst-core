@@ -1,3 +1,4 @@
+import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import {
   SKILL_NAME_PATTERN,
   SKILL_NAME_RULE,
@@ -63,7 +64,7 @@ export function createSkillAssetKind(options: {
       },
       actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).
-      owners: ["instance", "workspace"],
+      owners: [...ASSET_OWNER_KINDS],
       validate: () => [],
       validateWrite: (context, skills) =>
         skills

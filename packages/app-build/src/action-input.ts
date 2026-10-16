@@ -1,3 +1,4 @@
+import { DATA_STORE_INSERT_CONFLICT_MODES, OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import {
   APP_ACTION_NAME_PATTERN,
   DATA_STORE_SCALAR_TYPES,
@@ -134,7 +135,7 @@ export const compiledAppActionSchema = z.union([
   z.strictObject({
     ...compiledActionBase,
     kind: z.literal("connection"),
-    effect: z.enum(["reading", "changing"]),
+    effect: z.enum(OPERATION_EFFECTS),
     connection: z.string().min(1).max(64),
     operation: z.string().min(1).max(128),
     input: mappedInput
@@ -162,7 +163,7 @@ export const compiledAppActionSchema = z.union([
         .array(z.strictObject({ column: z.string().min(1).max(63), parameter: parameterName }))
         .min(1)
         .max(APP_ACTION_MAX_PARAMETERS),
-      onConflict: z.enum(["fail", "skip"])
+      onConflict: z.enum(DATA_STORE_INSERT_CONFLICT_MODES)
     })
   })
 ]);

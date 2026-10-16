@@ -1,3 +1,4 @@
+import { TOOL_GROUPS, localeCodes } from "@work-shape/catalyst-core";
 import type {
   AgentToolReference,
   ConfigAssetReferences,
@@ -10,15 +11,7 @@ import { isConnectionToolName, type ConnectionToolsRead } from "./connection-too
 // switch for all of them. Pure, so the page and its tests read the same answer.
 
 /** The groups in the order the page shows them. A group without tools is left out. */
-const INSTANCE_TOOL_GROUPS: readonly ToolGroupName[] = [
-  "documents",
-  "web",
-  "files",
-  "results",
-  "skills",
-  "platform",
-  "instance"
-];
+const INSTANCE_TOOL_GROUPS: readonly ToolGroupName[] = [...TOOL_GROUPS];
 
 /** Why an agent holds a tool without a check box for it. */
 type ToolInclusionReason = "skills";
@@ -142,7 +135,7 @@ function instanceToolGroups(input: {
   references: ConfigAssetReferences | undefined;
   selected: readonly string[];
   skillNames: readonly string[];
-  locale: "en" | "de";
+  locale: (typeof localeCodes)[number];
   /** The names the stored agent holds that the instance cannot run. */
   unavailable?: readonly string[];
   isOtherSource?: (name: string) => boolean;
@@ -200,7 +193,7 @@ export function toolPackages(input: {
   references: ConfigAssetReferences | undefined;
   selected: readonly string[];
   skillNames: readonly string[];
-  locale: "en" | "de";
+  locale: (typeof localeCodes)[number];
   connections?: ConnectionToolsRead;
   /** The names the stored agent holds that the instance cannot run: no chip shows them. */
   unavailable?: readonly string[];

@@ -1,3 +1,4 @@
+import { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-core";
 import {
   AppError,
   asUserId,
@@ -169,7 +170,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     tx: PlatformStores,
     run: WorkflowRun,
     end: {
-      status: "done" | "failed" | "cancelled" | "limit_reached";
+      status: (typeof WORKFLOW_ENDED_STATUSES)[number];
       output?: JsonValue;
       error?: WorkflowRunError;
       cancelledBy?: WorkflowRun["cancelledBy"];

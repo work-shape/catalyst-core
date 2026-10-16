@@ -1,3 +1,4 @@
+import { CONFIG_ASSET_KINDS } from "@work-shape/catalyst-asset-schemas";
 import { credentialOrigin, readStoredCredential } from "./credentials";
 import { readConfigCliEnv, type ConfigCliEnv } from "./env";
 import { createHash } from "node:crypto";
@@ -111,7 +112,7 @@ function isAssetKindName(value: string): value is AssetKindName {
 export function workingCopyKinds(
   manifest: Awaited<ReturnType<typeof readManifest>>
 ): readonly AssetKindName[] {
-  return (manifest.guardrails ?? []).length > 0 ? ASSET_KINDS : ["agent", "skill"];
+  return (manifest.guardrails ?? []).length > 0 ? ASSET_KINDS : [...CONFIG_ASSET_KINDS];
 }
 
 /** How many assets are read from the instance side by side in one pull. */

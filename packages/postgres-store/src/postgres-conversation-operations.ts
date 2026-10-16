@@ -1,3 +1,4 @@
+import { ACTIVE_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import { containsPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
 import {
@@ -344,7 +345,7 @@ function conversationRunsInProgress(db: PostgresConnection) {
       and(
         eq(agentRuns.clientInstanceId, conversations.clientInstanceId),
         eq(agentRuns.conversationId, conversations.id),
-        inArray(agentRuns.status, ["queued", "running", "waiting_for_permission", "cancelling"])
+        inArray(agentRuns.status, ACTIVE_AGENT_RUN_STATUSES)
       )
     );
 }

@@ -1,3 +1,4 @@
+import { KNOWLEDGE_BASE_STATUSES } from "@work-shape/catalyst-core";
 import {
   POSTGRES_RESULT_MAX_BYTES,
   POSTGRES_RESULT_MAX_ROWS,
@@ -69,7 +70,7 @@ const stateOutputSchema = z.object({
   id: z.string(),
   name: z.string(),
   /** `unchecked` until the first check of the published revision. */
-  status: z.enum(["unchecked", "ok", "needs_attention"]),
+  status: z.enum(KNOWLEDGE_BASE_STATUSES),
   /** The revision the last check was of. */
   revision: z.number().int().optional(),
   checkedAt: z.string().optional(),

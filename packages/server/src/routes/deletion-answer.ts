@@ -1,3 +1,4 @@
+import { DELETION_STATES } from "@work-shape/catalyst-core";
 import { DEFERRED } from "../http/route";
 import type { DeletionOutcome } from "../deletion/subject-deletion";
 
@@ -7,7 +8,7 @@ export function deletionAnswer<Result>(outcome: DeletionOutcome<Result>): Result
 }
 
 export function deletionState(outcome: DeletionOutcome<unknown>): {
-  state: "deleting" | "deleted";
+  state: (typeof DELETION_STATES)[number];
 } {
   return { state: outcome.status === "deleted" ? "deleted" : "deleting" };
 }

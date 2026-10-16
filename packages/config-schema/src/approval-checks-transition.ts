@@ -1,3 +1,4 @@
+import { APPROVAL_CHECK_FAILURE_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import {
   AppError,
@@ -19,7 +20,7 @@ const approvalCheckSchema = z.object({
   appliesTo: z.string().trim().min(1),
   modelBindingId: z.string().trim().min(1),
   instruction: z.string().trim().min(1),
-  onFail: z.enum(["warn", "block"])
+  onFail: z.enum(APPROVAL_CHECK_FAILURE_OUTCOMES)
 });
 
 /**

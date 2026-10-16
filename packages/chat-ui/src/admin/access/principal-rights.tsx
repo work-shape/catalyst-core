@@ -1,3 +1,4 @@
+import { USER_STATUSES } from "@work-shape/catalyst-core";
 import { Box, Plus } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 import type { AssetSummary } from "@work-shape/catalyst-api-client";
@@ -97,7 +98,7 @@ type PrincipalRightsRead =
   | { status: "ready"; rows: PrincipalGrantView[] };
 
 export interface PrincipalRightsProps {
-  principal: { id: string; displayLabel: string; status: "active" | "disabled" };
+  principal: { id: string; displayLabel: string; status: (typeof USER_STATUSES)[number] };
   /** The reader administers service principals: the section offers giving and removing. */
   canMutate: boolean;
   read: PrincipalRightsRead;

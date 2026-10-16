@@ -1,3 +1,4 @@
+import { CONNECTION_NETWORKS } from "@work-shape/catalyst-core";
 import { BlockList, isIP } from "node:net";
 import {
   AppError,
@@ -55,7 +56,7 @@ export interface EgressAllowEntry {
   protocol: EgressProtocol;
   host: string;
   port: number;
-  network: "public" | "private";
+  network: (typeof CONNECTION_NETWORKS)[number];
   /** With `private`: the ranges every address of the host must lie in. */
   cidrs: readonly string[];
 }

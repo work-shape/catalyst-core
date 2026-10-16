@@ -1,21 +1,14 @@
+import { APPROVAL_CHECK_STATUSES, APPROVAL_REQUEST_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import { timestampSchema } from "./shared";
 import { z } from "zod";
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
-export const approvalRequestStatusSchema = z.enum([
-  "pending",
-  "approved",
-  "rejected",
-  "changes_requested",
-  "superseded",
-  "withdrawn",
-  "reverted"
-]);
+export const approvalRequestStatusSchema = z.enum(APPROVAL_REQUEST_STATUSES);
 
 export const approvalCheckResultSchema = z.object({
   id: z.string(),
-  status: z.enum(["passed", "warned", "blocked"]),
+  status: z.enum(APPROVAL_CHECK_STATUSES),
   message: z.string()
 });
 

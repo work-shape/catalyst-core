@@ -1,3 +1,4 @@
+import { OPENAI_COMPATIBLE_APIS } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import {
   PROVIDER_REGIONS,
@@ -22,7 +23,7 @@ const providerEntrySchema = z.looseObject(providerEntryFields);
 const modelEntrySchema = z.looseObject({
   ...providerEntryFields,
   model: z.string().min(1).optional(),
-  api: z.enum(["chat_completions", "responses"]).optional(),
+  api: z.enum(OPENAI_COMPATIBLE_APIS).optional(),
   reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
   contextManagement: z
     .object({

@@ -1,3 +1,4 @@
+import { THEME_MODES, WORKSPACE_ACCENT_COLORS } from "@work-shape/catalyst-core";
 import type { CSSProperties } from "react";
 
 /**
@@ -11,26 +12,7 @@ import type { CSSProperties } from "react";
  * promise. Ordered around the hue wheel (warm to cool, neutrals last) because
  * the swatch grid renders in array order.
  */
-export const collaborationWorkspaceAccentColors = [
-  "garnet",
-  "ruby",
-  "mahogany",
-  "copper",
-  "amber",
-  "olive",
-  "jade",
-  "emerald",
-  "teal",
-  "turquoise",
-  "azure",
-  "sapphire",
-  "indigo",
-  "violet",
-  "magenta",
-  "rose",
-  "stone",
-  "slate"
-] as const;
+export const collaborationWorkspaceAccentColors = WORKSPACE_ACCENT_COLORS;
 
 export type CollaborationWorkspaceAccentColor = (typeof collaborationWorkspaceAccentColors)[number];
 
@@ -121,7 +103,7 @@ const accentPalette: Record<
 
 export function collaborationWorkspaceAccentTokens(
   accentColor: CollaborationWorkspaceAccentColor,
-  themeMode: "light" | "dark"
+  themeMode: (typeof THEME_MODES)[number]
 ): CollaborationWorkspaceAccentTokens {
   return accentPalette[accentColor][themeMode];
 }

@@ -1,3 +1,4 @@
+import { MESSAGE_FINISH_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import {
   APPROVAL_EXECUTIONS,
   approvalExecutionOf,
@@ -57,7 +58,7 @@ export interface AgentRuntimeAssistantFinalMetadata {
   version: typeof MESSAGE_METADATA_VERSION;
   kind: "assistant_final";
   runId: AgentRunId | string;
-  finishStatus: "completed" | "cancelled";
+  finishStatus: (typeof MESSAGE_FINISH_STATUSES)[number];
   cancellationReason?: string;
   reasoning?: StoredReasoningSummary[];
   sources?: WebSource[];
@@ -242,7 +243,7 @@ export function createAssistantFinalMetadata(input: {
   reasoning?: readonly StoredReasoningSummary[];
   sources?: readonly WebSource[];
   citations?: readonly MessageCitation[];
-  finishStatus?: "completed" | "cancelled";
+  finishStatus?: (typeof MESSAGE_FINISH_STATUSES)[number];
   cancellationReason?: string;
   modelContext?: StoredModelContextSnapshot;
 }): JsonObject {

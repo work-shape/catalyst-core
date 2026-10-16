@@ -1,3 +1,4 @@
+import { AUDIT_ACTOR_KINDS, AUDIT_OUTCOMES, AUDIT_TIERS, MODEL_USAGE_EVENT_STATUSES, MODEL_USAGE_SOURCES, USAGE_COST_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import { timestampSchema } from "./shared";
 import { z } from "zod";
 import { usageSafeguardsSchema } from "./configuration";
@@ -17,7 +18,7 @@ export const auditEventSchema = z.object({
 });
 
 export const auditActivityActorSchema = z.object({
-  kind: z.enum(["user", "assistant", "service", "system"]),
+  kind: z.enum(AUDIT_ACTOR_KINDS),
   label: z.string(),
   onBehalfOf: z.string().optional(),
   roles: z.array(z.string()).optional()
@@ -33,8 +34,8 @@ export const auditActivitySchema = z.object({
   correlationId: z.string(),
   at: timestampSchema,
   label: z.string(),
-  tier: z.enum(["governance", "workflow", "runtime", "telemetry"]),
-  outcome: z.enum(["success", "failed", "denied", "warning"]),
+  tier: z.enum(AUDIT_TIERS),
+  outcome: z.enum(AUDIT_OUTCOMES),
   actor: auditActivityActorSchema,
   target: auditActivityTargetSchema.optional(),
   reason: z.string().optional(),
@@ -50,7 +51,7 @@ export const modelUsageVolumeEventSchema = z.object({
    * `settled`: it ended with the usage its provider reported. `failed`: it ended without an
    * answer. `abandoned`: it never ended as far as the instance knows.
    */
-  status: z.enum(["pending", "settled", "failed", "abandoned"]),
+  status: z.enum(MODEL_USAGE_EVENT_STATUSES),
   clientInstanceId: z.string(),
   conversationId: z.string().optional(),
   agentRunId: z.string().optional(),
@@ -68,7 +69,7 @@ export const modelUsageVolumeEventSchema = z.object({
   totalTokens: z.number(),
   webSearchCallCount: z.number().int().nonnegative(),
   billedAsFast: z.boolean(),
-  source: z.enum(["provider_reported", "not_reported", "estimated"]),
+  source: z.enum(MODEL_USAGE_SOURCES),
   correlationId: z.string(),
   createdAt: timestampSchema
 });
@@ -85,7 +86,7 @@ export const modelUsageVolumeWindowSummarySchema = z.object({
 });
 
 export const modelUsageBillableCostSchema = z.object({
-  status: z.enum(["settled", "incomplete", "unpriced"]),
+  status: z.enum(USAGE_COST_STATUSES),
   currency: z.string().optional(),
   uncachedInputBillableCostMicros: z.number().int().nonnegative().optional(),
   cachedInputBillableCostMicros: z.number().int().nonnegative().optional(),

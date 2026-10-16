@@ -1,3 +1,4 @@
+import { OPERATION_EFFECTS, OPERATION_TARGETS, PRINCIPAL_HOLDER_KINDS, WORKFLOW_RESERVED_STEP_TYPES, WORKFLOW_RUN_MODES, WORKFLOW_RUN_STATUSES, WORKFLOW_STEP_RUN_STATUSES, WORKFLOW_STEP_TYPES, WORKFLOW_TRIGGER_KINDS } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { listQuerySchema, timestampSchema } from "../shared";
 import { defineRegisteredOperation, json, page } from "./define-operation";
@@ -12,29 +13,10 @@ export const WORKFLOW_RUN_OUTPUT_PREVIEW_MAX_CHARS = 2_000;
 
 // The values of the Workflow contract in `@work-shape/catalyst-core`, which this package does not
 // import. A value the engine writes and this list lacks fails the answer of the read.
-const runStatusSchema = z.enum([
-  "queued",
-  "running",
-  "waiting",
-  "done",
-  "failed",
-  "cancelled",
-  "limit_reached"
-]);
-const stepRunStatusSchema = z.enum(["queued", "running", "waiting", "done", "failed", "cancelled"]);
+const runStatusSchema = z.enum(WORKFLOW_RUN_STATUSES);
+const stepRunStatusSchema = z.enum(WORKFLOW_STEP_RUN_STATUSES);
 // The reserved blocks are among them: a step run of one says that the engine refused it.
-const stepTypeSchema = z.enum([
-  "trigger",
-  "operation",
-  "loop",
-  "code",
-  "output",
-  "agent",
-  "notify",
-  "workflow",
-  "condition",
-  "parallel"
-]);
+const stepTypeSchema = z.enum([...WORKFLOW_STEP_TYPES, ...WORKFLOW_RESERVED_STEP_TYPES]);
 const countsSchema = z.object({
   total: z.number().int().min(0),
   done: z.number().int().min(0),
@@ -64,8 +46,8 @@ export const workflowRunSchema = z.object({
   workflow: z.string(),
   /** The revision of the definition the run started on and keeps to its end. */
   definitionRevisionId: z.string(),
-  mode: z.enum(["live", "test"]),
-  trigger: z.enum(["manual", "schedule", "parent"]),
+  mode: z.enum(WORKFLOW_RUN_MODES),
+  trigger: z.enum(WORKFLOW_TRIGGER_KINDS),
   status: runStatusSchema,
   /**
    * The service principal the run acts as. Its rights are the rights of every step. A test run
@@ -73,7 +55,7 @@ export const workflowRunSchema = z.object({
    */
   principal: z.object({ id: z.string(), name: z.string(), displayLabel: z.string() }),
   startedBy: z.object({
-    kind: z.enum(["user", "service_principal"]),
+    kind: z.enum(PRINCIPAL_HOLDER_KINDS),
     id: z.string(),
     label: z.string()
   }),
@@ -125,14 +107,14 @@ export const workflowStepRunSchema = z.object({
     .object({ asked: z.number().int().min(1), ranWith: z.number().int().min(1) })
     .optional(),
   /** On the step run of an operation step: what its operation does and what it belongs to. */
-  effect: z.enum(["reading", "changing"]).optional(),
+  effect: z.enum(OPERATION_EFFECTS).optional(),
   source: z.string().optional(),
   /**
    * On the step run of an operation step: where its call went (ADR-0031). `live` on every step
    * of a run of the published revision; in a test run `dry_run` for a changing step that was
    * simulated, `test` for a call to a test target, `live` for a read and for "Run live once".
    */
-  target: z.enum(["live", "test", "dry_run"]).optional(),
+  target: z.enum(OPERATION_TARGETS).optional(),
   /**
    * On a step run of a test run: the tester's start satisfied the step's `confirm`, and a run
    * of the published revision asks for an approval here.

@@ -1,3 +1,4 @@
+import { ENDED_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { ApiClient, Message } from "@work-shape/catalyst-api-client";
 import { showOwnerInStudio } from "../../shared/build-rights";
@@ -13,7 +14,7 @@ import {
   type SubjectRunPart
 } from "./subject-run";
 
-const FINISHED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+const FINISHED_RUN_STATES = new Set(ENDED_AGENT_RUN_STATUSES);
 
 /** What the opens of the agent offer the conversation. */
 export interface AgentOpens {

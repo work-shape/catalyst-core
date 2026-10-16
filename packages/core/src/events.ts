@@ -1,3 +1,4 @@
+import { GUARDRAIL_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
 import type { GuardrailAnswer, GuardrailFields } from "./guardrails";
 import type { JsonObject } from "./json";
 import type { OperationCall } from "./operations";
@@ -549,7 +550,7 @@ export interface PlatformEventContext extends Pick<
   cannotWait?: true;
 }
 
-export type PlatformEventOutcome = "allow" | "warn" | "block" | "require_approval";
+export type PlatformEventOutcome = (typeof GUARDRAIL_OUTCOMES)[number];
 
 /**
  * What a before-event answered: the strictest outcome of every guardrail that applies, and
@@ -562,12 +563,7 @@ export interface PlatformEventAnswer {
 
 export const PLATFORM_EVENT_ALLOW: PlatformEventAnswer = { outcome: "allow", guardrails: [] };
 
-const OUTCOME_ORDER: readonly PlatformEventOutcome[] = [
-  "allow",
-  "warn",
-  "require_approval",
-  "block"
-];
+const OUTCOME_ORDER: readonly PlatformEventOutcome[] = [...GUARDRAIL_OUTCOMES];
 
 /** The strictest of several outcomes: an `allow` never overrides a `warn` or a `block`. */
 export function strictestOutcome(outcomes: readonly PlatformEventOutcome[]): PlatformEventOutcome {

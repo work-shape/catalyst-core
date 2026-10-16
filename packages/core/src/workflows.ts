@@ -1,3 +1,4 @@
+import { NOTIFY_CHANNELS, WORKFLOW_RUN_MODES, WORKFLOW_RUN_STATUSES, WORKFLOW_STEP_RUN_STATUSES, WORKFLOW_STEP_TYPES, WORKFLOW_TRIGGER_KINDS } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
 import type { UserId, WorkflowRunId, WorkflowStepRunId } from "./ids";
@@ -23,16 +24,7 @@ export const WORKFLOW_STEP_FILES_FOLDER = "steps";
  * also names `condition`, `approval` and `delay`; each joins this list with the slice that
  * executes it, so that no definition is accepted that no engine runs.
  */
-export const WORKFLOW_STEP_TYPES = [
-  "trigger",
-  "operation",
-  "loop",
-  "code",
-  "output",
-  "agent",
-  "notify",
-  "workflow"
-] as const;
+export { WORKFLOW_STEP_TYPES } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowStepType = (typeof WORKFLOW_STEP_TYPES)[number];
 
@@ -40,7 +32,7 @@ export type WorkflowStepType = (typeof WORKFLOW_STEP_TYPES)[number];
  * What may start a run. Spec: Workflow definition, triggers. The spec also names `form`,
  * `webhook`, `platform_event` and `connector_event`; each joins with the slice that fires it.
  */
-export const WORKFLOW_TRIGGER_KINDS = ["manual", "schedule", "parent"] as const;
+export { WORKFLOW_TRIGGER_KINDS } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowTriggerKind = (typeof WORKFLOW_TRIGGER_KINDS)[number];
 
@@ -275,7 +267,7 @@ export type WorkflowStep =
   /** Puts a notice into an Inbox or sends a mail through the platform mailer. */
   | (WorkflowStepBase & {
       type: "notify";
-      channel: "inbox" | "mail";
+      channel: (typeof NOTIFY_CHANNELS)[number];
       input: WorkflowInputMapping;
     })
   | WorkflowConditionStep
@@ -511,32 +503,17 @@ export interface WorkflowManifest {
 }
 
 /** `test` runs a draft as its tester, bounded by the principal (ADR-0031). */
-export const WORKFLOW_RUN_MODES = ["live", "test"] as const;
+export { WORKFLOW_RUN_MODES } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowRunMode = (typeof WORKFLOW_RUN_MODES)[number];
 
 /** Spec: Engine on the shared job executor, statuses. */
-export const WORKFLOW_RUN_STATUSES = [
-  "queued",
-  "running",
-  "waiting",
-  "done",
-  "failed",
-  "cancelled",
-  "limit_reached"
-] as const;
+export { WORKFLOW_RUN_STATUSES } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
 
 /** The statuses of a run without `limit_reached`: a usage limit stops a run, not one step. */
-export const WORKFLOW_STEP_RUN_STATUSES = [
-  "queued",
-  "running",
-  "waiting",
-  "done",
-  "failed",
-  "cancelled"
-] as const;
+export { WORKFLOW_STEP_RUN_STATUSES } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowStepRunStatus = (typeof WORKFLOW_STEP_RUN_STATUSES)[number];
 

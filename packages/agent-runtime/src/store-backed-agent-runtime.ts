@@ -1,3 +1,4 @@
+import { ENDED_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import {
   AppError,
   type AgentRun,
@@ -73,7 +74,7 @@ export interface StoreBackedAgentRuntimeOptions {
   cancellations?: AgentRunSignal;
 }
 
-const TERMINAL_STATUSES = new Set<AgentRunStatus>(["completed", "cancelled", "failed"]);
+const TERMINAL_STATUSES = new Set<AgentRunStatus>(ENDED_AGENT_RUN_STATUSES);
 
 /**
  * The API's side of a run. The run is a row and a job: a worker executes it and stores its

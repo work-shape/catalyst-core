@@ -1,3 +1,4 @@
+import { ARTIFACT_PREVIEW_IMAGE_MIME_TYPES } from "@work-shape/catalyst-core";
 import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
@@ -50,7 +51,7 @@ export interface ArtifactPreviewRenderInput {
 
 export interface ArtifactPreviewRenderedPage {
   bytes: Uint8Array;
-  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  mimeType: (typeof ARTIFACT_PREVIEW_IMAGE_MIME_TYPES)[number];
   pageNumber?: number;
   slideNumber?: number;
   sheet?: string;
@@ -63,7 +64,7 @@ export interface ArtifactPreviewRenderedPage {
 
 export interface ArtifactPreviewRenderedModelImage {
   bytes: Uint8Array;
-  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  mimeType: (typeof ARTIFACT_PREVIEW_IMAGE_MIME_TYPES)[number];
   width?: number;
   height?: number;
 }

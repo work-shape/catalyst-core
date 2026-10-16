@@ -1,3 +1,4 @@
+import { APP_MODES } from "@work-shape/catalyst-core";
 import {
   ApiError,
   type AssetSummary,
@@ -247,7 +248,7 @@ export function appPreviewProblem(error: unknown): AppPreviewProblem {
 /** The sentence of each problem. The draft has its own for a reader who may not write. */
 export function appPreviewProblemText(
   problem: AppPreviewProblem,
-  mode: "published" | "draft"
+  mode: (typeof APP_MODES)[number]
 ): TranslationKey {
   switch (problem) {
     case "not_published":

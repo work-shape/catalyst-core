@@ -1,3 +1,4 @@
+import { DATA_STORE_INSERT_CONFLICT_MODES, OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import { DATA_STORE_SCALAR_TYPES } from "@work-shape/catalyst-core";
 import { APP_ACTION_MAX_PARAMETERS, type SqlActionParameter } from "./action-input";
 
@@ -68,7 +69,7 @@ interface SqlActionInsert {
   table: string;
   columns: { column: string; parameter: string }[];
   /** `skip` where the statement ends with `on conflict do nothing`. */
-  onConflict: "fail" | "skip";
+  onConflict: (typeof DATA_STORE_INSERT_CONFLICT_MODES)[number];
 }
 
 type CompiledSqlStatement =
@@ -88,7 +89,7 @@ type CompiledSqlStatement =
  */
 export function compileSqlStatement(
   text: string,
-  effect: "reading" | "changing"
+  effect: (typeof OPERATION_EFFECTS)[number]
 ): CompiledSqlStatement {
   const lines = text.split("\n");
   const faults: SqlActionFault[] = [];

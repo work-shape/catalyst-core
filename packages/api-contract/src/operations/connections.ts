@@ -1,3 +1,4 @@
+import { CONNECTION_OPERATION_STATUSES, CONNECTION_SECRET_STATES, CONNECTOR_TEST_STATUSES, OPERATION_EFFECTS } from "@work-shape/catalyst-asset-schemas";
 import {
   CONNECTION_EXPOSURES,
   CONNECTION_HEALTH_STATES,
@@ -23,19 +24,13 @@ const connectionNameSchema = z
   .max(CONNECTION_NAME_MAX_LENGTH)
   .regex(CONNECTION_NAME_PATTERN);
 
-const connectionOperationEffectSchema = z.enum(["reading", "changing"]);
+const connectionOperationEffectSchema = z.enum(OPERATION_EFFECTS);
 
-export const connectionOperationStatusSchema = z.enum([
-  "ready",
-  "awaiting_discovery",
-  "needs_review",
-  "unknown",
-  "disabled"
-]);
+export const connectionOperationStatusSchema = z.enum(CONNECTION_OPERATION_STATUSES);
 
 /** What anybody may learn of a Connection's secret: whether there is one, and its version. */
 export const connectionSecretStateSchema = z.object({
-  state: z.enum(["set", "not_set", "unreadable"]),
+  state: z.enum(CONNECTION_SECRET_STATES),
   version: z.number().int().optional()
 });
 
@@ -90,7 +85,7 @@ export const connectionDetailSchema = z.object({
 });
 
 export const connectionTestResultSchema = z.object({
-  status: z.enum(["ready", "unauthorized", "network_denied", "unavailable"]),
+  status: z.enum(CONNECTOR_TEST_STATUSES),
   testedAt: timestampSchema
 });
 

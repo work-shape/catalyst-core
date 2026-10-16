@@ -1,3 +1,4 @@
+import { STRUCTURED_DATA_REVIEW_REASONS } from "@work-shape/catalyst-asset-schemas";
 import type {
   ClientInstanceId,
   ConversationAttachmentId,
@@ -16,7 +17,7 @@ export type StructuredDataFieldSource = {
 };
 
 export type StructuredDataFieldAttention = {
-  reason: "uncertain" | "conflicting";
+  reason: (typeof STRUCTURED_DATA_REVIEW_REASONS)[number];
   message?: string;
 };
 

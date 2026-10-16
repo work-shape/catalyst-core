@@ -1,3 +1,4 @@
+import { CONFIG_ASSET_KINDS } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
@@ -97,7 +98,7 @@ export function findAgentReferenceIssues(input: {
 
 interface ConfigAssetValidationIssue {
   message: string;
-  assetKind?: "agent" | "skill";
+  assetKind?: (typeof CONFIG_ASSET_KINDS)[number];
   assetName?: string;
   index?: number;
   path?: PropertyKey[];
@@ -114,7 +115,7 @@ interface AssetSchema<Output> {
 
 function parseAssets<Output>(
   inputs: unknown[],
-  assetKind: "agent" | "skill",
+  assetKind: (typeof CONFIG_ASSET_KINDS)[number],
   schema: AssetSchema<Output>,
   issues: ConfigAssetValidationIssue[]
 ): Output[] {

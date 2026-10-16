@@ -1,3 +1,4 @@
+import { APP_MODES } from "@work-shape/catalyst-core";
 import { createHash, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 import type { ClientInstanceId, FileSetId, ServedFileSetAsset } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -61,7 +62,7 @@ export interface AppContentClaims {
 }
 
 /** The two views of an App an address can be minted for. */
-export type AppContentMode = "draft" | "published";
+export type AppContentMode = (typeof APP_MODES)[number];
 
 /**
  * The view of an App a frame shows. The file set does not say it: right after a publish or a

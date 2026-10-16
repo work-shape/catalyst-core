@@ -1,3 +1,4 @@
+import { ACCESS_SOURCES, CONFIG_ASSET_KINDS, GRANT_EFFECTS } from "@work-shape/catalyst-core";
 import {
   ApiError,
   type AdministeredUser,
@@ -84,7 +85,7 @@ export const GRANT_KINDS: readonly GrantKind[] = [
 ];
 
 /** Agents and skills: the two kinds every instance has, read with the agent configuration. */
-const CONFIG_ASSET_GRANT_KINDS = ["agent", "skill"] as const satisfies readonly GrantKind[];
+const CONFIG_ASSET_GRANT_KINDS = CONFIG_ASSET_KINDS satisfies readonly GrantKind[];
 
 export function isConfigAssetGrantKind(
   kind: GrantKind
@@ -308,7 +309,7 @@ export interface GrantForm {
   assetId: string | undefined;
   /** The Shared Workspace of a grant on what a workspace owns. */
   workspaceId: string | undefined;
-  effect: "allow" | "deny";
+  effect: (typeof GRANT_EFFECTS)[number];
 }
 
 /** A new right on agents, at the first place an agent right can be written. */
@@ -564,7 +565,7 @@ export interface CheckableAsset {
  * grant it stands in for.
  */
 function checkedReason(
-  source: "role" | "legacy_ref" | "grant" | "membership"
+  source: (typeof ACCESS_SOURCES)[number]
 ): "role" | "legacy" | "grant" {
   if (source === "legacy_ref") return "legacy";
   return source === "membership" ? "grant" : source;

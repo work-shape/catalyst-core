@@ -1,3 +1,4 @@
+import { SKILL_CHANGE_TYPES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import {
   AppError,
@@ -76,7 +77,7 @@ export interface SkillChangePreview {
   skillTitle: string;
   isNewSkill: boolean;
   changes: Array<{
-    type: "replace" | "add" | "new_resource";
+    type: (typeof SKILL_CHANGE_TYPES)[number];
     target: string;
     sectionHeading?: string;
     before?: string;

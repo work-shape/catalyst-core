@@ -1,3 +1,4 @@
+import { CONNECTION_EXPOSURES } from "@work-shape/catalyst-core";
 import type { ReactNode } from "react";
 import {
   Badge,
@@ -54,7 +55,7 @@ const OPERATION_STATUS: Record<
 type Exposure = ConnectionOperationDetail["exposure"][number];
 
 /** Who may call an operation, in the order the page offers it: `outside` only here. */
-const EXPOSURES: readonly Exposure[] = ["agent", "bridge", "workflow", "outside"];
+const EXPOSURES: readonly Exposure[] = [...CONNECTION_EXPOSURES];
 
 const EXPOSURE_LABELS: Record<Exposure, TranslationKey> = {
   agent: "connections.exposureAgent",

@@ -1,3 +1,4 @@
+import { NOTIFY_CHANNELS } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import {
   WORKFLOW_DATASET_KEY,
@@ -136,7 +137,7 @@ const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
     z.strictObject({
       ...named,
       type: z.literal("notify"),
-      channel: z.enum(["inbox", "mail"]),
+      channel: z.enum(NOTIFY_CHANNELS),
       input: inputMappingSchema
     }),
     z.strictObject({

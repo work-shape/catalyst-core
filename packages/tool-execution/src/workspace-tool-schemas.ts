@@ -1,3 +1,4 @@
+import { ARTIFACT_PREVIEW_STATUSES, SUPPORTED_IMAGE_MIME_TYPES, WORKSPACE_COMMAND_STATUSES } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { JsonObject } from "@work-shape/catalyst-core";
 
@@ -220,7 +221,7 @@ const promotedArtifactOutputSchema = z.object({
 export const workspaceExecOutputSchema = z.object({
   commandId: z.string(),
   workspaceId: z.string(),
-  status: z.enum(["queued", "running", "cancelling", "completed", "failed", "cancelled"]),
+  status: z.enum(WORKSPACE_COMMAND_STATUSES),
   limits: z.object({
     timeoutSeconds: z.number(),
     idleTimeoutSeconds: z.number().optional(),
@@ -315,7 +316,7 @@ export const workspacePromoteArtifactOutputSchema = z.object({
 const workspacePreviewImageOutputSchema = z.object({
   sourceArtifactId: z.string(),
   imageArtifactId: z.string(),
-  mimeType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]),
+  mimeType: z.enum(SUPPORTED_IMAGE_MIME_TYPES),
   status: z.literal("ready"),
   pageNumber: z.number().int().positive().optional(),
   slideNumber: z.number().int().positive().optional(),
@@ -336,7 +337,7 @@ const workspacePreviewWarningOutputSchema = z.object({
 
 export const workspacePreviewImagesOutputSchema = z.object({
   artifactId: z.string(),
-  status: z.enum(["ready", "pending", "failed", "unsupported"]),
+  status: z.enum(ARTIFACT_PREVIEW_STATUSES),
   maxImages: z.number().int().positive(),
   images: z.array(workspacePreviewImageOutputSchema),
   warnings: z.array(workspacePreviewWarningOutputSchema),

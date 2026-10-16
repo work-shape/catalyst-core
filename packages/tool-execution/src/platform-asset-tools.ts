@@ -1,3 +1,4 @@
+import { APP_MODES, OPERATIONS_AUDIENCES, OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   AppError,
@@ -61,7 +62,7 @@ interface PlatformAssetRead {
   /** The revision that runs. Missing while nothing is published. */
   publishedRevision?: number;
   /** Which of the two `config` is: the draft, or the published revision where no draft differs. */
-  shows: "draft" | "published";
+  shows: (typeof APP_MODES)[number];
   /** The workspace that owns the asset, by its id. Missing for an asset of the instance. */
   workspaceId?: string;
 }
@@ -114,12 +115,12 @@ type PlatformAssetWrite =
  * Who would call the listed operations: a step of a Workflow, or a `connection` action of an
  * App. Each is offered the operations exposed to its own surface.
  */
-export type PlatformOperationsAudience = "workflow" | "app";
+export type PlatformOperationsAudience = (typeof OPERATIONS_AUDIENCES)[number];
 
 /** One operation a step or an action may call, as far as the person the agent acts for may see it. */
 export interface PlatformCallableOperation {
   name: string;
-  effect: "reading" | "changing";
+  effect: (typeof OPERATION_EFFECTS)[number];
   inputSchema?: JsonObject;
   outputSchema?: JsonObject;
 }
@@ -274,7 +275,7 @@ const operationsOutputSchema = z.object({
   operations: z.array(
     z.object({
       name: z.string(),
-      effect: z.enum(["reading", "changing"]),
+      effect: z.enum(OPERATION_EFFECTS),
       inputSchema: jsonObjectSchema.optional(),
       outputSchema: jsonObjectSchema.optional()
     })
@@ -523,7 +524,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       ].join(" "),
       inputSchema: z.object({
         for: z
-          .enum(["workflow", "app"])
+          .enum(OPERATIONS_AUDIENCES)
           .optional()
           .describe(
             "Who calls the operations: 'workflow' for a step of a Workflow (the default), 'app' for an App's connection action."

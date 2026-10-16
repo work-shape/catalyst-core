@@ -1,3 +1,4 @@
+import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import type { SecretKeyring } from "@work-shape/catalyst-connections";
 import {
   DATA_STORE_ACTIONS,
@@ -187,7 +188,7 @@ export function createDataStores(input: {
       lifecycle: "draft_published",
       representation: "files",
       manifestFile: DATA_STORE_MANIFEST_FILE,
-      owners: ["instance", "workspace"],
+      owners: [...ASSET_OWNER_KINDS],
       validate: () => [],
       summarize: (store) => ({
         name: store.name,

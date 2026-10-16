@@ -1,3 +1,4 @@
+import { ASSET_NAME_REFUSAL_REASONS } from "@work-shape/catalyst-core";
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
@@ -170,7 +171,7 @@ export function nameCheckOf(
   target: AssetTarget
 ):
   | { available: true }
-  | { available: false; reason: "name_invalid" | "name_taken"; message: string } {
+  | { available: false; reason: (typeof ASSET_NAME_REFUSAL_REASONS)[number]; message: string } {
   const issue = assetNameIssue(target.kind, target.name);
   if (issue) return { available: false, reason: "name_invalid", message: issue.message };
   const held = target.elsewhere || currentRevisionOf(target.asset) !== null;

@@ -1,3 +1,4 @@
+import { ENDED_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import {
   AGENT_RUN_CANCELLATION_CHECK_INTERVAL_MS,
   AGENT_RUN_INTERRUPTED_ERROR,
@@ -599,7 +600,7 @@ async function nextEventOrAbort(
   }
 }
 
-const ENDED_STATUSES = new Set<AgentRun["status"]>(["completed", "cancelled", "failed"]);
+const ENDED_STATUSES = new Set<AgentRun["status"]>(ENDED_AGENT_RUN_STATUSES);
 
 /** Keeps the tool calls that started and have not ended, with the name of their tool. */
 function noteToolCall(open: Map<string, string>, event: AgentRuntimeEvent): void {

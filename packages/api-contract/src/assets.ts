@@ -1,3 +1,4 @@
+import { ASSET_NAME_REFUSAL_REASONS, ASSET_SYNC_CHANGE_TYPES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import {
   agentAvailabilitySchema,
@@ -401,7 +402,7 @@ export const checkAssetNameResponseSchema = z.discriminatedUnion("available", [
   z.object({ available: z.literal(true) }),
   z.object({
     available: z.literal(false),
-    reason: z.enum(["name_invalid", "name_taken"]),
+    reason: z.enum(ASSET_NAME_REFUSAL_REASONS),
     message: z.string()
   })
 ]);
@@ -480,7 +481,7 @@ export const syncAssetsRequestSchema = z.object({
 
 export const assetSyncAppliedItemSchema = z.discriminatedUnion("status", [
   z.object({
-    type: z.enum(["put", "delete"]),
+    type: z.enum(ASSET_SYNC_CHANGE_TYPES),
     kind: z.string(),
     name: z.string(),
     status: z.literal("applied"),
@@ -519,7 +520,7 @@ export const checkAssetSyncResponseSchema = z.object({
  */
 export const assetSyncRefusedItemSchema = z.object({
   index: z.number().int().nonnegative(),
-  type: z.enum(["put", "delete"]),
+  type: z.enum(ASSET_SYNC_CHANGE_TYPES),
   kind: z.string(),
   name: z.string().optional(),
   status: z.enum(["refused", "not_applied"]),

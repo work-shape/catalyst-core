@@ -1,3 +1,4 @@
+import { AGENT_RUN_FAILURE_CATEGORIES, AGENT_RUN_STATUSES, LIVE_JOB_STATUSES, TOOL_CALL_STATES } from "@work-shape/catalyst-asset-schemas";
 import type {
   AgentRunId,
   ClientInstanceId,
@@ -43,16 +44,10 @@ export interface AgentRunHandle {
 }
 
 export type AgentRunStatus =
-  | "queued"
-  | "running"
-  | "waiting_for_permission"
-  | "cancelling"
-  | "completed"
-  | "cancelled"
-  | "failed";
+  (typeof AGENT_RUN_STATUSES)[number];
 
 export type AgentRunFailureCategory =
-  "app_error" | "internal_error" | "runtime_interrupted" | "abort_error" | "unknown_error";
+  (typeof AGENT_RUN_FAILURE_CATEGORIES)[number];
 
 export interface AgentRunError {
   code: string;
@@ -128,7 +123,7 @@ export type AgentRunProjectionPart =
       toolCallId: ToolCallId;
       toolName: string;
       input?: unknown;
-      state: "input_available" | "waiting_for_permission" | "output_available" | "output_error";
+      state: (typeof TOOL_CALL_STATES)[number];
       output?: unknown;
       errorText?: string;
     };
@@ -153,7 +148,7 @@ export interface AgentRunProjection {
     toolCallId: ToolCallId;
     toolName: string;
     input?: unknown;
-    state: "input_available" | "waiting_for_permission" | "output_available" | "output_error";
+    state: (typeof TOOL_CALL_STATES)[number];
     output?: unknown;
     errorText?: string;
   }>;
@@ -348,7 +343,7 @@ export interface CreateAgentRunInput {
   reasoningEffort?: ReasoningEffortConfig;
   locale?: LocaleCode;
   authorization?: AgentRunAuthorization;
-  status?: "queued" | "running";
+  status?: (typeof LIVE_JOB_STATUSES)[number];
   idempotencyKey?: string;
   correlationId: string;
   startedAt?: ISODateString;

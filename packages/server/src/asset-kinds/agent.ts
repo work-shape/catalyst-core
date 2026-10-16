@@ -1,3 +1,4 @@
+import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   assertSpendBudgetPricingCoverage,
@@ -53,7 +54,7 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       },
       actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).
-      owners: ["instance", "workspace"],
+      owners: [...ASSET_OWNER_KINDS],
       validate(context, agents) {
         const changed = agents.filter((agent) => context.changes("agent", agent.name));
         const skillNames = context

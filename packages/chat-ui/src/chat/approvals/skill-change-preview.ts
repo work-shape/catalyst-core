@@ -1,4 +1,5 @@
-type SkillChangeType = "replace" | "add" | "new_resource";
+import { SKILL_CHANGE_TYPES } from "@work-shape/catalyst-core";
+type SkillChangeType = (typeof SKILL_CHANGE_TYPES)[number];
 
 export interface SkillChangePreviewChange {
   type: SkillChangeType;

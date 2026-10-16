@@ -1,3 +1,4 @@
+import { STRUCTURED_DATA_REVIEW_REASONS } from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 const keySchema = z
@@ -22,7 +23,7 @@ const sourcesSchema = z
   .describe("Optional source references using the file ids visible to the model.");
 const attentionSchema = z
   .object({
-    reason: z.enum(["uncertain", "conflicting"]),
+    reason: z.enum(STRUCTURED_DATA_REVIEW_REASONS),
     message: z.string().min(1).optional()
   })
   .strict();

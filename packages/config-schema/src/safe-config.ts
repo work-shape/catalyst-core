@@ -1,3 +1,4 @@
+import { OPERATION_EFFECTS } from "@work-shape/catalyst-asset-schemas";
 import {
   AGENT_STARTERS_MAX,
   SUBJECT_TOOL_PREFIX,
@@ -45,7 +46,7 @@ export interface SafeConfigConnection {
   title: string;
   service?: string;
   connectorType?: string;
-  tools: readonly { toolName: string; effect: "reading" | "changing" }[];
+  tools: readonly { toolName: string; effect: (typeof OPERATION_EFFECTS)[number] }[];
 }
 
 export function createSafeConfigView(

@@ -1,3 +1,4 @@
+import { ASSET_SYNC_CHANGE_TYPES } from "@work-shape/catalyst-core";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -419,7 +420,7 @@ export function itemWriteDecision(
   access: ActorAccess,
   surface: AssetWriteSurface,
   target: { kind: WorkflowAssetKind; resource: AccessResource },
-  type: "put" | "delete"
+  type: (typeof ASSET_SYNC_CHANGE_TYPES)[number]
 ): OperationAuthorization {
   const { actions } = target.kind;
   const right =

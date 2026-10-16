@@ -1,3 +1,4 @@
+import { SUPPORTED_IMAGE_MIME_TYPES } from "@work-shape/catalyst-core";
 import type { ArtifactPreviewResponse } from "@work-shape/catalyst-api-client";
 import {
   ARTIFACT_PREVIEW_MAX_PAGES,
@@ -32,7 +33,7 @@ export interface ToolArtifactPreviewImagePageRef {
   artifactId: string;
   kind?: string;
   filename?: string;
-  mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+  mimeType: (typeof SUPPORTED_IMAGE_MIME_TYPES)[number];
   pageNumber?: number;
   slideNumber?: number;
   width?: number;

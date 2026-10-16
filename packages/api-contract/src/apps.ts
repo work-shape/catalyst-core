@@ -1,3 +1,4 @@
+import { APP_ACTION_CALL_STATUSES, APP_MODES, OPERATION_EFFECTS } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { appActionPermissionSchema } from "./app-bridge";
 import { operationTargetSchema } from "./operation-runs";
@@ -7,7 +8,7 @@ import { pagePreviewSchema } from "./pages";
 export const APP_ASSET_KIND = "app";
 
 /** Which revision of an App is shown: the one its users are served, or the one being edited. */
-export const appModeSchema = z.enum(["published", "draft"]);
+export const appModeSchema = z.enum(APP_MODES);
 
 export type AppMode = z.infer<typeof appModeSchema>;
 
@@ -192,7 +193,7 @@ export const appActionCallRequestSchema = z
 export const appActionCallResultSchema = z.union([
   z.object({
     runId: z.string(),
-    status: z.enum(["done", "pending_approval"]),
+    status: z.enum(APP_ACTION_CALL_STATUSES),
     result: z.unknown().optional()
   }),
   z.object({
@@ -231,7 +232,7 @@ export type AppActionUnavailable = z.infer<typeof appActionUnavailableSchema>;
 /** What every named action of a revision is listed with, whatever its kind. */
 const listedAppAction = {
   name: z.string(),
-  effect: z.enum(["reading", "changing"]),
+  effect: z.enum(OPERATION_EFFECTS),
   description: z.string().optional(),
   /** The operation the action is, as an agent lists it: `app.<id>.<action>`. */
   toolName: z.string(),

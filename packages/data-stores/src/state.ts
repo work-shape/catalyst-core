@@ -1,3 +1,4 @@
+import { DATA_STORE_MIGRATION_OUTCOMES, LISTED_DATA_STORE_STATUSES } from "@work-shape/catalyst-core";
 import {
   DATA_STORE_ACTIONS,
   DATA_STORE_CONDITIONS,
@@ -39,7 +40,7 @@ const dataStoreStateSchema = z.object({
   /** The id operations and routes name the store by. */
   name: z.string(),
   /** `provisioning` until the database of the store is complete. Its rows are reached while `ready`. */
-  status: z.enum(["provisioning", "ready"]),
+  status: z.enum(LISTED_DATA_STORE_STATUSES),
   /** The number of the last migration the database has applied. Zero before the first. */
   level: z.number().int(),
   /** The number of the last migration of the published revision. */
@@ -62,7 +63,7 @@ const dataStoreStateSchema = z.object({
    * published revision has no migration.
    */
   lastMigration: z.object({
-    outcome: z.enum(["none", "pending", "applied", "failed"]),
+    outcome: z.enum(DATA_STORE_MIGRATION_OUTCOMES),
     migration: migrationSchema.optional(),
     /** A code and a sentence, never a value of a row. */
     failure: z.object({ code: z.string(), message: z.string() }).optional()

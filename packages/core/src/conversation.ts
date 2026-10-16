@@ -1,3 +1,4 @@
+import { CHAT_MESSAGE_ROLES, CONVERSATION_VISIBILITIES } from "@work-shape/catalyst-asset-schemas";
 import type { StorePage } from "./paging";
 import type { ActiveRunSummary, AgentRunProjection } from "./agent-runtime";
 import type {
@@ -15,7 +16,7 @@ import type { ISODateString } from "./time";
 export type ConversationStatus = "active" | "deleted" | "retention_expired";
 
 /** `private` restricts a Conversation in a Shared Workspace to the user who created it. */
-export type ConversationVisibility = "workspace" | "private";
+export type ConversationVisibility = (typeof CONVERSATION_VISIBILITIES)[number];
 
 /**
  * Who a workspace Conversation listing is for. `viewer` hides other users' private
@@ -128,7 +129,7 @@ export interface ConversationListItem extends Conversation {
   lastViewedAt?: ISODateString;
 }
 
-export type ChatMessageRole = "user" | "assistant" | "system" | "tool";
+export type ChatMessageRole = (typeof CHAT_MESSAGE_ROLES)[number];
 
 export interface ChatMessage {
   id: MessageId;

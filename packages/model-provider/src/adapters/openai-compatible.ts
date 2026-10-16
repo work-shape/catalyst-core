@@ -1,3 +1,4 @@
+import { MODEL_PROVIDER_AUTH_MODES } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   defineProvider,
@@ -15,7 +16,7 @@ import type { ModelAdapterFactory, ModelAdapterRequest, ModelCompletionRequest }
 const openAiCompatibleConfigSchema = z.object({
   baseUrl: z.string().url().default("https://api.openai.com/v1"),
   credentialSecret: secretRef().default("OPENAI_API_KEY"),
-  authMode: z.enum(["bearer", "api-key"]).default("bearer"),
+  authMode: z.enum(MODEL_PROVIDER_AUTH_MODES).default("bearer"),
   organizationSecret: secretRef().optional()
 });
 
@@ -27,7 +28,7 @@ async function listModels(
   endpoint: {
     baseUrl: string;
     apiKey: string;
-    authMode: "bearer" | "api-key";
+    authMode: (typeof MODEL_PROVIDER_AUTH_MODES)[number];
     organization: string | undefined;
   },
   { signal }: ProviderCheckContext

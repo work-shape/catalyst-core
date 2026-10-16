@@ -1,3 +1,4 @@
+import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
@@ -37,7 +38,7 @@ const BYTES_PER_UNIT = { MB: 1024 ** 2, GB: 1024 ** 3 } as const;
 const SIZE_LIMIT = /^([1-9]\d{0,5})(MB|GB)$/u;
 
 /** Who owns a store, as `store.yaml` may say it. The owner itself is the asset's. */
-const scopeSchema = z.enum(["instance", "workspace"] satisfies AssetScope["kind"][]);
+const scopeSchema = z.enum(ASSET_OWNER_KINDS);
 
 // Strict: a key the manifest does not know is refused, never ignored.
 const manifestSchema = z.strictObject({

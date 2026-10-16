@@ -1,3 +1,4 @@
+import { MODEL_USAGE_TIERS } from "@work-shape/catalyst-core";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn, LevelMeter, Popover, PopoverContent, PopoverTrigger } from "@work-shape/catalyst-ui";
@@ -9,14 +10,7 @@ import { EuResidencyBadge, ModelVendorIcon, modelVendorLabel } from "./model-ven
 type UsageTier = NonNullable<AgentSelectableModel["usageTier"]>;
 
 /** The usage tiers from least to most, as the meter on the model card counts them. */
-const usageTiers: readonly UsageTier[] = [
-  "very_low",
-  "low",
-  "moderate",
-  "elevated",
-  "high",
-  "very_high"
-];
+const usageTiers: readonly UsageTier[] = [...MODEL_USAGE_TIERS];
 const usageTierLabels: Record<UsageTier, TranslationKey> = {
   very_low: "modelUsageTierVeryLow",
   low: "modelUsageTierLow",

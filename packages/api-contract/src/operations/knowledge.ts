@@ -1,3 +1,4 @@
+import { DATA_STORE_SCALAR_TYPES, KNOWLEDGE_BASE_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { defineRegisteredOperation, json } from "./define-operation";
 
@@ -6,7 +7,7 @@ import { defineRegisteredOperation, json } from "./define-operation";
 // agent's tool and a Workflow step call too, with that operation's right, policy, run and
 // audit trail. The definition itself is written, published and read with `assets.*`.
 
-const SCALAR_TYPES = ["text", "integer", "number", "boolean", "date", "timestamp"] as const;
+const SCALAR_TYPES = DATA_STORE_SCALAR_TYPES;
 const scalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const valueSchema = z.union([scalarSchema, z.array(scalarSchema)]);
 
@@ -47,7 +48,7 @@ const knowledgeStateResponseSchema = z.object({
   /** The id operations and routes name the Knowledge Base by. */
   name: z.string(),
   /** `unchecked` until the published revision was first checked. */
-  status: z.enum(["unchecked", "ok", "needs_attention"]),
+  status: z.enum(KNOWLEDGE_BASE_STATUSES),
   /** The revision the last check was of. */
   revision: z.number().int().optional(),
   checkedAt: z.string().optional(),

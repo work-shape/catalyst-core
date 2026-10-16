@@ -1,3 +1,4 @@
+import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import type { ReactNode } from "react";
 import {
   Badge,
@@ -20,7 +21,7 @@ export interface ToolGroupTool {
   /** What the check box is labelled with: the operation, or the action. */
   label: string;
   description?: string;
-  effect: "reading" | "changing";
+  effect: (typeof OPERATION_EFFECTS)[number];
 }
 
 /** A sub-group with more tools than this starts folded, with its count. */

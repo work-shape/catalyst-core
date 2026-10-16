@@ -1,3 +1,4 @@
+import { ATTACHMENT_CREATE_OUTCOMES } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import {
   AppError,
@@ -236,7 +237,7 @@ export interface UploadFileContent {
 
 export interface UploadDraftAttachmentResult {
   attachment: ConversationAttachment;
-  outcome: "created" | "already_available";
+  outcome: (typeof ATTACHMENT_CREATE_OUTCOMES)[number];
 }
 
 export interface ReadConversationFileInput {

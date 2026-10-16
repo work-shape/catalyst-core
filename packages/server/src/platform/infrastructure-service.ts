@@ -1,3 +1,4 @@
+import { INFRASTRUCTURE_SECRET_STATES, INFRASTRUCTURE_WITHHELD_FIELDS } from "@work-shape/catalyst-core";
 import type {
   Infrastructure,
   InfrastructureCheck,
@@ -53,7 +54,7 @@ export interface InfrastructureEntry {
   endpointHost?: string;
   bucket?: string;
   /** The fields named in `InfrastructureProvider.withheld`. */
-  withheld?: readonly ("endpointHost" | "bucket")[];
+  withheld?: readonly ((typeof INFRASTRUCTURE_WITHHELD_FIELDS)[number])[];
   /**
    * The secrets it takes: the name the config gives and the key of the config that gives it.
    * A name the platform fixes itself, such as `DATABASE_URL`, has no key.
@@ -240,7 +241,7 @@ export class InfrastructureWorkflow {
   }
 
   /** Whether a secret resolves. The value is dropped here and goes nowhere. */
-  private async secretState(name: string): Promise<"set" | "missing"> {
+  private async secretState(name: string): Promise<(typeof INFRASTRUCTURE_SECRET_STATES)[number]> {
     try {
       await this.options.secrets.resolve(name);
       return "set";

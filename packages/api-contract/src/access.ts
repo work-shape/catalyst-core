@@ -1,3 +1,4 @@
+import { ACCESS_SOURCES, GRANT_EFFECTS, GRANT_HOLDER_KINDS, GRANT_SCOPE_KINDS, PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
   NAMESPACE_PREFIX_MAX_LENGTH,
   NAMESPACE_PREFIX_MIN_LENGTH,
@@ -6,9 +7,9 @@ import {
 import { z } from "zod";
 import { listQuerySchema, timestampSchema } from "./shared";
 
-export const grantHolderKindSchema = z.enum(["user", "service_principal", "role", "group"]);
-export const grantScopeKindSchema = z.enum(["instance", "workspace", "namespace", "asset"]);
-export const grantEffectSchema = z.enum(["allow", "deny"]);
+export const grantHolderKindSchema = z.enum(GRANT_HOLDER_KINDS);
+export const grantScopeKindSchema = z.enum(GRANT_SCOPE_KINDS);
+export const grantEffectSchema = z.enum(GRANT_EFFECTS);
 
 /**
  * Text a grant row holds or is looked up by. No store holds a NUL byte, and a refusal that
@@ -77,7 +78,7 @@ export const listPermissionGrantsQuerySchema = listQuerySchema.extend({
 });
 
 export const effectivePermissionsQuerySchema = z.object({
-  holderKind: z.enum(["user", "service_principal"]),
+  holderKind: z.enum(PRINCIPAL_HOLDER_KINDS),
   holderId: storedText
 });
 
@@ -97,7 +98,7 @@ export const effectivePermissionsSchema = z.object({
        * the published Apps of that workspace. A legacy permission list is grant rows since AP-4
        * and reads as `grant`.
        */
-      source: z.enum(["role", "legacy_ref", "grant", "membership"])
+      source: z.enum(ACCESS_SOURCES)
     })
   )
 });

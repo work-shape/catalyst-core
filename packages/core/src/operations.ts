@@ -1,3 +1,4 @@
+import { POLICY_VALUES } from "@work-shape/catalyst-asset-schemas";
 import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
   type OperationEffect
@@ -19,7 +20,7 @@ import type { ToolExecutionRequest, ToolExecutionResult } from "./tool-execution
 export { IDEMPOTENCY_KEY_MAX_LENGTH, type OperationEffect };
 
 /** From the loosest to the strictest. Where several values meet, the strictest wins. */
-export const POLICY_VALUES = ["allow", "confirm", "approval", "deny"] as const;
+export { POLICY_VALUES } from "@work-shape/catalyst-asset-schemas";
 
 export type PolicyValue = (typeof POLICY_VALUES)[number];
 

@@ -1,3 +1,4 @@
+import { GUARDRAIL_OUTCOMES, OPERATION_ORIGIN_KINDS } from "@work-shape/catalyst-asset-schemas";
 import {
   GUARDRAIL_NAME_MAX_LENGTH,
   GUARDRAIL_NAME_PATTERN
@@ -71,22 +72,14 @@ export const GUARDRAIL_FILTER_KEYS = {
 } as const satisfies Record<GuardrailEvent, readonly (keyof GuardrailFilter)[]>;
 
 /** Where a call can come from, as a filter's `origin` names it. */
-export const GUARDRAIL_FILTER_ORIGINS = [
-  "agent",
-  "user",
-  "cli",
-  "mcp",
-  "app",
-  "workflow",
-  "schedule"
-] as const satisfies readonly OperationOrigin["kind"][];
+export const GUARDRAIL_FILTER_ORIGINS = OPERATION_ORIGIN_KINDS satisfies readonly OperationOrigin["kind"][];
 
 /**
  * What a hit does. `allow` lets the action go on and never overrides another guardrail's
  * answer; `warn` lets it go on with the reason beside it; `require_approval` makes a call wait
  * for another person's approval; `block` stops it. Strictest last.
  */
-export const GUARDRAIL_OUTCOMES = ["allow", "warn", "require_approval", "block"] as const;
+export { GUARDRAIL_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
 export type GuardrailOutcome = (typeof GUARDRAIL_OUTCOMES)[number];
 
 /**

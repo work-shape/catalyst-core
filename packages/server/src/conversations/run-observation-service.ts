@@ -1,3 +1,4 @@
+import { ACTIVE_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import { auditActorFromUser, projectAgentRun } from "@work-shape/catalyst-core";
 import {
   AppError,
@@ -380,7 +381,7 @@ function isActiveAgentRunStatus(
   status: AgentRunStatus
 ): status is Extract<
   AgentRunStatus,
-  "queued" | "running" | "waiting_for_permission" | "cancelling"
+  (typeof ACTIVE_AGENT_RUN_STATUSES)[number]
 > {
   return (
     status === "queued" ||

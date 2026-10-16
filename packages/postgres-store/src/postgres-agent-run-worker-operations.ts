@@ -1,3 +1,4 @@
+import { ACTIVE_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import { and, asc, eq, gt, inArray, lt, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   AppError,
@@ -285,12 +286,7 @@ export async function assertClaimedAgentRun(
   });
 }
 
-const RUN_IN_PROGRESS_STATUSES: AgentRun["status"][] = [
-  "queued",
-  "running",
-  "waiting_for_permission",
-  "cancelling"
-];
+const RUN_IN_PROGRESS_STATUSES: AgentRun["status"][] = [...ACTIVE_AGENT_RUN_STATUSES];
 
 export async function listAgentRunsInProgress(
   db: PostgresConnection,

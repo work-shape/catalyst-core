@@ -1,3 +1,4 @@
+import { USER_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { StorePage } from "./paging";
 import type { ReasoningEffortConfig } from "./config";
 import { AppError } from "./errors";
@@ -7,7 +8,7 @@ import { createPlatformId } from "./ids";
 import type { ISODateString } from "./time";
 
 /** What an administrator sets. */
-export type UserStatus = "active" | "disabled";
+export type UserStatus = (typeof USER_STATUSES)[number];
 
 /**
  * The status a user is read with. A user whose deletion was requested reads `deleting`,

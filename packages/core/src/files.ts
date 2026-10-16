@@ -1,3 +1,4 @@
+import { ARTIFACT_PREVIEW_IMAGE_FORMATS, ARTIFACT_PREVIEW_IMAGE_MIME_TYPES, ARTIFACT_PREVIEW_STATUSES, CONVERSATION_ATTACHMENT_STATUSES, SUPPORTED_IMAGE_MIME_TYPES, TOOL_DISPLAY_MODES } from "@work-shape/catalyst-asset-schemas";
 import type {
   ClientInstanceId,
   CollaborationWorkspaceId,
@@ -24,10 +25,10 @@ export interface ManagedFileRef {
 
 export type ManagedArtifactKind = string;
 
-export type SupportedImageMimeType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+export type SupportedImageMimeType = (typeof SUPPORTED_IMAGE_MIME_TYPES)[number];
 
-export type ArtifactPreviewImageFormat = "png" | "jpeg" | "webp";
-export type ArtifactPreviewStatus = "pending" | "ready" | "failed" | "unsupported";
+export type ArtifactPreviewImageFormat = (typeof ARTIFACT_PREVIEW_IMAGE_FORMATS)[number];
+export type ArtifactPreviewStatus = (typeof ARTIFACT_PREVIEW_STATUSES)[number];
 export type ArtifactPreviewJobStatus =
   "pending" | "processing" | "completed" | "failed" | "unsupported";
 export type ArtifactPreviewSourceKind = "document" | "presentation" | "pdf" | "spreadsheet";
@@ -192,7 +193,7 @@ export interface ManagedObjectDeletionResult {
   artifactObjectKeys: string[];
 }
 
-export type ToolDisplayMode = "inline" | "side_panel" | "fullscreen";
+export type ToolDisplayMode = (typeof TOOL_DISPLAY_MODES)[number];
 
 export type ToolDisplayOutput = JsonObject & {
   kind: string;
@@ -226,7 +227,7 @@ export function isImageFileFormat(
 }
 
 export type ConversationAttachmentStatus =
-  "queued" | "preprocessing" | "ready" | "failed" | "unsupported" | "deleted";
+  (typeof CONVERSATION_ATTACHMENT_STATUSES)[number];
 
 export interface AttachmentWarning {
   code: string;
@@ -387,7 +388,7 @@ export interface ArtifactPreviewImageArtifactInput {
   kind: ManagedArtifactKind;
   objectKey: string;
   filename?: string;
-  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  mimeType: (typeof ARTIFACT_PREVIEW_IMAGE_MIME_TYPES)[number];
   byteSize: number;
   checksum: string;
   metadata?: JsonObject;

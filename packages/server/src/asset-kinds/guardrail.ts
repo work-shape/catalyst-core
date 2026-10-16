@@ -1,3 +1,4 @@
+import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import { guardrailConfigSchema, guardrailNameSchema } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
@@ -175,7 +176,7 @@ export function createGuardrailAssetKind(): WorkflowAssetKind {
       },
       actions: { ...GUARDRAIL_ACTIONS },
       lifecycle: "draft_published",
-      owners: ["instance", "workspace"],
+      owners: [...ASSET_OWNER_KINDS],
       // A Guardrail refers to no other asset: its model binding is release config's own.
       validate: () => [],
       validateWrite(context, guardrails) {

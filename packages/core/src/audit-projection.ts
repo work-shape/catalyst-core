@@ -1,3 +1,4 @@
+import { AUDIT_ACTOR_KINDS, AUDIT_OUTCOMES, AUDIT_TIERS } from "@work-shape/catalyst-asset-schemas";
 import type { AuditActor, AuditEvent } from "./audit";
 import type { ISODateString } from "./time";
 
@@ -12,7 +13,7 @@ import type { ISODateString } from "./time";
  * unit tested and run either on the server or the client.
  */
 
-export type AuditActivityActorKind = "user" | "assistant" | "service" | "system";
+export type AuditActivityActorKind = (typeof AUDIT_ACTOR_KINDS)[number];
 
 /**
  * Tier drives the default visibility of an activity.
@@ -21,9 +22,9 @@ export type AuditActivityActorKind = "user" | "assistant" | "service" | "system"
  * - runtime: tool and workspace-command lifecycle — evidence only, unless failed
  * - telemetry: recovery / projection bookkeeping — hidden unless failed
  */
-export type AuditActivityTier = "governance" | "workflow" | "runtime" | "telemetry";
+export type AuditActivityTier = (typeof AUDIT_TIERS)[number];
 
-export type AuditActivityOutcome = "success" | "failed" | "denied" | "warning";
+export type AuditActivityOutcome = (typeof AUDIT_OUTCOMES)[number];
 
 export interface AuditActivityActor {
   kind: AuditActivityActorKind;

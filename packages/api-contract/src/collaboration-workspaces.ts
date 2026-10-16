@@ -1,35 +1,17 @@
+import { COLLABORATION_WORKSPACE_KINDS, DELETION_STATES, WORKSPACE_ACCENT_COLORS, WORKSPACE_ACCESS_STATES, WORKSPACE_MEMBERSHIP_ROLES, WORKSPACE_VISIBILITIES } from "@work-shape/catalyst-asset-schemas";
 import { timestampSchema } from "./shared";
 import { z } from "zod";
 import { conversationVisibilitySchema } from "./conversations";
 
-export const workspaceVisibilitySchema = z.enum(["discoverable", "private"]);
-export const workspaceMembershipRoleSchema = z.enum(["owner", "admin", "member"]);
+export const workspaceVisibilitySchema = z.enum(WORKSPACE_VISIBILITIES);
+export const workspaceMembershipRoleSchema = z.enum(WORKSPACE_MEMBERSHIP_ROLES);
 export type WorkspaceMembershipRole = z.infer<typeof workspaceMembershipRoleSchema>;
-export const workspaceAccentColorSchema = z.enum([
-  "garnet",
-  "ruby",
-  "mahogany",
-  "copper",
-  "amber",
-  "olive",
-  "jade",
-  "emerald",
-  "teal",
-  "turquoise",
-  "azure",
-  "sapphire",
-  "indigo",
-  "violet",
-  "magenta",
-  "rose",
-  "stone",
-  "slate"
-]);
+export const workspaceAccentColorSchema = z.enum(WORKSPACE_ACCENT_COLORS);
 
 export const collaborationWorkspaceSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
-  kind: z.enum(["personal", "shared"]),
+  kind: z.enum(COLLABORATION_WORKSPACE_KINDS),
   name: z.string(),
   description: z.string().nullable(),
   visibility: workspaceVisibilitySchema,
@@ -55,7 +37,7 @@ export const collaborationWorkspaceDirectoryItemSchema = z.object({
   description: z.string().nullable(),
   emoji: z.string().nullable(),
   accentColor: workspaceAccentColorSchema.nullable(),
-  accessState: z.enum(["member", "request_pending", "can_request"]),
+  accessState: z.enum(WORKSPACE_ACCESS_STATES),
   createdAt: timestampSchema
 });
 
@@ -139,7 +121,7 @@ export const collaborationWorkspaceDeletionImpactSchema = z.object({
 
 /** `deleted` means the rows are gone; `deleting` means the workspace is closed and a job removes the rest. */
 export const collaborationWorkspaceDeletionStateSchema = z.object({
-  state: z.enum(["deleting", "deleted"])
+  state: z.enum(DELETION_STATES)
 });
 
 export type CollaborationWorkspace = z.infer<typeof collaborationWorkspaceSchema>;

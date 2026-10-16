@@ -1,3 +1,4 @@
+import { ENDED_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import { AppWindow, TriangleAlert } from "lucide-react";
 import { useEffect, useRef } from "react";
 import {
@@ -169,7 +170,7 @@ interface WatchedRun {
   };
 }
 
-const FINISHED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+const FINISHED_RUN_STATES = new Set(ENDED_AGENT_RUN_STATUSES);
 
 /**
  * Shows a Page beside the conversation when a run saves it: from the start of the save, as the

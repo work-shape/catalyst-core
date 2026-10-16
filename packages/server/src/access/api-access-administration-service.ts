@@ -1,3 +1,4 @@
+import { API_CREDENTIAL_SCOPES, SERVICE_PRINCIPAL_PERMISSIONS } from "@work-shape/catalyst-core";
 import type {
   ApiCredentialScope,
   ServicePrincipalPermission
@@ -28,14 +29,8 @@ import {
 import { requireAuthorized, withRightsHeld } from "./rights-held";
 import type { ChatServerOptions } from "../types";
 
-const SERVICE_PERMISSIONS = new Set<ServicePrincipalPermission>([
-  "config_assets.read",
-  "config_assets.release"
-]);
-const CREDENTIAL_SCOPES = new Set<ApiCredentialScope>([
-  "config_assets:read",
-  "config_assets:release"
-]);
+const SERVICE_PERMISSIONS = new Set<ServicePrincipalPermission>(SERVICE_PRINCIPAL_PERMISSIONS);
+const CREDENTIAL_SCOPES = new Set<ApiCredentialScope>(API_CREDENTIAL_SCOPES);
 
 /** The right that creates service principals, gives and takes their rights, and enables them. */
 export const SERVICE_PRINCIPALS_ACTION = "service_principals.manage";

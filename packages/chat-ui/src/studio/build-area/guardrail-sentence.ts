@@ -1,3 +1,4 @@
+import { GUARDRAIL_OUTCOMES } from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../../shared/i18n";
 
 // When a guardrail runs and what it does, in one line a person reads: built from its event,
@@ -5,7 +6,7 @@ import type { TranslationKey } from "../../shared/i18n";
 // Workflow step or an App action can name the guardrails that watch it with the same words.
 
 /** What a guardrail does on a hit. */
-export type GuardrailOutcomeName = "allow" | "warn" | "require_approval" | "block";
+export type GuardrailOutcomeName = (typeof GUARDRAIL_OUTCOMES)[number];
 
 /** What the sentence is built from: a guardrail's definition and where it applies. */
 export interface GuardrailRunFacts {

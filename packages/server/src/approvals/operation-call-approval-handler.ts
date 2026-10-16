@@ -1,3 +1,4 @@
+import { AUTH_PRINCIPAL_KINDS, OPERATION_EFFECTS, OPERATION_ORIGIN_KINDS } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import {
   AppError,
@@ -78,7 +79,7 @@ const HELD_OPERATION_PREVIEW_MAX_FIELDS = 50;
 const HELD_OPERATION_PREVIEW_VALUE_MAX_CHARS = 2000;
 
 const principalSchema = z.object({
-  kind: z.enum(["user", "service"]),
+  kind: z.enum(AUTH_PRINCIPAL_KINDS),
   id: z.string(),
   displayLabel: z.string(),
   authSource: z.string(),
@@ -92,7 +93,7 @@ const principalSchema = z.object({
 const payloadSchema = z.object({
   runId: z.string().min(1),
   operation: z.string().min(1),
-  effect: z.enum(["reading", "changing"]),
+  effect: z.enum(OPERATION_EFFECTS),
   input: z.unknown().optional(),
   /** What the call is about, as `approval` of its operation froze it when it was held. */
   subject: z.record(z.string(), z.json()).optional(),
@@ -108,7 +109,7 @@ const payloadSchema = z.object({
     scopes: z.array(z.string()).optional()
   }),
   origin: z.object({
-    kind: z.enum(["agent", "user", "cli", "mcp", "app", "workflow", "schedule"]),
+    kind: z.enum(OPERATION_ORIGIN_KINDS),
     agentName: z.string().optional(),
     toolName: z.string().optional()
   }),

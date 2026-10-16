@@ -1,3 +1,4 @@
+import { ASSET_REPRESENTATIONS } from "@work-shape/catalyst-asset-schemas";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import {
@@ -23,7 +24,7 @@ const SKILL_FILE = "SKILL.md";
 
 export async function readAssetSource(
   path: string,
-  representation: "config" | "files"
+  representation: (typeof ASSET_REPRESENTATIONS)[number]
 ): Promise<AssetSource> {
   return representation === "files"
     ? { files: await readFileSet(path) }

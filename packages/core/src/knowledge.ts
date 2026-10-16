@@ -1,3 +1,4 @@
+import { KNOWLEDGE_CHECK_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
 import type { ActorAccess } from "./permissions";
@@ -91,7 +92,7 @@ export interface KnowledgeTableCheck {
  * read or the backend cannot be reached: a query then fails, and a publish is refused.
  */
 export interface KnowledgeCheckResult {
-  status: "ok" | "needs_attention";
+  status: (typeof KNOWLEDGE_CHECK_STATUSES)[number];
   /** Every described table, in the order of the definition. */
   tables: KnowledgeTableCheck[];
   /** Why the backend could not be asked at all, as a sentence. It names no row value. */

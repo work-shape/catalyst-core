@@ -1,3 +1,4 @@
+import { AUDIT_EVENT_STATUSES } from "@work-shape/catalyst-core";
 import {
   EVENTS,
   PLATFORM_EVENT_ALLOW,
@@ -14,7 +15,7 @@ import {
 } from "@work-shape/catalyst-core";
 import type { GuardrailCallContext, GuardrailRunner } from "../guardrails/guardrail-runner";
 
-const AUDIT_STATUSES: readonly AuditEventStatus[] = ["success", "failed", "denied"];
+const AUDIT_STATUSES: readonly AuditEventStatus[] = [...AUDIT_EVENT_STATUSES];
 
 /**
  * The events of a call. At a before-event the guardrails bound to it run and the strictest of

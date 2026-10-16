@@ -1,3 +1,4 @@
+import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import {
   APP_ASSET_KIND,
   type AppAction,
@@ -379,7 +380,7 @@ export class AppActionList {
    */
   private async agentTools(
     revisions: readonly ListedRevision[]
-  ): Promise<Map<string, "reading" | "changing">> {
+  ): Promise<Map<string, (typeof OPERATION_EFFECTS)[number]>> {
     const { connections } = this.options;
     if (!connections || revisions.every((revision) => revision.view === "draft")) {
       return new Map();

@@ -1,3 +1,4 @@
+import { JOB_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
 import type { Brand, ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
@@ -13,7 +14,7 @@ export type JobId = Brand<string, "JobId">;
  * before an attempt did its work. The executor has no waiting state: what waits, waits on its
  * own record and a wake enqueues a job.
  */
-export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "dead" | "cancelled";
+export type JobStatus = (typeof JOB_STATUSES)[number];
 
 /** The error class of a withdrawn job. It tells a job nobody ran from one that ran and ended. */
 export const JOB_WITHDRAWN_ERROR_CODE = "WITHDRAWN";

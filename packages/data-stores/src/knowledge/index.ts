@@ -1,3 +1,4 @@
+import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
 import {
   AppError,
   defineAssetKind,
@@ -85,7 +86,7 @@ export function createKnowledgeBases(input: {
       },
       actions: KNOWLEDGE_BASE_ACTIONS,
       lifecycle: "draft_published",
-      owners: ["instance", "workspace"],
+      owners: [...ASSET_OWNER_KINDS],
       validate: () => [],
       summarize: (knowledgeBase) => ({
         name: knowledgeBase.name,

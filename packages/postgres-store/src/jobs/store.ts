@@ -1,3 +1,4 @@
+import { FAILED_JOB_STATUSES, LIVE_JOB_STATUSES } from "@work-shape/catalyst-core";
 import { and, asc, eq, gt, inArray, lt, lte, not, sql } from "drizzle-orm";
 import {
   AppError,
@@ -141,7 +142,7 @@ export async function enqueueJob<Payload extends JsonObject>(
     eq(platformJobs.clientInstanceId, options.clientInstanceId),
     eq(platformJobs.kind, kind.kind),
     options.dedupeKey === undefined ? sql`false` : eq(platformJobs.dedupeKey, options.dedupeKey),
-    inArray(platformJobs.status, ["queued", "running"])
+    inArray(platformJobs.status, LIVE_JOB_STATUSES)
   );
   // The live job of a dedupe key can end between the refused insert and the read of it, so the
   // pair is tried again. Each round needs another job to end at that exact moment.
@@ -334,7 +335,7 @@ async function pruneEndedJobs(
         )
       );
   const completed = await endedBefore(["succeeded", "cancelled"], COMPLETED_JOB_RETENTION_DAYS);
-  const failed = await endedBefore(["failed", "dead"], FAILED_JOB_RETENTION_DAYS);
+  const failed = await endedBefore(FAILED_JOB_STATUSES, FAILED_JOB_RETENTION_DAYS);
   // One row per kind: it grows with the kinds of the product, not with time. The kinds of a
   // release that is gone would stay for good, so a report nobody renewed for a day is removed.
   await db

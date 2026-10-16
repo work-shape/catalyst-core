@@ -1,3 +1,4 @@
+import { PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-core";
 import {
   AppError,
   userInDeletionError,
@@ -450,7 +451,7 @@ export class AccessWorkflow {
   async effective(
     actor: AuthenticatedUser,
     access: ActorAccess,
-    input: { holderKind: "user" | "service_principal"; holderId: string }
+    input: { holderKind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; holderId: string }
   ): Promise<{ holderActive: boolean; items: AccessEntry[] }> {
     // A person always reads their own rights. Other people remain behind user administration.
     if (input.holderKind === "user" && input.holderId !== actor.id) {
@@ -631,7 +632,7 @@ export class AccessWorkflow {
   private async findHolder(
     actor: AuthenticatedUser,
     access: ActorAccess,
-    input: { holderKind: "user" | "service_principal"; holderId: string }
+    input: { holderKind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; holderId: string }
   ): Promise<AccessHolder> {
     if (input.holderKind === "user") {
       const user = await this.findUser(input.holderId);

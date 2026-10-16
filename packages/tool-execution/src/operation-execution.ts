@@ -1,3 +1,4 @@
+import { OPERATION_DENIAL_REASONS } from "@work-shape/catalyst-core";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
@@ -699,15 +700,7 @@ const forbiddenSchema = z.object({
   message: z.string(),
   details: z.object({
     action: z.string().optional(),
-    reason: z.enum([
-      "no_grant",
-      "denied",
-      "unknown_action",
-      "holder_inactive",
-      "holder_not_administrable",
-      "user_only",
-      "outside_key_scope"
-    ])
+    reason: z.enum(OPERATION_DENIAL_REASONS)
   })
 });
 

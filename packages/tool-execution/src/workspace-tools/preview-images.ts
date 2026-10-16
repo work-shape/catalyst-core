@@ -1,3 +1,4 @@
+import { SUPPORTED_IMAGE_MIME_TYPES } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import { posix as path } from "node:path";
 import type { z } from "zod";
@@ -145,7 +146,7 @@ async function previewWorkspaceImagePaths(
       return failed("handler_failed", "Workspace preview image must be a supported image file", {
         path: file.path,
         ...(file.mimeType ? { mimeType: file.mimeType } : {}),
-        supportedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"]
+        supportedMimeTypes: [...SUPPORTED_IMAGE_MIME_TYPES]
       });
     }
     let bytes: Uint8Array;

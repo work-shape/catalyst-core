@@ -1,3 +1,4 @@
+import { OPERATION_RUN_DECISION_MODES, OPERATION_RUN_DECISION_REASONS, OPERATION_RUN_STATUSES, OPERATION_TARGETS, PRINCIPAL_HOLDER_KINDS } from "@work-shape/catalyst-asset-schemas";
 import type { DelegatedActor } from "./identity";
 import type {
   ClientInstanceId,
@@ -11,15 +12,7 @@ import type { OperationEffect, OperationOrigin } from "./operations";
 import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
 
-export const OPERATION_RUN_STATUSES = [
-  "running",
-  "pending_confirmation",
-  "pending_approval",
-  "done",
-  "failed",
-  "denied",
-  "expired"
-] as const;
+export { OPERATION_RUN_STATUSES } from "@work-shape/catalyst-asset-schemas";
 
 export type OperationRunStatus = (typeof OPERATION_RUN_STATUSES)[number];
 
@@ -29,13 +22,13 @@ export type OperationRunStatus = (typeof OPERATION_RUN_STATUSES)[number];
  * `dry_run`: nowhere; a changing call of a draft that answered what it would have done. Every
  * call of a published revision is `live`. `runOperation()` decides it, never its caller.
  */
-export const OPERATION_TARGETS = ["live", "test", "dry_run"] as const;
+export { OPERATION_TARGETS } from "@work-shape/catalyst-asset-schemas";
 
 export type OperationTarget = (typeof OPERATION_TARGETS)[number];
 
 /** Who called, as far as the run keeps it: never scopes, rights or an address. */
 export interface OperationRunActor {
-  kind: "user" | "service_principal";
+  kind: (typeof PRINCIPAL_HOLDER_KINDS)[number];
   id: string;
   label: string;
   delegatedActor?: DelegatedActor;
@@ -52,14 +45,14 @@ export interface OperationRunActor {
  * own call was the approval (`approval` of the operation's definition).
  */
 export type OperationRunDecisionReason =
-  "inherited_approval_not_applied" | "workflow_publish" | "approved_by_caller";
+  (typeof OPERATION_RUN_DECISION_REASONS)[number];
 
 export interface OperationRunDecision {
   /**
    * `direct`: nobody was asked when the call was made. The caller's own call was the
    * confirmation, or what `reason` names.
    */
-  mode: "direct" | "confirmed" | "approved" | "declined";
+  mode: (typeof OPERATION_RUN_DECISION_MODES)[number];
   reason?: OperationRunDecisionReason;
   by: string;
   /** The name of who decided, kept where the decision was another person's. */

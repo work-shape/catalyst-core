@@ -1,3 +1,4 @@
+import { TOOL_GROUPS } from "@work-shape/catalyst-asset-schemas";
 import type {
   AgentRunId,
   CollaborationWorkspaceId,
@@ -29,15 +30,7 @@ export interface ToolText {
  * Where the agent page shows a tool among the instance's tools. `instance` is the instance's own
  * tools, which its deployment registers; it is also where a tool without a group stands.
  */
-export const TOOL_GROUPS = [
-  "documents",
-  "web",
-  "files",
-  "results",
-  "skills",
-  "platform",
-  "instance"
-] as const;
+export { TOOL_GROUPS } from "@work-shape/catalyst-asset-schemas";
 
 export type ToolGroup = (typeof TOOL_GROUPS)[number];
 

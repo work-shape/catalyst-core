@@ -1,3 +1,4 @@
+import { DATA_STORE_CONDITIONS, DATA_STORE_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { ClientInstanceId } from "./ids";
 import type { ISODateString } from "./time";
 
@@ -12,7 +13,7 @@ import type { ISODateString } from "./time";
  * in an error is `failure`, beside the status: a store whose migration failed is still `ready`
  * at the level it had.
  */
-export type DataStoreStatus = "provisioning" | "ready" | "retired";
+export type DataStoreStatus = (typeof DATA_STORE_STATUSES)[number];
 
 /** One migration a store's database has applied, as its file named and held it. */
 export interface DataStoreAppliedMigration {
@@ -40,11 +41,7 @@ export interface DataStoreLocation {
  * - `temp_files_unbounded`: the platform's database role is no superuser, so it cannot set
  *   `temp_file_limit` on the roles of the store.
  */
-export const DATA_STORE_CONDITIONS = [
-  "server_databases_open",
-  "sessions_open",
-  "temp_files_unbounded"
-] as const;
+export { DATA_STORE_CONDITIONS } from "@work-shape/catalyst-asset-schemas";
 
 export type DataStoreCondition = (typeof DATA_STORE_CONDITIONS)[number];
 

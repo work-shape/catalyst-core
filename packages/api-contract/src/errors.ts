@@ -1,25 +1,7 @@
+import { APP_ERROR_CODES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 
-export const appErrorCodeSchema = z.enum([
-  "BAD_REQUEST",
-  "UNAUTHENTICATED",
-  "FORBIDDEN",
-  "NOT_FOUND",
-  "CONFLICT",
-  "REVISION_CONFLICT",
-  "PRECONDITION_REQUIRED",
-  "TIMEOUT",
-  "VALIDATION_FAILED",
-  "RATE_LIMITED",
-  "POLICY_DENIED",
-  "GUARDRAIL_BLOCKED",
-  "DECLINED",
-  "IDEMPOTENCY_KEY_REUSED",
-  "OPERATION_IN_PROGRESS",
-  "OPERATION_EXPIRED",
-  "OUTPUT_NOT_RETAINED",
-  "INTERNAL"
-]);
+export const appErrorCodeSchema = z.enum(APP_ERROR_CODES);
 
 /** What each error code tells a caller, as the reference states it. */
 export const API_ERROR_MEANINGS: Record<z.infer<typeof appErrorCodeSchema>, string> = {

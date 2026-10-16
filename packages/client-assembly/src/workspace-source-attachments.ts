@@ -1,3 +1,4 @@
+import { ARTIFACT_PREVIEW_IMAGE_MIME_TYPES } from "@work-shape/catalyst-core";
 import { posix as posixPath } from "node:path";
 import { resolveUploadFileContent } from "@work-shape/catalyst-capability-sdk";
 import {
@@ -30,7 +31,7 @@ const WORKSPACE_SOURCE_METADATA_SOURCE = "execution_workspace_source";
 const LEGACY_WORKSPACE_PREVIEW_ARTIFACT_METADATA_SOURCE = "execution_workspace_preview";
 const DEFAULT_WORKSPACE_SOURCE_MAX_FILE_BYTES = 25 * 1024 * 1024;
 const ARTIFACT_PREVIEW_OBJECT_KEY_PREFIX = "artifact-previews/";
-const ARTIFACT_PREVIEW_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const ARTIFACT_PREVIEW_IMAGE_MIME_TYPES = new Set(ARTIFACT_PREVIEW_IMAGE_MIME_TYPES);
 const ARTIFACT_PREVIEW_IMAGE_KINDS = new Set([
   "document.preview_page_image",
   "presentation.preview_slide_image",

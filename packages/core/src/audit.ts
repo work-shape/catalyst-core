@@ -1,3 +1,4 @@
+import { AUDIT_EVENT_STATUSES, AUTH_PRINCIPAL_KINDS } from "@work-shape/catalyst-asset-schemas";
 import type { StorePage } from "./paging";
 import {
   getAuthPrincipal,
@@ -20,7 +21,7 @@ export interface AuditActor {
   externalUserId?: string;
   displayLabel: string;
   roles: UserRole[];
-  principalKind?: "user" | "service";
+  principalKind?: (typeof AUTH_PRINCIPAL_KINDS)[number];
   principalId?: string;
   principalDisplayLabel?: string;
   credentialId?: ApiCredentialId;
@@ -28,7 +29,7 @@ export interface AuditActor {
   delegatedActor?: DelegatedActor;
 }
 
-export type AuditEventStatus = "success" | "failed" | "denied";
+export type AuditEventStatus = (typeof AUDIT_EVENT_STATUSES)[number];
 
 export interface AuditEvent {
   id: AuditEventId;

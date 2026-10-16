@@ -1,3 +1,4 @@
+import { INFRASTRUCTURE_SECRET_STATES, INFRASTRUCTURE_WITHHELD_FIELDS } from "@work-shape/catalyst-asset-schemas";
 import {
   PROVIDER_CHECK_ERROR_CLASSES,
   PROVIDER_PORTS,
@@ -49,7 +50,7 @@ export type InfrastructureCheck = z.infer<typeof infrastructureCheckSchema>;
 export const infrastructureSecretSchema = z.object({
   name: z.string().optional(),
   field: z.string().optional(),
-  state: z.enum(["set", "missing"])
+  state: z.enum(INFRASTRUCTURE_SECRET_STATES)
 });
 export type InfrastructureSecret = z.infer<typeof infrastructureSecretSchema>;
 
@@ -76,7 +77,7 @@ export const infrastructureProviderSchema = z.object({
    * The fields of the config that are set and not shown, because the value does not read as a
    * bare host or as a bucket name.
    */
-  withheld: z.array(z.enum(["endpointHost", "bucket"])).optional(),
+  withheld: z.array(z.enum(INFRASTRUCTURE_WITHHELD_FIELDS)).optional(),
   secrets: z.array(infrastructureSecretSchema),
   check: infrastructureCheckSchema
 });

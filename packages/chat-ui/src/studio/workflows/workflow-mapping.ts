@@ -1,3 +1,4 @@
+import { WORKFLOW_RUN_MODES, WORKFLOW_TRIGGER_KINDS } from "@work-shape/catalyst-core";
 import type { Asset } from "@work-shape/catalyst-api-client";
 import { WORKFLOW_ACTIONS } from "@work-shape/catalyst-core";
 import {
@@ -88,9 +89,9 @@ interface TimesResource {
 export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<WorkflowRunLineage>> {
   id: string;
   workflow: string;
-  trigger: "manual" | "schedule" | "parent";
+  trigger: (typeof WORKFLOW_TRIGGER_KINDS)[number];
   /** `test` on a test run of the draft. */
-  mode?: "live" | "test";
+  mode?: (typeof WORKFLOW_RUN_MODES)[number];
   status: WorkflowRunStatus;
   startedBy: { id: string; label: string };
   /** On a child run: the id of the Workflow of the run that started it. */

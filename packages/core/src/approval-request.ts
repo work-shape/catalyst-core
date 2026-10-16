@@ -1,3 +1,4 @@
+import { APPROVAL_CHECK_STATUSES, APPROVAL_EXECUTIONS, APPROVAL_REQUEST_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { AgentRunId, ClientInstanceId, ConversationId, ToolCallId } from "./ids";
 import type { AuthenticatedUser } from "./identity";
 import type { JsonObject } from "./json";
@@ -7,17 +8,11 @@ import type { ISODateString } from "./time";
 // `approval-requests.ts`, which a module that only reads a request does not need to import.
 
 export type ApprovalRequestStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "changes_requested"
-  | "superseded"
-  | "withdrawn"
-  | "reverted";
+  (typeof APPROVAL_REQUEST_STATUSES)[number];
 
 export interface ApprovalCheckResult {
   id: string;
-  status: "passed" | "warned" | "blocked";
+  status: (typeof APPROVAL_CHECK_STATUSES)[number];
   message: string;
 }
 
@@ -59,14 +54,7 @@ export interface ApprovalRequest {
  * not ended yet; the thread is told once it has. A kind whose change is applied with the
  * decision leaves the field out.
  */
-export const APPROVAL_EXECUTIONS = [
-  "queued",
-  "done",
-  "failed",
-  "interrupted",
-  "refused",
-  "expired"
-] as const;
+export { APPROVAL_EXECUTIONS } from "@work-shape/catalyst-asset-schemas";
 
 export type ApprovalExecution = (typeof APPROVAL_EXECUTIONS)[number];
 

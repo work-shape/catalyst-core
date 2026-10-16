@@ -1,3 +1,4 @@
+import { ATTACHMENT_CREATE_OUTCOMES } from "@work-shape/catalyst-core";
 import type {
   AttachmentManifest,
   ConversationAttachment,
@@ -37,7 +38,7 @@ export interface ReadConversationFileResult {
 
 export interface UploadDraftAttachmentResult {
   attachment: ConversationAttachment;
-  outcome: "created" | "already_available";
+  outcome: (typeof ATTACHMENT_CREATE_OUTCOMES)[number];
 }
 
 export interface ChatAttachmentService {

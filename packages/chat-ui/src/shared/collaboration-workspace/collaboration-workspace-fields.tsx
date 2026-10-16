@@ -1,3 +1,4 @@
+import { WORKSPACE_VISIBILITIES } from "@work-shape/catalyst-core";
 import { Ban, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import type { ConversationListItem } from "@work-shape/catalyst-api-client";
@@ -13,7 +14,7 @@ import {
   collaborationWorkspaceEmojiSuggestions
 } from "./collaboration-workspace-emoji";
 
-export type CollaborationWorkspaceVisibility = "discoverable" | "private";
+export type CollaborationWorkspaceVisibility = (typeof WORKSPACE_VISIBILITIES)[number];
 export type ConversationVisibility = ConversationListItem["visibility"];
 
 const accentLabelKeys: Record<CollaborationWorkspaceAccentColor, TranslationKey> = {

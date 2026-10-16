@@ -1,3 +1,4 @@
+import { LIVE_JOB_STATUSES } from "@work-shape/catalyst-core";
 import {
   AppError,
   WORKSPACE_COMMAND_JOB_KIND,
@@ -364,7 +365,7 @@ export async function giveUpUnclaimedWorkspaceCommand(
           eq(platformJobs.clientInstanceId, input.clientInstanceId),
           eq(platformJobs.kind, WORKSPACE_COMMAND_JOB_KIND),
           eq(platformJobs.dedupeKey, subjectDedupeKey(WORKSPACE_COMMAND_JOB_KIND, input.commandId)),
-          inArray(platformJobs.status, ["queued", "running"])
+          inArray(platformJobs.status, LIVE_JOB_STATUSES)
         )
       )
       .for("update");

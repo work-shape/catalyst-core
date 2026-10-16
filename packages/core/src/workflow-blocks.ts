@@ -1,9 +1,10 @@
+import { WORKFLOW_RESERVED_STEP_TYPES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import type { JsonValue } from "./json";
 import { WORKFLOW_ERROR_CODES, WORKFLOW_STEP_TYPES, type WorkflowStep } from "./workflows";
 
 /** The step types that are reserved and that no engine of this release runs. */
-export const WORKFLOW_RESERVED_STEP_TYPES = ["condition", "parallel"] as const;
+export { WORKFLOW_RESERVED_STEP_TYPES } from "@work-shape/catalyst-asset-schemas";
 
 /** What leaves a `condition`: which branch ran and the output of that branch's last step. */
 export interface WorkflowConditionOutput {

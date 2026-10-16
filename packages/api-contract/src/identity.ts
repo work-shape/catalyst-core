@@ -1,3 +1,4 @@
+import { ADMINISTERED_USER_STATUSES, API_CREDENTIAL_SCOPES, AUTH_PRINCIPAL_KINDS, DELETION_STATES, SERVICE_PRINCIPAL_PERMISSIONS, SERVICE_PRINCIPAL_STATUSES, USER_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import { timestampSchema } from "./shared";
 import { FIRST_PARTY_AUTH_SCOPES } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
@@ -19,7 +20,7 @@ export const chatSessionAuthScopeSchema = z.enum([
 ]);
 
 export const authPrincipalSchema = z.object({
-  kind: z.enum(["user", "service"]),
+  kind: z.enum(AUTH_PRINCIPAL_KINDS),
   id: z.string(),
   displayLabel: z.string(),
   clientInstanceId: z.string(),
@@ -87,12 +88,12 @@ export const exchangeApiKeyResponseSchema = z.object({
 });
 
 /** What an administrator sets. */
-export const userStatusSchema = z.enum(["active", "disabled"]);
+export const userStatusSchema = z.enum(USER_STATUSES);
 /**
  * The status a user is read with. `deleting`: the deletion of the account was accepted, the
  * user is closed and their data is being removed.
  */
-export const administeredUserStatusSchema = z.enum(["active", "disabled", "deleting"]);
+export const administeredUserStatusSchema = z.enum(ADMINISTERED_USER_STATUSES);
 
 export const administeredUserIdentitySchema = z.object({
   clientInstanceId: z.string(),
@@ -127,7 +128,7 @@ export const administeredUserPasswordSignInRequestSchema = z.object({
 });
 
 /** `deleted` means the rows are gone; `deleting` means the account is closed and a job removes the rest. */
-export const userDeletionStateSchema = z.object({ state: z.enum(["deleting", "deleted"]) });
+export const userDeletionStateSchema = z.object({ state: z.enum(DELETION_STATES) });
 
 export const createAdministeredUserRequestSchema = z.object({
   displayLabel: z.string().min(1),
@@ -202,14 +203,11 @@ export const sendAdministeredUserInvitationResponseSchema = z.object({
   ok: z.literal(true)
 });
 
-export const servicePrincipalStatusSchema = z.enum(["active", "disabled"]);
+export const servicePrincipalStatusSchema = z.enum(SERVICE_PRINCIPAL_STATUSES);
 
-export const servicePrincipalPermissionSchema = z.enum([
-  "config_assets.read",
-  "config_assets.release"
-]);
+export const servicePrincipalPermissionSchema = z.enum(SERVICE_PRINCIPAL_PERMISSIONS);
 
-export const apiCredentialScopeSchema = z.enum(["config_assets:read", "config_assets:release"]);
+export const apiCredentialScopeSchema = z.enum(API_CREDENTIAL_SCOPES);
 
 export const apiCredentialSchema = z.object({
   id: z.string(),
@@ -285,7 +283,7 @@ export const auditActorSchema = z.object({
   externalUserId: z.string().optional(),
   displayLabel: z.string(),
   roles: z.array(z.string()),
-  principalKind: z.enum(["user", "service"]).optional(),
+  principalKind: z.enum(AUTH_PRINCIPAL_KINDS).optional(),
   principalId: z.string().optional(),
   principalDisplayLabel: z.string().optional(),
   credentialId: z.string().optional(),

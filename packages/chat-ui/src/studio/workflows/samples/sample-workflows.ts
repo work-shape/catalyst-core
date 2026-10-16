@@ -1,3 +1,4 @@
+import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import type { JsonObject, WorkflowManifest, WorkflowStep } from "@work-shape/catalyst-core";
 
@@ -15,7 +16,7 @@ const OBJECT: JsonObject = { type: "object" };
  * changes, what it works on and the `service` of its Connection. Contract need C8.
  */
 interface StepReading {
-  effect: "reading" | "changing";
+  effect: (typeof OPERATION_EFFECTS)[number];
   source: string;
   service?: string;
 }

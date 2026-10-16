@@ -1,5 +1,6 @@
+import { WEB_SOURCE_PROVIDERS } from "@work-shape/catalyst-asset-schemas";
 export type WebSourceProvider =
-  "openai-native" | "serper" | "tavily" | "firecrawl" | "browserbase" | "direct";
+  (typeof WEB_SOURCE_PROVIDERS)[number];
 
 export interface WebSource {
   id: string;

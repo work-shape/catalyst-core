@@ -1,3 +1,4 @@
+import { API_CREDENTIAL_SCOPES, SERVICE_PRINCIPAL_PERMISSIONS } from "@work-shape/catalyst-core";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -16,8 +17,8 @@ import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 export const API_KEY_ENV_NAME = "CATALYST_API_KEY";
 
 const PRINCIPAL_LABEL = "Local config CLI";
-const PERMISSIONS = ["config_assets.read", "config_assets.release"] as const;
-const SCOPES = ["config_assets:read", "config_assets:release"] as const;
+const PERMISSIONS = SERVICE_PRINCIPAL_PERMISSIONS;
+const SCOPES = API_CREDENTIAL_SCOPES;
 
 type Env = Readonly<Record<string, string | undefined>>;
 

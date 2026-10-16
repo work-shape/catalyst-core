@@ -1,3 +1,4 @@
+import { SERVICE_PRINCIPAL_STATUSES } from "@work-shape/catalyst-core";
 import { KeyRound, Pencil, Plus, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import type {
@@ -510,7 +511,7 @@ function PrincipalForm({
   const { t } = useTranslation();
   const [name, setName] = useState(principal?.displayLabel ?? "");
   const [description, setDescription] = useState(principal?.description ?? "");
-  const [status, setStatus] = useState<"active" | "disabled">(principal?.status ?? "active");
+  const [status, setStatus] = useState<(typeof SERVICE_PRINCIPAL_STATUSES)[number]>(principal?.status ?? "active");
   const [permissions, setPermissions] = useState<ServicePrincipalPermission[]>(
     principal?.permissions ?? DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS
   );
@@ -536,7 +537,7 @@ function PrincipalForm({
       <Field label={t("apiAccessStatus")}>
         <Select
           value={status}
-          onChange={(event) => setStatus(event.target.value as "active" | "disabled")}
+          onChange={(event) => setStatus(event.target.value as (typeof SERVICE_PRINCIPAL_STATUSES)[number])}
         >
           <option value="active">{t("apiAccessActive")}</option>
           <option value="disabled">{t("apiAccessDisabled")}</option>
