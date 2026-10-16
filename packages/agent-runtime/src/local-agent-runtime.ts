@@ -123,13 +123,29 @@ export class LocalAgentRuntime implements AgentRuntime {
       void this.executeRun(runId, input, runContext)
         .catch((error) => {
           const failure = toRunFailureError(error);
-          this.runEvents.reportRunFailure({
-            runId,
-            input,
-            context: runContext,
-            failure,
-            error
-          });
+          // Worker failures abort the caller signal too. Only cancel() marks a member's Stop.
+          const status = state.getStatus();
+          if (status === "cancelling" || status === "cancelled") {
+            this.options.logger?.info(
+              {
+                type: "agent_runtime.run_cancelled",
+                runId,
+                conversationId: input.conversationId,
+                agentName: input.agentName,
+                clientInstanceId: runContext.clientInstanceId,
+                correlationId: runContext.correlationId
+              },
+              "Agent run cancelled"
+            );
+          } else {
+            this.runEvents.reportRunFailure({
+              runId,
+              input,
+              context: runContext,
+              failure,
+              error
+            });
+          }
           state.fail(error, failure);
         })
         .finally(() => {
