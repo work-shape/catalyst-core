@@ -1,17 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Bound GitHub lookups; unavailable or slow CI evidence falls back to the full gate.
+CI_LOOKUP_CONNECT_TIMEOUT_SECONDS=5
+CI_LOOKUP_TIMEOUT_SECONDS=30
+
 usage() {
   cat <<'USAGE'
 Usage:
   check-release.sh --workspace-root DIR --deployment-root DIR
-    [--post-check EXECUTABLE]
+    [--post-check EXECUTABLE] [--full]
 
 Runs the common release gate for a stitched Catalyst workspace. Environment
 examples and loadable config entrypoints are discovered from the deployment.
 Deployment-specific assertions may live in one thin executable passed through
 --post-check; that executable receives WORKSPACE_ROOT, PLATFORM_ROOT,
 CAPABILITIES_ROOT, and DEPLOYMENT_ROOT.
+
+With GH_TOKEN (the existing cross-repository checkout token), reuses successful
+check.yml runs at both pinned SHAs, builds their packages, and keeps all deployment
+checks. Missing or unreadable CI evidence runs both full checks. --full always
+runs both full checks. The token needs Actions read access to both repositories;
+this command never changes its permissions.
 USAGE
 }
 
@@ -27,6 +37,7 @@ log_step() {
 workspace_root=""
 deployment_root=""
 post_check=""
+full="0"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --workspace-root)
@@ -43,6 +54,10 @@ while [[ $# -gt 0 ]]; do
       post_check="${2:-}"
       [[ -n "$post_check" ]] || fail "--post-check requires a value"
       shift 2
+      ;;
+    --full)
+      full="1"
+      shift
       ;;
     -h|--help)
       usage
@@ -199,11 +214,51 @@ if [[ "${CHECK_RELEASE_INSTALL:-1}" != "0" ]]; then
   run_pnpm install --frozen-lockfile
 fi
 
-log_step "Run platform check"
-run_pnpm --dir "$platform_root" check
+github_json() {
+  curl --fail --silent \
+    --connect-timeout "$CI_LOOKUP_CONNECT_TIMEOUT_SECONDS" \
+    --max-time "$CI_LOOKUP_TIMEOUT_SECONDS" \
+    --header "Authorization: Bearer $GH_TOKEN" \
+    --header 'Accept: application/vnd.github+json' \
+    --header 'X-GitHub-Api-Version: 2022-11-28' \
+    "https://api.github.com/repos/$1"
+}
 
-log_step "Run capabilities check"
-run_pnpm --dir "$capabilities_root" check
+successful_check_run() {
+  local repository="$1" ref="$2" runs run_id jobs
+  [[ -n "${GH_TOKEN:-}" ]] || return 1
+  # PR checks can be path-selected. Only push and dispatch runs prove the full gate.
+  runs="$(github_json "$repository/actions/workflows/check.yml/runs?head_sha=$ref&status=success&per_page=100")" \
+    || return 1
+  run_id="$(jq -er --arg sha "$ref" '
+    [.workflow_runs[] | select(.head_sha == $sha and .status == "completed"
+      and .conclusion == "success" and (.event == "push" or .event == "workflow_dispatch"))]
+    | first | .id | select(type == "number")
+  ' <<< "$runs" 2>/dev/null)" || return 1
+  jobs="$(github_json "$repository/actions/runs/$run_id/jobs?filter=latest&per_page=100")" \
+    || return 1
+  jq -e 'any(.jobs[]; .name == "check" and .status == "completed" and .conclusion == "success")' \
+    <<< "$jobs" >/dev/null 2>&1 || return 1
+  printf '%s\n' "$run_id"
+}
+
+if [[ "$full" == "0" ]] \
+  && platform_run="$(successful_check_run work-shape/catalyst-core "$PLATFORM_REF")" \
+  && capabilities_run="$(successful_check_run work-shape/catalyst-capabilities "$CAPABILITIES_REF")"; then
+  log_step "Reuse platform check: work-shape/catalyst-core run $platform_run at $PLATFORM_REF"
+  log_step "Reuse capabilities check: work-shape/catalyst-capabilities run $capabilities_run at $CAPABILITIES_REF"
+  log_step "Build platform packages for deployment assembly"
+  run_pnpm --dir "$platform_root" build
+  log_step "Build capabilities packages for deployment assembly"
+  run_pnpm --dir "$capabilities_root" build
+else
+  log_step "Run full checks (--full requested or successful CI evidence unavailable)"
+  log_step "Run platform check"
+  run_pnpm --dir "$platform_root" check
+
+  log_step "Run capabilities check"
+  run_pnpm --dir "$capabilities_root" check
+fi
 
 log_step "Verify runner image Dockerfile"
 node "$capabilities_root/packages/artifact-helpers/scripts/verify-runner-dockerfile.mjs"

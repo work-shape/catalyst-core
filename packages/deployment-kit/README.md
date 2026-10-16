@@ -171,3 +171,11 @@ the Terraform roots.
 - `verify/`: Node checks of the Compose wiring of the workers, and their helpers.
 - `dev/`: helpers for the local Compose development loop.
 - `tests/`: `pnpm test:deployment-kit` in the platform root. Not shipped.
+
+The release gate accepts `--full` to force platform and capabilities checks. With
+`GH_TOKEN` set to the existing cross-repository checkout token, it reuses successful
+full `check.yml` runs with a successful `check` job at both release SHAs and logs
+their run IDs. It still builds both repositories and runs every deployment check.
+PR runs do not qualify because they can select only some checks. Missing tokens,
+Actions read access, results or failed lookups fall back to both full checks; the
+kit does not change token permissions.

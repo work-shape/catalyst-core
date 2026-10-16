@@ -1120,6 +1120,7 @@ test_shell_files() {
 }
 
 test_shell_files
+bash "$kit_dir/tests/test-check-release.sh"
 test_prepare_build_workspace
 test_update_release
 test_resolve_entry_points
