@@ -21,9 +21,9 @@
         "src/index.tsx",
         "src/{shell,admin}.tsx",
         "src/vite.js",
-        "src/agents/index.ts",
-        "src/apps/index.ts",
-        "src/pages/index.ts",
+        "src/studio/agents/index.ts",
+        "src/studio/apps/index.ts",
+        "src/studio/pages/index.ts",
         "*.config.{ts,js,mjs}"
       ],
       "project": ["src/**/*.{ts,tsx,mts,cts,js}", "*.{ts,mts,cts,js,mjs}"],

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ModelCard, ModelPicker } from "../packages/chat-ui/src/assistant/model-picker";
+import { ModelCard, ModelPicker } from "../packages/chat-ui/src/chat/assistant/model-picker";
 import {
   renderToStaticMarkup as renderInUiRoot,
   TranslationProvider
@@ -11,7 +11,7 @@ import {
   conversationModelPicks,
   modelReasoningEffortSelection,
   type AgentSelectableModel
-} from "../packages/chat-ui/src/workspace/agent-model-selection";
+} from "../packages/chat-ui/src/chat/workspace/agent-model-selection";
 
 const own: AgentSelectableModel = {
   bindingId: "sol",

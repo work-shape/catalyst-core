@@ -5,5 +5,5 @@ export {
   canViewAudit,
   canViewAdministrationPanel,
   canViewUsageGovernance
-} from "./control-plane/governance";
-export { administration } from "./settings/administration";
+} from "./shared/governance";
+export { administration } from "./admin/settings/administration";

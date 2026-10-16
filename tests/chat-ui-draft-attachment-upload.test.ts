@@ -11,11 +11,11 @@ import {
   uploadErrorMessage,
   uploadFileWithRetry,
   withoutDraftAttachment
-} from "../packages/chat-ui/src/conversation/draft-attachment-controller";
+} from "../packages/chat-ui/src/chat/conversation/draft-attachment-controller";
 import {
   isAbandonedDraftConversation,
   terminalRunNotice
-} from "../packages/chat-ui/src/workspace/workspace-chat-model";
+} from "../packages/chat-ui/src/chat/workspace/workspace-chat-model";
 import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 
 const file = () => new File(["content"], "Perso.pdf", { type: "application/pdf" });

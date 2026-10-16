@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { toAttachmentFilePart } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
-import { managedFileIdFromAttachmentContent } from "../packages/chat-ui/src/attachment-preview";
+import { toAttachmentFilePart } from "../packages/chat-ui/src/chat/assistant/assistant-ui-adapter";
+import { managedFileIdFromAttachmentContent } from "../packages/chat-ui/src/chat/files/attachment-preview";
 
 describe("chat attachment previews", () => {
   it("preserves the managed file id needed to open a committed attachment", () => {

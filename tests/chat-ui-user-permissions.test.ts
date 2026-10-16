@@ -9,9 +9,9 @@ import {
   setUserPermission,
   userPermissionCopy,
   userPermissionStates
-} from "../packages/chat-ui/src/control-plane/user-administration-model";
-import { UserPermissionOverview } from "../packages/chat-ui/src/control-plane/user-permission-overview";
-import { UserPermissionsCard } from "../packages/chat-ui/src/control-plane/user-permissions-card";
+} from "../packages/chat-ui/src/admin/control-plane/user-administration-model";
+import { UserPermissionOverview } from "../packages/chat-ui/src/admin/control-plane/user-permission-overview";
+import { UserPermissionsCard } from "../packages/chat-ui/src/admin/control-plane/user-permissions-card";
 import { TranslationProvider } from "./chat-ui-render-harness";
 
 function user(overrides: Partial<AdministeredUser> = {}): AdministeredUser {

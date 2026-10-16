@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
+import { toUiMessages } from "../packages/chat-ui/src/chat/assistant/assistant-ui-adapter";
 import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
-import { ToolSurfaceList } from "../packages/chat-ui/src/tool-surface-card";
-import { dedupeToolSurfaceRefs } from "../packages/chat-ui/src/tool-surfaces";
+import { ToolSurfaceList } from "../packages/chat-ui/src/chat/tools/tool-surface-card";
+import { dedupeToolSurfaceRefs } from "../packages/chat-ui/src/chat/tools/tool-surfaces";
 
 describe("chat UI message history projection", () => {
   it("defers promoted result cards until the active run finishes", () => {

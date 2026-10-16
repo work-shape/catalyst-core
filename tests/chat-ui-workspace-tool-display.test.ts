@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatWorkspaceCommandActionLabel,
   projectWorkspaceToolDisplay
-} from "../packages/chat-ui/src/workspace-tool-display";
+} from "../packages/chat-ui/src/chat/tools/workspace-tool-display";
 
 describe("workspace tool display", () => {
   it("shows the actual sanitized multiline workspace command label", () => {

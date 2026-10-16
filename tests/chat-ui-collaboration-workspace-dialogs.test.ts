@@ -8,39 +8,39 @@ import type {
   WorkspaceMemberCandidate
 } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { BrowseCollaborationWorkspacesDialog } from "../packages/chat-ui/src/collaboration-workspace/browse-collaboration-workspaces-dialog";
-import { CreateCollaborationWorkspaceDialog } from "../packages/chat-ui/src/collaboration-workspace/create-collaboration-workspace-dialog";
+import { BrowseCollaborationWorkspacesDialog } from "../packages/chat-ui/src/shared/collaboration-workspace/browse-collaboration-workspaces-dialog";
+import { CreateCollaborationWorkspaceDialog } from "../packages/chat-ui/src/shared/collaboration-workspace/create-collaboration-workspace-dialog";
 import {
   CollaborationWorkspaceAddMemberForm,
   CollaborationWorkspaceMemberCandidateList,
   nextCollaborationWorkspaceMemberCandidate
-} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-member-search";
+} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-member-search";
 import {
   canChangeCollaborationWorkspaceRole,
   canDeleteCollaborationWorkspace,
   canRemoveCollaborationWorkspaceMember
-} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-roles";
-import { WorkspaceGeneralView } from "../packages/chat-ui/src/settings/pages/workspace-general";
-import { WorkspaceMembersView } from "../packages/chat-ui/src/settings/pages/workspace-members";
+} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-roles";
+import { WorkspaceGeneralView } from "../packages/chat-ui/src/admin/settings/pages/workspace-general";
+import { WorkspaceMembersView } from "../packages/chat-ui/src/admin/settings/pages/workspace-members";
 import {
   collaborationWorkspaceAccentColors,
   collaborationWorkspaceAccentTokens
-} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-accent";
-import { CollaborationWorkspaceEmojiGrid } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-fields";
+} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-accent";
+import { CollaborationWorkspaceEmojiGrid } from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-fields";
 import {
   collaborationWorkspaceEmojiChoices,
   collaborationWorkspaceEmojiSuggestions
-} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-emoji";
+} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-emoji";
 import {
   CollaborationWorkspaceDeletionConfirmStep,
   CollaborationWorkspaceDeletionImpactStep
-} from "../packages/chat-ui/src/collaboration-workspace/delete-collaboration-workspace-dialog";
+} from "../packages/chat-ui/src/shared/collaboration-workspace/delete-collaboration-workspace-dialog";
 import {
   moveConversationDestinations,
   movedConversationVisibility,
   MoveConversationDialog,
   MoveConversationVisibility
-} from "../packages/chat-ui/src/collaboration-workspace/move-conversation-dialog";
+} from "../packages/chat-ui/src/shared/collaboration-workspace/move-conversation-dialog";
 
 const noop = () => undefined;
 

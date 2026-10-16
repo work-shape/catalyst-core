@@ -8,23 +8,23 @@ import {
   createToolResultMetadata
 } from "@work-shape/catalyst-core";
 import { describe, expect, it } from "vitest";
-import { ApprovalDecisionLine } from "../packages/chat-ui/src/approvals/approval-decision-line";
+import { ApprovalDecisionLine } from "../packages/chat-ui/src/chat/approvals/approval-decision-line";
 import {
   APPROVAL_REQUEST_DISPLAY_KIND,
   approvalRevisionHintKey,
   approvalRevisionPlan,
   shouldSendApprovalFollowUp,
   type ApprovalDecisionStatus
-} from "../packages/chat-ui/src/approvals/approval-request-model";
+} from "../packages/chat-ui/src/chat/approvals/approval-request-model";
 import {
   startApprovalRevision,
   type ApprovalRevisionRunInput
-} from "../packages/chat-ui/src/approvals/approval-revision-host";
+} from "../packages/chat-ui/src/chat/approvals/approval-revision-host";
 import {
   toUiMessages,
   type AssistantUiApprovalDecision,
   type AssistantUiMessageMetadata
-} from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
+} from "../packages/chat-ui/src/chat/assistant/assistant-ui-adapter";
 import { TranslationProvider } from "./chat-ui-render-harness";
 
 const MODEL_NOTE = "Approval request apr_1 (skill_change) was decided.";

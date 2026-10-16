@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
-import { workbookToUniverSnapshot } from "../packages/chat-ui/src/spreadsheet-preview";
-import { extractSpreadsheetVisuals } from "../packages/chat-ui/src/spreadsheet-visuals";
+import { workbookToUniverSnapshot } from "../packages/chat-ui/src/chat/files/spreadsheet-preview";
+import { extractSpreadsheetVisuals } from "../packages/chat-ui/src/chat/files/spreadsheet-visuals";
 
 const requireFromChatUi = createRequire(
   new URL("../packages/chat-ui/package.json", import.meta.url)

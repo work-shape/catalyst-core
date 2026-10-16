@@ -9,7 +9,7 @@ import {
 import {
   WorkspaceApiClientProvider,
   useWorkspaceApiClient
-} from "../packages/chat-ui/src/api/workspace-api-client";
+} from "../packages/chat-ui/src/shared/api/workspace-api-client";
 
 const requireFromChatUi = createRequire(
   new URL("../packages/chat-ui/package.json", import.meta.url)

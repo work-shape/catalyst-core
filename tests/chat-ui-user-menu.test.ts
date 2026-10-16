@@ -1,7 +1,7 @@
 import { createElement, Fragment, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
-import { UserMenu } from "../packages/chat-ui/src/workspace/user-menu";
+import { UserMenu } from "../packages/chat-ui/src/chat/workspace/user-menu";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { settingsUser } from "./chat-ui-settings-fixtures";
 

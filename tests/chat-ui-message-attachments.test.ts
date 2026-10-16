@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   partitionAttachments,
   planAttachmentGroup
-} from "../packages/chat-ui/src/message-attachments";
+} from "../packages/chat-ui/src/chat/files/message-attachments";
 
 describe("sent message attachment grouping", () => {
   it("keeps short stacks inline", () => {

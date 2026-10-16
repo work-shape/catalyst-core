@@ -1,0 +1,51 @@
+// What the tests of the Apps area read. The interface itself reaches these through the area
+// route table, the surface renderers and the header of a Page.
+export { ActionTestDialogView } from "./action-test-dialog";
+export { AppActionsView, type AppActionsLiveOnce } from "./actions-view";
+export {
+  appActionInputStart,
+  appActionLiveOnceOffered,
+  appActionOutcome,
+  appActionTestable,
+  appActionTestOutcome,
+  formatAppActionResult,
+  keptWhileItServes,
+  readAppActionInput
+} from "./app-actions-model";
+export type { AppActionsRead } from "./app-data";
+export { AppEditFrame, appDraftIsAhead, PublishDialog } from "./app-edit";
+export { AppDeleteDialog, AppDetailsDialog, appLink } from "./app-header";
+export {
+  APP_ID_PATTERN,
+  appIdFromName,
+  appManifestSummary,
+  appPreviewProblem,
+  appPreviewProblemText,
+  appDraftShown,
+  appRefusalText,
+  appsRowShown,
+  appRowActions,
+  appState,
+  NO_APP_RIGHTS,
+  resolveAppRights,
+  type AppRights
+} from "./app-model";
+export { AppPreviewNotice, appPreviewState } from "./app-preview";
+export { AppToolsGroup, appToolsView, type AppToolsRead } from "./app-tools-group";
+export { AppViewFrame } from "./app-view";
+export { AppsHostProvider, type AppsHost } from "./apps-host";
+export { appRowRoute, AppsPageView } from "./apps-page";
+export { RevisionsDrawerView } from "./revisions-drawer";
+export { pageAppChoice } from "./page-app-action";
+export { SaveAsAppAction, SaveAsAppDialogView } from "./save-as-app-dialog";
+export { UpdateAppAction, UpdateAppDialogView } from "./update-app-dialog";
+// The address of the area and its row in the rail, which the same tests hold.
+export {
+  areaOfRoute,
+  workspaceRouteFromPath,
+  workspaceRouteNavigation,
+  workspaceRoutePath
+} from "../../shared/routes";
+export { railSections, shownRailSections } from "../../chat/workspace/rail-sections";
+export { WorkspaceRail } from "../../chat/workspace/workspace-rail";
+export { parseAppOpens, railApps, RAIL_APPS_LIMIT, withAppOpen, type RailApp } from "./rail-apps";

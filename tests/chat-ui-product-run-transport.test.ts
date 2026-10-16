@@ -3,7 +3,7 @@ import type { StartConversationRunResponse } from "@work-shape/catalyst-api-clie
 import {
   ProductConversationRunTransport,
   startProductConversationRun
-} from "../packages/chat-ui/src/assistant/product-run-transport";
+} from "../packages/chat-ui/src/chat/assistant/product-run-transport";
 
 type ProductUiMessage = Parameters<
   ProductConversationRunTransport["sendMessages"]

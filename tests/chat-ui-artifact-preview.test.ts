@@ -10,13 +10,13 @@ import {
   createImagePagesArtifactPreviewLoadPlan,
   getArtifactSourceFallbackKind,
   shouldUseLiveArtifactPreviewState
-} from "../packages/chat-ui/src/artifact-preview";
-import { ArtifactPreviewMessage } from "../packages/chat-ui/src/artifact-preview-shell";
+} from "../packages/chat-ui/src/chat/files/artifact-preview";
+import { ArtifactPreviewMessage } from "../packages/chat-ui/src/chat/files/artifact-preview-shell";
 import {
   getArtifactFileType,
   type ToolArtifactDownloadRef
-} from "../packages/chat-ui/src/tool-artifacts";
-import { conversationFileFromResource } from "../packages/chat-ui/src/conversation-file-presentation";
+} from "../packages/chat-ui/src/chat/tools/tool-artifacts";
+import { conversationFileFromResource } from "../packages/chat-ui/src/chat/files/conversation-file-presentation";
 import { TranslationProvider } from "./chat-ui-render-harness";
 
 describe("chat UI artifact preview state", () => {

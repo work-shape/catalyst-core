@@ -1,0 +1,573 @@
+import { useEffect, useState, type FormEvent } from "react";
+import { ChevronRight, Copy, Search, UserPlus, Users } from "lucide-react";
+import type {
+  AdministeredUser,
+  UserDeletionState,
+  AdministeredUserIdentity,
+  CreateAdministeredUserRequest,
+  UpdateAdministeredUserRequest,
+  UpsertAdministeredUserIdentityRequest
+} from "@work-shape/catalyst-api-client";
+import {
+  Badge,
+  Banner,
+  Button,
+  Card,
+  Dialog,
+  EmptyState,
+  FilterBar,
+  Input,
+  PageHeader,
+  Pagination,
+  SegmentedControl,
+  SegmentedControlItem,
+  Select,
+  SkeletonList,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@work-shape/catalyst-ui";
+import {
+  DEFAULT_ROWS_PER_PAGE,
+  accessLevelLabel,
+  createEmptyCreateUserForm,
+  authSourceLabel,
+  distinctAuthSources,
+  errorMessage,
+  filterUsers,
+  formToCreateInput,
+  roleFilterOptions,
+  roleLabel,
+  rolesToAccessLevel,
+  type CreateUserFormState,
+  type FormNoticeState,
+  type UserStatusFilter
+} from "./user-administration-model";
+import { UserDetail } from "./user-administration-detail";
+import { CreateUserFields, MaskedPasswordInput } from "./user-administration-fields";
+import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
+import { UserPermissionOverview } from "./user-permission-overview";
+import { useTranslation } from "../../shared/i18n";
+import { formatMomentShort } from "../../shared/locale-format";
+
+interface UserAdministrationPanelProps {
+  users: AdministeredUser[];
+  loading: boolean;
+  error?: string;
+  canManageSuperadminAccess: boolean;
+  mutating: boolean;
+  onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
+  onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
+  onDeleteUser(userId: string): Promise<UserDeletionState>;
+  onUpsertIdentity(
+    userId: string,
+    input: UpsertAdministeredUserIdentityRequest
+  ): Promise<AdministeredUser>;
+  onDeleteIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
+  onResetPassword(userId: string, password: string): Promise<unknown>;
+  /** Absent while invitation emails are unavailable for this client instance. */
+  onSendInvitation?(userId: string): Promise<unknown>;
+}
+
+export function UserAdministrationPanel({
+  users,
+  loading,
+  error,
+  canManageSuperadminAccess,
+  mutating,
+  onCreateUser,
+  onUpdateUser,
+  onDeleteUser,
+  onUpsertIdentity,
+  onDeleteIdentity,
+  onResetPassword,
+  onSendInvitation
+}: UserAdministrationPanelProps) {
+  const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [listView, setListView] = useState<"users" | "permissions">("users");
+  const { t, locale } = useTranslation();
+  const selectedUser = users.find((user) => user.id === selectedUserId);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, roleFilter, rowsPerPage]);
+
+  useEffect(() => {
+    const liveUserIds = new Set(users.map((user) => user.id));
+    setSelectedRowIds((currentIds) => {
+      const nextIds = new Set([...currentIds].filter((id) => liveUserIds.has(id)));
+      return nextIds.size === currentIds.size ? currentIds : nextIds;
+    });
+  }, [users]);
+
+  if (selectedUser) {
+    return (
+      <UserDetail
+        user={selectedUser}
+        canManageSuperadminAccess={canManageSuperadminAccess}
+        canDeleteUser={canManageSuperadminAccess}
+        mutating={mutating}
+        onBack={() => setSelectedUserId(undefined)}
+        onUpdateUser={onUpdateUser}
+        onDeleteUser={onDeleteUser}
+        onDeleted={() => setSelectedUserId(undefined)}
+        onUpsertIdentity={onUpsertIdentity}
+        onDeleteIdentity={onDeleteIdentity}
+        onResetPassword={onResetPassword}
+        onSendInvitation={onSendInvitation}
+      />
+    );
+  }
+
+  const roleOptions = roleFilterOptions(users);
+  const visibleUsers = filterUsers(users, { search, statusFilter, roleFilter });
+  const pageCount = Math.max(1, Math.ceil(visibleUsers.length / rowsPerPage));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * rowsPerPage;
+  const pageUsers = visibleUsers.slice(pageStart, pageStart + rowsPerPage);
+  const selectedPageCount = pageUsers.filter((user) => selectedRowIds.has(user.id)).length;
+  const allPageRowsSelected = pageUsers.length > 0 && selectedPageCount === pageUsers.length;
+  const activeUserCount = users.filter((user) => user.status === "active").length;
+
+  function toggleRowSelection(userId: string, checked: boolean) {
+    setSelectedRowIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      if (checked) {
+        nextIds.add(userId);
+      } else {
+        nextIds.delete(userId);
+      }
+      return nextIds;
+    });
+  }
+
+  function togglePageSelection(checked: boolean) {
+    setSelectedRowIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      for (const user of pageUsers) {
+        if (checked) {
+          nextIds.add(user.id);
+        } else {
+          nextIds.delete(user.id);
+        }
+      }
+      return nextIds;
+    });
+  }
+
+  return (
+    <>
+      <PageHeader
+        title={t("settings.users")}
+        description={t("settings.usersSummary", {
+          total: users.length.toLocaleString(locale),
+          active: activeUserCount.toLocaleString(locale)
+        })}
+        primaryAction={
+          <Button type="button" onClick={() => setCreateOpen(true)}>
+            <UserPlus aria-hidden="true" />
+            {t("settings.userNew")}
+          </Button>
+        }
+      />
+      <div className="grid min-w-0 content-start gap-4">
+        <FilterBar
+          search={
+            <Input
+              type="search"
+              leadingIcon={<Search aria-hidden="true" />}
+              placeholder={t("settings.userSearch")}
+              aria-label={t("settings.userSearch")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          }
+          filters={
+            <>
+              <Select
+                className="w-full font-medium sm:w-40"
+                aria-label={t("settings.userFilterByStatus")}
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as UserStatusFilter)}
+              >
+                <option value="all">{t("allStatuses")}</option>
+                <option value="active">{t("settings.statusActive")}</option>
+                <option value="disabled">{t("settings.statusDisabled")}</option>
+              </Select>
+              <Select
+                className="w-full font-medium sm:w-40"
+                aria-label={t("settings.userFilterByRole")}
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value)}
+              >
+                <option value="all">{t("settings.userAllRoles")}</option>
+                {roleOptions.map((role) => {
+                  const label = roleLabel(role);
+                  return (
+                    <option key={role} value={role}>
+                      {label ? t(label) : role}
+                    </option>
+                  );
+                })}
+              </Select>
+            </>
+          }
+          actions={
+            <SegmentedControl
+              label={t("userListViewChoice")}
+              value={listView}
+              onValueChange={(value) =>
+                setListView(value === "permissions" ? "permissions" : "users")
+              }
+            >
+              <SegmentedControlItem value="users">{t("userListView")}</SegmentedControlItem>
+              <SegmentedControlItem value="permissions">
+                {t("userRightsOverview")}
+              </SegmentedControlItem>
+            </SegmentedControl>
+          }
+        />
+
+        {error ? <Banner tone="danger">{error}</Banner> : null}
+
+        <Card className="overflow-hidden">
+          {selectedRowIds.size > 0 && listView === "users" ? (
+            <div className="flex flex-wrap items-center gap-3 border-b bg-primary/10 px-4 py-2.5">
+              <span className="text-sm font-semibold text-primary">
+                {t("settings.userSelectedCount", {
+                  count: selectedRowIds.size.toLocaleString(locale)
+                })}
+              </span>
+              <div className="flex-1" />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-primary hover:bg-primary/15"
+                onClick={() => setSelectedRowIds(new Set())}
+              >
+                {t("settings.userClearSelection")}
+              </Button>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <SkeletonList className="px-4" />
+          ) : visibleUsers.length === 0 ? (
+            <EmptyState
+              layout="inline"
+              icon={<Users aria-hidden="true" />}
+              action={
+                users.length === 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCreateOpen(true)}
+                  >
+                    <UserPlus aria-hidden="true" />
+                    {t("settings.userCreateFirst")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {t(users.length === 0 ? "settings.usersEmpty" : "settings.usersNoMatch")}
+            </EmptyState>
+          ) : listView === "permissions" ? (
+            <UserPermissionOverview users={visibleUsers} onSelectUser={setSelectedUserId} />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10 px-4">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-sky-600"
+                      aria-label={t("settings.userSelectVisible")}
+                      checked={allPageRowsSelected}
+                      onChange={(event) => togglePageSelection(event.target.checked)}
+                    />
+                  </TableHead>
+                  <TableHead className="px-4">{t("userRightsOverviewUser")}</TableHead>
+                  <TableHead className="px-4">{t("settings.userAccess")}</TableHead>
+                  <TableHead className="px-4">{t("settings.status")}</TableHead>
+                  <TableHead className="px-4">{t("settings.userSignInMethods")}</TableHead>
+                  <TableHead className="px-4">{t("settings.userLastActive")}</TableHead>
+                  <TableHead className="w-8" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pageUsers.map((user) => (
+                  <TableRow
+                    key={user.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setSelectedUserId(user.id)}
+                  >
+                    <TableCell className="px-4" onClick={(event) => event.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-sky-600"
+                        aria-label={t("settings.userSelect", { name: user.displayLabel })}
+                        checked={selectedRowIds.has(user.id)}
+                        onChange={(event) => toggleRowSelection(user.id, event.target.checked)}
+                      />
+                    </TableCell>
+                    <TableCell className="min-w-64 max-w-80 px-4">
+                      <Button
+                        variant="ghost"
+                        className="h-auto w-full min-w-0 justify-start gap-3 rounded-none px-0 py-0 text-left"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedUserId(user.id);
+                        }}
+                      >
+                        <UserAvatar displayLabel={user.displayLabel} />
+                        <span className="grid min-w-0 gap-0.5">
+                          <span className="truncate font-medium" title={user.displayLabel}>
+                            {user.displayLabel}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {user.email ?? user.id}
+                          </span>
+                        </span>
+                      </Button>
+                    </TableCell>
+                    <TableCell className="px-4">
+                      <Badge appearance="outline">
+                        {t(accessLevelLabel(rolesToAccessLevel(user.roles)))}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4">
+                      <StatusBadge status={user.status} />
+                    </TableCell>
+                    <TableCell className="px-4 text-muted-foreground">
+                      {user.identities.length > 0
+                        ? distinctAuthSources(user.identities)
+                            .map((source) => authSourceLabel(source, t))
+                            .join(", ")
+                        : t("settings.userSignInMethodsNone")}
+                    </TableCell>
+                    <TableCell className="px-4 whitespace-nowrap text-muted-foreground">
+                      {user.lastAuthenticatedAt
+                        ? formatMomentShort(user.lastAuthenticatedAt, locale)
+                        : t("settings.never")}
+                    </TableCell>
+                    <TableCell className="px-4 text-muted-foreground">
+                      <ChevronRight size={15} aria-hidden="true" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          {!loading && visibleUsers.length > 0 && listView === "users" ? (
+            <Pagination
+              className="border-t px-4 py-3"
+              page={currentPage}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              range={t("settings.paginationRange", {
+                from: pageStart + 1,
+                to: Math.min(pageStart + rowsPerPage, visibleUsers.length),
+                total: visibleUsers.length.toLocaleString(locale)
+              })}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={setRowsPerPage}
+              labels={{
+                rows: t("settings.paginationRows"),
+                rowsPerPage: t("settings.paginationRowsPerPage"),
+                previous: t("settings.paginationPrevious"),
+                next: t("settings.paginationNext")
+              }}
+            />
+          ) : null}
+        </Card>
+
+        <CreateUserDialog
+          open={createOpen}
+          canManageSuperadminAccess={canManageSuperadminAccess}
+          mutating={mutating}
+          onClose={() => setCreateOpen(false)}
+          onCreateUser={onCreateUser}
+          onSendInvitation={onSendInvitation}
+          onCreated={(user) => {
+            setCreateOpen(false);
+            setSelectedUserId(user.id);
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
+function CreateUserDialog({
+  open,
+  canManageSuperadminAccess,
+  mutating,
+  onClose,
+  onCreateUser,
+  onSendInvitation,
+  onCreated
+}: {
+  open: boolean;
+  canManageSuperadminAccess: boolean;
+  mutating: boolean;
+  onClose(): void;
+  onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
+  onSendInvitation?(userId: string): Promise<unknown>;
+  onCreated(user: AdministeredUser): void;
+}) {
+  const { t } = useTranslation();
+  const invitationsEnabled = Boolean(onSendInvitation);
+  const [form, setForm] = useState<CreateUserFormState>(() =>
+    createEmptyCreateUserForm(invitationsEnabled)
+  );
+  const [createdResult, setCreatedResult] = useState<{
+    user: AdministeredUser;
+    password?: string;
+  }>();
+  const [notice, setNotice] = useState<FormNoticeState>();
+
+  useEffect(() => {
+    if (open) {
+      setForm(createEmptyCreateUserForm(invitationsEnabled));
+      setCreatedResult(undefined);
+      setNotice(undefined);
+    }
+  }, [open, invitationsEnabled]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNotice(undefined);
+    try {
+      const created = await onCreateUser(formToCreateInput(form));
+      if (form.sendInvitation && onSendInvitation) {
+        setCreatedResult({ user: created });
+        try {
+          await onSendInvitation(created.id);
+          setNotice({ kind: "success", text: t("settings.userCreatedInvitationSent") });
+        } catch (error) {
+          setNotice({
+            kind: "error",
+            text: t("settings.userCreatedInvitationFailed", {
+              error: errorMessage(error, t("settings.requestFailed"))
+            })
+          });
+        }
+        return;
+      }
+      if (form.createPasswordSignIn) {
+        setCreatedResult({ user: created, password: form.password });
+        setNotice({
+          kind: "success",
+          text: t("settings.userCreatedSharePassword")
+        });
+        return;
+      }
+      setForm(createEmptyCreateUserForm(invitationsEnabled));
+      onCreated(created);
+    } catch (error) {
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
+    }
+  }
+
+  async function copyPassword() {
+    if (!createdResult?.password) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(createdResult.password);
+      setNotice({ kind: "success", text: t("settings.userPasswordCopied") });
+    } catch {
+      setNotice({ kind: "error", text: t("settings.userPasswordCopyFailed") });
+    }
+  }
+
+  if (createdResult) {
+    return (
+      <Dialog open={open} title={t("settings.userCreated")} onClose={onClose}>
+        <div className="grid gap-4">
+          <div className="grid gap-1">
+            <strong className="text-sm">{createdResult.user.displayLabel}</strong>
+            <span className="text-sm text-muted-foreground">{createdResult.user.email}</span>
+          </div>
+          {createdResult.password ? (
+            <Field
+              label={t("settings.passwordInitial")}
+              hint={t("settings.userInitialPasswordShownOnce")}
+            >
+              <div className="flex gap-2">
+                <MaskedPasswordInput
+                  readOnly
+                  value={createdResult.password}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => void copyPassword()}
+                >
+                  <Copy size={16} aria-hidden="true" />
+                  {t("copy")}
+                </Button>
+              </div>
+            </Field>
+          ) : null}
+          <FormNotice notice={notice} />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t("close")}
+            </Button>
+            <Button type="button" onClick={() => onCreated(createdResult.user)}>
+              {t("settings.userOpen")}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={open} title={t("settings.userNew")} onClose={onClose}>
+      <form className="grid gap-3" onSubmit={submit}>
+        <CreateUserFields
+          form={form}
+          canManageSuperadminAccess={canManageSuperadminAccess}
+          invitationsEnabled={invitationsEnabled}
+          onChange={setForm}
+        />
+        <FormNotice notice={notice} />
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="outline" onClick={onClose}>
+            {t("cancel")}
+          </Button>
+          <Button
+            type="submit"
+            disabled={
+              mutating ||
+              !form.displayLabel.trim() ||
+              (form.sendInvitation
+                ? !form.email.trim() || form.status !== "active"
+                : form.createPasswordSignIn && (!form.email.trim() || form.password.length < 8))
+            }
+          >
+            <UserPlus size={16} aria-hidden="true" />
+            {t("settings.userCreate")}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}

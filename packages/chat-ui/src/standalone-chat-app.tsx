@@ -10,23 +10,26 @@ import {
   useLocation,
   useRouter
 } from "@tanstack/react-router";
-import type { ClientLabelOverrides } from "./i18n";
+import type { ClientLabelOverrides } from "./shared/i18n";
 import { ChatShell } from "./chat-shell";
-import type { ChatShellAdministration } from "./settings/page-definition";
-import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
-import { ToolActivityLabelsProvider, type ToolActivityLabels } from "./assistant/tool-activity";
-import { hasLeaveGuard, mayLeave, subscribeLeaveGuard } from "./leave-guard";
-import { installStaleChunkRecovery } from "./stale-chunk-recovery";
-import { applyDocumentThemeMode } from "./theme";
+import type { ChatShellAdministration } from "./shared/page-definition";
+import type { ToolDisplayWidgetRegistry } from "./shared/domain-ui-widgets";
+import {
+  ToolActivityLabelsProvider,
+  type ToolActivityLabels
+} from "./chat/assistant/tool-activity";
+import { hasLeaveGuard, mayLeave, subscribeLeaveGuard } from "./shared/leave-guard";
+import { installStaleChunkRecovery } from "./shared/stale-chunk-recovery";
+import { applyDocumentThemeMode } from "./shared/theme";
 import {
   areaRoutePaths,
   workspaceRouteFromPath,
   workspaceRouteNavigation,
   workspaceRoutePath
-} from "./routes";
-import { dockViewTransition, dockViewTransitionsSupported } from "./dock/dock-motion";
-import { dockConversationOfSearch, searchWithDock } from "./workspace/dock-state";
-import type { WorkspaceRoute, WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
+} from "./shared/routes";
+import { dockViewTransition, dockViewTransitionsSupported } from "./chat/dock/dock-motion";
+import { dockConversationOfSearch, searchWithDock } from "./chat/workspace/dock-state";
+import type { WorkspaceRoute, WorkspaceRouteChangeOptions } from "./shared/workspace-route";
 
 export interface StandaloneChatAppOptions {
   apiBaseUrl?: string;
