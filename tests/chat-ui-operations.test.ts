@@ -205,6 +205,43 @@ describe("operation runs list", () => {
     }
   });
 
+  it.each([
+    [
+      "pending_confirmation",
+      "confirmed",
+      "Confirmed, waiting to run",
+      "Bestätigt, wartet auf Ausführung"
+    ],
+    [
+      "pending_approval",
+      "approved",
+      "Approved, waiting to run",
+      "Freigegeben, wartet auf Ausführung"
+    ]
+  ] as const)(
+    "says a %s call that was %s waits to run, not for a decision",
+    (status, mode, english, german) => {
+      const waiting = run({
+        status,
+        startedAt: undefined,
+        finishedAt: undefined,
+        decision: { mode, by: "user-anna", at: "2026-10-05T08:00:02.000Z" }
+      });
+      const waits = /Waiting for (confirmation|approval)|Wartet auf (Bestätigung|Freigabe)/u;
+
+      for (const [markup, words] of [
+        [table([waiting]), english],
+        [table([waiting], "de"), german],
+        [detail(waiting), english],
+        [detail(waiting, "de"), german]
+      ] as const) {
+        expect(markup).toContain(words);
+        expect(markup).not.toMatch(waits);
+      }
+      expect(table([waiting])).toContain('data-status="' + status + '"');
+    }
+  );
+
   it("shows a dash for a run outside a workspace and for one that has not ended", () => {
     const markup = table([
       run({ workspaceId: undefined, finishedAt: undefined, status: "running" })

@@ -1,16 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ApiError, type OperationInput } from "@work-shape/catalyst-api-client";
+import type { OperationInput } from "@work-shape/catalyst-api-client";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { APPROVAL_AUTH_SCOPE } from "../../shared/api/approval-request-api";
+import { toolDecisionFailure } from "./tool-decision-model";
 
 export type ToolDecisionInput = OperationInput<"operations.decide">["body"];
-
-/**
- * Why an answer was not taken. `already_decided`: the call was decided otherwise first, in
- * another tab or by its expiry. `not_yours`: only the person the run acts for decides, and the
- * server answers anybody else that it knows no such call.
- */
-export type ToolDecisionFailure = "failed" | "already_decided" | "not_yours";
 
 /**
  * Answers a call that waits for the person's confirmation (`operations.decide`). The card shows
@@ -29,21 +23,6 @@ export function useToolDecisionDecide(operationRunId: string) {
     decided: mutation.isSuccess ? mutation.variables : undefined,
     failure: toolDecisionFailure(mutation.error)
   };
-}
-
-function toolDecisionFailure(error: unknown): ToolDecisionFailure | undefined {
-  if (!error) return undefined;
-  if (error instanceof ApiError && (error.status === 409 || error.code === "CONFLICT")) {
-    return "already_decided";
-  }
-  // The server answers a call of another person's run as one it does not know.
-  if (
-    error instanceof ApiError &&
-    (error.status === 403 || error.status === 404 || error.code === "FORBIDDEN")
-  ) {
-    return "not_yours";
-  }
-  return "failed";
 }
 
 /**

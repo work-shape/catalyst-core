@@ -2,6 +2,7 @@ import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  DECISION_EXPIRED_REASON,
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
@@ -336,6 +337,12 @@ describe("an agent's call that waits for its person's decision", () => {
       // Move the persisted deadline past the database clock, never fake the driver's timers.
       await sql`update operation_runs set expires_at = now() - interval '1 second'
         where id = ${waiting.id}`;
+      // Before the sweep, the deadline alone refuses the answer, and says it expired.
+      const late = await f.decide(waiting.id, "confirm");
+      expect(late.statusCode, late.body).toBe(409);
+      expect(late.json()).toMatchObject({
+        error: { code: "CONFLICT", details: { reason: DECISION_EXPIRED_REASON } }
+      });
       await getTestJobs(f.app).runDue();
       expect(await f.callsOf(said.runId)).toMatchObject([{ id: waiting.id, status: "expired" }]);
       expect(await f.agentRun(said.runId)).toMatchObject({ status: "queued" });
@@ -353,7 +360,11 @@ describe("an agent's call that waits for its person's decision", () => {
       expect(
         (await f.events(said.runId)).filter((event) => event.type === "tool_decision_recorded")
       ).toMatchObject([{ operationRunId: waiting.id, outcome: "expired" }]);
-      expect((await f.decide(waiting.id, "confirm")).statusCode).toBe(409);
+      const expired = await f.decide(waiting.id, "confirm");
+      expect(expired.statusCode, expired.body).toBe(409);
+      expect(expired.json()).toMatchObject({
+        error: { code: "CONFLICT", details: { reason: DECISION_EXPIRED_REASON } }
+      });
     } finally {
       await sql.end({ timeout: 5 });
     }
@@ -429,6 +440,13 @@ describe("an agent's call that waits for its person's decision", () => {
           limit: 10
         })
       ).toEqual([]);
+      // A decline from a stale tab after the deadline: the call was confirmed and may run,
+      // so the refusal must not say it expired.
+      const stale = await f.decide(waiting.id, "decline");
+      expect(stale.statusCode, stale.body).toBe(409);
+      expect(
+        stale.json<{ error: { details?: { reason?: string } } }>().error.details?.reason
+      ).not.toBe(DECISION_EXPIRED_REASON);
     } finally {
       await sql.end({ timeout: 5 });
     }

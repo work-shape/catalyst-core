@@ -30,6 +30,15 @@ export function useToolDecision(toolCallId: string): ToolDecision | undefined {
   return useContext(ToolDecisionsContext).get(toolCallId);
 }
 
+/**
+ * What the run waits for, where it waits: `confirm` when one of its calls waits for the person
+ * in this chat, else `approval` when one waits for somebody else's approval.
+ */
+export function useRunWaitsFor(): ToolDecision["mode"] | undefined {
+  const modes = [...useContext(ToolDecisionsContext).values()].map((decision) => decision.mode);
+  return modes.includes("confirm") ? "confirm" : modes[0];
+}
+
 /** Whether one of these tool calls waits for a decision. */
 export function useWaitsForDecision(toolCallIds: readonly string[]): boolean {
   const decisions = useContext(ToolDecisionsContext);

@@ -38,7 +38,7 @@ export const operationStatusLabelKeys: Record<OperationRunStatus, TranslationKey
 };
 
 /** Warning is for what waits on a person. A refused or expired call is over and needs nobody. */
-export const operationStatusTones: Record<OperationRunStatus, BadgeTone> = {
+const operationStatusTones: Record<OperationRunStatus, BadgeTone> = {
   running: "info",
   pending_confirmation: "warning",
   pending_approval: "warning",
@@ -47,6 +47,25 @@ export const operationStatusTones: Record<OperationRunStatus, BadgeTone> = {
   denied: "neutral",
   expired: "neutral"
 };
+
+/**
+ * The badge of a run's status. A call that was confirmed or approved keeps its waiting status
+ * until the worker of its Agent Run takes it for execution, which is what exactly-once rests
+ * on. Meanwhile it waits for no person, so its badge does not say it does.
+ */
+export function operationRunStatusBadge(run: Pick<OperationRunResource, "status" | "decision">): {
+  labelKey: TranslationKey;
+  tone: BadgeTone;
+} {
+  const decided = run.decision?.mode;
+  if (run.status === "pending_confirmation" && decided === "confirmed") {
+    return { labelKey: "operations.statusConfirmedWaitingToRun", tone: "info" };
+  }
+  if (run.status === "pending_approval" && decided === "approved") {
+    return { labelKey: "operations.statusApprovedWaitingToRun", tone: "info" };
+  }
+  return { labelKey: operationStatusLabelKeys[run.status], tone: operationStatusTones[run.status] };
+}
 
 export const operationOriginLabelKeys: Record<OperationRunOriginKind, TranslationKey> = {
   agent: "operations.originAgent",

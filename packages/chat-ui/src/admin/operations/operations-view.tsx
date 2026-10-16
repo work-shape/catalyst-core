@@ -34,11 +34,11 @@ import {
   operationRunOriginFields,
   operationRunOriginKindOf,
   operationRunOriginKinds,
+  operationRunStatusBadge,
   operationRunStatusOf,
   operationRunStatuses,
   operationRunWorkspaceLabel,
   operationStatusLabelKeys,
-  operationStatusTones,
   type OperationRunAppFacts,
   type OperationRunFilter
 } from "../../shared/operations-model";
@@ -216,9 +216,7 @@ export function OperationRunsTable({
                 )}
               </TableCell>
               <TableCell>
-                <Badge tone={operationStatusTones[run.status]} dot>
-                  {t(operationStatusLabelKeys[run.status])}
-                </Badge>
+                <OperationRunStatus run={run} />
               </TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">
                 {formatDateTime(run.startedAt ?? run.createdAt, locale)}
@@ -232,6 +230,16 @@ export function OperationRunsTable({
         })}
       </TableBody>
     </Table>
+  );
+}
+
+function OperationRunStatus({ run }: { run: OperationRunResource }) {
+  const { t } = useTranslation();
+  const { labelKey, tone } = operationRunStatusBadge(run);
+  return (
+    <Badge tone={tone} dot>
+      {t(labelKey)}
+    </Badge>
   );
 }
 
@@ -262,9 +270,7 @@ export function OperationRunDetail({
         {run.operation}
       </Fact>
       <Fact name="status" label={t("operations.status")}>
-        <Badge tone={operationStatusTones[run.status]} dot>
-          {t(operationStatusLabelKeys[run.status])}
-        </Badge>
+        <OperationRunStatus run={run} />
       </Fact>
       <Fact name="effect" label={t("operations.effect")}>
         {t(run.effect === "reading" ? "operations.effectReading" : "operations.effectChanging")}

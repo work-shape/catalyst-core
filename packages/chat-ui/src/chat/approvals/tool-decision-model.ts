@@ -1,5 +1,8 @@
-import type { DecideWaitingToolCallInput } from "@work-shape/catalyst-core";
-import type { AgentRunProjection } from "@work-shape/catalyst-api-client";
+import {
+  DECISION_EXPIRED_REASON,
+  type DecideWaitingToolCallInput
+} from "@work-shape/catalyst-core";
+import { ApiError, type AgentRunProjection } from "@work-shape/catalyst-api-client";
 
 type ProjectionDecision = NonNullable<
   Extract<AgentRunProjection["parts"][number], { type: "tool_call" }>["decision"]
@@ -24,6 +27,41 @@ export interface ToolDecisionInputRow {
   truncated: boolean;
   /** How many characters the whole value has, where it was cut. */
   length?: number;
+}
+
+/**
+ * Why an answer was not taken. `already_decided`: the call was decided otherwise first, in
+ * another tab, and may have run. `expired`: the server says its time ran out before the
+ * answer arrived, so nothing ran. `not_yours`: only the person the run acts for decides, and
+ * the server answers anybody else that it knows no such call.
+ */
+export type ToolDecisionFailure = "failed" | "already_decided" | "expired" | "not_yours";
+
+/**
+ * The failure of an answer the server refused. Only the server's own reason makes a conflict
+ * an expiry (EW-2c); without it the call was decided otherwise, and may have run.
+ */
+export function toolDecisionFailure(error: unknown): ToolDecisionFailure | undefined {
+  if (!error) return undefined;
+  if (error instanceof ApiError && (error.status === 409 || error.code === "CONFLICT")) {
+    return conflictReason(error.payload) === DECISION_EXPIRED_REASON
+      ? "expired"
+      : "already_decided";
+  }
+  // The server answers a call of another person's run as one it does not know.
+  if (
+    error instanceof ApiError &&
+    (error.status === 403 || error.status === 404 || error.code === "FORBIDDEN")
+  ) {
+    return "not_yours";
+  }
+  return "failed";
+}
+
+function conflictReason(payload: unknown): unknown {
+  const error = isRecord(payload) ? payload.error : undefined;
+  const details = isRecord(error) ? error.details : undefined;
+  return isRecord(details) ? details.reason : undefined;
 }
 
 /** The calls of a run that wait for a decision, by tool call. */

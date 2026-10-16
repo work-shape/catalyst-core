@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Spinner } from "@work-shape/catalyst-ui";
 import { formatElapsedSeconds } from "./thread-time";
 import { useTranslation } from "../../shared/i18n";
+import { useRunWaitsFor } from "../approvals/tool-decision-context";
 import type { RunActivity } from "./thread-activity";
 import { useToolActivityLabel } from "./tool-activity";
 
@@ -71,12 +72,18 @@ export function useAssistantActivityLabel({
   variationSeed?: string;
 }): string {
   const { locale, t } = useTranslation();
+  const waitsFor = useRunWaitsFor();
   const runningToolName = activity?.kind === "tool" ? activity.toolName : undefined;
   const runningToolLabel = useToolLabel(runningToolName, locale);
   const preparingToolLabel = useToolLabel(preparingToolName, locale);
-  const isFallback = !runningToolLabel && !preparingToolLabel && activity?.kind !== "reasoning";
+  const isFallback =
+    !waitsFor && !runningToolLabel && !preparingToolLabel && activity?.kind !== "reasoning";
   const fallbackRotation = useFallbackRotation(isFallback);
 
+  // A run held for a decision does nothing until somebody decides; it says so.
+  if (waitsFor) {
+    return t(waitsFor === "confirm" ? "waitingForDecision" : "waitingForApproval");
+  }
   // A running tool is observed state; `preparingToolName` is an announcement
   // that may still describe the call currently in flight. Observed state wins.
   if (runningToolLabel) {

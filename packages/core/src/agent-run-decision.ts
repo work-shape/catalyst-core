@@ -24,6 +24,13 @@ export type ToolDecisionRunner = (
   context: RuntimeCallContext
 ) => Promise<ToolExecutionResult>;
 
+/**
+ * `details.reason` of the CONFLICT a decision answers when the call's time ran out before it
+ * was decided: nothing ran. Every other CONFLICT of a decision means the call was decided
+ * otherwise first, and may have run.
+ */
+export const DECISION_EXPIRED_REASON = "decision_expired";
+
 /** A person's decision on a call an Agent Run waits on. */
 export interface DecideWaitingToolCallInput {
   clientInstanceId: ClientInstanceId;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { AgentRunProjection } from "@work-shape/catalyst-api-client";
+import { ToolDecisionsProvider } from "@work-shape/catalyst-chat-ui/tool-call";
 import {
   AssistantActivityStatus,
   acknowledgeRecentlyActiveAssistantRunId,
@@ -133,6 +135,35 @@ describe("chat UI thread activity", () => {
     );
   });
 
+  it.each([
+    ["confirm", "de", "Ich warte auf eine Entscheidung…"],
+    ["confirm", "en", "Waiting for a decision…"],
+    ["approval", "de", "Ich warte auf die Freigabe…"],
+    ["approval", "en", "Waiting for approval…"]
+  ] as const)(
+    "says a run held for %s waits, instead of naming its tool (%s)",
+    (mode, locale, words) => {
+      const markup = renderActivityStatus(
+        { activity: { kind: "tool", toolName: "documents.check" }, variationSeed: "run_42" },
+        { locale, parts: [waitingCall(mode)] }
+      );
+
+      expect(markup).toContain(words);
+      expect(markup).not.toMatch(/Unterlagenprüfung|document check|Ich gehe alles durch/u);
+      expect(markup.match(/role="status"/gu)).toHaveLength(1);
+    }
+  );
+
+  it("goes back to the run's own words once nothing waits for a decision", () => {
+    const decided = { ...waitingCall("confirm"), state: "input_available" as const };
+    const markup = renderActivityStatus(
+      { activity: { kind: "tool", toolName: "documents.check" } },
+      { parts: [decided] }
+    );
+
+    expect(markup).toContain("Bearbeite Unterlagenprüfung…");
+  });
+
   it("shows the elapsed run time next to the phrase", () => {
     expect(renderActivityStatus({})).toContain(">0s<");
   });
@@ -181,11 +212,32 @@ describe("chat UI thread activity", () => {
   });
 });
 
-function renderActivityStatus(props: Parameters<typeof AssistantActivityStatus>[0]): string {
+type ProjectionPart = AgentRunProjection["parts"][number];
+
+function waitingCall(mode: "confirm" | "approval"): ProjectionPart {
+  return {
+    type: "tool_call",
+    toolCallId: "call_1",
+    toolName: "documents.check",
+    state: "waiting_for_decision",
+    decision: {
+      operationRunId: "oprun_1",
+      operationId: "documents.check",
+      mode,
+      inputPreview: {},
+      expiresAt: "2026-10-16T18:30:00Z"
+    }
+  };
+}
+
+function renderActivityStatus(
+  props: Parameters<typeof AssistantActivityStatus>[0],
+  { locale = "de", parts }: { locale?: "de" | "en"; parts?: ProjectionPart[] } = {}
+): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { children: null, locale: "de" },
+      { children: null, locale },
       createElement(
         ToolActivityLabelsProvider,
         {
@@ -195,7 +247,10 @@ function renderActivityStatus(props: Parameters<typeof AssistantActivityStatus>[
             "structured_data.publish": { de: "Kundendaten", en: "customer data" }
           }
         },
-        createElement(AssistantActivityStatus, props)
+        createElement(ToolDecisionsProvider, {
+          parts,
+          children: createElement(AssistantActivityStatus, props)
+        })
       )
     )
   );

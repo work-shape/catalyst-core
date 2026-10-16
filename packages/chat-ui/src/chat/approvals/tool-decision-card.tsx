@@ -19,13 +19,13 @@ import { CallInputs } from "./operation-call-body";
 import {
   useToolDecisionDecide,
   useWaitingOperationRunQuery,
-  type ToolDecisionFailure,
   type ToolDecisionInput
 } from "./tool-decision-api";
 import {
   DECLINE_REASON_MAX_CHARS,
   toolDecisionInputRows,
   type ToolDecision,
+  type ToolDecisionFailure,
   type ToolDecisionOutcome
 } from "./tool-decision-model";
 
@@ -37,6 +37,7 @@ const OUTCOME: Record<ToolDecisionOutcome, { label: TranslationKey; tone: "info"
 const FAILURE: Record<ToolDecisionFailure, TranslationKey> = {
   failed: "toolDecisionFailed",
   already_decided: "toolDecisionAlreadyDecided",
+  expired: "toolDecisionExpired",
   not_yours: "toolDecisionNotYours"
 };
 

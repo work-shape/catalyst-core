@@ -1,7 +1,8 @@
 import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import type { AgentRunProjection } from "@work-shape/catalyst-api-client";
+import { ApiError, type AgentRunProjection } from "@work-shape/catalyst-api-client";
+import { DECISION_EXPIRED_REASON } from "@work-shape/catalyst-core";
 import { ToolCallPart, ToolDecisionsProvider } from "@work-shape/catalyst-chat-ui/tool-call";
 import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
@@ -11,6 +12,7 @@ import {
 } from "@work-shape/catalyst-chat-ui/tool-decision-card";
 import {
   readToolDecisions,
+  toolDecisionFailure,
   toolDecisionInputRows,
   type ToolDecision
 } from "@work-shape/catalyst-chat-ui/tool-decision-model";
@@ -128,6 +130,44 @@ describe("the confirmation card", () => {
       "Erlaubt. Der Aufruf läuft."
     );
     expect(text(renderView(waiting, { decided: { decision: "decline" } }))).not.toContain("Reason");
+  });
+
+  it("calls a refusal after the deadline already decided when the server says the call was decided", () => {
+    // Confirmed in one tab before its deadline, declined from a stale tab after it: the call
+    // may have run, so the card must not say that nothing ran.
+    const alreadyConfirmed = new ApiError(409, "This call was already confirmed.", {
+      error: {
+        code: "CONFLICT",
+        message: "This call was already confirmed. It cannot be declined any more.",
+        details: { operationRunId: waiting.operationRunId }
+      }
+    });
+    expect(toolDecisionFailure(alreadyConfirmed)).toBe("already_decided");
+    // A conflict that names no reason at all is not taken for an expiry either.
+    expect(toolDecisionFailure(new ApiError(409, "Conflict", "not an envelope"))).toBe(
+      "already_decided"
+    );
+  });
+
+  it("says an answer came too late when the server says the call's time ran out (EW-2c)", () => {
+    const expired = new ApiError(409, "This call expired before it was decided.", {
+      error: {
+        code: "CONFLICT",
+        message: "This call expired before it was decided. Nothing was executed.",
+        details: { reason: DECISION_EXPIRED_REASON }
+      }
+    });
+    expect(toolDecisionFailure(expired)).toBe("expired");
+    expect(toolDecisionFailure(new ApiError(404, "Not found", {}))).toBe("not_yours");
+    expect(toolDecisionFailure(new Error("offline"))).toBe("failed");
+    expect(toolDecisionFailure(undefined)).toBeUndefined();
+
+    expect(text(renderView(waiting, { failure: "expired" }))).toContain(
+      "This call expired. Nothing ran."
+    );
+    expect(text(renderView(waiting, { failure: "expired" }, "de"))).toContain(
+      "Dieser Aufruf ist abgelaufen. Nichts wurde ausgeführt."
+    );
   });
 
   it("says why an answer was not taken", () => {

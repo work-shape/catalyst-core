@@ -2,6 +2,7 @@ import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   AppError,
+  DECISION_EXPIRED_REASON,
   agentRunJobOptions,
   executeAgentRunJob,
   type AgentRuntimeEvent,
@@ -181,10 +182,9 @@ export async function decideWaitingToolCall(
 }
 
 function notWaiting(expired: boolean): AppError {
-  return new AppError(
-    "CONFLICT",
-    expired
-      ? "This call expired before it was decided. Nothing was executed."
-      : "This call does not wait for a decision any more."
-  );
+  return expired
+    ? new AppError("CONFLICT", "This call expired before it was decided. Nothing was executed.", {
+        reason: DECISION_EXPIRED_REASON
+      })
+    : new AppError("CONFLICT", "This call does not wait for a decision any more.");
 }
