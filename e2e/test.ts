@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test as base, type BrowserContext } from "@playwright/test";
+import { takeInstanceTurn } from "./instance-turn";
 import {
   REPLACED_BUILT_INS_LINK,
   pageExitTitle,
@@ -532,68 +533,18 @@ async function ageOf(path: string): Promise<number | undefined> {
 
 const pause = () => new Promise((resolve) => setTimeout(resolve, 250));
 
-/**
- * Waits for a turn on something of the instance that only one test may hold at a time, and
- * answers with what ends the turn. The specs run side by side in several processes, so the
- * turn is a directory: making one succeeds for one process alone.
- */
-export async function takeTurn(
+/** Take the process-owned turn with the current test's diagnostics. */
+export function takeTurn(
   name: "access" | "release-connections",
   baseURL: string | undefined
 ): Promise<() => Promise<void>> {
-  const lock = join(tmpdir(), `catalyst-e2e-${name}-${(baseURL ?? "").replace(/\W+/gu, "-")}`);
-  const testInfo = base.info();
-  // The sidecar keeps the directory empty, so abandoning a lock still uses atomic rmdir.
-  const holderPath = `${lock}.holder.json`;
-  for (;;) {
-    try {
-      await mkdir(lock);
-    } catch (error) {
-      if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
-        throw error;
-      }
-      // Queue time is unbounded: only the age of the current holder matters. Each new
-      // holder creates a fresh directory, so progress restarts the abandonment clock.
-      const age = await ageOf(lock);
-      if (age !== undefined && age > ACCESS_STATE_WAIT_MS) {
-        try {
-          await rmdir(lock);
-        } catch (cause) {
-          if (cause instanceof Error && "code" in cause && cause.code === "ENOENT") {
-            continue;
-          }
-          const holder = await readFile(holderPath, "utf8").catch(() => "unavailable");
-          throw new Error(
-            `The turn "${name}" on the instance could not reclaim a holder older than ${ACCESS_STATE_WAIT_MS} ms: ${lock}. Holder: ${holder}`,
-            { cause }
-          );
-        }
-      } else {
-        await pause();
-      }
-      continue;
-    }
-    try {
-      await writeFile(
-        holderPath,
-        JSON.stringify({
-          pid: process.pid,
-          worker: testInfo.workerIndex,
-          project: testInfo.project.name,
-          file: testInfo.file,
-          title: testInfo.title,
-          startedAt: new Date().toISOString()
-        })
-      );
-    } catch (error) {
-      await rmdir(lock);
-      throw error;
-    }
-    return async () => {
-      await rm(holderPath, { force: true });
-      await rmdir(lock).catch(() => undefined);
-    };
-  }
+  const info = base.info();
+  return takeInstanceTurn(name, baseURL, {
+    worker: info.workerIndex,
+    project: info.project.name,
+    file: info.file,
+    title: info.title
+  });
 }
 
 /** The places of the turn-taking on the instance's agents, by the instance's address. */

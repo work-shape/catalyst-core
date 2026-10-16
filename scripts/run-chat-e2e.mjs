@@ -79,8 +79,11 @@ const e2eConfigPath = resolve(repoRoot, process.env.E2E_CONFIG_PATH ?? generated
 const e2eSessionTokenSecret = "e2e-session-token-secret-with-at-least-24-characters";
 const e2eServerCredential = "e2e-server-to-server-credential";
 const e2eServiceAccessTokenSecret = "e2e-service-access-token-secret-with-32-characters";
-/** The port the sample MCP server of the connection editor spec listens on. */
-const e2eSampleMcpPort = process.env.E2E_SAMPLE_MCP_PORT ?? "4219";
+// Exact egress ports for the editor tests, including room to skip orphaned children.
+// If all are occupied, the test fails with the exhausted port list instead of using an old key.
+const SAMPLE_MCP_PORT_COUNT = 32;
+const sampleMcpPorts = [];
+
 // The key of the Secret Store of one run. Every API the suite starts inherits it, a second API
 // of a spec too, because the config names it.
 process.env.E2E_SECRET_STORE_KEY ??= randomBytes(32).toString("base64");
@@ -200,7 +203,6 @@ Environment:
                         creates and drops none. Use it with E2E_EXTERNAL_POSTGRES=1
   E2E_SKIP_BUILD=1      Skip package/server builds
   E2E_KEEP_STACK=1      Leave services running for debugging
-  E2E_SAMPLE_MCP_PORT   Port of the sample MCP server a spec starts, default 4219
 
 Examples:
   node scripts/run-chat-e2e.mjs --state
@@ -210,6 +212,22 @@ Examples:
 }
 
 async function prepareConfig() {
+  const reservations = [];
+  try {
+    for (let index = 0; index < SAMPLE_MCP_PORT_COUNT; index++) {
+      const server = createServer();
+      reservations.push(server);
+      await new Promise((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", resolve);
+      });
+      sampleMcpPorts.push(server.address().port);
+    }
+  } finally {
+    await Promise.all(
+      reservations.map((server) => new Promise((resolve) => server.close(resolve)))
+    );
+  }
   await mkdir(dirname(e2eConfigPath), { recursive: true });
   const fixturePath = resolve(repoRoot, "tests/fixtures/e2e-app.yaml");
   const fixture = await readFile(fixturePath, "utf8");
@@ -217,8 +235,13 @@ async function prepareConfig() {
     .replaceAll("http://127.0.0.1:4210", e2eApiUrl)
     .replaceAll("http://127.0.0.1:5273", e2eUiUrl)
     .replace(
-      "protocol: http, host: 127.0.0.1, port: 4219",
-      `protocol: http, host: 127.0.0.1, port: ${e2eSampleMcpPort}`
+      "    - { protocol: http, host: 127.0.0.1, port: 4219, network: private, cidrs: [127.0.0.0/8] }",
+      sampleMcpPorts
+        .map(
+          (port) =>
+            `    - { protocol: http, host: 127.0.0.1, port: ${port}, network: private, cidrs: [127.0.0.0/8] }`
+        )
+        .join("\n")
     );
   await writeFile(e2eConfigPath, generated);
 }
@@ -453,7 +476,7 @@ async function runPlaywright() {
       E2E_UI_URL: e2eUiUrl,
       E2E_CONFIG_PATH: e2eConfigPath,
       E2E_SERVER_CREDENTIAL: e2eServerCredential,
-      E2E_SAMPLE_MCP_PORT: e2eSampleMcpPort
+      E2E_SAMPLE_MCP_PORTS: sampleMcpPorts.join(",")
     }
   });
 }

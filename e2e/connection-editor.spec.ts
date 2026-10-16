@@ -4,12 +4,13 @@ import { once } from "node:events";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Locator, Page, Request } from "@playwright/test";
+import { availableSamplePort } from "./sample-port.mjs";
 import { sendToolCall } from "./page-surface-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // The New connection dialog against the demo's sample MCP server, which this file starts on
-// the port the suite's `egress.allow` names. An MCP server: a wrong address, then a refused
+// a free loopback port the suite's `egress.allow` permits. An MCP server: a wrong address, then a refused
 // key, then the tools the server names, approved in one confirmation. A REST API: the address,
 // the key and the test path, then tools pasted as YAML and approved. Each in English and in
 // German; the key is typed and never shown again. The agent's draft of a REST API's tools
@@ -18,9 +19,7 @@ import { expect, test } from "./test";
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
-/** The port of `tests/fixtures/e2e-app.yaml` for the sample server; the runner may move it. */
-const samplePort = Number(process.env.E2E_SAMPLE_MCP_PORT ?? "4219");
-const sampleBase = `http://127.0.0.1:${samplePort}`;
+let sampleBase: string;
 const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 /** Set to a directory to keep pictures of each step of the dialog and of the page. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
@@ -41,6 +40,11 @@ const sampleKey = randomBytes(24).toString("base64url");
 // Connections and the sample server's port are instance-wide. Keep the same turn as the
 // list/rights specs through setup, every UI write and cleanup, including parallel repeats.
 test.beforeEach(async ({ releaseConnections: _releaseConnections }) => {
+  // A killed worker can leave its child alive. Never reuse that child's port and key.
+  const samplePort = await availableSamplePort(
+    (process.env.E2E_SAMPLE_MCP_PORTS ?? "4219").split(",").map(Number)
+  );
+  sampleBase = `http://127.0.0.1:${samplePort}`;
   sampleServer = spawn(process.execPath, ["clients/demo/dist/sample-mcp-server.js"], {
     env: {
       ...process.env,
