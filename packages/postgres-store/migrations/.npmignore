@@ -1,3 +1,4 @@
 # Drizzle uses snapshots to generate migrations from the source checkout.
 # Runtime migration readers need the SQL files and _journal.json only.
-*_snapshot.json
+# This file sits above meta/ because drizzle-kit reads every file in meta/ as a snapshot.
+meta/*_snapshot.json
