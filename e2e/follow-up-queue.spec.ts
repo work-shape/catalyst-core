@@ -262,6 +262,135 @@ test("Stop pauses the queue, and Send now starts the oldest message", async ({ p
   await expect(queueOf(page)).toHaveCount(0);
 });
 
+// The notice, queue and composer share one opaque pinned surface. The return button belongs
+// above all of them, and the head's band covers the transcript in both themes at phone width.
+test("pinned chat bands cover the transcript and the return button clears the whole footer", async ({
+  page
+}) => {
+  test.setTimeout(RUN_TEST_TIMEOUT_MS);
+  page.setDefaultTimeout(10_000);
+  await signIn(page, owner);
+  const workspaceId = await sharedWorkspace(page, `Phone bands ${Date.now()}`);
+  await startLongRun(page, workspaceId, `phone-bands-${Date.now()}`, 500);
+  await queueMessage(page, "Then summarise the quarterly revenue and the remaining questions");
+  await stopButton(page).click();
+  await expect(queueOf(page)).toContainText("Queue paused");
+
+  // A failed send leaves its run notice above the paused queue.
+  await page.route(/\/api\/v1\/conversations\/[^/]+\/runs$/u, (route) =>
+    route.request().method() === "POST" ? route.abort("failed") : route.continue()
+  );
+  const footer = page.getByTestId("thread-footer");
+  const viewport = page.locator(".chat-thread-inset");
+  const chat = page.getByRole("region", { name: "Chat" });
+  const head = page.locator("header").first();
+  const bottom = page.getByRole("button", { name: /^(?:Scroll to bottom|Zum Ende scrollen)$/u });
+  const background = (locator: Locator) =>
+    locator.evaluate((element) => getComputedStyle(element).backgroundColor);
+  const top = (locator: Locator) =>
+    locator.evaluate((element) => element.getBoundingClientRect().top);
+
+  for (const variant of VARIANTS) {
+    await showVariant(page, variant, async () => {
+      await expect(queueOf(page)).toBeVisible();
+    });
+    await page.setViewportSize({ width: variant[2], height: 640 });
+    await chat.getByRole("button", { name: /^(?:Show more|Mehr anzeigen)$/u }).click();
+    const input = page.getByPlaceholder(/^(?:Message|Nachricht)$/u);
+    await input.fill("Keep this message when sending fails");
+    await input.press("Enter");
+    await expect(footer.getByRole("alert")).toBeVisible();
+    await input.fill("");
+    expect(await background(footer)).toBe(await background(chat));
+    expect(await background(head)).toBe(await background(chat));
+    const fade = await head.evaluate((element) => {
+      const style = getComputedStyle(element, "::after");
+      return {
+        top: parseFloat(style.top),
+        height: parseFloat(style.height),
+        image: style.backgroundImage,
+        headerHeight: element.getBoundingClientRect().height,
+        rem: parseFloat(getComputedStyle(document.documentElement).fontSize)
+      };
+    });
+    expect(fade.top).toBe(fade.headerHeight);
+    expect(fade.height).toBe(fade.rem);
+    expect(fade.image).toContain("linear-gradient");
+
+    const end = await viewport.evaluate((element) => element.scrollHeight - element.clientHeight);
+    expect(end).toBeGreaterThan(100);
+    // Wheel input tells assistant-ui the reader has taken over from turn anchoring.
+    await viewport.hover({ position: { x: 100, y: 100 } });
+    const wheelToTop = () =>
+      expect
+        .poll(async () => {
+          await page.mouse.wheel(0, -100_000);
+          return viewport.evaluate((element) => element.scrollTop);
+        })
+        .toBe(0);
+    await wheelToTop();
+    const pinnedTop = await top(footer);
+    await page.mouse.wheel(0, end / 2);
+    await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    expect(await top(footer)).toBeCloseTo(pinnedTop, 0);
+    await expect
+      .poll(async () => {
+        await page.mouse.wheel(0, 100_000);
+        return viewport.evaluate(
+          (element) => element.scrollHeight - element.clientHeight - element.scrollTop
+        );
+      })
+      .toBeLessThanOrEqual(1);
+    expect(await top(footer)).toBeCloseTo(pinnedTop, 0);
+    await wheelToTop();
+    await page.mouse.wheel(0, 80);
+    await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(80);
+    await expect(bottom).toBeVisible();
+    const buttonBottom = await bottom.evaluate((element) => element.getBoundingClientRect().bottom);
+    expect(buttonBottom).toBeLessThanOrEqual(await top(footer));
+    expect(buttonBottom).toBeLessThanOrEqual(await top(footer.getByRole("alert")));
+    expect(buttonBottom).toBeLessThanOrEqual(await top(queueOf(page)));
+    await picture(page, `phone-chat-bands-${variant.join("-")}`);
+    await bottom.click();
+    await expect(bottom).toBeHidden();
+  }
+  await queueOf(page)
+    .getByRole("button", { name: /^(?:Remove|Entfernen)$/u })
+    .click();
+  await expect(queueOf(page)).toHaveCount(0);
+  await page.unroute(/\/api\/v1\/conversations\/[^/]+\/runs$/u);
+  const completedMessage = "Finish this reply for the composer-only layout";
+  const input = page.getByPlaceholder(/^(?:Message|Nachricht)$/u);
+  await input.fill(completedMessage);
+  await input.press("Enter");
+  await expect(chat.locator('[data-role="assistant"]').last()).toContainText(completedMessage);
+  await expect(
+    page.getByRole("button", { name: /^(?:Stop generating|Generierung stoppen)$/u })
+  ).toBeHidden();
+  for (const variant of VARIANTS) {
+    await showVariant(page, variant, async () => {
+      await expect(page.getByPlaceholder(/^(?:Message|Nachricht)$/u)).toBeVisible();
+    });
+    await page.setViewportSize({ width: variant[2], height: 640 });
+    await chat.getByRole("button", { name: /^(?:Show more|Mehr anzeigen)$/u }).click();
+    await expect(footer.getByRole("alert")).toHaveCount(0);
+    await expect(queueOf(page)).toHaveCount(0);
+    await viewport.hover({ position: { x: 100, y: 100 } });
+    await expect
+      .poll(async () => {
+        await page.mouse.wheel(0, -100_000);
+        return viewport.evaluate((element) => element.scrollTop);
+      })
+      .toBe(0);
+    await expect(bottom).toBeVisible();
+    const buttonBottom = await bottom.evaluate((element) => element.getBoundingClientRect().bottom);
+    expect(buttonBottom).toBeLessThanOrEqual(await top(footer));
+    await picture(page, `phone-composer-only-${variant.join("-")}`);
+    await bottom.click();
+    await expect(bottom).toBeHidden();
+  }
+});
+
 test("when the oldest message of a paused queue is withdrawn, the next author can send theirs without a reload", async ({
   page,
   browser,

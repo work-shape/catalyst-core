@@ -115,6 +115,7 @@ export interface LayoutGalleryText {
   surfaceNoRenderer: string;
   surfaceHeaderAlone: string;
   surfaceHeaderTitle: string;
+  surfaceHeaderLongTitle: string;
   splitHandleLabel: string;
   splitHandleSample: string;
   headerShellAction: string;
@@ -302,6 +303,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     surfaceNoRenderer: "This content cannot be shown yet.",
     surfaceHeaderAlone: "SurfaceHeader: a panel's head on its own",
     surfaceHeaderTitle: "Lease renewal",
+    surfaceHeaderLongTitle: "Revenue overview for the entire sales team in the current quarter",
     splitHandleLabel: "Resize panel",
     splitHandleSample: "Drag the line or use the arrow keys",
     headerShellAction: "PageHeaderShellAction: the shell's control first",
@@ -488,6 +490,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     surfaceNoRenderer: "Dieser Inhalt kann noch nicht angezeigt werden.",
     surfaceHeaderAlone: "SurfaceHeader: der Kopf eines Bereichs für sich",
     surfaceHeaderTitle: "Mietvertrag verlängern",
+    surfaceHeaderLongTitle: "Umsatzübersicht des gesamten Vertriebsteams im laufenden Quartal",
     splitHandleLabel: "Bereichsbreite ändern",
     splitHandleSample: "Ziehe die Linie oder nutze die Pfeiltasten",
     headerShellAction: "PageHeaderShellAction: die Aktion der Oberfläche zuerst",

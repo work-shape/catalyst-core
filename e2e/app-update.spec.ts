@@ -2,11 +2,11 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FrameLocator, Page } from "@playwright/test";
 import { z } from "zod";
+import { appIdFromName } from "@work-shape/catalyst-core";
 import {
   builtPage,
   expectShownRevision,
   overviewRoute,
-  pageName,
   pageSource,
   pageSurface,
   patchThatAdds,
@@ -306,8 +306,12 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   page
 }, testInfo) => {
   const attempt = testInfo.repeatEachIndex * 10 + testInfo.retry;
-  const appName = attempt === 0 ? "Offer sheet" : `Offer sheet ${attempt}`;
-  const appId = attempt === 0 ? "offer-sheet" : `offer-sheet-${attempt}`;
+  const previewName = "Umsatzübersicht";
+  const appName =
+    attempt === 0
+      ? "Quarterly revenue overview for the entire sales team"
+      : `Quarterly revenue overview for the entire sales team ${attempt}`;
+  const appId = appIdFromName(appName);
   test.setTimeout(shotsDir ? 600_000 : 300_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   page.setDefaultTimeout(30_000);
@@ -353,7 +357,13 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   const updateApp = surface.getByRole("button", { name: /^(?:Update app|App aktualisieren)$/u });
   const dialog = page.getByRole("dialog");
   await page.goto(`/w/${workspaceId}`);
-  await writePageFiles(page, patchThatAdds(pageSource(FIRST_HEADING)));
+  await writePageFiles(
+    page,
+    patchThatAdds({
+      ...pageSource(FIRST_HEADING),
+      "app.yaml": `id: revenue\nname: ${previewName}\nkit: 1.0.0\n`
+    })
+  );
   await savePage(page);
   await rewritePageFile(page, "src/routes/index.tsx", overviewRoute("Offer sheet, wider"));
   await savePage(page);
@@ -365,10 +375,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
 
   // Saving under the App's id is refused, and the dialog offers the App itself.
   const offer = dialog.getByRole("button", {
-    name: new RegExp(
-      `^(?:Update “${appName}” from this preview|„${appName}“ aus dieser Vorschau aktualisieren)$`,
-      "u"
-    )
+    name: /^(?:Update this app|Diese App aktualisieren)$/u
   });
   const untilOffered = async () => {
     await saveAsApp.click();
@@ -389,10 +396,85 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await expect(dialog).toContainText(
     `This name is already taken by the app “${appName}”. Choose another name, or update the app.`
   );
-  await shoot(page, "save-as-app-id-taken", ALL, async () => {
-    await reopened();
-    await untilOffered();
+  // The short conflict offer and the name field stay inside the name-only dialog in both
+  // languages and themes, even when the taken App has a long name.
+  for (const theme of ["light", "dark"] as const) {
+    for (const locale of ["en", "de"] as const) {
+      for (const width of [390, 1440] as const) {
+        await page.evaluate(
+          ([mode, language]) => {
+            localStorage.setItem("vivd-catalyst:theme", mode);
+            localStorage.setItem("vivd-catalyst:locale", language);
+          },
+          [theme, locale] as const
+        );
+        await page.setViewportSize({ width, height: 640 });
+        await page.reload();
+        await reopened();
+        const heading = surface.locator("header").getByRole("heading", { level: 2 });
+        await expect(heading).toHaveText(previewName);
+        const titleWidth = await heading.evaluate((element) => ({
+          needed: element.scrollWidth,
+          available: element.clientWidth
+        }));
+        expect(
+          titleWidth.needed,
+          `${theme}/${locale}/${width}: full panel title`
+        ).toBeLessThanOrEqual(titleWidth.available);
+        await expect(heading).not.toHaveAttribute("tabindex");
+        if (width === 390) {
+          const showChat = surface.getByRole("button", { name: /^(?:Show chat|Chat anzeigen)$/u });
+          await expect(showChat).toHaveText("");
+        }
+        if (shotsDir)
+          await page.screenshot({
+            path: join(shotsDir, `phone-real-panel-${theme}-${locale}-${width}.png`),
+            animations: "disabled"
+          });
+        await untilOffered();
+        const form = dialog.locator("form");
+        const bounds = await form.boundingBox();
+        if (!bounds) throw new Error("The save form has no box");
+        for (const control of [offer, dialog.getByRole("textbox", { name: /^Name/u })]) {
+          const box = await control.boundingBox();
+          if (!box) throw new Error("The save control has no box");
+          expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+          expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+          expect(box.x + box.width).toBeLessThan(width);
+        }
+        expect(await form.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
+          Math.ceil(bounds.width)
+        );
+        if (width === 390) {
+          expect(
+            await offer.evaluate(
+              (element) =>
+                element.clientHeight / Number.parseFloat(getComputedStyle(element).lineHeight)
+            )
+          ).toBeLessThanOrEqual(2);
+        }
+        if (shotsDir) {
+          await page.screenshot({
+            path: join(shotsDir, `phone-update-offer-${theme}-${locale}-${width}.png`),
+            animations: "disabled"
+          });
+        }
+      }
+    }
+  }
+  await page.evaluate(() => {
+    localStorage.setItem("vivd-catalyst:theme", "light");
+    localStorage.setItem("vivd-catalyst:locale", "en");
   });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await reopened();
+  await untilOffered();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.setViewportSize({ width: 700, height: 640 });
+  await expect(surface.getByRole("button", { name: "Show chat", exact: true })).toHaveText("");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await untilOffered();
   // On a low window the offer and the footer are still reached.
   await page.setViewportSize({ width: 1440, height: 640 });
   await offer.scrollIntoViewIfNeeded();
@@ -437,7 +519,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await replace.click();
   const done = page.getByRole("dialog", { name: `The draft of “${appName}” is updated` });
   await expect(done).toContainText(
-    `The app keeps its name “${appName}”. The preview is called “${pageName}”.`
+    `The app keeps its name “${appName}”. The preview is called “${previewName}”.`
   );
   if (shotsDir) {
     await page.screenshot({

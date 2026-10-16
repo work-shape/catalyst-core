@@ -261,14 +261,21 @@ export function AssistantThread({
 
             {/* The one composer: the start page only changes where it sits. */}
             <ThreadPrimitive.ViewportFooter
+              data-testid="thread-footer"
               className={cn(
                 "z-10 shrink-0 pb-4 pt-2",
                 startPage
                   ? "relative"
-                  : "sticky bottom-0 mt-auto after:pointer-events-none after:absolute after:inset-0 after:z-0 after:bg-gradient-to-t after:from-background after:via-background after:to-transparent after:content-['']"
+                  : "sticky bottom-0 mt-auto bg-background before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-gradient-to-t before:from-background before:to-transparent before:content-['']"
               )}
             >
               <div ref={composerRef} className="relative z-10">
+                {/* Above the entire footer, including notices and queued follow-ups. */}
+                {messagesEnabled ? (
+                  <AuiIf condition={(state) => !state.thread.isEmpty}>
+                    <ThreadScrollToBottom />
+                  </AuiIf>
+                ) : null}
                 {notice ? (
                   // Something went wrong with what was sent, so it is announced at once.
                   <Banner tone="warning" role="alert" className="mb-2">
@@ -290,11 +297,6 @@ export function AssistantThread({
                   <RetentionNotice retention={config?.retention} retainedUntil={retainedUntil} />
                 )}
                 <div className="relative">
-                  {messagesEnabled ? (
-                    <AuiIf condition={(state) => !state.thread.isEmpty}>
-                      <ThreadScrollToBottom />
-                    </AuiIf>
-                  ) : null}
                   <AssistantComposer
                     attachments={draftAttachments}
                     localUploadingAttachments={localUploadingAttachments}
@@ -566,7 +568,7 @@ function ThreadScrollToBottom() {
 
   return (
     <ThreadPrimitive.ScrollToBottom
-      className="absolute -top-5 left-1/2 z-10 grid size-8 -translate-x-1/2 place-items-center rounded-full border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:invisible"
+      className="absolute bottom-full mb-2 left-1/2 z-10 grid size-8 -translate-x-1/2 place-items-center rounded-full border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:invisible"
       aria-label={t("scrollToBottom")}
       title={t("scrollToBottom")}
     >

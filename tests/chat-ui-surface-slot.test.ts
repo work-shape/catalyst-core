@@ -157,11 +157,13 @@ describe("surface slot frame", () => {
 
   // OPEN-1f design review: at 390 px "Show chat" left the title "u.". On a phone the title wins
   // the row and the button keeps its icon, as in the dock's head.
-  it("keeps only the icon of Show chat on a phone", () => {
+  it("keeps Show chat as one icon action while the panel covers the chat", () => {
     const markup = renderFrame(toolDisplay, "covering");
-
-    expect(markup).toMatch(/<button[^>]*class="[^"]*max-sm:hidden[^"]*"[^>]*>.*?Show chat/u);
-    expect(markup).toMatch(/<button[^>]*class="[^"]* sm:hidden"[^>]*aria-label="Show chat"/u);
+    const button = /<button[^>]*aria-label="Show chat"[^>]*>(.*?)<\/button>/u.exec(markup)?.[1];
+    expect(button).toContain("<svg");
+    expect(button).not.toContain("Show chat");
+    expect(markup.match(/aria-label="Show chat"/gu)).toHaveLength(1);
+    expect(markup).not.toContain(">Show chat<");
   });
 
   // Fails without `under`: the frame knew the chat as the only thing a surface covers.

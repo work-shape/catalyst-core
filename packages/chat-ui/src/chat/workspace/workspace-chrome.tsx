@@ -185,7 +185,7 @@ export function StagingBanner({ environment }: { environment: string }) {
 
 /**
  * The header of the chat: the button that opens the rail's drawer under 768 px and the agent
- * selector. It floats over the conversation and ends where a surface beside it begins.
+ * selector. Its solid band ends where a surface beside it begins.
  */
 export function WorkspaceChrome({
   agentDisplay,
@@ -216,22 +216,15 @@ export function WorkspaceChrome({
     <header
       data-beside-surface={besideSurface ? "" : undefined}
       className={cn(
-        "pointer-events-none absolute top-0 left-0 z-40 flex h-(--layout-header) min-w-0 items-center gap-2 px-4",
+        "pointer-events-none absolute top-0 left-0 z-40 flex h-(--layout-header) min-w-0 items-center gap-2 bg-background px-4 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-gradient-to-b after:from-background after:to-transparent after:content-['']",
         // Beside a surface the header is a band like the surface's own: one line runs across
         // the window, and the thread scrolls under the band, not under the controls.
-        besideSurface && "border-b bg-background"
+        // The fade starts below the border so it cannot paint over that line.
+        besideSurface && "border-b after:translate-y-px"
       )}
       style={{ right: surfaceBesideWidth }}
       inert={covered}
     >
-      {/* Alone, the chat scrolls all the way to the top, so the controls float over it;
-          this fade keeps them legible once messages pass underneath. */}
-      {besideSurface ? null : (
-        <div
-          className="pointer-events-none absolute inset-x-0 -top-px bottom-0 -z-10 bg-gradient-to-b from-background/25 via-background/3 to-transparent"
-          aria-hidden="true"
-        />
-      )}
       <div className="pointer-events-auto flex min-w-0 items-center gap-2">
         <IconButton className="md:hidden" label={t("openSidebar")} onClick={onOpenSidebar}>
           <PanelLeft aria-hidden="true" />

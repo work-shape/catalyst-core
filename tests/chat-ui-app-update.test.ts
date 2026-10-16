@@ -207,9 +207,9 @@ describe("a Page put into an App that has the id", () => {
     expect(markup).toContain(
       "This name is already taken by the app “Angebotsrechner”. Choose another name, or update the app."
     );
-    expect(markup).toContain(">Update “Angebotsrechner” from this preview</button>");
+    expect(markup).toContain(">Update this app</button>");
     // Without somebody to take the App over, the sentence stands alone.
-    expect(save(undefined)).not.toContain("from this preview</button>");
+    expect(save(undefined)).not.toContain(">Update this app</button>");
     // Once the name is changed, neither the refusal nor the offer stands.
     expect(save(() => undefined, "en", "Angebotsrechner neu")).not.toContain("Angebotsrechner”");
   });
@@ -260,7 +260,7 @@ describe("a Page put into an App that has the id", () => {
     expect(taken).toContain(
       "Dieser Name ist schon an die App „Angebotsrechner“ vergeben. Wähle einen anderen Namen, oder aktualisiere die App."
     );
-    expect(taken).toContain(">„Angebotsrechner“ aus dieser Vorschau aktualisieren</button>");
+    expect(taken).toContain(">Diese App aktualisieren</button>");
     const asked = dialog({ link: "other_conversation" }, "de");
     expect(asked).toContain("„Angebotsrechner“ aus dieser Vorschau aktualisieren?");
     expect(asked).toContain(

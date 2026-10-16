@@ -134,9 +134,8 @@ describe("agent chip in the header", () => {
     );
   });
 
-  // Fails without the band: the header beside a surface kept its fading gradient and no line,
-  // so thread text showed under the chip and the surface's header line ended at the seam.
-  it("stands on an opaque band with a line under it while a surface is beside the chat", () => {
+  // Both layouts cover scrolled text. Beside a surface, the header also continues its line.
+  it("stands on an opaque band alone and beside a surface, with a line at the panel seam", () => {
     const header = (markup: string) => /<header[^>]*>/u.exec(markup)?.[0] ?? "";
     const beside = renderHeader({ surfaceBesideWidth: 520 });
 
@@ -144,12 +143,15 @@ describe("agent chip in the header", () => {
     expect(header(beside)).toContain("h-(--layout-header)");
     expect(header(beside)).toContain("border-b");
     expect(header(beside)).toContain("bg-background");
-    expect(beside).not.toContain("bg-gradient-to-b");
+    expect(header(beside)).toContain("after:bg-gradient-to-b");
+    expect(header(beside)).toContain("after:top-full");
+    expect(header(beside)).toContain("after:h-4");
 
     const alone = renderHeader();
     expect(header(alone)).not.toContain("data-beside-surface");
     expect(header(alone)).not.toContain("border-b");
-    expect(alone).toContain("bg-gradient-to-b");
+    expect(header(alone)).toContain("bg-background");
+    expect(header(alone)).toContain("after:bg-gradient-to-b");
   });
 
   it("stays empty while the start page shows the agent", () => {

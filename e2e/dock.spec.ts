@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Browser, Page } from "@playwright/test";
 import { z } from "zod";
@@ -207,6 +209,7 @@ test("a person who may not read the dock's conversation gets an empty dock and n
 test("in a narrow window the dock lies over the page, and each brings the other back", async ({
   page
 }) => {
+  test.setTimeout(90_000);
   await page.setViewportSize({ width: 700, height: 900 });
   await signIn(page, member);
   const stamp = Date.now();
@@ -240,6 +243,32 @@ test("in a narrow window the dock lies over the page, and each brings the other 
   await expect(showPage).toHaveText("");
   await showPage.hover();
   await expect(page.getByRole("tooltip")).toHaveText("Show page");
+  const shotsDir = process.env.E2E_SHOTS_DIR;
+  if (shotsDir) await mkdir(shotsDir, { recursive: true });
+  for (const theme of ["light", "dark"] as const) {
+    for (const locale of ["en", "de"] as const) {
+      await page.evaluate(
+        ([mode, language]) => {
+          localStorage.setItem("vivd-catalyst:theme", mode);
+          localStorage.setItem("vivd-catalyst:locale", language);
+        },
+        [theme, locale] as const
+      );
+      await page.setViewportSize({ width: 390, height: 640 });
+      await page.reload();
+      await expect(chatColumn(page)).toBeVisible();
+      await expect(page.locator("[data-dock-page]")).toHaveAttribute("inert", "");
+      await expect(
+        dockHead(page).getByRole("button", { name: /^(?:Show page|Seite anzeigen)$/u })
+      ).toHaveText("");
+      await page.mouse.move(0, 0);
+      if (shotsDir)
+        await page.screenshot({
+          path: join(shotsDir, `phone-dock-overlay-${theme}-${locale}-390.png`),
+          animations: "disabled"
+        });
+    }
+  }
 });
 
 // DOCK-1: fails where the width is not kept, or where the dock and the page lose their minimum.

@@ -236,7 +236,7 @@ export function SaveAsAppDialogView({
             disabled={saving}
             onClick={() => refused.taken && onLink(refused.taken)}
           >
-            {t("apps.linkOffer", { name: refused.taken.title })}
+            {t("apps.linkOffer")}
           </Button>
         ) : null}
         {refused && refused.field === undefined ? (

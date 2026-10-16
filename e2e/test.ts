@@ -66,6 +66,14 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["pictures of the queue's passing states"]
   },
   {
+    name: "planted-phone-send-failure",
+    reason:
+      "The phone layout regression deliberately aborts a send to show its pinned run notice above a paused queue.",
+    matches: REQUEST_FAILED,
+    path: /^\/api\/v1\/conversations\/[^/]+\/runs$/u,
+    tests: ["pinned chat bands cover the transcript and the return button clears the whole footer"]
+  },
+  {
     name: "signed-out-session",
     reason:
       "Chromium's own log line, written by no script: every page asks who is signed in, and " +

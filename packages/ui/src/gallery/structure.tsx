@@ -326,8 +326,17 @@ function SurfaceFrameSamples({ text }: { text: GalleryText }) {
         </div>
       </Samples>
       <Samples label={text.surfaceHeaderAlone}>
-        <div className="w-full max-w-md overflow-hidden rounded-lg border">
+        <div
+          className="w-full max-w-md overflow-hidden rounded-lg border"
+          data-gallery-sample="surface-short-title"
+        >
           <SurfaceHeader title={text.surfaceHeaderTitle} close={close} />
+        </div>
+        <div
+          className="w-full max-w-md overflow-hidden rounded-lg border"
+          data-gallery-sample="surface-long-title"
+        >
+          <SurfaceHeader title={text.surfaceHeaderLongTitle} close={close} />
         </div>
       </Samples>
     </>

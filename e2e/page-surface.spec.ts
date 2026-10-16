@@ -554,19 +554,44 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   const band = page.locator("header[data-beside-surface]");
   const bandBox = await band.boundingBox();
   const surfaceBox = await surface.boundingBox();
-  expect(bandBox?.height).toBe(64);
-  expect(Math.round((bandBox?.x ?? 0) + (bandBox?.width ?? 0))).toBe(
-    Math.round(surfaceBox?.x ?? -1)
-  );
+  if (!bandBox || !surfaceBox) throw new Error("The adjacent headers have no box");
+  expect(bandBox.height).toBe(64);
+  expect(Math.round(bandBox.x + bandBox.width)).toBe(Math.round(surfaceBox.x));
   expect(
     await band.evaluate((element) => {
       const style = getComputedStyle(element);
       return [style.borderBottomWidth, style.backgroundImage];
     })
   ).toEqual(["1px", "none"]);
+  // A border can exist in CSS while the fade paints over it. Read the rendered hairline on
+  // both sides of the seam, and the background immediately above it.
+  const seam = surfaceBox.x;
+  const strip = await page.screenshot({
+    clip: { x: Math.round(seam) - 3, y: bandBox.y + bandBox.height - 2, width: 6, height: 2 },
+    scale: "css",
+    animations: "disabled"
+  });
+  const hairline = await page.evaluate(async (bytes) => {
+    const image = await createImageBitmap(
+      new Blob([Uint8Array.from(bytes)], { type: "image/png" })
+    );
+    const canvas = new OffscreenCanvas(image.width, image.height);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("The header pixel probe has no canvas context");
+    context.drawImage(image, 0, 0);
+    const { data, width } = context.getImageData(0, 0, image.width, image.height);
+    image.close();
+    return {
+      background: Array.from(data.slice(0, 4)),
+      chat: Array.from(data.slice(width * 4, width * 4 + 4)),
+      panel: Array.from(data.slice(-4))
+    };
+  }, Array.from(strip));
+  expect(hairline.chat).toEqual(hairline.panel);
+  expect(hairline.chat).not.toEqual(hairline.background);
+
   // The messages hold long strings without a break, the patch and the answer to it. They wrap
   // inside the conversation and none runs under the Page.
-  const seam = surfaceBox?.x ?? 0;
   const texts = page.locator(".chat-markdown");
   await expect(texts.first()).toBeVisible();
   expect(

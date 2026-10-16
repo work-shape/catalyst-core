@@ -135,7 +135,7 @@ export const apps = defineTranslations({
       "The current draft of this app is replaced by this preview as it is now. The published version does not change until someone publishes the draft.",
     "apps.linkMoved":
       "The draft of this app was changed just now. If you replace it, that change is lost.",
-    "apps.linkOffer": "Update “{name}” from this preview",
+    "apps.linkOffer": "Update this app",
     "apps.linkOtherConversation":
       "This app was last updated from a preview in another conversation. That preview will no longer show “Update app” for it.",
     "apps.linkOtherPage":
@@ -337,7 +337,7 @@ export const apps = defineTranslations({
       "Der aktuelle Entwurf dieser App wird durch diese Vorschau ersetzt, so wie sie jetzt ist. Die veröffentlichte Version ändert sich erst, wenn jemand den Entwurf veröffentlicht.",
     "apps.linkMoved":
       "Der Entwurf dieser App wurde gerade geändert. Beim Ersetzen geht auch diese Änderung verloren.",
-    "apps.linkOffer": "„{name}“ aus dieser Vorschau aktualisieren",
+    "apps.linkOffer": "Diese App aktualisieren",
     "apps.linkOtherConversation":
       "Diese App wurde zuletzt aus einer Vorschau in einer anderen Unterhaltung aktualisiert. Jene Vorschau zeigt für sie dann nicht mehr „App aktualisieren“.",
     "apps.linkOtherPage":

@@ -528,9 +528,11 @@ describe("NotFound", () => {
 });
 
 describe("SurfaceFrame", () => {
+  const render = (children: ReactNode) =>
+    renderToStaticMarkup(createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, children));
   it("puts its slots in one order under a header of the shared height", () => {
     const slot = (text: string) => createElement("span", null, text);
-    const markup = renderToStaticMarkup(
+    const markup = render(
       createElement(
         library.SurfaceFrame,
         {
@@ -560,16 +562,14 @@ describe("SurfaceFrame", () => {
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect([...positions].sort((left, right) => left - right)).toEqual(positions);
     expect(markup).toContain("h-(--layout-header)");
-    expect(markup).toMatch(/<h2 class="[^"]*text-heading[^"]*">name</u);
+    expect(markup).toMatch(/<h2[^>]*class="[^"]*text-heading[^"]*"[^>]*>name</u);
     expect(markup).toMatch(/<p class="[^"]*text-caption text-muted-foreground[^"]*">subtitle</u);
   });
 
   it("gives its content the inset and the scrolling unless the content is flush", () => {
     const body = (flush: boolean) =>
       /<\/header><div(?: data-flush="")? class="([^"]*)"/u
-        .exec(
-          renderToStaticMarkup(createElement(library.SurfaceFrame, { title: "name", flush }, "c"))
-        )?.[1]
+        .exec(render(createElement(library.SurfaceFrame, { title: "name", flush }, "c")))?.[1]
         ?.split(" ");
 
     expect(body(false)).toEqual(expect.arrayContaining(["p-4", "overflow-y-auto"]));
@@ -585,7 +585,9 @@ describe("SurfaceFrame", () => {
     );
     const imports = [...source.matchAll(/from "([^"]+)"/gu)].map((match) => match[1]);
 
-    expect(imports).toEqual(["react", "../cn"]);
+    expect(imports.every((path) => path === "react" || path?.startsWith("../") === true)).toBe(
+      true
+    );
   });
 });
 

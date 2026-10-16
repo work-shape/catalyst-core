@@ -1,5 +1,6 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 import { cn } from "../cn";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
 
 /** The slots of a surface's header, in the one order every surface has. */
 export interface SurfaceHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
@@ -34,10 +35,27 @@ export function SurfaceHeader({
   close,
   ...props
 }: SurfaceHeaderProps) {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [clipped, setClipped] = useState(false);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+  useLayoutEffect(() => {
+    const element = titleRef.current;
+    if (!element) return;
+    const measure = () => {
+      const cut = element.scrollWidth > element.clientWidth;
+      setClipped(cut);
+      if (!cut) setTooltipOpen(false);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [title]);
+
   return (
     <header
       className={cn(
-        "flex h-(--layout-header) shrink-0 items-center gap-3 border-b px-4",
+        "flex h-(--layout-header) shrink-0 items-center gap-2 border-b px-3 sm:gap-3 sm:px-4",
         className
       )}
       {...props}
@@ -47,7 +65,21 @@ export function SurfaceHeader({
       )}
       {icon === undefined ? null : <div className="flex shrink-0 items-center">{icon}</div>}
       <div className="grid min-w-0 flex-1 gap-0.5">
-        <h2 className="truncate text-heading">{title}</h2>
+        <Tooltip
+          open={clipped && tooltipOpen}
+          onOpenChange={(open) => setTooltipOpen(clipped && open)}
+        >
+          <TooltipTrigger asChild>
+            <h2
+              ref={titleRef}
+              tabIndex={clipped ? 0 : undefined}
+              className="truncate text-heading focus-visible:focus-ring"
+            >
+              {title}
+            </h2>
+          </TooltipTrigger>
+          {clipped ? <TooltipContent>{title}</TooltipContent> : null}
+        </Tooltip>
         {subtitle === undefined ? null : (
           <p className="truncate text-caption text-muted-foreground">{subtitle}</p>
         )}
