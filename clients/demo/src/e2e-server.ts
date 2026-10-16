@@ -8,7 +8,8 @@ import { z } from "zod";
 import { demoTools } from "../tools";
 
 // The API the browser suite runs against: the demo, with one changing tool and the central
-// policy setting that sends its calls to another person for approval. A second setting holds
+// policy setting that sends its calls to another person for approval, and one whose calls the
+// person the run acts for confirms. A second setting holds
 // a skill saved into the Namespace `e2ehold-`, which one test registers and removes; it holds
 // nothing while that Namespace is not registered. No screen sets a central setting before
 // Instance > Policies exists (OP-2), so the suite's server names both.
@@ -25,6 +26,21 @@ const recordNote = defineTool({
   // Runs on the agent's own call. Without a mode the instance default for changes would apply.
   permission: { mode: "allow" },
   description: "Records a note. A fixture of the browser suite: it stores nothing.",
+  inputSchema: z.object({ text: z.string().min(1) }),
+  outputSchema: z.object({ recorded: z.string() }),
+  execute: (input) => toolSuccess({ recorded: input.text })
+});
+
+// Held for the confirmation of the person the run acts for (EW-2): the run pauses on it, and
+// the conversation shows the host's card with Allow and Deny.
+const CONFIRMED_TOOL = "e2e.confirm_note";
+
+const confirmNote = defineTool({
+  name: CONFIRMED_TOOL,
+  effect: "changing",
+  // Runs on the agent's own call. The central setting below asks the person first.
+  permission: { mode: "allow" },
+  description: "Records a note once the person allows it. A fixture of the browser suite.",
   inputSchema: z.object({ text: z.string().min(1) }),
   outputSchema: z.object({ recorded: z.string() }),
   execute: (input) => toolSuccess({ recorded: input.text })
@@ -120,7 +136,7 @@ const generalSkills: ClientInstanceCapability = {
 
 const client = defineClientInstance({
   rootDir: new URL("..", import.meta.url),
-  tools: [...demoTools, recordNote],
+  tools: [...demoTools, recordNote, confirmNote],
   connectorTypes: [testConnector],
   capabilities: [generalSkills]
 });
@@ -129,6 +145,7 @@ const app = await client.listen({
   operations: {
     centralPolicySettings: () => [
       { operation: HELD_TOOL, value: "approval" },
+      { operation: CONFIRMED_TOOL, value: "confirm" },
       { operation: "assets.put", assetKind: "skill", namespace: HELD_NAMESPACE, value: "approval" }
     ]
   }

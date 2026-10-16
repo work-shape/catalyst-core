@@ -36,6 +36,17 @@ const recordNote = defineTool({
   execute: (input) => toolSuccess({ recorded: input.text })
 });
 
+/** The fixture config enables this tool too; the suite's own server holds its calls to confirm. */
+const confirmNote = defineTool({
+  name: "e2e.confirm_note",
+  effect: "changing",
+  permission: { mode: "allow" },
+  description: "Records a note once the person allows it. A fixture: it stores nothing.",
+  inputSchema: z.object({ text: z.string().min(1) }),
+  outputSchema: z.object({ recorded: z.string() }),
+  execute: (input) => toolSuccess({ recorded: input.text })
+});
+
 /** What the preview of a held save says about the asset, as far as the tests read it. */
 const shownAssetSchema = z.looseObject({ kind: z.string(), isNew: z.boolean() });
 
@@ -45,7 +56,7 @@ const seeded = useSeededInstance({
   origin: "http://127.0.0.1:5273",
   instanceAssets: resolve("tests/fixtures/e2e-assets"),
   superadmin: { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" },
-  tools: [recordNote],
+  tools: [recordNote, confirmNote],
   // The fixture config names this key of the Secret Store, as the suite's runner sets it.
   env: { E2E_SECRET_STORE_KEY: randomBytes(32).toString("base64") },
   // The Apps of the seed are built for real here, so a source that does not build fails.

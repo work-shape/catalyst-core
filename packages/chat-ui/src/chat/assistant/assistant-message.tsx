@@ -1,3 +1,4 @@
+import { useWaitsForDecision } from "../approvals/tool-decision-context";
 import {
   ActionBarPrimitive,
   AttachmentPrimitive,
@@ -316,6 +317,7 @@ function renderAssistantGroupedPart({
           count={renderableIndices.length}
           only={onlyToolCall(messageParts, renderableIndices)}
           last={lastToolCall(messageParts, renderableIndices)}
+          toolCallIds={toolCallIdsOf(messageParts, renderableIndices)}
           summary={false}
         >
           {renderableIndices.map((index) => (
@@ -373,6 +375,7 @@ function AssistantWorkTimeline({
               count={renderableIndices.length}
               only={onlyToolCall(messageParts, renderableIndices)}
               last={lastToolCall(messageParts, renderableIndices)}
+              toolCallIds={toolCallIdsOf(messageParts, renderableIndices)}
               nested
               summary={false}
             >
@@ -439,10 +442,19 @@ function lastToolCall(
   return undefined;
 }
 
+/** The tool calls of a group. */
+function toolCallIdsOf(parts: readonly PartState[], indices: readonly number[]): string[] {
+  return indices.flatMap((index) => {
+    const part = parts[index];
+    return part?.type === "tool-call" ? [part.toolCallId] : [];
+  });
+}
+
 function AssistantWorkGroup({
   count,
   only,
   last,
+  toolCallIds = [],
   children,
   nested = false,
   summary,
@@ -454,6 +466,8 @@ function AssistantWorkGroup({
   only?: ToolCallPartState;
   /** The group's last tool call. */
   last?: ToolCallPartState;
+  /** The group's tool calls: one that waits for a decision keeps the group open. */
+  toolCallIds?: readonly string[];
   children: ReactNode;
   nested?: boolean;
   summary: boolean;
@@ -463,6 +477,8 @@ function AssistantWorkGroup({
   const { t } = useTranslation();
   const [open, setOpen] = useState(autoCollapse);
   const [suppressOpenAnimation, setSuppressOpenAnimation] = useState(autoCollapse);
+  // A call that waits for a decision shows its card, so the person sees what to answer.
+  const waitsForDecision = useWaitsForDecision(toolCallIds);
 
   // The whole timer lives in this effect, so a second run of it, as StrictMode makes one,
   // starts the timer its cleanup has just cleared.
@@ -491,7 +507,7 @@ function AssistantWorkGroup({
         "chat-tool-work max-w-5xl",
         nested ? "chat-tool-work-nested my-0" : "mt-4 first:mt-0"
       )}
-      open={open}
+      open={open || waitsForDecision}
       onOpenChange={setOpen}
       variant="ghost"
     >

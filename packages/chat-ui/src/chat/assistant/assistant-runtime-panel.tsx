@@ -1,3 +1,4 @@
+import { ToolDecisionsProvider } from "../approvals/tool-decision-context";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assistant-ui/react";
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
@@ -56,13 +57,15 @@ export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
   const startComposerRef = useRef<StartComposerPosition | undefined>(undefined);
 
   return (
-    <AssistantRuntimePane
-      key={runtimeKey}
-      chat={chat}
-      initialMessages={initialMessages}
-      messagesSyncKey={messageSnapshotKey}
-      startComposerRef={startComposerRef}
-    />
+    <ToolDecisionsProvider parts={activeRun?.projection.parts}>
+      <AssistantRuntimePane
+        key={runtimeKey}
+        chat={chat}
+        initialMessages={initialMessages}
+        messagesSyncKey={messageSnapshotKey}
+        startComposerRef={startComposerRef}
+      />
+    </ToolDecisionsProvider>
   );
 }
 

@@ -233,7 +233,13 @@ function BeforeAndNow({ before, now }: { before: string; now: string | undefined
 }
 
 /** The input of a call, a block per field as the server rendered it. */
-function CallInputs({ call, hiddenFields }: { call: OperationCallPreview; hiddenFields: number }) {
+export function CallInputs({
+  call,
+  hiddenFields
+}: {
+  call: Pick<OperationCallPreview, "inputs" | "inputFieldCount" | "inputRemoved">;
+  hiddenFields: number;
+}) {
   const { t } = useTranslation();
   return (
     <section className="grid min-w-0 gap-2" data-testid="operation-call-inputs">

@@ -29,6 +29,15 @@
       "@work-shape/catalyst-quality-config/source-aliases": [
         "packages/quality-config/source-aliases.mjs"
       ],
+      "@work-shape/catalyst-chat-ui/workspace-api-client": [
+        "packages/chat-ui/src/shared/api/workspace-api-client.tsx"
+      ],
+      "@work-shape/catalyst-chat-ui/tool-decision-model": [
+        "packages/chat-ui/src/chat/approvals/tool-decision-model.ts"
+      ],
+      "@work-shape/catalyst-chat-ui/tool-decision-card": [
+        "packages/chat-ui/src/chat/approvals/tool-decision-card.tsx"
+      ],
       "@work-shape/catalyst-chat-ui/tool-display-panel": [
         "packages/chat-ui/src/chat/tools/tool-display-panel.tsx"
       ],

@@ -1,3 +1,6 @@
+import { ToolDecisionCard } from "../approvals/tool-decision-card";
+import { useToolDecision } from "../approvals/tool-decision-context";
+export { ToolDecisionsProvider } from "../approvals/tool-decision-context";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import { cn } from "@work-shape/catalyst-ui";
 import { Wrench } from "lucide-react";
@@ -81,6 +84,7 @@ export function ToolCallPart({
   const displayPanel = useToolDisplayPanel();
   const displayWidget = useToolDisplayWidget();
   const state = toolUiState({ isError, result, status, toolName });
+  const decision = useToolDecision(toolCallId);
   const display = readToolDisplayPayloadFromToolResult(result);
   // Platform-owned and resolved before the client widget registry: the card
   // decides a change to the instance, so a client assembly must not replace it.
@@ -134,6 +138,15 @@ export function ToolCallPart({
   const summary = workspaceProjection?.summary ?? getToolSummary(result, t);
   const statusLabel = toolStatusLabel(state, t);
   const actionLabel = workspaceProjection?.actionLabel ?? toolDisplay.actionLabel;
+
+  // The run waits for a decision on this call, or took one and the call has not answered yet.
+  if (decision && state === "running") {
+    return (
+      <div className="chat-tool-part my-3 max-w-3xl" data-testid="tool-call-card">
+        <ToolDecisionCard decision={decision} title={toolDisplay.title} toolName={toolName} />
+      </div>
+    );
+  }
 
   if (toolName === PAGE_SAVE_TOOL_NAME) {
     return <PageSaveCard args={args} result={result} failed={state === "failed"} />;

@@ -88,6 +88,15 @@
     },
     "./tool-display-panel": {
       "development": "./src/chat/tools/tool-display-panel.tsx"
+    },
+    "./tool-decision-card": {
+      "development": "./src/chat/approvals/tool-decision-card.tsx"
+    },
+    "./tool-decision-model": {
+      "development": "./src/chat/approvals/tool-decision-model.ts"
+    },
+    "./workspace-api-client": {
+      "development": "./src/shared/api/workspace-api-client.tsx"
     }
   },
   "publishConfig": {
