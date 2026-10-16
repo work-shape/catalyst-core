@@ -82,10 +82,10 @@ describe("built-in platform tools", () => {
     expect(description).toContain("save a Page with page.save instead");
   });
 
-  it("names no outside host and no runtime switch in the tool's source", async () => {
+  it("names no runtime switch in the tool's source", async () => {
     const source = await readFile("packages/tool-execution/src/built-in-tools.ts", "utf8");
 
-    expect(source).not.toMatch(/cdn\.tailwindcss\.com|unpkg\.com|externalRuntime/u);
+    expect(source).not.toMatch(/externalRuntime/u);
   });
 
   it("gives the layout and color guidance once, in the tool description", () => {

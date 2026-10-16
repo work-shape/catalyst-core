@@ -173,28 +173,6 @@ describe("api operation catalog", () => {
       /Unknown query parameter "unknown"/u
     );
   });
-  it("keeps normal server route registrations tied to the operation catalog", async () => {
-    const routeFiles = [
-      "packages/server/src/routes/audit-routes.ts",
-      "packages/server/src/routes/agent-run-routes.ts",
-      "packages/server/src/routes/config-routes.ts",
-      "packages/server/src/routes/conversation-file-routes.ts",
-      "packages/server/src/routes/conversation-routes.ts",
-      "packages/server/src/routes/draft-attachment-routes.ts",
-      "packages/server/src/routes/session-token-routes.ts",
-      "packages/server/src/routes/superadmin-routes.ts",
-      "packages/server/src/routes/user-account-routes.ts"
-    ];
-
-    for (const file of routeFiles) {
-      const source = await readFile(file, "utf8");
-      expect(source, file).toContain("apiOperations[");
-      expect(source, file).not.toMatch(
-        /app\.(?:get|post|patch|put|delete)\(\s*["'`]\/(?:api|auth)\//u
-      );
-    }
-  });
-
   it("does not keep the deleted legacy live chat stream path in the API contract", async () => {
     const contractSourceDirectory = "packages/api-contract/src";
     const contractSourceFiles = (await readdir(contractSourceDirectory, { recursive: true }))

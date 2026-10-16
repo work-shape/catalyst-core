@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
 import { importX } from "eslint-plugin-import-x";
 import tseslint from "typescript-eslint";
+import { assetBoundaryRules } from "./asset-boundary-rules.mjs";
 import { envBoundaryRule } from "./env-boundary-rule.mjs";
 import { importRules } from "./import-rules.mjs";
 import { moduleSnapshotBoundaryRule } from "./module-snapshot-rule.mjs";
@@ -723,6 +724,31 @@ const plugin = {
           : {}
     ),
     ...modelGatewayRules({ root, rule, packageAt, keyName, loadedModule }),
+    "chart-engine-import": rule(
+      "Only ui/src/data/chart-engine.ts imports ECharts",
+      (filename) =>
+        packageAt(filename)?.directory === "packages/ui" &&
+        !isPackageFile(filename, "src/data/chart-engine.ts"),
+      (_context, report) => {
+        /** @param {AnyNode} node */
+        const check = (node) => {
+          const name =
+            node.type === "ExportNamedDeclaration" || node.type === "ExportAllDeclaration"
+              ? node.source?.value
+              : loadedModule(node);
+          if (name === "echarts" || (typeof name === "string" && name.startsWith("echarts/")))
+            report(node);
+        };
+        return {
+          ImportDeclaration: check,
+          ImportExpression: check,
+          CallExpression: check,
+          ExportNamedDeclaration: check,
+          ExportAllDeclaration: check
+        };
+      }
+    ),
+    ...assetBoundaryRules({ rule, keyName, staticReads }),
     "retired-terms": retiredTermsRule
   }
 };

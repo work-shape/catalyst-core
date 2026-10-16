@@ -16,6 +16,7 @@ import {
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { createTestToolRunner } from "./support/tool-runner";
 import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
+import { platformDocsSkill } from "@work-shape/catalyst-client-assembly";
 import { createReadSkillTool, ToolRegistry } from "@work-shape/catalyst-tool-execution";
 
 const supportSkill = {
@@ -85,6 +86,21 @@ describe("client skills", () => {
     expect(result).toMatchObject({
       status: "failed",
       error: { code: "not_allowed" }
+    });
+  });
+
+  it("refuses the platform documentation when the agent has no offer of it", async () => {
+    const execution = createExecution({
+      agents: [agent("test_agent", [])],
+      skills: [{ ...platformDocsSkill, resources: [...(platformDocsSkill.resources ?? [])] }]
+    });
+    const result = await executeReadSkill(execution, request("test_agent", "platform-docs"));
+    expect(result).toMatchObject({
+      status: "failed",
+      error: {
+        code: "not_allowed",
+        message: "Agent 'test_agent' is not allowed to read skill 'platform-docs'"
+      }
     });
   });
 

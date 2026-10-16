@@ -15,7 +15,6 @@ import {
   type ChartRow
 } from "@work-shape/catalyst-ui";
 import * as chartEngine from "@work-shape/catalyst-ui/chart-engine";
-import { scanUiGuard } from "./ui-guard-scan";
 
 const { renderChartSvg } = chartEngine;
 type ChartSpec = chartEngine.ChartSpec;
@@ -506,13 +505,5 @@ describe("chart boundary", () => {
       "chart-engine"
     );
     expectTypeOf(renderChartSvg).returns.toEqualTypeOf<string>();
-  });
-
-  it("is held by the library guard: only the engine file imports ECharts", () => {
-    const root = fileURLToPath(new URL("..", import.meta.url));
-
-    expect(scanUiGuard(root).filter((finding) => finding.category === "library-imports")).toEqual(
-      []
-    );
   });
 });

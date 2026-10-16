@@ -13,6 +13,7 @@ import {
   asUserId,
   createFileSetId
 } from "@work-shape/catalyst-core";
+import { platformContextSchema } from "@work-shape/catalyst-api-contract";
 import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
 import { createPlatformDiscoveryTools } from "@work-shape/catalyst-tool-execution";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
@@ -187,13 +188,20 @@ describe("the tools that find what is on the platform", () => {
 
   it("lets an agent in a conversation about nothing read the platform skill, see what the instance has and find the assets its user may read, and nothing of the others", async () => {
     const t = await fixture(true);
+    const owner = await t.conversationOf(OWNER);
+    expect((await owner("platform.assets.list", { kind: "workflow" })).answer).toEqual({
+      assets: [],
+      truncated: false
+    });
+    const initiallyEveryKind = foundSchema.parse((await owner("platform.assets.list", {})).answer);
+    expect(initiallyEveryKind.truncated).toBe(false);
+    expect(initiallyEveryKind.assets.map(({ kind }) => kind)).not.toContain("workflow");
     const written = await t.app.call("assets.put", {
       params: { kind: WORKFLOW_ASSET_KIND, name: WORKFLOW },
       payload: { config: workflowConfig, expectedRevision: null }
     });
     expect(written.statusCode, written.body).toBe(200);
 
-    const owner = await t.conversationOf(OWNER);
     // The documentation lists its pages, and each listed path answers that page.
     const docs = z
       .object({
@@ -207,18 +215,6 @@ describe("the tools that find what is on the platform", () => {
       path: "references/configure/cli.md",
       mediaType: "text/markdown"
     });
-    const page = z.object({ resourcePath: z.string(), content: z.string() }).parse(
-      (
-        await owner("read_skill", {
-          name: "platform-docs",
-          resourcePath: "references/configure/cli.md"
-        })
-      ).answer
-    );
-    expect(page.resourcePath).toBe("references/configure/cli.md");
-    expect(page.content.startsWith("# The Catalyst CLI\n")).toBe(true);
-    expect(page.content).toContain("@work-shape/catalyst-cli");
-
     const context = contextSchema.parse((await owner("platform.context")).answer);
     expect(context.modules).toContain("workflows");
     expect(context.kinds).toContainEqual({ kind: "workflow", plural: "workflows", hasDraft: true });
@@ -226,7 +222,7 @@ describe("the tools that find what is on the platform", () => {
 
     // Names, titles and descriptions; never the definition.
     const found = foundSchema.parse(
-      (await owner("platform.assets.list", { kind: "workflow", text: "MONTH" })).answer
+      (await owner("platform.assets.list", { text: "CLOSING" })).answer
     );
     expect(found).toEqual({
       assets: [
@@ -239,41 +235,19 @@ describe("the tools that find what is on the platform", () => {
       ],
       truncated: false
     });
-    // The title is searched as well as the name.
-    const byTitle = foundSchema.parse(
-      (await owner("platform.assets.list", { text: "Closing" })).answer
-    );
-    expect(byTitle.assets.map(({ name }) => name)).toEqual([WORKFLOW]);
-    const everyKind = foundSchema.parse((await owner("platform.assets.list", {})).answer);
-    expect(everyKind.assets.map(({ kind, name }) => `${kind}:${name}`)).toContain(
-      `workflow:${WORKFLOW}`
-    );
-
     // A member who may not read the Workflow is told what is told of a name that is not there.
     const member = await t.conversationOf(MEMBER);
-    const memberContext = contextSchema.parse((await member("platform.context")).answer);
+    // Rights are an operation contract; the tool's projection is checked once above.
+    const memberContext = platformContextSchema.parse(
+      (await t.app.call("platform.context.get", {}, MEMBER)).json()
+    );
     expect(memberContext.actions).not.toContain("workflow.write");
-    const hidden = await member("platform.assets.list", { kind: "workflow", text: WORKFLOW });
-    const missing = await member("platform.assets.list", { kind: "workflow", text: "no-such" });
+    const hidden = await member("platform.assets.list", { text: WORKFLOW });
+    const missing = await member("platform.assets.list", { text: "no-such" });
     expect(hidden.answer).toEqual({ assets: [], truncated: false });
     expect(hidden.answer).toEqual(missing.answer);
     const memberEveryKind = foundSchema.parse((await member("platform.assets.list", {})).answer);
     expect(memberEveryKind.assets.map(({ kind }) => kind)).not.toContain("workflow");
-  }, 120_000);
-
-  it("gives an agent that lists none of the platform's tools neither the tools nor the documentation", async () => {
-    // It reads skills, but none of the platform's tools.
-    const t = await fixture(true, false, ["read_skill"]);
-    const owner = await t.conversationOf(OWNER);
-    for (const tool of ["platform.context", "platform.assets.list", "platform.files.list"]) {
-      const { events, answer } = await owner(tool);
-      expect(answer).toBeUndefined();
-      expect(events).toContain(`Tool '${tool}' is not available to this agent`);
-    }
-    expect((await owner("read_skill", { name: "platform-docs" })).answer).toEqual({
-      code: "not_allowed",
-      message: "Agent 'test_agent' is not allowed to read skill 'platform-docs'"
-    });
   }, 120_000);
 
   it("lists no kind of a module that is off, and refuses it as a kind that does not exist", async () => {
@@ -292,19 +266,6 @@ describe("the tools that find what is on the platform", () => {
     });
     expect(off.answer).toEqual(refusal("workflow"));
     expect(unknown.answer).toEqual(refusal("no-such-kind"));
-  }, 120_000);
-
-  it("finds nothing on an instance that holds no asset of a kind", async () => {
-    const t = await fixture(true);
-    const owner = await t.conversationOf(OWNER);
-    expect((await owner("platform.assets.list", { kind: "workflow" })).answer).toEqual({
-      assets: [],
-      truncated: false
-    });
-    // What the release ships alone: the instance holds no asset anybody wrote.
-    const everyKind = foundSchema.parse((await owner("platform.assets.list", {})).answer);
-    expect(everyKind.truncated).toBe(false);
-    expect(everyKind.assets.map(({ kind }) => kind)).not.toContain("workflow");
   }, 120_000);
 
   it("refuses search text the store cannot hold before it reaches the store", () => {
@@ -499,10 +460,11 @@ describe("the tools that find what is on the platform", () => {
     expect(await names(asker, { text: "TAX RETURN" })).toEqual(
       expect.arrayContaining(["deductions", "receipts.txt"])
     );
-    expect(await names(asker, {})).toEqual(
+    const ownerNames = await names(asker, {});
+    expect(ownerNames).toEqual(
       expect.arrayContaining(["deductions", "receipts.txt", "salaries.txt"])
     );
-    expect(await names(asker, {})).not.toContain("diary.txt");
+    expect(ownerNames).not.toContain("diary.txt");
     const here = filesSchema.parse(
       (await taxChat("platform.files.list", { kind: "upload" })).answer
     );

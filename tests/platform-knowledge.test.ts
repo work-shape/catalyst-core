@@ -123,6 +123,15 @@ describe("the shipped skill platform-docs", () => {
     }
   });
 
+  it("ships the CLI resource with its title and package", () => {
+    const page = platformDocsSkill.resources?.find(
+      (resource) => resource.path === "references/configure/cli.md"
+    );
+    expect(page?.path).toBe("references/configure/cli.md");
+    expect(page?.content.startsWith("# The Catalyst CLI\n")).toBe(true);
+    expect(page?.content).toContain("@work-shape/catalyst-cli");
+  });
+
   it("is generated from the docs pages: a changed page fails here until `pnpm generate:platform-docs` ran", async () => {
     await expect(
       promisify(execFile)(process.execPath, [generator, "--check"])
