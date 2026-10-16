@@ -1,21 +1,61 @@
 #!/usr/bin/env node
 // Release-only, one-way mirror. Copy only tracked files from the four approved folders;
-// public-facing docs, examples and the workflow come from approved release assets.
+// public-facing docs, images, examples and the workflow come from approved release assets.
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { PUBLIC_PACKAGE_DIRS, repoRoot } from "./package-metadata.mjs";
 import { assertReleaseContext } from "./context.mjs";
 import { guard } from "./guard.mjs";
 import { publicLockfile } from "./mirror-lock.mjs";
 
+// Every path the mirror writes; the release commit stages exactly these.
+export const MIRRORED_PATHS = [
+  "packages",
+  "package.json",
+  "pnpm-workspace.yaml",
+  "pnpm-lock.yaml",
+  "tsconfig.base.json",
+  ".gitignore",
+  ".npmrc",
+  "scripts/release",
+  "README.md",
+  "LICENSE",
+  "SECURITY.md",
+  "examples",
+  "docs",
+  ".github/workflows/publish.yml"
+];
+
+// A symlink in the release assets could export a file from outside them, or a local path.
+function refuseSymlinks(source, path) {
+  const stat = lstatSync(path);
+  if (stat.isSymbolicLink()) throw new Error(`Mirror refuses symlink ${relative(source, path)}`);
+  if (stat.isDirectory())
+    for (const entry of readdirSync(path)) refuseSymlinks(source, join(path, entry));
+}
+
 export function mirror(source, destination) {
   guard([source]);
   const assets = join(source, "scripts/release/public");
+  for (const dir of ["scripts", "scripts/release"])
+    if (lstatSync(join(source, dir)).isSymbolicLink())
+      throw new Error(`Mirror refuses symlink ${dir}`);
+  refuseSymlinks(source, assets);
   rmSync(join(destination, "examples"), { recursive: true, force: true });
+  rmSync(join(destination, "docs"), { recursive: true, force: true });
   rmSync(join(destination, ".github/workflows"), { recursive: true, force: true });
-  for (const file of ["README.md", "LICENSE", "SECURITY.md", "examples"])
+  for (const file of ["README.md", "LICENSE", "SECURITY.md", "examples", "docs"])
     cpSync(join(assets, file), join(destination, file), { recursive: true });
   mkdirSync(join(destination, ".github/workflows"), { recursive: true });
   cpSync(join(assets, "publish.yml"), join(destination, ".github/workflows/publish.yml"));
@@ -143,23 +183,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (!dryRun) {
     git("config", "user.name", "Workshape release");
     git("config", "user.email", "release@workshape.ai");
-    git(
-      "add",
-      "--",
-      "packages",
-      "package.json",
-      "pnpm-workspace.yaml",
-      "pnpm-lock.yaml",
-      "tsconfig.base.json",
-      ".gitignore",
-      ".npmrc",
-      "scripts/release",
-      "README.md",
-      "LICENSE",
-      "SECURITY.md",
-      "examples",
-      ".github/workflows/publish.yml"
-    );
+    git("add", "--", ...MIRRORED_PATHS);
     if (git("ls-files", "changes")) git("add", "-u", "--", "changes");
     git("commit", "-m", `chore(release): mirror v${version}`, "-m", `Core-Commit: ${sourceCommit}`);
     git("tag", `v${version}`);

@@ -2,12 +2,20 @@ import assert from "node:assert/strict";
 import { parse } from "yaml";
 import { publicLockfile } from "./mirror-lock.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, test } from "node:test";
 import { guard } from "./guard.mjs";
-import { mirror } from "./mirror.mjs";
+import { MIRRORED_PATHS, mirror } from "./mirror.mjs";
 import { withPublishMetadata } from "./package-metadata.mjs";
 import { verifyRestricted } from "./registry.mjs";
 import { distributionTag, publish } from "./publish.mjs";
@@ -155,7 +163,7 @@ test("candidate and older hotfix channels never move latest backwards", () => {
 test("publish refuses a local non-dry-run before invoking npm", async () => {
   await assert.rejects(publish(["--root", fixture(), "--group", "restricted"]), /only allowed/u);
 });
-test("mirror carries only tracked public folders and approved release docs/workflow", () => {
+function mirrorFixture() {
   const source = fixture();
   const destination = mkdtempSync(join(tmpdir(), "catalyst-mirror-fixture-"));
   roots.push(destination);
@@ -234,16 +242,25 @@ snapshots:
     );
   write(source, "scripts/release/public/publish.yml", "public workflow");
   write(source, "scripts/release/public/examples/example.md", "public example");
+  write(source, "scripts/release/public/docs/images/chat.jpg", "public image");
   cpSync(
     new URL("public/package-metadata.mjs", import.meta.url),
     join(source, "scripts/release/public/package-metadata.mjs")
   );
+  return { source, destination };
+}
+
+test("mirror carries only tracked public folders and approved release docs/workflow", () => {
+  const { source, destination } = mirrorFixture();
   write(destination, "changes/unreleased/feat-vp3-public-release.md", "stale change");
   write(destination, "scripts/release/obsolete.mjs", "stale helper");
   write(destination, "README.md", "stale introduction");
+  write(destination, "docs/images/obsolete.jpg", "stale image");
   write(destination, ".github/workflows/publish.yml", "public workflow");
   mirror(source, destination);
   assert.equal(readFileSync(join(destination, "README.md"), "utf8"), "Public introduction");
+  assert.equal(readFileSync(join(destination, "docs/images/chat.jpg"), "utf8"), "public image");
+  assert.throws(() => readFileSync(join(destination, "docs/images/obsolete.jpg")));
   assert.equal(
     readFileSync(join(destination, ".github/workflows/publish.yml"), "utf8"),
     "public workflow"
@@ -275,6 +292,37 @@ snapshots:
     stdio: "pipe"
   });
   assert.doesNotMatch(readFileSync(join(destination, "tsconfig.base.json"), "utf8"), /private.ts/u);
+});
+
+test("mirror release commit stages docs, including removed images", () => {
+  const { source, destination } = mirrorFixture();
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: destination, encoding: "utf8", stdio: "pipe" }).trim();
+  git("init");
+  write(destination, "docs/images/obsolete.jpg", "stale image");
+  git("add", ".");
+  git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "seed");
+  mirror(source, destination);
+  git("add", "--", ...MIRRORED_PATHS);
+  assert.deepEqual(git("ls-files", "docs").split("\n"), ["docs/images/chat.jpg"]);
+  assert.equal(
+    git("status", "--porcelain", "--", "docs"),
+    "A  docs/images/chat.jpg\nD  docs/images/obsolete.jpg"
+  );
+});
+
+test("mirror refuses a symlink in the release assets before touching the destination", () => {
+  const { source, destination } = mirrorFixture();
+  const outside = join(mkdtempSync(join(tmpdir(), "catalyst-mirror-outside-")), "secret.txt");
+  roots.push(dirname(outside));
+  writeFileSync(outside, "outside");
+  symlinkSync(outside, join(source, "scripts/release/public/docs/images/outside.txt"));
+  write(destination, "README.md", "previous introduction");
+  assert.throws(
+    () => mirror(source, destination),
+    /Mirror refuses symlink scripts\/release\/public\/docs\/images\/outside\.txt/u
+  );
+  assert.equal(readFileSync(join(destination, "README.md"), "utf8"), "previous introduction");
 });
 
 test("CI context rejects an unapproved branch or a red Check and accepts a green tag", () => {
