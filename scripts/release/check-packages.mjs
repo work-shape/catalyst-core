@@ -41,6 +41,8 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   // pack to 5.9 MB (2026-10-16). Keep that existing build shape within a measured budget.
   "artifact-helpers": 6_500_000, // check-limit
   "chat-ui": 650_000, // check-limit
+  // Packed site was 1.55 MB.
+  docs: 2_000_000, // check-limit
   ui: 500_000, // check-limit
   // Raised on 2026-10-14 for App Kit 1.4.0 and the guardrail assets of EW-6a. Follow-up
   // KIT-SHARE-1: vendored App Kit versions share React and the chart engine; then lower the
