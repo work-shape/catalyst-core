@@ -114,21 +114,6 @@ and sets `E2E_EXTERNAL_POSTGRES=1`, so the runner starts no container there.
 
 ### Images of the hosted checks
 
-A hosted runner shares its address with many others, and a public registry limits what an address
-may pull without a sign-in: `public.ecr.aws` answered "toomanyrequests" to the Postgres image and
-failed a release check twice. The checks therefore pull such an image from a copy in the
-organisation's own registry, `ghcr.io/work-shape/mirror/NAME`, by digest.
-
-`.github/mirrored-images` lists the images, one `NAME:TAG DIGEST` per line. The workflow "Mirror
-images" copies what the registry does not hold yet, with all platforms and the digest of the
-original, from the first public registry that serves it. It runs when the list changes on `main`,
-every Monday and by hand. The weekly run pulls nothing; it fails when a copy is gone.
-
-Who pulls the copy: the service containers of a deployment's release checks, until they move
-to the instance's Postgres image below. To move to another version, change the line in
-`.github/mirrored-images`, let "Mirror images" run on `main`, and then change the digest in the
-deployments' workflows.
-
 The checks here and the capabilities' start the instance's own Postgres image instead
 (ADR-0023): `docker/postgres/Dockerfile`, the official image the live hosts ran plus pgvector,
 pinned by digest in `docker/postgres/pinned-image`. `.github/scripts/start-postgres.sh` and
@@ -139,10 +124,9 @@ repository and fails with the line to pin. Commit that line here and in the capa
 demo's and the deployments' files that name the digest. The package is the repository's; a job
 signs in to `ghcr.io` with its own token before it pulls.
 
-The package `mirror/postgres` is public, because it is the unchanged official image and a pull
-request from a fork has to read it. An image that is built from, not started (`node`, `nginx`,
-`docker` in `docker/vivd-client.Dockerfile`), still comes from Docker Hub, which by GitHub's
-account does not limit hosted runners.
+Images used as build inputs (`node`, `nginx`, `docker` in
+`docker/vivd-client.Dockerfile`) still come from Docker Hub, which by GitHub's account does not
+limit hosted runners.
 
 Use `E2E_SKIP_BUILD=1` for a faster rerun when the package dist output is already fresh, or pass
 Playwright flags after `--`:
