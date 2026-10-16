@@ -122,8 +122,6 @@ jobs:
         run: pnpm check:openapi
       - name: Contract
         run: pnpm check:contract
-      - name: Workspace dependencies
-        run: pnpm check:workspace-deps
       - name: Migrations
         run: pnpm check:migrations
   docs:

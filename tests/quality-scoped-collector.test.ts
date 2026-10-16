@@ -29,7 +29,6 @@ beforeAll(() => {
       "packages/*": { entry: ["src/index.ts"], project: ["src/*.ts"], ignoreBinaries: ["tsc"] }
     }
   });
-  write("quality-package-graph.json", { alpha: [], beta: [] });
   write("tsconfig.lint.json", {
     compilerOptions: {
       strict: true,

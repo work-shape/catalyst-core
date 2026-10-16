@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { workspaceDependencyFixtures } from "./support/quality-dependency-fixtures";
 
 // The real collector runs over a small project that breaks every rule once, including each
 // way a rule used to be bypassed. Weakening a rule or the collection fails this test.
@@ -25,7 +26,11 @@ const handler = () => {};
 
 const project: Record<string, string> = {
   ".gitignore": "node_modules\n",
-  "package.json": JSON.stringify({ name: "fixture", private: true, workspaces: ["packages/*"] }),
+  "package.json": JSON.stringify({
+    name: "fixture",
+    private: true,
+    workspaces: ["packages/*", "clients/*"]
+  }),
   "eslint.config.mjs": `import config from "@work-shape/catalyst-quality-config";
 export default [...config, { rules: { "catalyst/retired-terms": "error" } }, { files: ["**/warned.ts"], rules: { "no-debugger": "warn" } }];
 `,
@@ -49,28 +54,11 @@ export default [...config, { rules: { "catalyst/retired-terms": "error" } }, { f
       types: [],
       paths: { "@fixture/beta": ["./packages/beta/src/index.ts"] }
     },
-    include: ["packages", "tests"]
+    include: ["packages", "clients", "tests"]
   }),
   "tsconfig.tests.json": JSON.stringify({ extends: "./tsconfig.lint.json", include: ["tests"] }),
   "quality-baseline.json": JSON.stringify({ version: 1, entries: [] }),
-  // Beta and gamma depend on each other. Delta's manifest has an edge the graph lacks, and
-  // the graph names a package that no manifest has.
-  "quality-package-graph.json": JSON.stringify({
-    "@fixture/alpha": [],
-    "@fixture/beta": ["@fixture/gamma"],
-    "@fixture/gamma": ["@fixture/beta"],
-    "@fixture/delta": [],
-    "@fixture/config-cli": [],
-    "@fixture/ghost": [],
-    "@fixture/chat-server": [],
-    "@fixture/config-schema": [],
-    "@fixture/document-worker": [],
-    "@fixture/model-provider": [],
-    "@fixture/postgres-store": [],
-    "@fixture/tool-execution": [],
-    "@fixture/agent-runtime": [],
-    "@fixture/auth": []
-  }),
+  // Beta and gamma depend on each other in their manifests.
   "packages/alpha/package.json": JSON.stringify({
     name: "@fixture/alpha",
     type: "module",
@@ -93,6 +81,8 @@ export default [...config, { rules: { "catalyst/retired-terms": "error" } }, { f
   "packages/beta/src/internal.ts": `export const hidden = 1;\n`,
   "packages/gamma/package.json": JSON.stringify({
     name: "@fixture/gamma",
+    type: "module",
+    exports: { ".": "./src/index.ts" },
     dependencies: { "@fixture/beta": "workspace:*" }
   }),
   "packages/delta/package.json": JSON.stringify({
@@ -475,7 +465,8 @@ export type UnusedType = string;
   [`${source}/unused-local.ts`]: `const unused = 1;
 export {};
 `,
-  "tests/type-error.test.ts": `export const wrong: number = "text";\n`
+  "tests/type-error.test.ts": `export const wrong: number = "text";\n`,
+  ...workspaceDependencyFixtures
 };
 
 // Files added after the formatter has run once over the project.
@@ -528,6 +519,7 @@ beforeAll(() => {
   write(project);
   link(qualityConfig, "node_modules/@work-shape/catalyst-quality-config");
   link(join(directory, "packages/beta"), "node_modules/@fixture/beta");
+  link(join(directory, "packages/gamma"), "node_modules/@fixture/gamma");
   expect(spawnSync("git", ["init", "--quiet"], { cwd: directory }).status).toBe(0);
 });
 
@@ -758,10 +750,20 @@ describe("quality collector", { timeout: 180_000 }, () => {
         "catalyst/test-store tests/store-class.test.ts",
         "catalyst/test-store tests/store-alias.test.ts",
         `catalyst/database-skip tests/database.test.ts`,
-        "catalyst/package-cycle quality-package-graph.json",
-        "catalyst/package-cycle quality-package-graph.json",
-        "catalyst/package-graph packages/delta/package.json",
-        "catalyst/package-graph quality-package-graph.json"
+        "catalyst/runtime-dependency packages/config-cli/src/undeclared.ts",
+        ...["deep-import.ts", "deep-dynamic-import.ts", "deep-require.cjs"].map(
+          (file) => `catalyst/runtime-dependency ${source}/${file}`
+        ),
+        `catalyst/runtime-dependency ${source}/undeclared-edge.ts`,
+        `catalyst/runtime-dependency ${source}/undeclared.mdx`,
+        "catalyst/runtime-dependency clients/demo/src/undeclared.ts",
+        "catalyst/workspace-dependency clients/demo/tools/undeclared.ts",
+        "catalyst/workspace-dependency packages/delta/scripts/undeclared.mjs",
+        "catalyst/package-cycle packages/beta/package.json",
+        "catalyst/package-cycle packages/gamma/package.json",
+        ...["edge.ts", "import.ts", "type.ts", "dynamic.ts", "require.cjs"].map(
+          (file) => `catalyst/runtime-dependency ${source}/dev-only-${file}`
+        )
       ].sort()
     );
     expect(findings).toEqual(
@@ -773,6 +775,20 @@ describe("quality collector", { timeout: 180_000 }, () => {
         "knip/dependencies packages/alpha/package.json"
       ])
     );
+  });
+
+  it("fails undeclared workspace imports in client source, tools, package scripts and MDX", () => {
+    const result = collect("lint");
+    expect(result.status).toBe(1);
+    for (const [rule, scope, file] of [
+      ["runtime-dependency", "clients/demo", "src/undeclared.ts"],
+      ["workspace-dependency", "clients/demo", "tools/undeclared.ts"],
+      ["workspace-dependency", "packages/delta", "scripts/undeclared.mjs"],
+      ["runtime-dependency", "packages/alpha", "src/undeclared.mdx"]
+    ]) {
+      expect(result.stderr).toContain(`lint|catalyst/${rule}|${scope}: measured`);
+      expect(result.stderr).toContain(`${scope}/${file} (1)`);
+    }
   });
 
   it("counts literal interface text per folder and other findings per package", () => {

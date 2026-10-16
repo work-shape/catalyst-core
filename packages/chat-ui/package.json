@@ -41,6 +41,48 @@
       "types": "./dist/widget.d.ts",
       "development": "./src/widget.tsx",
       "import": "./dist/widget.js"
+    },
+    "./access": {
+      "development": "./src/admin/access/index.ts"
+    },
+    "./build-area": {
+      "development": "./src/studio/build-area/index.ts"
+    },
+    "./operations": {
+      "development": "./src/admin/operations/index.ts"
+    },
+    "./agents": {
+      "development": "./src/studio/agents/index.ts"
+    },
+    "./apps": {
+      "development": "./src/studio/apps/index.ts"
+    },
+    "./pages": {
+      "development": "./src/studio/pages/index.ts"
+    },
+    "./workflows": {
+      "development": "./src/studio/workflows/index.ts"
+    },
+    "./reading-place": {
+      "development": "./src/chat/assistant/reading-place.ts"
+    },
+    "./surface-layout": {
+      "development": "./src/chat/surface/surface-layout.ts"
+    },
+    "./subject-run": {
+      "development": "./src/chat/conversation/subject-run.ts"
+    },
+    "./open-move": {
+      "development": "./src/chat/conversation/open-move.ts"
+    },
+    "./asset-tool-lines": {
+      "development": "./src/chat/conversation/asset-tool-lines.ts"
+    },
+    "./tool-call": {
+      "development": "./src/chat/tools/tool-call.tsx"
+    },
+    "./tool-display-panel": {
+      "development": "./src/chat/tools/tool-display-panel.tsx"
     }
   },
   "publishConfig": {

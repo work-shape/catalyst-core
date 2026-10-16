@@ -88,16 +88,19 @@ test("runner keeps root-test checks narrow, typechecks package consumers and exp
     const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
   };
-  for (const pkg of ["a", "unrelated", "quality-config"])
+  for (const pkg of ["a", "dependent", "quality-config"])
     write(`packages/${pkg}/package.json`, JSON.stringify({ name: pkg }));
+  write(
+    "packages/dependent/package.json",
+    JSON.stringify({
+      name: "dependent",
+      dependencies: { a: "workspace:*" }
+    })
+  );
   write("packages/a/index.ts", "export const value = 1;\n");
   write("tests/a.test.ts", 'import { value } from "../packages/a/index";\nvoid value;\n');
   write("tests/b.test.ts", "export {};\n");
   write("tsconfig.tests.json", JSON.stringify({ include: ["tests/**/*.ts"] }));
-  write(
-    "quality-package-graph.json",
-    JSON.stringify({ a: [], unrelated: [], "quality-config": [] })
-  );
   // The tooling self-check is separate from the package/test commands under observation.
   write("scripts/check-affected.test.mjs", "");
   const callsFile = join(root, "calls.log");
@@ -151,8 +154,9 @@ appendFileSync(process.env.CALLS_FILE, JSON.stringify(process.argv.slice(2)) + "
   writeFileSync(callsFile, "");
   result = run();
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /1 packages, 1 test files/);
+  assert.match(result.stdout, /2 packages, 1 test files/);
   assert.ok(calls().some((args) => args[0] === "typecheck:tests"));
+  assert.ok(calls().some((args) => args.includes("dependent...")));
   assert.ok(calls().some((args) => args[2] === "lint" && args[3]?.startsWith("--scope-file=")));
   git("restore", "packages/a/index.ts");
   // Untracked logs must not enter the changed-file selection.
