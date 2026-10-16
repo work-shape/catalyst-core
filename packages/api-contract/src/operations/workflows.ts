@@ -73,6 +73,12 @@ export const workflowRunSchema = z.object({
   scheduledFor: timestampSchema.optional(),
   /** The Operation Run of the call that started the run. */
   operationRunId: z.string().optional(),
+  parentRunId: z.string().optional(),
+  parentStepRunId: z.string().optional(),
+  rootRunId: z.string(),
+  depth: z.number().int().min(0).max(2),
+  itemIndex: z.number().int().min(0).optional(),
+  itemLabel: z.string().optional(),
   stepRunCount: z.number().int().min(0),
   /** After this moment no further step starts and the run ends as `limit_reached`. */
   deadlineAt: timestampSchema,

@@ -247,6 +247,10 @@ export async function workflowFixture(
   };
   const kind = createWorkflowAssetKind({
     clientInstanceId,
+    configAssets: {
+      getConfigAsset: (input) => storesOf().configAssets.getConfigAsset(input),
+      listPublishedConfigAssets: (input) => storesOf().configAssets.listPublishedConfigAssets(input)
+    },
     apiAccess: {
       findServicePrincipalByName: (input) => storesOf().apiAccess.findServicePrincipalByName(input)
     },

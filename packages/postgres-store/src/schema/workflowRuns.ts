@@ -62,6 +62,12 @@ export const workflowRuns = pgTable(
     // Minimized: kind, id and label of who started the run.
     startedBy: jsonb("started_by").$type<OperationRunActor>().notNull(),
     operationRunId: text("operation_run_id").$type<OperationRunId>(),
+    parentRunId: text("parent_run_id").$type<WorkflowRunId>(),
+    parentStepRunId: text("parent_step_run_id").$type<WorkflowStepRunId>(),
+    rootRunId: text("root_run_id").$type<WorkflowRunId>(),
+    depth: integer("depth").notNull().default(0),
+    itemIndex: integer("item_index"),
+    itemLabel: text("item_label"),
     stepRunCount: integer("step_run_count").notNull().default(0),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }).notNull(),
     correlationId: text("correlation_id").notNull(),
@@ -77,6 +83,14 @@ export const workflowRuns = pgTable(
     dataPrunedAt: timestamp("data_pruned_at", { withTimezone: true })
   },
   (table) => [
+    uniqueIndex("workflow_runs_operation_idx").on(table.clientInstanceId, table.operationRunId),
+    uniqueIndex("workflow_runs_parent_step_idx").on(table.clientInstanceId, table.parentStepRunId),
+    index("workflow_runs_parent_idx").on(table.clientInstanceId, table.parentRunId),
+    check("workflow_runs_depth_check", sql`${table.depth} between 0 and 2`),
+    check(
+      "workflow_runs_lineage_check",
+      sql`(${table.parentRunId} is null and ${table.parentStepRunId} is null and ${table.depth} = 0) or (${table.parentRunId} is not null and ${table.parentStepRunId} is not null and ${table.rootRunId} is not null and ${table.depth} > 0)`
+    ),
     check("workflow_runs_mode_check", sql`${table.mode} in ('live', 'test')`),
     check(
       "workflow_runs_status_check",

@@ -358,7 +358,7 @@ export async function callStepOperation(input: {
       // it. Its reason is one of a fixed list, such as `upstream_conflict` for a 409.
       const reason = failureReasonSchema.safeParse(result.error.details);
       throw new OperationStepFailure(
-        result.error.code,
+        stepRun.stepType === "workflow" && reason.success ? reason.data.reason : result.error.code,
         reason.success
           ? `The operation '${operation}' failed (${reason.data.reason})`
           : `The operation '${operation}' failed`,

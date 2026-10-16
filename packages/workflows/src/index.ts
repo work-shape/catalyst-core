@@ -1,3 +1,4 @@
+import { workflowDeadlineJobKind } from "./run-deadline";
 import {
   WORKFLOW_ASSET_KIND,
   WORKFLOW_RUN_JOB_KINDS,
@@ -27,6 +28,7 @@ export const workflowsModule = defineModule({
   kinds: [WORKFLOW_ASSET_KIND],
   jobKinds: [
     WORKFLOW_RUN_JOB_KINDS.executeStep,
+    workflowDeadlineJobKind.kind,
     WORKFLOW_RUN_JOB_KINDS.fireSchedule,
     WORKFLOW_CODE_JOB_KIND,
     WORKFLOW_CODE_SWEEP_JOB_KIND,
@@ -97,6 +99,7 @@ export { WORKFLOW_TEST_RUN_ERRORS } from "./test-run";
 export * from "./limits";
 export { replaceScheduleJob, workflowScheduleJobKind } from "./schedule-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
+export { checkChildContracts, checkChildCycles } from "./child-contracts";
 export { workflowRunPrincipal } from "./run-identity";
 export {
   workflowDefinitionStartIssues,

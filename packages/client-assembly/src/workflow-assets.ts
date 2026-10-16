@@ -1,3 +1,4 @@
+import { checkPublishedChildren } from "./workflow-child-assets";
 import {
   createWorkflowLiveCheck,
   type PublishReach,
@@ -23,6 +24,8 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   WORKFLOW_MANIFEST_MAX_BYTES,
+  checkChildContracts,
+  checkChildCycles,
   indexWorkflowSteps,
   parseWorkflowManifest,
   replaceScheduleJob,
@@ -100,6 +103,7 @@ function parseStoredManifest(manifest: unknown): WorkflowDefinitionResult {
 export function createWorkflowAssetKind(
   options: WorkflowRunAsOptions & {
     /** The time zone of the engine's schedules. UTC when left out. */
+    configAssets: Pick<ConfigAssetStore, "getConfigAsset" | "listPublishedConfigAssets">;
     timeZone?: string;
     /** The clock of the engine, for a test of due times. */
     now?: () => Date;
@@ -187,13 +191,44 @@ export function createWorkflowAssetKind(
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
-    onPublish: ({ stores, replaced, config }) => reschedule(stores, replaced, config),
+    async onPublish({ stores, replaced, config }) {
+      // The pointer has moved in this transaction, but is not visible outside it yet.
+      // Serializing graph reads here prevents two individually safe publishes forming a cycle.
+      await stores.workflowRuns.lockDefinitionGraph({ clientInstanceId });
+      const parsed = workflowConfigSchema.parse(config);
+      const result = parseStoredManifest(parsed.manifest);
+      if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      await checkChildCycles(
+        result.manifest,
+        createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
+      );
+      await reschedule(stores, replaced, config);
+    },
     onRemove: ({ stores, published }) => reschedule(stores, published, undefined),
+    assertScopedWrite: async ({ definition, stores }) => {
+      const parsed = workflowConfigSchema.parse(definition);
+      const result = parseStoredManifest(parsed.manifest);
+      if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      await checkChildContracts(
+        result.manifest,
+        createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
+      );
+    },
     publishReach: workflowPublishReach,
-    authorizeLive: createWorkflowLiveCheck(
-      options,
-      (config) => runAsOfConfigSchema.safeParse(config).data?.manifest.runAs
-    )
+    async authorizeLive(input) {
+      await createWorkflowLiveCheck(
+        options,
+        (config) => runAsOfConfigSchema.safeParse(config).data?.manifest.runAs
+      )(input);
+      const config = workflowConfigSchema.parse(input.config);
+      const result = parseStoredManifest(config.manifest);
+      if (!result.ok) throw workflowDefinitionRefusal(config.name, result.issues);
+      await checkPublishedChildren(
+        options,
+        result.manifest,
+        createWorkflowAssetDefinitions({ clientInstanceId, configAssets: options.configAssets })
+      );
+    }
   };
 }
 

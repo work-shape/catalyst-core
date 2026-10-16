@@ -15142,6 +15142,28 @@
                     "operationRunId": {
                       "type": "string"
                     },
+                    "parentRunId": {
+                      "type": "string"
+                    },
+                    "parentStepRunId": {
+                      "type": "string"
+                    },
+                    "rootRunId": {
+                      "type": "string"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2
+                    },
+                    "itemIndex": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "itemLabel": {
+                      "type": "string"
+                    },
                     "stepRunCount": {
                       "type": "integer",
                       "minimum": 0,
@@ -15215,6 +15237,8 @@
                     "status",
                     "principal",
                     "startedBy",
+                    "rootRunId",
+                    "depth",
                     "stepRunCount",
                     "deadlineAt",
                     "createdAt"
@@ -15391,6 +15415,28 @@
                     "operationRunId": {
                       "type": "string"
                     },
+                    "parentRunId": {
+                      "type": "string"
+                    },
+                    "parentStepRunId": {
+                      "type": "string"
+                    },
+                    "rootRunId": {
+                      "type": "string"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2
+                    },
+                    "itemIndex": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "itemLabel": {
+                      "type": "string"
+                    },
                     "stepRunCount": {
                       "type": "integer",
                       "minimum": 0,
@@ -15464,6 +15510,8 @@
                     "status",
                     "principal",
                     "startedBy",
+                    "rootRunId",
+                    "depth",
                     "stepRunCount",
                     "deadlineAt",
                     "createdAt"
@@ -16264,6 +16312,28 @@
                           "operationRunId": {
                             "type": "string"
                           },
+                          "parentRunId": {
+                            "type": "string"
+                          },
+                          "parentStepRunId": {
+                            "type": "string"
+                          },
+                          "rootRunId": {
+                            "type": "string"
+                          },
+                          "depth": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 2
+                          },
+                          "itemIndex": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "itemLabel": {
+                            "type": "string"
+                          },
                           "stepRunCount": {
                             "type": "integer",
                             "minimum": 0,
@@ -16337,6 +16407,8 @@
                           "status",
                           "principal",
                           "startedBy",
+                          "rootRunId",
+                          "depth",
                           "stepRunCount",
                           "deadlineAt",
                           "createdAt"
@@ -16536,6 +16608,28 @@
                     "operationRunId": {
                       "type": "string"
                     },
+                    "parentRunId": {
+                      "type": "string"
+                    },
+                    "parentStepRunId": {
+                      "type": "string"
+                    },
+                    "rootRunId": {
+                      "type": "string"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2
+                    },
+                    "itemIndex": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "itemLabel": {
+                      "type": "string"
+                    },
                     "stepRunCount": {
                       "type": "integer",
                       "minimum": 0,
@@ -16609,6 +16703,8 @@
                     "status",
                     "principal",
                     "startedBy",
+                    "rootRunId",
+                    "depth",
                     "stepRunCount",
                     "deadlineAt",
                     "createdAt"
@@ -16831,6 +16927,28 @@
                     "operationRunId": {
                       "type": "string"
                     },
+                    "parentRunId": {
+                      "type": "string"
+                    },
+                    "parentStepRunId": {
+                      "type": "string"
+                    },
+                    "rootRunId": {
+                      "type": "string"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2
+                    },
+                    "itemIndex": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "itemLabel": {
+                      "type": "string"
+                    },
                     "stepRunCount": {
                       "type": "integer",
                       "minimum": 0,
@@ -16904,6 +17022,8 @@
                     "status",
                     "principal",
                     "startedBy",
+                    "rootRunId",
+                    "depth",
                     "stepRunCount",
                     "deadlineAt",
                     "createdAt"

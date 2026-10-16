@@ -626,6 +626,7 @@ describe("the modules workflows and dataStores", () => {
       ],
       jobKinds: [
         WORKFLOW_RUN_JOB_KINDS.executeStep,
+        "workflow_run.deadline",
         WORKFLOW_RUN_JOB_KINDS.fireSchedule,
         "workflow_run.run_code",
         "workflow_run.sweep_code",

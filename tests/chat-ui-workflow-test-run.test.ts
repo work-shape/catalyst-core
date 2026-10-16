@@ -137,6 +137,8 @@ describe("the instance's source for a test run", () => {
             principal: { id: "sp_1", name: "workflow-runner", displayLabel: "Workflow runner" },
             startedBy: { kind: "user", id: "user_kai", label: "Kai" },
             stepRunCount: 0,
+            rootRunId: "wr_test",
+            depth: 0,
             deadlineAt: "2026-10-14T21:00:00.000Z"
           }
         : { draftRevision: 3, part: "send" }

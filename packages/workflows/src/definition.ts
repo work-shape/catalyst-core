@@ -42,6 +42,7 @@ import {
 export const WORKFLOW_EXECUTED_STEP_TYPES = [
   "trigger",
   "operation",
+  "workflow",
   "loop",
   "code",
   "output"
@@ -213,6 +214,10 @@ export function stepOperationRefusal(
  */
 function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
   const issues: WorkflowDefinitionIssue[] = [];
+  for (const field of ["inputs", "outputs"] as const) {
+    if (namesDatasetType(manifest[field]))
+      issues.push(notSupported(field, "a dataset in a Workflow contract"));
+  }
   for (const field of ["labels", "onFailure", "retention", "types"] as const) {
     if (manifest[field] !== undefined) issues.push(notSupported(field, `'${field}'`));
   }
@@ -228,9 +233,6 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
         // A trigger that is read and never fires would look like one that is kept.
         step.triggers.forEach((trigger, number) => {
           const here = `${at}.triggers[${number}]`;
-          if (trigger.kind === "parent") {
-            issues.push(notSupported(`${here}.kind`, "the trigger 'parent'"));
-          }
           if (trigger.kind !== "schedule") return;
           // A schedule fires the latest of the due times it missed and skips a due time
           // that meets an open run. The other ways are read and not built.
@@ -246,6 +248,9 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
         for (const field of ["dataset", "paginate"] as const) {
           if (step[field] !== undefined) issues.push(notSupported(`${at}.${field}`, `'${field}'`));
         }
+      }
+      if (step.type === "workflow" && step.key !== undefined) {
+        issues.push(notSupported(`${at}.key`, "a child run key"));
       }
       if (step.type === "code") {
         // A code step is handed JSON and returns JSON. Datasets come with the slice that

@@ -13,6 +13,7 @@ import {
   type WorkflowRunView,
   type WorkflowStep
 } from "@work-shape/catalyst-core";
+import { workflowDeadlineJobKind } from "./run-deadline";
 import { codeStepIssues, workflowStepFilesRefusal, type WorkflowStepFiles } from "./code-step";
 import type { WorkflowDefinitionRevision } from "./definition-source";
 import type { WorkflowRunLimits } from "./limits";
@@ -77,12 +78,28 @@ export function createRunOpening(options: {
       definition: published.manifest,
       input,
       principal,
-      deadlineAt: new Date(createdAt.getTime() + limits.maxDurationMs).toISOString(),
       createdAt: createdAt.toISOString(),
-      ...origin
+      ...origin,
+      deadlineAt: new Date(
+        Math.min(
+          createdAt.getTime() + limits.maxDurationMs,
+          started.deadlineAt === undefined ? Infinity : Date.parse(started.deadlineAt)
+        )
+      ).toISOString()
     });
     if (!run) return undefined;
     await options.beginTrigger(tx, run, trigger);
+    await tx.jobs.enqueue(
+      workflowDeadlineJobKind,
+      { runId: run.id },
+      {
+        clientInstanceId,
+        subject: run.id,
+        dedupeKey: `${workflowDeadlineJobKind.kind}:${run.id}`,
+        runAfter: new Date(run.deadlineAt),
+        correlationId: run.correlationId
+      }
+    );
     await tx.audit.appendAuditEvent({
       clientInstanceId,
       type: "workflow_run.started",
@@ -108,27 +125,41 @@ export function createRunOpening(options: {
     input: Omit<StartWorkflowRunInput, "workflow">,
     mode: WorkflowRunMode
   ): Promise<WorkflowRunView> {
+    if (input.operationRunId) {
+      const existing = await stores.workflowRuns.findRunByOperation({
+        clientInstanceId,
+        operationRunId: input.operationRunId
+      });
+      if (existing) return existing;
+    }
     const prepared = await options.prepareStart(revision, input.input);
     const scripts = await codeStepIssues(revision, options.stepFiles);
     if (scripts.length > 0) throw workflowStepFilesRefusal(revision.manifest.id, scripts);
     const { startedBy } = input;
-    const run = await stores.transaction((tx) =>
-      openRun(
-        tx,
-        prepared,
-        {
-          trigger: "manual",
-          startedBy: {
-            kind: isAuthenticatedServicePrincipal(startedBy) ? "service_principal" : "user",
-            id: startedBy.id,
-            label: startedBy.displayLabel
+    const run = await stores.transaction(
+      async (tx) =>
+        (await openRun(
+          tx,
+          prepared,
+          {
+            trigger: "manual",
+            startedBy: {
+              kind: isAuthenticatedServicePrincipal(startedBy) ? "service_principal" : "user",
+              id: startedBy.id,
+              label: startedBy.displayLabel
+            },
+            ...(input.operationRunId ? { operationRunId: input.operationRunId } : {}),
+            actor: auditActorFromIdentity(startedBy),
+            correlationId: input.correlationId
           },
-          ...(input.operationRunId ? { operationRunId: input.operationRunId } : {}),
-          actor: auditActorFromIdentity(startedBy),
-          correlationId: input.correlationId
-        },
-        mode
-      )
+          mode
+        )) ??
+        (input.operationRunId
+          ? await tx.workflowRuns.findRunByOperation({
+              clientInstanceId,
+              operationRunId: input.operationRunId
+            })
+          : undefined)
     );
     const view = run
       ? await stores.workflowRuns.readRun({ clientInstanceId, id: run.id })

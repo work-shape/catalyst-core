@@ -45,7 +45,7 @@ const STEP_REFERENCE: {
     does: "Starts the run. It is always the first step, and a definition has exactly one. Its output is { input, startedAt, trigger, scheduledFor }, where `input` is the run's input, checked against the definition's `inputs`.",
     fields: {
       triggers:
-        'A list with at least one of { kind: manual } (a person or a call starts the run) and { kind: schedule, cron: "<five fields>" } (the run starts at the due times, read in the instance\'s time zone). `kind: parent`, and `missed` and `overlap` with other values than `last` and `skip`, are not run yet.'
+        'A nonempty list of { kind: manual } (a person or a call starts it), { kind: schedule, cron: "<five fields>" } (a due time in the instance time zone), or { kind: parent } (a workflow step starts it). With parent alone, only another Workflow starts it. Values of missed and overlap other than last and skip are not run yet.'
     }
   },
   operation: {
@@ -57,6 +57,14 @@ const STEP_REFERENCE: {
         "The mapping onto the operation's input: one entry per field of its input schema. See 'Mappings and references'.",
       dataset: "Not run yet. Leave it out.",
       paginate: "Not run yet. Leave it out."
+    }
+  },
+  workflow: {
+    does: "Starts one child on its published revision, waits without a slot and returns its output.",
+    fields: {
+      workflow: "The child Workflow id; it lists the parent trigger.",
+      input: "A mapping onto the child's inputs; its inputs and outputs supply the schemas.",
+      key: "Reserved until run keys are supported."
     }
   },
   loop: {
@@ -397,7 +405,7 @@ A definition that holds one of these is refused when it is saved, with the code
     .join(", ")};
 - \`labels\`, \`onFailure\`, \`retention\` and \`types\` on the manifest;
 - \`dataset\` and \`paginate\` on an operation step, and \`collect\` on a loop;
-- the trigger \`parent\`.
+- child dataset inputs and outputs, and child run keys.
 
 Where the person asks for one of them, say that this release does not run it yet, and offer
 what does: a loop for a list, a changing operation to keep what an item produces, one

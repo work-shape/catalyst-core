@@ -200,6 +200,8 @@ interface OperationDefinitionBase<Input, Output> {
    * system.
    */
   repeatsUnderKey?: true;
+  /** A Workflow start called by a draft starts a test run of its published revision. */
+  draftTarget?: "test";
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
   /**

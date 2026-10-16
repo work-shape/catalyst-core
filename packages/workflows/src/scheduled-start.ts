@@ -16,7 +16,18 @@ import type { PreparedStart } from "./run-start";
 
 /** How a run is written: by whom it was started, and from what. */
 export type RunOrigin = Pick<WorkflowRun, "trigger" | "startedBy" | "correlationId"> &
-  Pick<Partial<WorkflowRun>, "operationRunId" | "scheduledFor"> & { actor: AuditActor };
+  Pick<
+    Partial<WorkflowRun>,
+    | "operationRunId"
+    | "scheduledFor"
+    | "deadlineAt"
+    | "parentRunId"
+    | "parentStepRunId"
+    | "rootRunId"
+    | "depth"
+    | "itemIndex"
+    | "itemLabel"
+  > & { actor: AuditActor };
 
 interface ScheduledStartOptions {
   clientInstanceId: ClientInstanceId;

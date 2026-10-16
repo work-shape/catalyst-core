@@ -11,6 +11,7 @@ import type {
   WorkflowLoopCounts,
   WorkflowManifest,
   WorkflowRunMode,
+  WorkflowRunLineage,
   WorkflowRunRecordView,
   WorkflowRunStatus,
   WorkflowStep,
@@ -55,7 +56,7 @@ export interface WorkflowRunError {
  * `WorkflowRunRecordView` it has the revision it started on, and who cancelled it and when:
  * `cancelledBy` is there where a person did, and `cancelledAt` whoever did.
  */
-export interface WorkflowRun extends WorkflowRunRecordView {
+export interface WorkflowRun extends WorkflowRunRecordView, WorkflowRunLineage {
   id: WorkflowRunId;
   clientInstanceId: ClientInstanceId;
   /** The id of the Workflow. */
@@ -114,15 +115,16 @@ export type NewWorkflowRun = Pick<
   | "deadlineAt"
   | "correlationId"
   | "createdAt"
-> & {
-  /**
-   * The definition as it stood when the run started. The run keeps it and never reads a newer
-   * one; a step reads it with `readRunDefinition`, and no other read of a run carries it.
-   */
-  definition: WorkflowManifest;
-  /** The run's input, checked against the definition's `inputs`. */
-  input: JsonObject;
-};
+> &
+  Partial<WorkflowRunLineage> & {
+    /**
+     * The definition as it stood when the run started. The run keeps it and never reads a newer
+     * one; a step reads it with `readRunDefinition`, and no other read of a run carries it.
+     */
+    definition: WorkflowManifest;
+    /** The run's input, checked against the definition's `inputs`. */
+    input: JsonObject;
+  };
 
 /** A value cut to `WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS` characters of its JSON. */
 export interface WorkflowOutputPreview {
@@ -260,6 +262,20 @@ export interface WorkflowStepRunEnd {
 }
 
 export interface WorkflowRunsStore {
+  /** Serializes published Workflow edges until the calling transaction commits. */
+  lockDefinitionGraph(input: { clientInstanceId: ClientInstanceId }): Promise<void>;
+  /** A step owns at most one child, including after a crashed start. */
+  findRunByOperation(ref: {
+    clientInstanceId: ClientInstanceId;
+    operationRunId: OperationRunId;
+  }): Promise<WorkflowRunView | undefined>;
+  findChildRun(ref: WorkflowStepRunRef): Promise<WorkflowRunView | undefined>;
+  listChildRuns(ref: WorkflowRunRef): Promise<WorkflowRunView[]>;
+  readRunOutput(ref: WorkflowRunRef): Promise<{ value: JsonValue } | undefined>;
+  markChildWaiting(
+    ref: WorkflowStepRunRef & { operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
+  ): Promise<void>;
+
   /**
    * Writes a run as `queued`. Answers nothing, and writes nothing, where the run names a due
    * time of a schedule that a run of the same Workflow already has: a due time starts once.

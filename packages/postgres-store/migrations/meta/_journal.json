@@ -610,6 +610,20 @@
       "when": 1792135606084,
       "tag": "0086_agent_run_waiting_for_decision_index",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1792136156500,
+      "tag": "0087_workflow_child_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1792136157049,
+      "tag": "0088_workflow_child_run_indexes",
+      "breakpoints": true
     }
   ]
 }

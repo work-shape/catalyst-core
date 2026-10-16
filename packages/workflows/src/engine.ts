@@ -1,6 +1,5 @@
 import {
   AppError,
-  WORKFLOW_ENDED_STATUSES,
   asUserId,
   auditActorFromIdentity,
   createPlatformId,
@@ -12,7 +11,6 @@ import {
   type ClientInstanceId,
   type JobControl,
   type JobSchedule,
-  type JsonValue,
   type PlatformStores,
   type RegisteredJobHandler,
   type StorePage,
@@ -29,6 +27,9 @@ import {
   type WorkflowStepRunRef,
   type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
+import { childStepOutcome, createWorkflowStartSource } from "./child-runs";
+import { createRunEnd } from "./run-end";
+import { createRunDeadline } from "./run-deadline";
 import { noWorkflowStepFiles, type WorkflowStepFiles } from "./code-step";
 import {
   WORKFLOW_STEP_DATA_DAYS,
@@ -161,32 +162,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     ...(options.codeRunner ? { codeRunner: options.codeRunner } : {})
   });
 
-  /**
-   * Ends a run that has not ended, with every step run that still waits for its turn. A
-   * step run that is running is left to its attempt, which records how its call went and
-   * starts nothing after it. Answers whether this call ended the run.
-   */
-  async function endRun(
-    tx: PlatformStores,
-    run: WorkflowRun,
-    end: {
-      status: (typeof WORKFLOW_ENDED_STATUSES)[number];
-      output?: JsonValue;
-      error?: WorkflowRunError;
-      cancelledBy?: WorkflowRun["cancelledBy"];
-    }
-  ): Promise<boolean> {
-    const finishedAt = now().toISOString();
-    const ended = await tx.workflowRuns.endRun({
-      clientInstanceId,
-      id: run.id,
-      finishedAt,
-      ...end
-    });
-    if (!ended) return false;
-    await cancelWaiting(tx, run);
-    return true;
-  }
+  const endRun = createRunEnd({ clientInstanceId, now, cancelWaiting });
 
   /** Ends a run the engine ends itself, and writes that it ended. Never a value of the run. */
   async function finishRun(
@@ -427,11 +403,20 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       if (!run || !stepRun) return undefined;
       // A code step waits while the command worker runs its script, and is taken up again
       // when the script has ended. Nothing else that waits is executed by a step job.
+      const afterChild =
+        stepRun.status === "waiting" && stepRun.stepType === "workflow"
+          ? await childStepOutcome(tx, run, stepRun)
+          : undefined;
       const afterCode =
         stepRun.status === "waiting" && stepRun.stepType === "code"
           ? await tx.workflowRuns.readCodeOutcome(ref)
           : undefined;
-      if (stepRun.status !== "queued" && stepRun.status !== "running" && !afterCode) {
+      if (
+        stepRun.status !== "queued" &&
+        stepRun.status !== "running" &&
+        !afterCode &&
+        !afterChild
+      ) {
         return undefined;
       }
       const moment = now();
@@ -495,6 +480,29 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const { kind: _kind, systemic, ...failure } = end;
       await tx.workflowRuns.endStepRun({ ...ref, status: "failed", finishedAt, ...failure });
       if (live) await failStep(tx, run, index, stepRun, end.error, systemic);
+      return;
+    }
+    if (end.kind === "child") {
+      if (!live) {
+        await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
+        return;
+      }
+      // A fast child can finish before this attempt commits its wait. Read behind the
+      // parent lock so its wake can never be consumed before there is a wait to resume.
+      const known = await childStepOutcome(tx, run, stepRun);
+      if (known) {
+        await settle(tx, ref, index, {
+          ...known,
+          ...(end.operationRunId ? { operationRunId: end.operationRunId } : {}),
+          ...(end.call ? { call: end.call } : {})
+        });
+        return;
+      }
+      await tx.workflowRuns.markChildWaiting({
+        ...ref,
+        ...(end.operationRunId ? { operationRunId: end.operationRunId } : {}),
+        ...(end.call ? { call: end.call } : {})
+      });
       return;
     }
     if (end.kind === "code") {
@@ -617,6 +625,30 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     beginTrigger: (tx, run, trigger) => beginStep(tx, run, trigger, { key: trigger.id })
   });
 
+  operationCalls.registry.addSource(
+    createWorkflowStartSource({
+      clientInstanceId,
+      stores,
+      definitions,
+      now,
+      prepare: prepareStart,
+      open: openRun,
+      start: async (input, mode) => {
+        const published = await definitions.read(input.workflow);
+        if (!published) throw new AppError("NOT_FOUND", "There is no such Workflow");
+        const [trigger] = published.manifest.steps;
+        if (trigger?.type !== "trigger" || !trigger.triggers.some((t) => t.kind === "manual")) {
+          throw new AppError("CONFLICT", "The Workflow is not started by hand", {
+            reason: "no_manual_trigger"
+          });
+        }
+        return startByHand(published, input, mode);
+      }
+    })
+  );
+
+  const deadlineHandler = createRunDeadline({ clientInstanceId, now, finishRun });
+
   const schedule = createScheduleTrigger({
     clientInstanceId,
     stores,
@@ -635,7 +667,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   });
 
   return {
-    jobHandlers: [stepHandler, schedule.handler, pruning.handler],
+    jobHandlers: [stepHandler, deadlineHandler, schedule.handler, pruning.handler],
     jobSchedules: [pruning.schedule],
     pruneRunData: pruning.prune,
     planSchedules: schedule.plan,

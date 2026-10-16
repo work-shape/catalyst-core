@@ -26,6 +26,8 @@ const noop = () => undefined;
 
 const run = {
   id: "wfr_1",
+  rootRunId: "wfr_1",
+  depth: 0,
   workflow: "open-invoices",
   definitionRevisionId: "rev_1",
   mode: "live" as const,

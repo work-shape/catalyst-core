@@ -49,6 +49,8 @@ function apiFetch(answer: (request: Request) => Response | Promise<Response>): t
 const at = "2026-10-15T10:00:00.000Z";
 const workflowRun = {
   id: "run-1",
+  rootRunId: "run-1",
+  depth: 0,
   workflow: "month-end",
   definitionRevisionId: "revision-1",
   mode: "test",

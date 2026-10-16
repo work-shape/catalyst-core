@@ -31,7 +31,10 @@ export const WORKFLOW_TEST_RUN_ERRORS = {
   testerMissingRight: "tester_missing_right"
 } as const;
 
-type TestRunStores = Pick<PlatformStores, "apiAccess" | "users" | "configAssets" | "operationRuns">;
+type TestRunStores = Pick<
+  PlatformStores,
+  "apiAccess" | "users" | "configAssets" | "operationRuns" | "workflowRuns"
+>;
 
 /** The actor and the draft context of the call one step of a test run makes. */
 export async function testRunCall(
@@ -73,10 +76,14 @@ export async function testRunCall(
   }
   // The tester's start was their own confirmation where they called it themselves. A start an
   // agent made for them was not, until the person confirms it in their conversation (OP-3).
+  const root =
+    run.rootRunId === run.id
+      ? run
+      : await stores.workflowRuns.readRun({ clientInstanceId, id: run.rootRunId });
   const start =
-    run.operationRunId === undefined
+    root?.operationRunId === undefined
       ? undefined
-      : await stores.operationRuns.get({ clientInstanceId, id: run.operationRunId });
+      : await stores.operationRuns.get({ clientInstanceId, id: root.operationRunId });
   const startConfirmed =
     start !== undefined && start.actor.id === tester.id && callerCanConfirm(start.origin);
   return {

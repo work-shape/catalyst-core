@@ -59,6 +59,7 @@ export async function decideTarget(input: {
   const { call, definition, deps, admitted } = input;
   const { draft } = call;
   if (!draft || definition.effect === "reading") return "live";
+  if (definition.draftTarget) return definition.draftTarget;
   if (!deps.liveOnce || !(await admitted())) return "dry_run";
   const forRun = call.origin.kind === "workflow" ? call.origin.workflowRunId : undefined;
   const now = deps.now ?? (() => new Date());

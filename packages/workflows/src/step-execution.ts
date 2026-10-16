@@ -1,3 +1,4 @@
+import { childStepOutcome } from "./child-runs";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   WORKFLOW_DATASET_KEY,
@@ -5,6 +6,7 @@ import {
   operationDenialError,
   workflowDatasetReferenceSchema,
   workflowStepIdempotencyKey,
+  workflowStartOperationName,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JsonObject,
@@ -71,6 +73,7 @@ export type StepEnd =
     }
   /** A loop read its list. Its items are run by step runs of their own. */
   | { kind: "loop"; items: JsonValue[] }
+  | { kind: "child"; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
   /** A code step has its script and its input. The command worker runs it in the sandbox. */
   | { kind: "code"; staged: WorkflowStagedCode };
 
@@ -259,8 +262,6 @@ export function createStepExecutor(options: StepExecutorOptions) {
       switch (step?.type) {
         case "trigger": {
           // A definition another release stored may name a trigger no engine fires yet.
-          const other = step.triggers.find((trigger) => trigger.kind === "parent");
-          if (other) throw notSupportedFailure(`the trigger '${other.kind}'`);
           const input = await stores.workflowRuns.readRunInput({ clientInstanceId, id: run.id });
           const output: WorkflowTriggerOutput = {
             input: input ?? {},
@@ -270,6 +271,36 @@ export function createStepExecutor(options: StepExecutorOptions) {
             scheduledFor: run.scheduledFor ?? null
           };
           return { kind: "done", output: { ...output } };
+        }
+        case "workflow": {
+          const ended = await childStepOutcome(stores, run, stepRun);
+          if (stepRun.status === "waiting" && ended) return ended;
+          const input = await resolveInput(scope, step.input);
+          withinStepData(input, "The child input");
+          if (holdsDatasetReference(input)) throw notSupportedFailure("a dataset in a child input");
+          const caller = await callerOf(run, stepRun);
+          const { output: _output, ...trace } = await callStepOperation({
+            calls: operationCalls,
+            run,
+            stepRun,
+            operation: workflowStartOperationName(step.workflow),
+            input,
+            ...caller,
+            signal,
+            wait: {
+              waitMs: limits.operationOutcomeWaitMs,
+              pollMs: WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
+              maxPollMs: WORKFLOW_STEP_JOB_BACKOFF_MAX_MS,
+              now
+            },
+            noteOperationRun: (operationRunId) =>
+              stores.workflowRuns.noteStepRunOperation({
+                clientInstanceId,
+                id: stepRun.id,
+                operationRunId
+              })
+          });
+          return { kind: "child", ...trace };
         }
         case "operation": {
           for (const field of ["dataset", "paginate"] as const) {

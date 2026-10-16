@@ -157,6 +157,7 @@ describe("a definition with a schedule trigger", () => {
   it("is accepted alone and beside the start by hand, with the defaults of a schedule", () => {
     expect(refused([hourly])).toEqual([]);
     expect(refused([{ kind: "manual" }, hourly])).toEqual([]);
+    expect(refused([{ kind: "manual" }, { kind: "parent" }])).toEqual([]);
     const result = parseWorkflowManifest(scheduled([hourly]));
     const [trigger] = result.ok ? result.manifest.steps : [];
     expect(trigger).toMatchObject({
@@ -176,9 +177,6 @@ describe("a definition with a schedule trigger", () => {
     ]);
     expect(refused([{ ...hourly, overlap: "queue" }])).toEqual([
       ["not_supported_yet", "steps[0].triggers[0].overlap"]
-    ]);
-    expect(refused([{ kind: "manual" }, { kind: "parent" }])).toEqual([
-      ["not_supported_yet", "steps[0].triggers[1].kind"]
     ]);
   });
 });
