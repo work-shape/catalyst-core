@@ -7,6 +7,25 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.2 — 2026-10-16
+
+### Changed
+
+- Operated deployments use one exact published Catalyst version and their own frozen lockfile. The deployment kit removes source-pin updates and workspace preparation; use `catalyst-deploy bump <version>` and commit the manifest and lockfile together. Merge this cleanup only after VP-6 and VP-7 switch Musterbau and Catalyst. Earlier digest manifests remain readable for rollback; pre-switch releases use the kit and recovery procedure committed with their tag.
+- **Test audit:** Test inventories now use per-rule lint fixtures and reviewed event and role-right snapshots. Plain-operation rights decisions remain checked against the catalog, and exact module inventories and operation counts are checked at the API seam.
+- Trim duplicate discovery-tool integration checks and enforce asset-header and workspace-handle boundaries through lint rules with violation fixtures.
+- **Migration tests:** Migration guards identify their named migration without depending on the latest journal entry, while preserving exact rollback replay and legacy-data checks.
+- Route chat UI tests through one private test seam so folder moves do not rewrite their imports. Reject private chat UI imports outside that seam with lint; all existing assertions remain in place.
+- **Test guards:** Make rights wording guards follow marked screens and translations across folder moves, verify Connect page API side effects by rendering, and carry the UI guard's unchanged counts in the shared quality baseline.
+
+### Fixed
+
+- **Release checks:** The deployment-kit version mismatch fixture stays different from the kit version after a release cut.
+- **Release:** Publication now waits for a hosted scratch consumer to install the release tarballs without core's lockfile or third-party overrides and build the server and UI, catching incompatible third-party range drift before publishing. The same gate can be dispatched on a branch without publishing.
+- **Deployment kit:** Document the buildx bake filesystem permission required for the CI npm secret outside the work tree.
+- **Release safety:** Bound published auth, ORM, database, validation, React and server dependency ranges (including UI peers) to core-tested versions or minor lines. Fresh consumer release validation now migrates test Postgres, starts the installed assembly and requires a real sign-in plus an authenticated API request. Manual gate runs also prove the better-auth 1.7.10 / zod 4.4.3 regression is rejected at sign-in.
+- **Release:** Retry transient npm registry failures while waiting for public packages, retaining the last HTTP status within the existing 20-minute deadline. Bound GitHub release notes and link to the full tagged changelog when truncated.
+
 ## 0.8.0-rc.1 — 2026-10-16
 
 ### Added
