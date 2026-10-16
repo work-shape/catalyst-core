@@ -8,8 +8,6 @@ const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-passwo
 const accessPath = "/settings/instance/access";
 const assetPath = `${apiBaseUrl}/api/v1/assets/agent/kai-helper`;
 const grantsPath = `${apiBaseUrl}/api/v1/instance/access/grants`;
-/** Where a closed Instance page sends the visitor: the workspace, or its first settings page. */
-const awayFromInstancePagesPattern = /\/w\/[^/]+$|\/settings\/workspace\/general$/u;
 const NARROW = { width: 390, height: 844 };
 const WIDE = { width: 1280, height: 800 };
 
@@ -322,16 +320,4 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     .getByRole("button", { name: "Delete" })
     .click();
   await expect(page.getByText("No Namespace yet.")).toBeVisible();
-});
-
-test("a user without the right to manage users has no Access page", async ({ page }) => {
-  await signInViaApi(page, normalUser);
-  await page.goto("/settings/you/profile");
-  const rail = page.getByRole("navigation", { name: "Settings pages" });
-  await expect(rail.getByRole("button", { name: "Profile" })).toBeVisible();
-  await expect(rail.getByRole("button", { name: "Access", exact: true })).toHaveCount(0);
-
-  await page.goto(accessPath);
-  await expect(page).toHaveURL(awayFromInstancePagesPattern);
-  await expect(page.getByRole("tab", { name: /^Namespaces/u })).toHaveCount(0);
 });

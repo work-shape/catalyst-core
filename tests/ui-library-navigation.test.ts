@@ -224,6 +224,7 @@ describe("navigation, page structure and data components", () => {
     expect(markup).toMatch(/role="radiogroup"[^>]*aria-label="View"/u);
     expect(markup.match(/role="radio"/gu)).toHaveLength(2);
     expect(markup.match(/aria-checked="true"/gu)).toHaveLength(1);
+    expect(markup).toMatch(/role="radio"[^>]*aria-checked="true"[^>]*>List<\/button>/u);
     expect(markup).not.toContain("tabular-nums");
   });
 

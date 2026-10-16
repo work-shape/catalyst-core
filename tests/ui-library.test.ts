@@ -358,11 +358,11 @@ describe("form components", () => {
   });
 
   it("draws a person round and every thing as a rounded square, with initials from the name", () => {
-    const avatar = (kind: "person" | "workspace" | "agent" | "app", name: string) =>
+    const avatar = (kind: "person" | "workspace" | "agent" | "app" | "workflow", name: string) =>
       render(createElement(Avatar, { kind, name }));
 
     expect(avatar("person", "Maria Schmidt")).toMatch(/rounded-full[^>]*>MS</u);
-    for (const kind of ["workspace", "agent", "app"] as const) {
+    for (const kind of ["workspace", "agent", "app", "workflow"] as const) {
       expect(avatar(kind, "marketing")).toMatch(/rounded-md[^>]*>MA</u);
     }
     expect(avatar("person", " ")).toContain(">?<");

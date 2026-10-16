@@ -363,6 +363,114 @@ describe("the content route of a Page", () => {
     expect(order.filter((step) => step === "listening")).toHaveLength(3);
   });
 
+  it("maps every mouse button and modifier to cancellation before a Page can handle it", async () => {
+    const started = await startInstance();
+    const { url } = (await preview(started.instance, await withPage(started))).json<Preview>();
+    const shell = await callTestPath(started.instance, "GET", url, asFrame);
+    const script = heldBy(shell.body).script ?? "";
+    const getters = (names: string[]) =>
+      Object.defineProperties(
+        {},
+        Object.fromEntries(
+          names.map((name) => [
+            name,
+            {
+              get(this: Record<string, unknown>) {
+                return this[name];
+              },
+              configurable: true
+            }
+          ])
+        )
+      );
+    type Click = {
+      button: number;
+      ctrlKey: boolean;
+      metaKey: boolean;
+      shiftKey: boolean;
+      altKey: boolean;
+      path: object[];
+      prevented: boolean;
+    };
+    const listeners = new Map<string, (event: Click) => void>();
+    const elementPrototype = Object.assign(getters(["localName", "attributes"]), {
+      removeAttributeNode: () => undefined,
+      remove: () => undefined,
+      querySelectorAll: () => [],
+      attachShadow: () => ({ nodeType: 11 })
+    });
+    class Observer {
+      observe() {}
+    }
+    const ran = runPageScript(script, {
+      document: { nodeType: 9 },
+      Node: { prototype: getters(["nodeType"]) },
+      Element: { prototype: elementPrototype },
+      NodeList: { prototype: Object.assign(getters(["length"]), { item: () => undefined }) },
+      NamedNodeMap: { prototype: Object.assign(getters(["length"]), { item: () => undefined }) },
+      Attr: { prototype: getters(["localName"]) },
+      DocumentFragment: { prototype: { querySelectorAll: () => [] } },
+      MutationRecord: { prototype: getters(["type", "target", "addedNodes"]) },
+      MutationObserver: Observer,
+      Event: {
+        prototype: {
+          preventDefault(this: Click) {
+            this.prevented = true;
+          },
+          composedPath(this: Click) {
+            return this.path;
+          }
+        }
+      },
+      MouseEvent: { prototype: getters(["button", "ctrlKey", "metaKey", "shiftKey", "altKey"]) },
+      EventTarget: {
+        prototype: {
+          addEventListener: (kind: string, cancel: (event: Click) => void) =>
+            listeners.set(kind, cancel)
+        }
+      },
+      ShadowRoot: { prototype: {} },
+      Document: { prototype: { querySelectorAll: () => [], write: () => undefined } }
+    });
+    expect(ran.thrown).toBeUndefined();
+    expect([...listeners.keys()]).toEqual(["click", "auxclick", "dragstart"]);
+    const closedHost = { nodeType: 1, localName: "div", attributes: [] };
+    Reflect.apply(elementPrototype.attachShadow, closedHost, [{ mode: "closed" }]);
+    const cases = [
+      { name: "plain", flags: {}, modified: false },
+      { name: "middle", flags: { button: 1 }, modified: true },
+      { name: "secondary", flags: { button: 2 }, modified: true },
+      { name: "Control", flags: { ctrlKey: true }, modified: true },
+      { name: "Meta", flags: { metaKey: true }, modified: true },
+      { name: "Shift", flags: { shiftKey: true }, modified: true },
+      { name: "Alt", flags: { altKey: true }, modified: true }
+    ];
+    for (const [kind, cancel] of listeners) {
+      for (const { name, flags, modified } of cases) {
+        for (const localName of ["a", "area", "div"]) {
+          const event: Click = {
+            button: 0,
+            ctrlKey: false,
+            metaKey: false,
+            shiftKey: false,
+            altKey: false,
+            ...flags,
+            path: [{ nodeType: 1, localName, attributes: [] }],
+            prevented: false
+          };
+          cancel(event);
+          expect(event.prevented, `${kind}: ${name} on ${localName}`).toBe(
+            localName !== "div" && modified
+          );
+          event.path = [closedHost];
+          event.prevented = false;
+          cancel(event);
+          expect(event.prevented, `${kind}: ${name} on a closed shadow host`).toBe(modified);
+        }
+      }
+    }
+  });
+
   it("answers a token on another file set, an expired token and an altered token with 404", async () => {
     const started = await startInstance();
     const { instance } = started;

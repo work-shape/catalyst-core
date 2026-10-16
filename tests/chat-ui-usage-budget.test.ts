@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UsageSummary } from "@work-shape/catalyst-api-client";
-import { UsageView } from "../packages/chat-ui/src/admin/control-plane/usage-view";
+import { UsageView } from "@work-shape/catalyst-chat-ui/control-plane";
 import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
 
 describe("usage spend budget progress", () => {
@@ -20,6 +20,21 @@ describe("usage spend budget progress", () => {
     expect(markup).toContain('aria-valuenow="25"');
     expect(markup).toContain(formatEuro(40));
     expect(markup).toContain(formatEuro(300));
+  });
+
+  it("renders German Usage and groups configured safeguards without English billable copy", () => {
+    const usage = createUsageSummary();
+    usage.safeguards.modelCallsPerDay = 25_000;
+    const markup = renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "de",
+        children: createElement(UsageView, { usage })
+      })
+    );
+    expect(markup).toContain("Nutzung");
+    expect(markup).toContain("Kosten diesen Monat");
+    expect(markup).toContain("25.000");
+    expect(markup).not.toContain("Billable");
   });
 
   it("labels amounts as billable and renders incomplete cost explicitly", () => {

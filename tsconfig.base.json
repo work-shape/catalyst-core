@@ -49,6 +49,9 @@
       "@work-shape/catalyst-chat-ui/surface-layout": [
         "packages/chat-ui/src/chat/surface/surface-layout.ts"
       ],
+      "@work-shape/catalyst-chat-ui/control-plane": [
+        "packages/chat-ui/src/admin/control-plane/index.ts"
+      ],
       "@work-shape/catalyst-chat-ui/reading-place": [
         "packages/chat-ui/src/chat/assistant/reading-place.ts"
       ],

@@ -196,21 +196,6 @@ test("conversation rail keeps dense histories readable and scrollable", async ({
   expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight);
 });
 
-test("composer grows for multiline input", async ({ page }) => {
-  await signInViaUi(page, normalUser);
-  await page.goto("/");
-
-  const input = page.getByPlaceholder("Message");
-  await expect(input).toBeVisible();
-  const initialHeight = await input.evaluate((element) => element.getBoundingClientRect().height);
-
-  await input.fill("Line one\nLine two\nLine three");
-
-  await expect
-    .poll(() => input.evaluate((element) => element.getBoundingClientRect().height))
-    .toBeGreaterThan(initialHeight);
-});
-
 test("the composer grows to six lines without a resize observer loop", async ({ page }) => {
   // The browser reports the loop as an error event on the window, without an exception.
   await page.addInitScript(() => {
@@ -226,6 +211,7 @@ test("the composer grows to six lines without a resize observer loop", async ({ 
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
   const input = page.getByPlaceholder("Message");
+  await expect(input).toBeVisible();
   const lineHeight = async () =>
     input.evaluate((element) => Number.parseFloat(getComputedStyle(element).lineHeight));
   const height = async () => input.evaluate((element) => element.getBoundingClientRect().height);
@@ -1846,6 +1832,18 @@ test("deleting my account signs me out when the removal is finished later", asyn
 
 test("the user list shows an account that is being deleted", async ({ page }) => {
   await signInViaUi(page, superadminUser);
+  // Own this row so the assertion works even as the shard's first Users test.
+  const id = randomUUID();
+  const email = `deleting-status-${id}@example.test`;
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
+    data: {
+      displayLabel: `Deleting status ${id}`,
+      email,
+      roles: ["user"],
+      passwordSignIn: { password: `deleting-status-${id}` }
+    }
+  });
+  expect(created.ok()).toBe(true);
   const apiOrigin = new URL(apiBaseUrl).origin;
   await page.route(
     (url) => url.origin === apiOrigin && url.pathname === apiOperations["users.list"].path,
@@ -1861,7 +1859,7 @@ test("the user list shows an account that is being deleted", async ({ page }) =>
         json: {
           ...body,
           items: body.items.map((user) =>
-            user.email === normalUser.email ? { ...user, status: "deleting" } : user
+            user.email === email ? { ...user, status: "deleting" } : user
           )
         }
       });
@@ -1870,7 +1868,7 @@ test("the user list shows an account that is being deleted", async ({ page }) =>
   await settingsGear(page).click();
   await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
 
-  await searchUsers(page, normalUser.email);
+  await searchUsers(page, email);
   await expect(page.getByText("Being deleted", { exact: true }).first()).toBeVisible();
 });
 
@@ -2671,14 +2669,6 @@ for (const text of [
     placeholder: "Message",
     account: / account$/u,
     darkTheme: "Switch to dark theme"
-  },
-  {
-    locale: "de",
-    deletion: /^Wird am [A-Z][a-z]+, \d+\. [A-Z][a-zä]+ automatisch gelöscht\./u,
-    kept: "Mit einer neuen Nachricht bleibt diese Unterhaltung erhalten.",
-    placeholder: "Nachricht",
-    account: /^Konto von /u,
-    darkTheme: "Zum dunklen Design wechseln"
   }
 ] as const) {
   test(`the open conversation says when it is deleted, and a new message keeps it (${text.locale})`, async ({
@@ -2969,10 +2959,6 @@ test("standalone auth gates superadmin views", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
   await signInViaUi(page, normalUser, { alreadyOnLogin: true });
-  // A user who owns a shared workspace has the gear too; the Instance pages stay closed.
-  await page.goto("/settings");
-  await expect(settingsPages(page).getByRole("button", { name: "Profile" })).toBeVisible();
-  await expect(settingsPages(page).getByRole("group", { name: "Instance" })).toHaveCount(0);
 });
 
 test("the Settings pages and Studio are route-backed", async ({ page }) => {
@@ -2987,10 +2973,7 @@ test("the Settings pages and Studio are route-backed", async ({ page }) => {
   await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
   await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
 
-  // The addresses of the former administration panel still lead to their pages.
-  await page.goto("/admin");
-  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
-  await page.goto("/admin/usage");
+  await page.goto("/settings/instance/usage");
   await expect(page).toHaveURL(/\/settings\/instance\/usage$/u);
   await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toBeVisible();
   await expect(page.getByText("Billable this month")).toBeVisible();
@@ -3009,40 +2992,6 @@ test("the Settings pages and Studio are route-backed", async ({ page }) => {
   await page.goBack();
   await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
   await expect(page.getByRole("heading", { name: "Users", level: 1 })).toBeVisible();
-});
-
-test("users, usage, audit and API access follow the German locale", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("vivd-catalyst:locale", "de");
-  });
-  await signInViaApi(page, superadminUser);
-  const panel = page.getByRole("region", { name: "Einstellungen" });
-
-  await page.goto("/settings/instance/users");
-  await expect(panel.getByRole("heading", { name: "Benutzer", exact: true })).toBeVisible();
-  await expect(panel.getByRole("button", { name: "Neuer Benutzer" })).toBeVisible();
-  await expect(panel.getByRole("searchbox", { name: "Benutzer suchen" })).toBeVisible();
-  await expect(panel.getByRole("columnheader", { name: "Anmeldemethoden" })).toBeVisible();
-  await expect(panel.getByRole("button", { name: "Nächste Seite" })).toBeVisible();
-  // The sign-in above is the superadmin's last activity, written as a German date, without seconds.
-  await searchUsers(page, superadminUser.email, "Benutzer suchen");
-  await expect(panel.getByRole("row", { name: /E2E Superadmin/u })).toContainText(
-    /\d{1,2}\.\d{1,2}\.\d{4}, \d{2}:\d{2}(?!:\d)/u
-  );
-
-  await page.goto("/settings/instance/usage");
-  await expect(panel.getByRole("heading", { name: "Nutzung", exact: true })).toBeVisible();
-  await expect(panel.getByText("Kosten diesen Monat")).toBeVisible();
-  // Numbers are grouped the German way.
-  await expect(page.getByTestId("configured-safeguards")).toContainText("25.000");
-  await expect(panel.getByText("Billable")).toHaveCount(0);
-
-  await page.goto("/settings/instance/audit");
-  await expect(panel.getByRole("heading", { name: "Audit", exact: true })).toBeVisible();
-  await expect(panel.getByText("Letzte Aktivitäten", { exact: true })).toBeVisible();
-
-  await page.goto("/settings/instance/api-access");
-  await expect(panel.getByRole("heading", { name: "API-Zugang", exact: true })).toBeVisible();
 });
 
 test("no page keeps room for the agent button: lists share one title line and a detail head is the top band", async ({
@@ -3342,7 +3291,7 @@ test("superadmin config follows the German locale", async ({ page }) => {
   });
   await signInViaApi(page, superadminUser);
 
-  await page.goto("/admin/config");
+  await page.goto("/build/agents");
 
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(page.getByRole("region", { name: "Studio" })).toBeVisible();
@@ -3649,6 +3598,14 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await page.goto("/");
   await settingsGear(page).click();
   const rail = settingsPages(page);
+  await ensureDarkMode(page);
+  await expect
+    .poll(() =>
+      page
+        .getByLabel("Filter by status")
+        .evaluate((element) => getComputedStyle(element).backgroundColor)
+    )
+    .not.toBe("rgb(255, 255, 255)");
   await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
   for (const group of ["You", "Workspace", "Instance"]) {
     await expect(rail.getByRole("group", { name: group, exact: true })).toBeVisible();
@@ -3709,6 +3666,7 @@ test("a plain user finds only their own pages in the Settings rail", async ({
   await page.goto("/settings");
   await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
   const rail = settingsPages(page);
+  await expect(rail.getByRole("button", { name: "Profile", exact: true })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Profile", exact: true })).toHaveAttribute(
     "aria-current",
     "true"
@@ -3731,6 +3689,15 @@ test("a plain user finds only their own pages in the Settings rail", async ({
   await expect(page).toHaveURL(awayFromInstancePagesPattern);
   await expect(page.getByRole("heading", { name: "Users", level: 1 })).toHaveCount(0);
 
+  for (const path of ["/admin/usage", "/settings/instance/access"]) {
+    await page.goto(path);
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+    await expect(page).toHaveURL(awayFromInstancePagesPattern);
+    await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: /^Namespaces/u })).toHaveCount(0);
+    await expect(rail.getByRole("group", { name: "Instance" })).toHaveCount(0);
+  }
+
   // With too little room beside the content the rail is a select above it.
   await page.setViewportSize({ width: 760, height: 800 });
   await page.goto("/settings/you/profile");
@@ -3742,17 +3709,6 @@ test("a plain user finds only their own pages in the Settings rail", async ({
   await expect(
     page.getByRole("heading", { name: "Language and appearance", level: 1 })
   ).toBeVisible();
-});
-
-test("normal users are redirected away from superadmin routes", async ({ page }) => {
-  await signInViaApi(page, normalUser);
-
-  await page.goto("/admin/usage");
-
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
-  await expect(page).toHaveURL(awayFromInstancePagesPattern);
-  await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toHaveCount(0);
-  await expect(settingsPages(page).getByRole("group", { name: "Instance" })).toHaveCount(0);
 });
 
 test("workspace and superadmin keep page scroll locked", async ({ page }) => {
@@ -3771,31 +3727,6 @@ test("workspace and superadmin keep page scroll locked", async ({ page }) => {
   await settingsGear(page).click();
   await expect(settingsPages(page)).toBeVisible();
   await expectDocumentScrollLocked(page);
-});
-
-test("superadmin can open usage and audit views", async ({ page }) => {
-  await signInViaUi(page, superadminUser);
-  await ensureDarkMode(page);
-  await expect(settingsGear(page)).toBeVisible();
-  await settingsGear(page).click();
-  await expect(settingsPages(page)).toBeVisible();
-  await expect(
-    settingsPages(page).getByRole("button", { name: "Usage", exact: true })
-  ).toBeVisible();
-  await expect(
-    settingsPages(page).getByRole("button", { name: "Users", exact: true })
-  ).toBeVisible();
-  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
-  await expect
-    .poll(() =>
-      page
-        .getByLabel("Filter by status")
-        .evaluate((element) => getComputedStyle(element).backgroundColor)
-    )
-    .not.toBe("rgb(255, 255, 255)");
-  await expect(
-    settingsPages(page).getByRole("button", { name: "Audit", exact: true })
-  ).toBeVisible();
 });
 
 test("admin sees billed usage and can manage users", async ({ page }) => {

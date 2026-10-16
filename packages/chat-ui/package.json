@@ -97,6 +97,9 @@
     },
     "./workspace-api-client": {
       "development": "./src/shared/api/workspace-api-client.tsx"
+    },
+    "./control-plane": {
+      "development": "./src/admin/control-plane/index.ts"
     }
   },
   "publishConfig": {

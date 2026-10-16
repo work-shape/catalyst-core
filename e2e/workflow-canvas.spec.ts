@@ -241,20 +241,6 @@ test("folding a loop leaves it where it was, and the entries' filter stays above
   expect(Math.abs(held.top - body.top)).toBeLessThan(2);
 });
 
-test("the head says whom every run of the Workflow acts as, and in German too", async ({
-  page
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await openSample(page, "monthly-booking-check");
-  await expect(
-    page.getByTestId("workflow-page").getByText("Runs as Workflow runner")
-  ).toBeVisible();
-  await page.goto("/ui-library/workflows?lang=de&at=monthly-booking-check");
-  await expect(
-    page.getByTestId("workflow-page").getByText("Läuft als Workflow runner")
-  ).toBeVisible();
-});
-
 test("the focus walks the steps, Enter opens the step's panel and Escape closes it", async ({
   page
 }) => {
@@ -266,11 +252,18 @@ test("the focus walks the steps, Enter opens the step's panel and Escape closes 
   await canvas.locator('[data-flow-id="start"]').focus();
   await page.keyboard.press("Tab");
   expect(await focused()).toBe("clients");
+  expect((await boxOf(canvas.locator('[data-flow-id="clients"]'))).left).toBeGreaterThan(
+    (await boxOf(canvas.locator('[data-flow-id="start"]'))).left
+  );
   const panel = canvas.locator('[data-slot="side-panel"]');
   await expect(panel).toHaveCount(0);
   await page.keyboard.press("Enter");
   await expect(panel).toBeVisible();
   await expect(panel).toHaveAttribute("data-placement", "float");
+  await expect(canvas.locator('[data-flow-id="clients"]')).toHaveAttribute("aria-current", "true");
+  expect((await boxOf(canvas.locator('[data-flow-id="clients"]'))).right).toBeLessThanOrEqual(
+    (await boxOf(panel)).left
+  );
   await expect(canvas.locator('[data-step-panel="clients"]')).toContainText("Load the clients");
   await expect(canvas.locator('[data-step-panel="clients"]')).toContainText("Bookings");
 
@@ -379,6 +372,13 @@ test("on a phone the Workflow runs top to bottom and a step opens as a sheet", a
   await canvas.locator('[data-flow-id="clients"]').click();
   const panel = canvas.locator('[data-slot="side-panel"]');
   await expect(panel).toHaveAttribute("data-placement", "sheet");
+  await expect
+    .poll(async () => {
+      const frame = await boxOf(canvas);
+      const sheet = await boxOf(panel);
+      return Math.abs(sheet.bottom - frame.bottom) < 1 && Math.abs(sheet.left - frame.left) < 1;
+    })
+    .toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
   );

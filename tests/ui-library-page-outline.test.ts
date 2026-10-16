@@ -40,6 +40,7 @@ describe("the outline of a page's sections", () => {
     }
     expect(linkTo(markup, "overview")).toContain('aria-current="location"');
     expect(linkTo(markup, "overview")).toMatch(/class="[^"]*border-foreground/u);
+    expect(linkTo(markup, "overview")).toContain("border-l-2");
     expect(markup.match(/aria-current=/gu)).toHaveLength(1);
     expect(linkTo(markup, "tools")).toMatch(/class="[^"]*border-transparent/u);
     // What makes a `NavItem` look selected is nowhere in it.

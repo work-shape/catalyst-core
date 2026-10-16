@@ -430,32 +430,33 @@ export const pageLinks: readonly PageLink[] = [
   {
     name: "a link in its markup",
     html: (address) =>
-      `<a id="go" style="${linkStyle}" ping="${address}" href="${address}">Open</a>`,
-    target: "#go"
+      `<a id="markup-link" style="${linkStyle}" ping="${address}" href="${address}">Open</a>`,
+    target: "#markup-link"
   },
   {
     name: "a download link in its markup",
-    html: (address) => `<a id="go" style="${linkStyle}" download="rows" href="${address}">Open</a>`,
-    target: "#go"
+    html: (address) =>
+      `<a id="download-link" style="${linkStyle}" download="rows" href="${address}">Open</a>`,
+    target: "#download-link"
   },
   {
     name: "a link a script adds",
     script: (address) =>
-      `const link = document.createElement("a"); link.id = "go"; link.style.cssText = ${text(linkStyle)}; link.textContent = "Open"; link.href = ${text(address)}; document.body.appendChild(link);`,
-    target: "#go"
+      `const link = document.createElement("a"); link.id = "script-link"; link.style.cssText = ${text(linkStyle)}; link.textContent = "Open"; link.href = ${text(address)}; document.body.appendChild(link);`,
+    target: "#script-link"
   },
   {
     name: "a link in an embedded SVG",
     html: (address) =>
-      `<svg width="240" height="40"><a id="go" href="${address}" xlink:href="${address}"><rect width="240" height="40" fill="silver"/><text y="24">Open</text></a></svg>`,
-    target: "#go"
+      `<svg width="240" height="40"><a id="svg-link" href="${address}" xlink:href="${address}"><rect width="240" height="40" fill="silver"/><text y="24">Open</text></a></svg>`,
+    target: "#svg-link"
   },
   {
     name: "an area of an image map",
     html: (address) =>
-      `<img id="map-image" alt="Open" usemap="#map" width="240" height="40" src="${PIXEL}"><map name="map"><area id="go" shape="rect" coords="0,0,240,40" alt="Open" ping="${address}" href="${address}"></map>`,
+      `<img id="map-image" alt="Open" usemap="#map" width="240" height="40" src="${PIXEL}"><map name="map"><area id="map-area" shape="rect" coords="0,0,240,40" alt="Open" ping="${address}" href="${address}"></map>`,
     script: () =>
-      `const area = document.getElementById("go"); document.body.setAttribute("data-area", [area.hasAttribute("href"), area.hasAttribute("ping")].join(","));`,
+      `const area = document.getElementById("map-area"); document.body.setAttribute("data-area", [area.hasAttribute("href"), area.hasAttribute("ping")].join(","));`,
     target: "#map-image",
     hidden: true,
     shows: { attribute: "data-area", value: "false,false" }
@@ -464,18 +465,18 @@ export const pageLinks: readonly PageLink[] = [
     // No link to this browser, so the guard leaves the attribute. The click is what counts.
     name: "an address on a MathML element",
     html: (address) =>
-      `<math id="go" display="block" href="${address}"><mtext href="${address}">Open</mtext></math>`,
-    target: "#go",
+      `<math id="math-link" display="block" href="${address}"><mtext href="${address}">Open</mtext></math>`,
+    target: "#math-link",
     hidden: true
   },
   {
     // An attribute with a namespace, which a filter of attribute names would not see.
     name: "a link in an SVG that a script gives an address with a namespace",
     html: () =>
-      `<svg width="240" height="40"><a id="go"><rect width="240" height="40" fill="silver"/><text y="24">Open</text></a></svg>`,
+      `<svg width="240" height="40"><a id="xlink-link"><rect width="240" height="40" fill="silver"/><text y="24">Open</text></a></svg>`,
     script: (address) =>
-      `const link = document.getElementById("go"); const give = () => { link.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", ${text(address)}); link.setAttributeNS("http://www.w3.org/1999/xlink", "href", ${text(address)}); }; give(); window.addEventListener("pointerdown", give, true);`,
-    target: "#go"
+      `const link = document.getElementById("xlink-link"); const give = () => { link.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", ${text(address)}); link.setAttributeNS("http://www.w3.org/1999/xlink", "href", ${text(address)}); }; give(); window.addEventListener("pointerdown", give, true);`,
+    target: "#xlink-link"
   },
   {
     name: "a link that gets its address back when the pointer goes down",

@@ -185,7 +185,13 @@ exitTest.describe("a view cannot move its frame to another host", () => {
 exitTest.describe("a link in a view has no address", () => {
   exitTest.setTimeout(60_000);
 
-  for (const click of linkClicks) {
+  // Individual keys and ordinary clicks are mapped in app-content.test.ts. Keep
+  // the browser's click and auxclick paths; the modified click also covers download markup.
+  for (const click of linkClicks
+    .filter((click) => tabOpeningClicks.includes(click.name))
+    .map((click) =>
+      click.options?.button === "middle" ? click : { ...click, attributes: "download" }
+    )) {
     exitTest(`a view reaches no other host through ${click.name}`, async ({ page, otherHost }) => {
       await expectClickReachesNothing(page, "html.rendered", click, otherHost);
     });
@@ -569,43 +575,62 @@ exitTest.describe("a Page cannot reach another host or the page that holds it", 
     expect(asked).toEqual([]);
   });
 
-  for (const link of pageLinks) {
+  // Ordinary link fixtures coexist without changing each other's document or built-ins.
+  // A shared Page lets the full observation window run after the last click, with every
+  // earlier link still alive. Guard-bypass fixtures keep their own Page and observation.
+  const groups = [
+    pageLinks.filter((link) => !link.bypass),
+    ...pageLinks.filter((link) => link.bypass).map((link) => [link])
+  ];
+  for (const links of groups) {
     const clicks = linkClicks.filter(
-      (click) =>
-        click.attributes === undefined && (!link.bypass || tabOpeningClicks.includes(click.name))
+      (click) => click.attributes === undefined && tabOpeningClicks.includes(click.name)
     );
     for (const click of clicks) {
-      exitTest(pageLinkTitle(link, click.name), async ({ page, otherHost }) => {
+      const titleLink =
+        links.length === 1 ? links[0] : { name: "the seven stripped link variants", target: "" };
+      if (!titleLink) throw new Error("A link group must not be empty");
+      exitTest(pageLinkTitle(titleLink, click.name), async ({ page, otherHost }) => {
         const opened = watchOpened(page);
         const address = `${otherHost.origin}/hit?click=${encodeURIComponent(click.name)}&rows=secret`;
-
+        const scripts = links.map((link) => link.script?.(address) ?? "");
         const view = await openPage(page, {
-          html: link.html?.(address),
-          script: link.script?.(address)
+          html: links.map((link) => link.html?.(address) ?? "").join(""),
+          script:
+            links.length === 1
+              ? scripts[0]
+              : scripts.map((body) => `(() => {${body}})();`).join("\n")
         });
-        await expectPageRan(page);
-        const target = view.locator(link.target);
-        await expect(target).toBeVisible();
-        if (!link.hidden) {
-          // The link is there to be clicked. Its address is gone.
-          await expect(target).toHaveText("Open");
-          await expect(target).not.toHaveAttribute("href");
-          await expect(target).not.toHaveAttribute("xlink:href");
-          await expect(target).not.toHaveAttribute("ping");
+        const expectNothingLeft = () => {
+          expect(opened).toEqual([]);
+          expectOnInterface(page);
+          expect(otherHost.requests).toEqual([]);
+          expect(otherHost.connections).toBe(0);
+        };
+        for (const link of links) {
+          await exitTest.step(link.name, async () => {
+            await expectPageRan(page);
+            const target = view.locator(link.target);
+            await expect(target).toBeVisible();
+            if (!link.hidden) {
+              await expect(target).toHaveText("Open");
+              await expect(target).not.toHaveAttribute("href");
+              await expect(target).not.toHaveAttribute("xlink:href");
+              await expect(target).not.toHaveAttribute("ping");
+            }
+            if (link.shows) {
+              await expect(view.locator("body")).toHaveAttribute(
+                link.shows.attribute,
+                link.shows.value
+              );
+            }
+            await target.click(click.options);
+            expectNothingLeft();
+          });
         }
-        if (link.shows) {
-          await expect(view.locator("body")).toHaveAttribute(
-            link.shows.attribute,
-            link.shows.value
-          );
-        }
-        await target.click(click.options);
-
+        // Every clicked element remains in the document throughout this full window.
         await page.waitForTimeout(SETTLE_MS);
-        expect(opened).toEqual([]);
-        expectOnInterface(page);
-        expect(otherHost.requests).toEqual([]);
-        expect(otherHost.connections).toBe(0);
+        expectNothingLeft();
       });
     }
   }

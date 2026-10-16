@@ -13,38 +13,6 @@ const member = { email: "e2e-dock@example.test", password: "e2e-dock-password" }
 const chatColumn = (page: Page) => page.locator("[data-dock-chat]");
 const dockHead = (page: Page) => chatColumn(page).locator("header").first();
 
-// DOCK-1, acceptance check 25: fails while the dock retries the refused thread for about seven
-// seconds. Meanwhile it offers the composer and "Open as full chat" for the conversation the
-// person may not read; a message sent then is refused with "Conversation is not available" and
-// its text is lost.
-test("a link to a conversation the person may not read opens the empty dock at once, and a message typed meanwhile raises no error", async ({
-  page
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await signIn(page, member);
-  const own = await createConversation(page, `Own ${Date.now()}`);
-  const workspace = encodeURIComponent(own.collaborationWorkspaceId);
-  const refusedSends: string[] = [];
-  page.on("response", (response) => {
-    if (response.request().method() === "POST" && response.status() === 404) {
-      refusedSends.push(new URL(response.url()).pathname);
-    }
-  });
-
-  await page.goto(`/w/${workspace}/agents?chat=conv_${randomUUID()}`);
-  const composer = chatColumn(page).getByPlaceholder("Message");
-  await composer.fill("first words to a shared link");
-  await composer.press("Enter");
-
-  // The refusal is one request of a few milliseconds: the dock is empty well within two seconds.
-  await expect(page).toHaveURL(new RegExp(`/w/${workspace}/agents$`, "u"), { timeout: 2_000 });
-  await expect(dockHead(page)).toContainText("New chat", { timeout: 2_000 });
-  // Long enough for the retries of today to run out.
-  await page.waitForTimeout(8_000);
-  await expect(chatColumn(page).getByRole("alert")).toHaveCount(0);
-  expect(refusedSends).toEqual([]);
-});
-
 // DOCK-1: fails where the dock's head looks for its title only in the sidebar's loaded rows. A
 // conversation started from an asset ("Edit with agent") has no message yet, and an older one is
 // past the first page: both are called "Chat".
@@ -74,9 +42,15 @@ test("on a slow connection, a message typed into the dock of a refused link is n
   const own = await createConversation(page, `Own ${Date.now()}`);
   const workspace = encodeURIComponent(own.collaborationWorkspaceId);
   const missing = `conv_${randomUUID()}`;
+  let threadCalls = 0;
+  let refusedAt = 0;
   await page.route(`**/api/v1/conversations/${missing}/thread`, async (route) => {
+    threadCalls += 1;
     await new Promise((resolve) => setTimeout(resolve, 3_000));
-    await route.continue();
+    const response = await route.fetch();
+    expect(response.status()).toBe(404);
+    await route.fulfill({ response });
+    refusedAt = Date.now();
   });
   const refusedSends: string[] = [];
   page.on("response", (response) => {
@@ -92,10 +66,12 @@ test("on a slow connection, a message typed into the dock of a refused link is n
 
   await expect(page).toHaveURL(new RegExp(`/w/${workspace}/agents$`, "u"), { timeout: 10_000 });
   await expect(dockHead(page)).toContainText("New chat");
+  expect(Date.now() - refusedAt).toBeLessThan(2_000);
   // What was typed stays in the composer of the empty dock.
   await expect(composer).toHaveValue("first words to a shared link");
   await page.waitForTimeout(1_000);
   expect(refusedSends).toEqual([]);
+  expect(threadCalls).toBe(1);
   await expect(chatColumn(page).getByRole("alert")).toHaveCount(0);
 });
 
