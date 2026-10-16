@@ -26,9 +26,10 @@ export type ConversationDataCleanupOutcome =
   ({ cleanup: "complete" } & ConversationDataDeletionTotals) | { cleanup: "pending" };
 
 /**
- * Removes the stored objects, file and artifact records, preview state, execution workspace and
- * Pages of a Conversation that is already deleted or expired. Call it only after the claim: it does
- * not check that the Conversation may be deleted. Safe to repeat.
+ * Removes the stored objects, file and artifact records, preview state, execution workspace,
+ * Pages, Operation Runs and agent proposals of a Conversation that is already deleted or
+ * expired. Call it only after the claim: it does not check that the Conversation may be
+ * deleted. Safe to repeat.
  */
 async function cleanUpConversationData(
   options: ChatServerOptions,
@@ -44,6 +45,11 @@ async function cleanUpConversationData(
   });
   await deleteConversationPages(options, conversationId);
   await deleteOperationRunsOfConversation(options, conversationId);
+  // A Build conversation's proposals for agents go with it; the agents stay as they are.
+  await options.stores.agentProposals.removeOfConversations({
+    clientInstanceId: options.clientInstanceId,
+    conversationIds: [conversationId]
+  });
   return {
     attachmentCount: objects?.attachmentCount ?? 0,
     fileCount: objects?.fileObjectKeys.length ?? 0,

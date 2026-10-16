@@ -487,6 +487,47 @@ describe("config asset admin routes", () => {
     });
   });
 
+  it("counts a field a stored agent leaves out as its default when it checks the editable fields", async () => {
+    const fixture = await createFixture({
+      agentConfiguration: { enabled: true, editableAgentFields: ["instructions"] }
+    });
+    const token = await mintToken(fixture.server);
+    // Stored as written outside the server's writer: the fields at their defaults are left out.
+    const {
+      skillNames: _skillNames,
+      initialPrompts: _initialPrompts,
+      ...initial
+    } = agentConfig("Release-managed instructions", { toolNames: ["read_skill"] });
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        { type: "upsert", kind: "skill", name: "research", config: skillConfig("Research") },
+        { type: "upsert", kind: "agent", name: "assistant", config: initial },
+        { type: "setDefaultAgent", agentName: "assistant" }
+      ]
+    });
+
+    const instructions = await request(fixture.server, token, "assets.put", {
+      params: { kind: "agent", name: "assistant" },
+      payload: { config: { ...initial, instructions: "Changed interactively" } }
+    });
+    expect(instructions.statusCode, instructions.body).toBe(200);
+
+    const skills = await request(fixture.server, token, "assets.put", {
+      params: { kind: "agent", name: "assistant" },
+      payload: {
+        config: { ...initial, instructions: "Changed interactively", skillNames: ["research"] }
+      }
+    });
+    expect(skills.statusCode).toBe(403);
+    expect(skills.json()).toMatchObject({
+      error: {
+        code: "FORBIDDEN",
+        message: "Interactive changes are not allowed for agent field: skillNames"
+      }
+    });
+  });
+
   it("requires agent_models.manage for the agent model settings on interactive writes", async () => {
     // No model setting is listed as editable: the permission alone decides.
     const fixture = await createFixture({

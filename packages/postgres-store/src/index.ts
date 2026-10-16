@@ -46,6 +46,7 @@ import { createPostgresStructuredDataStore } from "./postgres-structured-data-op
 import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./postgres-operation-run-operations";
 import { createPostgresLiveOnceSwitchesStore } from "./postgres-live-once-switch-operations";
+import { createPostgresAgentProposalStore } from "./postgres-agent-proposal-operations";
 import { createPostgresInfrastructureChecksStore } from "./postgres-infrastructure-check-operations";
 import { createPostgresPagesStore } from "./postgres-page-operations";
 import { createPostgresConnectionsStore } from "./postgres-connection-operations";
@@ -141,6 +142,7 @@ function bindStores(
       },
       inTransaction
     ),
+    agentProposals: createPostgresAgentProposalStore(db),
     approvals: createPostgresApprovalsStore(db, transact),
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
     structuredData: createPostgresStructuredDataStore(db),

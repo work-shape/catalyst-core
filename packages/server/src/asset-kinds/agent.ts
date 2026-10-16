@@ -132,9 +132,11 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         throw new AppError("FORBIDDEN", "Interactive agent creation is disabled");
       }
       const editableFields = new Set<AgentEditableField>(policy().editableAgentFields);
+      // `next` is validated, with the definition's defaults filled in; `current` is as stored.
+      const stored = withDefinitionDefaults(current);
       const changedFields = AGENT_EDITABLE_FIELDS.filter(
         (field) =>
-          !configValuesEqual(readDefinitionField(current, field), readDefinitionField(next, field))
+          !configValuesEqual(readDefinitionField(stored, field), readDefinitionField(next, field))
       );
       const changedSettings = changedModelSettings(namespaces, name, current, next);
       if (changedSettings.length > 0 && !access.authorize(MODEL_SETTINGS_RIGHT).allowed) {
@@ -160,6 +162,17 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       }
     }
   };
+}
+
+/**
+ * A stored agent as its validated definition reads it: a field it leaves out holds the
+ * definition's default, so that leaving it out and stating the default compare equal. A
+ * definition the schema refuses stays as it is.
+ */
+function withDefinitionDefaults(agent: unknown): unknown {
+  if (agent === undefined) return undefined;
+  const parsed = agentConfigSchema.safeParse(agent);
+  return parsed.success ? parsed.data : agent;
 }
 
 /** A model setting of a stored or validated agent, with what an unset one means. */

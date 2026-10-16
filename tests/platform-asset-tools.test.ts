@@ -341,8 +341,9 @@ describe("a conversation about a Workflow", () => {
     ).toEqual({ awaitsPerson: true });
     expect(await subjectOf()).toEqual(subject);
 
-    // A conversation started from the agent's page is about the agent. It has no draft, so
-    // its agent opens it, reads it and saves nothing.
+    // A conversation started from the agent's page is about the agent. Its agent opens it, and
+    // a save there is a change proposal for the agent (agent-change-proposals.test.ts): the
+    // Workflow's definition is no agent, so it saves nothing, and the Workflow stays as it is.
     const { id: aboutAgent } = z
       .object({ id: z.string() })
       .parse((await t.ok(t.converse(agent))).json());
@@ -355,7 +356,14 @@ describe("a conversation about a Workflow", () => {
       aboutAgent,
       `/tool platform.assets.put ${JSON.stringify({ config: configOf(), expectedRevision: 1 })}`
     );
-    expect(live.answer).toContain("An asset of the kind 'agent' has no draft");
+    expect(
+      z
+        .object({ saved: z.boolean() })
+        .loose()
+        .parse(JSON.parse(live.answer ?? "null"))
+    ).toMatchObject({
+      saved: false
+    });
     expect((await t.asset()).revision).toBe(t.published + 1);
   }, 120_000);
 

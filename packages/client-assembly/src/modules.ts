@@ -48,6 +48,8 @@ const assetManagementModule = defineModule({
     "assets.run_live_once",
     "assets.set_default",
     "assets.set_availability",
+    "agents.proposal.apply",
+    "agents.proposal.discard",
     "guardrails.unpublish"
   ],
   selfCheckedOperations: ["assets.sync"],

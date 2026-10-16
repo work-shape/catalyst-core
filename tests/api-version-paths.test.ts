@@ -60,6 +60,9 @@ describe("the operation catalog", () => {
     expect(names.map((name) => `${name}  ${routeOf(name)}`).sort()).toMatchInlineSnapshot(`
       [
         "access_tokens.exchange  POST /api/v1/auth/access-token",
+        "agents.proposal.apply  POST /api/v1/agents/:name/proposals/:conversationId/apply",
+        "agents.proposal.discard  POST /api/v1/agents/:name/proposals/:conversationId/discard",
+        "agents.proposal.get  GET /api/v1/agents/:name/proposals/:conversationId",
         "api_credentials.create  POST /api/v1/instance/service-principals/:servicePrincipalId/credentials",
         "api_credentials.revoke  POST /api/v1/instance/api-credentials/:credentialId/revoke",
         "app_content.files.get  GET /app-content/*",
@@ -276,6 +279,7 @@ describe("the operation catalog", () => {
     }
     const scopes = new Set(versioned.map((name) => descriptor(name).path.split("/")[3]));
     expect([...scopes].sort()).toEqual([
+      "agents",
       "app-actions",
       "app-content-sessions",
       "approval-requests",
@@ -432,6 +436,7 @@ describe("a running instance", () => {
     // Then personal API keys and the connect code of the CLI, and the search of the Pages and
     // files of a workspace. Then the check of a new asset's name and the switch of a
     // guardrail the release ships. Then a person's decision on a call their Agent Run waits on.
+    // Then the queued follow-ups of a conversation, and the change proposal of an agent.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -519,7 +524,10 @@ describe("a running instance", () => {
       "assets.check_name",
       "operations.decide",
       "conversations.follow_ups.withdraw",
-      "conversations.follow_ups.dispatch"
+      "conversations.follow_ups.dispatch",
+      "agents.proposal.get",
+      "agents.proposal.apply",
+      "agents.proposal.discard"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

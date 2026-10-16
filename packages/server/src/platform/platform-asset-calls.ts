@@ -41,6 +41,7 @@ import type { AssetCall } from "../assets/asset-access";
 import { assetWriteEvent } from "../guardrails/asset-guardrail-events";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { AssetWorkflow } from "../assets/asset-service";
+import { AgentProposals, PROPOSED_KIND } from "../assets/agent-proposals";
 import { callableByAudience, listingOrigin } from "./platform-operations-audience";
 import { readPlatformContext } from "./platform-context";
 import {
@@ -112,6 +113,7 @@ const sameSubject = (left: ConversationSubject, right: ConversationSubject | und
 
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
+  const proposals = new AgentProposals(options);
   const pageApps = new PageApps(options);
 
   /** The conversation the call came from, where it came from one. */
@@ -316,6 +318,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
 
   /** The asset the conversation is about, where the operations find it, and the call. */
   async function bound(context: ToolExecutionContext): Promise<{
+    conversation: Conversation;
     subject: ConversationSubject;
     address: ConversationSubject & { workspaceId?: string };
     call: AssetCall;
@@ -324,6 +327,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     const subject = conversation.subject;
     if (!subject) throw withoutSubject();
     return {
+      conversation,
       subject,
       address: await addressOf(conversation, subject),
       call: await callOf(context)
@@ -340,14 +344,18 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     const call = await callOf(context);
     allowed(await workflow.reads.authorizeGet(call.access, address));
     const read = await workflow.reads.get(call, address);
-    const published = "publishedRevision" in read ? read.publishedRevision : undefined;
+    // In the conversation of an agent's proposal, the agent reads what it proposed.
+    const proposed = await proposals.head(conversation, asset);
+    const published =
+      proposed?.liveRevision ?? ("publishedRevision" in read ? read.publishedRevision : undefined);
+    const revision = proposed?.revision ?? read.revision;
     return {
       kind: read.kind,
       name: read.name,
-      config: read.config ?? {},
-      revision: read.revision,
+      config: proposed?.config ?? read.config ?? {},
+      revision,
       ...(published === undefined ? {} : { publishedRevision: published }),
-      shows: published !== undefined && published === read.revision ? "published" : "draft",
+      shows: !proposed && published !== undefined && published === revision ? "published" : "draft",
       ...(address.workspaceId === undefined ? {} : { workspaceId: address.workspaceId })
     };
   }
@@ -527,14 +535,16 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       if (input.expectedRevision === undefined) return create(context, input);
       // The save reaches the subject and no asset the model names. An asset of the instance is
       // the subject only where a person's step, or this conversation's own first save, made it.
-      const { subject, address, call } = await bound(context);
+      const { conversation, subject, address, call } = await bound(context);
       const kind = options.configAssets.kinds.kinds.find(
         (candidate) => candidate.kind === subject.kind
       );
       // A Page is saved with its own tool, and a kind of a module that is off is none here.
       if (kind === undefined) throw subjectUnavailable();
-      // A kind without a draft is live with every write. This tool moves a draft and nothing else.
-      if (kind.lifecycle !== "draft_published") {
+      // A kind without a draft is live with every write. This tool moves a draft and nothing
+      // else; an agent's save of an agent writes the conversation's proposal instead.
+      const proposes = kind.kind === PROPOSED_KIND;
+      if (kind.lifecycle !== "draft_published" && !proposes) {
         throw new AppError(
           "VALIDATION_FAILED",
           `An asset of the kind '${subject.kind}' has no draft: a save of it would be live at once, and this tool saves drafts only`,
@@ -553,6 +563,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       };
       try {
         allowed(await workflow.authorizeRevisionWrite(call.access, write, "write"));
+        if (proposes) return await proposals.save(call, conversation, address, input);
         const written = await workflow.put(call, write);
         return { saved: true, revision: written.revision };
       } catch (error) {

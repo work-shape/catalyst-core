@@ -116,6 +116,15 @@ export function conversationsPendingCleanup(input: {
      and c.client_instance_id = p.client_instance_id
     where p.client_instance_id = ${input.clientInstanceId}
       and ${notActive}
+    union
+    select c.id, c.deleted_at
+    from agent_change_proposals acp
+    join conversations c
+      on c.id = acp.source_id
+     and c.client_instance_id = acp.client_instance_id
+    where acp.client_instance_id = ${input.clientInstanceId}
+      and acp.source_kind = 'conversation'
+      and ${notActive}
     ${executionWorkspaces}
   `;
 }

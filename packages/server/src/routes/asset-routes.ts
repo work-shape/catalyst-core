@@ -18,6 +18,7 @@ import {
   setAssetDefault
 } from "../assets/asset-placement";
 import { AssetWorkflow } from "../assets/asset-service";
+import { AgentProposals, PROPOSED_KIND } from "../assets/agent-proposals";
 import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
@@ -191,6 +192,40 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     module: ASSET_WRITE_MODULE,
     beforeEvents: (input) => revertWriteEvents(options, input),
     execute: (input, context) => workflow.revert(context, input)
+  });
+
+  // The pending change proposal of an agent: the person reads it, applies it as their own save
+  // of the agent, or drops it.
+  const proposals = new AgentProposals(options);
+  const proposalResource = ({ name }: { name: string }) =>
+    assetResource({ kind: PROPOSED_KIND, name });
+
+  route.operation(apiOperations["agents.proposal.get"], {
+    authorize: (input, { actor, access }) => proposals.authorizeRead(actor, access, input),
+    resource: proposalResource,
+    policyTargets: (input) => proposals.policyTargets(input),
+    execute: async (input, context) => ({ proposal: await proposals.get(context, input) })
+  });
+
+  route.operation(apiOperations["agents.proposal.apply"], {
+    authorize: (input, { actor, access }) =>
+      proposals.authorizeChange(actor, access, input, "apply"),
+    resource: proposalResource,
+    policyTargets: (input) => proposals.policyTargets(input),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    beforeEvents: (input) => proposals.applyEvents(input),
+    execute: (input, context) => proposals.apply(context, input)
+  });
+
+  route.operation(apiOperations["agents.proposal.discard"], {
+    authorize: (input, { actor, access }) =>
+      proposals.authorizeChange(actor, access, input, "discard"),
+    resource: proposalResource,
+    policyTargets: (input) => proposals.policyTargets(input),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => proposals.discard(context, input)
   });
 
   const overview = new ConfigAssetWorkflow({ options });

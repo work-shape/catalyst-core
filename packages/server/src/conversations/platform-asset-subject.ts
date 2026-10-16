@@ -40,7 +40,8 @@ export const subjectUnavailable = () =>
  * Refuses a conversation about an asset its creator may not read. A kind the instance does
  * not have, an asset that does not exist and one the caller holds no read right on are told
  * the same way, so the refusal says nothing of what is stored. An asset of a kind without a
- * draft, such as an agent, may be a subject: the agent reads it, and its tools save drafts only.
+ * draft, such as an agent, may be a subject: the agent reads it, and its tools save drafts only,
+ * or an agent's change proposal.
  * The right is asked where the asset is: an asset a workspace owns is read with a right in
  * that workspace, as `assets.get` naming the workspace reads it.
  */

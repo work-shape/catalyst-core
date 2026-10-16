@@ -2,6 +2,7 @@ import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
 import {
   WORKFLOW_ASSET_KIND,
   asClientInstanceId,
+  type AgentEditableField,
   type ClientInstanceId
 } from "@work-shape/catalyst-core";
 import type { ChildProcess } from "node:child_process";
@@ -127,9 +128,11 @@ interface AssetToolsFixture {
 /**
  * The instance. With `separate` its agent runs execute in an agent-run worker that is a
  * process of its own, started from the same config as an operated instance starts one.
+ * `editableAgentFields` are the fields of an agent a person may change outside a release.
  */
 export async function createAssetToolsFixture(
-  agentRuns: "in_process" | "separate" = "in_process"
+  agentRuns: "in_process" | "separate" = "in_process",
+  editableAgentFields: AgentEditableField[] = []
 ): Promise<AssetToolsFixture> {
   // No release names `read_skill` here: the skill of a subject is readable all the same.
   const config = createTestConfig({
@@ -151,6 +154,7 @@ export async function createAssetToolsFixture(
   });
   config.modules = { assetManagement: { enabled: true }, workflows: { enabled: true } };
   config.administration.agentConfiguration.enabled = true;
+  config.administration.agentConfiguration.editableAgentFields = editableAgentFields;
   const app = await createTestInstance({
     config,
     env: {},
