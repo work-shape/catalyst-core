@@ -205,9 +205,27 @@ describe("the release manifest of a deployment that installs released packages",
   });
 
   test("is deployed only by the kit of the same release", () => {
-    const deployed = deploy(root, ["deploy", "--host", "host.example.test", "--manifest", file]);
+    const kitVersion = JSON.parse(readFileSync(join(kitDir, "package.json"), "utf8")).version;
+    const otherVersion = `${Number(kitVersion.split(".")[0]) + 1}.0.0`;
+    const mismatched = join(scratch, "mismatched-kit.json");
+    writeJson(mismatched, {
+      ...JSON.parse(readFileSync(file, "utf8")),
+      catalystVersion: otherVersion
+    });
+    const deployed = deploy(root, [
+      "deploy",
+      "--host",
+      "host.example.test",
+      "--manifest",
+      mismatched
+    ]);
     assert.notEqual(deployed.status, 0);
-    assert.match(deployed.stderr, /built from Catalyst 0\.8\.0-rc\.1; this deployment kit is/u);
+    assert.ok(
+      deployed.stderr.includes(
+        `built from Catalyst ${otherVersion}; this deployment kit is ${kitVersion}`
+      ),
+      deployed.stderr
+    );
   });
 });
 

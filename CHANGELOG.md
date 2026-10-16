@@ -7,7 +7,7 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
-## Unreleased
+## 0.8.0-rc.1 — 2026-10-16
 
 ### Added
 
@@ -1148,6 +1148,399 @@ id from config_assets where status = 'deleted')`.
   appears among the instance's users after the first deploy and each run leaves two audit
   events. An instance with `retention.allowUserDelete: false` cannot remove the check's
   conversation and fails the check, naming the conversation.
+- Add `pnpm check:affected` for builders to check changed packages and their dependents before review, with package quality baselines and affected tests.
+- Fall back to all scopes for shared quality tooling changes, type-check root tests for every selected package, keep root-test-only checks narrow, and include Git diagnostics for missing bases.
+- **A guide to building an App:** the docs page `apps/build` shows an App's folder, its
+  manifest and each kind of named action (`connection`, `sql`, `workflow`) with a complete
+  example, what a Page and a draft do with a changing action, how the App's code calls an action
+  through the kit and who publishes. The shipped skill `platform-docs` carries it, and a test
+  builds every example on the page. `page.save` now describes `sql` actions, and `page.save`,
+  `page.save_as_app` and the platform orientation point the agent at the page before it writes
+  actions.
+- **Build errors that name the fix:** a YAML file in `actions/` without the ending
+  `.action.yaml` is refused with the name it needs (it was passed over, and the action was
+  missing at the first call); an action file without `connection`, `operation` or `effect` says
+  what the key holds; an unknown key on a line under `actions` in `app.yaml` says which keys a
+  line holds and that an action file needs none.
+- **Task pages for people who use the product (D-2):** "Connect a system" (create a Connection,
+  enter its key, accept operations, test, give an agent the tools, let people use it),
+  "Workflows" (find, change with the agent, test run, Run live once, publish, start), "Guardrails"
+  (when one runs, what a hit does, reading them in Studio, writing, testing and publishing one)
+  and "Apps for people" (ask in a chat, Save as app, the draft's simulated actions, Run live once,
+  publish). Each says what to click, with the German screen labels beside the English. The
+  sidebar gains the groups Automate and Connect, and the shipped skill `platform-docs` carries
+  the pages.
+- **Docs:** A "How it works" page, Rights at a glance, explains in three pictures who may do what, where an App's data comes from and what a workspace gives its members, with the text beside each picture. The docs theme gains the diagram classes these pictures use.
+- **Draft safe mode for Apps (ADR-0031):** a changing action called from the draft of an App is
+  simulated: it answers `dry_run` with what it would have done and the input, changes nothing,
+  and leaves an Operation Run with the target `dry_run` (named in `Operation-Run-Id`). A reading
+  action reads live. "Run live once" on the Actions side of the draft carries out the next call
+  of one changing action, for a person who writes the App. The switch is its owner's, on the
+  key of action and person that Workflow test runs brought, so one member's switch neither
+  replaces nor uses another's; the call goes through central policy (a call that needs another
+  person's approval is refused with `approval_unavailable`, since a draft cannot wait). A save
+  or a discard of the draft clears an unused switch at that moment and audits
+  `live_once.cleared` in the name of who saved or discarded. `apps.actions.list` gives each
+  action of a draft the `target` the reader's next call goes to. The test dialog says what the
+  call would have done in the interface's language, and focus moves to the status line of
+  "Run live once" once it is set. The UI library adds `TargetBadge` (Live, Test, Simulated),
+  which now also marks the steps of a Workflow run, and `RunLiveOnce`. No migration of its
+  own. Only a Page of a conversation still refuses a changing call with `draft_safe_mode`; a
+  draft has no direct Connection call since `connections.call` was removed. **Upgrade:** an App's draft that called a changing
+  action got `409 draft_safe_mode` and now gets a `dry_run` answer; the call needs an
+  `Idempotency-Key` as in a published App. **Rollback:** the previous release refuses such a
+  call again; switches stay in `live_once_switches` and are cleared by the next save or call.
+- Show when a conversation started and where each new day begins: a small, centred time above the first message and above the first message of each later day, in the reader's time zone ("Today 10:47 AM", "Yesterday …", the weekday within the last week, the full date beyond it). It shows in the full chat, the side chat and while an answer streams. The UI library gains `TimeMarker` for it.
+- Pull, push and inspect an App as a local folder with `catalyst app pull|push|status`. Files round-trip byte for byte, local edits are protected, and build refusals name the file, line and column. `catalyst app publish` shows the review and keeps the terminal question: `--yes` publishes nothing, and a required approval waits in the Inbox.
+- Added `catalyst call <operation>` with file or stdin JSON input, JSON output and the existing API authorization and exit codes, plus write-only Connection secret entry and Connection test, discovery and tool-list commands.
+- Fixed hidden secret prompts keeping the CLI process alive after Enter or Ctrl-C, reused the write's idempotency key for retries, and documented stdin for multi-line secrets.
+- Recover a completed Connection secret write after a lost reply by reading its secret state on `OUTPUT_NOT_RETAINED` and exiting successfully; other conflicts remain refusals.
+- Added named CLI commands for Workflow tests and runs, Guardrail hits, Knowledge Base checks, Data Store schemas and dependencies, App actions, own keys and Shared Workspaces, using the existing API client operations with readable output and `--json`.
+- `instance workspaces` lists Shared Workspaces for agent availability; `workspace list` is reserved for personal memberships. Workflow test input file errors retain the file problem and exit 1.
+- Personal API keys can follow their owner's Operation Runs and list and count their own approval requests with `me:read`; withdrawing an own request requires `config_assets:write`. Other callers retain their existing scopes and rights.
+- `catalyst operation show <run-id>` follows a held call to its decision, and `catalyst requests [--withdraw <id>]` lists or withdraws the caller's own requests.
+- Contract compatibility checks compare all scope alternatives per credential, and the API reference lists each credential once with its alternative scopes.
+- A personal key refused a request withdrawal is told it needs `config_assets:write`; other caller kinds keep their existing scope refusals.
+- **Connect a local agent:** Settings > "Connect a local agent" ("Lokalen Agenten verbinden"),
+  at `/settings/you/connect` while personal API keys are on, gives one command for Claude Code,
+  Codex or another tool: `npm install --global @work-shape/catalyst-cli@<version> && catalyst
+setup <tool> --instance <url>`, with the instance's address and the CLI version
+  `PUBLISHED_CLI_VERSION` names filled in. The page issues nothing; no key and no connect code
+  exists until the command runs. `platform.context.get` answers that version as
+  `release.cliVersion`. It is unset in this release, because no published CLI has `setup` yet:
+  the page says the command is not available and shows none. Deploy order for the release that
+  offers it: bump the shared version, run `Publish public CLI` on that commit, set
+  `PUBLISHED_CLI_VERSION` and commit it, deploy, and only then switch on `personalApiKeys`.
+  `Publish public CLI` now refuses a commit whose version is on npm already, with
+  "@work-shape/catalyst-cli@<version> is on npm already. Bump the version all packages share and
+  publish from that commit."
+- **`catalyst setup <claude-code|codex|other> --instance <url>`** logs in by a connect code
+  labelled "<Tool> on <host>" where no working key is saved, opens the confirmation address in
+  the browser, and writes the Catalyst skill the package ships to
+  `~/.claude/skills/catalyst/SKILL.md` (below `$CLAUDE_CONFIG_DIR` where that is set) or
+  `~/.agents/skills/catalyst/SKILL.md`. A different file there is kept unless `--force` is
+  given, which moves it to the first free name of `SKILL.md.bak`, `SKILL.md.bak.1` and so on; a
+  link at that path is never written through. A run again keeps a working key and updates the
+  skill; only a key the instance refuses (401 or 403) is replaced by a new login. It never prints
+  the key. A test fails when the skill names a command or option `catalyst --help` does not list.
+- **CLI:** outside a working copy, a command without `--instance` works on the one instance a
+  key is saved for, unless `CATALYST_API_KEY` is set. With none or several saved it is refused,
+  and the message names the saved ones. In a working copy nothing changes: one whose
+  `catalyst.yaml` names no `defaultInstance` is refused, and the message names its instances. `catalyst --version` prints the version.
+  `login`, `logout` and `setup` name the address of API keys, `<url>/settings/you/api-keys`.
+- **`CommandLine`** in the UI library: one command with a copy button.
+- **The docs page "Connect a local agent"**, carried into `platform-docs`.
+- **New connection dialog (CS-5a 2/2):** "New connection" asks for an MCP server or a REST API, then for the name, the address and the key, with the id, how the key is sent, fixed headers and a test path under "Technical details". "Connect" writes the definition without operations, stores the key, tests the connection and, for an MCP server, reads its tools; a wrong address or a refused key is told at its field, a refused key empties the field, and a changed host sends the key again. Cancel after a failed connect asks, then deletes the Connection. The tools an MCP server names are approved in one list, the reading ones ticked, for agents, the bridge and workflows at once; the same list replaces "Accept" per tool on the Connection page. The tools of a REST API are pasted as YAML into that list, or "Draft with Workshaper" opens the chat beside the page with the request typed. Each operation on the page has four boxes: agents, the bridge, workflows and outside.
+- **REST connections on the server (CS-5a 1/2):** the connector type `http_api` reads a REST interface by declared GET operations (CS-5a 1/2). Settings `baseUrl`, fixed non-secret `headers`, an optional `testPath` and `headerName`; a header that can carry a credential is refused as `credential_in_settings`. Auth `none`, `bearer` or `header`. Each operation declares `method: GET`, `effect: reading`, a `path` template with `pathParams` and `query`, and a `description`; caller input fills only the declared parameters, a path segment that is `.` or `..`, also written as `%2e` in any case, is refused in a declared path and a `testPath` at save and in a filled path at call time as `input_invalid`, as is a path parameter holding `/`, and no redirect is followed. The answer is JSON under 2 MiB and a list comes back as `{ items }`. Without `testPath` a test answered 401 or 403 is "key refused" and any other answer reachable. Changing the host of `baseUrl` clears the stored key. The key `scope` on an operation is reserved for SCOPE-2 and refused at save.
+- **The agent drafts a REST API's tools as a card (CS-5c):** the platform tool `platform.connections.draft_tools` checks the operations an agent declares for an `http_api` Connection as a save would (GET only, the effect `reading`, no header or query or path parameter that can carry a credential, no `.` or `..` path segment in any spelling, no `default`, `const`, `examples`, `example` or singleton `enum` at any depth in a parameter's schema) and answers every issue, or the draft. A parameter is refused by credential substrings after case-folding and removing separators and digits, with only an exact allowlist of known harmless names; the credential words share the core list fixed headers are refused by: `refresh_token`, `subscription-key`, `authkey`, `jwt` and `pwd` are refused, `pageToken`, `nextToken` and `secretary` are not. The conversation shows the draft as a card with the tools' names, and an existing Connection by its own title; its button "Review and approve" opens the approval list on the Connection's page, which now shows each declared tool's description under its request, folded to three lines with "Show more" (`FoldedText` in the UI library), and each parameter's allowed enum values for drafted and pasted declarations, or, for an id no Connection has, the New connection dialog filled with the name, address and header names, whose drafted tools wait in the list after "Connect". The card never carries a key, and nothing is saved before the person approves. An agent holds the tool where its definition lists it; "Draft with Workshaper" now asks for the card instead of YAML to paste.
+- **The chat dock beside every page (DOCK-1):** a conversation opened from a page's link
+  stands in a dock at the left of that page and of every page after it, as
+  `?chat=<conversation>` in the address; a reload or a new tab brings it back, and a
+  conversation the person may not read leaves the dock empty without an error. A change of
+  route never mounts the conversation anew, so its running answer, the composer's text and its
+  scroll position stay. The dock opens at 420 px, keeps 380 px for itself and the page, and
+  remembers a dragged width; below a main area of 760 px it lies over the page with "Show page"
+  and "Show chat". Close hides it, and "Chat" in the page head brings it back with a dot while
+  its answer runs. Going into or out of the dock plays a 250 ms view transition
+  (`--duration-dock`), at once under reduced motion. The UI library gains `SplitHandle`,
+  `SurfaceHeader` and `PageHeaderShellAction`.
+- The docs build writes `catalyst/commit.json`, `{"commit": "<platform sha>"}`, so the published site names the commit it was built from. The hand-over check compares it with main. The commit is `CATALYST_PLATFORM_COMMIT` when set (a build without Git metadata), else the HEAD of the platform checkout; a build in neither case skips the file with a warning.
+- When an agent's call waits for the person's confirmation, the conversation shows a card on that call: what it is, its input as it will run, when it expires, Allow, and Deny with an optional reason for the agent. The card says what became of the call, the same assistant message goes on once the run resumes, and every open tab closes the card when one decides. A call that waits for somebody else's approval shows its approval card under the line that the agent waits for it.
+- **Workflows:** Test run of a Workflow's draft, from Test run in the canvas's draft bar or
+  `workflows.test` (`POST /api/v1/workflows/:workflow/test-runs`). It needs `workflow.write`, not
+  `api_access.manage`, and only a person starts one. A test run acts as the person who starts it,
+  bounded by the Workflow's service principal: a step runs only where both hold its right, and a
+  refusal names the side that lacks it ("The principal '…' does not hold … publishing would fail
+  at this step", or `tester_missing_right`, "You do not hold …"). Reading steps read live; a
+  changing step is simulated and says in sentences what it would have done. Every step run shows
+  where its call went: Live, Test or Simulated. A disabled principal is refused with
+  `run_as_disabled`.
+- **Workflows:** "Run live once" on a changing step belongs to the person who sets it and makes
+  that step live for the whole of their next test run: every item of a loop, every retry. Another
+  tester's run stays simulated. `assets.list_live_once` (`GET /api/v1/assets/:kind/:name/run-live-once`)
+  answers the caller's own switches and the test run that used each, so the run page shows them
+  after a reload. The audit events `live_once.switched_on` and `live_once.used` name the switch's
+  owner.
+- **Workflows:** A step whose `confirm` the tester's own start satisfied says "A published run asks
+  for approval here", because a published run has nobody present to confirm. A changing step that
+  the policy holds for an approval is refused in a test run, which cannot wait for one yet.
+- **Guardrails written as assets (EW-6a):** the kind `guardrail` is written as a draft and made
+  to enforce by a publish, on the `draft_published` lifecycle, through `assets.put`, the CLI and
+  the agent's asset tools. A guardrail belongs to the instance or to one Collaboration
+  Workspace. Published guardrails run beside the floor of release config, which the release
+  seed now stores published and which stays read-only; every guardrail that applies runs and
+  the strictest answer wins. A workspace guardrail answers its workspace's events only, and a
+  filter that reaches outside it (another workspace, an agent the workspace does not offer, an
+  operation of another workspace's asset) is refused at save and at publish. Filters take a new
+  key `workspace`. Guardrail assets never run on writes, publishes, deletes or tests of
+  guardrails; only the floor does.
+- **`guardrail.publish`:** a right of its own, held by administrators at instance scope and
+  grantable at one Shared Workspace through `permissions.grant`. No bundle carries it.
+- **`guardrails.test`, `guardrails.dry_run` and `guardrails.unpublish`:** a test checks a
+  revision, the draft unless named, on sample content or on an asset, and keeps no hit. A dry
+  run counts what it would have blocked, asked an approval for or warned on in the last 14 days,
+  by actions and people and without names: writes and publishes of assets are checked again, a
+  judge on at most the newest 200; calls of operations and approval requests are counted only.
+  Unpublish stops a guardrail and keeps its draft. Publish and unpublish are audited as
+  `guardrail.published` and `guardrail.unpublished` with revision, scope and actor, and a judge's
+  usage counts for the guardrail's scope.
+- **CLI:** `catalyst guardrail test`, `dry-run` and `unpublish`; `catalyst guardrail publish`
+  shows the dry run first and asks `--confirm <n>` on a first publish that would block. `catalyst
+  config pull|push` carries `guardrails/<name>/guardrail.yaml` with `check.md` for a judge's
+  instruction.
+- **Studio > Guardrails says when each guardrail runs:** every row of the list and the page of
+  a guardrail show one line built from its event, filter, check, outcome and scope, in English
+  and German, such as "Runs before an agent saves a skill, in workspace Kai Spezis. Checks the
+  content for a text pattern. Blocks if the check fails." A guardrail of release config reads
+  "set by the operator", and no event id is shown. A workspace guardrail's page names its
+  workspace in place of "Instance".
+- **Which calls skip the published guardrails** is decided by the operation: `guardrails.*`, the
+  asset operations on the kind `guardrail`, a sync of guardrails alone and the agent's save of
+  the guardrail its conversation is about. An input that names `kind: guardrail` no longer
+  does. The dry run answers the guardrail's `outcome`, and `catalyst guardrail publish` asks
+  `--confirm` also for the actions a first blocking publish could not check.
+- **Guardrails (GR-PUB-1): publishing needs an instance admin's approval.** Every instance
+  carries the shipped guardrail "Publishing needs an instance admin's approval"
+  (`publishing-needs-approval`) on `app.before_publish` and `workflow.before_publish`, with no
+  check and the outcome `require_approval`, on by default, existing instances included. It is
+  not part of the release floor: a holder of `guardrail.publish` at instance scope switches it
+  off and on again on Build > Guardrails (`guardrails.list_shipped`,
+  `guardrails.switch_shipped`); each switch is the audit event `guardrail.shipped_switched`,
+  and a release never switches it back on.
+- **New rights `app.approve` and `workflow.approve`,** held by the `admin` role. A holder's own
+  Publish of an App or a Workflow in the app satisfies a guardrail's `require_approval` on its
+  publish only when the holder has the approve right at instance scope:
+  the revision is live at once, and its Operation Run records the caller as publisher and
+  approver with the decision reason `approved_by_caller` ("Approved by the caller's own
+  click"); `operation.completed` carries `decisionReason: "approved_by_caller"`.
+- **Everyone else's publish waits** as an Approval Request of the kind `app_publish` or
+  `workflow_publish`, answered `202 pending_approval`. Only holders of `app.approve` or
+  `workflow.approve` at instance scope see and decide it; the Inbox item shows the version,
+  the live version it replaces, the files that differ, the changing actions or steps that are new or changed, the
+  outside hosts it adds, the Connections, the Data Stores with their level and the account a
+  Workflow runs as. A publish is checked against its caller's rights (RIGHTS-1a's rule over
+  the principal a Workflow runs as) when it is filed, so a request that could never apply is
+  not filed, and again when the approval applies it. Approving publishes exactly the frozen
+  revision, as the requester. A
+  request whose draft or live revision moved can no longer be approved: it ends `superseded`
+  and its run is refused with `POLICY_DENIED`, `details.reason: approval_stale`. A newer
+  request for the same asset replaces the open one.
+- **`catalyst app publish` and `catalyst workflow publish` ask first** in the terminal; an
+  answer other than yes publishes nothing. `--yes`, and a run without a terminal to ask, are
+  refused with the reason ("needs your answer here or your click in the interface") until a
+  publish can wait as a confirmation in the person's Inbox (OP-4). A held publish ends with
+  exit code 3 and names the request id, even for an admin's key. A CLI answer never supplies
+  approval; an instance approver can approve the request in the Inbox.
+- **A publish of an App or a Workflow from an agent or an MCP client is refused** with the
+  reason (`FORBIDDEN`, `reason: user_only`), until OP-3 and OP-4 let it wait for its person.
+- `platform.context.get` names the `approve` right of a kind that has one.
+- **Knowledge Bases on a Data Store (module `knowledge`, off by default, needs `dataStores`):**
+  the asset kind `knowledge_base` with a draft and a published revision. Its definition names
+  a Data Store under `backend: { dataStore: <id> }` and describes at least one of its tables
+  with a sentence; it answers the method `structured` alone. A field of a later slice
+  (`sources`, `indexing`, `search`, `queries`, `filters`, a built-in or external backend, or
+  any field it does not know, such as an answer prompt) is refused with the slice that brings
+  it. Publishing needs `knowledge_base.publish` and `data_store.read` on the store, and checks
+  that every described table can be read; otherwise it is refused with the reason
+  `knowledge_base_needs_attention` and the tables it could not read. `knowledge.<id>.query`
+  (`POST /api/v1/knowledge-bases/:knowledgeBase/query`) runs one read-only statement with bound
+  parameters under the store's timeout, row and byte caps, with the asker's
+  `knowledge_base.use` and no right on the store. It connects as a login role of the Knowledge
+  Base's own (`catalyst_kb_…`, password in the Secret Store, member of no role), which may
+  select from exactly the tables the published revision describes: publishing grants them and
+  takes the rest away in one transaction, "Check now" sets them again, and deleting the
+  Knowledge Base drops the role. A store that has a Knowledge Base takes EXECUTE on its
+  functions from PUBLIC and keeps it for its app role, also for a function a later migration
+  makes; every call is one recorded Operation
+  Run, and the audit holds no SQL, parameter or row. `knowledge_bases.get` reads the last
+  check and `knowledge_bases.check` runs it again. An agent lists Knowledge Bases under
+  `knowledgeBases`; however many it lists, it gets one tool, `knowledge.query`, whose
+  description names each published one with its tables. Saving an agent that lists a
+  Knowledge Base the instance does not have is refused. In Studio, Build > Knowledge bases adds
+  one, describes the tables, shows the last check with "Check now" and a test query, and
+  publishes the draft; the agent page has a Knowledge section. **Operators:** add
+  `knowledgeBases` to `administration.configAssets.editableAgentFields` where people should
+  change it in Studio.
+- **The agent's first save creates the asset:** `platform.assets.put` without
+  `expectedRevision`, with a `kind` and a `name`, in a conversation that has no subject yet,
+  creates a Workflow, a Data Store, an agent or a skill and makes it the conversation's
+  subject; the person's tab then moves to its page under the navigation rule, and the
+  conversation shows "Opened <name>". It calls the same write as `assets.put` on the API and
+  the CLI, with the same rights check (`assets.put` for the kind, in the conversation's
+  workspace) and the same validation; nothing else writes. A Workflow and a Data Store start as
+  a draft that runs nothing until a person publishes it; the Workflows list shows a Workflow
+  never published as "Draft · not published" to who may write Workflows, and to nobody else. A Data Store is saved as files, its
+  `store.yaml` and its first migration, through the files write the CLI uses. The person of the
+  conversation is recorded as its creator. An agent created so is offered nowhere: no workspace
+  and no person's agent list gains it until a person places it. A conversation that already has
+  a subject, a kind that is not one of these four and a save without a name are refused.
+  `platform.assets.put` also takes `files` for a kind kept as files. Before, the first save of
+  an asset that did not exist was refused.
+- **New buttons open the dock where an agent builds:** where an agent offered here holds the
+  platform tools and new conversations of the open workspace are the person's own (the
+  Personal Workspace, or a Shared Workspace whose conversations start private), "New workflow"
+  on the Workflows page, and "New agent", "New skill" and "New data store" in Studio when its
+  scope is the open workspace, open the dock with a new conversation with that agent and a
+  started sentence in its composer; they create nothing. Its first save creates the asset.
+  Elsewhere, the New agent and New skill forms stay as before, and so does New agent on the
+  Agents page, which leads into Studio. A first save in a conversation others of the
+  workspace read is refused, as an open there is. The safe configuration's agent items gain
+  the optional `buildsAssets`, set on an agent that holds `platform.assets.put`.
+- **Never-rule 5 and the instance-scope floor, for the product lead to align:** by the manager's
+  ruling, the first save may create a new instance-owned Workflow draft and make it the
+  subject without the person's confirmation. Never-rule 5 and the floor of check 46 protect
+  existing instance assets; a draft this conversation just created runs nothing and widens
+  nothing, so the move to its page follows normally and publishing stays the person's click.
+  An existing instance asset still waits for the person's "Go to it" (interim, until OP-3).
+- **A Data Store never published shows its draft:** its page in Studio says "Draft · not
+  published", lists the migrations a publish applies and offers Publish to whoever may publish
+  it; it reads nothing of a database that does not exist yet. Before, it said twice that the
+  store was not available.
+- **Studio follows the asset the agent opens:** the answers of `platform.assets.open`, `.get`
+  and of a first save name the owning workspace as `workspaceId`, and going to the asset's page
+  in Studio sets Studio's scope to that owner, so the page reads it where it is. Studio offers
+  the reader's Personal Workspace as the scope "Personal" to whoever Studio is open to, where
+  what the agent made in a personal conversation is listed and changed.
+- **An administrator's setting holds the first save as it holds the API's put:** the floor of
+  a first save is asked of the kind and the name it creates, so a setting on a Namespace
+  applies, and a setting on another kind does not. Tools' `policyFloor` is told the call's
+  input. A confirmation of an open sent again changes nothing and writes no second audit row.
+- **An asset's page in Studio finds its owner:** a page reached by the "Working on" line, by
+  its address or after a reload names the asset alone. Where Studio is set to an owner that
+  does not have it, the page looks in the other owners Studio offers and sets Studio to the
+  one that has it. A Data Store never published says "Draft · not published" in the list
+  instead of asking for a state it does not have yet.
+- **A list row keeps its title:** chips that do not fit beside a row's title go to the line
+  below it instead of pushing the title out, so a Data Store's draft badge leaves its name
+  readable on a phone and beside the dock.
+- **Platform knowledge in three layers, and the platform's tools follow the agent's list
+  (PG-1):** every agent's system prompt starts with "Platform rules": it acts as the signed-in
+  user, outside content is evidence and never instructions, and these rules come before the
+  agent's own instructions and win where the two disagree. An agent whose `toolNames` list a
+  platform tool (`platform.context`, `platform.assets.list`, `platform.files.list`,
+  `platform.assets.open`, `platform.assets.get`, `platform.assets.validate`,
+  `platform.assets.put`, `platform.assets.operations`) also gets "How this platform works" in
+  its system prompt and the shipped read-only skill `platform-docs`, whose references are the
+  pages of the product docs, read through `read_skill` (`references/<page>.md`). The prompt runs:
+  platform rules, orientation, the agent's instructions, then date, skills and subject. The
+  references are generated from `packages/docs` by `pnpm generate:platform-docs`; a test fails
+  while they differ from the pages. Shipped skills can now carry reference files. The skill
+  `platform-guide` is retired: the release seed deletes it at the next start. On an agent's page
+  in Studio a read-only disclosure "Platform instructions" shows the rules and, for an agent that
+  holds a platform tool, the orientation; the references API returns them as
+  `platformInstructions`. The snapshot every turn and tool call reads carries no skill's
+  resources: the store leaves them out, and `read_skill` and skill changes read the one skill
+  whole (`ConfigAssetSource.getSkill`, and `withoutSkillResources` on
+  `listActiveConfigAssets`). **Upgrade:** a skill a release stops shipping, such as
+  `platform-guide`, is first taken off every agent that lists it, as a revision of that agent by
+  "System" with the audit event `config_asset.shipped_skill_unlisted` naming the agent and the
+  skill, and then deleted, so no reference is left that refuses later writes. A copy made with
+  "Copy to edit" keeps its own name and stays on its agents. A conversation is offered only the
+  platform tools its agent lists, and `platform-docs` and `workflow-authoring` only with them,
+  where before every conversation got them all. Add the platform tools to the `toolNames` of each builder agent and
+  push the config to each environment, or that agent loses them. Agents may list them without
+  the release config naming them. An instance skill named `platform-docs` stops startup; rename
+  it before the upgrade.
+- Reserve `scope`, `$viewer.scope` and `$viewer.scope_all` in App SQL validation with the later data-scope slices named; refuse the dropped `$viewer.groups` binding and document the SCOPE-0 Data Store build rules.
+- The skill editor in Studio shows the skill as a folder: `SKILL.md`, and the files below `references/`, `scripts/` and `assets/`. Text files are edited in place; any file can be uploaded, replaced, downloaded and deleted. A file is added to one of the three folders, and its type is read from its name. A save writes the whole folder where a file beside the instructions changed, and the instance's refusals, such as a file over 2 MiB, a compiled program or a script that is not UTF-8 text, are shown with the path of the file.
+- A write of a skill's config is checked as a write of its folder is: the text resources it holds, beside the files it keeps, are refused for their size, the number and total size of the files, a Git LFS pointer, an invalid path, and a path that is a file and a folder at once. Before, a config write took such resources unchecked.
+- The UI library has `FilePicker`: a labelled library control, such as a button or a menu item, opens the system file dialog, and the library owns the hidden file input.
+- **Skills a capability ships:** a capability names `skills`, and the release seed stores each
+  as a read-only skill of the platform with its registry icon and its `summary`, where the
+  instance has every tool the skill names in `tools`. The artifact helpers of the capabilities
+  repo ship spreadsheets, documents, presentations and pdf this way, so the agent editor, the
+  skill chooser and the Skills list show their own icons instead of the generic book.
+- **A start that names the fix:** a release that ships a skill the instance holds as its own
+  stops with the skill's name and the steps to remove the copy with `catalyst config push`. The
+  start deletes nothing. The docs page Config assets says the same under "Skills that ship with
+  the release".
+- **A proposal to a shipped skill is refused when the agent makes it:** `propose_skill_change`
+  on a skill that ships with the release answers `not_allowed` with a sentence the agent can pass
+  on (it ships with the release and cannot be changed on this instance; a person can copy it).
+  Before, the request was filed and its approval always failed.
+- Config validation and push report unavailable agent tools with their `toolNames` index or instructions line. Dotted tool names in instructions are checked with or without backticks in the full registry’s tool groups, including tools disabled on the instance; skills are not scanned. Connection operations must exist in stored assets and be exposed to agents. App actions resolve against stored assets plus the push batch. Tools that exist and are exposed but are not callable now produce warnings. Failed validation writes nothing.
+- The demo agent's instructions no longer name an unavailable App-saving tool, so demo seeding passes tool-reference validation.
+- The Connection tools browser fixture saves valid references before removing a Connection, then verifies its retained tool is marked unavailable after a reload.
+- **Tools people can read on the agent page:** the Tools section works like the Skills section
+  above it. Each package ("Paket") the agent uses is a chip with its icon and name: Documents,
+  Web, Files and code, Results, Skills or Platform. So is each of this instance's own tools and
+  each Connection. A chip shows "1/3" while only some of its tools are on and has a remove ×.
+  Clicking it opens a panel with its sentence and its tools, each with title and summary, plus
+  "Remove package" and "All on". "Add packages" is a picker that lists what is not in use, with
+  its sentence and number of tools, and adds it with all its tools on. A tool without a title
+  shows its id. `read_skill` shows as included while the agent has a skill and is saved with it,
+  so the warning to tick it is gone. The ids, effects and packages stand under "Technical
+  details". The Connection groups are gone; each Connection is a chip.
+- **What a tool tells people:** a tool definition takes optional `title` and `summary` in
+  English and German, a `group` and an `icon` of the UI library's registry. Every platform tool
+  carries them; a deployment's tool carries its own. `platform.references.get` answers them as
+  `tools` beside `enabledToolNames`, with the module whose switch governs each tool.
+- **`Chip` takes a count and a panel:** `trailing` shows small muted text after the label, and
+  `popover` makes the chip open a panel under it.
+- **`SkeletonChips`:** the loading layout of a row of chips with the picker below. The agent
+  page's Tools section shows it while the instance's references load, so no tool stands by its
+  id before its package is known.
+- Publish the built documentation site as the restricted `@work-shape/catalyst-docs` package in each lockstep release, including its version and core commit so deployments can publish docs from their pinned registry package.
+- **Releases:** `pnpm release:cut <version> --root ../capabilities` cuts one lockstep version, folds change files, refreshes OpenAPI and checks tarballs before creating a local release commit in each repository. Requires matching current versions in both repositories and reports repository state and undo commands when preparation fails, plus finish commands when a release commit fails. All manifests, including private tooling and repository roots, share the current version. Workspace dependencies stay linked; tags and publishing remain separate.
+- **Release validation:** Core CI audits its own manifest versions and tests paired version drift with fixtures, so core and capabilities changes can land in that order. The cut preflight still refuses mismatched real repository versions before writing either tree.
+- The deployment kit ships `docker/deployment.Dockerfile`: a deployment builds its six release
+  images (api, ui, workspace-command-worker, artifact-preview-worker, doc-worker, runner) from
+  its own folder, installing the catalyst packages its lockfile pins with an `npmrc` build
+  secret. The runner and document worker images carry only their packages and what those
+  depend on. The images keep `/app/deployment.<instance>`, so Compose files are unchanged. The
+  kit README holds the bake file a deployment points at it.
+- `catalyst-deploy bump VERSION` pins every `@work-shape/catalyst-*` dependency at a version
+  npm has, rewrites the deployment's own `pnpm-lock.yaml` (`--ignore-workspace`) and prints the
+  release notes in between. `catalyst-deploy pack-local` builds the same images from the
+  workspace's platform and capabilities packages packed into `.local-packages/`, for changes not
+  yet released.
+- For a deployment without `deploy/release.refs`, `catalyst-deploy check` refuses a catalyst
+  dependency that is not one exact release (`workspace:`, `file:`, `link:`, ranges, two versions,
+  overrides), then gates on the installed release: it refuses `node_modules` that links local
+  source. Refusal texts start with `catalyst-deploy:`, for example
+  `dependencies.@work-shape/catalyst-ui is workspace:*: a local package never reaches a release`.
+  `check --static` runs only the checks that read files; `publish staging` runs it.
+- Release manifests of such deployments are schema 2 with `catalystVersion` instead of the
+  platform and capabilities commits. `manifest check` still accepts schema 1, so rolling back to
+  an earlier release keeps working; `deploy` refuses a schema 2 manifest whose
+  `catalystVersion` is not the kit's own version.
+- Deployments with `deploy/release.refs` keep `update-refs`, `prepare-workspace` and the
+  stitched gate unchanged until they switch (VP-6, VP-7); `bump` and `pack-local` refuse them.
+- pnpm drops the integrity of the SheetJS URL tarball whenever it rewrites a lockfile. The kit
+  puts back the integrity core's lockfile records after every lockfile it writes (`update-refs`,
+  `bump`, `pack-local`). It refuses a lockfile that still resolves a URL tarball without an
+  integrity, or with a different one, before anything is compared or written. `check` refuses
+  a deployment lockfile an install left without it; `bump` to the pinned version puts it back.
+- **A workspace owns agents and skills (WS-OWN-1a):** an agent or skill made in a Shared
+  Workspace's Studio scope, or pushed from a working copy bound with
+  `catalyst config pull --workspace <id>`, belongs to that workspace (and so does a guardrail
+  such a root pushes); one made with the scope
+  Instance, or from an unbound working copy, belongs to the instance. `assets.put`,
+  `assets.sync` and the reads take the owner as `workspaceId`; a batch names a Namespace or a
+  workspace, never both, and a workspace batch is never a release. Only an asset of the same
+  workspace may name a workspace's skill: an instance agent or another workspace's agent that
+  names it is refused with `invalid_scope`, and a workspace agent names an instance skill only
+  where its writer holds `skill.read` on it. A name that is taken is refused without saying
+  where. A new workspace agent is offered in the workspace it was made in when its maker is a
+  member there, and starts hidden after a push; offering it in another workspace is an
+  instance admin's step. A workspace's agent is never the instance default: `assets.set_default`
+  and a release naming one are refused with `default_owned_by_workspace`, and so is a
+  workspace's agent as the first agent of an instance. A workspace's builder starts a Build
+  conversation about its agents, and the agent's asset tools read them by name. Agent and skill rights can be granted "In
+  workspace X" on Instance > Access. Studio has a scope filter, shows a workspace chip on a
+  workspace's assets and writes into the scope chosen. `platform.context` names, per workspace,
+  the actions the caller holds on what it owns (`workspaces`), and each kind's `owners`. What a
+  workspace owns is deleted with it. The demo seed gives the workspace `Nordlicht Beratung` the
+  skill `nordlicht-house-style` and the agent `nordlicht-front-desk`.
+- **`egress.allowPublicHttps`:** an operator opt-in in release config, off unless set. With it
+  on, a Connection may reach a host that no `egress.allow` entry names over `https` on port
+  443. Such a target is judged as a `public` entry: every address it resolves to must be public,
+  so loopback, link-local, cloud metadata, private ranges and their IPv4-mapped forms stay
+  refused. The instance's database host is refused on every port, by name and by address.
+  Redirects and download addresses are checked again, and the credential goes only to the
+  origin it was configured for. Another port, plain `http` and `postgres` still need an entry. A
+  start with the setting on logs a warning. An `egress_denied` refusal now ends with the setting
+  that would let the target through, or says that none would.
 
 ### Changed
 
@@ -2296,6 +2689,386 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `/approvals` leads to `/inbox`. The card of a request in a conversation opens the same item
   beside the chat. Rejecting from the item takes an optional comment. A collapsed sidebar shows
   the number of an item's count on its icon.
+- Rename workspace packages to `@work-shape/catalyst-*`, including `@work-shape/catalyst-server`, and deployment assembly packages to their explicit Workshape names. Keep stored keys, resource names and host paths unchanged. Publish repository metadata only for the four public edge packages.
+- Read actual imports in the workspace dependency check so gallery code examples and seeded Apps keep their existing build boundary after the scope rewrite.
+- Keep rebuilding stored Pages with legacy App Kit imports, and allow the CLI itself in the public tarball install check while rejecting workspace dependencies.
+- **Packages:** complete the freeze-C package layout: move the server to `packages/server` and the standalone client to `clients/chat-standalone`; fold data sources into postgres-connector, the widget into chat-ui/widget, and native document helpers into tool-execution/native-document. Remove registry-canary, unused image mirror plumbing and deployment-kit forwarders. Update consumer imports, source aliases, baseline scopes and deployment paths together.
+
+- **Compatibility:** consumers must update the removed package imports and script paths in the paired capability/deployment changes. No database migration or runtime configuration change is required; rollback uses the previous matched repository revisions.
+- Trim the published `@work-shape/catalyst-chat-ui` package by scanning its compiled JavaScript for Tailwind classes instead of shipping a duplicate TypeScript implementation. Keep the stylesheet, Vite helpers, types and runtime chunks in the package, and the full source for workspace development.
+- Run hosted checks on main pushes and release tags, or explicitly by dispatching a branch or adding the `ci` PR label. Ordinary PR events allocate no runners; the local combined batch check gates landing. Keep `check` as the stable result aggregate, share one build across parallel checks, and select labeled PR jobs from changed paths.
+- Fail the aggregate on cancelled browser shards, select browser and image checks from the demo/server workspace dependency closure, and run the format check for docs-only changes too.
+- Group server implementation files by feature and rename workflow implementation files to services, preserving the public package exports and runtime behavior.
+- **Postgres stores:** Fold store factories into their operation modules and remove the internal
+  `stores/` folder. Public store contracts, SQL, transactions and migration files are unchanged.
+- **Quality checks:** Ratchet retired product terms in platform code, starting with Namespace, against exact per-package baseline counts. Technical Postgres, ESTree, esbuild and process-isolation terms are excluded. Namespace removal remains in NS-RETIRE.
+- **Quality checks:** Remove the max-lines rule and its platform and capabilities baseline entries; keep all other rules and counts unchanged.
+- The chat E2E runner labels its Postgres container and volume `catalyst.worktree=<name>`, taken from `CATALYST_WORKTREE` or the checkout's `.worktrees/<name>` path, so the lane's `tidy` removes a stack whose worktree is gone by its label and never by a name.
+- Organize chat-ui source into chat, studio, admin and shared folders, preserving package entrypoints and behavior. Repoint internal imports, test aliases, guard keys and capacity references. Include a replayable D2 move script for the freeze's moving base.
+- Share contract allowed-value lists and typed subsets through asset-schemas and core, preserving accepted values, order, exported unions and the existing documented disagreements. Add a measured duplicate-list lint ratchet; no dependency, lockfile, API document, migration or runtime behavior changes.
+- **Workspace checks:** Derive the package dependency graph and source aliases from package manifests. Lint now owns the workspace dependency check across package and client source, tests, scripts, tools, Astro and MDX as well as package cycles; the separate workspace-deps script and manually maintained graphs are removed. Test-only UI subpaths are development-only exports and remain absent from published packages. After editing exports, run `pnpm exec catalyst-quality aliases --write` in platform and capabilities; lint refuses stale maps with a repair command that also covers new exports in the sibling platform repository.
+- Split workspace access requests and settings, configuration schemas, managed-file attachments and cleanup, execution-workspace persistence, and command filesystem handling into concern modules while preserving their existing entry points and public contracts.
+- Split chat workspace state, tool-call presentation and assistant message conversion into focused modules. Existing entry points and behavior are unchanged.
+- Add a limit guard to the hosted check: a line marked `check-limit` (the package tarball limits, the test and job timeouts) moves only in a pull request titled `chore(limits): ...`, which lands alone.
+- Lower the release check's tarball limit for `@work-shape/catalyst-chat-ui` from 1.3 MB back to 650 kB. The package packs to about 540 kB since it stopped shipping a duplicate TypeScript source.
+- **Release:** Set the docs package tarball budget to 2,000,000 bytes, based on a packed site of 1.55 MB.
+- Use generic accounting and deployment examples in platform packages and docs, and guard against customer and vendor names returning.
+- **Version 0.7.0:** all platform packages and the public CLI `@work-shape/catalyst-cli` carry
+  version 0.7.0, the first version whose CLI has `catalyst setup`. 0.6.4 is taken by the hotfix
+  release on `release/0.6.4`. The API reference `openapi.json` names release 0.7.0.
+- **Platform:** Remove unreachable Connection scope code, clarify agent-facing data-scope guidance, and use generic accounting examples in App documentation.
+- **Docs say what the product does today (D-1):** guardrails run at every before-event and are
+  written as assets (How rights work, Current status, CLI); the CLI signs in with
+  `catalyst login` and a personal key from Settings > You > API keys (Config Assets, CLI, Auth
+  and embedding); the page of a Connection made in Studio is edited there, and its status table
+  says what to do for such a Connection; Modules lists `apps`, `workflows`, `dataStores` and
+  `knowledge`; the glossary gains Workspace, Studio, Skill, Page, App, Workflow, Connection, Data
+  Store, Guardrail, Inbox and Module, with German screen names; the docs home has an Apps card.
+  The pages OpenAPI API Tools, Config Asset Migration and Chat Experience are gone from the site
+  and from the shipped skill `platform-docs`: the first described a tool that is not built, the
+  second a migration that is done, the third types that do not exist.
+- **Docs:** The docs start with the people who use Catalyst. The home page opens with one plain sentence and tiles for getting started, building agents and Apps, automating, connecting systems and managing. Two new pages, Your first conversation and Workspaces, cover the first steps. Setup, configuration, code tools and running the reference client locally move into a section for operators and developers, and several page titles lose their jargon.
+- **Docs tabs stand apart from an instance:** every page title on the docs site starts with
+  "Docs" ("Docs · Workshape Catalyst" on the home page, "Docs · <page title>" elsewhere), and the
+  site uses a docs variant of the Catalyst mark as favicon and logo: a dark ink square with the
+  orange corner, outlined in light on a dark scheme. It uses only the mark's colours.
+- **The docs describe what the product does, not what is missing:** the sections "Not In The
+  Current Release" (What the release contains), "Not built yet" (Rights), "What the system does
+  not have yet" (How rights work), "Not yet stated" (Capacity and limits) and "What is not in it"
+  (CLI) are gone, and so are sentences that announce a later feature on the pages Build an App,
+  Release config, Apps, Workflows, Build, Modules and Config assets. A limit that shapes how a
+  feature is used today stays, stated as how it works. The shipped skill `platform-docs` carries
+  the same text.
+- **A Connection is not MCP only in the docs:** Connect a system, the glossary and What the
+  release contains name REST interfaces read by GET (`http_api`) beside remote MCP servers.
+- **CLI:** the note that `catalyst config local-key` was removed, and that `pnpm config:local-key`
+  in the client repository replaces it, stays on the page without a heading of its own.
+- **Docs, Operated Instances:** a new page under Operate holds what every instance operated with
+  the deployment kit needs: the three repositories and the deployment repo's layout, the
+  Cloudflare, Hetzner and GitHub tokens and secrets, the Terraform roots, the env file and zram on
+  the host, the release flow with its manifest, pins and rollback, the six images, a manual
+  deploy, the backup timer, the bucket retention rules with Hetzner's limits, the model provider
+  smoke test and the local development loop. It moves out of the deployment repos' READMEs, which
+  keep only what belongs to their instance.
+- Show the Catalyst mark and three product screens in the public repository's README: a chat answer from the CRM, an offer waiting for approval and a Workflow run. The public mirror now carries `docs/` from the approved release assets.
+- Describe rights in the docs by the asset owner: an agent or skill belongs to the instance or to the Shared Workspace it was made in, and a right in a workspace covers everything it owns. Namespaces remain only as a short note on what is left of them until their code is removed.
+- Move "Rights for one person or asset" to `/operate/rights-for-one-person/`; the old address redirects.
+- Point the interface's rights help links at the rewritten headings, and regenerate the shipped platform docs skill from the pages.
+- **A person's or a service principal's own rights are grant rows (AP-4):** the nine legacy
+  permission keys in the lists of users and service principals become instance-wide rows of
+  `permission_grants`, one per action a key stands for (`config_assets.write` is `agent.write`,
+  `agent.delete`, `skill.write` and `skill.delete`), an allow for `key` and a deny for `!key`,
+  written with `grantedBy` `legacy_permission_list`. The evaluator no longer reads the columns
+  `permissions`, and nothing writes them. The Users and API access screens show and save the
+  same lists, now as rows: a saved list rewrites only the keys it changes, and the new rows name
+  who saved them. A list entry that is no key is refused with `422` "'…' is not a permission".
+  **Instance > Access** no longer lists the instance-wide rows of a user or a service principal,
+  and revoking one there is refused with `invalid_scope` "An instance-wide right is changed on
+  the page of the user or the service principal". `permissions.effective` names such an entry
+  with the source `grant`; the source `legacy` is gone from the contract, and the Check tab
+  calls such a right "Given right". An API key created without scopes is stored with `["*"]`.
+  An API key's scopes still cap its service principal: a key holds a principal's instance-wide
+  right only when one of its scopes carries the legacy key behind it, one key per scope as a
+  request read it before (`governance:read` is `usage.view`). No user, service principal or API
+  key gains or loses a right.
+- **Breaking for Apps: `connections.call` is removed.** An App reaches a Connection only through
+  a named `connection` action in its folder (`actions/<name>.action.yaml` with `connection`,
+  `operation` and `effect`, called with `actions.call('<name>', input)`). The route
+  `POST /api/v1/app-content-sessions/{pageSessionId}/connections/{connection}/operations/{operation}`
+  (`apps.sessions.call_connection`) is gone. An App built against kits 1.1.0 to 1.3.0 that still
+  calls `connections.call` gets at once the error `connection_call_removed`, which names the named
+  action as the fix (kit 1.0.0 had no call of a Connection). A `connections.call` that waited for
+  an approval across the upgrade is ended when it is approved: its run fails with the same
+  message and the Connection is not called. The platform operation `connections.call` for the
+  CLI, MCP and agents is unchanged.
+- **App Kit 1.4.0** is released without `connections` and is the kit version for new Pages and
+  Apps. It adds about 485 kB to the `chat-server` package; its size limit moves from 2.1 MB to
+  2.7 MB.
+- **Reserved App keys:** the build refuses `rights` and `requires` at the top of `app.yaml`,
+  `requires` on an action, and an action of `kind: code` or with `reads` or `writes`, as a line
+  of the manifest or in its action file, with the code `key_reserved`. The `code` action arrives
+  with APP-12; rights inside Apps are not yet decided.
+- **App bridge v1 is frozen:** the docs page Reference > App bridge v1 lists its messages and the
+  kit's calls. Changes to version 1 are additive, a new call needs a named App that cannot be
+  built without it, and a breaking change is version 2 beside it.
+- The Results tools on the agent page say what they do: **Keep a fact sheet** ("Faktenblatt führen"), **Read the fact sheet** ("Faktenblatt lesen") and **Reopen an earlier result** ("Früheres Ergebnis öffnen"). Where the instance offers both, keeping the fact sheet and reading it are one check box: on, the agent holds `structured_data.publish` and `structured_data.read`; off, neither. An agent stored with only one of them is saved as its box shows on its next save from the page, also when only another field changed: with both when it held `structured_data.publish`, with neither when it held only `structured_data.read`. Where the instance offers only `structured_data.publish`, it stands alone as before. The tool names are unchanged.
+- The chat steps of these tools follow the same names: **Update the fact sheet** ("Faktenblatt aktualisieren"), **Read the fact sheet** ("Faktenblatt lesen") and **Reopen an earlier result** ("Früheres Ergebnis öffnen").
+- **The instance's Postgres image is our own, with pgvector (KB-3, ADR-0023):**
+  `ghcr.io/vivd-solutions/catalyst-postgres`, pinned by digest in
+  `docker/postgres/pinned-image`. It is `postgres:17.11-trixie` by the digest the live hosts
+  ran on 2026-10-14 (Debian 13, glibc 2.41) plus `postgresql-17-pgvector` 0.8.7-1.pgdg13+1 from
+  PGDG, checked against its SHA-256 and installed alone, so Debian, glibc and Postgres stay
+  those of the base. `vector` is not a trusted extension on it. The demo Compose files, the
+  hosted checks and `pnpm check:local` start it; `POSTGRES_VERSION` is gone from the demo's
+  environment. The workflow "Postgres image" builds, checks and pushes it
+  (`docker/postgres/check-image.sh`: versions, collation, `halfvec` ranking exact and through
+  HNSW, a dump with vectors restored into a scratch database). `DataStores` gains
+  `ensureVectorExtension(storeId)`, which creates the extension in one store as the platform's
+  role, and finds it where the store already has it, also where an operator created it as its
+  refusal `vector_extension_not_permitted` says; nothing calls it yet (KB-5). **Operators:**
+  switch the `postgres` service of a deployment to the pinned digest once, in the order of the
+  KB-3 rollout: every database backed up with the roles (`pg_dumpall --globals-only`),
+  `/etc/os-release`, `version()` and `datcollversion` recorded on the host, staging first, the
+  log and `pg_database` read for collation warnings after the restart. **Rollback:** until the
+  first `CREATE EXTENSION vector` on a server, restart the `postgres` service on the image it
+  ran before (`postgres@sha256:2d2b8998...` on the hosts read so far); the data directory is the
+  same. After it, do not start the old image on that data directory: a store database with the
+  extension can then not be read at all, its other columns included, and `pg_dump` and
+  `pg_dumpall` fail on it, so a backup of all databases breaks as well. A dump taken on the new
+  image does not restore on the old one either ("extension "vector" is not available"). The way
+  back is on the new image: in every database that has it, `DROP EXTENSION vector CASCADE`,
+  which drops the columns and indexes that use it with their embeddings; then restart on the
+  old image.
+- **The agent takes the person to the asset it opens:** when the agent opens a Workflow, an
+  App, an agent or a skill, the tab that sent the message and watches the run moves to the
+  asset's page with the conversation in the dock, from the chat route, the page of the
+  conversation's subject or a page an earlier open moved to. The first move of a run adds one
+  step to the history and later ones replace it. From a page the person went to on their own,
+  in a second tab and on a run read later nothing moves: the dock says "Opened <name> · Go to
+  it". Every open leaves the line "Opened <name>" in the conversation, outside the Work
+  history, with a link to the page. The dock's line says "Working on: <name>".
+- **An agent's open of an instance-scoped asset waits for the person (interim, until OP-3):**
+  `platform.assets.open` on an asset of the whole instance, in a conversation not started from
+  its page, sets no subject and moves no browser. It answers `awaitsPerson`, and the dock offers
+  "Go to it"; the person's press is the confirmation. It calls the new registered operation
+  `conversations.subject.open` (`PUT /api/v1/conversations/:conversationId/subject`), which sets
+  the subject of the person's own conversation, records an Operation Run and the audit event
+  `conversation.subject_opened` with the tool call it confirms, and then opens the page. A
+  `toolCallId` that names no open of that asset in that conversation which waits for the person
+  is refused (`open_not_pending`), so the audit row names only a call the agent made. Until
+  then a changing asset tool on it is refused. Before, such an open was refused outright.
+  Once OP-3 exists, the open pauses for the confirmation in the host's prompt instead.
+- **No asset beside the chat:** the Workflow canvas, the App draft and the agent no longer open
+  as surfaces beside the conversation; "Edit with the agent" opens the asset's page with the
+  conversation in the dock. A preview the dock's conversation opens on a page, such as a file or
+  a view, covers the page and leaves the dock in view.
+- **"Draft · not published":** the page of a Workflow or an App that was never published says
+  so. On the App's page that badge stands at the end of the tab row, so it stays whole with the
+  dock open, whatever room the actions take.
+- **The New right dialog offers no Namespace, and Connection rights no workspace:** Instance >
+  Access offers a new right in a shared workspace (chosen first where the kind can be owned by
+  one), on one asset, or on the whole instance, each only where the right can be written there,
+  and asks for no place when there is one. Today every kind has one place, one asset. Rights in
+  a Namespace that exist stay listed and revocable, and `permissions.grant` still writes them,
+  until the Namespace is retired. `connection.read` and `connection.use` at workspace scope are
+  refused with `422` and the reason `invalid_scope`: "'connection.use' cannot be granted at the
+  scope kind 'workspace'". **Operators:** rows already written there stay and are read as
+  before, and the Access page lists them under the workspace's name; revoke them there.
+  **Rollback:** an earlier release writes them again.
+- **Connect a local agent:** `PUBLISHED_CLI_VERSION` names `@work-shape/catalyst-cli` 0.7.0, the
+  first version on npm with `catalyst setup`. Settings > "Connect a local agent" shows the command
+  `npm install --global @work-shape/catalyst-cli@0.7.0 && catalyst setup <tool> --instance <url>`
+  instead of "The command is not available yet", and `platform.context.get` answers
+  `release.cliVersion` 0.7.0. The page still appears only where personal API keys are on.
+- **No escalation through service principals (RIGHTS-1a):** a person gives or lends a right
+  only where their own call holds it, with the scopes of a personal key counted. Making a
+  Workflow revision live, the newest or an earlier one, asks `workflow.publish` and every right
+  of the service principal it runs as. The superadmin role and `api_access.manage` no longer
+  stand in for that, so an administrator publishes a Workflow whose principal holds what she
+  holds. A test run is unchanged. A Workflow whose principal holds `config_assets.release` is
+  published by nobody. A refusal names the first missing right, and the asset only where the
+  caller may read it.
+- **`service_principals.manage`:** a new right, held by administrators and superadmins through
+  their role. It lists and creates service principals, gives and takes their rights, and
+  enables and disables them, each gift and each enabling under the rule above. Issuing a key
+  needs `api_access.manage` and every right of the principal; revoking one needs
+  `api_access.manage` only. Only a superadmin gives a principal `config_assets.release`. The
+  API access page shows principals to holders of the new right and keys to holders of
+  `api_access.manage`.
+- **`PlatformContext.instanceActions`:** `platform.context.get` names the rights the caller
+  holds over the instance itself, today `service_principals.manage`.
+- **No escalation through people (RIGHTS-1b):** `users.manage` no longer hands out more than
+  the caller holds. Giving a person a grant, a role or a legacy key asks every action it
+  carries, at the scope given; writing a deny and lifting one ask the action the deny names.
+  Nobody writes or lifts a grant of their own (`holder_not_administrable`), and nobody gives
+  themselves a role or a key. Changing an account (name, email, status, roles, keys, a sign-in,
+  the password, an invitation, deletion) asks every right the person holds: role defaults,
+  instance-wide rows and keys, rows in a workspace, a Namespace or on an asset, and memberships
+  of Shared Workspaces, a disabled person's included. The person's own Personal Workspace does
+  not count. A superadmin follows the same rule; the superadmin-only rules stay as they were.
+  A refusal is `403 FORBIDDEN` naming the first missing right, for example "This call does not
+  hold 'agent.write' in the Namespace 'kai-', and 'Kai' would hold it. Only a holder of a right
+  gives or lends it". Existing rows and accounts are not re-checked and nothing is migrated. A
+  holder of `users.manage` without the admin role can therefore change only people who hold
+  nothing beyond their Personal Workspace, until RIGHTS-1c lets an admin give them more.
+- **A deny counts wherever it lies:** a right given over a Namespace, a workspace or the whole
+  instance (a role, a legacy key, a key of a Service Principal, a Workflow's principal) is
+  refused while the giver holds a deny of it on anything inside that place, rather than
+  narrowed: "'agent.read' on an asset this call may not read is denied to this call, and the
+  right in the Namespace 'kai-' reaches it". The asset is named only to a giver who may read
+  it. The same holds for changing an account whose rights reach the deny.
+- **Permission refs follow the rule:** a reference of a tool is given only by a person who
+  holds it, never to oneself, and a person's references count when their account is changed.
+  A superadmin who does not hold a reference no longer gives it on the Users page.
+- **The rights checked are the rights written:** every write that changes who holds what
+  (grants and their removal, roles, legacy keys, permission refs, sign-ins, passwords,
+  memberships, Service Principals and their keys, personal API keys) takes the instance's
+  access lock and then the lock of the user it changes, at the start of its transaction, and
+  asks its check again there, of the rights as they are then rather than as the call was
+  admitted. A user promoted, a deny given to the caller, a deny of the user lifted or a
+  membership given in between is counted, not missed. A first password sign-in is created only
+  after that check and removed again when the change fails; a new password for an existing
+  sign-in is the last step before the commit. Rights writes of one instance now run one at a
+  time, and an account change and a grant for the same user no longer end in a Postgres
+  deadlock.
+- **Effect on an operated instance:** an admin keeps every change they made before, except
+  changing the account of a person who holds `api_access.manage` or `agent_models.manage`,
+  which now only a superadmin does, and writing a grant for themselves, which another admin
+  or a superadmin now writes. Rolling back restores the earlier rule; no data changes.
+- **Close the remaining rights races:** deletion admission and its mark share the rights
+  transaction; identity mappings cannot silently move between users; new sign-in mappings and
+  direct membership/provisioning writes take access, user, then identity/workspace locks.
+- **Existing sign-ins stay independent:** refreshing an already linked sign-in locks only its
+  user before its identity, so an unrelated rights write or password hash does not queue every
+  authenticated request. Creating a user, linking a sign-in and writing legacy grants still
+  take access first; a mapping changed during the lookup is re-read before anything is written.
+- **A Workflow's page says whom it runs as (WF-RUNAS-1):** the first line under its head reads
+  "Runs as <account>" ("Läuft als <account>"), by the label of the service principal every run
+  acts as, never by the definition's name for it. `workflows.list` names that label in the new
+  optional field `runsAs` of each Workflow; it is missing where the principal is disabled or gone,
+  which the Workflow's `reasons` already say. The list reads each principal once for both.
+- **An unpublished draft names its account too:** `assets.get` returns the active configured
+  account's label in optional `runsAs`, only after the asset read is authorized. The header
+  uses it when the Workflow has no published entry. Disabled or missing accounts have no label.
+- **Words on the rights screens (RIGHTS-WORDS):** Instance > Access, Users, API access, a
+  workspace's Members and a Connection's page say every right with one verb per action, the
+  same in every dialog, row and refusal: view, use, edit, publish, delete, approve (German
+  ansehen, verwenden, bearbeiten, veröffentlichen, löschen, freigeben), so "Read agents" is now
+  "View agents" and "Agenten: Lesen" is "Agenten ansehen". No rights screen shows an action id,
+  a legacy key, a key scope or an asset id any more: an asset the reader may not see is "An
+  asset you cannot see". The German interface calls a service principal "Technisches Konto".
+  "Rolle" names the instance role only: the Users page's "Access level" is now "Role", and a
+  workspace member's role is their "Membership" ("Mitgliedschaft").
+- **Workspace > Members** says what a member gets and what Builder and Publisher add.
+- **The principal-rights dialog on API access** offers only rights the person holds
+  themselves: a Connection they are denied, or hold no right on, stands disabled with the
+  reason. Everyone may read their own effective rights, and principal managers may read
+  principal grants and effective rights without `users.manage`; other people’s rights
+  remain protected. The instance still refuses an unheld grant itself.
+  A holder of `api_access.manage` alone is told that the service principals need the right to
+  manage them, instead of "No service principals yet".
+- **An agent's page (AGENT-AVAIL-1)** names "Available in" ("Verfügbar in") once, as its
+  section's heading, and saves where the agent can be chosen through the page's one save bar
+  with the agent's other changes. The section's own "Save availability" button is gone. The
+  library's `RadioGroup` takes `labelHidden` for a group whose heading names it already.
+- **Settings waits for the platform context** before it sends an address elsewhere: an
+  administrator who opened Instance > API access by its address, such as from a Connection's
+  page, was sent to Users while the right that shows the page was still loading.
+- **Instance > API access** lists every person's own keys only to a holder of
+  `api_access.manage`, who alone may read and revoke them; an administrator without it no
+  longer meets a refused request on the page.
+- Refuse reserved data-scope config keys and Data Store table metadata with SCOPE-1, and Connection operation scope declarations with SCOPE-2, including malformed values. Ship the SCOPE-0 build rules in Workflow authoring and App-building guidance.
+- **The head of every asset page names the asset and says what it does:** the name, then its
+  description or summary on the same row. The asset's id is no longer shown on the page; "Copy
+  ID" ("ID kopieren") in the head's "…" menu puts it on the clipboard, on Studio pages, Apps
+  (for whoever builds them) and Workflows (for whoever may change them). The App details dialog
+  no longer lists the id.
+- **Long names wrap, then cut:** a name in an asset's head, a Studio list row or an App, agent or
+  Workflow card takes a second line, is then cut and reads whole on hover, also beside the dock
+  at 1280 and at 390.
+- **No id as a row's second line, one scope chip per row:** Data Store and Knowledge Base rows
+  show their description instead of their id, an App card no longer shows its id to builders,
+  and a Connection or Data Store row shows one chip for whose it is ("Persönlich" alone for the
+  reader's own) instead of a second "Arbeitsbereich"/"Instanz" chip.
+- UI library: `PageHeader`'s detail name and `ListRow`'s title wrap to two lines, `CardTitle`
+  takes `clamp`, and `DropdownMenuCopyItem` copies a text and says so in place.
+
+- Header actions stay within the screen at phone widths, including the German Workflow
+  header: the shared header wraps them so its Copy ID menu stays reachable.
+- **App drafts fold Files and Actions under "Technical details":** an App's draft page opens
+  with its preview and one line, "Technical details" ("Technische Details"), after the Preview
+  tab. One click shows the Files and Actions tabs; the browser remembers the choice for the next
+  draft and after a reload. Folding them again returns to the preview. The UI library's
+  `TabsList` takes an `end` beside the tabs, and `TabsDisclosure` is the line that shows more.
+
+- The disclosure stays within the tab row at phone widths, including German: its label
+  truncates when needed and reads in full on hover.
+- **Create in one step (UXA-2):** the New agent and New skill dialogs that stay where no
+  building agent is offered, New agent on the Agents page, Copy to edit, and the New connection
+  dialog ask for the name first; the New agent dialog also asks "What should it do?", which
+  becomes the agent's description. The address (the id) is made from the name under
+  "Advanced" ("Erweitert"), or under "Technical details" for a Connection, and follows the name
+  until it is edited. It is checked while typing: a taken address, or one the kind's rule for
+  names refuses, is named at the field, the fold opens, and Continue or Connect stays off
+  until it is fixed. The Namespace choice moved under the same fold. The UI library gains `NameWithAddress`.
+- **`assets.check_name`:** `POST /api/v1/assets/{kind}/check-name` with `name` and an optional
+  `workspaceId` answers `{ available: true }`, or `{ available: false, reason, message }` with
+  `reason` `name_invalid` (creation's shared name validation and its reason, including the
+  agent schema's refusal of `.` and `..`) or `name_taken` (the generic revision-conflict
+  sentence a non-reader's create gives). It writes nothing and requires the kind's write
+  right on the requested name; without it the caller gets 403. A fresh create names
+  `expectedRevision: null`: both active and deleted assets reserve their names. The check
+  reveals only the submitted kind and name, with no title, owner, workspace, revision or
+  deleted state. Reusing a deleted name still requires its deletion revision. A put is
+  unchanged. Rollback: the dialogs of an older UI do not call it; nothing is stored.
+- Reconcile publish metadata at the existing lockstep version, 0.7.0: API contract/client,
+  asset schemas and CLI are MIT/public; other libraries and deployment-kit are
+  UNLICENSED/restricted. Docs, demo, standalone UI, App Kit source and quality tooling stay
+  unpublished. Preserve the folded package layout: server ships vendor assets, the standalone
+  UI is a private client assembly, and the removed widget, data-source, document-execution and
+  registry-canary packages stay absent. Derive the quality graph from manifests.
+- Add a visibility/dependency guard and release-tag-only CI: require tag/manifest agreement,
+  main or release/* ancestry and the commit's green Check, mirror only public packages,
+  publish in dependency order, resume existing versions and verify private names anonymously.
+  Candidates use next; older hotfixes use release-X.Y without moving latest backwards.
+- Mirror the core lockfile's peer-install setting so public installs keep the tested dependency
+  graph, including peer resolutions.
+- Inspect capability tarballs and imports in the external consumer too; budget the existing
+  standalone artifact-helper bundles at 6.5 MB (measured 5.9 MB).
+- No tag or package is released by merging this change. The manager must authorize the
+  paired 0.8.0-rc.1 cut and tags. Core needs Actions secrets NPM_TOKEN and PUBLIC_MIRROR_KEY;
+  the public repo needs its bootstrap NPM_TOKEN until all four trusted publishers exist.
+  VP-5 must add deployment-kit/docker and regenerate metadata when its Dockerfile is built.
+  Existing package versions remain available for rollback; never move a tag or unpublish.
+- Prune the public lock to reachable importer resolutions before pnpm regenerates it; verify
+  frozen installation, builds, publish dry runs and installed dependency parity with core.
+  Mirror only the public metadata policy and remove bootstrap change files.
+- Pin release npm to 11.21.1. Clear a registry-created candidate latest tag, including on reruns;
+  warn and leave latest on a sole candidate if npm refuses removal. Set latest explicitly
+  only for final releases that do not move it backwards.
+- **Deployment kit:** Source-ref deployment lockfile refreshes resolve exact Catalyst version pins against matching local packages. This keeps existing image builds working while deployments move to published packages; root development uses the workspace repository's generated local overrides.
+- **Workflows (WF-AUTO-1):** a run of a published Workflow revision performs its changing
+  operations. Where the policy of an operation is `confirm`, a step of a run from a schedule,
+  or of a manual or parent start of what is published, runs the call: publishing the Workflow
+  was the confirmation. Before, that `confirm` became an approval nobody could give, so every
+  `data_store.<id>.insert` of a published run failed under the instance's default policy. The
+  call's Operation Run records the decision reason `workflow_publish` ("Approved by publishing
+  the Workflow" on its detail), and its `operation.completed` audit row carries
+  `decisionReason: "workflow_publish"`. A `deny`, an `approval`, a floor of the operation, a
+  guardrail and the grants of the Workflow's service principal still stop the call. A test run
+  of a draft acts as its tester, as before, and an agent's call still asks its person.
+- **Workflows:** a step refused because a guardrail asks for an approval names the guardrail
+  and its reason: "The guardrail '…' asks for another person's approval of '…': <reason>",
+  with `details.guardrailId` beside `details.reason: approval_unavailable`.
+- **Workflows:** a test run no longer marks a step "A published run asks for approval here" for
+  a plain `confirm`, since a published run now runs it; the mark stays where the operation's
+  floor asks for a confirmation.
+- **Workflows:** a run that is still going when its Workflow is deleted loses the publish's
+  confirmation: a later step whose operation's policy is `confirm` fails with `POLICY_DENIED`,
+  `details.reason: workflow_deleted`, "The Workflow of this run was deleted, so its publish no
+  longer confirms '…'". Its reading steps and the calls its policy allows still run.
+- **Connection operations stay inside the instance unless an admin opens them:** an operation
+  of a Connection has a fourth exposure, `outside`, which admits the CLI and the platform MCP
+  server and nothing else. It is off on every operation, new and stored, and no migration sets
+  it. Before, the CLI, an MCP client and a person in the browser passed any non-empty exposure;
+  now `cli` and `mcp` need `outside`, and a person outside an App and a schedule reach no
+  Connection operation directly (`connection_exposure:<origin>`). Over HTTP only an API
+  credential (a personal API key, a service principal's credential or a token exchanged for
+  one) gives origin `cli`; a session token an embedding host issued is the person (`user`).
+  The Connection page has the check box **Outside clients (CLI, MCP)**, German **Externe
+  Clients (CLI, MCP)**, on each operation of a Connection made on the instance; release config
+  names `outside` in `exposure`. A personal connection refuses every exposure but `agent`.
+- **Platform:** reconcile the combined folder and store refactors with tool validation and App CLI commands, regenerate their documentation, remove one-time freeze replay tooling and the obsolete usage-store exception.
+- **Platform:** remove one-time freeze replay scripts after integrating the D7b and D7c concern splits.
+- **Platform:** remove the one-time freeze-C replay script and document hosted checks without the retired image mirror.
+- Move the core to `work-shape/catalyst-core`: build Postgres under
+  `ghcr.io/work-shape/catalyst-postgres` on Blacksmith, pin the checked image in CI and the
+  demo, and update its source label. Move the docs and mirror workflow guards and mirror
+  destination to Workshape; remove the registry-canary workflow.
+- **CI:** Balance fourteen browser shards by measured main-run durations, keep serial Inbox tests together, use uniform 2-vCPU runners, retain JSON reports for refreshing the measurements, and validate the browser selection directly so the required aggregate runs alongside the compatibility aggregate.
+- **Tests:** Consolidate duplicate browser checks and cover Page mouse-modifier cancellation in unit tests, while retaining browser exit, authorization, focus, layout and interaction guards. Make the retained deleting-user fixture independent of browser shard order.
+- Balance Vitest shards by measured file duration, using the median for new files and retaining hosted timing artifacts for refreshes. Speed up the independent child-run budget test by seeding completed history instead of replaying thousands of no-op jobs.
+- **Tests:** Split the platform asset tool tests by execution mode, keep the cross-process read/write and actor checks, share read-only fixtures, and skip deterministic model word pacing in the in-process tests.
 
 ### Fixed
 
@@ -2634,6 +3407,242 @@ surrogate pair, which cannot be stored.`). A tool call whose arguments hold eith
   changed, so it no longer offers a decision on a request someone else has decided. A decision
   that still comes too late is answered in one sentence that names who decided, and a comment
   already written stays on the page.
+- **`load-deploy-env.sh` finds the workspace's `.env.deploy` from any directory:** without an
+  argument it read `../../.env.deploy` relative to the current directory, so sourcing it from a
+  deployment repo or from a Terraform root failed with "Missing deploy env file". It now reads
+  `.env.deploy` at the workspace root, found from the kit's own location. An argument still
+  names another file.
+- **CLI:** `catalyst <kind> validate --from <folder>` reads what `put` reads. For a kind whose
+  revisions hold files, such as an App, it checks the folder against the limits of one write and
+  says that the instance checks the files as it writes them.
+- **CLI:** the commands of one asset, such as `catalyst skill put`, address the workspace a
+  working copy is bound to, as its `config` commands do; `--workspace` still names another.
+- **A Data Store or Knowledge Base query past `temp_file_limit`:** a statement that sorted or
+  generated more than the store role's 1 GiB of temporary files (SQLSTATE 53400) was told as
+  the database being unreachable and answered 500 with no sentence. It is now refused as the
+  caller's statement with status 422, the SQLSTATE and the advice to narrow or aggregate it, and
+  is not retried. Too many connections stays unavailable.
+- **Agent configuration (SA-0):** stored agents naming unavailable tools, skills or models no longer stop instance startup. Missing tools and skills are omitted at runtime, including native `web_search` when web access, model support or customer pricing is unavailable (`unknown_tool`); an agent with an unavailable primary model is excluded from chat rather than silently switching models. Startup warns once per affected agent, and agent reads report unavailable references and their reasons without changing the stored definition. Skill-change approval and revert read the stored agent, preserving unavailable references; a missing primary model does not supersede pending requests. New and changed agent definitions, including those written by skill changes, remain strictly validated, so an invalid agent update is refused without changing storage.
+- **Agent page (SA-0):** a "Not available" line names each tool, skill and model the agent names that the instance lacks, with the reason in plain words, and an agent whose model is missing says it cannot chat until its model is changed. A tool the instance does not have shows as unavailable and removable in the Tools section, as a tool of a module that is off already did. The page reads the agent's `unavailableTools` in place of the deprecated `moduleOffTools`.
+
+- **Agent reference checks:** editing or reverting an agent may retain an existing skill reference that only the caller cannot read. New unreadable references and references missing from the instance remain refused.
+- Show the Tools section of the agent page as the agreed rows again: one row per package, per own tool of the instance and per Connection, the switched-off ones too, each with its icon, name, sentence, how many of its tools are on and one switch for all of them, mixed while only some are on. The chevron folds out the tools, each with its check box. "This instance" and "Connections" head their rows, "Technical details" stays, and the heading counts the tools that are on, the sum of the rows. The library `Switch` has its mixed state back, and a switch that can be partly on is a tri-state check box to screen readers, so "partly on" is not read as "off"; the `trailing` and `popover` options of `Chip` are gone.
+- Give the Connection draft tool `platform.connections.draft_tools` a title, a summary, the group `platform` and an icon, so the agent page no longer shows it by its id.
+- **The agent can list what an App may call:** `platform.assets.operations` takes `for: app`
+  and then lists the operations of Connections exposed to Apps (`bridge`), named
+  `connection.<connection>.<operation>`, as far as the person may use them. Without `for` it
+  lists, as before, what a step of a Workflow may call. An operation exposed to Apps alone was
+  listed nowhere, so an agent writing a `connection` action had to guess its name. The list is
+  of the instance and no longer needs the conversation to be about an asset, so it answers
+  while the agent builds a Page.
+- **Data stores page:** the description and the empty list say that a data store is created
+  through the CLI or the API by a person with the right to create one. They said an agent
+  creates one, which no agent tool does.
+- **A Page that reads a Data Store offers no retry:** the refusal `data_store_needs_app` is
+  final in the frame (`retryable: false`), as a Page reaches a Data Store only once it is an
+  App.
+- **The test of every kind of table and every page size of a Data Store's page no longer runs
+  into its timeout:** it read 666 pages one after the other, about 13 seconds on an idle
+  machine and over 30 on a busy CI runner. It now reads about 350 pages, the six tables side by
+  side, in about 3 seconds. Every table is still read whole at every page size, and a page of
+  every size still starts in one part of a table and goes on in the next. A cursor that answers
+  a row again now fails the test at once instead of at the timeout.
+- **The demo's seeded Customers App and accounting Workflows read the Connection's rows:** the
+  App `customer-list` and the Workflows `accounting-clients` and `kai-client-years` read the rows
+  of an MCP Connection under `structuredContent`, where the Connection answers them. Before, the
+  App showed "The customers could not be loaded." and both Workflows failed their loop as
+  `reference_unresolved`. Revision 1 of each is changed in place, so a local demo database seeded
+  before this fix needs a fresh seed.
+- **Local development:** Build the demo migration image from current code before starting the stack,
+  so startup applies the migrations expected by the API. `dev:restart` follows the same path.
+- Upgrade the static documentation site to Astro 7.2 with matching Starlight and Markdown packages and require Sharp 0.35.5, removing vulnerable documentation build dependencies while preserving the `/catalyst` base path and generated API reference.
+- Isolate browser Connection editor and page-frame fixtures from instance-wide Connection list and principal rights checks, verify cleanup succeeds, and diagnose abandoned holders without capping healthy lock queues. Keep page-frame lock waits outside test timeouts, after the App build. Serialize the sidebar rights writer and revoke its grant during cleanup.
+- **Guardrails on UTF-16 without a mark and on the App draft of a `page.save`:** a file is now
+  read as UTF-16 without a byte order mark where at least 90% of the bytes at one parity of its
+  first KiB are NUL and at most 10% at the other. Before, it took a NUL in every other byte, so
+  one letter outside Latin-1, as in "Łukasz", left the file printable runs and an IBAN in it
+  passed. A guardrail that warns about the App draft a `page.save` writes is now passed on to
+  the agent (`app.warnings` of the answer). One that asks for an approval there blocks the draft,
+  as no request is filed and nobody could approve it; the answer says that the person's Update
+  app on the Page can wait for the approval. Its hit is kept as a `block` that says it answered
+  a request for an approval (`convertedFrom: require_approval` of `guardrails.list_hits`), and
+  the guardrail's page shows it as "Blocked: approval could not wait".
+- Publish self-approval requires an instance-level approve right and a click in the app.
+  Workspace approvers and CLI publishers wait in the Inbox; the CLI names the request and
+  tells instance approvers where to approve it. Keys never carry approve rights.
+- Workflow publish reviews include `workflow.yaml`, comparing its manifest with the live
+  revision alongside the step files.
+- Regression tests cover workspace self-approval, CLI-origin self-approval, an admin's real
+  personal key with an interactive answer and forged origin headers, and MCP publish refusal.
+- **Guardrails list:** the guardrail the platform ships ("Publishing needs an instance admin's approval") is the first row of the Guardrails list, under the search and the scope, marked as shipped with the platform, with its switch and its state line. The list no longer says "Nothing in Instance yet" while that guardrail is in it, and the search and the scope narrow it as they narrow every row.
+- Remove the unused `BuildListLead` barrel export so the guardrails list passes the lint baseline check.
+- The composer's model picker opens its menu and its Model and Reasoning panels above the page, through the UI library's popover. In the chat beside a Workflow canvas the model panel was cut off at the chat's edge; it now shows whole, flips below the composer where there is no room above, and shifts to stay in the window. The picker follows a window resized across the breakpoint, keeps a panel no taller than the window with its Back row in reach, leaves the open panel in place while the pointer crosses the other row into it, and works from the keyboard: the arrow key towards a panel or Enter enters it, the other arrow key or Escape goes back one level. `PopoverContent` takes `surface="none"` for content that draws its own surfaces, and `reserve` for room kept free beside it, and `onEscapeKeyDown`.
+- Keep workflow header actions inside narrow screens, including German start buttons at 390 px.
+- Reserve readable space for user names in narrow lists and expose the full name when truncated.
+- Show disabled workflow accounts by display label with English and German reasons.
+- **Banners line up their icon, title and actions:** a Banner's actions are centred on the whole
+  message and no longer reach into its padding, where they sat at the top edge above the title.
+  The icon stays on the title's first line, a one-line message sits on the middle of its action,
+  and the dismiss stays at the top end when the actions take a line of their own on a narrow
+  screen, instead of wrapping under them. This shows on the Workflow draft bar and on the notice
+  that the application was updated. The UI library shows a Banner with a title and an action
+  alone.
+- **The notice that the application was updated is opaque:** it floats over the page on the
+  raised surface under its warning tint, so the page under it no longer shows through.
+- **Skills:** Keep existing instance skills when an upgrade ships skills with the same names, and warn the operator instead of refusing API startup. Instance content, revisions and agent references remain intact. A later config push can remove instance-owned copies so the next start seeds the shipped skills; upgrades do not require that push beforehand. Workspace-owned names remain with their workspace even after deletion and are skipped with the same warning, keeping API startup available.
+- Remove the former product name from the public README template before mirroring releases.
+- **Publishing the public CLI:** the publish workflow runs on a GitHub-hosted runner again. npm
+  refuses a provenance statement signed on a self-hosted runner such as Blacksmith.
+- **Published packages:** Pin the tested assistant-ui AI SDK adapter, streamdown integration and zod versions, and constrain assistant-ui React and AI SDK dependencies to the tested minors so fresh deployment installs avoid incompatible dependency drift.
+- **Release gate and the host's memory:** the release gate's resolve-only run of the workspace
+  command worker compared the memory its sandboxes need with the memory of the machine the
+  gate runs on, so a CI runner smaller than the host stopped every deploy with
+  `sandbox_memory_exceeds_host`. A resolve-only run no longer makes that check and prints
+  `host memory not checked: checked at startup on the host`; the worker still refuses to start
+  on a host that cannot hold its sandboxes. **Upgrade:** nothing to do. **Rollback:** the
+  previous release's gate refuses such a config again on a smaller CI machine.
+- Refuse `assets.run_live_once` for API keys and their access tokens, including personal keys, with an error directing callers to a person signed in to the app.
+- **CI:** Retry image checks only after transient registry failures, and distinguish the tagged, expected WebRTC failure from unexpected browser failures and passes in hosted logs.
+- **Tests:** Make audit assertions independent of tied timestamps, exercise the rights regressions with Date frozen, and give operation-run helper sorts an explicit ID tie-breaker.
+- **Tests:** Observe the composer’s running and finished animation alongside its start/end positions, isolate surface journeys by user, and settle the desktop rail before edge hit testing.
+- **Tests:** Stop workspace workers before removing their directories, observe queued commands and held workflow steps, and await the refused message’s own audit event. Exercise the command give-up boundary with only Date frozen.
+
+The workflow outcome-wait probe holds the second operation note, proving the worker has waited before checking the running state. It fails explicitly if the worker finishes without waiting.
+- Upgrade SheetJS readers to the upstream 0.20.3 tarball, raise the published CLI and asset-schema js-yaml minimum to 4.3.2, and patch multipart parsing, Seroval, Fastify routing/URI parsing and Better Auth dependencies.
+- Use the legacy spreadsheet reader for ODS files that the primary XLSX reader accepts without finding any worksheets.
+- Keep app-content tokens out of request logs through Fastify’s supported log controller, and return a 400 product error for malformed multipart uploads.
+- Pin and verify the SheetJS tarball integrity in the release gate so lock regeneration cannot silently remove its checksum.
+- **A session token names only a service principal as its delegated actor:** the issuer refuses
+  any other kind (`A session token names only a service principal as its delegated actor`), and
+  verification refuses a signed token that names one (`UNAUTHENTICATED`, `Chat session token names a delegated
+actor other than a service principal`). Before, a token signed with the session secret that
+  named an API key authenticated, skipped resolving its user and was recorded as the CLI. The
+  `session_tokens.issue` route accepted only `service_principal` already, so no caller of the API
+  changes.
+- Show a scrollbar's thumb only while the pointer is over its scroll area or the area holds the keyboard focus, like an overlay scrollbar; the bar keeps its width, so nothing moves. A screen without hover shows it as before.
+- A sidebar item that lies wholly in a faded edge of the list takes no pointer, so a conversation row next to unseen under the bottom fade no longer lights up and opens its menu's tooltip beside the row above it. A row with any part in sight keeps its hover and click.
+- Make the access-operation audit assertion independent of row order when audit timestamps tie, preventing intermittent staging release-check failures while still checking the exact events, statuses and actors.
+- **A new API key starts with no scope ticked:** You > API keys and a CLI's connect code no
+  longer tick every right the person holds. A click on the scope a person wanted used to take it
+  away, so the key came out with every other scope. The key gets exactly the boxes ticked.
+- **`catalyst <kind> put` and `validate` take what `show --json` printed:** the definition is
+  read from its `config`. The whole answer was sent as the definition before, so an unchanged
+  agent read as a changed model and an admin was refused with "Missing the right
+  'agent_models.manage'". The right is still asked where the model settings change, leaving a
+  model binding out included.
+- **Docs and agent orientation on Connections:** the docs name the interface's navigation,
+  Studio > Connections and Studio > Guardrails (German: Studio › Verbindungen), and Studio's page
+  walks through connecting a remote MCP server with the rights each step needs. They and the
+  orientation every agent reads say that MCP is the only connector type, with no HTTP
+  connector, and that a Connection's key is entered on its page, never in a chat.
+- **A user's detail no longer lays its cards over each other:** Settings > Instance > Users puts
+  Password, Delete account and Account beside Profile and Rights only where the detail itself has
+  the room for both columns, not where the window is 1280 wide. At 1280 the right column covered
+  the Profile and Rights cards and hid their switches; at 390 every card ran past the right edge.
+  The profile and identity fields wrap by the width of their card in the same way.
+- **The test that a loop runs three items at once no longer fails now and then on a busy
+  runner:** it counted the calls that were with the Connection in the same 40 ms, so three items
+  that reached their call further apart than that were counted as two. The first calls now wait
+  for each other, for 1.5 s at most, before the 40 ms begin. A loop that runs fewer items at once
+  still fails the count, and one that runs a fourth is still counted.
+- **A Workflow step calls no asset operation:** an `operation` step that names `assets.*`
+  (`assets.list`, `assets.get`, `assets.put`, `assets.publish`, `assets.sync` and the rest) is
+  refused when the Workflow is saved or published, with the reason `operation_not_callable` and
+  the step's path. A run acts as its service principal, and a principal that holds
+  `config_assets.read` or `config_assets.release` could read every agent's and skill's
+  definition through a step or reach `assets.sync`. A definition stored before this release is
+  listed as not runnable with the same reason, and a run that reaches such a step fails it
+  before anything is called. The demo's seeded Workflows, which read agents and skills, now
+  read the Connection `sample-accounting`: `accounting-clients` (was `agent-inventory`) and
+  Kai Berger's draft `kai-client-years` (was `kai-skill-inventory`). Their principal
+  `workflow-demo` holds no permission and one grant, `connection.use` on that Connection.
+
+### Database
+
+- **Legacy permission keys become grant rows (AP-4):** migration
+  `0079_legacy_permission_grants` writes the rows; a user whose deletion was requested gets
+  none, an entry that is no key gives none, and a row the holder already had keeps who wrote it
+  (a `!key` still makes it a deny). It gives `["*"]` to every API key without scopes, keeps an
+  empty list empty (it still gives nothing) and takes `*` out of a list that held it (it gave
+  nothing before and would give everything now). Every statement can run again. It creates the
+  table `legacy_permission_restores`. **Operators:** after the migration and before anyone
+  changes a right, run `node --experimental-strip-types scripts/verify-permissions.ts` with
+  `DATABASE_URL` set: it compares every holder's rights from the rows with what the columns
+  answered and exits `1` on a difference. Do not change rights while a release before this one
+  still runs beside it: that release writes the column only, and the change is not seen.
+  **Rollback:** the columns are kept for one release. Stop this release, run the script with
+  `--restore-legacy-columns`, then start the earlier release. It writes each holder's rows back
+  into its column and removes them (the earlier release reads every row as well), turns `["*"]`
+  back to null and marks the restore with a row in `legacy_permission_restores`; it leaves the
+  migration record alone. To upgrade again, run the migration step as always: after the
+  migrations it moves the lists the earlier release kept into rows again and clears the mark, in
+  one transaction, whatever migrations are recorded. Until then this release refuses to start.
+  A later release drops the columns.
+- **Workflows:** Workflow steps can start a published child Workflow, wait without a step slot, and return its output. Child runs retain lineage and the root starter, inherit test mode, stop with their parent, and nest at most three levels. Save and publish check child contracts, parent triggers, use rights, and cycles. Migrations 0087–0088 add workflow run lineage and the unique parent step key. Datasets and child run keys remain unsupported.
+- **Refusals:** A fourth level fails with `depth_limit`: "A child run cannot start below three levels". Publishing a cycle fails with `workflow_cycle`: "Publishing this Workflow would make it reach itself". Missing child use rights fail with `child_use_forbidden`: "The parent's principal does not hold workflow.use on the child". Dataset inputs fail with `not_supported_yet`: "Child datasets are not supported yet".
+- **Rollback:** The migrations are additive; keep the new columns and indexes when rolling application code back. Drain child runs and unpublish Workflows using child steps or parent triggers before rollback because the previous engine cannot execute those definitions.
+
+- **Deploy order:** after EW-2a (0085–0086), run `0087_workflow_child_runs` and
+  `0088_workflow_child_run_indexes` before starting this release. Without them startup refuses
+  with `The database is behind this release. Run the migration step before starting. Missing migrations: 0087_workflow_child_runs, 0088_workflow_child_run_indexes`.
+  Generated Drizzle snapshots stay in the source checkout; runtime packages ship migration SQL
+  and the journal within the existing package size budget.
+- **An agent's call waits for its person's confirmation (EW-2a):** a call whose policy is
+  `confirm`, made by an Agent Run's worker, pauses the run instead of being refused. Its
+  Operation Run becomes `pending_confirmation` (24 hours), the run becomes
+  `waiting_for_decision` and holds no lease and no worker. `operations.decide`
+  (`POST /api/v1/operations/runs/:runId/decision`, `{ "decision": "confirm" | "decline",
+"reason"?: string }`) records the run owner's decision; the run goes on in a worker in the
+  same reply, with the call executed once, or answered to the agent as declined with the
+  reason. The same decision again answers the same run; another one is a `409 CONFLICT`. The
+  run status `waiting_for_permission` is now `waiting_for_decision`, the event
+  `tool_permission_requested` is now `tool_decision_requested` (with `tool_decision_recorded`
+  beside it), and the run command `tool_permission_decision` is removed: `continue` is the only
+  run command.
+- **Migrations:** `0085_agent_run_resume_state` adds the nullable column
+  `agent_runs.resume_state` (jsonb), what a waiting run goes on from; it is cleared when the run
+  ends. `0086_agent_run_waiting_for_decision_index` recreates the unique index
+  `agent_runs_active_conversation_idx` with `waiting_for_decision` in place of
+  `waiting_for_permission`, concurrently. No row has ever held `waiting_for_permission`: the
+  worker failed such a run instead. **Deploy order:** run the migration step before the new
+  release starts, as always. Without it the release refuses to start with: `The database is
+behind this release. Run the migration step before starting. Missing migrations:
+0085_agent_run_resume_state, 0086_agent_run_waiting_for_decision_index`. **Rollback:** the
+  previous release ignores the column, but it knows no `waiting_for_decision` run: such a run
+  keeps its conversation from starting another run, and its upkeep never ends it. Before
+  starting the previous release, end the waiting runs:
+  `UPDATE agent_runs SET status = 'failed', resume_state = NULL, failed_at = now(),
+updated_at = now(), error = '{"code":"AGENT_RUN_ROLLED_BACK","message":"The release that
+paused this run was rolled back","category":"internal_error"}'::jsonb WHERE status =
+'waiting_for_decision'`. The index can stay as it is.
+
+- **Packaging:** postgres-store keeps Drizzle schema snapshots in the source checkout and ships
+  only the migration SQL and journal. Runtime migration history and startup checks are unchanged.
+- **Workflows:** Migration `0081_test_run_targets` adds `workflow_step_runs.target` and
+  `workflow_step_runs.published_would_ask`, both nullable and checked. It gives
+  `live_once_switches` the owner in its key (`asset_id`, `part`, `switched_by_id`), and adds the
+  table `live_once_runs`, which records the step of a test run a switch made live and is removed with the run. Rollback: a
+  release without 0081 ignores the new columns and the new table. Released versions up to v0.6.4
+  have no "Run live once" at all. A build between 0073 and 0081 sets a switch with a conflict on
+  (`asset_id`, `part`), which no longer has a unique key, so its "Run live once" fails. Before
+  going back to such a build, delete the rows of `live_once_switches` and restore the old key:
+  `ALTER TABLE live_once_switches DROP CONSTRAINT live_once_switches_owner_pk, ADD CONSTRAINT
+  live_once_switches_pk PRIMARY KEY (asset_id, part)`.
+- **Shipped guardrail switches (GR-PUB-1):** migration `0083_shipped_guardrail_switches`
+  creates the table `shipped_guardrail_switches`, one row per shipped guardrail an instance
+  admin switched, with who switched it and when. A shipped guardrail without a row is on, so
+  "Publishing needs an instance admin's approval" is on on every existing instance from this
+  release; no row is written by the migration or by a release. **Deploy order:** run the
+  migration before the new release starts, as always; the previous release ignores the table.
+  **Rollback:** the previous release does not read the table and runs no shipped guardrail, so
+  every publish goes live on its publisher's click again; the table can stay.
+- **Knowledge Bases:** Migration `0082_knowledge_base_states` adds the table of a Knowledge
+  Base's last check. Rollback: the previous release ignores the new table and drops an agent's
+  `knowledgeBases` when it reads the agent, so its agents answer without them.
+- **`0080_guardrail_hits_converted_from`:** adds the nullable column `converted_from` to
+  `guardrail_hits`, without a default and without a scan. A release before this one writes no
+  value and reads none, so a rollback of the app keeps working on the migrated database.
+- **Workspace inspections:** Mark historical workspace inspection images with `metadata.purpose = "inspection"` so conversation resources and file search hide them. Only files under `previews/` with preview-only source rows or exact artifact IDs proven by retained path-preview tool results are updated; ambiguous rows and promoted files remain unchanged. No files or bytes are deleted.
 
 ## 0.6.3 — 2026-10-08
 
