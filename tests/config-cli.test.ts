@@ -87,7 +87,7 @@ import {
   serializeSkillMarkdown,
   writeStateFile,
   updateManifestDefaultAgent
-} from "../packages/config-cli/src/index";
+} from "@work-shape/catalyst-cli";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import {
   agentConfig as namespaceAgentConfig,

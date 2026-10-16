@@ -497,12 +497,14 @@ describe("chart boundary", () => {
     expect(imports(engine).filter((name) => !name.startsWith("echarts/"))).toEqual([]);
     // The engine hands out drawing functions over product-owned types and no option object.
     expect(Object.keys(chartEngine).sort()).toEqual(["drawChart", "renderChartSvg"]);
-    // The package does not export the engine: a test reaches it through a source alias only.
+    // The published package keeps the engine private; workspace tests use a development export.
     const manifest = readFileSync(
       fileURLToPath(new URL("../packages/ui/package.json", import.meta.url)),
       "utf8"
     );
-    expect(manifest).not.toContain("chart-engine");
+    expect(JSON.stringify(JSON.parse(manifest).publishConfig.exports)).not.toContain(
+      "chart-engine"
+    );
     expectTypeOf(renderChartSvg).returns.toEqualTypeOf<string>();
   });
 

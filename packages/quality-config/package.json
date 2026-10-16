@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./eslint.config.mjs",
-    "./baseline": "./baseline.mjs"
+    "./baseline": "./baseline.mjs",
+    "./source-aliases": "./source-aliases.mjs"
   },
   "bin": {
     "catalyst-quality": "./check.mjs",

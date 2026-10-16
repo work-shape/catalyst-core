@@ -18,7 +18,8 @@ import {
   dockMotion,
   dockPlacement,
   searchWithDock
-} from "@work-shape/catalyst-chat-ui/dock-state";
+} from "../packages/chat-ui/src/chat/workspace/dock-state";
+// Keep this module private: exporting it only for tests hides a Knip unused-export finding.
 
 type Area = (typeof areaRoutes)[number]["area"];
 

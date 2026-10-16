@@ -9,6 +9,7 @@ import { ESLint } from "eslint";
 import { getFileInfo } from "prettier";
 import ts from "typescript";
 import { compareBaseline } from "./baseline.mjs";
+import { syncSourcePaths } from "./source-aliases.mjs";
 
 /** @typedef {import("./baseline.mjs").Finding & { file: string, detail: string }} Finding */
 
@@ -187,7 +188,17 @@ const startPart = (index) =>
     });
   });
 
-if (target === "format") {
+if (target === "aliases") {
+  if (
+    !(await syncSourcePaths(root, process.argv.includes("--write"))) &&
+    !process.argv.includes("--write")
+  ) {
+    console.error(
+      "Source aliases differ from package exports; run catalyst-quality aliases --write"
+    );
+    process.exitCode = 1;
+  }
+} else if (target === "format") {
   const patterns = [`**/*.{${formatted.join(",")}}`];
   const prettier = [resolve(here, "node_modules/prettier/bin/prettier.cjs")];
   if (process.argv.includes("--write")) {
@@ -214,6 +225,12 @@ if (target === "format") {
     }
   }
 } else if (target === "lint") {
+  if (!(await syncSourcePaths(root))) {
+    console.error(
+      "Source aliases differ from package exports; run catalyst-quality aliases --write"
+    );
+    process.exit(1);
+  }
   const lintable = files.filter((file) => inScope(file) && /\.(?:[cm]?[jt]s|[jt]sx)$/.test(file));
   const parts = Math.ceil(lintable.length / lintFilesPerProcess);
   const own = process.argv.find((argument) => argument.startsWith(partFlag));
@@ -259,10 +276,11 @@ if (target === "format") {
     }
   }
 
-  // The declared package graph and the manifests must describe the same packages and edges.
+  // Manifests are the only package graph. Knip rejects undeclared imports, but accepts
+  // devDependencies in src, so the collector enforces that runtime boundary here.
   /** @type {Record<string, string[]>} */
-  const graph = readJson("quality-package-graph.json");
-  /** @type {Map<string, { file: string, edges: string[] }>} */
+  const graph = {};
+  /** @type {Map<string, { name: string, file: string, development: Set<string>, workspaceDevelopment: Set<string>, runtime: Set<string> }>} */
   const manifests = new Map();
   for (const file of files.filter((path) =>
     /^(?:packages|clients)\/[^/]+\/package\.json$/.test(path)
@@ -273,17 +291,52 @@ if (target === "format") {
         .filter(([, version]) => String(version).startsWith("workspace:"))
         .map(([name]) => name)
     );
-    manifests.set(manifest.name, { file, edges: [...new Set(edges)].sort() });
+    graph[manifest.name] = [...new Set(edges)].sort();
+    manifests.set(dirname(file), {
+      name: manifest.name,
+      file,
+      development: new Set(Object.keys(manifest.devDependencies ?? {})),
+      workspaceDevelopment: new Set(
+        Object.entries(manifest.devDependencies ?? {})
+          .filter(([, version]) => String(version).startsWith("workspace:"))
+          .map(([name]) => name)
+      ),
+      runtime: new Set(
+        ["dependencies", "peerDependencies", "optionalDependencies"].flatMap((key) =>
+          Object.keys(manifest[key] ?? {})
+        )
+      )
+    });
   }
-  for (const name of new Set([...Object.keys(graph), ...manifests.keys()])) {
-    const manifest = manifests.get(name);
-    const declared = graph[name] && [...graph[name]].sort();
-    if (JSON.stringify(manifest?.edges) !== JSON.stringify(declared))
-      report(
-        "catalyst/package-graph",
-        manifest?.file ?? "quality-package-graph.json",
-        `${name}: manifest ${JSON.stringify(manifest?.edges)}, declared graph ${JSON.stringify(declared)}`
-      );
+  for (const file of files.filter(
+    (path) =>
+      inScope(path) &&
+      /^(?:packages|clients)\/[^/]+\/src\//.test(path) &&
+      /\.(?:[cm]?[jt]sx?|astro|mdx)$/.test(path) &&
+      !/(?:\.(?:test|spec|stories)\.[cm]?[jt]sx?$)|(?:^|\/)(?:tests?|__tests__|e2e|scripts|test-support)\//.test(
+        path
+      )
+  )) {
+    const directory = file.split("/").slice(0, 2).join("/");
+    const manifest = manifests.get(directory);
+    // config-cli bundles these workspace packages into its public standalone executable.
+    if (!manifest || manifest.name === "@work-shape/catalyst-cli") continue;
+    const imports = ts.preProcessFile(readFileSync(file, "utf8"), true, true).importedFiles;
+    for (const name of new Set(
+      imports.map(({ fileName }) => fileName.match(/^@[^/]+\/[^/]+/)?.[0])
+    )) {
+      if (
+        name &&
+        manifest.development.has(name) &&
+        !manifest.runtime.has(name) &&
+        (name in graph || manifest.workspaceDevelopment.has(name))
+      )
+        report(
+          "catalyst/runtime-dependency",
+          file,
+          `${name} is only in devDependencies; source imports need dependencies or peerDependencies`
+        );
+    }
   }
   /**
    * @param {string} from
@@ -297,7 +350,11 @@ if (target === "format") {
     );
   for (const name of Object.keys(graph))
     if (reaches(name, name, new Set()))
-      report("catalyst/package-cycle", "quality-package-graph.json", `${name} depends on itself`);
+      report(
+        "catalyst/package-cycle",
+        [...manifests.values()].find((manifest) => manifest.name === name)?.file ?? "package.json",
+        `${name} depends on itself`
+      );
 
   // Source-module cycles among the files ESLint linted, resolved by TypeScript with the lint
   // project's own options so that package aliases count. Modules that reach each other form

@@ -136,6 +136,9 @@ export function publishedExports(exports) {
     Object.entries(exports)
       .filter(([condition]) => condition !== "development")
       .map(([key, value]) => [key, publishedExports(value)])
+      .filter(
+        ([, value]) => typeof value !== "object" || value === null || Object.keys(value).length > 0
+      )
   );
 }
 

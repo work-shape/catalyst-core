@@ -69,9 +69,6 @@
     "./surface-layout": {
       "development": "./src/chat/surface/surface-layout.ts"
     },
-    "./dock-state": {
-      "development": "./src/chat/workspace/dock-state.ts"
-    },
     "./subject-run": {
       "development": "./src/chat/conversation/subject-run.ts"
     },
