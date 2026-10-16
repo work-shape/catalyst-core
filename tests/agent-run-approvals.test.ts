@@ -11,12 +11,13 @@ import {
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { deferred, required, waitUntil } from "./support/assertions";
 import { injectStartConversationRun } from "./support/chat-server-run-harness";
+import { withTestSql } from "./support/test-sql";
 import { createTestConfig } from "./support/fixtures";
 import { createToolCallingModel, TOOL_CALLING_MODEL_PROVIDER } from "./support/held-model";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-instance";
 
-async function fixture() {
+async function fixture(startAgentRunJobs = true) {
   const executed: string[] = [];
   const change = defineTool({
     name: "demo.change",
@@ -60,6 +61,7 @@ async function fixture() {
       tools: [change],
       capabilities: [model.capability],
       seedAssets,
+      startAgentRunJobs,
       operations: {
         centralPolicySettings: (): CentralPolicySetting[] => [
           { operation: change.name, value: "approval" }
@@ -128,6 +130,81 @@ async function fixture() {
 }
 
 describe("agent approval pause (operations checks 4, 5 and 6)", () => {
+  it.each(["queued Stop", "waiting Stop", "approve", "reject"] as const)(
+    "%s takes the conversation before the run during a concurrent queue withdrawal",
+    async (action) => {
+      const f = await fixture(action !== "queued Stop");
+      const said = action === "queued Stop" ? await f.startMessage("First") : await f.say();
+      const scope = {
+        clientInstanceId: f.clientInstanceId,
+        conversationId: asConversationId(said.conversationId)
+      };
+      const queued = await f.app.call("conversations.runs.start", {
+        params: { conversationId: said.conversationId },
+        payload: {
+          idempotencyKey: "concurrent-queue-change",
+          message: { text: "Next" },
+          followUp: "queue"
+        }
+      });
+      expect(queued.statusCode, queued.body).toBe(200);
+      const item = required((await f.app.stores.followUps.listPending(scope))[0]);
+      const before = await f.events(said.runId);
+      const requestId = (await f.calls(said.runId))[0]?.approvalRequestId;
+      let pending: Promise<PromiseSettledResult<unknown>[]> | undefined;
+      try {
+        await f.app.stores.transaction(async (stores) => {
+          // Hold the same conversation lock as queue acceptance and withdrawal (#197).
+          await stores.followUps.getOldestPending(scope);
+          const change =
+            action === "queued Stop" || action === "waiting Stop"
+              ? f.app.stores.agentRuns.requestAgentRunCancellation({
+                  clientInstanceId: f.clientInstanceId,
+                  runId: asAgentRunId(said.runId),
+                  requestedAt: new Date().toISOString()
+                })
+              : f.decide(required(requestId), action);
+          // Attach the rejection handler now: either transaction can be the deadlock victim.
+          pending = Promise.allSettled([change]);
+          await waitUntil(
+            async () =>
+              (
+                await withTestSql(
+                  (sql) => sql`
+                select pid from pg_stat_activity
+                where datname = current_database() and wait_event_type = 'Lock'
+                  and cardinality(pg_blocking_pids(pid)) > 0
+                  and (query ilike '%conversations%' or query ilike '%agent_run_observations%')
+              `
+                )
+              ).length > 0,
+            "Stop or approval is visibly blocked on the held conversation"
+          );
+          // On main, the other transaction already owns the run: this causes 40P01.
+          await stores.followUps.cancel({ ...scope, followUpId: item.id });
+        });
+        const [outcome] = await required(pending);
+        expect(outcome).toMatchObject({ status: "fulfilled" });
+        if (action === "approve" || action === "reject") {
+          expect(outcome).toMatchObject({ value: { statusCode: 200 } });
+          await f.until(said.runId, "completed");
+          expect(f.executed).toEqual(action === "approve" ? ["one"] : []);
+        } else {
+          expect((await f.run(said.runId)).status).toBe("cancelled");
+        }
+        expect(await f.app.stores.followUps.get({ ...scope, followUpId: item.id })).toMatchObject({
+          status: "cancelled"
+        });
+        const events = await f.events(said.runId);
+        expect(events.length).toBeGreaterThan(before.length);
+        expect(events.map((event) => event.sequence)).toEqual(events.map((_, i) => i + 1));
+      } finally {
+        if (pending) await pending;
+        await f.app.close();
+      }
+    }
+  );
+
   it("check 4: pauses and keeps the conversation busy, then resumes after restart and executes once on approval", async () => {
     const f = await fixture();
     const said = await f.say("/tool demo.change {}");

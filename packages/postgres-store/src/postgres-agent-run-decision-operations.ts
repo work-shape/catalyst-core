@@ -1,3 +1,4 @@
+import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   AppError,
@@ -39,7 +40,8 @@ export async function decideWaitingToolCall(
     if (origin?.kind !== "agent") {
       throw new AppError("NOT_FOUND", "This call is not available");
     }
-    // The run is locked before its call, as the worker that resumes it reads them.
+    // Match queue changes, then lock the run before its call.
+    await lockAgentRunConversations(tx, input.clientInstanceId, [origin.agentRunId]);
     const [runRow] = await tx
       .select()
       .from(agentRuns)

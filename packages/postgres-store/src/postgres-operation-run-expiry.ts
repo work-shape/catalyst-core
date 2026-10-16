@@ -1,3 +1,4 @@
+import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import {
   WAITING_OPERATION_RUN_STATUSES,
   agentRunJobOptions,
@@ -34,7 +35,8 @@ export async function expireOperationRunsAndResumeAgents(
     const runIds = candidates.flatMap((call) =>
       call.origin.kind === "agent" ? [call.origin.agentRunId] : []
     );
-    // Match decide and Stop's lock order. Sort several locks so concurrent sweeps agree too.
+    // Lock all conversations before any run; batches agree on both orders.
+    await lockAgentRunConversations(tx, input.clientInstanceId, runIds);
     const runs = runIds.length
       ? await tx
           .select()

@@ -1,3 +1,4 @@
+import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { expireOperationRunsAndResumeAgents } from "./postgres-operation-run-expiry";
 import {
   INTERRUPTED_RUN_ERROR,
@@ -437,8 +438,9 @@ export function createPostgresOperationRunsStore(db: PostgresConnection): Operat
   ) =>
     db.transaction(async (tx) => {
       const seen = await getOperationRun(tx, input);
-      // Decisions and Stop lock the agent before its call. Use that order here too.
+      // Queue changes, decisions and Stop all take conversation -> run -> call.
       if (seen?.approvalRequestId && seen.origin.kind === "agent") {
+        await lockAgentRunConversations(tx, input.clientInstanceId, [seen.origin.agentRunId]);
         await tx
           .select({ id: agentRuns.id })
           .from(agentRuns)

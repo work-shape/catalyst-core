@@ -1,3 +1,4 @@
+import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import {
   dispatchConversationFollowUpJob,
   ACTIVE_AGENT_RUN_STATUSES,
@@ -407,6 +408,7 @@ export async function failLostAgentRun(
   input: FailLostAgentRunInput
 ): Promise<AgentRun | undefined> {
   return db.transaction(async (tx) => {
+    await lockAgentRunConversations(tx, input.clientInstanceId, [input.runId]);
     const [row] = await tx
       .update(agentRuns)
       .set({
@@ -504,12 +506,15 @@ async function failAgentRunsWhere(
 ): Promise<AgentRun[]> {
   return db.transaction(async (tx) => {
     const ofInstance = eq(agentRuns.clientInstanceId, input.clientInstanceId);
-    const chosen = tx
+    const chosen = await tx
       .select({ id: agentRuns.id })
       .from(agentRuns)
       .where(and(ofInstance, condition()))
       .orderBy(asc(agentRuns.startedAt), asc(agentRuns.id))
       .limit(input.limit);
+    if (!chosen.length) return [];
+    const runIds = chosen.map((run) => run.id);
+    await lockAgentRunConversations(tx, input.clientInstanceId, runIds);
     const rows = await tx
       .update(agentRuns)
       .set({
@@ -526,7 +531,7 @@ async function failAgentRunsWhere(
       })
       // The condition is read again under the row lock: a run that a worker claimed, renewed
       // or ended meanwhile stays as it is.
-      .where(and(ofInstance, condition(), inArray(agentRuns.id, chosen)))
+      .where(and(ofInstance, condition(), inArray(agentRuns.id, runIds)))
       .returning();
     const failed = rows.flatMap((row) => (row.failedAt ? [{ row, failedAt: row.failedAt }] : []));
     if (failed.length === 0) return [];

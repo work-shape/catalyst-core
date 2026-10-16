@@ -1,3 +1,4 @@
+import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { requestAgentRunCancellation } from "./postgres-agent-run-cancellation";
 import { decideWaitingToolCall } from "./postgres-agent-run-decision-operations";
 import {
@@ -503,6 +504,7 @@ async function appendRunObservation(
   input: AppendRunObservationInput
 ): Promise<RunObservation> {
   return db.transaction(async (tx) => {
+    await lockAgentRunConversations(tx, input.clientInstanceId, [input.runId]);
     const [run] = await tx
       .select()
       .from(agentRuns)

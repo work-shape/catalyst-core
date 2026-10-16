@@ -1,3 +1,4 @@
+import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import {
   agentRunJobOptions,
   asAgentRunId,
@@ -25,6 +26,7 @@ export async function resumeAgentRunAfterApproval(
     eq(agentRuns.clientInstanceId, input.clientInstanceId),
     eq(agentRuns.id, input.agentRunId)
   );
+  await lockAgentRunConversations(tx, input.clientInstanceId, [input.agentRunId]);
   const [run] = await tx.select().from(agentRuns).where(identity).for("update");
   if (run?.status !== "waiting_for_decision" || !run.resumeState?.waiting.length) return;
   const waiting = run.resumeState.waiting;

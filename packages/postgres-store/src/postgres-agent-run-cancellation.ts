@@ -1,3 +1,4 @@
+import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import {
   AppError,
   type AgentRun,
@@ -15,7 +16,8 @@ export async function requestAgentRunCancellation(
   input: RequestAgentRunCancellationInput
 ): Promise<AgentRun> {
   return db.transaction(async (tx) => {
-    // Decisions, expiry and Stop all lock the Agent Run before its Operation Runs.
+    // Match queue changes before locking the run and its operation runs.
+    await lockAgentRunConversations(tx, input.clientInstanceId, [input.runId]);
     const [run] = await tx
       .select()
       .from(agentRuns)
