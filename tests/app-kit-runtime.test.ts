@@ -87,6 +87,29 @@ describe("the released App Kit versions", () => {
     }
   });
 
+  it("ships only local WOFF2 faces with licences, within a small font budget", async () => {
+    const manifest = await readManifest("1.5.0");
+    const fonts = manifest.files.filter((file) => file.file.endsWith(".woff2"));
+    expect(fonts).toHaveLength(9);
+    expect(fonts.reduce((sum, file) => sum + file.bytes, 0)).toBeLessThan(250_000);
+    const files = loadAppKitFiles().get("1.5.0");
+    const css = files?.get("fonts/fonts.css")?.bytes.toString("utf8") ?? "";
+    const addresses = [...css.matchAll(/url\("([^" ]+)"\)/gu)].map((match) => match[1]);
+    expect(addresses.sort()).toEqual(
+      fonts.map((file) => `./${file.file.slice("fonts/".length)}`).sort()
+    );
+    expect(css).not.toMatch(/@import|https?:/u);
+    expect(css.match(/@font-face/gu)).toHaveLength(fonts.length);
+    expect(files?.get("fonts/README.md")?.bytes.toString("utf8")).toBe(
+      await readFile("packages/app-kit/fonts/README.md", "utf8")
+    );
+    for (const family of ["inter", "lora", "ibm-plex-mono", "bungee"]) {
+      const licence = files?.get(`fonts/${family}/LICENSE`)?.bytes.toString("utf8") ?? "";
+      expect(licence).toBe(await readFile(`packages/app-kit/fonts/${family}/LICENSE`, "utf8"));
+      expect(licence).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    }
+  });
+
   it("answers every import name the build rewrites with a file of the version", async () => {
     for (const version of RELEASED_KIT_VERSIONS) {
       const files = loadAppKitFiles().get(version);
@@ -270,6 +293,30 @@ describe("the kit route", () => {
     }
     const listed = await callTestPath(instance, "GET", kitFilePath("1.0.0", "manifest.json"));
     expect(listed.json<{ version: string }>().version).toBe("1.0.0");
+  });
+
+  it("serves nested fonts, their stylesheet and licences across the sandbox's opaque origin", async () => {
+    const instance = await startInstance();
+    const manifest = await readManifest("1.5.0");
+    for (const file of manifest.files.filter((entry) => entry.file.startsWith("fonts/"))) {
+      const response = await callTestPath(instance, "GET", kitFilePath("1.5.0", file.file));
+      expect(response.statusCode, file.file).toBe(200);
+      expect(sha256(response.rawPayload)).toBe(file.sha256);
+      expect(response.headers).toMatchObject({
+        "content-type": file.file.endsWith(".woff2")
+          ? "font/woff2"
+          : file.file.endsWith(".css")
+            ? "text/css; charset=utf-8"
+            : "text/plain; charset=utf-8",
+        "access-control-allow-origin": "*",
+        "cache-control": "public, max-age=31536000, immutable"
+      });
+    }
+    for (const path of ["fonts/missing.woff2", "fonts/inter/LICENSE/extra", "fonts.css"]) {
+      expect((await callTestPath(instance, "GET", kitFilePath("1.5.0", path))).statusCode).toBe(
+        404
+      );
+    }
   });
 
   it("answers a version this release does not hold with 404 kit_unavailable", async () => {

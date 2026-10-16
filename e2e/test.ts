@@ -37,6 +37,16 @@ const BESIDE_TOP_ANCHORED_TURN = " (beside a turn anchored to the top)";
 
 const allowedPageErrors: readonly AllowedPageError[] = [
   {
+    name: "outside-app-font-refused",
+    reason:
+      "The font spec deliberately names Google Fonts and proves CSP prevents a network request.",
+    matches:
+      /^Loading the font 'https:\/\/fonts\.googleapis\.com\/blocked\.woff2' violates the following Content Security Policy directive: "font-src 'self' data:"\. The action has been blocked\.\s*$/u,
+    tests: [
+      "folder, kit and data fonts render in draft and published Apps without outside requests"
+    ]
+  },
+  {
     name: "reply-remote-image-refused",
     reason:
       "Chromium's own log line for an image the interface's content policy refused. The test " +

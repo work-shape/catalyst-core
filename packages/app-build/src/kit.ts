@@ -16,7 +16,8 @@ export const RELEASED_KIT_VERSIONS: readonly string[] = [
   "1.1.0",
   "1.2.0",
   "1.3.0",
-  "1.4.0"
+  "1.4.0",
+  "1.5.0"
 ];
 
 /** The stylesheet of the shared UI library, with the utility classes its components use. */
@@ -79,6 +80,11 @@ export function kitFilePath(kitVersion: string, file: string): string {
  */
 export function kitStylesPlainPages(kitVersion: string): boolean {
   return releasedSince(kitVersion, PLAIN_PAGE_STYLES_SINCE);
+}
+
+/** Whether a kit version serves its bundled font stylesheet and font files. */
+export function kitHasFonts(kitVersion: string): boolean {
+  return releasedSince(kitVersion, "1.5.0");
 }
 
 /** Whether a Page of a kit version may have `workflow` actions. */

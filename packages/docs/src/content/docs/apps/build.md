@@ -35,6 +35,12 @@ Write the files with the workspace file tools, then open the folder that holds `
 
 A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-router` and `@work-shape/catalyst-app-kit`. Nothing is installed. A plain HTML App names `entry: index.html`; inline scripts work, inline event handler attributes such as `onclick` do not.
 
+Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.
+
+Kit 1.5.0 supplies Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.5.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.5.0/fonts/README.md`.
+
+A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.5.0/fonts/fonts.css");` and `body { font-family: Lora; }`.
+
 ## The manifest
 
 `app.yaml` names everything the App reaches. A Connection or a Data Store that the manifest does not list cannot be called.
@@ -44,7 +50,7 @@ A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-r
 | `id`                  | Lowercase letters, digits and `-`, at most 63 characters.                                                                                |
 | `name`                | The name people read.                                                                                                                    |
 | `description`, `icon` | Optional.                                                                                                                                |
-| `kit`                 | The exact kit version. Use `1.4.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
+| `kit`                 | The exact kit version. Use `1.5.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
 | `entry`               | `index.html` for a plain HTML App. A React App leaves it out.                                                                            |
 | `connections`         | The Connections the App's actions call, by name.                                                                                         |
 | `dataStores`          | The Data Store the App's `sql` actions use: `{ name, minSchema }`. One at most while the App has `sql` actions.                          |
@@ -171,7 +177,7 @@ A dashboard for one client of an accounting data source: it reads bookings from 
 ```yaml title="app.yaml"
 id: accounting-dashboard
 name: Accounting dashboard
-kit: 1.4.0
+kit: 1.5.0
 connections:
   - accounting_source
 dataStores:
@@ -319,7 +325,7 @@ The same call from a plain HTML App, with one action on the Connection.
 ```yaml title="app.yaml"
 id: accounting-bookings
 name: Accounting bookings
-kit: 1.4.0
+kit: 1.5.0
 entry: index.html
 connections:
   - accounting_source

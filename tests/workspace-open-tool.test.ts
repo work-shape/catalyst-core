@@ -299,6 +299,25 @@ const reactPage = (routes: Record<string, string>) => ({
 });
 
 describe("workspace.open", () => {
+  it("keeps its opening sentence and tells the agent where fonts and libraries belong", async () => {
+    const harness = await createWorkspaceHarness();
+    const tool = createWorkspaceOpenTool({
+      workspace: new WorkspaceCommandService({
+        store: harness.store,
+        objectStore: harness.objectStore,
+        fileStore: harness.objectStore
+      }).dependencies,
+      builds: {
+        build: async () => {
+          throw new Error("Description only");
+        }
+      }
+    });
+    expect(tool.description).toMatch(/^Show an HTML file or a folder/u);
+    expect(tool.description).toContain(
+      "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load."
+    );
+  });
   it("builds the folder into revision 1, and a second open into revision 2", async () => {
     const harness = await createSaveHarness();
     await harness.write("calculator", reactPage({ "index.tsx": fileRoute("/") }));
@@ -416,7 +435,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
       pageId: page.id
     });
     expect(stored).toMatchObject({
-      kitVersion: "1.4.0",
+      kitVersion: "1.5.0",
       manifest: { id: "index", entry: "index.html" }
     });
     expect(stored?.builtFiles.map((file) => file.path)).toContain("index.html");

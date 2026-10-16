@@ -224,7 +224,7 @@ export const pageLoadExits: readonly PageExit[] = [
     name: "a font",
     html: (there) =>
       `<style>@font-face { font-family: planted; src: url(${hit(there, "font")}); } #page-title { font-family: planted; }</style>`,
-    refusal: directive("default-src 'none'")
+    refusal: directive("font-src 'self' data:")
   },
   {
     name: "an image in an embedded SVG",
@@ -297,7 +297,7 @@ export const pageLoadExits: readonly PageExit[] = [
     files: (there) => ({
       "assets/style.css": `@font-face { font-family: planted; src: url("${hit(there, "filefont")}"); }\n#page-title { font-family: planted; }`
     }),
-    refusal: directive("default-src 'none'")
+    refusal: directive("font-src 'self' data:")
   },
   {
     name: "an image in the style attribute of an embedded SVG",

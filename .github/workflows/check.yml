@@ -354,6 +354,13 @@ jobs:
             test-results/browser-durations.json
             .tmp/e2e/shard-${{ matrix.shard }}.txt
           retention-days: 14
+      - name: Keep App font specimens
+        if: ${{ !cancelled() && hashFiles('test-results/**/font-specimens-*-light.png') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-font-specimens-${{ matrix.shard }}
+          path: test-results/**/font-specimens-*-light.png
+          retention-days: 7
       - name: Keep traces and the server log of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

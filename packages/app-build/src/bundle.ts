@@ -6,6 +6,7 @@ import { resolveReference, rewriteHtml, withHeadStart } from "./html";
 import {
   APP_KIT_PACKAGE,
   KIT_IMPORT_NAMES,
+  KIT_RUNTIME_PATH,
   KIT_STYLESHEET_FILE,
   htmlPageHead,
   kitFilePath,
@@ -222,6 +223,7 @@ async function buildHtmlPage(
     }
     const rewritten = rewriteHtml({
       path: file.path,
+      kitVersion: manifest.kit,
       html: decoder.decode(file.bytes),
       exists: (path) => sources.has(path)
     });
@@ -274,9 +276,7 @@ async function buildHtmlPage(
     bundle.componentEntries.forEach((path) => componentEntries.add(path));
   }
   if (kitStylesPlainPages(manifest.kit)) {
-    // Nothing else gives an HTML file a stylesheet of the kit or the theme: an author cannot
-    // link an address outside the Page's folder, and a script that imports the kit loads no
-    // styles.
+    // The build supplies the base look and theme; an author may also link the kit's fonts.
     for (const [path, { html, modules }] of documents) {
       const look = modules.some((source) => componentEntries.has(source)) ? "components" : "plain";
       built.set(path, encoder.encode(withHeadStart(html, htmlPageHead(manifest.kit, look))));
@@ -420,6 +420,17 @@ function pageFilesPlugin(sources: ReadonlyMap<string, Uint8Array>, kitVersion: s
         const kit = kitImportPath(kitVersion, args.path);
         if (kit !== undefined) {
           return { path: kit, external: true };
+        }
+        // CSS loads versioned kit assets from this instance at runtime, just as HTML does.
+        // Whole file segments keep the exception inside the kit; scripts still use kit names.
+        const kitAsset = args.path.slice(KIT_RUNTIME_PATH.length + 1).replace(/[?#].*$/u, "");
+        if (
+          (args.kind === "import-rule" || args.kind === "url-token") &&
+          args.path.startsWith(`${KIT_RUNTIME_PATH}/`) &&
+          /^\d+\.\d+\.\d+\//u.test(kitAsset) &&
+          fileSetPathIssue(kitAsset) === undefined
+        ) {
+          return { path: args.path, external: true };
         }
         if (args.path.startsWith("data:")) {
           return { path: args.path, external: true };

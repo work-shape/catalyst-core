@@ -1,4 +1,5 @@
 import { parse, type DefaultTreeAdapterMap, type Token } from "parse5";
+import { kitFilePath, kitHasFonts } from "./kit";
 import type { PageBuildError } from "./types";
 
 // A Page is served under `script-src 'self'`: a script runs only when it is a file of the
@@ -56,6 +57,7 @@ interface Edit {
  */
 export function rewriteHtml(input: {
   path: string;
+  kitVersion: string;
   html: string;
   exists(path: string): boolean;
 }): RewrittenHtml {
@@ -181,6 +183,13 @@ export function rewriteHtml(input: {
     const rel = (attribute(element, "rel") ?? "").toLowerCase().split(/\s+/u);
     const href = attribute(element, "href");
     if (!rel.includes("stylesheet") || href === undefined) {
+      return;
+    }
+    // The kit's pinned fonts are served by this instance, alongside the App's own files.
+    if (
+      kitHasFonts(input.kitVersion) &&
+      href === kitFilePath(input.kitVersion, "fonts/fonts.css")
+    ) {
       return;
     }
     if (OTHER_ADDRESS.test(href) || href.startsWith("/")) {

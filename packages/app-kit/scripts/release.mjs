@@ -15,7 +15,7 @@
 // a Page loads one React and one router however many of the files it imports, and no file
 // names a host.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,7 +23,7 @@ import { compile, optimize } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
 import { build } from "esbuild";
 
-const KIT_VERSION = "1.4.0";
+const KIT_VERSION = "1.5.0";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const platformRoot = resolve(packageRoot, "../..");
@@ -224,6 +224,16 @@ written.push({
   file: "page.css",
   bytes: await stylesheet("page.css", { utilities: false, canvas: false })
 });
+
+// Font bytes and their licences are committed inputs; release never downloads them.
+for (const file of readdirSync(resolve(packageRoot, "fonts"), { recursive: true })) {
+  if (typeof file === "string" && statSync(resolve(packageRoot, "fonts", file)).isFile()) {
+    written.push({
+      file: `fonts/${file}`,
+      bytes: readFileSync(resolve(packageRoot, "fonts", file))
+    });
+  }
+}
 
 const manifest = {
   version: KIT_VERSION,

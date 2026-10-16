@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { KIT_PLAIN_PAGE_FILES, kitStylesPlainPages } from "@work-shape/catalyst-app-build";
+import {
+  KIT_PLAIN_PAGE_FILES,
+  kitHasFonts,
+  kitStylesPlainPages
+} from "@work-shape/catalyst-app-build";
 import { z } from "zod";
 
 // The App Kit a Page loads from the instance: one frozen directory per released version under
@@ -22,9 +26,30 @@ const APP_KIT_FILES: readonly string[] = [
   "charts.js"
 ];
 
+const APP_KIT_FONT_FILES: readonly string[] = [
+  "fonts/README.md",
+  "fonts/bungee/LICENSE",
+  "fonts/bungee/bungee-latin-400-normal.woff2",
+  "fonts/fonts.css",
+  "fonts/ibm-plex-mono/LICENSE",
+  "fonts/ibm-plex-mono/ibm-plex-mono-latin-400-normal.woff2",
+  "fonts/ibm-plex-mono/ibm-plex-mono-latin-600-normal.woff2",
+  "fonts/inter/LICENSE",
+  "fonts/inter/inter-latin-400-normal.woff2",
+  "fonts/inter/inter-latin-600-normal.woff2",
+  "fonts/inter/inter-latin-700-normal.woff2",
+  "fonts/lora/LICENSE",
+  "fonts/lora/lora-latin-400-italic.woff2",
+  "fonts/lora/lora-latin-400-normal.woff2",
+  "fonts/lora/lora-latin-700-normal.woff2"
+];
+
 /** The files of one kit version: those of every version, and what a later version added. */
 export function appKitFilesOf(version: string): readonly string[] {
-  return kitStylesPlainPages(version) ? [...APP_KIT_FILES, ...KIT_PLAIN_PAGE_FILES] : APP_KIT_FILES;
+  const files = kitStylesPlainPages(version)
+    ? [...APP_KIT_FILES, ...KIT_PLAIN_PAGE_FILES]
+    : APP_KIT_FILES;
+  return kitHasFonts(version) ? [...files, ...APP_KIT_FONT_FILES] : files;
 }
 
 const APP_KIT_MANIFEST_FILE = "manifest.json";
@@ -46,7 +71,10 @@ const manifestSchema = z.object({
 const CONTENT_TYPES: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8"
+  ".json": "application/json; charset=utf-8",
+  ".woff2": "font/woff2",
+  ".md": "text/plain; charset=utf-8",
+  "": "text/plain; charset=utf-8"
 };
 
 interface AppKitFile {

@@ -8,6 +8,7 @@ export {
   KIT_RUNTIME_PATH,
   RELEASED_KIT_VERSIONS,
   kitFilePath,
+  kitHasFonts,
   kitImportPath,
   kitStylesPlainPages
 } from "./kit";

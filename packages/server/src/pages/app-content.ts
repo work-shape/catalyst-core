@@ -302,6 +302,7 @@ function appContentPolicy(
     document ? `script-src 'self' 'sha256-${document.pageScriptHash}'` : "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
+    "font-src 'self' data:",
     // Only the outside hosts someone reviewed: those of a published revision of an App
     // (`app-outside-hosts.ts`). A Page in a conversation is never published and connects to
     // none, and neither does the instance: the kit reaches it through the frame's parent.

@@ -96,6 +96,62 @@ function Home() {
     });
   });
 
+  it("preserves versioned instance kit URLs in React CSS imports and font sources", async () => {
+    const stylesheet = "/app-runtime/kit/1.5.0/fonts/fonts.css";
+    const font = "/app-runtime/kit/1.5.0/fonts/bungee/bungee-latin-400-normal.woff2";
+    const files = built(
+      await buildPage({
+        files: pageFiles({
+          "app.yaml": reactManifest.replace("1.0.0", "1.5.0"),
+          "src/routes/__root.tsx": rootRoute,
+          "src/routes/index.tsx": `import "../fonts.css";\n${fileRoute("/")}`,
+          "src/fonts.css": `@import url("${stylesheet}");
+@font-face { font-family: "Kit URL Font"; src: url(${font}) format("woff2"); }
+body { font-family: Bungee; }`
+        })
+      })
+    );
+    expect(files.get("app.css")).toContain(stylesheet);
+    expect(files.get("app.css")).toContain(font);
+    expect([...files.keys()].sort()).toEqual(["app.css", "app.js", "index.html"]);
+  });
+
+  it.each([
+    "/fonts/outside.woff2",
+    "/app-runtime/other/1.5.0/fonts.css",
+    "/app-runtime/kit/not-a-version/fonts.css",
+    "/app-runtime/kit/1.5.0/../../outside.css",
+    "/app-runtime/kit/1.5.0/%2e%2e/outside.css",
+    "//example.com/app-runtime/kit/1.5.0/fonts.css",
+    "https://example.com/app-runtime/kit/1.5.0/fonts.css"
+  ])("still refuses the CSS address %s", async (address) => {
+    for (const css of [
+      `@import url("${address}");`,
+      `@font-face { font-family: Outside; src: url("${address}"); }`
+    ]) {
+      const result = await buildPage({
+        files: [
+          ...reactPage({ "index.tsx": `import "../fonts.css";\n${fileRoute("/")}` }),
+          ...pageFiles({ "src/fonts.css": css })
+        ]
+      });
+      expect(errorsOf(result)).toEqual([
+        expect.objectContaining({ file: "src/fonts.css", code: "import_unavailable" })
+      ]);
+    }
+  });
+
+  it("still refuses a direct kit runtime URL imported from JavaScript", async () => {
+    const result = await buildPage({
+      files: reactPage({
+        "index.tsx": `import "/app-runtime/kit/1.5.0/fonts/fonts.css";\n${fileRoute("/")}`
+      })
+    });
+    expect(errorsOf(result)).toEqual([
+      expect.objectContaining({ file: "src/routes/index.tsx", code: "import_unavailable" })
+    ]);
+  });
+
   it("rebuilds stored Page source importing the four legacy kit names", async () => {
     const legacyKit = ["@vivd", "catalyst/app-kit"].join("-");
     const files = built(
@@ -562,6 +618,31 @@ createRoot(document.getElementById("root")!).render(<Button>Go</Button>);
     const html = "<!doctype html>\n<head><title>Old</title></head>\n<p>Hi</p>\n";
 
     expect(built(await buildPage({ files: page(html) })).get("index.html")).toBe(html);
+  });
+
+  it("links the pinned kit font stylesheet and refuses other instance stylesheets", async () => {
+    const stylesheet = "/app-runtime/kit/1.5.0/fonts/fonts.css";
+    const files = pageFiles({
+      "app.yaml": "id: demo-page\nname: Demo Page\nkit: 1.5.0\nentry: index.html\n",
+      "index.html": `<link rel="stylesheet" href="${stylesheet}"><p>Fonts</p>`
+    });
+    expect(built(await buildPage({ files })).get("index.html")).toContain(stylesheet);
+    for (const href of [
+      "/private.css",
+      "/app-runtime/kit/1.4.0/fonts/fonts.css",
+      "https://fonts.googleapis.com/css2?family=Inter"
+    ]) {
+      const refused = await buildPage({
+        files: files.map((file) =>
+          file.path === "index.html"
+            ? { ...file, bytes: new TextEncoder().encode(`<link rel="stylesheet" href="${href}">`) }
+            : file
+        )
+      });
+      expect(errorsOf(refused)).toEqual([
+        expect.objectContaining({ code: "external_resource", element: "link" })
+      ]);
+    }
   });
 
   it("refuses a script and a style sheet from another host", async () => {
