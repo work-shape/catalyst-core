@@ -3,9 +3,8 @@ import {
   readDeploymentFile,
   readRemoteDeployScript,
   extractServiceBlock,
-  installsReleasedPackages,
   modelSecretNames,
-  readPlatformDockerfile,
+  readReleaseDockerfile,
   assertWorkerIsolation,
   reachesDockerSocket,
   resolveCompose,
@@ -13,7 +12,7 @@ import {
 } from "./compose-helpers.mjs";
 
 const composeFiles = ["docker-compose.yml", "docker-compose.prod.yml"];
-const clientDockerfile = await readPlatformDockerfile();
+const clientDockerfile = await readReleaseDockerfile();
 // The worker reads and writes the object stores, so it holds the object store keys. It calls
 // no model and signs nothing.
 const secretsTheWorkerMustNotReceive = [
@@ -26,21 +25,16 @@ const secretsTheWorkerMustNotReceive = [
 
 assert(
   clientDockerfile.includes("FROM api AS workspace-command-worker"),
-  "vivd-client.Dockerfile: workspace-command-worker target is required"
+  "deployment.Dockerfile: workspace-command-worker target is required"
 );
-// The development target lives in the platform Dockerfile; the kit builds release images only.
-assert(
-  installsReleasedPackages() ||
-    clientDockerfile.includes("FROM api-dev AS workspace-command-worker-dev"),
-  "vivd-client.Dockerfile: source-based workspace-command-worker dev target is required"
-);
+
 assert(
   clientDockerfile.includes("FROM docker:29-cli AS docker-cli") &&
     clientDockerfile.includes(
       "COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker"
     ) &&
     clientDockerfile.includes("docker --version"),
-  "vivd-client.Dockerfile: workspace-command-worker target must install and smoke check a modern Docker CLI"
+  "deployment.Dockerfile: workspace-command-worker target must install and smoke check a modern Docker CLI"
 );
 
 for (const composeFile of composeFiles) {
@@ -151,9 +145,8 @@ assert(
   "docker-bake.hcl: release builds must build and tag the workspace command worker image"
 );
 assert(
-  (installsReleasedPackages()
-    ? bakeFile.includes("docker/deployment.Dockerfile") && /target\s*=\s*"runner"/u.test(bakeFile)
-    : bakeFile.includes("capabilities/docker/catalyst-runner-base.Dockerfile")) &&
+  bakeFile.includes("docker/deployment.Dockerfile") &&
+    /target\s*=\s*"runner"/u.test(bakeFile) &&
     bakeFile.includes("${IMAGE_REPOSITORY}-catalyst-runner-base:${RELEASE_TAG}"),
   "docker-bake.hcl: release builds must build and tag the catalyst runner base image"
 );

@@ -5,10 +5,8 @@ Docker Compose, images on GHCR, releases as manifests of image digests. A deploy
 (`deployment.<instance>`) calls the kit instead of carrying its own copies of these scripts.
 
 A deployment installs the kit as a dev dependency at the Catalyst release it runs and calls
-`catalyst-deploy` from its own install. A deployment that still has `deploy/release.refs` uses
-the kit from the platform checkout at its pinned `PLATFORM_REF` instead
-(`../platform/packages/deployment-kit/bin/catalyst-deploy`); the commands below say where the two
-differ.
+`catalyst-deploy` from its own install. Every Catalyst package is pinned to that same exact
+published version in `package.json`; the deployment commits its own `pnpm-lock.yaml`.
 
 ## The one input
 
@@ -23,13 +21,12 @@ EXECUTION_WORKSPACES=1
 
 Derived from `INSTANCE`:
 
-| What                    | Value                                                            |
-| ----------------------- | ---------------------------------------------------------------- |
-| Deployment checkout     | `deployment.<instance>`, next to `platform/` and `capabilities/` |
-| App directory on the VM | `/opt/vivd-catalyst/<instance>`                                  |
-| Env file on the VM      | `/etc/vivd-catalyst/<instance>/app.env`                          |
-| Database backups        | `<instance>-<database>-<timestamp>[-<label>].tar`                |
-| Backup units            | `vivd-catalyst-<instance>-backup.service` and `.timer`           |
+| What                    | Value                                                  |
+| ----------------------- | ------------------------------------------------------ |
+| App directory on the VM | `/opt/vivd-catalyst/<instance>`                        |
+| Env file on the VM      | `/etc/vivd-catalyst/<instance>/app.env`                |
+| Database backups        | `<instance>-<database>-<timestamp>[-<label>].tar`      |
+| Backup units            | `vivd-catalyst-<instance>-backup.service` and `.timer` |
 
 `INSTANCE` is lowercase letters, digits and dashes, and may start with a digit (`123-example`): a
 directory, a Compose project, a container, a dump and a unit all take such a name. The kit
@@ -48,11 +45,9 @@ start `workspace-command-worker`.
 | `check [--static]`                               | The release pin (below) and the policy checks, then the release gate on the installed packages. `--static` stops after the first two.   |
 | `bump VERSION`                                   | Pins every catalyst package at `VERSION`, rewrites `pnpm-lock.yaml` and prints the release notes in between.                            |
 | `pack-local [--workspace DIR] [--skip-build]`    | Builds the release images from the packages of the local platform and capabilities checkouts.                                           |
-| `update-refs [--latest \| --check \| ...]`       | `deploy/release.refs` only: pins it and refreshes `deploy/workspace/pnpm-lock.yaml`.                                                    |
-| `prepare-workspace`                              | `deploy/release.refs` only: prepares the parent directory as the image build workspace.                                                 |
-| `publish staging`                                | Runs `check`, then tags `staging-<date>-<n>` on `main`.                                                                                 |
+| `publish staging`                                | Runs `check --static`, then tags `staging-<date>-<n>` on `main`.                                                                        |
 | `publish production`                             | Tags `v<date>-<n>` on the commit of a staging release and starts its deploy. Refuses a release without a successful staging deployment. |
-| `manifest write\|check\|fetch\|staging-deployed` | Writes, validates and downloads release manifests (schema 1).                                                                           |
+| `manifest write\|check\|fetch\|staging-deployed` | Writes, validates and downloads release manifests (writes schema 2; reads schemas 1 and 2).                                             |
 | `deploy --host HOST --manifest FILE`             | Deploys the images of a manifest by digest.                                                                                             |
 
 A deploy sends the Compose file, the Caddyfile and the files under `host/` to the VM, then runs
@@ -132,7 +127,11 @@ runs `check --static` locally and leaves the gate to the deploy workflow.
 nothing when one is missing (the restricted packages need a read token in `~/.npmrc`). Then it
 sets them, runs `pnpm install --lockfile-only --ignore-workspace` and prints the GitHub release
 notes of `work-shape/catalyst-core` and `work-shape/catalyst-capabilities` after the previous
-version up to `VERSION`, or their addresses where `gh` cannot read them.
+version up to `VERSION`, or their addresses where `gh` cannot read them. Run it from the
+deployment repo, for example `pnpm exec catalyst-deploy bump 0.8.0`, review the printed release
+notes, and commit `package.json` and `pnpm-lock.yaml` together. CI installs that lockfile frozen.
+To return to an earlier package release, bump to its exact version in a new commit; rolling
+back an operated deployment uses the earlier tag's digest manifest.
 
 The release manifest is schema 2: `catalystVersion` instead of the platform and capabilities
 commits. `manifest check` accepts schema 1 too, so an earlier release can still be deployed, and

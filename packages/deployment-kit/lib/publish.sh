@@ -177,13 +177,9 @@ publish_staging() {
 
   if [[ "$skip_local_checks" != "1" ]]; then
     echo "Running local release checks before publishing..."
-    if [[ -f "deploy/release.refs" ]]; then
-      CI="${CI:-true}" "$kit_dir/bin/catalyst-deploy" check
-    else
-      # The deploy workflow runs the full gate on a standalone install; locally the catalyst
-      # packages may link the workspace source, so only the checks that read files run here.
-      "$kit_dir/bin/catalyst-deploy" check --static
-    fi
+    # The deploy workflow runs the full gate on a standalone install; locally the catalyst
+    # packages may link workspace source, so only checks that read files run here.
+    "$kit_dir/bin/catalyst-deploy" check --static
   fi
 
   if [[ "$local_head" != "$remote_head" ]]; then

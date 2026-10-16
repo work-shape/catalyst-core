@@ -4,16 +4,15 @@ import {
   readRemoteDeployScript,
   extractDockerStage,
   extractServiceBlock,
-  installsReleasedPackages,
   modelSecretNames,
-  readPlatformDockerfile,
+  readReleaseDockerfile,
   assertWorkerIsolation,
   resolveCompose,
   serviceNames
 } from "./compose-helpers.mjs";
 
 const composeFiles = ["docker-compose.yml", "docker-compose.prod.yml"];
-const clientDockerfile = await readPlatformDockerfile();
+const clientDockerfile = await readReleaseDockerfile();
 // The worker reads sources from the object stores and writes previews there, so it holds the
 // object store keys. It calls no model, signs nothing and does not call the document worker.
 const secretsTheWorkerMustNotReceive = [
@@ -47,76 +46,65 @@ const artifactPreviewRuntimeTarget = extractDockerStage(
   "artifact-preview-runtime"
 );
 const artifactPreviewWorkerTarget = extractDockerStage(clientDockerfile, "artifact-preview-worker");
-const artifactPreviewWorkerDevTarget = extractDockerStage(
-  clientDockerfile,
-  "artifact-preview-worker-dev"
-);
+
 const artifactPreviewTargets = `${workspaceArtifactRuntimeTarget}\n${artifactPreviewRuntimeTarget}\n${artifactPreviewWorkerTarget}`;
 
-assert(apiTarget, "vivd-client.Dockerfile: api target is required");
+assert(apiTarget, "deployment.Dockerfile: api target is required");
 assert(
   workspaceCommandWorkerTarget,
-  "vivd-client.Dockerfile: workspace-command-worker target is required"
+  "deployment.Dockerfile: workspace-command-worker target is required"
 );
 assert(
   workspaceArtifactRuntimeTarget,
-  "vivd-client.Dockerfile: workspace-artifact-runtime target is required"
+  "deployment.Dockerfile: workspace-artifact-runtime target is required"
 );
 assert(
   artifactPreviewRuntimeTarget,
-  "vivd-client.Dockerfile: artifact-preview-runtime target is required"
+  "deployment.Dockerfile: artifact-preview-runtime target is required"
 );
 assert(
   !artifactPreviewRuntimeTarget.includes("FROM api AS artifact-preview-runtime"),
-  "vivd-client.Dockerfile: artifact-preview-runtime target must not inherit from the API target"
+  "deployment.Dockerfile: artifact-preview-runtime target must not inherit from the API target"
 );
 assert(
   artifactPreviewWorkerTarget.includes("FROM artifact-preview-runtime AS artifact-preview-worker"),
-  "vivd-client.Dockerfile: artifact-preview-worker target must use the dedicated preview runtime stage"
+  "deployment.Dockerfile: artifact-preview-worker target must use the dedicated preview runtime stage"
 );
 assert(
   !artifactPreviewWorkerTarget.includes("FROM api AS artifact-preview-worker"),
-  "vivd-client.Dockerfile: artifact-preview-worker target must not inherit from the API target"
+  "deployment.Dockerfile: artifact-preview-worker target must not inherit from the API target"
 );
 assert(
   artifactPreviewWorkerTarget.includes("ARTIFACT_PREVIEW_WORKER_ENTRY"),
-  "vivd-client.Dockerfile: artifact-preview-worker target must run a dedicated worker entrypoint"
+  "deployment.Dockerfile: artifact-preview-worker target must run a dedicated worker entrypoint"
 );
-// The development target lives in the platform Dockerfile; the kit builds release images only.
-assert(
-  installsReleasedPackages() ||
-    (artifactPreviewWorkerDevTarget.includes(
-      "FROM artifact-preview-runtime AS artifact-preview-worker-dev"
-    ) &&
-      artifactPreviewWorkerDevTarget.includes("COPY --from=deps /app ./")),
-  "vivd-client.Dockerfile: local preview worker must reuse the native runtime without a server build"
-);
+
 for (const packageName of nativePackages) {
   assert(
     artifactPreviewTargets.includes(packageName),
-    `vivd-client.Dockerfile: preview runtime targets must install ${packageName}`
+    `deployment.Dockerfile: preview runtime targets must install ${packageName}`
   );
   assert(
     !apiTarget.includes(packageName),
-    `vivd-client.Dockerfile: api target must not install ${packageName}`
+    `deployment.Dockerfile: api target must not install ${packageName}`
   );
   assert(
     !workspaceCommandWorkerTarget.includes(packageName),
-    `vivd-client.Dockerfile: workspace-command-worker target must not install ${packageName}`
+    `deployment.Dockerfile: workspace-command-worker target must not install ${packageName}`
   );
 }
 for (const smokeCheck of nativeSmokeChecks) {
   assert(
     artifactPreviewTargets.includes(smokeCheck),
-    `vivd-client.Dockerfile: preview runtime targets must smoke check ${smokeCheck}`
+    `deployment.Dockerfile: preview runtime targets must smoke check ${smokeCheck}`
   );
   assert(
     !apiTarget.includes(smokeCheck),
-    `vivd-client.Dockerfile: api target must not run ${smokeCheck}`
+    `deployment.Dockerfile: api target must not run ${smokeCheck}`
   );
   assert(
     !workspaceCommandWorkerTarget.includes(smokeCheck),
-    `vivd-client.Dockerfile: workspace-command-worker target must not run ${smokeCheck}`
+    `deployment.Dockerfile: workspace-command-worker target must not run ${smokeCheck}`
   );
 }
 

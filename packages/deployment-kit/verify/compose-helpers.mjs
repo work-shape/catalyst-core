@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, posix, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 /** The secret names a model adapter reads when its config entry names none. */
 const DEFAULT_MODEL_SECRET_NAMES = [
@@ -34,22 +33,9 @@ function deploymentPath(path) {
   return resolve(process.env.DEPLOYMENT_ROOT ?? process.cwd(), path);
 }
 
-// A deployment without deploy/release.refs installs released packages and builds its images
-// from the kit's docker/deployment.Dockerfile instead of the platform checkout's Dockerfile.
-export function installsReleasedPackages() {
-  return !existsSync(deploymentPath("deploy/release.refs"));
-}
-
-// The Dockerfile the deployment's release images are built from.
-export async function readPlatformDockerfile() {
-  if (installsReleasedPackages()) {
-    return readFile(new URL("../docker/deployment.Dockerfile", import.meta.url), "utf8");
-  }
-  const platformDir = process.env.PLATFORM_DIR;
-  const platformRoot = platformDir
-    ? pathToFileURL(`${resolve(platformDir)}/`)
-    : new URL("../../../", import.meta.url);
-  return readFile(new URL("docker/vivd-client.Dockerfile", platformRoot), "utf8");
+// The Dockerfile shipped by the kit builds every deployment's release images.
+export function readReleaseDockerfile() {
+  return readFile(new URL("../docker/deployment.Dockerfile", import.meta.url), "utf8");
 }
 
 export function readDeploymentFile(path) {

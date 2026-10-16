@@ -36,159 +36,6 @@ expect_failure() {
   fi
 }
 
-test_prepare_build_workspace() {
-  local root="$scratch/prepare-workspace"
-  mkdir -p \
-    "$root/platform" \
-    "$root/capabilities" \
-    "$root/deployment.fixture/deploy/workspace"
-  printf '{"name":"fixture"}\n' > "$root/deployment.fixture/package.json"
-  printf "lockfileVersion: '9.0'\n" \
-    > "$root/deployment.fixture/deploy/workspace/pnpm-lock.yaml"
-  printf 'packages:\n  - "packages/*"\n\n# one zod\noverrides:\n  zod: 4.4.3\n  left-pad: 1.3.0\nallowBuilds:\n  esbuild: true\n' \
-    > "$root/platform/pnpm-workspace.yaml"
-
-  "$kit_dir/lib/prepare-build-workspace.sh" \
-    --workspace-root "$root" \
-    --deployment-root deployment.fixture
-
-  assert_contains "$root/pnpm-workspace.yaml" '  - "deployment.fixture"'
-  # A frozen install refuses a root whose overrides differ from the lockfile's, and the
-  # lockfile was resolved with platform's.
-  [[ "$(sed -n '/^overrides:/,$p' "$root/pnpm-workspace.yaml")" \
-    == $'overrides:\n  zod: 4.4.3\n  left-pad: 1.3.0' ]] \
-    || fail "prepare-build-workspace did not write platform's overrides into the root manifest"
-  cmp -s "$root/pnpm-lock.yaml" \
-    "$root/deployment.fixture/deploy/workspace/pnpm-lock.yaml" \
-    || fail "prepare-build-workspace did not copy the committed lockfile"
-
-  printf "lockfileVersion: 'different'\n" > "$root/pnpm-lock.yaml"
-  expect_failure "$kit_dir/lib/prepare-build-workspace.sh" \
-    --workspace-root "$root" \
-    --deployment-root "$root/deployment.fixture"
-  assert_contains "$scratch/failure-output" "refusing to overwrite"
-
-  mkdir -p "$scratch/outside-deployment"
-  expect_failure "$kit_dir/lib/prepare-build-workspace.sh" \
-    --workspace-root "$root" \
-    --deployment-root "$scratch/outside-deployment"
-  assert_contains "$scratch/failure-output" "must be inside workspace root"
-}
-
-init_fixture_repo() {
-  local directory="$1" name="$2"
-  mkdir -p "$directory"
-  printf '{"name":"%s","version":"1.0.0"}\n' "$name" > "$directory/package.json"
-  git -C "$directory" init -q
-  git -C "$directory" add package.json
-  git -C "$directory" -c user.name=Fixture -c user.email=fixture@example.test \
-    commit -qm "fixture"
-}
-
-test_update_release() {
-  local root="$scratch/release-workspace"
-  local deployment="$root/deployment.fixture"
-  local fake_bin="$root/fake-bin"
-  init_fixture_repo "$root/platform" platform-fixture
-  printf 'packages:\n  - "packages/*"\noverrides:\n  zod: 4.4.3\n' \
-    > "$root/platform/pnpm-workspace.yaml"
-  git -C "$root/platform" add pnpm-workspace.yaml
-  git -C "$root/platform" -c user.name=Fixture -c user.email=fixture@example.test \
-    commit -qm "overrides"
-  init_fixture_repo "$root/capabilities" capabilities-fixture
-  mkdir -p "$deployment/deploy/scripts" "$deployment/deploy/workspace" "$fake_bin"
-  printf '{"name":"deployment-fixture","version":"1.0.0"}\n' \
-    > "$deployment/package.json"
-  printf 'PLATFORM_REF=%s\nCAPABILITIES_REF=%s\n' \
-    "$(git -C "$root/platform" rev-parse HEAD)" \
-    "$(git -C "$root/capabilities" rev-parse HEAD)" \
-    > "$deployment/deploy/release.refs"
-
-  cat > "$fake_bin/corepack" <<'SH'
-#!/usr/bin/env bash
-set -euo pipefail
-[[ "${1:-}" == "pnpm" ]] && shift
-[[ "${1:-}" == "install" ]] || exit 2
-[[ " $* " == *" --link-workspace-packages "* ]] || exit 3
-deployment_package="$(find . -mindepth 2 -maxdepth 2 -path './deployment.*/package.json' -print -quit)"
-checksum="$(cksum platform/package.json capabilities/package.json "$deployment_package" \
-  | cksum | awk '{print $1}')"
-printf "lockfileVersion: '9.0'\nfixtureChecksum: '%s'\n" "$checksum" > pnpm-lock.yaml
-sed -n '/^overrides:/,$p' pnpm-workspace.yaml >> pnpm-lock.yaml
-# SheetJS without its integrity, as pnpm writes it. With foreign-tarball beside this script, also
-# a URL tarball the kit knows no integrity for.
-xlsx=https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
-printf 'packages:\n  xlsx@%s:\n    resolution: {tarball: %s}\n' "$xlsx" "$xlsx" >> pnpm-lock.yaml
-if [[ -f "$(dirname "$0")/foreign-tarball" ]]; then
-  printf '  other@https://cdn.example.test/other.tgz:\n    resolution: {tarball: https://cdn.example.test/other.tgz}\n' \
-    >> pnpm-lock.yaml
-fi
-SH
-  chmod +x "$fake_bin/corepack"
-
-  PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
-    --workspace-root "$root" \
-    --deployment-root "$deployment"
-  [[ -s "$deployment/deploy/workspace/pnpm-lock.yaml" ]] \
-    || fail "update-release did not create the committed lockfile"
-  # The lockfile is resolved under the overrides of the pinned platform tree.
-  assert_contains "$deployment/deploy/workspace/pnpm-lock.yaml" '  zod: 4.4.3'
-  # The kit puts back the SheetJS integrity pnpm dropped.
-  assert_contains "$deployment/deploy/workspace/pnpm-lock.yaml" \
-    "resolution: {integrity: $sheetjs_integrity, tarball: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz}"
-  assert_contains "$deployment/deploy/release.refs" \
-    "PLATFORM_REF=$(git -C "$root/platform" rev-parse HEAD)"
-
-  PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
-    --workspace-root "$root" \
-    --deployment-root "$deployment" \
-    --check
-
-  printf '{"name":"platform-dirty-tree-must-be-ignored"}\n' \
-    > "$root/platform/package.json"
-  PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
-    --workspace-root "$root" \
-    --deployment-root "$deployment" \
-    --check
-
-  printf '{"name":"deployment-fixture","version":"2.0.0"}\n' \
-    > "$deployment/package.json"
-  expect_failure env PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
-    --workspace-root "$root" \
-    --deployment-root "$deployment" \
-    --check
-  assert_contains "$scratch/failure-output" "committed lockfile is out of date"
-
-  # A regeneration that leaves a URL tarball without an integrity is refused before the
-  # comparison and before anything is written.
-  printf '{"name":"deployment-fixture","version":"1.0.0"}\n' > "$deployment/package.json"
-  cp "$deployment/deploy/workspace/pnpm-lock.yaml" "$scratch/lock-before"
-  touch "$fake_bin/foreign-tarball"
-  local check
-  for check in --check ""; do
-    expect_failure env PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
-      --workspace-root "$root" \
-      --deployment-root "$deployment" \
-      ${check:+"$check"}
-    assert_contains "$scratch/failure-output" \
-      "https://cdn.example.test/other.tgz has no integrity in the lockfile"
-    assert_contains "$scratch/failure-output" "does not authenticate every URL tarball"
-  done
-  cmp -s "$scratch/lock-before" "$deployment/deploy/workspace/pnpm-lock.yaml" \
-    || fail "update-release wrote a lockfile without a tarball integrity"
-  rm "$fake_bin/foreign-tarball"
-
-  printf 'PLATFORM_REF=short\nCAPABILITIES_REF=short\n' \
-    > "$deployment/deploy/release.refs"
-  printf '{}\n' > "$root/package.json"
-  printf 'packages: []\n' > "$root/pnpm-workspace.yaml"
-  cp "$deployment/deploy/workspace/pnpm-lock.yaml" "$root/pnpm-lock.yaml"
-  expect_failure "$kit_dir/lib/check-release.sh" \
-    --workspace-root "$root" \
-    --deployment-root "$deployment"
-  assert_contains "$scratch/failure-output" "release refs must be full commit SHAs"
-}
-
 # bump and every install drop the SheetJS integrity; bump puts it back and check refuses a
 # lockfile an install left without it.
 test_bump_lock_integrity() {
@@ -342,7 +189,7 @@ test_compose_helpers() {
   KIT_DIR="$kit_dir" node --input-type=module <<'NODE'
 import { pathToFileURL } from "node:url";
 const helpers = await import(pathToFileURL(`${process.env.KIT_DIR}/verify/compose-helpers.mjs`));
-helpers.assert((await helpers.readPlatformDockerfile()).includes("FROM "), "platform Dockerfile");
+helpers.assert((await helpers.readReleaseDockerfile()).includes("FROM "), "platform Dockerfile");
 const dockerfile = "FROM base AS api\nRUN api\nFROM base AS ui\nRUN ui\n";
 helpers.assert(helpers.extractDockerStage(dockerfile, "api").includes("RUN api"), "stage");
 const compose = "services:\n  api:\n    image: api\n  ui:\n    image: ui\n";
@@ -356,11 +203,8 @@ NODE
 
 # Consumers call the packaged entry points directly after freeze C.
 test_kit_paths() {
-  local script
-  for script in check-release.sh update-release.sh prepare-build-workspace.sh; do
-    bash "$kit_dir/lib/$script" --help > "$scratch/kit-help"
-    assert_contains "$scratch/kit-help" "$script"
-  done
+  bash "$kit_dir/lib/check-release.sh" --help > "$scratch/kit-help"
+  assert_contains "$scratch/kit-help" "check-release.sh"
   node "$kit_dir/dev/compose-watch-preflight.mjs" --help > "$scratch/kit-help"
   assert_contains "$scratch/kit-help" "compose-watch-preflight.mjs"
   expect_failure node "$kit_dir/dev/ensure-compose-dev-images.mjs" --unknown-option
@@ -402,10 +246,9 @@ IMAGE_REPOSITORY=$fixture_repository
 APP_PACKAGE=@example/fixture
 EXECUTION_WORKSPACES=1
 ENV
-  printf 'PLATFORM_REF=%040d\nCAPABILITIES_REF=%040d\n' 1 2 > "$deployment/deploy/release.refs"
   printf 'services: {}\n' > "$deployment/docker-compose.prod.yml"
   printf '{$PUBLIC_HOSTNAMES} {\n}\n' > "$deployment/deploy/Caddyfile"
-  printf '{"name":"@example/fixture"}\n' > "$deployment/package.json"
+  printf '{"name":"@example/fixture","dependencies":{"@work-shape/catalyst-core":"0.8.0"}}\n' > "$deployment/package.json"
   printf 'name: Deploy\n' > "$deployment/.github/workflows/deploy.yml"
   git init -q --bare "$root/origin.git"
   git -C "$deployment" init -q -b main
@@ -426,9 +269,7 @@ test_deployment_env() {
     # shellcheck source=../lib/deployment-env.sh
     source "$kit_dir/lib/deployment-env.sh"
     load_deployment_env
-    require_workspace_layout
     [[ "$DEPLOYMENT_ROOT" == "$deployment" ]] || fail "deployment root was not found from a subdirectory"
-    [[ "$WORKSPACE_ROOT" == "$root" ]] || fail "workspace root is not the parent directory"
     [[ "$REMOTE_APP_DIR" == "/opt/vivd-catalyst/fixture" ]] || fail "unexpected app dir"
     [[ "$REMOTE_ENV_FILE" == "/etc/vivd-catalyst/fixture/app.env" ]] || fail "unexpected env file"
   )
@@ -436,20 +277,17 @@ test_deployment_env() {
   local env_file="$deployment/deploy/deployment.env" original
   original="$(cat "$env_file")"
   printf '%s\nSERVICES=api\n' "$original" > "$env_file"
-  expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
+  expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" check --static
   assert_contains "$scratch/failure-output" "unknown key SERVICES"
   local refused
   for refused in Fixture/.. -fixture fixture_one; do
     printf '%s\n' "${original/INSTANCE=fixture/INSTANCE=$refused}" > "$env_file"
-    expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
+    expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" check --static
     assert_contains "$scratch/failure-output" "INSTANCE must be"
   done
   printf '%s\n' "${original/EXECUTION_WORKSPACES=1/EXECUTION_WORKSPACES=yes}" > "$env_file"
-  expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
+  expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" check --static
   assert_contains "$scratch/failure-output" "EXECUTION_WORKSPACES must be 0 or 1"
-  printf '%s\n' "${original/INSTANCE=fixture/INSTANCE=other}" > "$env_file"
-  expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
-  assert_contains "$scratch/failure-output" "must be named deployment.other"
 
   expect_failure env -u DEPLOYMENT_ROOT bash -c 'cd / && "$0" deploy --host h --manifest m' \
     "$catalyst_deploy"
@@ -466,16 +304,21 @@ test_release_manifest() {
   (cd "$deployment" && "$catalyst_deploy" manifest write --release staging-2026.10.06-1 \
     --images "$(jq -c '{api, ui}' <<< "$images")" \
     --images "$(jq -c 'del(.api, .ui)' <<< "$images")") > "$manifest"
-  [[ "$(jq -r '.schema' "$manifest")" == "1" ]] || fail "manifest schema is not 1"
+  [[ "$(jq -r '.schema' "$manifest")" == "2" ]] || fail "manifest schema is not 2"
   [[ "$(jq -r '.commits.deployment' "$manifest")" == "$commit" ]] \
     || fail "manifest does not record the deployment commit"
-  [[ "$(jq -r '.commits.platform' "$manifest")" == "$(printf '%040d' 1)" ]] \
-    || fail "manifest does not record the platform ref"
+  [[ "$(jq -r '.catalystVersion' "$manifest")" == "0.8.0" ]] \
+    || fail "manifest does not record the published version"
+  [[ "$(jq -c '.commits | keys' "$manifest")" == '["deployment"]' ]] \
+    || fail "manifest includes source commits"
+  # Earlier immutable manifests remain readable for rollback.
+  write_fixture_manifest "$scratch/legacy-manifest.json" staging-1 "$commit"
+  "$catalyst_deploy" manifest check "$scratch/legacy-manifest.json" --commit "$commit"
   "$catalyst_deploy" manifest check "$manifest" --commit "$commit"
   expect_failure "$catalyst_deploy" manifest check "$manifest" --commit "$(printf '%040d' 9)"
   assert_contains "$scratch/failure-output" "another deployment commit"
 
-  # One image short, a tag instead of a digest, a production tag as release, schema 2.
+  # One image short, a tag instead of a digest, a production tag as release, an unknown schema.
   expect_failure bash -c 'cd "$1" && "$2" manifest write --release staging-1 --images "$3"' _ \
     "$deployment" "$catalyst_deploy" "$(jq -c 'del(.runner)' <<< "$images")"
   local broken="$scratch/manifest-fixture/broken.json" filter
@@ -483,7 +326,7 @@ test_release_manifest() {
     '.images.api = "ghcr.io/example/api:latest"' \
     '.release = "v2026.10.06-1"' \
     '.images.extra = .images.api' \
-    '.schema = 2'
+    '.schema = 3'
   do
     jq "$filter" "$manifest" > "$broken"
     expect_failure "$catalyst_deploy" manifest check "$broken"
@@ -971,7 +814,7 @@ SH
   printf '{"name":"@example/other"}\n' > "$deployment/package.json"
   expect_failure "${policy[@]}"
   assert_contains "$scratch/failure-output" "APP_PACKAGE in deploy/deployment.env is not the name"
-  printf '{"name":"@example/fixture"}\n' > "$deployment/package.json"
+  printf '{"name":"@example/fixture","dependencies":{"@work-shape/catalyst-core":"0.8.0"}}\n' > "$deployment/package.json"
 
   printf 'services:\n  api:\n%s\n  ui:\n%s\n' "$pinned" "$unpinned" \
     > "$deployment/docker-compose.prod.yml"
@@ -1130,13 +973,6 @@ test_digit_leading_instance() {
     --tag staging-2026.10.06-1 > "$scratch/digit-publish"
   assert_contains "$scratch/digit-publish" "Published staging tag: staging-2026.10.06-1"
 
-  # prepare-workspace, update-refs and check find the checkout by the instance name.
-  mkdir -p "$root/platform" "$root/capabilities" "$deployment/deploy/workspace"
-  printf "lockfileVersion: '9.0'\n" > "$deployment/deploy/workspace/pnpm-lock.yaml"
-  DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
-  assert_contains "$root/pnpm-workspace.yaml" '  - "deployment.123-example"'
-  DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" update-refs --help > "$scratch/digit-help"
-  assert_contains "$scratch/digit-help" "update-release.sh --deployment-root DIR"
   expect_failure env "DEPLOYMENT_ROOT=$deployment" "$catalyst_deploy" check
   assert_contains "$scratch/failure-output" "must require a successful staging deployment"
 }
@@ -1157,13 +993,6 @@ test_packed_layout() {
   cmp -s "$capture/ssh-2.command" "$scratch/deploy-capture/ssh-2.command" \
     || fail "the packed kit sends another remote command"
   local deployment="$capture/workspace/deployment.fixture"
-  mkdir -p "$capture/workspace/platform" "$capture/workspace/capabilities" "$deployment/deploy/workspace"
-  printf "lockfileVersion: '9.0'\n" > "$deployment/deploy/workspace/pnpm-lock.yaml"
-  DEPLOYMENT_ROOT="$deployment" "$scratch/packed-bin/catalyst-deploy" prepare-workspace
-  assert_contains "$capture/workspace/pnpm-workspace.yaml" '  - "deployment.fixture"'
-  DEPLOYMENT_ROOT="$deployment" "$scratch/packed-bin/catalyst-deploy" update-refs --help \
-    > "$scratch/packed-help"
-  assert_contains "$scratch/packed-help" "update-release.sh --deployment-root DIR"
   expect_failure env "DEPLOYMENT_ROOT=$deployment" "$scratch/packed-bin/catalyst-deploy" publish
   expect_failure env "DEPLOYMENT_ROOT=$deployment" "$scratch/packed-bin/catalyst-deploy" check
   assert_contains "$scratch/failure-output" "must require a successful staging deployment"
@@ -1186,8 +1015,6 @@ test_shell_files() {
 }
 
 test_shell_files
-test_prepare_build_workspace
-test_update_release
 test_bump_lock_integrity
 test_resolve_entry_points
 test_compose_watch_preflight

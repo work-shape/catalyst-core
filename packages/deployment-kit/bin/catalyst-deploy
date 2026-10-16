@@ -13,17 +13,11 @@ Commands:
                      the catalyst packages are one exact version, the policy checks,
                      then typecheck, build and the Compose checks on its installed
                      packages. --static runs only the checks that read files.
-                     A deployment with deploy/release.refs: the stitched workspace gate.
   bump VERSION       Pin every catalyst package at VERSION, rewrite pnpm-lock.yaml and
                      print the release notes in between. Refuses a version not on npm.
   pack-local         Build the release images from the packages of the local platform
                      and capabilities checkouts instead of the registry. Takes
                      --workspace DIR, --skip-build, --keep and bake targets.
-  update-refs        Deployments with deploy/release.refs: pin platform and
-                     capabilities commits and refresh the committed build lockfile.
-                     Takes --platform-ref REF, --capabilities-ref REF, --latest or --check.
-  prepare-workspace  Deployments with deploy/release.refs: prepare the parent
-                     directory as the build workspace.
   publish            publish staging|production: tag a release.
   manifest           manifest write|check|fetch|staging-deployed: release manifests.
   deploy             deploy --host HOST --manifest FILE: deploy a release by digest.
@@ -46,63 +40,39 @@ command="${1:-}"
 [[ $# -gt 0 ]] && shift
 
 case "$command" in
-  check | update-refs | prepare-workspace | bump | pack-local)
+  check | bump | pack-local)
     # shellcheck source=../lib/deployment-env.sh
     source "$kit_dir/lib/deployment-env.sh"
     load_deployment_env
-    if [[ ! -f "$DEPLOYMENT_ROOT/deploy/release.refs" ]]; then
-      # The deployment installs released packages; package.json pins the version.
-      case "$command" in
-        check)
-          static_only=0
-          if [[ "${1:-}" == "--static" ]]; then
-            static_only=1
-            shift
-          fi
-          node "$kit_dir/lib/catalyst-versions.mjs" check "$DEPLOYMENT_ROOT"
-          if [[ -f "$DEPLOYMENT_ROOT/pnpm-lock.yaml" ]]; then
-            node "$kit_dir/lib/lock-integrity.mjs" check "$DEPLOYMENT_ROOT/pnpm-lock.yaml" \
-              || deployment_env_fail "an install dropped a tarball integrity from pnpm-lock.yaml; catalyst-deploy bump to the pinned version puts it back"
-          fi
-          DEPLOYMENT_ROOT="$DEPLOYMENT_ROOT" bash "$kit_dir/lib/check-deployment-policy.sh"
-          [[ "$static_only" == 0 ]] || exit 0
-          post_check=()
-          if [[ -x "$DEPLOYMENT_ROOT/deploy/scripts/check-release-policy.sh" ]]; then
-            post_check=(--post-check "$DEPLOYMENT_ROOT/deploy/scripts/check-release-policy.sh")
-          fi
-          exec bash "$kit_dir/lib/check-release.sh" --packages \
-            --deployment-root "$DEPLOYMENT_ROOT" ${post_check[@]+"${post_check[@]}"} "$@"
-          ;;
-        bump) exec node "$kit_dir/lib/catalyst-versions.mjs" bump "$DEPLOYMENT_ROOT" "$@" ;;
-        pack-local)
-          # The bake file reads these. The packages come from the tarballs, so the build needs
-          # no registry token: NPMRC empty gives the bake file no npmrc secret.
-          export CATALYST_KIT="$kit_dir" NPMRC="" PUSH=false RELEASE_TAG="${RELEASE_TAG:-pack-local}"
-          exec node "$kit_dir/lib/pack-local.mjs" --deployment-root "$DEPLOYMENT_ROOT" \
-            --release-tag "$RELEASE_TAG" "$@"
-          ;;
-        *) deployment_env_fail "$command applies to deploy/release.refs; this deployment pins a release in package.json (catalyst-deploy bump)" ;;
-      esac
-    fi
-    case "$command" in
-      bump | pack-local)
-        deployment_env_fail "$command needs a deployment that pins a release in package.json, not deploy/release.refs"
-        ;;
-    esac
-    require_workspace_layout
-    roots=(--workspace-root "$WORKSPACE_ROOT" --deployment-root "$DEPLOYMENT_ROOT")
     case "$command" in
       check)
-        # The policy checks read source files only, so they run first and fail fast.
+        static_only=0
+        if [[ "${1:-}" == "--static" ]]; then
+          static_only=1
+          shift
+        fi
+        node "$kit_dir/lib/catalyst-versions.mjs" check "$DEPLOYMENT_ROOT"
+        if [[ -f "$DEPLOYMENT_ROOT/pnpm-lock.yaml" ]]; then
+          node "$kit_dir/lib/lock-integrity.mjs" check "$DEPLOYMENT_ROOT/pnpm-lock.yaml" \
+            || deployment_env_fail "an install dropped a tarball integrity from pnpm-lock.yaml; catalyst-deploy bump to the pinned version puts it back"
+        fi
         DEPLOYMENT_ROOT="$DEPLOYMENT_ROOT" bash "$kit_dir/lib/check-deployment-policy.sh"
+        [[ "$static_only" == 0 ]] || exit 0
         post_check=()
         if [[ -x "$DEPLOYMENT_ROOT/deploy/scripts/check-release-policy.sh" ]]; then
           post_check=(--post-check "$DEPLOYMENT_ROOT/deploy/scripts/check-release-policy.sh")
         fi
-        exec bash "$kit_dir/lib/check-release.sh" "${roots[@]}" ${post_check[@]+"${post_check[@]}"} "$@"
+        exec bash "$kit_dir/lib/check-release.sh" \
+          --deployment-root "$DEPLOYMENT_ROOT" ${post_check[@]+"${post_check[@]}"} "$@"
         ;;
-      update-refs) exec bash "$kit_dir/lib/update-release.sh" "${roots[@]}" "$@" ;;
-      prepare-workspace) exec bash "$kit_dir/lib/prepare-build-workspace.sh" "${roots[@]}" "$@" ;;
+      bump) exec node "$kit_dir/lib/catalyst-versions.mjs" bump "$DEPLOYMENT_ROOT" "$@" ;;
+      pack-local)
+        # The bake file reads these. The packages come from the tarballs, so the build needs
+        # no registry token: NPMRC empty gives the bake file no npmrc secret.
+        export CATALYST_KIT="$kit_dir" NPMRC="" PUSH=false RELEASE_TAG="${RELEASE_TAG:-pack-local}"
+        exec node "$kit_dir/lib/pack-local.mjs" --deployment-root "$DEPLOYMENT_ROOT" \
+          --release-tag "$RELEASE_TAG" "$@"
+        ;;
     esac
     ;;
   publish) exec bash "$kit_dir/lib/publish.sh" "$@" ;;

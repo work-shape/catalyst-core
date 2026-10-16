@@ -103,7 +103,7 @@ describe("the version pin", () => {
   });
 });
 
-// A deployment that installs released packages: no deploy/release.refs, a Git commit.
+// A deployment that installs released packages, with a Git commit.
 function packageDeployment(name, manifest) {
   const root = join(scratch, name, "deployment.fixture");
   mkdirSync(join(root, "deploy"), { recursive: true });
@@ -230,16 +230,7 @@ describe("the release manifest of a deployment that installs released packages",
 });
 
 describe("the commands of a deployment that installs released packages", () => {
-  test("keep update-refs and prepare-workspace to deployments with release refs", () => {
-    const { root } = packageDeployment("commands", pinned("0.8.0"));
-    for (const command of ["update-refs", "prepare-workspace"]) {
-      const result = deploy(root, [command]);
-      assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /pins a release in package\.json \(catalyst-deploy bump\)/u);
-    }
-  });
-
-  test("check refuses an install that links local source", () => {
+  test("the release gate needs only the deployment root and refuses linked source", () => {
     const { root } = packageDeployment("linked", pinned("0.8.0"));
     for (const name of Object.keys({
       ...pinned("0.8.0").dependencies,
@@ -250,9 +241,10 @@ describe("the commands of a deployment that installs released packages", () => {
       mkdirSync(dirname(join(root, "node_modules", name)), { recursive: true });
       symlinkSync(source, join(root, "node_modules", name));
     }
+    writeFileSync(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
     const result = spawnSync(
-      process.execPath,
-      [join(kitDir, "lib/catalyst-versions.mjs"), "installed", root],
+      "bash",
+      [join(kitDir, "lib/check-release.sh"), "--deployment-root", root],
       { encoding: "utf8" }
     );
     assert.notEqual(result.status, 0);

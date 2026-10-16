@@ -72,11 +72,3 @@ load_deployment_env() {
   REMOTE_APP_DIR="/opt/vivd-catalyst/$INSTANCE"
   REMOTE_ENV_FILE="/etc/vivd-catalyst/$INSTANCE/app.env"
 }
-
-# The stitched workspace is the parent directory; image builds and the lockfile
-# address the deployment as deployment.<instance> inside it.
-require_workspace_layout() {
-  [[ "$(basename "$DEPLOYMENT_ROOT")" == "deployment.$INSTANCE" ]] \
-    || deployment_env_fail "the deployment checkout must be named deployment.$INSTANCE: $DEPLOYMENT_ROOT"
-  WORKSPACE_ROOT="$(cd "$DEPLOYMENT_ROOT/.." && pwd)"
-}

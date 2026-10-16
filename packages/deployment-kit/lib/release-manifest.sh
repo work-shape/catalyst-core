@@ -8,7 +8,7 @@ set -euo pipefail
 #
 # Schema 2 records the Catalyst release the deployment installs (catalystVersion,
 # the version every catalyst package in its package.json pins). Schema 1 records
-# the platform and capabilities commits of a deployment with deploy/release.refs;
+# the platform and capabilities commits of an earlier source-built deployment;
 # such manifests stay valid, so an earlier release can still be deployed.
 
 asset_name="release-manifest.json"
@@ -20,7 +20,7 @@ Usage:
   catalyst-deploy manifest write --release TAG --images JSON [--images JSON ...]
       Print the manifest for the deployment commit at HEAD. Each JSON argument
       maps image keys to "name@sha256:..." references. Schema 2 with the pinned
-      catalystVersion, or schema 1 with the commits of deploy/release.refs.
+      catalystVersion. Earlier schema 1 manifests remain readable for rollback.
   catalyst-deploy manifest check FILE [--commit SHA]
       Validate a manifest. With --commit, also require that it was built from
       that deployment commit.
@@ -96,37 +96,20 @@ case "$command" in
     manifest="$(mktemp)"
     trap 'rm -f "$manifest"' EXIT
     deployment_commit="$(git -C "$DEPLOYMENT_ROOT" rev-parse HEAD)"
-    if [[ -f "$DEPLOYMENT_ROOT/deploy/release.refs" ]]; then
-      # shellcheck disable=SC1091
-      source "$DEPLOYMENT_ROOT/deploy/release.refs"
-      jq -n \
-        --arg release "$release" \
-        --arg deployment "$deployment_commit" \
-        --arg platform "${PLATFORM_REF:-}" \
-        --arg capabilities "${CAPABILITIES_REF:-}" \
-        --argjson images "$images" \
-        '{
-          schema: 1,
-          release: $release,
-          commits: { deployment: $deployment, platform: $platform, capabilities: $capabilities },
-          images: $images
-        }' > "$manifest"
-    else
-      catalyst_version="$(node "$kit_dir/lib/catalyst-versions.mjs" version "$DEPLOYMENT_ROOT")" \
-        || fail "package.json must pin one catalyst release; see catalyst-deploy check"
-      jq -n \
-        --arg release "$release" \
-        --arg version "$catalyst_version" \
-        --arg deployment "$deployment_commit" \
-        --argjson images "$images" \
-        '{
-          schema: 2,
-          release: $release,
-          catalystVersion: $version,
-          commits: { deployment: $deployment },
-          images: $images
-        }' > "$manifest"
-    fi
+    catalyst_version="$(node "$kit_dir/lib/catalyst-versions.mjs" version "$DEPLOYMENT_ROOT")" \
+      || fail "package.json must pin one catalyst release; see catalyst-deploy check"
+    jq -n \
+      --arg release "$release" \
+      --arg version "$catalyst_version" \
+      --arg deployment "$deployment_commit" \
+      --argjson images "$images" \
+      '{
+        schema: 2,
+        release: $release,
+        catalystVersion: $version,
+        commits: { deployment: $deployment },
+        images: $images
+      }' > "$manifest"
     check_manifest "$manifest"
     cat "$manifest"
     ;;

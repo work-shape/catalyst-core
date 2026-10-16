@@ -15,7 +15,8 @@ buckets, model providers and approvals, stays in the README and `docs/` of its d
 
 ## Repositories
 
-An instance is built from three repositories, checked out next to each other:
+Local source development uses three repositories, checked out next to each other.
+Release CI checks out only the deployment and installs its published dependencies:
 
 | Checkout                 | Repository                         | Visibility |
 | ------------------------ | ---------------------------------- | ---------- |
@@ -37,7 +38,7 @@ instance:
 | `docker-compose.prod.yml`, `deploy/Caddyfile`               | What runs on a VM.                                                                                      |
 | `deploy/docker-bake.hcl`, `.github/workflows/`              | The image builds, the deploy workflow and a manual build workflow.                                      |
 | `deploy/deployment.env`                                     | The kit's one input.                                                                                    |
-| `deploy/release.refs`, `deploy/workspace/pnpm-lock.yaml`    | The pinned platform and capabilities commits, and the lockfile CI builds from.                          |
+| `package.json`, `pnpm-lock.yaml`                            | One exact published Catalyst version for every Catalyst package, and the standalone frozen lockfile.    |
 | `deploy/scripts/check-release-policy.sh`                    | The instance's own release assertions.                                                                  |
 | `infra/terraform/`                                          | The module `compose-host` and one root per environment.                                                 |
 | `.env.example`, `.env.staging.example`, `.env.prod.example` | The local env file, and the templates of the env files on the VMs.                                      |
@@ -65,7 +66,7 @@ GHCR_PULL_TOKEN=replace-with-read-packages-token
 Load it in the shell that runs Terraform, from the deployment repo:
 
 ```sh
-source ../platform/packages/deployment-kit/lib/load-deploy-env.sh
+source node_modules/@work-shape/catalyst-deployment-kit/lib/load-deploy-env.sh
 ```
 
 The script exports `HCLOUD_TOKEN`, which the Hetzner provider reads, from `HETZNER_API_TOKEN`, and
@@ -85,16 +86,18 @@ argument names another file.
   during bootstrap; split it into narrower keys per bucket once the console's restrictions are
   set up. The backup script reads a pair of its own, `BACKUP_AWS_ACCESS_KEY_ID` and
   `BACKUP_AWS_SECRET_ACCESS_KEY`.
-- **GitHub.** `GITHUB_TOKEN` is for bootstrapping on the workstation only. GitHub Actions does
-  not allow a secret of that name, so the workflows read their token as
-  `CROSS_REPO_CHECKOUT_TOKEN`.
+- **GitHub.** `GITHUB_TOKEN` is for bootstrapping on the workstation only. The deployment's
+  workflow token reads its own repository and publishes its images and release manifest.
 - **GHCR.** A token with `read:packages` lets a VM pull the images. It goes into the VM's env
   file as `GHCR_USERNAME` and `GHCR_PULL_TOKEN`, and a deploy logs in with them.
 
 ## GitHub
 
-The deployment repo has one repository secret, `CROSS_REPO_CHECKOUT_TOKEN`, which reads the
-private platform and capabilities repositories during a build.
+The deployment repo has `NPM_READ_TOKEN`, a granular read-only token for the private
+`@work-shape` packages. CI writes it into a temporary npmrc for the standalone install and
+mounts that file as a BuildKit secret. Keep the earlier source-checkout token until two
+package-built production releases exist, so pre-switch release tags can still recover;
+removing that token is a separate owner action.
 
 It has two GitHub Environments, `staging` and `production`. `production` requires a reviewer
 before its deploy job runs; `staging` needs none once the first deploy works. Each Environment
@@ -104,7 +107,7 @@ holds two secrets:
 - `DEPLOY_SSH_PRIVATE_KEY`: the private half of the deploy key whose public half Terraform
   installs for the user `deploy`.
 
-Nothing else goes into GitHub. The workflow token pushes the images and the build cache to GHCR
+The workflow token pushes the images and the build cache to GHCR
 and creates the GitHub release with the manifest. Model provider keys and object store keys stay
 in the env file on the VM, because the deploy workflow ships only images and Compose wiring.
 
@@ -218,14 +221,15 @@ between before rolling back. To go back to an earlier database, restore a backup
 
 ### The release gate
 
-`pnpm release:check` runs `catalyst-deploy check`. It starts with the deploy policy of the Compose
-file, the bake file and the workflow. Then it checks the committed lockfile and the env examples,
-installs the stitched workspace, runs the platform and capabilities checks, builds the deployment
-assembly and starts every built entry point once per release config with `--resolve-only`. It
-renders the production Compose file against the example env files, validates the Caddyfile, and
-ends with `deploy/scripts/check-release-policy.sh`. `pnpm publish:staging` runs it before tagging
-and the workflow runs it again beside the image builds; the manifest is published only when it
-passed. The kit README has the policy it enforces.
+`pnpm release:check` runs the installed `catalyst-deploy check`. It checks exact, equal package
+pins and tarball integrity, then the deploy policy of the Compose file, bake file and workflow.
+The full gate requires a frozen standalone install of those published packages, checks the env
+examples, builds the deployment assembly and starts every built entry point once per release
+config with `--resolve-only`. It renders production Compose against the example env files,
+validates Caddy and ends with `deploy/scripts/check-release-policy.sh` when present. Platform
+and capabilities passed their own release checks. `pnpm publish:staging` runs `check --static`
+locally; CI runs the full gate beside the image builds and publishes the manifest only after it
+passes. The kit README has the policy it enforces.
 
 ### The manifest
 
@@ -235,12 +239,11 @@ with `gh`, without another registry or tool. Staging releases are marked as pre-
 
 ```json
 {
-  "schema": 1,
-  "release": "staging-2026.10.07-1",
+  "schema": 2,
+  "release": "staging-2026.10.16-1",
+  "catalystVersion": "0.8.0",
   "commits": {
-    "deployment": "<deployment commit sha>",
-    "platform": "<platform commit sha>",
-    "capabilities": "<capabilities commit sha>"
+    "deployment": "<deployment commit sha>"
   },
   "images": {
     "api": "ghcr.io/work-shape/catalyst-acme-api@sha256:...",
@@ -257,29 +260,29 @@ with `gh`, without another registry or tool. Staging releases are marked as pre-
 `check FILE`) and checks the staging deployment (`staging-deployed FILE`). A successful staging
 deployment means that the GitHub Environment `staging` has a successful deployment for the
 release tag and its commit; the deploy job records it. The deploy job also requires that the kit
-it runs is the platform commit the manifest names.
+it runs has the Catalyst version the manifest names.
 
-### Pinned source refs
+### Pinned package version
 
-The build reads `deploy/release.refs` from the tagged deployment commit:
+The deployment's `package.json` pins every `@work-shape/catalyst-*` dependency to one exact
+published version, including the deployment kit and CLI. Commit its own `pnpm-lock.yaml`;
+CI installs it frozen and builds from the deployment folder alone. Private npm read auth is
+mounted as a BuildKit secret and stays outside the images.
 
-```text
-PLATFORM_REF=<platform commit sha>
-CAPABILITIES_REF=<capabilities commit sha>
+From the deployment repo, bump with the installed kit:
+
+```sh
+pnpm exec catalyst-deploy bump 0.8.0
 ```
 
-The platform pin is also the version of the kit: CI checks the kit out at `PLATFORM_REF`, and
-`pnpm release:check` refuses a local platform checkout at another commit.
+The kit refuses a version missing from npm, updates every Catalyst dependency together,
+regenerates `pnpm-lock.yaml` with `--ignore-workspace` and prints the intervening release notes.
+Read those notes for config or migration changes, then commit `package.json` and `pnpm-lock.yaml`
+together. `catalyst-deploy check` refuses ranges, unequal versions and local package specs.
+The manifest records `catalystVersion` and the deployment commit.
 
-`pnpm release:update` sets the refs, and `pnpm release:update --latest` pins both repositories to
-`origin/main`. It also writes `deploy/workspace/pnpm-lock.yaml`, the dependency resolution CI
-builds from. Commit the two files together; the release checks fail when they disagree. After a
-change to `package.json`, run the command without arguments to refresh the lockfile for the
-current refs.
-
-Before moving the platform pin, read the platform changelog between the two commits: the sections
-of `CHANGELOG.md` and the change files in `changes/unreleased/`, which `pnpm changelog` prints as
-the release will read. They name the config keys a new release refuses.
+Local development from the workspace root keeps source links through the root overrides.
+Use `catalyst-deploy pack-local` for images built from unpublished local packages.
 
 ## Images
 
@@ -300,15 +303,15 @@ A release has six images, built from `deploy/docker-bake.hcl`:
 the tag only names the release in `docker ps`. Every deploy writes `IMAGE_REPOSITORY`, `IMAGE_TAG`
 (the staging release tag) and the six digests into the env file.
 
-The images `api`, `ui`, `workspace-command-worker` and `artifact-preview-worker` come from one
-Dockerfile and build in one `docker buildx bake` run, so the dependency install and the server
+The release images come from the kit's `docker/deployment.Dockerfile`.
+The images `api`, `ui`, `workspace-command-worker` and `artifact-preview-worker` build in one `docker buildx bake` run, so the dependency install and the server
 build run once. The document worker and the runner build in jobs of their own. Images with a slow
 system layer keep a registry build cache under the tag `buildcache`.
 
-To build locally, run from the workspace root:
+To build locally, run from the deployment repo:
 
 ```sh
-docker buildx bake -f deployment.<instance>/deploy/docker-bake.hcl client
+docker buildx bake -f deploy/docker-bake.hcl client
 ```
 
 The manual workflow `.github/workflows/build-images.yml` runs the same builds from any ref,
@@ -322,15 +325,18 @@ worker and runs the upload check. It also checks the API's health, and it fails 
 service runs the image of the release. Agent-run workers of the previous release that still drain
 are the one exception.
 
-The workflow calls it. For the first setup or a break-glass deploy, check out the release tag and
-the platform commit of its `deploy/release.refs` first, so that the Compose file and the kit match
-the release. Then, from the deployment repo:
+The workflow calls it. For the first setup or a break-glass deploy, check out the release tag
+and install its frozen dependencies in the deployment repo, so the Compose file and kit match
+the release. Then run:
 
 ```sh
-kit=../platform/packages/deployment-kit/bin/catalyst-deploy
-"$kit" manifest fetch staging-2026.10.07-1 /tmp/release-manifest.json
-"$kit" deploy --host staging.chat.example.com --manifest /tmp/release-manifest.json
+pnpm install --frozen-lockfile --ignore-workspace
+pnpm exec catalyst-deploy manifest fetch staging-2026.10.07-1 /tmp/release-manifest.json
+pnpm exec catalyst-deploy deploy --host staging.chat.example.com --manifest /tmp/release-manifest.json
 ```
+
+Earlier schema 1 digest manifests remain readable for rollback. For a release from before the
+package switch, use the kit and recovery instructions committed with that release tag.
 
 A deploy is done when every container on the host runs and one signed-in action worked, not when
 the script ends.
