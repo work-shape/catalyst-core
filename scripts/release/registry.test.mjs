@@ -1,11 +1,54 @@
 import assert from "node:assert/strict";
 import { setImmediate } from "node:timers/promises";
-import { test } from "node:test";
-import { waitForPackages } from "./registry.mjs";
+import { beforeEach, test } from "node:test";
+import { verifyRestricted, waitForPackages } from "./registry.mjs";
+import { publish } from "./publish.mjs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const version = "0.8.0-rc.1";
 const packages = [{ name: "@work-shape/catalyst-api-contract", version }];
 const visible = () => Response.json({ version });
+
+beforeEach((t) => {
+  const token = process.env.NODE_AUTH_TOKEN;
+  delete process.env.NODE_AUTH_TOKEN;
+  t.after(() => {
+    if (token === undefined) delete process.env.NODE_AUTH_TOKEN;
+    else process.env.NODE_AUTH_TOKEN = token;
+  });
+});
+
+test("restricted publish wait authenticates every retry while privacy verification stays anonymous", async (t) => {
+  process.env.NODE_AUTH_TOKEN = "fixture-token";
+  const root = mkdtempSync(join(tmpdir(), "catalyst-restricted-wait-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "packages/server"), { recursive: true });
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "vivd-catalyst", version }));
+  const manifest = { name: "@work-shape/catalyst-server", version };
+  writeFileSync(join(root, "packages/server/package.json"), JSON.stringify(manifest));
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 0 });
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url, options });
+    if (options.redirect === "error") {
+      assert.equal(options.headers, undefined);
+      return new Response(null, { status: 404 });
+    }
+    assert.equal(options.redirect, "manual");
+    assert.deepEqual(options.headers, { Authorization: "Bearer fixture-token" });
+    assert.equal(url, `https://registry.npmjs.org/%40work-shape%2Fcatalyst-server/${version}`);
+    return calls.length === 1 ? new Response(null, { status: 404 }) : visible();
+  });
+  const done = publish(["--root", root, "--group", "restricted", "--wait"]);
+  await setImmediate();
+  t.mock.timers.tick(15_000);
+  await done;
+  assert.equal(calls.length, 2);
+  await verifyRestricted([manifest]);
+  assert.equal(calls.length, 3);
+});
 
 function clock(t, fetch) {
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 0 });
