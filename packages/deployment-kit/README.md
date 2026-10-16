@@ -4,12 +4,11 @@ Release and deploy tooling for operated Catalyst instances: one Hetzner VM per e
 Docker Compose, images on GHCR, releases as manifests of image digests. A deployment repo
 (`deployment.<instance>`) calls the kit instead of carrying its own copies of these scripts.
 
-The package is not published yet. A deployment uses it from the platform checkout at its pinned
-`PLATFORM_REF`:
-
-```sh
-../platform/packages/deployment-kit/bin/catalyst-deploy publish staging
-```
+A deployment installs the kit as a dev dependency at the Catalyst release it runs and calls
+`catalyst-deploy` from its own install. A deployment that still has `deploy/release.refs` uses
+the kit from the platform checkout at its pinned `PLATFORM_REF` instead
+(`../platform/packages/deployment-kit/bin/catalyst-deploy`); the commands below say where the two
+differ.
 
 ## The one input
 
@@ -46,9 +45,11 @@ start `workspace-command-worker`.
 
 | Command                                          | Does                                                                                                                                    |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `check`                                          | Release gate for the stitched workspace, then the policy checks below.                                                                  |
-| `update-refs [--latest \| --check \| ...]`       | Pins `deploy/release.refs` and refreshes `deploy/workspace/pnpm-lock.yaml`.                                                             |
-| `prepare-workspace`                              | Prepares the parent directory as the image build workspace.                                                                             |
+| `check [--static]`                               | The release pin (below) and the policy checks, then the release gate on the installed packages. `--static` stops after the first two.   |
+| `bump VERSION`                                   | Pins every catalyst package at `VERSION`, rewrites `pnpm-lock.yaml` and prints the release notes in between.                            |
+| `pack-local [--workspace DIR] [--skip-build]`    | Builds the release images from the packages of the local platform and capabilities checkouts.                                           |
+| `update-refs [--latest \| --check \| ...]`       | `deploy/release.refs` only: pins it and refreshes `deploy/workspace/pnpm-lock.yaml`.                                                    |
+| `prepare-workspace`                              | `deploy/release.refs` only: prepares the parent directory as the image build workspace.                                                 |
 | `publish staging`                                | Runs `check`, then tags `staging-<date>-<n>` on `main`.                                                                                 |
 | `publish production`                             | Tags `v<date>-<n>` on the commit of a staging release and starts its deploy. Refuses a release without a successful staging deployment. |
 | `manifest write\|check\|fetch\|staging-deployed` | Writes, validates and downloads release manifests (schema 1).                                                                           |
@@ -114,6 +115,87 @@ the worker starts on the host. An entry point must start its process through
 `defineClientInstance` for this. One that ends without the line fails, and one that is still
 running after two minutes is killed and fails.
 
+## Deployments that install released packages
+
+`package.json` names every `@work-shape/catalyst-*` package at one exact release version, the
+kit (`@work-shape/catalyst-deployment-kit`) and the CLI among them, and the deployment commits
+its own `pnpm-lock.yaml`, written with `--ignore-workspace`. `check` refuses a range, a second
+version, a `file:`, `link:` or `workspace:` specifier and a `pnpm.overrides` or `resolutions`
+entry for a catalyst package. Before its gate it requires `node_modules` to hold the pinned
+release from the registry, not a link to local source: run it on a standalone install
+(`pnpm install --frozen-lockfile`), as CI does. The gate is the deployment's typecheck and
+build, the entry points, and the Compose and Caddy files; platform and capabilities passed their
+checks in their own release. The post-check receives `DEPLOYMENT_ROOT` only. `publish staging`
+runs `check --static` locally and leaves the gate to the deploy workflow.
+
+`bump VERSION` asks npm for every catalyst package of `package.json` at `VERSION` and changes
+nothing when one is missing (the restricted packages need a read token in `~/.npmrc`). Then it
+sets them, runs `pnpm install --lockfile-only --ignore-workspace` and prints the GitHub release
+notes of `work-shape/catalyst-core` and `work-shape/catalyst-capabilities` after the previous
+version up to `VERSION`, or their addresses where `gh` cannot read them.
+
+The release manifest is schema 2: `catalystVersion` instead of the platform and capabilities
+commits. `manifest check` accepts schema 1 too, so an earlier release can still be deployed, and
+`deploy` refuses a schema 2 manifest whose `catalystVersion` is not the kit's own version.
+
+### Images
+
+`docker/deployment.Dockerfile` builds the six images from the deployment folder alone: it
+downloads what `pnpm-lock.yaml` names with the npmrc secret `npmrc`, installs offline and frozen,
+and runs the deployment's `build:server` and `build:ui`. The images keep the deployment at
+`/app/deployment.<instance>`, so Compose commands and `CLIENT_CONFIG_PATH` stay as they are.
+
+| Target                     | Runs                                                                                                      |
+| -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `api`                      | `dist/server.js` of the deployment                                                                        |
+| `workspace-command-worker` | the API image with a Docker client, `dist/workspace-command-worker.js`                                    |
+| `artifact-preview-worker`  | `dist/artifact-preview-worker.js` on the LibreOffice runtime                                              |
+| `ui`                       | nginx with `dist/client` and `docker/nginx-spa.conf`                                                      |
+| `doc-worker`               | `@work-shape/catalyst-document-worker` with the deployment's `config/`; the deployment must depend on it  |
+| `runner`                   | the commands of `catalyst-app-build`, `catalyst-asset-repo` and `catalyst-artifact-helpers` as user 10001 |
+
+The runner and document worker images carry their packages and exactly what those depend on,
+copied out of the same install (`docker/copy-packages.mjs`), and nothing of the deployment's own
+code. The system layers (LibreOffice, fonts, Python) are copies of those in the platform's and
+capabilities' Dockerfiles, which keep serving the demo and platform CI; the kit's tests and a
+capabilities test fail when the package lists drift apart.
+
+`deploy/docker-bake.hcl` stays the deployment's. It builds with context `.` and these
+variables, which `pack-local` and CI set:
+
+```hcl
+variable "CATALYST_KIT" { default = "node_modules/@work-shape/catalyst-deployment-kit" }
+variable "NPMRC" { default = "" } # an npmrc that may read @work-shape; empty: no secret
+variable "IMAGE_REPOSITORY" { default = "ghcr.io/work-shape/catalyst-acme" }
+variable "RELEASE_TAG" { default = "local" }
+variable "PUSH" { default = false }
+
+target "_release" {
+  context    = "."
+  dockerfile = "${CATALYST_KIT}/docker/deployment.Dockerfile"
+  args       = { DEPLOYMENT_DIR = "deployment.acme" }
+  secret     = NPMRC == "" ? [] : ["id=npmrc,src=${NPMRC}"]
+  output     = [PUSH ? "type=registry" : "type=cacheonly"]
+}
+
+target "api" {
+  inherits = ["_release"]
+  target   = "api"
+  tags     = ["${IMAGE_REPOSITORY}-api:${RELEASE_TAG}"]
+}
+# ... ui, workspace-command-worker, artifact-preview-worker and doc-worker the same way;
+# runner with target "runner" and the tag "${IMAGE_REPOSITORY}-catalyst-runner-base:${RELEASE_TAG}".
+```
+
+`pack-local` builds and packs every published package of `../platform` and `../capabilities`
+(`--workspace DIR` for another folder) into `<deployment>/.local-packages/`, a folder that
+ignores itself. It copies the deployment's files to a scratch folder, points every catalyst
+package there at its tarball (`file:` specifiers and overrides, a lockfile written for them) and
+runs the bake file there with every output set to the local engine (`type=docker`), the images tagged `pack-local` (`RELEASE_TAG` overrides
+it). Bake reads a Dockerfile outside the context only when allowed, so `pack-local` passes
+`--allow=fs.read` for the kit's `docker/` folder; CI, with the kit under `node_modules`, needs none. Nothing in the deployment changes, and `check` refuses such a manifest. The tarballs carry
+the workspace's version, whatever the deployment pins.
+
 ## Backups
 
 `host/backup-postgres.sh` runs nightly from the backup timer (key prefix `postgres/`) and before
@@ -170,4 +252,7 @@ the Terraform roots.
   directory and the units in `deploy/systemd/` below it. `configure-zram.sh` is copied by hand.
 - `verify/`: Node checks of the Compose wiring of the workers, and their helpers.
 - `dev/`: helpers for the local Compose development loop.
-- `tests/`: `pnpm test:deployment-kit` in the platform root. Not shipped.
+- `docker/`: the release Dockerfile, its ignore file, the nginx configuration of the UI image and
+  the package copy the Dockerfile runs.
+- `tests/`: `pnpm test:deployment-kit` in the platform root (the shell suite and
+  `node --test tests/*.test.mjs`). Not shipped.

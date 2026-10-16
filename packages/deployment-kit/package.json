@@ -16,7 +16,8 @@
     "lib",
     "host",
     "verify",
-    "dev"
+    "dev",
+    "docker"
   ],
   "bin": {
     "catalyst-deploy": "./bin/catalyst-deploy"

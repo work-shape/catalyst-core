@@ -6,12 +6,19 @@ usage() {
 Usage:
   check-release.sh --workspace-root DIR --deployment-root DIR
     [--post-check EXECUTABLE]
+  check-release.sh --packages --deployment-root DIR [--post-check EXECUTABLE]
 
 Runs the common release gate for a stitched Catalyst workspace. Environment
 examples and loadable config entrypoints are discovered from the deployment.
 Deployment-specific assertions may live in one thin executable passed through
 --post-check; that executable receives WORKSPACE_ROOT, PLATFORM_ROOT,
 CAPABILITIES_ROOT, and DEPLOYMENT_ROOT.
+
+With --packages the deployment installs released packages instead: there is no
+workspace, the platform and capabilities checks ran in their own release, and
+the gate requires the pinned version installed (pnpm install --frozen-lockfile)
+before it typechecks, builds and checks the Compose and Caddy files. The
+post-check then receives DEPLOYMENT_ROOT only.
 USAGE
 }
 
@@ -27,6 +34,7 @@ log_step() {
 workspace_root=""
 deployment_root=""
 post_check=""
+packages=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --workspace-root)
@@ -44,6 +52,10 @@ while [[ $# -gt 0 ]]; do
       [[ -n "$post_check" ]] || fail "--post-check requires a value"
       shift 2
       ;;
+    --packages)
+      packages=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -54,15 +66,19 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$workspace_root" ]] || fail "--workspace-root is required"
 [[ -n "$deployment_root" ]] || fail "--deployment-root is required"
-[[ -d "$workspace_root" ]] || fail "workspace root does not exist: $workspace_root"
 [[ -d "$deployment_root" ]] || fail "deployment root does not exist: $deployment_root"
-workspace_root="$(cd "$workspace_root" && pwd)"
 deployment_root="$(cd "$deployment_root" && pwd)"
-platform_root="$workspace_root/platform"
-capabilities_root="$workspace_root/capabilities"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "$packages" == 1 ]]; then
+  [[ -z "$workspace_root" ]] || fail "--packages takes no --workspace-root"
+else
+  [[ -n "$workspace_root" ]] || fail "--workspace-root is required"
+  [[ -d "$workspace_root" ]] || fail "workspace root does not exist: $workspace_root"
+  workspace_root="$(cd "$workspace_root" && pwd)"
+  platform_root="$workspace_root/platform"
+  capabilities_root="$workspace_root/capabilities"
+fi
 
 require_dir() {
   [[ -d "$1" ]] || fail "missing required checkout: $1"
@@ -72,42 +88,49 @@ require_file() {
   [[ -f "$1" ]] || fail "missing required file: $1"
 }
 
-for directory in "$platform_root" "$capabilities_root" "$deployment_root"; do
-  require_dir "$directory"
-done
-for file in \
-  "$workspace_root/package.json" \
-  "$workspace_root/pnpm-workspace.yaml" \
-  "$workspace_root/pnpm-lock.yaml" \
-  "$deployment_root/deploy/release.refs"
-do
-  require_file "$file"
-done
 if [[ -n "$post_check" ]]; then
   [[ "$post_check" == /* ]] || post_check="$deployment_root/$post_check"
   [[ -x "$post_check" ]] || fail "post-check is not executable: $post_check"
 fi
 
-# shellcheck disable=SC1090
-source "$deployment_root/deploy/release.refs"
-: "${PLATFORM_REF:?PLATFORM_REF is required}"
-: "${CAPABILITIES_REF:?CAPABILITIES_REF is required}"
-for ref in "$PLATFORM_REF" "$CAPABILITIES_REF"; do
-  [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || fail "release refs must be full commit SHAs: $ref"
-done
+if [[ "$packages" == 1 ]]; then
+  require_file "$deployment_root/pnpm-lock.yaml"
+  log_step "Verify the installed release"
+  node "$script_dir/catalyst-versions.mjs" installed "$deployment_root"
+else
+  for directory in "$platform_root" "$capabilities_root" "$deployment_root"; do
+    require_dir "$directory"
+  done
+  for file in \
+    "$workspace_root/package.json" \
+    "$workspace_root/pnpm-workspace.yaml" \
+    "$workspace_root/pnpm-lock.yaml" \
+    "$deployment_root/deploy/release.refs"
+  do
+    require_file "$file"
+  done
 
-actual_platform_ref="$(git -C "$platform_root" rev-parse HEAD)"
-actual_capabilities_ref="$(git -C "$capabilities_root" rev-parse HEAD)"
-[[ "$actual_platform_ref" == "$PLATFORM_REF" ]] \
-  || fail "platform checkout does not match PLATFORM_REF"
-[[ "$actual_capabilities_ref" == "$CAPABILITIES_REF" ]] \
-  || fail "capabilities checkout does not match CAPABILITIES_REF"
+  # shellcheck disable=SC1090
+  source "$deployment_root/deploy/release.refs"
+  : "${PLATFORM_REF:?PLATFORM_REF is required}"
+  : "${CAPABILITIES_REF:?CAPABILITIES_REF is required}"
+  for ref in "$PLATFORM_REF" "$CAPABILITIES_REF"; do
+    [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || fail "release refs must be full commit SHAs: $ref"
+  done
 
-log_step "Verify committed build lockfile"
-bash "$script_dir/update-release.sh" \
-  --workspace-root "$workspace_root" \
-  --deployment-root "$deployment_root" \
-  --check
+  actual_platform_ref="$(git -C "$platform_root" rev-parse HEAD)"
+  actual_capabilities_ref="$(git -C "$capabilities_root" rev-parse HEAD)"
+  [[ "$actual_platform_ref" == "$PLATFORM_REF" ]] \
+    || fail "platform checkout does not match PLATFORM_REF"
+  [[ "$actual_capabilities_ref" == "$CAPABILITIES_REF" ]] \
+    || fail "capabilities checkout does not match CAPABILITIES_REF"
+
+  log_step "Verify committed build lockfile"
+  bash "$script_dir/update-release.sh" \
+    --workspace-root "$workspace_root" \
+    --deployment-root "$deployment_root" \
+    --check
+fi
 
 corepack_shim_dir=""
 status_snapshot_dir=""
@@ -147,8 +170,10 @@ verify_git_status_unchanged() {
   fi
 }
 
-capture_git_status platform "$platform_root"
-capture_git_status capabilities "$capabilities_root"
+if [[ "$packages" == 0 ]]; then
+  capture_git_status platform "$platform_root"
+  capture_git_status capabilities "$capabilities_root"
+fi
 capture_git_status deployment "$deployment_root"
 
 # A deployment that takes every script from the kit has no deploy/scripts.
@@ -194,19 +219,21 @@ for env_file in "${env_examples[@]}"; do
   bash -e -o pipefail -c 'set -a; source "$1"; set +a' _ "$env_file"
 done
 
-if [[ "${CHECK_RELEASE_INSTALL:-1}" != "0" ]]; then
-  log_step "Install workspace dependencies"
-  run_pnpm install --frozen-lockfile
+if [[ "$packages" == 0 ]]; then
+  if [[ "${CHECK_RELEASE_INSTALL:-1}" != "0" ]]; then
+    log_step "Install workspace dependencies"
+    run_pnpm install --frozen-lockfile
+  fi
+
+  log_step "Run platform check"
+  run_pnpm --dir "$platform_root" check
+
+  log_step "Run capabilities check"
+  run_pnpm --dir "$capabilities_root" check
+
+  log_step "Verify runner image Dockerfile"
+  node "$capabilities_root/packages/artifact-helpers/scripts/verify-runner-dockerfile.mjs"
 fi
-
-log_step "Run platform check"
-run_pnpm --dir "$platform_root" check
-
-log_step "Run capabilities check"
-run_pnpm --dir "$capabilities_root" check
-
-log_step "Verify runner image Dockerfile"
-node "$capabilities_root/packages/artifact-helpers/scripts/verify-runner-dockerfile.mjs"
 
 log_step "Typecheck and build deployment assembly"
 run_pnpm --dir "$deployment_root" typecheck
@@ -247,7 +274,10 @@ if [[ -f "$deployment_root/deploy/Caddyfile" ]]; then
   done
 fi
 
-if [[ -n "$post_check" ]]; then
+if [[ -n "$post_check" && "$packages" == 1 ]]; then
+  log_step "Run deployment-specific post-check"
+  DEPLOYMENT_ROOT="$deployment_root" "$post_check"
+elif [[ -n "$post_check" ]]; then
   log_step "Run deployment-specific post-check"
   WORKSPACE_ROOT="$workspace_root" \
     PLATFORM_ROOT="$platform_root" \
@@ -257,8 +287,10 @@ if [[ -n "$post_check" ]]; then
 fi
 
 log_step "Verify generated checks did not change repository status"
-verify_git_status_unchanged platform "$platform_root"
-verify_git_status_unchanged capabilities "$capabilities_root"
+if [[ "$packages" == 0 ]]; then
+  verify_git_status_unchanged platform "$platform_root"
+  verify_git_status_unchanged capabilities "$capabilities_root"
+fi
 verify_git_status_unchanged deployment "$deployment_root"
 
 log_step "Release checks passed"

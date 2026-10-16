@@ -3,6 +3,7 @@ import {
   readDeploymentFile,
   readRemoteDeployScript,
   extractServiceBlock,
+  installsReleasedPackages,
   modelSecretNames,
   readPlatformDockerfile,
   assertWorkerIsolation,
@@ -27,8 +28,10 @@ assert(
   clientDockerfile.includes("FROM api AS workspace-command-worker"),
   "vivd-client.Dockerfile: workspace-command-worker target is required"
 );
+// The development target lives in the platform Dockerfile; the kit builds release images only.
 assert(
-  clientDockerfile.includes("FROM api-dev AS workspace-command-worker-dev"),
+  installsReleasedPackages() ||
+    clientDockerfile.includes("FROM api-dev AS workspace-command-worker-dev"),
   "vivd-client.Dockerfile: source-based workspace-command-worker dev target is required"
 );
 assert(
@@ -143,12 +146,14 @@ assert(
 
 const bakeFile = await readDeploymentFile("deploy/docker-bake.hcl");
 assert(
-  bakeFile.includes('target   = "workspace-command-worker"') &&
+  /target\s*=\s*"workspace-command-worker"/u.test(bakeFile) &&
     bakeFile.includes("${IMAGE_REPOSITORY}-workspace-command-worker:${RELEASE_TAG}"),
   "docker-bake.hcl: release builds must build and tag the workspace command worker image"
 );
 assert(
-  bakeFile.includes("capabilities/docker/catalyst-runner-base.Dockerfile") &&
+  (installsReleasedPackages()
+    ? bakeFile.includes("docker/deployment.Dockerfile") && /target\s*=\s*"runner"/u.test(bakeFile)
+    : bakeFile.includes("capabilities/docker/catalyst-runner-base.Dockerfile")) &&
     bakeFile.includes("${IMAGE_REPOSITORY}-catalyst-runner-base:${RELEASE_TAG}"),
   "docker-bake.hcl: release builds must build and tag the catalyst runner base image"
 );

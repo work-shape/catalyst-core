@@ -29,17 +29,27 @@ const UNSEEN_SOURCES = ["secrets", "configs", "volumes_from"];
  */
 const FOLLOWED_SOURCES = ["env_file", "extends"];
 
+// A path in the deployment repo under check: DEPLOYMENT_ROOT, or the directory the check runs in.
+function deploymentPath(path) {
+  return resolve(process.env.DEPLOYMENT_ROOT ?? process.cwd(), path);
+}
+
+// A deployment without deploy/release.refs installs released packages and builds its images
+// from the kit's docker/deployment.Dockerfile instead of the platform checkout's Dockerfile.
+export function installsReleasedPackages() {
+  return !existsSync(deploymentPath("deploy/release.refs"));
+}
+
+// The Dockerfile the deployment's release images are built from.
 export async function readPlatformDockerfile() {
+  if (installsReleasedPackages()) {
+    return readFile(new URL("../docker/deployment.Dockerfile", import.meta.url), "utf8");
+  }
   const platformDir = process.env.PLATFORM_DIR;
   const platformRoot = platformDir
     ? pathToFileURL(`${resolve(platformDir)}/`)
     : new URL("../../../", import.meta.url);
   return readFile(new URL("docker/vivd-client.Dockerfile", platformRoot), "utf8");
-}
-
-// A path in the deployment repo under check: DEPLOYMENT_ROOT, or the directory the check runs in.
-function deploymentPath(path) {
-  return resolve(process.env.DEPLOYMENT_ROOT ?? process.cwd(), path);
 }
 
 export function readDeploymentFile(path) {

@@ -60,6 +60,16 @@ remote_env_file="$REMOTE_ENV_FILE"
 ssh_target="deploy@${host}"
 
 bash "$kit_dir/lib/release-manifest.sh" check "$manifest"
+# A release built from installed packages is deployed by the kit of the same release, so the
+# Compose wiring, the host scripts and the images belong together.
+catalyst_version="$(jq -r '.catalystVersion // empty' "$manifest")"
+if [[ -n "$catalyst_version" ]]; then
+  kit_version="$(jq -r '.version' "$kit_dir/package.json")"
+  if [[ "$catalyst_version" != "$kit_version" ]]; then
+    echo "The release was built from Catalyst $catalyst_version; this deployment kit is $kit_version. Deploy it with the kit its deployment commit installs." >&2
+    exit 1
+  fi
+fi
 image_tag="$(jq -r '.release' "$manifest")"
 image_repository="$IMAGE_REPOSITORY"
 

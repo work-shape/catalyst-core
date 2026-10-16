@@ -5,6 +5,8 @@ kit_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fakes="$kit_dir/tests/fakes"
 catalyst_deploy="$kit_dir/bin/catalyst-deploy"
 scratch="$(mktemp -d)"
+# The SheetJS integrity of core's pnpm-lock.yaml, which lib/lock-integrity.mjs pins.
+sheetjs_integrity="sha512-oLDq3jw7AcLqKWH2AhCpVTZl8mf6X2YReP+Neh0SJUzV/BdZYjth94tG5toiMB1PPrYtxOCfaoUCkvtuH+3AJA=="
 trap 'rm -rf "$scratch"' EXIT
 
 fail() {
@@ -113,6 +115,14 @@ checksum="$(cksum platform/package.json capabilities/package.json "$deployment_p
   | cksum | awk '{print $1}')"
 printf "lockfileVersion: '9.0'\nfixtureChecksum: '%s'\n" "$checksum" > pnpm-lock.yaml
 sed -n '/^overrides:/,$p' pnpm-workspace.yaml >> pnpm-lock.yaml
+# SheetJS without its integrity, as pnpm writes it. With foreign-tarball beside this script, also
+# a URL tarball the kit knows no integrity for.
+xlsx=https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+printf 'packages:\n  xlsx@%s:\n    resolution: {tarball: %s}\n' "$xlsx" "$xlsx" >> pnpm-lock.yaml
+if [[ -f "$(dirname "$0")/foreign-tarball" ]]; then
+  printf '  other@https://cdn.example.test/other.tgz:\n    resolution: {tarball: https://cdn.example.test/other.tgz}\n' \
+    >> pnpm-lock.yaml
+fi
 SH
   chmod +x "$fake_bin/corepack"
 
@@ -123,6 +133,9 @@ SH
     || fail "update-release did not create the committed lockfile"
   # The lockfile is resolved under the overrides of the pinned platform tree.
   assert_contains "$deployment/deploy/workspace/pnpm-lock.yaml" '  zod: 4.4.3'
+  # The kit puts back the SheetJS integrity pnpm dropped.
+  assert_contains "$deployment/deploy/workspace/pnpm-lock.yaml" \
+    "resolution: {integrity: $sheetjs_integrity, tarball: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz}"
   assert_contains "$deployment/deploy/release.refs" \
     "PLATFORM_REF=$(git -C "$root/platform" rev-parse HEAD)"
 
@@ -146,6 +159,25 @@ SH
     --check
   assert_contains "$scratch/failure-output" "committed lockfile is out of date"
 
+  # A regeneration that leaves a URL tarball without an integrity is refused before the
+  # comparison and before anything is written.
+  printf '{"name":"deployment-fixture","version":"1.0.0"}\n' > "$deployment/package.json"
+  cp "$deployment/deploy/workspace/pnpm-lock.yaml" "$scratch/lock-before"
+  touch "$fake_bin/foreign-tarball"
+  local check
+  for check in --check ""; do
+    expect_failure env PATH="$fake_bin:$PATH" "$kit_dir/lib/update-release.sh" \
+      --workspace-root "$root" \
+      --deployment-root "$deployment" \
+      ${check:+"$check"}
+    assert_contains "$scratch/failure-output" \
+      "https://cdn.example.test/other.tgz has no integrity in the lockfile"
+    assert_contains "$scratch/failure-output" "does not authenticate every URL tarball"
+  done
+  cmp -s "$scratch/lock-before" "$deployment/deploy/workspace/pnpm-lock.yaml" \
+    || fail "update-release wrote a lockfile without a tarball integrity"
+  rm "$fake_bin/foreign-tarball"
+
   printf 'PLATFORM_REF=short\nCAPABILITIES_REF=short\n' \
     > "$deployment/deploy/release.refs"
   printf '{}\n' > "$root/package.json"
@@ -155,6 +187,37 @@ SH
     --workspace-root "$root" \
     --deployment-root "$deployment"
   assert_contains "$scratch/failure-output" "release refs must be full commit SHAs"
+}
+
+# bump and every install drop the SheetJS integrity; bump puts it back and check refuses a
+# lockfile an install left without it.
+test_bump_lock_integrity() {
+  local deployment="$scratch/bump/deployment.fixture" fake_bin="$scratch/bump/bin"
+  local xlsx=https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+  mkdir -p "$deployment/deploy" "$fake_bin"
+  printf 'INSTANCE=fixture\nIMAGE_REPOSITORY=ghcr.io/example/fixture\nAPP_PACKAGE=@example/fixture\nEXECUTION_WORKSPACES=1\n' \
+    > "$deployment/deploy/deployment.env"
+  printf '{"name":"@example/fixture","dependencies":{"@work-shape/catalyst-chat-ui":"0.7.0"}}\n' \
+    > "$deployment/package.json"
+  printf '#!/usr/bin/env bash\necho "\\"${2##*@}\\""\n' > "$fake_bin/npm"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$fake_bin/gh"
+  cat > "$fake_bin/pnpm" <<SH
+#!/usr/bin/env bash
+printf 'packages:\\n  xlsx@%s:\\n    resolution: {tarball: %s}\\n' "$xlsx" "$xlsx" > pnpm-lock.yaml
+SH
+  chmod +x "$fake_bin/npm" "$fake_bin/gh" "$fake_bin/pnpm"
+
+  (cd "$deployment" && PATH="$fake_bin:$PATH" "$kit_dir/bin/catalyst-deploy" bump 0.8.0) \
+    > "$scratch/bump/output" 2>&1 || { cat "$scratch/bump/output" >&2; fail "bump failed"; }
+  assert_contains "$deployment/package.json" '"@work-shape/catalyst-chat-ui": "0.8.0"'
+  assert_contains "$deployment/pnpm-lock.yaml" \
+    "resolution: {integrity: $sheetjs_integrity, tarball: $xlsx}"
+
+  # A later install drops it again.
+  (cd "$deployment" && PATH="$fake_bin:$PATH" pnpm install)
+  expect_failure env DEPLOYMENT_ROOT="$deployment" "$kit_dir/bin/catalyst-deploy" check --static
+  assert_contains "$scratch/failure-output" "$xlsx has no integrity in the lockfile"
+  assert_contains "$scratch/failure-output" "catalyst-deploy bump to the pinned version puts it back"
 }
 
 # The entry points here are stand-ins that record how they were started. What a real process
@@ -1083,8 +1146,10 @@ test_digit_leading_instance() {
 test_packed_layout() {
   local packed="$scratch/packed" capture="$scratch/packed-capture"
   mkdir -p "$packed"
-  cp -R "$kit_dir/bin" "$kit_dir/lib" "$kit_dir/host" "$kit_dir/verify" "$kit_dir/dev" "$packed/"
-  find "$packed/lib" "$packed/host" "$packed/verify" "$packed/dev" -type f -exec chmod 0644 {} +
+  cp -R "$kit_dir/package.json" "$kit_dir/bin" "$kit_dir/lib" "$kit_dir/host" "$kit_dir/verify" \
+    "$kit_dir/dev" "$kit_dir/docker" "$packed/"
+  find "$packed/lib" "$packed/host" "$packed/verify" "$packed/dev" "$packed/docker" -type f \
+    -exec chmod 0644 {} +
   mkdir -p "$scratch/packed-bin"
   ln -s "$packed/bin/catalyst-deploy" "$scratch/packed-bin/catalyst-deploy"
 
@@ -1123,6 +1188,7 @@ test_shell_files() {
 test_shell_files
 test_prepare_build_workspace
 test_update_release
+test_bump_lock_integrity
 test_resolve_entry_points
 test_compose_watch_preflight
 test_ensure_compose_dev_images

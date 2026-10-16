@@ -192,6 +192,12 @@ fi
 # Deployments pin exact versions; while builds still use source refs, resolve matching
 # local packages rather than fetching the not-yet-published release from npm.
 (cd "$scratch" && "${pnpm_cmd[@]}" install --lockfile-only --link-workspace-packages)
+# pnpm drops the integrity of a URL tarball (SheetJS) it re-resolves. Put back the one the kit
+# knows and refuse a lockfile that still lacks one, before it is compared or copied.
+input_lockfile="$committed_lockfile"
+[[ -f "$input_lockfile" ]] || input_lockfile="$scratch/platform/pnpm-lock.yaml"
+node "$(dirname "${BASH_SOURCE[0]}")/lock-integrity.mjs" restore "$scratch/pnpm-lock.yaml" "$input_lockfile" \
+  || fail "the regenerated lockfile does not authenticate every URL tarball; see above"
 
 if [[ "$mode" == "check" ]]; then
   [[ -f "$committed_lockfile" ]] \

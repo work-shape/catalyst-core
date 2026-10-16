@@ -4,6 +4,7 @@ import {
   readRemoteDeployScript,
   extractDockerStage,
   extractServiceBlock,
+  installsReleasedPackages,
   modelSecretNames,
   readPlatformDockerfile,
   assertWorkerIsolation,
@@ -81,10 +82,13 @@ assert(
   artifactPreviewWorkerTarget.includes("ARTIFACT_PREVIEW_WORKER_ENTRY"),
   "vivd-client.Dockerfile: artifact-preview-worker target must run a dedicated worker entrypoint"
 );
+// The development target lives in the platform Dockerfile; the kit builds release images only.
 assert(
-  artifactPreviewWorkerDevTarget.includes(
-    "FROM artifact-preview-runtime AS artifact-preview-worker-dev"
-  ) && artifactPreviewWorkerDevTarget.includes("COPY --from=deps /app ./"),
+  installsReleasedPackages() ||
+    (artifactPreviewWorkerDevTarget.includes(
+      "FROM artifact-preview-runtime AS artifact-preview-worker-dev"
+    ) &&
+      artifactPreviewWorkerDevTarget.includes("COPY --from=deps /app ./")),
   "vivd-client.Dockerfile: local preview worker must reuse the native runtime without a server build"
 );
 for (const packageName of nativePackages) {
@@ -187,7 +191,7 @@ assert(
 
 const bakeFile = await readDeploymentFile("deploy/docker-bake.hcl");
 assert(
-  bakeFile.includes('target     = "artifact-preview-worker"') &&
+  /target\s*=\s*"artifact-preview-worker"/u.test(bakeFile) &&
     bakeFile.includes("${IMAGE_REPOSITORY}-artifact-preview-worker:${RELEASE_TAG}"),
   "docker-bake.hcl: release builds must build and tag the artifact preview worker image"
 );

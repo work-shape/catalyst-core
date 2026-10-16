@@ -5,6 +5,11 @@ set -euo pipefail
 # manifest is a small JSON file attached to the GitHub release of that tag
 # (asset "release-manifest.json"). Production releases (v* tags) carry a copy of
 # the manifest of the staging release they promote.
+#
+# Schema 2 records the Catalyst release the deployment installs (catalystVersion,
+# the version every catalyst package in its package.json pins). Schema 1 records
+# the platform and capabilities commits of a deployment with deploy/release.refs;
+# such manifests stay valid, so an earlier release can still be deployed.
 
 asset_name="release-manifest.json"
 image_keys=(api ui doc-worker workspace-command-worker artifact-preview-worker runner)
@@ -14,7 +19,8 @@ usage() {
 Usage:
   catalyst-deploy manifest write --release TAG --images JSON [--images JSON ...]
       Print the manifest for the deployment commit at HEAD. Each JSON argument
-      maps image keys to "name@sha256:..." references.
+      maps image keys to "name@sha256:..." references. Schema 2 with the pinned
+      catalystVersion, or schema 1 with the commits of deploy/release.refs.
   catalyst-deploy manifest check FILE [--commit SHA]
       Validate a manifest. With --commit, also require that it was built from
       that deployment commit.
@@ -41,11 +47,15 @@ check_manifest() {
   [[ -s "$file" ]] || fail "missing or empty manifest: $file"
   jq -e --argjson keys "$(printf '%s\n' "${image_keys[@]}" | jq -R . | jq -sc .)" '
     def sha: type == "string" and test("^[0-9a-f]{40}$");
-    .schema == 1
+    (if .schema == 2 then
+      (.catalystVersion | type == "string"
+        and test("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.(0|[1-9][0-9]*))?$"))
+      and ((.commits | keys) == ["deployment"])
+    else
+      .schema == 1 and (.commits.platform | sha) and (.commits.capabilities | sha)
+    end)
     and (.release | type == "string" and test("^staging-[A-Za-z0-9_.-]+$"))
     and (.commits.deployment | sha)
-    and (.commits.platform | sha)
-    and (.commits.capabilities | sha)
     and ((.images | keys) == ($keys | sort))
     and ([.images[] | type == "string" and test("^[a-z0-9][a-z0-9./_-]*@sha256:[0-9a-f]{64}$")] | all)
   ' "$file" >/dev/null || fail "invalid manifest: $file"
@@ -83,22 +93,40 @@ case "$command" in
     # shellcheck source=deployment-env.sh
     source "$kit_dir/lib/deployment-env.sh"
     load_deployment_env
-    # shellcheck disable=SC1091
-    source "$DEPLOYMENT_ROOT/deploy/release.refs"
     manifest="$(mktemp)"
     trap 'rm -f "$manifest"' EXIT
-    jq -n \
-      --arg release "$release" \
-      --arg deployment "$(git -C "$DEPLOYMENT_ROOT" rev-parse HEAD)" \
-      --arg platform "${PLATFORM_REF:-}" \
-      --arg capabilities "${CAPABILITIES_REF:-}" \
-      --argjson images "$images" \
-      '{
-        schema: 1,
-        release: $release,
-        commits: { deployment: $deployment, platform: $platform, capabilities: $capabilities },
-        images: $images
-      }' > "$manifest"
+    deployment_commit="$(git -C "$DEPLOYMENT_ROOT" rev-parse HEAD)"
+    if [[ -f "$DEPLOYMENT_ROOT/deploy/release.refs" ]]; then
+      # shellcheck disable=SC1091
+      source "$DEPLOYMENT_ROOT/deploy/release.refs"
+      jq -n \
+        --arg release "$release" \
+        --arg deployment "$deployment_commit" \
+        --arg platform "${PLATFORM_REF:-}" \
+        --arg capabilities "${CAPABILITIES_REF:-}" \
+        --argjson images "$images" \
+        '{
+          schema: 1,
+          release: $release,
+          commits: { deployment: $deployment, platform: $platform, capabilities: $capabilities },
+          images: $images
+        }' > "$manifest"
+    else
+      catalyst_version="$(node "$kit_dir/lib/catalyst-versions.mjs" version "$DEPLOYMENT_ROOT")" \
+        || fail "package.json must pin one catalyst release; see catalyst-deploy check"
+      jq -n \
+        --arg release "$release" \
+        --arg version "$catalyst_version" \
+        --arg deployment "$deployment_commit" \
+        --argjson images "$images" \
+        '{
+          schema: 2,
+          release: $release,
+          catalystVersion: $version,
+          commits: { deployment: $deployment },
+          images: $images
+        }' > "$manifest"
+    fi
     check_manifest "$manifest"
     cat "$manifest"
     ;;

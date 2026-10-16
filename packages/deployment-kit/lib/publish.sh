@@ -126,7 +126,6 @@ cd "$repo_root"
 
 [[ "$(cd "$(git rev-parse --show-toplevel)" && pwd -P)" == "$(pwd -P)" ]] \
   || fail "deploy/deployment.env must sit in the root of the deployment repo"
-[[ -f "deploy/release.refs" ]] || fail "run this from deployment.$INSTANCE"
 [[ -f ".github/workflows/deploy.yml" ]] || fail "missing .github/workflows/deploy.yml"
 
 next_tag() {
@@ -178,7 +177,13 @@ publish_staging() {
 
   if [[ "$skip_local_checks" != "1" ]]; then
     echo "Running local release checks before publishing..."
-    CI="${CI:-true}" "$kit_dir/bin/catalyst-deploy" check
+    if [[ -f "deploy/release.refs" ]]; then
+      CI="${CI:-true}" "$kit_dir/bin/catalyst-deploy" check
+    else
+      # The deploy workflow runs the full gate on a standalone install; locally the catalyst
+      # packages may link the workspace source, so only the checks that read files run here.
+      "$kit_dir/bin/catalyst-deploy" check --static
+    fi
   fi
 
   if [[ "$local_head" != "$remote_head" ]]; then

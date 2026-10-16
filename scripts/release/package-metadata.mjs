@@ -2,7 +2,7 @@
 // Single source for the publish metadata every platform package shares. Checks that the
 // package manifests match it; `--write` applies it. The registry is one line here; licence
 // and access are set per package group.
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -76,7 +76,7 @@ const OVERRIDES = {
   // Shell scripts, host files and Node checks, shipped as they are: nothing is built.
   "artifact-helpers": { files: ["dist", "skills"], sideEffects: undefined },
   "deployment-kit": {
-    files: ["bin", "lib", "host", "verify", "dev"],
+    files: ["bin", "lib", "host", "verify", "dev", "docker"],
     sideEffects: undefined,
     assetsOnly: true
   }
@@ -152,13 +152,7 @@ export function withPublishMetadata(dir, manifest, root = repoRoot) {
     },
     sideEffects: "sideEffects" in override ? override.sideEffects : false,
     engines: { node: NODE_ENGINE },
-    // VP-5 adds the shipped Dockerfile. Include it as soon as it exists, never an empty path.
-    files: [
-      ...(override.files ?? ["dist"]),
-      ...(dir === "deployment-kit" && existsSync(resolve(root, "packages", dir, "docker"))
-        ? ["docker"]
-        : [])
-    ],
+    files: override.files ?? ["dist"],
     publishConfig: {
       access: group.access,
       registry: REGISTRY,
