@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Build the reference assembly as a deployment consuming this release's tarballs. Only
 // Catalyst dependencies are substituted; third-party ranges resolve without core's lock or
-// overrides. No registry credentials, database, Docker engine or running server are needed.
+// overrides. The hosted job supplies an isolated test Postgres for the signed-in smoke.
 import { execFileSync } from "node:child_process";
 import {
   cpSync,
@@ -17,12 +17,18 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { localManifest, packPackages } from "../../packages/deployment-kit/lib/pack-local.mjs";
+import { smokeConsumer } from "./fresh-consumer-smoke.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const runCommand = (command, args, options) =>
   execFileSync(command, args, { stdio: "inherit", ...options });
 
-export function checkFreshResolution(root = repoRoot, run = runCommand) {
+export async function checkFreshResolution(
+  root = repoRoot,
+  run = runCommand,
+  smoke = smokeConsumer,
+  proveAuthDrift = false
+) {
   const scratch = mkdtempSync(join(tmpdir(), "catalyst-fresh-resolution-"));
   try {
     const consumer = join(scratch, "consumer");
@@ -72,12 +78,39 @@ export function checkFreshResolution(root = repoRoot, run = runCommand) {
         throw new Error(`fresh-resolution: missing or empty build artifact: ${artifact}`);
       }
     }
-    console.log("\nfresh-resolution: server and UI built successfully");
+    await smoke(consumer);
+    console.log("\nfresh-resolution: builds, sign-in and authenticated /api/v1/me passed");
+
+    if (proveAuthDrift) {
+      // Reproduce the rc.1 deployment resolution through the same tarballs and HTTP probe.
+      // A build failure is not proof: only the runtime's sign-in 500 satisfies the mutation.
+      const path = join(consumer, "package.json");
+      const mutated = JSON.parse(readFileSync(path, "utf8"));
+      Object.assign(mutated.pnpm.overrides, { "better-auth": "1.7.10", zod: "4.4.3" });
+      writeFileSync(path, `${JSON.stringify(mutated, null, 2)}\n`);
+      run("pnpm", ["install", "--ignore-workspace", "--no-frozen-lockfile"], { cwd: consumer });
+      run("pnpm", ["run", "build:server"], { cwd: consumer });
+      try {
+        await smoke(consumer);
+      } catch (error) {
+        if (error.message === "fresh-resolution: sign-in returned 500 (expected 200)") {
+          console.log("fresh-resolution: rejected better-auth 1.7.10 + zod 4.4.3 at sign-in (500)");
+          return;
+        }
+        throw error;
+      }
+      throw new Error("fresh-resolution: auth drift mutation unexpectedly passed");
+    }
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  checkFreshResolution();
+  await checkFreshResolution(
+    repoRoot,
+    runCommand,
+    smokeConsumer,
+    process.argv.includes("--prove-auth-drift")
+  );
 }

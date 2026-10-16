@@ -365,7 +365,7 @@ importers:
   packages/asset-schemas:
     dependencies:
       js-yaml:
-        specifier: ^4.3.2
+        specifier: ~4.3.2
         version: 4.3.2
       zod:
         specifier: 4.4.3
@@ -390,13 +390,13 @@ importers:
         specifier: workspace:*
         version: link:../core
       better-auth:
-        specifier: ^1.6.22
+        specifier: 1.6.22
         version: 1.6.22(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(kysely@0.29.2)(postgres@3.4.9))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.8(@opentelemetry/api@1.9.1)(@types/node@24.13.1)(happy-dom@21.0.3)(vite@8.3.4(@types/node@24.13.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1)))
       drizzle-orm:
-        specifier: ^0.45.2
+        specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(kysely@0.29.2)(postgres@3.4.9)
       postgres:
-        specifier: ^3.4.9
+        specifier: ~3.4.9
         version: 3.4.9
     devDependencies:
       '@types/node':
@@ -452,10 +452,10 @@ importers:
         specifier: ^1.0.2
         version: 1.0.2(react@19.2.7)
       '@tanstack/react-query':
-        specifier: ^5.101.0
+        specifier: ~5.101.0
         version: 5.101.0(react@19.2.7)
       '@tanstack/react-router':
-        specifier: ^1.170.16
+        specifier: ~1.170.16
         version: 1.170.16(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@univerjs/core':
         specifier: 0.25.1
@@ -503,10 +503,10 @@ importers:
         specifier: ^1.17.0
         version: 1.17.0(react@19.2.7)
       react:
-        specifier: ^19.2.7
+        specifier: 19.2.7
         version: 19.2.7
       react-dom:
-        specifier: ^19.2.7
+        specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
       rehype-harden:
         specifier: 1.1.8
@@ -628,7 +628,7 @@ importers:
   packages/config-cli:
     dependencies:
       js-yaml:
-        specifier: ^4.3.2
+        specifier: ~4.3.2
         version: 4.3.2
       zod:
         specifier: 4.4.3
@@ -665,7 +665,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       re2js:
-        specifier: ^2.8.6
+        specifier: ~2.8.6
         version: 2.8.6
       zod:
         specifier: 4.4.3
@@ -696,7 +696,7 @@ importers:
         specifier: workspace:*
         version: link:../web-access
       ajv:
-        specifier: ^8.20.0
+        specifier: ~8.20.0
         version: 8.20.0
       zod:
         specifier: 4.4.3
@@ -857,7 +857,7 @@ importers:
         specifier: workspace:*
         version: link:../tool-sdk
       postgres:
-        specifier: ^3.4.9
+        specifier: ~3.4.9
         version: 3.4.9
       zod:
         specifier: 4.4.3
@@ -879,10 +879,10 @@ importers:
         specifier: workspace:*
         version: link:../core
       drizzle-orm:
-        specifier: ^0.45.2
+        specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(kysely@0.29.2)(postgres@3.4.9)
       postgres:
-        specifier: ^3.4.9
+        specifier: ~3.4.9
         version: 3.4.9
     devDependencies:
       '@types/node':
@@ -929,10 +929,10 @@ importers:
   packages/server:
     dependencies:
       '@fastify/cors':
-        specifier: ^11.2.0
+        specifier: 11.2.0
         version: 11.2.0
       '@fastify/multipart':
-        specifier: ^9.3.0
+        specifier: 9.4.0
         version: 9.4.0
       '@work-shape/catalyst-api-contract':
         specifier: workspace:*
@@ -968,7 +968,7 @@ importers:
         specifier: ~6.0.224
         version: 6.0.224(zod@4.4.3)
       fastify:
-        specifier: ^5.12.2
+        specifier: 5.12.7
         version: 5.12.7
       zod:
         specifier: 4.4.3

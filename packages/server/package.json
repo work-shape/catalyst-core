@@ -40,8 +40,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fastify/cors": "^11.2.0",
-    "@fastify/multipart": "^9.3.0",
+    "@fastify/cors": "11.2.0",
+    "@fastify/multipart": "9.4.0",
     "@work-shape/catalyst-api-contract": "workspace:*",
     "@work-shape/catalyst-app-build": "workspace:*",
     "@work-shape/catalyst-asset-repo": "workspace:*",
@@ -53,7 +53,7 @@
     "@work-shape/catalyst-tool-execution": "workspace:*",
     "@work-shape/catalyst-usage-governance": "workspace:*",
     "ai": "~6.0.224",
-    "fastify": "^5.12.2",
+    "fastify": "5.12.7",
     "zod": "4.4.3"
   },
   "devDependencies": {

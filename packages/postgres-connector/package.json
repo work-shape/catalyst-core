@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@work-shape/catalyst-core": "workspace:*",
-    "postgres": "^3.4.9",
+    "postgres": "~3.4.9",
     "zod": "4.4.3",
     "@work-shape/catalyst-tool-sdk": "workspace:*"
   },

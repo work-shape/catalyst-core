@@ -46,7 +46,37 @@ A fresh install of that checkout from its frozen lock removes that stale referen
 frozen lock, reuses deployment kit `pack-local` to pack and substitute every release
 package, and installs the reference demo in a scratch directory without core's lockfile,
 source aliases or third-party overrides. It then runs the deployment's `build:server`
-and `build:ui` commands and requires their artifacts, as the kit's check does. Only
+and `build:ui` commands and requires their artifacts, as the kit's check does. It explicitly migrates the hosted
+test Postgres, starts the installed server, seeds a disposable standalone user through the
+normal startup seed, signs in over HTTP, and requires a session cookie plus a 200 from
+`GET /api/v1/me` (401 without the cookie). A build, readiness, sign-in or API failure blocks
+publication. The child server and scratch consumer are removed even on failure. Only
 Catalyst package overrides select local tarballs; third-party ranges resolve afresh.
 Dispatch `gh workflow run release.yml --ref <branch>` to prove this gate without
 publishing. Dispatches have their own concurrency group and cannot hold up a tag release.
+
+Dispatch also proves the regression: after the good consumer passes, it overrides
+`better-auth` to `1.7.10` and `zod` to `4.4.3`, installs and rebuilds the server, and requires
+the same smoke to reject sign-in with 500. An install/build/startup failure is not accepted
+as mutation proof, nor is an unexpected success. Tags run only the good consumer.
+
+Published runtime dependencies and peers deliberately stay on these tested lines (the
+range test checks their starting versions against core's lock):
+
+| Dependency                                    | Range               | Reason                                                                                             |
+| --------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
+| better-auth                                   | 1.6.22              | 1.7.10 calls Zod APIs absent from core's 4.4.3; its @better-auth/* dependencies are already exact. |
+| zod                                           | 4.4.3 (retained)    | Schema identity and validation must agree across packages and auth.                                |
+| drizzle-orm                                   | 0.45.2              | Pre-1.0 ORM and auth adapter contracts move in patch releases.                                     |
+| react, react-dom (including UI peers)         | 19.2.7              | Renderer and hooks must agree; 19.3.x was not core's tested runtime.                               |
+| fastify                                       | 5.12.7              | Request/auth boundary and emitted server types must match the tested security patch.               |
+| @fastify/cors, @fastify/multipart             | 11.2.0, 9.4.0       | Credentialed origins and upload parsing sit on the HTTP/data boundary.                             |
+| postgres                                      | ~3.4.9              | DB protocol, transactions and value conversion must stay on the tested minor.                      |
+| js-yaml                                       | ~4.3.2              | Parses release and asset configuration before validation.                                          |
+| re2js                                         | ~2.8.6              | Compiles guardrail validation patterns.                                                            |
+| ajv                                           | ~8.20.0             | Validates connector inputs and outputs at the data boundary.                                       |
+| @tanstack/react-query, @tanstack/react-router | ~5.101.0, ~1.170.16 | Cache and route transitions carry signed-in UI state.                                              |
+
+The existing `@assistant-ui/react` and `ai` minor bounds and other exact pins stay in place.
+Unrelated UI helpers and tooling keep their existing ranges. Changes to these lines require
+a deliberate manifest/lock update and both the frozen-lock Check and fresh consumer gate.

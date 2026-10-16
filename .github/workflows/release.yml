@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  packages: read
 concurrency:
   group: ${{ github.event_name == 'workflow_dispatch' && format('fresh-resolution-{0}', github.run_id) || 'npm-release' }}
   cancel-in-progress: false
@@ -12,6 +13,8 @@ jobs:
   fresh-resolution:
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 15
+    env:
+      POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -20,11 +23,24 @@ jobs:
         with:
           build: "false"
       - name: Verify the fresh-resolution gate
-        run: node --test scripts/release/fresh-resolution.test.mjs
+        run: node --test scripts/release/fresh-resolution.test.mjs scripts/release/fresh-consumer-smoke.test.mjs scripts/release/dependency-ranges.test.mjs
       - name: Build release packages from the frozen core lock
         run: pnpm -r --filter './packages/*' build
+      - name: Sign in to the registry for the test Postgres image
+        env:
+          TOKEN: ${{ github.token }}
+        run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
+      - name: Test Postgres
+        run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
       - name: Build a consumer with freshly resolved third-party ranges
+        if: github.event_name != 'workflow_dispatch'
         run: node scripts/release/check-fresh-resolution.mjs
+      - name: Prove the gate rejects auth version drift
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/release/check-fresh-resolution.mjs --prove-auth-drift
+      - name: Remove test Postgres
+        if: always()
+        run: docker rm -f check-postgres || true
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: fresh-resolution

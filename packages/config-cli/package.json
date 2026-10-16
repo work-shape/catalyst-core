@@ -42,7 +42,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "js-yaml": "^4.3.2",
+    "js-yaml": "~4.3.2",
     "zod": "4.4.3"
   },
   "devDependencies": {
