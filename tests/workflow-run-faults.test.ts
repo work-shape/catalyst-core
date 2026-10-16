@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   createPlatformId,
@@ -6,6 +6,7 @@ import {
   type WorkflowManifest
 } from "@work-shape/catalyst-core";
 import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
+import { deferred } from "./support/assertions";
 import { clientInstanceId } from "./support/access-instance";
 import {
   hangingAt,
@@ -171,16 +172,38 @@ describe("a changing call whose first attempt left no outcome", () => {
     const started = await start(t);
     const { worker, stepRun, first } = await firstCallRunning(t, started.id, new Date());
 
+    const waited = deferred<void>();
+    const release = deferred<void>();
+    let notes = 0;
+    hanging.push(() => release.resolve());
+    const note = t.stores.workflowRuns.noteStepRunOperation;
+    const spy = vi
+      .spyOn(t.stores.workflowRuns, "noteStepRunOperation")
+      .mockImplementation(async (input) => {
+        await note(input);
+        if (input.id === stepRun.id && ++notes === 2) {
+          waited.resolve();
+          await release.promise;
+        }
+      });
     const pass = worker.runDue();
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    // Half a second in, the step waits: nothing failed and nothing was called.
-    const waiting = (await stepRunsOf(t, started.id)).find(
-      (candidate) => candidate.id === stepRun.id
-    );
-    expect(waiting).toMatchObject({ status: "running", operationRunId: first.id });
-    expect(waiting?.error).toBeUndefined();
-    expect(writesOf(t)).toEqual([]);
-    await pass;
+    try {
+      // The second note is reached only after awaitFirstCall has paused inside its wait window.
+      expect(
+        await Promise.race([waited.promise.then(() => "waited"), pass.then(() => "finished")])
+      ).toBe("waited");
+      expect(notes).toBe(2);
+      const waiting = (await stepRunsOf(t, started.id)).find(
+        (candidate) => candidate.id === stepRun.id
+      );
+      expect(waiting).toMatchObject({ status: "running", operationRunId: first.id });
+      expect(waiting?.error).toBeUndefined();
+      expect(writesOf(t)).toEqual([]);
+    } finally {
+      release.resolve();
+      await pass;
+      spy.mockRestore();
+    }
     expect((await t.finish(started.id, worker)).error?.code).toBe("operation_interrupted");
   });
 

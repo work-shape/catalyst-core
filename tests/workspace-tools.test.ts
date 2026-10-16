@@ -1,4 +1,4 @@
-import { text, array, jsonObject } from "./support/assertions";
+import { text, array, jsonObject, waitUntil } from "./support/assertions";
 
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -1574,15 +1574,11 @@ async function expectToolFailure(toolName: string, input: unknown, code: string,
 async function waitForQueuedCommand(
   harness: Awaited<ReturnType<typeof createWorkspaceHarness>>
 ): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  await waitUntil(async () => {
     const counts = await harness.store.executionWorkspaces.countActiveWorkspaceCommands({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id
     });
-    if (counts.queued === 1) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1));
-  }
-  throw new Error("Workspace command was not queued");
+    return counts.queued === 1;
+  }, "the workspace command is queued before cancelling its run");
 }

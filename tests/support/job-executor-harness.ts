@@ -65,9 +65,14 @@ export function useJobExecutorHarness(db: PostgresSuite) {
   afterEach(async () => {
     vi.useRealTimers();
     for (const release of hanging.splice(0)) release();
-    await Promise.all(workers.splice(0).map((worker) => worker.stop()));
+    await stopWorkers();
+    vi.restoreAllMocks();
     await db.sql`delete from platform_jobs`;
   });
+
+  async function stopWorkers(): Promise<void> {
+    await Promise.all(workers.splice(0).map((worker) => worker.stop()));
+  }
 
   function worker(
     stores: PlatformStores,
@@ -134,5 +139,5 @@ export function useJobExecutorHarness(db: PostgresSuite) {
     };
   }
 
-  return { worker, hang, jobs, onlyJob, expireLeases, heartbeatsByHand };
+  return { worker, stopWorkers, hang, jobs, onlyJob, expireLeases, heartbeatsByHand };
 }

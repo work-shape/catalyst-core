@@ -20,7 +20,7 @@ import {
   type WorkspaceCommandProcessInput
 } from "@work-shape/catalyst-tool-execution";
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 import { deferred, required } from "./assertions";
 import type { useJobExecutorHarness } from "./job-executor-harness";
 import type { PostgresSuite } from "./postgres-suite";
@@ -36,6 +36,8 @@ export function useWorkspaceCommandJobFixture(
   const cleanupDirectories: string[] = [];
 
   afterEach(async () => {
+    vi.useRealTimers();
+    await harness.stopWorkers();
     await Promise.all(
       cleanupDirectories
         .splice(0)

@@ -15,7 +15,7 @@ import {
   createWorkspaceCommandClient
 } from "@work-shape/catalyst-tool-execution";
 import { describe, expect, it, vi } from "vitest";
-import { required, waitUntil } from "./support/assertions";
+import { deferred, required, waitUntil } from "./support/assertions";
 import {
   advanceFakeClockUntilSettled,
   settleOnFakeClock,
@@ -711,6 +711,16 @@ describe("a workspace command no worker takes", () => {
   it("goes on waiting for a command that a worker claims in the moment it is given up", async () => {
     const fixture = await createFixture("claimed_at_give_up");
     let pass: Promise<void> | undefined;
+    const claimed = deferred<Awaited<ReturnType<typeof fixture.executor.next>>>();
+    const gaveUp = deferred<void>();
+    const giveUp = db.store.executionWorkspaces.giveUpUnclaimedWorkspaceCommand;
+    vi.spyOn(db.store.executionWorkspaces, "giveUpUnclaimedWorkspaceCommand").mockImplementation(
+      async (input) => {
+        const result = await giveUp(input);
+        gaveUp.resolve();
+        return result;
+      }
+    );
     // The queue is read, it shows no worker, and before the client acts on it a worker claims.
     const jobs: typeof db.store.jobs = {
       ...db.store.jobs,
@@ -718,7 +728,7 @@ describe("a workspace command no worker takes", () => {
         const read = await db.store.jobs.readKindActivity(input);
         if (!pass) {
           pass = fixture.worker().runDue();
-          await fixture.executor.next();
+          claimed.resolve(await fixture.executor.next());
         }
         return read;
       }
@@ -727,35 +737,33 @@ describe("a workspace command no worker takes", () => {
       stores: { ...db.store, jobs },
       now: () => new Date().toISOString()
     });
-    useFakeClockBesidePostgres();
-    const handle = await settleOnFakeClock(
-      client.enqueue(
-        { kind: "execution_workspace", id: fixture.workspace.id },
-        fixture.request("ls")
-      )
+    // Freeze only Date: database and polling timers remain real. The first poll sees
+    // exactly the give-up boundary, regardless of how long the database takes.
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date() });
+    const handle = await client.enqueue(
+      { kind: "execution_workspace", id: fixture.workspace.id },
+      fixture.request("ls")
     );
+    const activity = await db.store.jobs.readKindActivity({
+      clientInstanceId: fixture.clientInstanceId,
+      kind: "workspace.command"
+    });
+    // The job's due time comes from Postgres, not the frozen application clock.
+    vi.setSystemTime(Date.parse(required(activity.waitingSince)));
     let result: Awaited<ReturnType<typeof client.await>> | undefined;
     const waiting = client.await(handle, {}).then((ended) => {
       result = ended;
     });
-
-    await vi.advanceTimersByTimeAsync(JOB_UNCLAIMED_MS - 700);
-    for (let step = 0; step < 40 && fixture.executor.calls.length === 0; step += 1) {
-      await vi.advanceTimersByTimeAsync(250);
-      await settleOnFakeClock(fixture.command(handle.command));
-    }
-    const execution = required(fixture.executor.calls[0]);
-    // Two more looks at the row: the client has acted on what it read.
-    await vi.advanceTimersByTimeAsync(1_300);
-    expect(await settleOnFakeClock(fixture.command(handle.command))).toMatchObject({
-      status: "running"
-    });
+    vi.setSystemTime(Date.now() + JOB_UNCLAIMED_MS);
+    const execution = await claimed.promise;
+    await gaveUp.promise;
+    expect(await fixture.command(handle.command)).toMatchObject({ status: "running" });
     expect(result).toBeUndefined();
     expect(execution.signal?.aborted).toBe(false);
 
     execution.complete(successResult({ stdoutPreview: "listed" }));
-    await settleOnFakeClock(required(pass));
-    await advanceFakeClockUntilSettled(waiting, 250);
+    await required(pass);
+    await waiting;
 
     expect(result).toMatchObject({
       status: "settled",

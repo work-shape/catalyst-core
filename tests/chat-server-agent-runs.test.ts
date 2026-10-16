@@ -1011,8 +1011,10 @@ describe("client instance app vertical slice", () => {
     });
     await drainRunEvents(app, conversation.id, firstMessage.run.id);
 
+    const correlationId = "usage-limit-refused-message";
     const secondMessage = await injectStartConversationRun(app, conversation.id, "hello again", {
-      idempotencyKey: "usage-limit-second"
+      idempotencyKey: "usage-limit-second",
+      headers: { "x-correlation-id": correlationId }
     });
     const failedEvents = parseSseChunks(
       await drainRunEvents(app, conversation.id, secondMessage.run.id)
@@ -1028,9 +1030,23 @@ describe("client instance app vertical slice", () => {
       })
     );
 
+    // The terminal observation may reach the client before its audit write commits.
+    await waitUntil(async () => {
+      const audit = await app.call("audit_events.list", {});
+      expect(audit.statusCode).toBe(200);
+      return audit
+        .json<{ items: Array<{ type: string; correlationId?: string }> }>()
+        .items.some(
+          (event) => event.correlationId === correlationId && event.type === "message.failed"
+        );
+    }, "the refused message has its own failure audit");
     const audit = await app.call("audit_events.list", {});
     expect(audit.statusCode).toBe(200);
-    expect(audit.json().items).toContainEqual(
+    expect(
+      audit
+        .json<{ items: Array<{ correlationId?: string }> }>()
+        .items.filter((event) => event.correlationId === correlationId)
+    ).toContainEqual(
       expect.objectContaining({
         type: "message.failed",
         metadata: expect.objectContaining({
