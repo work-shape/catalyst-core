@@ -2,8 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "./chat-ui-render-harness";
-import { StagingBanner } from "../packages/chat-ui/src/chat/workspace/workspace-chrome";
-import { createEnvironmentDocumentTitle } from "../packages/chat-ui/src/shared/workspace-utils";
+import { StagingBanner, createEnvironmentDocumentTitle } from "./support/chat-ui";
 
 function renderBanner(environment: string, locale: "de" | "en" = "de") {
   return renderToStaticMarkup(

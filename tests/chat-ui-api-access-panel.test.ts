@@ -2,11 +2,7 @@ import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import type { ServicePrincipalDetail } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { ApiAccessPanel } from "../packages/chat-ui/src/admin/control-plane/api-access-panel";
-import {
-  copySecretField,
-  SecretFields
-} from "../packages/chat-ui/src/admin/control-plane/api-access-secret-fields";
+import { ApiAccessPanel, copySecretField, SecretFields } from "./support/chat-ui";
 
 const detail: ServicePrincipalDetail = {
   principal: {

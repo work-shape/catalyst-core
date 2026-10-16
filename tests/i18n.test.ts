@@ -1,3 +1,4 @@
+import { chatUiSources } from "./support/chat-ui";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
@@ -130,7 +131,7 @@ describe("interface translations", () => {
 // The compiler checks the real area files with every type check. These sources show that the
 // same declarations reject an incomplete locale and a key that two areas share.
 describe("translation area types", { timeout: 60_000 }, () => {
-  const areas = fileURLToPath(new URL("../packages/chat-ui/src/shared/i18n", import.meta.url));
+  const areas = fileURLToPath(chatUiSources.i18n);
   const sources: Record<string, string> = {
     complete: `import { defineTranslations } from "./translation-area";
 export const area = defineTranslations({

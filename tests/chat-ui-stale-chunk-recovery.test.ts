@@ -1,9 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import {
-  installStaleChunkRecovery,
-  STALE_CHUNK_RELOAD_COOLDOWN_MS
-} from "../packages/chat-ui/src/shared/stale-chunk-recovery";
+import { installStaleChunkRecovery, STALE_CHUNK_RELOAD_COOLDOWN_MS } from "./support/chat-ui";
 
 describe("stale client chunk recovery", () => {
   it("reloads once per cooldown when Vite reports a missing lazy chunk", () => {

@@ -2,20 +2,18 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import type { ConversationListItem, LocaleCode, SafeConfig } from "@work-shape/catalyst-api-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-selector";
-import { WorkspaceRail } from "../packages/chat-ui/src/chat/workspace/workspace-rail";
 import {
+  CollaborationWorkspaceSelector,
+  WorkspaceRail,
   retentionHintAfter,
   retentionHintClosed,
   retentionHintOpen,
-  type RetentionHintEvent
-} from "../packages/chat-ui/src/chat/conversation/conversation-button";
-import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/chat-workspace";
-import { workspaceSendBlock } from "../packages/chat-ui/src/chat/workspace/workspace-send-block";
-import {
+  type RetentionHintEvent,
+  collaborationWorkspacesAvailableFor,
+  workspaceSendBlock,
   activeAgentNameFor,
   workspaceScopedConfigFor
-} from "../packages/chat-ui/src/chat/workspace/workspace-chat-model";
+} from "./support/chat-ui";
 
 const noop = () => undefined;
 

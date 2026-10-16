@@ -1,21 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AssistantActivityStatus } from "../packages/chat-ui/src/chat/assistant/assistant-activity-status";
 import {
+  AssistantActivityStatus,
   acknowledgeRecentlyActiveAssistantRunId,
   isRecentlyActiveAssistantRunId,
-  rememberRecentlyActiveAssistantRunId
-} from "../packages/chat-ui/src/chat/assistant/assistant-message";
-import { TranslationProvider } from "./chat-ui-render-harness";
-import { ToolActivityLabelsProvider } from "../packages/chat-ui/src/chat/assistant/tool-activity";
-import {
+  rememberRecentlyActiveAssistantRunId,
+  ToolActivityLabelsProvider,
   findRunActivity,
   isComposerBlockedByActiveRun,
   isThreadBusy,
   shouldShowCancelAction,
   shouldShowRunActivity
-} from "../packages/chat-ui/src/chat/assistant/thread-activity";
+} from "./support/chat-ui";
+import { TranslationProvider } from "./chat-ui-render-harness";
 
 describe("chat UI thread activity", () => {
   it("runs completed-work effects only once across conversation remounts", () => {

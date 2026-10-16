@@ -4,9 +4,9 @@ import type { CollaborationWorkspaceWithRole, SafeConfig } from "@work-shape/cat
 import { describe, expect, it } from "vitest";
 import {
   CollaborationWorkspaceSelector,
-  CollaborationWorkspaceSelectorMenu
-} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-selector";
-import { ClientBrandingHeader } from "../packages/chat-ui/src/chat/workspace/client-branding";
+  CollaborationWorkspaceSelectorMenu,
+  ClientBrandingHeader
+} from "./support/chat-ui";
 
 const noop = () => undefined;
 

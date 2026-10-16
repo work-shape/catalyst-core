@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationThreadSnapshot, RunObservation } from "@work-shape/catalyst-api-client";
-import { toUiMessages } from "../packages/chat-ui/src/chat/assistant/assistant-ui-adapter";
 import {
+  toUiMessages,
   applyRunObservationToControllerState,
   completeRunObservationStreamInControllerState,
   controllerStateForConversation,
@@ -9,7 +9,7 @@ import {
   createInitialControllerState,
   resolveRunConnectionTarget,
   staleThreadReread
-} from "../packages/chat-ui/src/chat/conversation/conversation-controller-state";
+} from "./support/chat-ui";
 
 describe("chat UI conversation controller", () => {
   it("shows the preparing tool until the real tool call starts", () => {

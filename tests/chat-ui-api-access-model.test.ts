@@ -6,12 +6,10 @@ import {
   expiryInputToIso,
   isCredentialActive,
   optionalTrimmedValue,
-  scopesAllowedByPermissions
-} from "../packages/chat-ui/src/admin/control-plane/api-access-model";
-import {
+  scopesAllowedByPermissions,
   createApiAccessAuthorityKey,
   createApiAccessRevealController
-} from "../packages/chat-ui/src/shared/api/api-access-reveal-controller";
+} from "./support/chat-ui";
 import { canManageApiAccess, canViewAdministrationPanel } from "@work-shape/catalyst-chat-ui/admin";
 
 describe("API access model", () => {

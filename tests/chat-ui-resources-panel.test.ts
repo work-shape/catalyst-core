@@ -10,18 +10,16 @@ import {
   groupConversationResources,
   isResourcesPanelAvailable,
   resolveResourcesPanelOpen,
-  structuredDataToTsv
-} from "../packages/chat-ui/src/chat/files/resources-panel-model";
-import { ResourcesPanel } from "../packages/chat-ui/src/chat/files/resources-panel";
-import {
+  structuredDataToTsv,
+  ResourcesPanel,
   conversationFileFromResource,
   createConversationFilePanelEntry,
   findSourceFileResource,
   findSourceFileResourceByAttachmentId,
   getSourceFilePreviewKind,
-  SourceFilePreview
-} from "../packages/chat-ui/src/chat/files/conversation-file-presentation";
-import { StructuredDataView } from "../packages/chat-ui/src/chat/files/structured-data-view";
+  SourceFilePreview,
+  StructuredDataView
+} from "./support/chat-ui";
 import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 
 const resources: ConversationResourceListItem[] = [

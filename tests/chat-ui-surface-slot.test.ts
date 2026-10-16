@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import { pageSurfaceRendering } from "@work-shape/catalyst-chat-ui/pages";
-import { SurfaceSlotFrame } from "../packages/chat-ui/src/chat/surface/surface-slot";
+import { SurfaceSlotFrame } from "./support/chat-ui";
 import { renderToStaticMarkup } from "./chat-ui-render-harness";
 
 type FrameProps = Parameters<typeof SurfaceSlotFrame>[0];

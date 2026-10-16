@@ -8,39 +8,29 @@ import type {
   WorkspaceMemberCandidate
 } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { BrowseCollaborationWorkspacesDialog } from "../packages/chat-ui/src/shared/collaboration-workspace/browse-collaboration-workspaces-dialog";
-import { CreateCollaborationWorkspaceDialog } from "../packages/chat-ui/src/shared/collaboration-workspace/create-collaboration-workspace-dialog";
 import {
+  BrowseCollaborationWorkspacesDialog,
+  CreateCollaborationWorkspaceDialog,
   CollaborationWorkspaceAddMemberForm,
   CollaborationWorkspaceMemberCandidateList,
-  nextCollaborationWorkspaceMemberCandidate
-} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-member-search";
-import {
+  nextCollaborationWorkspaceMemberCandidate,
   canChangeCollaborationWorkspaceRole,
   canDeleteCollaborationWorkspace,
-  canRemoveCollaborationWorkspaceMember
-} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-roles";
-import { WorkspaceGeneralView } from "../packages/chat-ui/src/admin/settings/pages/workspace-general";
-import { WorkspaceMembersView } from "../packages/chat-ui/src/admin/settings/pages/workspace-members";
-import {
+  canRemoveCollaborationWorkspaceMember,
+  WorkspaceGeneralView,
+  WorkspaceMembersView,
   collaborationWorkspaceAccentColors,
-  collaborationWorkspaceAccentTokens
-} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-accent";
-import { CollaborationWorkspaceEmojiGrid } from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-fields";
-import {
+  collaborationWorkspaceAccentTokens,
+  CollaborationWorkspaceEmojiGrid,
   collaborationWorkspaceEmojiChoices,
-  collaborationWorkspaceEmojiSuggestions
-} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-emoji";
-import {
+  collaborationWorkspaceEmojiSuggestions,
   CollaborationWorkspaceDeletionConfirmStep,
-  CollaborationWorkspaceDeletionImpactStep
-} from "../packages/chat-ui/src/shared/collaboration-workspace/delete-collaboration-workspace-dialog";
-import {
+  CollaborationWorkspaceDeletionImpactStep,
   moveConversationDestinations,
   movedConversationVisibility,
   MoveConversationDialog,
   MoveConversationVisibility
-} from "../packages/chat-ui/src/shared/collaboration-workspace/move-conversation-dialog";
+} from "./support/chat-ui";
 
 const noop = () => undefined;
 

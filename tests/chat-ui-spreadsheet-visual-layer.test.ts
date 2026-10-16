@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { spreadsheetChartOption } from "../packages/chat-ui/src/chat/files/spreadsheet-visual-layer";
-import type { SpreadsheetVisual } from "../packages/chat-ui/src/chat/files/spreadsheet-visuals";
+import { spreadsheetChartOption, type SpreadsheetVisual } from "./support/chat-ui";
 
 const chart: Extract<SpreadsheetVisual, { kind: "chart" }> = {
   id: "chart-1",

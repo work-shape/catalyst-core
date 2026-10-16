@@ -1,13 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import { describe, expect, it } from "vitest";
-import { ThreadWelcomeHeading } from "../packages/chat-ui/src/chat/assistant/assistant-thread";
-import { TranslationProvider } from "./chat-ui-render-harness";
 import {
+  ThreadWelcomeHeading,
   agentChipDisplayFor,
-  agentPickerOptions
-} from "../packages/chat-ui/src/chat/workspace/agent-selector";
-import { WorkspaceChrome } from "../packages/chat-ui/src/chat/workspace/workspace-chrome";
+  agentPickerOptions,
+  WorkspaceChrome
+} from "./support/chat-ui";
+import { TranslationProvider } from "./chat-ui-render-harness";
 
 const noop = () => undefined;
 

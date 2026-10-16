@@ -115,8 +115,10 @@ subpaths use development-only exports and are omitted from published metadata. T
 JSON `paths` are a generated cache of the same entries: run `pnpm exec catalyst-quality aliases --write` in each repository after changing exports. Lint rejects a stale cache with the repair command, including when a sibling platform package adds an export. Runtime source requires dependencies, peerDependencies or optionalDependencies; other files and the bundled CLI may also use devDependencies. Demo seed App files are checked by their own build boundary. The explicit
 capabilities `#platform-test-support` path remains outside package resolution.
 
-The dock-state route test keeps its relative import: adding a development export would make
-Knip treat that private module as public and hide an existing unused export.
+Chat UI tests use public subpaths or `tests/support/chat-ui.ts`, the sole private test seam.
+Its named exports and source URLs keep folder moves out of test callers without widening the
+published package surface. The platform root ESLint config rejects private static imports,
+re-exports, dynamic imports, require calls and type imports everywhere else under tests/.
 
 ## Allowed-value lists
 

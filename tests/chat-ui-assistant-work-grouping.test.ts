@@ -9,7 +9,7 @@ import {
   createRenderableAssistantToolGroupIndices,
   createVisibleFinalAssistantPartIndices,
   findFinalAssistantTextPartIndex
-} from "../packages/chat-ui/src/chat/assistant/assistant-work-grouping";
+} from "./support/chat-ui";
 
 describe("assistant work grouping", () => {
   it("uses the last non-empty text part as the visible final answer boundary", () => {

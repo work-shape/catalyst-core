@@ -8,9 +8,7 @@ import {
   areaRoutes,
   workspaceRouteFromPath,
   workspaceRouteNavigation,
-  workspaceRoutePath
-} from "../packages/chat-ui/src/shared/routes";
-import {
+  workspaceRoutePath,
   addressDockConversation,
   clampDockWidth,
   DOCK_DEFAULT_WIDTH,
@@ -18,7 +16,7 @@ import {
   dockMotion,
   dockPlacement,
   searchWithDock
-} from "../packages/chat-ui/src/chat/workspace/dock-state";
+} from "./support/chat-ui";
 // Keep this module private: exporting it only for tests hides a Knip unused-export finding.
 
 type Area = (typeof areaRoutes)[number]["area"];

@@ -10,7 +10,7 @@ import {
   threadQueryRetry,
   threadRetryDelay,
   workspaceConfigQueryOptions
-} from "../packages/chat-ui/src/shared/api/workspace-queries";
+} from "./support/chat-ui";
 
 describe("workspace session query", () => {
   it("aborts the current-user request when its deadline expires", async () => {

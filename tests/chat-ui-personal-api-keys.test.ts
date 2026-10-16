@@ -17,8 +17,8 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
-import { PersonalApiKeysTable } from "../packages/chat-ui/src/admin/control-plane/personal-api-keys-list";
 import {
+  PersonalApiKeysTable,
   buildPersonalKeyScopes,
   connectCodeOfSearch,
   formatConnectCode,
@@ -29,21 +29,17 @@ import {
   personalKeyDraftProblem,
   personalKeyExpiryOf,
   personalKeyRequest,
-  personalKeyState
-} from "../packages/chat-ui/src/admin/control-plane/personal-api-keys-model";
-import {
+  personalKeyState,
   settingsCatalog,
-  visibleSettingsPages
-} from "../packages/chat-ui/src/admin/settings/catalog";
-import { ConnectCodeConfirm } from "../packages/chat-ui/src/admin/settings/pages/api-keys";
-import {
+  visibleSettingsPages,
+  ConnectCodeConfirm,
   ConnectLocalAgentPage,
   ConnectLocalAgentView,
   LOCAL_AGENT_TOOLS,
   localAgentCommand,
   type LocalAgentCommandState,
   type LocalAgentTool
-} from "../packages/chat-ui/src/admin/settings/pages/connect-local-agent";
+} from "./support/chat-ui";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { personalWorkspace, settingsUser } from "./chat-ui-settings-fixtures";

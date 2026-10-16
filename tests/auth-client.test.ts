@@ -6,10 +6,7 @@ import {
   signOut,
   type ApiClient
 } from "@work-shape/catalyst-api-client";
-import {
-  WorkspaceApiClientProvider,
-  useWorkspaceApiClient
-} from "../packages/chat-ui/src/shared/api/workspace-api-client";
+import { WorkspaceApiClientProvider, useWorkspaceApiClient } from "./support/chat-ui";
 
 const requireFromChatUi = createRequire(
   new URL("../packages/chat-ui/package.json", import.meta.url)

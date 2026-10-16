@@ -2,19 +2,18 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { ApprovalRequestCardView } from "../packages/chat-ui/src/chat/approvals/approval-request-card";
-import { readApprovalRequestDisplay } from "../packages/chat-ui/src/chat/approvals/approval-request-model";
 import {
+  ApprovalRequestCardView,
+  readApprovalRequestDisplay,
   buildApprovalRevisionMessage,
-  changedLines
-} from "../packages/chat-ui/src/chat/approvals/approval-revision-message";
-import { parseSkillChangePreview } from "../packages/chat-ui/src/chat/approvals/skill-change-preview";
-import {
+  changedLines,
+  parseSkillChangePreview,
   createCompletedAssistantWorkIndices,
-  createVisibleFinalAssistantPartIndices
-} from "../packages/chat-ui/src/chat/assistant/assistant-work-grouping";
+  createVisibleFinalAssistantPartIndices,
+  InboxItemView,
+  type InboxItemActions
+} from "./support/chat-ui";
 import { TranslationProvider, createTranslationContext } from "@work-shape/catalyst-chat-ui";
-import { InboxItemView, type InboxItemActions } from "../packages/chat-ui/src/chat/inbox";
 
 const skillChangePreview = {
   skillName: "payroll",

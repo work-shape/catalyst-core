@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StartConversationRunResponse } from "@work-shape/catalyst-api-client";
-import {
-  ProductConversationRunTransport,
-  startProductConversationRun
-} from "../packages/chat-ui/src/chat/assistant/product-run-transport";
+import { ProductConversationRunTransport, startProductConversationRun } from "./support/chat-ui";
 
 type ProductUiMessage = Parameters<
   ProductConversationRunTransport["sendMessages"]

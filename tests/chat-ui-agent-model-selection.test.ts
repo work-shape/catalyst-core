@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ModelCard, ModelPicker } from "../packages/chat-ui/src/chat/assistant/model-picker";
 import {
-  renderToStaticMarkup as renderInUiRoot,
-  TranslationProvider
-} from "./chat-ui-render-harness";
-import {
+  ModelCard,
+  ModelPicker,
   agentModelSelection,
   conversationModelPicks,
   modelReasoningEffortSelection,
   type AgentSelectableModel
-} from "../packages/chat-ui/src/chat/workspace/agent-model-selection";
+} from "./support/chat-ui";
+import {
+  renderToStaticMarkup as renderInUiRoot,
+  TranslationProvider
+} from "./chat-ui-render-harness";
 
 const own: AgentSelectableModel = {
   bindingId: "sol",

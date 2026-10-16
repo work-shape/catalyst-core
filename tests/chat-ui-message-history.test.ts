@@ -8,8 +8,7 @@ import {
   createAssistantToolCallsMetadata,
   createToolResultMetadata
 } from "@work-shape/catalyst-core";
-import { toUiMessages } from "../packages/chat-ui/src/chat/assistant/assistant-ui-adapter";
-import { AssistantSourcePart } from "../packages/chat-ui/src/chat/assistant/assistant-source-part";
+import { toUiMessages, AssistantSourcePart } from "./support/chat-ui";
 
 describe("chat UI message history projection", () => {
   it("replays persisted user document manifests as file attachments", () => {

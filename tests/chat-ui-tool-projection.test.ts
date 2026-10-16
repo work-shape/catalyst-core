@@ -7,15 +7,17 @@ import {
   createToolResultMetadata,
   type ToolExecutionResult
 } from "@work-shape/catalyst-core";
-import { toUiMessages } from "../packages/chat-ui/src/chat/assistant/assistant-ui-adapter";
-import { readToolDisplayPayloadFromToolResult } from "../packages/chat-ui/src/shared/domain-ui-widgets";
+import {
+  toUiMessages,
+  readToolDisplayPayloadFromToolResult,
+  readToolArtifactRefs,
+  readToolSurfaceRefs
+} from "./support/chat-ui";
 import {
   readToolActionLabel,
   readToolDetailSections,
   readToolDisplayProjection
 } from "@work-shape/catalyst-chat-ui/tool-call";
-import { readToolArtifactRefs } from "../packages/chat-ui/src/chat/tools/tool-artifacts";
-import { readToolSurfaceRefs } from "../packages/chat-ui/src/chat/tools/tool-surfaces";
 
 describe("chat UI message history projection", () => {
   it("uses one structured result payload for live and persisted display surfaces", () => {

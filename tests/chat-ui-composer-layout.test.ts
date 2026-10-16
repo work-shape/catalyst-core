@@ -6,20 +6,18 @@ import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import { safeConfigSchema } from "@work-shape/catalyst-api-contract";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
-import { shouldExpandComposer } from "../packages/chat-ui/src/chat/assistant/assistant-composer";
 import {
+  shouldExpandComposer,
   createQueuedSendSettler,
   draftAttachmentsKey,
   resolveSendBlock,
   shouldQueueSend,
   type QueuedSendState,
-  type SendBlock
-} from "../packages/chat-ui/src/chat/assistant/send-block";
-import {
+  type SendBlock,
   AssistantThread,
   ThreadStartBlock,
   ThreadWelcomeHeading
-} from "../packages/chat-ui/src/chat/assistant/assistant-thread";
+} from "./support/chat-ui";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { createTestConfig } from "./support/fixtures";
 

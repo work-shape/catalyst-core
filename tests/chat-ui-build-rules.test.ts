@@ -14,7 +14,7 @@ import {
   resolveBuildRights,
   resolveBuildScope
 } from "@work-shape/catalyst-chat-ui/build-area";
-import { createAssetWrites } from "../packages/chat-ui/src/shared/api/asset-writes";
+import { createAssetWrites } from "./support/chat-ui";
 import {
   instanceActions,
   legalNamespace,

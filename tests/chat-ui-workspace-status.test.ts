@@ -4,11 +4,7 @@ import {
   renderToStaticMarkup as renderInUiRoot,
   TranslationProvider
 } from "./chat-ui-render-harness";
-import {
-  ConfigCheckPanel,
-  OutdatedInterfaceBanner,
-  SessionCheckPanel
-} from "../packages/chat-ui/src/chat/workspace/workspace-chrome";
+import { ConfigCheckPanel, OutdatedInterfaceBanner, SessionCheckPanel } from "./support/chat-ui";
 
 describe("workspace config status", () => {
   const idle = { retrying: false, onRetry: () => undefined, onReload: () => undefined };

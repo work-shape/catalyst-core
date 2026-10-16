@@ -9,14 +9,12 @@ import {
   createArtifactPreviewView,
   createImagePagesArtifactPreviewLoadPlan,
   getArtifactSourceFallbackKind,
-  shouldUseLiveArtifactPreviewState
-} from "../packages/chat-ui/src/chat/files/artifact-preview";
-import { ArtifactPreviewMessage } from "../packages/chat-ui/src/chat/files/artifact-preview-shell";
-import {
+  shouldUseLiveArtifactPreviewState,
+  ArtifactPreviewMessage,
   getArtifactFileType,
-  type ToolArtifactDownloadRef
-} from "../packages/chat-ui/src/chat/tools/tool-artifacts";
-import { conversationFileFromResource } from "../packages/chat-ui/src/chat/files/conversation-file-presentation";
+  type ToolArtifactDownloadRef,
+  conversationFileFromResource
+} from "./support/chat-ui";
 import { TranslationProvider } from "./chat-ui-render-harness";
 
 describe("chat UI artifact preview state", () => {

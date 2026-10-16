@@ -9,7 +9,7 @@ import {
   formatWorkHistoryLabel,
   msUntilNextMidnight,
   transcriptMessageTimes
-} from "../packages/chat-ui/src/chat/assistant/thread-time";
+} from "./support/chat-ui";
 
 const berlin = "Europe/Berlin";
 

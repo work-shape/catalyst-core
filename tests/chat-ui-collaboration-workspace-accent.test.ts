@@ -9,7 +9,7 @@ import {
   defaultCollaborationWorkspaceAccentColor,
   randomCollaborationWorkspaceAccentColor,
   resolveCollaborationWorkspaceAccentColor
-} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-accent";
+} from "./support/chat-ui";
 
 /**
  * The eight accents that shipped before the palette was widened. Pinned as

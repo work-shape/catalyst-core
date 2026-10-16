@@ -1,3 +1,4 @@
+import { chatUiSources } from "./support/chat-ui";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -96,7 +97,7 @@ it("generates TypeScript paths, detects stale entries and preserves the test-sup
 it("keeps the repository cache in sync with its package exports", async () => {
   expect(await syncSourcePaths(process.cwd())).toBe(true);
   expect(sourceAliases(process.cwd())["@work-shape/catalyst-chat-ui/tool-call"]).toBe(
-    resolve("packages/chat-ui/src/chat/tools/tool-call.tsx")
+    fileURLToPath(chatUiSources.toolCall)
   );
 });
 

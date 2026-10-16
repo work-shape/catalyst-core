@@ -10,12 +10,10 @@ import {
   draftAttachmentPolling,
   uploadErrorMessage,
   uploadFileWithRetry,
-  withoutDraftAttachment
-} from "../packages/chat-ui/src/chat/conversation/draft-attachment-controller";
-import {
+  withoutDraftAttachment,
   isAbandonedDraftConversation,
   terminalRunNotice
-} from "../packages/chat-ui/src/chat/workspace/workspace-chat-model";
+} from "./support/chat-ui";
 import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 
 const file = () => new File(["content"], "Perso.pdf", { type: "application/pdf" });

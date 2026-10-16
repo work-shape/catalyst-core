@@ -5,7 +5,7 @@ import {
   toolDisplayWidgetRegistry,
   type StandardSchemaV1,
   type ToolDisplayRenderInput
-} from "../packages/chat-ui/src/shared/domain-ui-widgets";
+} from "./support/chat-ui";
 
 describe("chat UI domain UI widgets", () => {
   it("declines rendering on version mismatch", () => {

@@ -3,15 +3,15 @@ import type { ApiUser, CollaborationWorkspaceWithRole } from "@work-shape/cataly
 import { createTranslationContext, type SettingsViewer } from "@work-shape/catalyst-chat-ui";
 import type { WorkspaceRoute } from "@work-shape/catalyst-chat-ui/shell";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
-import { workspaceRouteFromPath } from "../packages/chat-ui/src/shared/routes";
 import {
+  workspaceRouteFromPath,
   firstAdministrationRoute,
   resolveSettingsRoute,
   settingsCatalog,
   settingsGoToTargets,
   visibleSettingsPages,
   type BuildAccess
-} from "../packages/chat-ui/src/admin/settings/catalog";
+} from "./support/chat-ui";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { personalWorkspace, settingsUser, sharedWorkspace } from "./chat-ui-settings-fixtures";
 

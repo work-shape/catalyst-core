@@ -13,27 +13,19 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   workspaceRouteFromPath,
-  workspaceRouteNavigation
-} from "../packages/chat-ui/src/shared/routes";
-import {
+  workspaceRouteNavigation,
   routeCollaborationWorkspaceId,
-  workspaceRouteView
-} from "../packages/chat-ui/src/shared/workspace-route";
-import { canonicalConversationRedirect } from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-model";
-import {
+  workspaceRouteView,
+  canonicalConversationRedirect,
   CollaborationWorkspaceChangeHeldError,
-  collaborationWorkspaceErrorKey
-} from "../packages/chat-ui/src/shared/collaboration-workspace/collaboration-workspace-errors";
-import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/chat-workspace";
-import {
+  collaborationWorkspaceErrorKey,
+  collaborationWorkspacesAvailableFor,
   conversationListCacheKey,
   listCollaborationWorkspacesWithPersonal,
   cacheStartedRunThread,
   createWorkspaceQueryClient,
-  readThreadAgain
-} from "../packages/chat-ui/src/shared/api/workspace-queries";
-import { workspaceQueryKeys } from "../packages/chat-ui/src/shared/api/workspace-query-keys";
-import {
+  readThreadAgain,
+  workspaceQueryKeys,
   RAIL_PAGE_SIZE,
   loadOlderRailConversations,
   railConversationsQueryOptions,
@@ -42,7 +34,7 @@ import {
   withFirstPage,
   withOlderPage,
   type RailConversations
-} from "../packages/chat-ui/src/shared/api/rail-conversations";
+} from "./support/chat-ui";
 import { createTestFetch, createTestInstance } from "./support/test-instance";
 
 describe("collaboration workspace routes", () => {

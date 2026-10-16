@@ -2,10 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "./chat-ui-render-harness";
-import {
-  MarkdownArtifact,
-  MarkdownLinkPolicyProvider
-} from "../packages/chat-ui/src/chat/markdown/markdown-text";
+import { MarkdownArtifact, MarkdownLinkPolicyProvider } from "./support/chat-ui";
 
 const policy = {
   ownOrigins: ["https://chat.example.com"],

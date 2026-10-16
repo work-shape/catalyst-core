@@ -19,7 +19,7 @@ import {
   type InboxItemActions,
   type InboxItemKind,
   type InboxTab
-} from "../packages/chat-ui/src/chat/inbox";
+} from "./support/chat-ui";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // What the Inbox tests share: the Inbox modules themselves, one request to vary and the
