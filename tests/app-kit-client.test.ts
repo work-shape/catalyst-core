@@ -5,7 +5,7 @@ import {
   appBridgePageMessageSchema,
   type AppBridgeContext
 } from "@work-shape/catalyst-api-contract";
-import { readFileSync } from "node:fs";
+import { loadAppKitFiles } from "@work-shape/catalyst-server";
 import { describe, expect, it } from "vitest";
 import { RELEASED_KIT_VERSIONS } from "@work-shape/catalyst-app-build";
 import * as kitClient from "@work-shape/catalyst-app-kit/client";
@@ -133,10 +133,7 @@ describe("the two halves of the bridge", () => {
   // Fails before kit 1.4.0: every released kit offered `connections.call` to a new Page.
   it("ship the newest kit, 1.4.0, without a call of a Connection", () => {
     expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.4.0");
-    const kit = readFileSync(
-      new URL("../packages/server/vendor/app-kit/1.4.0/kit.js", import.meta.url),
-      "utf8"
-    );
+    const kit = loadAppKitFiles().get("1.4.0")?.get("kit.js")?.bytes.toString("utf8");
     expect(kit).not.toMatch(/connection/u);
     expect(kit).toMatch(/\bas actions\b/u);
   });

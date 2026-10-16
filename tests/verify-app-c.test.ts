@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { loadAppKitFiles } from "@work-shape/catalyst-server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   appBridgePageMessageSchema,
@@ -93,10 +94,7 @@ describe("APP-15: the bridge page states what the spec asks of it", () => {
   });
 
   it("does not say kit 1.0.0 had connections.call: that kit has no Connection call at all", () => {
-    const kit100 = readFileSync(
-      new URL("../packages/server/vendor/app-kit/1.0.0/kit.js", import.meta.url),
-      "utf8"
-    );
+    const kit100 = loadAppKitFiles().get("1.0.0")?.get("kit.js")?.bytes.toString("utf8");
     expect(kit100).not.toContain("connection_call");
     expect(doc).not.toMatch(/Kits 1\.0\.0 to 1\.3\.0 have `connections\.call/u);
   });
@@ -118,11 +116,11 @@ describe("APP-15: the bridge page states what the spec asks of it", () => {
   });
 
   it("names every vendored kit that sends connection_call and no other", () => {
-    const vendor = new URL("../packages/server/vendor/app-kit/", import.meta.url);
-    const sending = readdirSync(vendor)
-      .filter((version) =>
-        readFileSync(new URL(`${version}/kit.js`, vendor), "utf8").includes("connection_call")
+    const sending = [...loadAppKitFiles()]
+      .filter(([, files]) =>
+        files.get("kit.js")?.bytes.toString("utf8").includes("connection_call")
       )
+      .map(([version]) => version)
       .sort();
     expect(sending).toEqual(["1.1.0", "1.2.0", "1.3.0"]);
   });

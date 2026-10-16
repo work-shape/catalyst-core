@@ -8,6 +8,8 @@
 // exactly these files. So the script never writes into a directory that exists. A change to
 // the kit is a new version beside the old ones, added to `RELEASED_KIT_VERSIONS` of
 // `packages/app-build/src/kit.ts` in the same change.
+// File contents are stored once by hash in the sibling `app-kit-shared/`;
+// the manifest still pins their exact bytes and Apps still load their versioned URLs.
 //
 // Every file is one ES module. They name each other by a relative address (`./react.js`), so
 // a Page loads one React and one router however many of the files it imports, and no file
@@ -27,6 +29,7 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const platformRoot = resolve(packageRoot, "../..");
 const uiRoot = resolve(platformRoot, "packages/ui");
 const outputRoot = resolve(platformRoot, "packages/server/vendor/app-kit", KIT_VERSION);
+const sharedRoot = resolve(outputRoot, "../../app-kit-shared");
 const require = createRequire(join(packageRoot, "package.json"));
 
 /** The four names a Page imports React by. One file answers all of them. */
@@ -234,8 +237,17 @@ const manifest = {
   libraries: LIBRARIES.map(libraryOf)
 };
 mkdirSync(outputRoot, { recursive: true });
-for (const { file, bytes } of written) {
-  writeFileSync(join(outputRoot, file), bytes, { flag: "wx" });
+mkdirSync(sharedRoot, { recursive: true });
+for (const { bytes } of written) {
+  const hash = createHash("sha256").update(bytes).digest("hex");
+  const path = join(sharedRoot, hash);
+  if (existsSync(path)) {
+    if (!readFileSync(path).equals(Buffer.from(bytes))) {
+      throw new Error(`Shared App Kit file ${hash} differs from its content hash`);
+    }
+  } else {
+    writeFileSync(path, bytes, { flag: "wx" });
+  }
 }
 writeFileSync(join(outputRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, {
   flag: "wx"

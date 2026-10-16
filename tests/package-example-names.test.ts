@@ -5,13 +5,6 @@ import { expect, it } from "vitest";
 const packages = fileURLToPath(new URL("../packages/", import.meta.url));
 const denied = /exampledata|(?<![a-z])datev|exampletax|musterbau|(?<![a-z])extrade(?![a-z])/iu;
 
-// These pinned third-party chart bundles contain updateView and repeatCount, not names.
-const vendoredCharts = new Set(
-  ["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"].map(
-    (version) => `server/vendor/app-kit/${version}/charts.js`
-  )
-);
-
 async function mentions(directory = ""): Promise<string[]> {
   const found: string[] = [];
   for (const entry of await readdir(`${packages}${directory}`, { withFileTypes: true })) {
@@ -22,7 +15,6 @@ async function mentions(directory = ""): Promise<string[]> {
       }
     } else if (
       entry.isFile() &&
-      !vendoredCharts.has(path) &&
       /\.(?:[cm]?[jt]sx?|mdx?|json|ya?ml|sh|html|css|svg|txt)$/u.test(path)
     ) {
       const lines = (await readFile(`${packages}${path}`, "utf8")).split("\n");

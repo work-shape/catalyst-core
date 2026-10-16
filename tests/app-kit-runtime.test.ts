@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { appendFile, cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   kitFilePath,
@@ -54,8 +54,10 @@ async function startInstance(appsEnabled = true) {
 }
 
 async function copyOfKit(change: (root: string) => Promise<void>): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "app-kit-"));
+  const parent = await mkdtemp(join(tmpdir(), "app-kit-"));
+  const root = join(parent, "app-kit");
   await cp(kitRoot, root, { recursive: true });
+  await cp(join(kitRoot, "../app-kit-shared"), join(parent, "app-kit-shared"), { recursive: true });
   await change(root);
   return root;
 }
@@ -72,13 +74,13 @@ describe("the released App Kit versions", () => {
         [...appKitFilesOf(version)].sort()
       );
       for (const file of manifest.files) {
-        const bytes = await readFile(join(kitRoot, version, file.file));
+        const bytes = loadAppKitFiles().get(version)?.get(file.file)?.bytes;
+        expect(bytes).toBeDefined();
+        if (!bytes) throw new Error(`Missing ${version}/${file.file}`);
         expect({ file: file.file, bytes: bytes.byteLength, sha256: sha256(bytes) }).toEqual(file);
       }
       // Nothing lies in the directory that the manifest does not account for.
-      expect((await readdir(join(kitRoot, version))).sort()).toEqual(
-        ["manifest.json", ...appKitFilesOf(version)].sort()
-      );
+      expect(await readdir(join(kitRoot, version))).toEqual(["manifest.json"]);
       for (const library of manifest.libraries) {
         expect(library.version).toMatch(/^\d+\.\d+\.\d+$/u);
       }
@@ -111,7 +113,7 @@ describe("the released App Kit versions", () => {
   it("names no host: the files reach each other by relative addresses only", async () => {
     for (const version of RELEASED_KIT_VERSIONS) {
       for (const file of appKitFilesOf(version).filter((name) => name.endsWith(".js"))) {
-        const text = await readFile(join(kitRoot, version, file), "utf8");
+        const text = loadAppKitFiles().get(version)?.get(file)?.bytes.toString("utf8") ?? "";
         const imported = [
           ...text.matchAll(/\bfrom\s*"([^"]+)"/gu),
           ...text.matchAll(/\bimport\s*\(\s*"([^"]+)"\s*\)/gu),
@@ -125,7 +127,7 @@ describe("the released App Kit versions", () => {
           );
         }
       }
-      const css = await readFile(join(kitRoot, version, "ui.css"), "utf8");
+      const css = loadAppKitFiles().get(version)?.get("ui.css")?.bytes.toString("utf8") ?? "";
       expect(css).not.toMatch(/@import|url\(\s*["']?(?:https?:)?\/\//iu);
     }
   });
@@ -149,7 +151,7 @@ describe("the released App Kit versions", () => {
     };
 
     for (const version of RELEASED_KIT_VERSIONS.filter(kitStylesPlainPages)) {
-      const css = await readFile(join(kitRoot, version, "page.css"), "utf8");
+      const css = loadAppKitFiles().get(version)?.get("page.css")?.bytes.toString("utf8") ?? "";
       // The layer after the reset, where the base rules are, up to the brace that closes it.
       const layerStart = css.indexOf("@layer components{");
       expect(layerStart).toBeGreaterThan(css.indexOf("@layer base{"));
@@ -175,19 +177,27 @@ describe("the released App Kit versions", () => {
       ].map((match) => match[1]);
       expect([...new Set(classes)].sort()).toEqual(["dark", "lucide", "size-3"]);
       // The library's stylesheet holds its utilities and none of the base rules.
-      const library = await readFile(join(kitRoot, version, "ui.css"), "utf8");
+      const library = loadAppKitFiles().get(version)?.get("ui.css")?.bytes.toString("utf8") ?? "";
       expect(library).toContain("@layer utilities{");
       expect(library).not.toContain(":where(body)");
       // The theme script stands alone: it loads nothing of the kit.
-      const theme = await readFile(join(kitRoot, version, "theme.js"), "utf8");
+      const theme = loadAppKitFiles().get(version)?.get("theme.js")?.bytes.toString("utf8") ?? "";
       expect(theme).not.toMatch(/\bfrom\s*"|\bimport\s*[("]/u);
     }
   });
 
   it("keeps the chart engine out of every file but its own, asked for by address", async () => {
     const [version] = RELEASED_KIT_VERSIONS;
-    const ui = await readFile(join(kitRoot, version ?? "", "ui.js"), "utf8");
-    const kit = await readFile(join(kitRoot, version ?? "", "kit.js"), "utf8");
+    const ui =
+      loadAppKitFiles()
+        .get(version ?? "")
+        ?.get("ui.js")
+        ?.bytes.toString("utf8") ?? "";
+    const kit =
+      loadAppKitFiles()
+        .get(version ?? "")
+        ?.get("kit.js")
+        ?.bytes.toString("utf8") ?? "";
 
     expect(ui).toContain('import("./charts.js")');
     // A static import would load the engine with every Page.
@@ -198,13 +208,18 @@ describe("the released App Kit versions", () => {
 
 describe("loading the kit at startup", () => {
   it("refuses a file that is not the one its manifest pins", async () => {
-    const root = await copyOfKit((copy) => appendFile(join(copy, "1.0.0", "kit.js"), "\n"));
+    const manifest = await readManifest("1.0.0");
+    const hash = manifest.files.find((file) => file.file === "kit.js")?.sha256;
+    expect(hash).toBeDefined();
+    const root = await copyOfKit((copy) =>
+      appendFile(join(copy, "../app-kit-shared", hash ?? ""), "\n")
+    );
     try {
       expect(() => loadAppKitFiles(root)).toThrow(
         /App Kit file '1\.0\.0\/kit\.js' has SHA-256 [0-9a-f]{64}, its manifest pins [0-9a-f]{64}/u
       );
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await rm(dirname(root), { recursive: true, force: true });
     }
   });
 
@@ -213,7 +228,7 @@ describe("loading the kit at startup", () => {
     try {
       expect(() => loadAppKitFiles(root)).toThrow(/App Kit directory '1\.0\.0' holds .*extra\.js/u);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await rm(dirname(root), { recursive: true, force: true });
     }
   });
 
@@ -226,7 +241,7 @@ describe("loading the kit at startup", () => {
         "App Kit manifest in '9.9.9' names version '1.0.0'"
       );
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await rm(dirname(root), { recursive: true, force: true });
     }
   });
 });

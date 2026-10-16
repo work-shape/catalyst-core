@@ -6,9 +6,9 @@ import { KIT_PLAIN_PAGE_FILES, kitStylesPlainPages } from "@work-shape/catalyst-
 import { z } from "zod";
 
 // The App Kit a Page loads from the instance: one frozen directory per released version under
-// `vendor/app-kit/<version>/`, written by `pnpm kit:release`. A Page names the version it was
-// built with and loads exactly these files for as long as it exists, so a directory is never
-// edited and never removed. Each has a manifest with the hash of every file.
+// `vendor/app-kit/<version>/`, written by `pnpm kit:release`. Released manifests and served
+// bytes never change. File contents live once per SHA-256 in the sibling
+// `app-kit-shared/` directory; their versioned URLs still resolve through each manifest.
 
 const appKitRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../vendor/app-kit");
 
@@ -82,7 +82,7 @@ export function loadAppKitFiles(root: string = appKitRoot): AppKitFiles {
       );
     }
     const present = readdirSync(directory).sort();
-    const accounted = [...expected, APP_KIT_MANIFEST_FILE].sort();
+    const accounted = [APP_KIT_MANIFEST_FILE];
     if (present.join("\n") !== accounted.join("\n")) {
       throw new Error(
         `App Kit directory '${manifest.version}' holds ${present.join(", ")}. A released version holds ${accounted.join(", ")} and nothing else.`
@@ -90,7 +90,7 @@ export function loadAppKitFiles(root: string = appKitRoot): AppKitFiles {
     }
     const files = new Map<string, AppKitFile>();
     for (const file of manifest.files) {
-      const bytes = readFileSync(join(directory, file.file));
+      const bytes = readFileSync(join(root, "../app-kit-shared", file.sha256));
       const sha256 = createHash("sha256").update(bytes).digest("hex");
       if (sha256 !== file.sha256) {
         throw new Error(
