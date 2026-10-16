@@ -308,7 +308,20 @@ async function publish(
     throw new Error(`The instance answered revision ${number} for --revision ${values.revision}.`);
   }
   if (candidate.publishedRevision === number) {
-    writeOut(options, `Revision ${number} of App '${app}' is the published one already.`);
+    writeOut(
+      options,
+      values.json
+        ? JSON.stringify(
+            {
+              draftRevision: candidate.draftRevision ?? candidate.revision,
+              publishedRevision: number,
+              alreadyPublished: true
+            },
+            null,
+            2
+          )
+        : `Revision ${number} of App '${app}' is the published one already.`
+    );
     return EXIT.done;
   }
   const live = candidate.publishedRevision === undefined ? undefined : await get("published");

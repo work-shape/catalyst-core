@@ -1,0 +1,16 @@
+{
+  "instance": {
+    "id": "instance-1",
+    "name": "Test"
+  },
+  "release": {
+    "version": "1.0.0"
+  },
+  "kinds": [],
+  "actions": [],
+  "assetActions": [],
+  "instanceActions": [],
+  "namespaces": [],
+  "workspaces": [],
+  "visibleSections": []
+}

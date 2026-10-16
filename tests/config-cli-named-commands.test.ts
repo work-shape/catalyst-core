@@ -10,6 +10,8 @@ import {
 } from "@work-shape/catalyst-api-contract";
 import { runCli, type CliRuntimeOptions } from "@work-shape/catalyst-cli";
 
+import platformContext from "./fixtures/cli-platform-context.json";
+
 const directories: string[] = [];
 afterEach(async () => {
   await Promise.all(
@@ -261,6 +263,57 @@ describe("named CLI operation faces", () => {
       expect(await request.text()).toBe(entry.body === undefined ? "" : JSON.stringify(entry.body));
     }
   });
+
+  it.each([undefined, "2"])(
+    "prints one JSON object when App revision %s is already published",
+    async (revision) => {
+      const publishedRevision = revision ? 2 : 3;
+      const requests: Request[] = [];
+      const prompt = vi.fn<NonNullable<CliRuntimeOptions["prompt"]>>();
+      const result = await run(
+        [
+          "app",
+          "publish",
+          "offers",
+          "--workspace",
+          "workspace-1",
+          "--json",
+          ...(revision ? ["--revision", revision] : [])
+        ],
+        {
+          prompt,
+          fetchImpl: apiFetch((request) => {
+            requests.push(request);
+            if (new URL(request.url).pathname === apiOperations["platform.context.get"].path) {
+              return Response.json(platformContext);
+            }
+            return Response.json({
+              id: "app-1",
+              kind: "app",
+              name: "offers",
+              scope: { kind: "workspace", workspaceId: "workspace-1" },
+              revision: 3,
+              contentRevision: publishedRevision,
+              draftRevision: 3,
+              publishedRevision,
+              config: {},
+              updatedAt: at
+            });
+          })
+        }
+      );
+      expect(result.code, result.err).toBe(0);
+      expect(JSON.parse(result.out)).toEqual({
+        draftRevision: 3,
+        publishedRevision,
+        alreadyPublished: true
+      });
+      expect(result.err).toBe("");
+      expect(prompt).not.toHaveBeenCalled();
+      expect(requests).toHaveLength(2);
+      expect(requests.every((request) => request.method === "GET")).toBe(true);
+    }
+  );
 
   it("reads workflow test input from a file or explicit stdin before calling the operation", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "cli-test-input-"));
