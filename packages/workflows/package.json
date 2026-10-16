@@ -43,7 +43,7 @@
     "@work-shape/catalyst-connections": "workspace:*",
     "@work-shape/catalyst-core": "workspace:*",
     "@work-shape/catalyst-tool-execution": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.13.1",
