@@ -1,3 +1,4 @@
+export * from "./schema/followUps";
 export * from "./schema/users";
 export * from "./schema/workspaces";
 export * from "./schema/apiAccess";
@@ -56,7 +57,10 @@ import { dataStores } from "./schema/dataStores";
 import { guardrailHits } from "./schema/guardrails";
 import { knowledgeBaseStates } from "./schema/knowledgeBases";
 
+import { conversationFollowUps } from "./schema/followUps";
+
 export const schema = {
+  conversationFollowUps,
   approvalRequests,
   productUsers,
   userIdentities,

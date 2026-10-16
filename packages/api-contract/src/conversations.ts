@@ -1,4 +1,9 @@
-import { TOOL_DECISION_MODES, TOOL_DECISION_OUTCOMES } from "@work-shape/catalyst-asset-schemas";
+import {
+  FOLLOW_UP_MODES,
+  FOLLOW_UP_STATUSES,
+  TOOL_DECISION_MODES,
+  TOOL_DECISION_OUTCOMES
+} from "@work-shape/catalyst-asset-schemas";
 import {
   AGENT_RUN_FAILURE_CATEGORIES,
   AGENT_RUN_STATUSES,
@@ -407,6 +412,13 @@ export const agentRunErrorSchema = z.object({
 
 export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
   z.object({
+    type: z.literal("follow_up_changed"),
+    runId: z.string(),
+    sequence: z.number().int().positive(),
+    createdAt: timestampSchema,
+    followUp: z.lazy(() => conversationFollowUpSchema)
+  }),
+  z.object({
     type: z.literal("message_delta"),
     runId: z.string(),
     sequence: z.number(),
@@ -636,7 +648,35 @@ export const runObservationSchema = z.object({
   createdAt: timestampSchema
 });
 
+export const conversationFollowUpSchema = z.object({
+  id: z.string(),
+  clientInstanceId: z.string(),
+  conversationId: z.string(),
+  authorUserId: z.string(),
+  text: z.string(),
+  mode: z.enum(FOLLOW_UP_MODES),
+  status: z.enum(FOLLOW_UP_STATUSES),
+  position: z.number().int().positive(),
+  agentName: z.string(),
+  modelBindingId: z.string().optional(),
+  reasoningEffort: reasoningEffortSchema.optional(),
+  idempotencyKey: z.string().optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+  dispatchedRunId: z.string().optional()
+});
+
+export const queuedConversationRunResponseSchema = z.object({
+  followUp: conversationFollowUpSchema
+});
+
 export const startConversationRunRequestSchema = z.object({
+  followUp: z
+    .literal("queue")
+    .optional()
+    .describe(
+      "Queue the message when this conversation has an active run. Without this option, an active run still returns CONFLICT."
+    ),
   idempotencyKey: z.string().min(1),
   agentName: z.string().min(1).optional(),
   modelBindingId: z.string().min(1).optional(),
@@ -691,6 +731,7 @@ export const conversationUserStateSchema = z.object({
 });
 
 export const conversationThreadSnapshotSchema = z.object({
+  followUps: z.array(conversationFollowUpSchema).optional(),
   conversation: conversationSchema,
   messages: z.array(messageSchema),
   completedRunProjections: z.record(z.string(), agentRunProjectionSchema).optional(),
@@ -756,6 +797,8 @@ export type RunCommand = z.infer<typeof runCommandSchema>;
 export type RunCommandRequest = z.infer<typeof runCommandRequestSchema>;
 export type RunCommandResponse = z.infer<typeof runCommandResponseSchema>;
 export type ConversationUserState = z.infer<typeof conversationUserStateSchema>;
+export type ConversationFollowUp = z.infer<typeof conversationFollowUpSchema>;
+
 export type ConversationThreadSnapshot = z.infer<typeof conversationThreadSnapshotSchema>;
 export type CancelRunRequest = z.infer<typeof cancelRunRequestSchema>;
 export type CancelRunResponse = z.infer<typeof cancelRunResponseSchema>;

@@ -1,0 +1,1 @@
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "conversation_attachments_follow_up_idx" ON "conversation_attachments" USING btree ("follow_up_id");

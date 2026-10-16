@@ -1,4 +1,5 @@
 import {
+  dispatchConversationFollowUpJob,
   ACTIVE_AGENT_RUN_STATUSES,
   AppError,
   JobLeaseLostError,
@@ -27,6 +28,7 @@ import {
   type RunObservation
 } from "@work-shape/catalyst-core";
 import { and, asc, sql as drizzleSql, eq, gt, inArray, lt, type SQL } from "drizzle-orm";
+import { enqueueJob } from "./jobs/store";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { withdrawUnclaimedWorkspaceCommandsOfRuns } from "./postgres-execution-workspace-operations";
@@ -139,8 +141,20 @@ export async function appendClaimedAgentRunEnd(
   await db.transaction(async (tx) => {
     await requireJobLease(tx, input.lease);
     if (input.message) await insertClaimedAgentRunMessage(tx, input, input.message);
+    let sequence: number | undefined;
+    if (input.allocateSequence) {
+      const [run] = await tx
+        .select({ lastSequence: agentRuns.lastSequence })
+        .from(agentRuns)
+        .where(claimedRunWhere(input))
+        .for("update")
+        .limit(1);
+      if (!run) throw new AppError("CONFLICT", "Agent run has ended");
+      sequence = run.lastSequence;
+    }
     for (const event of input.events) {
-      await insertClaimedRunObservation(tx, input, event, input.resumeState);
+      const persisted = sequence === undefined ? event : { ...event, sequence: ++sequence };
+      await insertClaimedRunObservation(tx, input, persisted, input.resumeState);
     }
   });
 }
@@ -190,6 +204,20 @@ async function insertClaimedRunObservation(
       runIds: [claim.runId]
     });
 
+  if (event.type === "run_completed") {
+    await enqueueJob(
+      tx,
+      dispatchConversationFollowUpJob,
+      { conversationId: run.conversationId, afterRunId: run.id },
+      {
+        clientInstanceId: claim.clientInstanceId,
+        subject: run.conversationId,
+        dedupeKey: run.conversationId,
+        concurrencyKey: run.conversationId,
+        correlationId: run.correlationId
+      }
+    );
+  }
   const [row] = await tx
     .insert(agentRunObservations)
     .values({

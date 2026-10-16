@@ -242,7 +242,7 @@ export async function createChatServer(
   registerDevMailRoutes(route, options);
   registerSessionTokenRoutes(route, options);
   registerServiceAccessTokenRoutes(route, options);
-  registerAgentRunRoutes(route, options, app.log);
+  registerAgentRunRoutes(route, options);
   registerConfigRoutes(route, options);
   registerPlatformRoutes(route, options);
   registerViewRuntimeRoutes(route);

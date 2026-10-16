@@ -285,6 +285,7 @@ async function executeClaimedRun(
         ...ofRun,
         lease,
         ...batch,
+        allocateSequence: true,
         ...(resumeState ? { resumeState } : {})
       })
     );

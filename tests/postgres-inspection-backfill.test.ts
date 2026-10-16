@@ -258,7 +258,9 @@ it("backfills only proven path inspections and hides them from resources and fil
       )
     );
     expect(await sql`select * from managed_files`).toEqual(upload);
-    expect(await sql`select * from conversation_attachments`).toEqual(attachments);
+    expect(await sql`select * from conversation_attachments`).toEqual(
+      attachments.map((row) => ({ ...row, follow_up_id: null }))
+    );
     expect(await migrateDatabase({ databaseUrl })).toEqual([]);
     // Reapply the SQL itself, not just the runner's journal skip: no rows are rewritten.
     const versions = await sql`select id, xmin::text from managed_artifacts order by id`;

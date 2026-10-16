@@ -1,6 +1,9 @@
 import { auditActorFromUser } from "@work-shape/catalyst-core";
 import {
   AppError,
+  type ConversationFollowUp,
+  type PlatformStores,
+  type JobId,
   type AgentRun,
   type AgentRunId,
   type AuthenticatedUser,
@@ -24,6 +27,7 @@ import {
 import { resolveModelBinding } from "@work-shape/catalyst-config-schema";
 import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
 import { createEmptyAttachmentManifest } from "./attachments";
+import { monitorRunLifecycle } from "./run-lifecycle-monitor";
 import { createConversationTitle } from "./conversation-title";
 import { generateConversationTitleJob } from "../jobs/job-kinds";
 import type { ChatServerOptions } from "../types";
@@ -35,7 +39,14 @@ export interface SendConversationMessageCommand {
   reasoningEffort?: ReasoningEffortConfig;
   idempotencyKey?: string;
   text: string;
+  followUp?: "queue";
+  dispatchFollowUpId?: string;
+  dispatchAfterRunId?: AgentRunId;
+  dispatchJobId?: JobId;
 }
+
+export type ConversationMessageRunResult =
+  StartedConversationMessageRun | { followUp: ConversationFollowUp };
 
 export interface StartedConversationMessageRun {
   userMessage: ChatMessage;
@@ -53,7 +64,10 @@ export class RunStartWorkflow {
   private readonly options: ChatServerOptions;
   private readonly conversations: ConversationWorkflow;
 
-  constructor(options: ChatServerOptions) {
+  constructor(
+    options: ChatServerOptions,
+    private readonly transact: PlatformStores["transaction"] = options.stores.transaction
+  ) {
     this.options = options;
     this.conversations = new ConversationWorkflow(options);
   }
@@ -64,12 +78,17 @@ export class RunStartWorkflow {
    * users: its own binding or one of its user-selectable bindings. A requested reasoning
    * effort must be one the model that will run offers to users.
    */
-  private async resolveRunAgentName(
+  private async resolveRunSelection(
     workspace: CollaborationWorkspace,
     requestedAgentName: string | undefined,
     requestedModelBindingId: string | undefined,
-    requestedReasoningEffort: ReasoningEffortConfig | undefined
-  ): Promise<string> {
+    requestedReasoningEffort: ReasoningEffortConfig | undefined,
+    acceptedFollowUp = false
+  ): Promise<{
+    agentName: string;
+    modelBindingId?: string;
+    reasoningEffort?: ReasoningEffortConfig;
+  }> {
     const assets = await getWorkspaceAssetSnapshot(this.options, workspace);
     const agentName = requestedAgentName ?? assets.defaultAgentName;
     if (!agentName) {
@@ -98,7 +117,9 @@ export class RunStartWorkflow {
         `Model binding '${requestedModelBindingId}' is not available for user selection`
       );
     }
-    if (requestedReasoningEffort) {
+    // A follow-up already accepted this effort, including an agent default whose picker is
+    // hidden. Preserve it at dispatch; the gateway still checks the model capabilities.
+    if (requestedReasoningEffort && !acceptedFollowUp) {
       const bindingId = requestedModelBindingId ?? agent?.modelBindingId;
       const binding = this.options.config.modelBindings.find(
         (candidate) => candidate.id === bindingId
@@ -119,15 +140,38 @@ export class RunStartWorkflow {
         );
       }
     }
-    return agentName;
+    const modelBindingId = requestedModelBindingId ?? agent?.modelBindingId;
+    const binding = this.options.config.modelBindings.find(
+      (candidate) => candidate.id === modelBindingId
+    );
+    return {
+      agentName,
+      modelBindingId,
+      reasoningEffort:
+        requestedReasoningEffort ??
+        (agent && binding ? defaultReasoningEffortForAgentBinding(agent, binding) : undefined) ??
+        binding?.reasoningEffort
+    };
   }
 
+  startMessageRun(
+    conversationId: ConversationId,
+    user: AuthenticatedUser,
+    context: RuntimeCallContext,
+    command: SendConversationMessageCommand & { followUp?: undefined }
+  ): Promise<StartedConversationMessageRun>;
+  startMessageRun(
+    conversationId: ConversationId,
+    user: AuthenticatedUser,
+    context: RuntimeCallContext,
+    command: SendConversationMessageCommand
+  ): Promise<ConversationMessageRunResult>;
   async startMessageRun(
     conversationId: ConversationId,
     user: AuthenticatedUser,
     context: RuntimeCallContext,
     command: SendConversationMessageCommand
-  ): Promise<StartedConversationMessageRun> {
+  ): Promise<ConversationMessageRunResult> {
     const conversation = await this.conversations.requireConversationAccess(conversationId, user);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
@@ -144,20 +188,33 @@ export class RunStartWorkflow {
     }
 
     try {
-      const agentName = await this.resolveRunAgentName(
+      const { agentName, modelBindingId, reasoningEffort } = await this.resolveRunSelection(
         await this.conversations.requireMemberWorkspace(
           user,
           conversation.collaborationWorkspaceId
         ),
         command.agentName,
         command.modelBindingId,
-        command.reasoningEffort
+        command.reasoningEffort,
+        Boolean(command.dispatchFollowUpId)
       );
       const attachments = this.options.attachments;
-      const draftAttachments = attachments
-        ? await attachments.listDraftAttachments(conversationId)
-        : [];
-      const blockMessage = attachments?.blockingDraftAttachmentMessage(draftAttachments);
+      const pendingDraftAttachments = command.dispatchFollowUpId
+        ? await this.options.stores.followUps.listAttachments({
+            clientInstanceId: this.options.clientInstanceId,
+            conversationId,
+            followUpId: command.dispatchFollowUpId
+          })
+        : attachments
+          ? await attachments.listDraftAttachments(conversationId)
+          : [];
+      const draftAttachments = pendingDraftAttachments.filter(
+        (attachment): attachment is typeof attachment & { messageId?: undefined } =>
+          attachment.messageId === undefined
+      );
+      const blockMessage = command.dispatchFollowUpId
+        ? undefined
+        : attachments?.blockingDraftAttachmentMessage(draftAttachments);
       if (blockMessage) {
         throw new AppError("CONFLICT", blockMessage);
       }
@@ -168,11 +225,16 @@ export class RunStartWorkflow {
       const startedAt = new Date().toISOString();
       // The title job is enqueued in the transaction that writes the first user message, so
       // the message never exists without it and the job never without the message.
-      const prepared = await this.options.stores.transaction(async (stores) => {
+      const prepared = await this.transact(async (stores) => {
         const prepared = await stores.agentRuns.prepareConversationRunStart({
           clientInstanceId: this.options.clientInstanceId,
           conversationId,
           ownerUserId: getSubjectUserId(user),
+          followUp: command.followUp,
+          followUpSelection: command.followUp ? { modelBindingId, reasoningEffort } : undefined,
+          dispatchFollowUpId: command.dispatchFollowUpId,
+          dispatchAfterRunId: command.dispatchAfterRunId,
+          dispatchJobId: command.dispatchJobId,
           userMessage: {
             id: userMessageId,
             text: command.text,
@@ -215,6 +277,7 @@ export class RunStartWorkflow {
             ? { extendRetentionDays: this.options.config.retention.conversationDays }
             : {})
         });
+        if ("followUp" in prepared) return prepared;
         if (prepared.firstUserMessage && this.options.config.conversationTitles.enabled) {
           await stores.jobs.enqueue(
             generateConversationTitleJob,
@@ -230,6 +293,8 @@ export class RunStartWorkflow {
         }
         return prepared;
       });
+
+      if ("followUp" in prepared) return prepared;
 
       const run = await this.options.agentRuntime.start(
         {
@@ -263,10 +328,12 @@ export class RunStartWorkflow {
         correlationId: context.correlationId,
         metadata: {
           conversationId,
-          attachmentCount: attachmentManifest.attachments.length
+          attachmentCount: attachmentManifest.attachments.length,
+          ...(command.dispatchFollowUpId ? { delivery: "queued" } : {})
         }
       });
 
+      monitorRunLifecycle(this.options, { conversationId, user, context, runId: prepared.run.id });
       return {
         userMessage: prepared.userMessage,
         run: prepared.run,
@@ -303,6 +370,8 @@ export class RunStartWorkflow {
         user
       });
       if (claim.status === "resolved") {
+        if ("followUp" in claim.started)
+          throw new AppError("CONFLICT", "First conversation message cannot queue");
         const conversation = await this.conversations.requireConversationAccess(
           claim.started.run.conversationId,
           user
@@ -317,7 +386,7 @@ export class RunStartWorkflow {
 
     try {
       // Checked before the Conversation exists so a rejected agent or model leaves nothing behind.
-      await this.resolveRunAgentName(
+      await this.resolveRunSelection(
         await this.conversations.resolveTargetWorkspace(user, command.collaborationWorkspaceId),
         command.agentName,
         command.modelBindingId,
@@ -330,6 +399,7 @@ export class RunStartWorkflow {
       });
       const started = await this.startMessageRun(conversation.id, user, context, {
         ...command,
+        followUp: undefined,
         idempotencyKey: undefined
       });
       if (command.idempotencyKey) {
@@ -369,7 +439,7 @@ export class RunStartWorkflow {
     user: AuthenticatedUser;
   }): Promise<
     | { status: "claimed"; command: RunStartCommand }
-    | { status: "resolved"; started: StartedConversationMessageRun }
+    | { status: "resolved"; started: ConversationMessageRunResult }
   > {
     const claimInput = {
       clientInstanceId: this.options.clientInstanceId,
@@ -410,14 +480,24 @@ export class RunStartWorkflow {
     command: RunStartCommand,
     user: AuthenticatedUser,
     expectedConversationId?: ConversationId
-  ): Promise<StartedConversationMessageRun> {
-    if (!command.conversationId || !command.userMessageId || !command.runId) {
+  ): Promise<ConversationMessageRunResult> {
+    if (!command.conversationId) {
       throw new AppError("CONFLICT", "Run start command is still pending");
     }
     if (expectedConversationId && command.conversationId !== expectedConversationId) {
       throw new AppError("NOT_FOUND", "Agent run is not available");
     }
     await this.conversations.requireConversationAccess(command.conversationId, user);
+    if (!command.runId || !command.userMessageId) {
+      const followUp = await this.options.stores.followUps.findByIdempotencyKey({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId: command.conversationId,
+        authorUserId: getSubjectUserId(user),
+        idempotencyKey: command.idempotencyKey
+      });
+      if (!followUp) throw new AppError("NOT_FOUND", "Follow-up is not available");
+      return { followUp };
+    }
     const run = await this.options.stores.agentRuns.getConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId: command.conversationId,

@@ -153,6 +153,7 @@ export interface ConversationUserState {
 }
 
 export interface ConversationThreadSnapshot {
+  followUps?: import("./follow-ups").ConversationFollowUp[];
   conversation: Conversation;
   messages: ChatMessage[];
   completedRunProjections?: Record<string, AgentRunProjection>;

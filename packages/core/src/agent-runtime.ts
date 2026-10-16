@@ -4,6 +4,7 @@ import {
   LIVE_JOB_STATUSES,
   TOOL_CALL_STATES
 } from "@work-shape/catalyst-asset-schemas";
+import type { ConversationFollowUp } from "./follow-ups";
 import type { ReasoningEffortConfig } from "./config";
 import type { AppendAssistantMessageInput, ChatMessage, CreateMessageInput } from "./conversation";
 import type { AttachmentManifest, ManagedFileRef, SubjectRowClaim } from "./files";
@@ -214,6 +215,13 @@ export type AgentRuntimeCommand = {
 
 export type AgentRuntimeEvent =
   | {
+      type: "follow_up_changed";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+      followUp: ConversationFollowUp;
+    }
+  | {
       type: "message_delta";
       runId: AgentRunId;
       sequence: number;
@@ -372,6 +380,13 @@ export interface PrepareConversationRunStartInput {
     commandKind: RunStartCommandKind;
     claimedAt?: ISODateString;
   };
+  followUp?: "queue";
+  /** Effective defaults captured only for a queued message; immediate runs keep caller selections. */
+  followUpSelection?: Pick<CreateAgentRunInput, "modelBindingId" | "reasoningEffort">;
+  /** Internal dispatch: consumes exactly this oldest pending item under the start lock. */
+  dispatchFollowUpId?: string;
+  dispatchAfterRunId?: AgentRunId;
+  dispatchJobId?: JobId;
   claimReadyDraftAttachments?: boolean;
   /**
    * Moves the Conversation's retention date to this many days after the acceptance, measured on
@@ -379,6 +394,9 @@ export interface PrepareConversationRunStartInput {
    */
   extendRetentionDays?: number;
 }
+
+export type ConversationRunStartResult =
+  PreparedConversationRunStart | { followUp: ConversationFollowUp };
 
 export interface PreparedConversationRunStart {
   userMessage: ChatMessage;
@@ -473,6 +491,8 @@ export interface AppendClaimedAgentRunEndInput {
   message?: { role: "assistant" } & AppendAssistantMessageInput;
   /** The events that follow, in order. The last one ends the run, or sets it waiting for a decision. */
   events: AgentRuntimeEvent[];
+  /** Allocate durable sequence numbers under the row lock, alongside server observations. */
+  allocateSequence?: boolean;
   /** What a run that ends waiting for a decision keeps to go on; required exactly then. */
   resumeState?: AgentRunResumeState;
 }
@@ -525,8 +545,11 @@ export interface AgentRunStore {
   completeRunStartCommand(input: CompleteRunStartCommandInput): Promise<RunStartCommand>;
   releaseRunStartCommand(input: ReleaseRunStartCommandInput): Promise<void>;
   prepareConversationRunStart(
-    input: PrepareConversationRunStartInput
+    input: PrepareConversationRunStartInput & { followUp?: undefined }
   ): Promise<PreparedConversationRunStart>;
+  prepareConversationRunStart(
+    input: PrepareConversationRunStartInput
+  ): Promise<ConversationRunStartResult>;
   createAgentRun(input: CreateAgentRunInput): Promise<AgentRun>;
   getAgentRun(input: {
     clientInstanceId: ClientInstanceId;

@@ -126,7 +126,12 @@ export async function startProductConversationRun({
   };
 
   if (conversationId) {
-    return client.conversations.runs.start({ params: { conversationId }, body: request });
+    const response = await client.conversations.runs.start({
+      params: { conversationId },
+      body: request
+    });
+    if ("followUp" in response) throw new Error("Unexpected queued message response");
+    return response;
   }
 
   return client.conversations.runs.create({

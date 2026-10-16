@@ -76,6 +76,10 @@ export class RunObservationWorkflow {
 
     return {
       conversation,
+      followUps: await this.options.stores.followUps.listPending({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId
+      }),
       messages: messages.map(toPublicChatMessage),
       ...(Object.keys(completedRunProjections).length > 0 ? { completedRunProjections } : {}),
       ...(runForSnapshot

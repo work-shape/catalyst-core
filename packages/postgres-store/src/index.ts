@@ -26,6 +26,8 @@ import type { PostgresConnection } from "./postgres-database";
 import { assertDatabaseMigrated } from "./migrations";
 import { createDatabaseReadinessCheck } from "./readiness";
 import { schema } from "./schema";
+import { createPostgresFollowUpStore } from "./postgres-follow-up-operations";
+import { lockActiveConversation } from "./postgres-conversation-operations";
 import { createPostgresConversationsStore } from "./postgres-conversation-operations";
 import { createPostgresAgentRunsStore } from "./postgres-agent-run-operations";
 import { createPostgresFilesStore } from "./postgres-file-store";
@@ -113,6 +115,7 @@ function bindStores(
         deletePostgresModelProviderContinuation(db, input),
       getModelProviderContinuation: (input) => getPostgresModelProviderContinuation(db, input)
     }),
+    followUps: createPostgresFollowUpStore(db, { lockActiveConversation }),
     agentRuns: createPostgresAgentRunsStore(db, enqueued),
     files: createPostgresFilesStore(db, enqueued),
     audit: createPostgresAuditStore(db),

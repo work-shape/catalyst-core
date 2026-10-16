@@ -380,7 +380,19 @@ export const EVENTS = {
   "live_once.used": { ...LIVE_ONCE_AUDIT, name: "live_once.used" },
   "message.cancelled": { ...LEGACY_AUDIT, name: "message.cancelled", subject: "message" },
   "message.completed": { ...LEGACY_AUDIT, name: "message.completed", subject: "message" },
-  "message.created": { ...LEGACY_AUDIT, name: "message.created", subject: "message" },
+  "message.created": {
+    ...LEGACY_AUDIT,
+    name: "message.created",
+    subject: "message",
+    payload: {
+      type: "object",
+      properties: {
+        conversationId: { type: "string" },
+        attachmentCount: { type: "integer" },
+        delivery: { const: "queued" }
+      }
+    }
+  },
   "message.failed": { ...LEGACY_AUDIT, name: "message.failed", subject: "message" },
   "namespace.created": { ...LEGACY_AUDIT, name: "namespace.created", subject: "namespace" },
   "namespace.deleted": { ...LEGACY_AUDIT, name: "namespace.deleted", subject: "namespace" },

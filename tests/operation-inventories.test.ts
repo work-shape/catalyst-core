@@ -59,10 +59,27 @@ describe("a changing operation is registered or named as plain", () => {
     expect(Object.keys(list.changing).sort()).toEqual([...plainChanging].sort());
   });
 
+  // FU-1a F4/F5 explicitly approves these new unaudited queue controls. They are not
+  // pre-existing plain operations. Keep this reviewed allowance finite; adding another
+  // plain operation still exceeds the unchanged baseline below.
+  const approvedFollowUpControls = new Set<string>([
+    "conversations.follow_ups.withdraw",
+    "conversations.follow_ups.dispatch"
+  ]);
+  it("keeps the two approved follow-up controls changing, unaudited and conversation-authorized", () => {
+    for (const name of approvedFollowUpControls) {
+      expect(list.changing[name]).toMatchObject({ class: "conversation" });
+      expect(list.rightDecidedBy[name]).toBe("conversation_access");
+      expect(plainChanging).toContain(name);
+    }
+  });
+
   // A count may only fall: the baseline guard refuses a pull request that raises one, so an
   // operation cannot be moved into a class that stays plain without that being seen.
   it.each(classes)("counts the class %s as the baseline does", (kind) => {
-    const counted = Object.values(list.changing).filter((entry) => entry.class === kind).length;
+    const counted = Object.entries(list.changing).filter(
+      ([name, entry]) => entry.class === kind && !approvedFollowUpControls.has(name)
+    ).length;
     const recorded = baseline.entries
       .filter((entry) => entry.target === "operations" && entry.rule === "plain-changing")
       .find((entry) => entry.scope === kind);

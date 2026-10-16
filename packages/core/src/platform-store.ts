@@ -1,3 +1,4 @@
+import type { ConversationFollowUpStore } from "./follow-up-store";
 import type { AgentRunDecisionStore } from "./agent-run-decision";
 import type { AgentRunStore, RunObservationStore } from "./agent-runtime";
 import type { AuditEventStore } from "./audit";
@@ -67,6 +68,7 @@ export type DatabaseReadiness =
 /** Domain stores bound to the same persistence connection or transaction. */
 export interface PlatformStores {
   conversations: ConversationsStore;
+  followUps: ConversationFollowUpStore;
   agentRuns: AgentRunsStore;
   files: PlatformFileStore;
   audit: AuditEventStore;

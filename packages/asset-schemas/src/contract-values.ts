@@ -493,6 +493,9 @@ export type AttachmentCreateOutcome = (typeof ATTACHMENT_CREATE_OUTCOMES)[number
 export const STRUCTURED_DATA_REVIEW_REASONS = ["uncertain", "conflicting"] as const;
 export type StructuredDataReviewReason = (typeof STRUCTURED_DATA_REVIEW_REASONS)[number];
 
+export const FOLLOW_UP_MODES = ["queue"] as const;
+export const FOLLOW_UP_STATUSES = ["pending", "dispatched", "cancelled"] as const;
+
 export const AGENT_RUN_STATUSES = [
   "queued",
   "running",

@@ -1,22 +1,21 @@
-import type { FastifyBaseLogger, FastifyRequest } from "fastify";
+import type { FastifyRequest } from "fastify";
 import { Readable } from "node:stream";
 import {
   apiOperations,
   cancelRunResponseSchema,
   runObservationSchema,
   runCommandResponseSchema,
+  queuedConversationRunResponseSchema,
   startConversationRunResponseSchema
 } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   type AgentRun,
-  type AgentRunId,
   type AgentRuntimeEvent,
   type AuthenticatedUser,
   type ChatMessage,
   type Conversation,
   type ConversationId,
-  type RuntimeCallContext,
   asAgentRunId,
   asCollaborationWorkspaceId,
   asConversationId,
@@ -24,21 +23,25 @@ import {
 } from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import { RunObservationWorkflow } from "../conversations/run-observation-service";
+import { awaitRunLifecycleAudit } from "../conversations/run-lifecycle-monitor";
+import { FollowUpWorkflow } from "../conversations/follow-up-service";
 import { RunStartWorkflow } from "../conversations/run-start-service";
 import type { Route } from "../http/route";
 import { conversationIdParam, withRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
-export function registerAgentRunRoutes(
-  route: Route,
-  options: ChatServerOptions,
-  log: FastifyBaseLogger
-): void {
+export function registerAgentRunRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
   const startWorkflow = new RunStartWorkflow(options);
+  const followUps = new FollowUpWorkflow(options);
+  route(apiOperations["conversations.follow_ups.withdraw"], async ({ user, params }) => ({
+    followUp: await followUps.withdraw(conversationIdParam(params), params.followUpId, user)
+  }));
+  route(apiOperations["conversations.follow_ups.dispatch"], async ({ user, params, context }) => {
+    await followUps.requestDispatch(conversationIdParam(params), user, context);
+    return {};
+  });
   const runObservation = new RunObservationWorkflow(options);
-  // The monitors of the runs started here, each until it has recorded how its run ended.
-  const lifecycleMonitorTasks = new Map<AgentRunId, Promise<void>>();
 
   async function readCurrentConversation(
     conversationId: ConversationId,
@@ -75,16 +78,10 @@ export function registerAgentRunRoutes(
         modelBindingId: body.modelBindingId,
         reasoningEffort: body.reasoningEffort,
         idempotencyKey: body.idempotencyKey,
-        text: body.message.text
+        text: body.message.text,
+        followUp: body.followUp
       });
-      if (isObservableRunStatus(started.run.status)) {
-        monitorRunLifecycleOnce({
-          conversationId,
-          context: localizedContext,
-          runId: started.runId,
-          user
-        });
-      }
+      if ("followUp" in started) return queuedConversationRunResponseSchema.parse(started);
       return createStartRunResponse(
         request,
         await readCurrentConversation(conversationId, user),
@@ -115,14 +112,6 @@ export function registerAgentRunRoutes(
         ...(body.conversation?.subject ? { subject: body.conversation.subject } : {})
       }
     );
-    if (isObservableRunStatus(started.run.status)) {
-      monitorRunLifecycleOnce({
-        conversationId: started.conversation.id,
-        context: localizedContext,
-        runId: started.runId,
-        user
-      });
-    }
     return createStartRunResponse(
       request,
       started.conversation,
@@ -184,7 +173,7 @@ export function registerAgentRunRoutes(
               if (isTerminalRunEventType(event.type)) {
                 // The monitor records the end of the run in the audit behind the event. Whoever
                 // hears that a run has ended reads back what is recorded, the audit included.
-                await lifecycleMonitorTasks.get(runId);
+                await awaitRunLifecycleAudit(options.agentRuntime, runId);
               }
               const observation = runObservationSchema.parse({
                 clientInstanceId: options.clientInstanceId,
@@ -203,67 +192,6 @@ export function registerAgentRunRoutes(
       );
     }
   );
-
-  function monitorRunLifecycleOnce(input: {
-    conversationId: ConversationId;
-    context: RuntimeCallContext;
-    runId: AgentRunId;
-    user: AuthenticatedUser;
-  }): void {
-    if (lifecycleMonitorTasks.has(input.runId)) {
-      return;
-    }
-    const task = (async () => {
-      let assistantMessageCount = 0;
-      for await (const event of runObservation.observeRun(input.runId, input.context)) {
-        if (event.type === "message_completed") {
-          assistantMessageCount += 1;
-        }
-        if (event.type === "run_failed") {
-          await runObservation.recordRunFailed(
-            input.conversationId,
-            input.user,
-            input.context,
-            input.runId,
-            assistantMessageCount,
-            event
-          );
-          return;
-        }
-        if (event.type === "run_cancelled") {
-          await runObservation.recordRunCancelled(
-            input.conversationId,
-            input.user,
-            input.context,
-            input.runId,
-            assistantMessageCount,
-            event
-          );
-          return;
-        }
-        if (event.type === "run_completed") {
-          await runObservation.recordRunCompleted(
-            input.conversationId,
-            input.user,
-            input.context,
-            input.runId,
-            assistantMessageCount
-          );
-          return;
-        }
-      }
-    })()
-      .catch((error: unknown) => {
-        log.warn(
-          { err: error, conversationId: input.conversationId, runId: input.runId },
-          "Agent run lifecycle monitor failed"
-        );
-      })
-      .finally(() => {
-        lifecycleMonitorTasks.delete(input.runId);
-      });
-    lifecycleMonitorTasks.set(input.runId, task);
-  }
 
   async function createStartRunResponse(
     request: FastifyRequest,

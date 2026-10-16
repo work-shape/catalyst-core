@@ -56,6 +56,14 @@
       "class": "conversation",
       "reason": "The Agent Run is the record for this operation."
     },
+    "conversations.follow_ups.dispatch": {
+      "class": "conversation",
+      "reason": "The dispatched Agent Run and its message.created audit record the outcome."
+    },
+    "conversations.follow_ups.withdraw": {
+      "class": "conversation",
+      "reason": "Pending messages have not entered the transcript; withdrawal has no audit event."
+    },
     "conversations.move": {
       "class": "conversation",
       "reason": "The Agent Run is the record for this operation."
@@ -146,6 +154,8 @@
     "conversations.draft_attachments.retry": "conversation_access",
     "conversations.draft_attachments.upload": "conversation_access",
     "conversations.files.get_content": "conversation_access",
+    "conversations.follow_ups.dispatch": "conversation_access",
+    "conversations.follow_ups.withdraw": "conversation_access",
     "conversations.list": "own",
     "conversations.messages.list": "conversation_access",
     "conversations.move": "conversation_access",

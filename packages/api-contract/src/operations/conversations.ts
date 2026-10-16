@@ -1,6 +1,8 @@
 import { listQuerySchema } from "../shared";
 import { z } from "zod";
 import {
+  queuedConversationRunResponseSchema,
+  conversationFollowUpSchema,
   cancelRunRequestSchema,
   cancelRunResponseSchema,
   conversationListItemSchema,
@@ -181,18 +183,50 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
+  "conversations.follow_ups.withdraw": defineOperation({
+    id: "conversations.follow_ups.withdraw",
+    method: "POST",
+    path: "/api/v1/conversations/:conversationId/follow-ups/:followUpId/withdraw",
+    summary: "Withdraw your pending follow-up message",
+    tag: "Conversations",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    effect: "changing",
+    body: z.object({}),
+    response: json(z.object({ followUp: conversationFollowUpSchema })),
+    errors: ["NOT_FOUND", "FORBIDDEN", "CONFLICT"],
+    rateClass: "write"
+  }),
+  "conversations.follow_ups.dispatch": defineOperation({
+    id: "conversations.follow_ups.dispatch",
+    method: "POST",
+    path: "/api/v1/conversations/:conversationId/follow-ups/dispatch",
+    summary: "Send your oldest pending follow-up when the conversation is idle",
+    tag: "Conversations",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    effect: "changing",
+    body: z.object({}),
+    response: json(z.object({})),
+    errors: ["NOT_FOUND", "FORBIDDEN", "CONFLICT"],
+    rateClass: "write"
+  }),
   "conversations.runs.start": defineOperation({
     id: "conversations.runs.start",
     method: "POST",
     path: "/api/v1/conversations/:conversationId/runs",
-    summary: "Send a message and start an agent run",
+    summary: "Send a message, starting a run or queueing a follow-up",
     tag: "Conversations",
     auth: "user",
     scope: "conversation:write",
     requires: [],
     effect: "changing",
     body: startConversationRunRequestSchema,
-    response: json(startConversationRunResponseSchema),
+    response: json(
+      z.union([startConversationRunResponseSchema, queuedConversationRunResponseSchema])
+    ),
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),

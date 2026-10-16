@@ -102,6 +102,7 @@ export async function listDraftAttachments(
         eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
         eq(conversationAttachments.conversationId, input.conversationId),
         isNull(conversationAttachments.messageId),
+        isNull(conversationAttachments.followUpId),
         ne(conversationAttachments.status, "deleted")
       )
     )
@@ -249,6 +250,7 @@ export async function reactivateDraftAttachment(
           eq(conversationAttachments.conversationId, input.conversationId),
           eq(conversationAttachments.id, input.attachmentId),
           isNull(conversationAttachments.messageId),
+          isNull(conversationAttachments.followUpId),
           eq(conversationAttachments.status, "deleted")
         )
       )
@@ -297,7 +299,8 @@ export async function deleteDraftAttachment(
         eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
         eq(conversationAttachments.conversationId, input.conversationId),
         eq(conversationAttachments.id, input.attachmentId),
-        isNull(conversationAttachments.messageId)
+        isNull(conversationAttachments.messageId),
+        isNull(conversationAttachments.followUpId)
       )
     )
     .returning();
@@ -329,7 +332,8 @@ export async function claimReadyDraftAttachmentsForMessage(
         eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
         eq(conversationAttachments.conversationId, input.conversationId),
         eq(conversationAttachments.status, "ready"),
-        isNull(conversationAttachments.messageId)
+        isNull(conversationAttachments.messageId),
+        isNull(conversationAttachments.followUpId)
       )
     )
     .returning();

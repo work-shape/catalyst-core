@@ -40,6 +40,8 @@ export const managedFiles = pgTable(
   ]
 );
 
+import { conversationFollowUps } from "./followUps";
+
 export const conversationAttachments = pgTable(
   "conversation_attachments",
   {
@@ -48,6 +50,9 @@ export const conversationAttachments = pgTable(
     conversationId: text("conversation_id")
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
+    followUpId: text("follow_up_id").references(() => conversationFollowUps.id, {
+      onDelete: "set null"
+    }),
     messageId: text("message_id").references(() => messages.id, { onDelete: "set null" }),
     fileId: text("file_id")
       .notNull()
@@ -79,6 +84,7 @@ export const conversationAttachments = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true })
   },
   (table) => [
+    index("conversation_attachments_follow_up_idx").on(table.followUpId),
     index("conversation_attachments_draft_idx").on(
       table.clientInstanceId,
       table.conversationId,

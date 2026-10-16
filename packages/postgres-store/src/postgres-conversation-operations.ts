@@ -49,6 +49,7 @@ import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
   agentRuns,
   collaborationWorkspaces,
+  conversationFollowUps,
   conversationAttachments,
   conversations,
   messages,
@@ -748,6 +749,14 @@ async function markLockedConversationDeleted(
         eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
         eq(conversationAttachments.conversationId, input.conversationId),
         ne(conversationAttachments.status, "deleted")
+      )
+    );
+  await tx
+    .delete(conversationFollowUps)
+    .where(
+      and(
+        eq(conversationFollowUps.clientInstanceId, input.clientInstanceId),
+        eq(conversationFollowUps.conversationId, input.conversationId)
       )
     );
   await tx

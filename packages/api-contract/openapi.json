@@ -5481,6 +5481,183 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/conversations/{conversationId}/follow-ups/dispatch": {
+      "post": {
+        "operationId": "conversations.follow_ups.dispatch",
+        "summary": "Send your oldest pending follow-up when the conversation is idle",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/conversations/{conversationId}/follow-ups/{followUpId}/withdraw": {
+      "post": {
+        "operationId": "conversations.follow_ups.withdraw",
+        "summary": "Withdraw your pending follow-up message",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "followUpId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "followUp": {
+                      "$ref": "#/components/schemas/ConversationFollowUp"
+                    }
+                  },
+                  "required": [
+                    "followUp"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/conversations/{conversationId}/messages": {
       "get": {
         "operationId": "conversations.messages.list",
@@ -6278,7 +6455,7 @@
     "/api/v1/conversations/{conversationId}/runs": {
       "post": {
         "operationId": "conversations.runs.start",
-        "summary": "Send a message and start an agent run",
+        "summary": "Send a message, starting a run or queueing a follow-up",
         "tags": [
           "Conversations"
         ],
@@ -6320,7 +6497,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StartConversationRunResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StartConversationRunResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/QueuedConversationRunResponse"
+                    }
+                  ]
                 }
               }
             }
@@ -20012,6 +20196,36 @@
             "properties": {
               "type": {
                 "type": "string",
+                "const": "follow_up_changed"
+              },
+              "runId": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "createdAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              "followUp": {
+                "$ref": "#/components/schemas/ConversationFollowUp"
+              }
+            },
+            "required": [
+              "type",
+              "runId",
+              "sequence",
+              "createdAt",
+              "followUp"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
                 "const": "message_delta"
               },
               "runId": {
@@ -23859,6 +24073,79 @@
           "retainedUntil"
         ]
       },
+      "ConversationFollowUp": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientInstanceId": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "authorUserId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "queue"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "dispatched",
+              "cancelled"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "agentName": {
+            "type": "string"
+          },
+          "modelBindingId": {
+            "type": "string"
+          },
+          "reasoningEffort": {
+            "$ref": "#/components/schemas/ReasoningEffort"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "dispatchedRunId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientInstanceId",
+          "conversationId",
+          "authorUserId",
+          "text",
+          "mode",
+          "status",
+          "position",
+          "agentName",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
       "ConversationListItem": {
         "type": "object",
         "properties": {
@@ -24294,6 +24581,12 @@
       "ConversationThreadSnapshot": {
         "type": "object",
         "properties": {
+          "followUps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationFollowUp"
+            }
+          },
           "conversation": {
             "$ref": "#/components/schemas/Conversation"
           },
@@ -24614,6 +24907,11 @@
       "CreateConversationRunRequest": {
         "type": "object",
         "properties": {
+          "followUp": {
+            "description": "Queue the message when this conversation has an active run. Without this option, an active run still returns CONFLICT.",
+            "type": "string",
+            "const": "queue"
+          },
           "idempotencyKey": {
             "type": "string",
             "minLength": 1
@@ -27925,6 +28223,17 @@
           }
         }
       },
+      "QueuedConversationRunResponse": {
+        "type": "object",
+        "properties": {
+          "followUp": {
+            "$ref": "#/components/schemas/ConversationFollowUp"
+          }
+        },
+        "required": [
+          "followUp"
+        ]
+      },
       "Ready": {
         "type": "object",
         "properties": {
@@ -29013,6 +29322,11 @@
       "StartConversationRunRequest": {
         "type": "object",
         "properties": {
+          "followUp": {
+            "description": "Queue the message when this conversation has an active run. Without this option, an active run still returns CONFLICT.",
+            "type": "string",
+            "const": "queue"
+          },
           "idempotencyKey": {
             "type": "string",
             "minLength": 1

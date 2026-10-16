@@ -121,6 +121,8 @@ describe("the operation catalog", () => {
         "conversations.draft_attachments.retry  POST /api/v1/conversations/:conversationId/draft-attachments/:attachmentId/retry",
         "conversations.draft_attachments.upload  POST /api/v1/conversations/:conversationId/draft-attachments",
         "conversations.files.get_content  GET /api/v1/conversations/:conversationId/files/:fileId/content",
+        "conversations.follow_ups.dispatch  POST /api/v1/conversations/:conversationId/follow-ups/dispatch",
+        "conversations.follow_ups.withdraw  POST /api/v1/conversations/:conversationId/follow-ups/:followUpId/withdraw",
         "conversations.list  GET /api/v1/conversations",
         "conversations.messages.list  GET /api/v1/conversations/:conversationId/messages",
         "conversations.move  POST /api/v1/conversations/:conversationId/move",
@@ -515,7 +517,9 @@ describe("a running instance", () => {
       "workspaces.files.list",
       "conversations.subject.open",
       "assets.check_name",
-      "operations.decide"
+      "operations.decide",
+      "conversations.follow_ups.withdraw",
+      "conversations.follow_ups.dispatch"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

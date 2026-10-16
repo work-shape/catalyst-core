@@ -11,6 +11,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { completeAccountDeletion, recordAccountDeletionStalled } from "./deletion/account-deletion";
 import { createConnectionDiscoveryJobs } from "./connections/connection-jobs";
+import { createFollowUpDispatchHandler } from "./conversations/follow-up-service";
 import { ConversationWorkflow } from "./conversations/conversation-service";
 import {
   adoptLegacyJobsJob,
@@ -73,6 +74,7 @@ export function createChatServerJobs(
   const usageReconciliation = createUsageReconciliation(options, now);
 
   const handlers: RegisteredJobHandler[] = [
+    createFollowUpDispatchHandler(options),
     defineJobHandler({
       kind: generateConversationTitleJob,
       slots: 4,

@@ -27,6 +27,7 @@ import {
   type CreateAgentRunInput,
   type PrepareConversationRunStartInput,
   type PreparedConversationRunStart,
+  type ConversationRunStartResult,
   type ReleaseRunStartCommandInput,
   type RunObservation,
   agentRunJobOptions,
@@ -46,6 +47,7 @@ import {
   type RunObservationStore,
   type AgentRunsStore
 } from "@work-shape/catalyst-core";
+import { queueFollowUp, observeFollowUpChange, mapFollowUp } from "./postgres-follow-up-operations";
 import { enqueueJob } from "./jobs/store";
 import { lockActiveConversation } from "./postgres-conversation-operations";
 import { type PostgresConnection } from "./postgres-database";
@@ -53,9 +55,11 @@ import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
   agentRunObservations,
   agentRuns,
+  conversationFollowUps,
   conversationAttachments,
   conversations,
   messages,
+  platformJobs,
   runStartCommands
 } from "./schema";
 
@@ -152,7 +156,7 @@ async function releaseRunStartCommand(
 async function prepareConversationRunStart(
   db: PostgresConnection,
   input: PrepareConversationRunStartInput
-): Promise<PreparedConversationRunStart> {
+): Promise<ConversationRunStartResult> {
   return db.transaction(async (tx) => {
     if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
       throw new AppError("NOT_FOUND", "Conversation is not available");
@@ -170,9 +174,44 @@ async function prepareConversationRunStart(
       )
       .limit(1);
     if (activeRun) {
+      if (input.followUp === "queue" && !input.dispatchFollowUpId)
+        return { followUp: await queueFollowUp(tx, input) };
       throw new AppError("CONFLICT", "Conversation already has an active agent run");
     }
 
+    if (input.dispatchFollowUpId) {
+      const [latest] = await tx
+        .select({ id: agentRuns.id })
+        .from(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.clientInstanceId, input.clientInstanceId),
+            eq(agentRuns.conversationId, input.conversationId)
+          )
+        )
+        .orderBy(desc(agentRuns.startedAt), desc(agentRuns.id))
+        .limit(1);
+      if (latest?.id !== input.dispatchAfterRunId)
+        throw new AppError("CONFLICT", "Dispatch belongs to an earlier turn");
+      const [oldest] = await tx
+        .select()
+        .from(conversationFollowUps)
+        .where(
+          and(
+            eq(conversationFollowUps.clientInstanceId, input.clientInstanceId),
+            eq(conversationFollowUps.conversationId, input.conversationId),
+            eq(conversationFollowUps.status, "pending")
+          )
+        )
+        .orderBy(asc(conversationFollowUps.position))
+        .limit(1);
+      if (
+        !oldest ||
+        oldest.id !== input.dispatchFollowUpId ||
+        oldest.authorUserId !== input.ownerUserId
+      )
+        throw new AppError("CONFLICT", "Follow-up is no longer the oldest pending message");
+    }
     const createdAt = input.run.startedAt ? new Date(input.run.startedAt) : new Date();
     const [earlierUserMessage] = await tx
       .select({ id: messages.id })
@@ -197,7 +236,7 @@ async function prepareConversationRunStart(
         metadata: input.userMessage.metadata ?? {}
       })
       .returning();
-    if (input.claimReadyDraftAttachments) {
+    if (input.claimReadyDraftAttachments || input.dispatchFollowUpId) {
       await tx
         .update(conversationAttachments)
         .set({
@@ -209,7 +248,10 @@ async function prepareConversationRunStart(
             eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
             eq(conversationAttachments.conversationId, input.conversationId),
             eq(conversationAttachments.status, "ready"),
-            isNull(conversationAttachments.messageId)
+            isNull(conversationAttachments.messageId),
+            input.dispatchFollowUpId
+              ? eq(conversationAttachments.followUpId, input.dispatchFollowUpId)
+              : isNull(conversationAttachments.followUpId)
           )
         );
     }
@@ -236,6 +278,27 @@ async function prepareConversationRunStart(
       })
       .returning();
 
+    if (input.dispatchFollowUpId) {
+      const [item] = await tx
+        .update(conversationFollowUps)
+        .set({ status: "dispatched", dispatchedRunId: input.run.id, updatedAt: createdAt })
+        .where(eq(conversationFollowUps.id, input.dispatchFollowUpId))
+        .returning();
+      if (!item) throw new AppError("CONFLICT", "Follow-up is not available");
+      await observeFollowUpChange(tx, mapFollowUp(item));
+      // Release this wake-up's dedupe key before its new run can complete. Its concurrency
+      // key stays held until the handler ends, so a fast next completion cannot lose a wake-up.
+      if (input.dispatchJobId)
+        await tx
+          .update(platformJobs)
+          .set({ dedupeKey: null })
+          .where(
+            and(
+              eq(platformJobs.id, input.dispatchJobId),
+              eq(platformJobs.kind, "conversation.follow_up.dispatch")
+            )
+          );
+    }
     if (input.runStartCommand) {
       const [commandRow] = await tx
         .update(runStartCommands)
@@ -567,6 +630,17 @@ export function createPostgresAgentRunsStore(
   db: PostgresConnection,
   enqueued: () => void
 ): AgentRunsStore {
+  function prepare(
+    input: PrepareConversationRunStartInput & { followUp?: undefined }
+  ): Promise<PreparedConversationRunStart>;
+  function prepare(input: PrepareConversationRunStartInput): Promise<ConversationRunStartResult>;
+  async function prepare(
+    input: PrepareConversationRunStartInput
+  ): Promise<ConversationRunStartResult> {
+    const result = await prepareConversationRunStart(db, input);
+    if ("run" in result && result.run.status === "queued") enqueued();
+    return result;
+  }
   return {
     async claimRunStartCommand(
       input: ClaimRunStartCommandInput
@@ -579,13 +653,7 @@ export function createPostgresAgentRunsStore(
     async releaseRunStartCommand(input: ReleaseRunStartCommandInput): Promise<void> {
       return releaseRunStartCommand(db, input);
     },
-    async prepareConversationRunStart(
-      input: Parameters<AgentRunStore["prepareConversationRunStart"]>[0]
-    ) {
-      const prepared = await prepareConversationRunStart(db, input);
-      if (prepared.run.status === "queued") enqueued();
-      return prepared;
-    },
+    prepareConversationRunStart: prepare,
     async createAgentRun(input: Parameters<AgentRunStore["createAgentRun"]>[0]): Promise<AgentRun> {
       return createAgentRun(db, input);
     },
@@ -659,7 +727,8 @@ export function createPostgresAgentRunsStore(
     async appendClaimedAgentRunEnd(
       input: Parameters<AgentRunStore["appendClaimedAgentRunEnd"]>[0]
     ) {
-      return appendClaimedAgentRunEnd(db, input);
+      await appendClaimedAgentRunEnd(db, input);
+      if (input.events.some((event) => event.type === "run_completed")) enqueued();
     },
     async appendClaimedAgentRunMessage(
       input: AppendClaimedAgentRunMessageInput
