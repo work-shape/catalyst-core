@@ -27,9 +27,9 @@ import {
   type StandaloneAuthRuntime
 } from "@work-shape/catalyst-auth";
 import { routeTestOperations } from "./support/operations";
-import Fastify from "../packages/chat-server/node_modules/fastify/fastify.js";
-import { installErrorHandler } from "../packages/chat-server/src/errors";
-import { registerBetterAuthRoutes } from "../packages/chat-server/src/routes/better-auth-routes";
+import Fastify from "../packages/server/node_modules/fastify/fastify.js";
+import { installErrorHandler } from "../packages/server/src/errors";
+import { registerBetterAuthRoutes } from "../packages/server/src/routes/better-auth-routes";
 
 describe("standalone auth email routes", () => {
   const baseUrl = "http://localhost:3000";

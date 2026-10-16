@@ -92,7 +92,7 @@
       ],
       "vite": false
     },
-    "packages/chat-standalone": {
+    "clients/chat-standalone": {
       "entry": ["src/main.tsx", "vite.config.ts"],
       "project": ["src/**/*.{ts,tsx,mts,cts}", "vite.config.ts"],
       "vite": false

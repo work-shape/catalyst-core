@@ -23,11 +23,11 @@ const runner = "@work-shape/catalyst-tool-execution";
  * replayed, so a file is added here only with the ticket that makes it one.
  */
 const runOperationCallers = [
-  { package: "packages/chat-server", path: "src/operations/operation-face.ts" },
+  { package: "packages/server", path: "src/operations/operation-face.ts" },
   // S3-42: a call a frame makes through the bridge. Its operation is a named action read from
   // the file set the frame shows, which for a Page or a draft is in no registry, so the
   // operation face cannot name it. The call runs with the same dependencies as the face.
-  { package: "packages/chat-server", path: "src/apps/action-call.ts" },
+  { package: "packages/server", path: "src/apps/action-call.ts" },
   // Workflow engine, slice A1: the call an operation step of a Workflow Run makes. It is made
   // by a job, with nobody's request to answer, as the run's service principal and from the
   // origin `workflow`, so the HTTP face cannot make it. It runs with the same dependencies.
@@ -49,7 +49,7 @@ export const runOperationBoundaryRule = ({
   staticReads
 }) =>
   rule(
-    "runOperation is imported by chat-server/src/operations/operation-face.ts and, for the calls of a frame, chat-server/src/apps/action-call.ts only; register the operation with route.operation",
+    "runOperation is imported by server/src/operations/operation-face.ts and, for the calls of a frame, server/src/apps/action-call.ts only; register the operation with route.operation",
     (filename) =>
       isServerSource(filename) &&
       packageAt(filename)?.directory !== "packages/tool-execution" &&

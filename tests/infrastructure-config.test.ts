@@ -10,7 +10,7 @@ import {
   resolveOptionalSecret,
   SecretNotResolvedError
 } from "@work-shape/catalyst-core";
-import { createDataSourceRegistry } from "@work-shape/catalyst-data-source";
+import { createDataSourceRegistry } from "@work-shape/catalyst-postgres-connector";
 import { replayServiceAccountKey } from "./support/model-adapter-recordings";
 import { createTestInstanceOnSecrets } from "./support/test-instance";
 

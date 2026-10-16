@@ -19,7 +19,7 @@ import {
   type ChatServerOptions,
   type OperationCalls
 } from "@work-shape/catalyst-server";
-import { frameworkBehind } from "../../packages/chat-server/src/http/framework";
+import { frameworkBehind } from "../../packages/server/src/http/framework";
 import { buildApiPath, operationPathParamNames } from "@work-shape/catalyst-api-contract";
 import {
   asClientInstanceId,

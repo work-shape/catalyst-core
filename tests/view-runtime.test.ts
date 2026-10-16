@@ -12,7 +12,7 @@ import { createTestInstance, createTestInstanceWith } from "./support/test-insta
 // The runtime a generated view loads is pinned third-party code that ships in the release.
 // Each version directory has a manifest: where every file came from, its hash, its licence.
 
-const runtimeRoot = "packages/chat-server/vendor/view-runtime";
+const runtimeRoot = "packages/server/vendor/view-runtime";
 const manifestSchema = z.object({
   version: z.string(),
   files: z.array(

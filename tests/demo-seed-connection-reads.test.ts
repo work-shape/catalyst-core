@@ -189,7 +189,7 @@ describe("the demo's seeded App and Workflows against the sample MCP server", ()
   it("lets the Customers App read the rows its named action answers", async () => {
     // The call the action `list-customers` stands for (actions/list-customers.action.yaml),
     // made on the call path of the instance as a frame makes it. A named action of an App
-    // answers its operation's output as it is (packages/chat-server/src/apps/action-call.ts).
+    // answers its operation's output as it is (packages/server/src/apps/action-call.ts).
     const outcome = await runOperation(
       {
         operation: "connection.sample-business.list_customers",

@@ -239,20 +239,20 @@ export const b: number = a;
   [`${source}/route-destructured.ts`]: `${httpServer}export const { route } = app;\n`,
   [`${source}/route-computed.ts`]: `${httpServer}app["get"]("/api/things", handler);\n`,
   [`${source}/route-renamed.ts`]: `${httpServer}const server = app;\nserver.get("/api/things", handler);\n`,
-  "packages/chat-server/package.json": JSON.stringify({ name: "@fixture/chat-server" }),
-  "packages/chat-server/src/http/route.ts": `${httpServer}export const register = (url: string) => app.route({ method: "GET", url, handler });\n`,
-  "packages/chat-server/src/routes/better-auth-routes.ts": `${httpServer}app.route({ method: "GET", url: "/api/auth/*", handler });
+  "packages/server/package.json": JSON.stringify({ name: "@fixture/chat-server" }),
+  "packages/server/src/http/route.ts": `${httpServer}export const register = (url: string) => app.route({ method: "GET", url, handler });\n`,
+  "packages/server/src/routes/better-auth-routes.ts": `${httpServer}app.route({ method: "GET", url: "/api/auth/*", handler });
 app.route({ method: "GET", url: "/api/users", handler });
 `,
   // The module switches: refused however a server source reads them from the config, and
   // allowed in the package that parses and resolves them.
-  "packages/chat-server/src/module-member.ts": `declare const options: { config: { modules: object } };
+  "packages/server/src/module-member.ts": `declare const options: { config: { modules: object } };
 export const switches = options.config.modules;
 `,
-  "packages/chat-server/src/module-destructured.ts": `declare const config: { modules: object };
+  "packages/server/src/module-destructured.ts": `declare const config: { modules: object };
 export const { modules } = config;
 `,
-  "packages/chat-server/src/module-snapshot.ts": `declare const options: { modules: object };
+  "packages/server/src/module-snapshot.ts": `declare const options: { modules: object };
 export const snapshot = options.modules;
 `,
   "packages/config-schema/package.json": JSON.stringify({ name: "@fixture/config-schema" }),
@@ -585,8 +585,8 @@ describe("quality collector", { timeout: 180_000 }, () => {
       "packages/artifact-helpers/src/lib/env.ts": read,
       "packages/chat-ui/package.json": JSON.stringify({ name: "@fixture/chat-ui" }),
       "packages/chat-ui/src/env.js": read,
-      "packages/chat-standalone/package.json": JSON.stringify({ name: "@fixture/chat-standalone" }),
-      "packages/chat-standalone/src/main.tsx": "export const mode = import.meta.env.MODE;\n",
+      "clients/chat-standalone/package.json": JSON.stringify({ name: "@fixture/chat-standalone" }),
+      "clients/chat-standalone/src/main.tsx": "export const mode = import.meta.env.MODE;\n",
       // A script at the repository root belongs to no package.
       "scripts/env-script.mjs": read
     };
@@ -620,9 +620,9 @@ describe("quality collector", { timeout: 180_000 }, () => {
       for (const file of Object.keys(allowed)) {
         expect(findings).not.toContain(`catalyst/env-boundary ${file}`);
       }
-      write({ "packages/chat-standalone/src/main.tsx": read });
+      write({ "clients/chat-standalone/src/main.tsx": read });
       expect(measure("lint")).toContain(
-        "catalyst/env-boundary packages/chat-standalone/src/main.tsx"
+        "catalyst/env-boundary clients/chat-standalone/src/main.tsx"
       );
     } finally {
       for (const file of Object.keys(fixtures)) rmSync(join(directory, file), { force: true });
@@ -711,7 +711,7 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `catalyst/route-registration ${source}/route-destructured.ts`,
         `catalyst/route-registration ${source}/route-computed.ts`,
         `catalyst/route-registration ${source}/route-renamed.ts`,
-        "catalyst/route-registration packages/chat-server/src/routes/better-auth-routes.ts",
+        "catalyst/route-registration packages/server/src/routes/better-auth-routes.ts",
         "catalyst/route-registration packages/document-worker/src/index.ts",
         "catalyst/route-registration packages/document-worker/src/index.ts",
         `catalyst/job-executor-boundary ${source}/claim-query.ts`,
@@ -747,8 +747,8 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `catalyst/provider-type-literal ${source}/provider-type-list.ts`,
         `catalyst/provider-type-literal ${source}/provider-type-switch.ts`,
         `catalyst/provider-type-literal ${source}/provider-type-read.ts`,
-        "catalyst/module-snapshot-boundary packages/chat-server/src/module-member.ts",
-        "catalyst/module-snapshot-boundary packages/chat-server/src/module-destructured.ts",
+        "catalyst/module-snapshot-boundary packages/server/src/module-member.ts",
+        "catalyst/module-snapshot-boundary packages/server/src/module-destructured.ts",
         `catalyst/memory-store ${source}/memory-store.ts`,
         "catalyst/test-api-path tests/api-path.test.ts",
         "catalyst/test-api-path tests/api-template.test.ts",

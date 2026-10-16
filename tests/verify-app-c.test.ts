@@ -94,7 +94,7 @@ describe("APP-15: the bridge page states what the spec asks of it", () => {
 
   it("does not say kit 1.0.0 had connections.call: that kit has no Connection call at all", () => {
     const kit100 = readFileSync(
-      new URL("../packages/chat-server/vendor/app-kit/1.0.0/kit.js", import.meta.url),
+      new URL("../packages/server/vendor/app-kit/1.0.0/kit.js", import.meta.url),
       "utf8"
     );
     expect(kit100).not.toContain("connection_call");
@@ -118,7 +118,7 @@ describe("APP-15: the bridge page states what the spec asks of it", () => {
   });
 
   it("names every vendored kit that sends connection_call and no other", () => {
-    const vendor = new URL("../packages/chat-server/vendor/app-kit/", import.meta.url);
+    const vendor = new URL("../packages/server/vendor/app-kit/", import.meta.url);
     const sending = readdirSync(vendor)
       .filter((version) =>
         readFileSync(new URL(`${version}/kit.js`, vendor), "utf8").includes("connection_call")

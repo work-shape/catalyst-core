@@ -134,7 +134,7 @@ describe("the two halves of the bridge", () => {
   it("ship the newest kit, 1.4.0, without a call of a Connection", () => {
     expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.4.0");
     const kit = readFileSync(
-      new URL("../packages/chat-server/vendor/app-kit/1.4.0/kit.js", import.meta.url),
+      new URL("../packages/server/vendor/app-kit/1.4.0/kit.js", import.meta.url),
       "utf8"
     );
     expect(kit).not.toMatch(/connection/u);

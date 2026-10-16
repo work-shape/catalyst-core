@@ -4,7 +4,7 @@ import {
   assertReadOnlyQuery,
   createDataSourceRegistry,
   createDataSourceTools
-} from "@work-shape/catalyst-data-source";
+} from "@work-shape/catalyst-postgres-connector";
 import { createFakeSecrets } from "./support/fixtures";
 
 describe("data source registry", () => {

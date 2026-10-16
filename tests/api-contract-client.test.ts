@@ -175,15 +175,15 @@ describe("api operation catalog", () => {
   });
   it("keeps normal server route registrations tied to the operation catalog", async () => {
     const routeFiles = [
-      "packages/chat-server/src/routes/audit-routes.ts",
-      "packages/chat-server/src/routes/agent-run-routes.ts",
-      "packages/chat-server/src/routes/config-routes.ts",
-      "packages/chat-server/src/routes/conversation-file-routes.ts",
-      "packages/chat-server/src/routes/conversation-routes.ts",
-      "packages/chat-server/src/routes/draft-attachment-routes.ts",
-      "packages/chat-server/src/routes/session-token-routes.ts",
-      "packages/chat-server/src/routes/superadmin-routes.ts",
-      "packages/chat-server/src/routes/user-account-routes.ts"
+      "packages/server/src/routes/audit-routes.ts",
+      "packages/server/src/routes/agent-run-routes.ts",
+      "packages/server/src/routes/config-routes.ts",
+      "packages/server/src/routes/conversation-file-routes.ts",
+      "packages/server/src/routes/conversation-routes.ts",
+      "packages/server/src/routes/draft-attachment-routes.ts",
+      "packages/server/src/routes/session-token-routes.ts",
+      "packages/server/src/routes/superadmin-routes.ts",
+      "packages/server/src/routes/user-account-routes.ts"
     ];
 
     for (const file of routeFiles) {
@@ -204,7 +204,7 @@ describe("api operation catalog", () => {
       Promise.all(
         contractSourceFiles.map((file) => readFile(`${contractSourceDirectory}/${file}`, "utf8"))
       ),
-      readFile("packages/chat-server/src/routes/agent-run-routes.ts", "utf8")
+      readFile("packages/server/src/routes/agent-run-routes.ts", "utf8")
     ]);
     const contractSource = contractSources.join("\n");
 

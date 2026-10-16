@@ -11,7 +11,7 @@ import {
   NativeProcessError,
   renderPdfPage,
   runNativeProcess
-} from "@work-shape/catalyst-document-execution";
+} from "@work-shape/catalyst-tool-execution/native-document";
 
 const tempDirectories: string[] = [];
 

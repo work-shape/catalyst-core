@@ -36,7 +36,12 @@
       "types": "./src/vite.d.ts",
       "import": "./src/vite.js"
     },
-    "./styles.css": "./src/styles.css"
+    "./styles.css": "./src/styles.css",
+    "./widget": {
+      "types": "./dist/widget.d.ts",
+      "development": "./src/widget.tsx",
+      "import": "./dist/widget.js"
+    }
   },
   "publishConfig": {
     "access": "restricted",
@@ -58,11 +63,15 @@
         "types": "./src/vite.d.ts",
         "import": "./src/vite.js"
       },
-      "./styles.css": "./src/styles.css"
+      "./styles.css": "./src/styles.css",
+      "./widget": {
+        "types": "./dist/widget.d.ts",
+        "import": "./dist/widget.js"
+      }
     }
   },
   "scripts": {
-    "build": "tsup src/index.tsx src/shell.tsx src/admin.tsx --format esm --dts --external react --external react-dom",
+    "build": "tsup src/index.tsx src/shell.tsx src/admin.tsx src/widget.tsx --format esm --dts --external react --external react-dom",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
