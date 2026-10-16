@@ -55,9 +55,9 @@ async function traced(
   const runs = (await t.stores.operationRuns.list({ clientInstanceId })).filter(
     (run) => !before.some((earlier) => earlier.id === run.id)
   );
-  const audit = (await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 }))
-    .filter((event) => event.correlationId === correlationId)
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const audit = (await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 })).filter(
+    (event) => event.correlationId === correlationId
+  );
   return { response, runs, audit };
 }
 
@@ -315,9 +315,11 @@ describe("a superadmin's rows", () => {
       expect(runs.map((run) => ({ status: run.status, denial: run.denial }))).toEqual([
         { status: "denied", denial: { kind: "forbidden", action: operation, reason: "no_grant" } }
       ]);
-      // The two rows every refused call of the registry leaves: the check and the ending.
+      // Assert both rows exactly; timestamps can tie and their random IDs do not encode call order.
       expect(
-        audit.map((event) => ({ type: event.type, status: event.status, actor: actorOf(event) }))
+        audit
+          .map((event) => ({ type: event.type, status: event.status, actor: actorOf(event) }))
+          .sort((left, right) => left.type.localeCompare(right.type))
       ).toEqual([
         { type: "operation.authorization_checked", status: "denied", actor: t.admin.id },
         { type: "operation.denied", status: "denied", actor: t.admin.id }
