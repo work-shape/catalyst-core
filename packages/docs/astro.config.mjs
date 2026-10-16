@@ -1,4 +1,5 @@
 import { defineConfig } from "astro/config";
+import { unified } from "@astrojs/markdown-remark";
 import starlight from "@astrojs/starlight";
 
 // The site is published at https://docs.workshape.ai/catalyst. The host may carry the docs of
@@ -26,7 +27,7 @@ export default defineConfig({
   // The build output is the root of the host: the site in its base folder, and beside it the
   // files of `host/` that have to sit at the root (robots.txt, the redirect from "/").
   outDir: `./dist${base}`,
-  markdown: { rehypePlugins: [rehypeBaseLinks] },
+  markdown: { processor: unified({ rehypePlugins: [rehypeBaseLinks] }) },
   vite: {
     css: {
       postcss: {

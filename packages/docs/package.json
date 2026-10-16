@@ -12,13 +12,15 @@
     "typecheck": "node scripts/generate-api-reference.mjs && astro check"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.40.0",
-    "astro": "^6.4.6"
+    "@astrojs/markdown-remark": "^7.3.3",
+    "@astrojs/starlight": "^0.42.6",
+    "astro": "~7.2.10",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.9",
+    "@astrojs/check": "^0.9.10",
     "@work-shape/catalyst-api-contract": "workspace:*",
     "typescript": "^6.0.3",
-    "vite": "^7.3.5"
+    "vite": "^8.3.4"
   }
 }
