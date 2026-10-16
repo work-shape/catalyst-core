@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { defineConfig } from "vitest/config";
+import DurationSequencer from "./scripts/vitest-duration-sequencer";
 import {
   connectionsForWorkers,
   defaultTestWorkers,
@@ -52,7 +53,7 @@ export default defineConfig({
     // See scripts/test-postgres-capacity.mjs for the arithmetic.
     maxWorkers,
     // Close suite connections/held transactions before the file fixture is reset or dropped.
-    sequence: { hooks: "stack" },
+    sequence: { hooks: "stack", sequencer: DurationSequencer },
     hookTimeout: 60000, // check-limit
     testTimeout: 30000, // check-limit
     include: ["tests/**/*.test.ts"]

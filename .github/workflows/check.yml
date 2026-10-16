@@ -182,7 +182,13 @@ jobs:
       - name: Unit and database tests
         env:
           SHARD: ${{ matrix.shard }}
-        run: pnpm exec vitest run --shard="$SHARD/4"
+        run: pnpm exec vitest run --shard="$SHARD/4" --reporter=default --reporter=json --outputFile=test-results/vitest-durations.json
+      - name: Keep Vitest durations and selected files
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vitest-durations-${{ matrix.shard }}
+          path: test-results/vitest-durations.json
       - name: Deployment kit tests (once)
         if: matrix.shard == 1
         run: pnpm test:deployment-kit

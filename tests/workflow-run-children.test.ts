@@ -9,6 +9,7 @@ import {
   runSchema,
   type WorkflowFixture
 } from "./support/workflow-instance";
+import { readyChildWorkflows } from "./support/workflow-children-instance";
 import { readyWorkflows, stepRunsOf } from "./support/workflow-runs";
 
 let open: WorkflowFixture | undefined;
@@ -16,31 +17,17 @@ afterEach(async () => {
   await open?.instance.close();
   open = undefined;
 });
-async function ready(
+const ready = (
   definitions = publishedDefinitions(),
   options: { now?: () => Date; duration?: number } = {}
-) {
-  const t = await readyWorkflows(
-    (f) => {
-      open = f;
+) =>
+  readyChildWorkflows(
+    (fixture) => {
+      open = fixture;
     },
-    {
-      definitions: definitions.source,
-      ...(options.now ? { now: options.now } : {}),
-      ...(options.duration ? { limits: { maxDurationMs: options.duration } } : {})
-    }
+    definitions,
+    options
   );
-  await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
-  t.state.limits = { ...t.state.limits, resultMaxBytes: 64 * 1_024 };
-  t.state.centralSettings = [
-    ...t.state.centralSettings,
-    { operation: "workflow.parent.start", value: "allow" }
-  ];
-  t.setBehaviour((_operation, input) =>
-    Promise.resolve({ value: z.object({ text: z.string() }).parse(input).text })
-  );
-  return t;
-}
 describe("Workflow child runs", () => {
   it("waits without a step job, wakes after restart and returns the whole child output with lineage", async () => {
     const definitions = publishedDefinitions();
@@ -383,77 +370,6 @@ describe("child Workflow contracts and publish checks", () => {
       []
     );
   });
-});
-
-describe("child-run budgets", () => {
-  it("keeps 600 children within their own budgets while their combined history exceeds 20,000 step runs", async () => {
-    const definitions = publishedDefinitions();
-    const sub = child();
-    sub.inputs = {
-      type: "object",
-      properties: {
-        value: { type: "string" },
-        items: { type: "array", items: { type: "integer" } },
-        empty: { type: "array" }
-      },
-      required: ["value", "items", "empty"]
-    };
-    const trigger = sub.steps[0];
-    const read = sub.steps[1];
-    if (!trigger || !read) throw new Error("Missing steps");
-    sub.steps = [
-      trigger,
-      {
-        id: "batch",
-        name: "Three-step child with bounded work",
-        type: "loop",
-        items: { step: "start", path: "input.items" },
-        steps: [
-          {
-            id: "empty",
-            name: "No-op item",
-            type: "loop",
-            items: { step: "start", path: "input.empty" },
-            steps: [read]
-          }
-        ]
-      },
-      { id: "result", name: "Counts", type: "output", input: { counts: ref("batch", "") } }
-    ];
-    const main = parent("child", 600);
-    const each = main.steps[2];
-    if (each?.type !== "loop" || each.steps[0]?.type !== "workflow")
-      throw new Error("Missing loop");
-    each.steps[0].input = {
-      ...each.steps[0].input,
-      items: { value: Array.from({ length: 34 }, (_, i) => i) }
-    };
-    each.steps[0].input = { ...each.steps[0].input, empty: { value: [] } };
-    definitions.publish(sub);
-    definitions.publish(main);
-    const t = await ready(definitions);
-    t.setBehaviour(async (_operation, input): Promise<JsonValue> => {
-      const text = z.object({ text: z.string() }).parse(input).text;
-      return text === "items"
-        ? { items: Array.from({ length: 600 }, (_, i) => String(i)) }
-        : { value: text };
-    });
-    const started = await start(t);
-    const worker = t.worker();
-    let done: Awaited<ReturnType<typeof t.stores.workflowRuns.readRun>>;
-    for (let pass = 0; pass < 7_000; pass++) {
-      await worker.runDue();
-      done = await t.stores.workflowRuns.readRun({ clientInstanceId, id: started.id });
-      if (done?.finishedAt) break;
-    }
-    expect(done?.status).toBe("done");
-    const runs = await children(t, started.id);
-    expect(runs).toHaveLength(600);
-    expect(runs.every((r) => r.status === "done" && r.stepRunCount === 37)).toBe(true);
-    expect(runs.reduce((sum, r) => sum + r.stepRunCount, done?.stepRunCount ?? 0)).toBeGreaterThan(
-      20_000
-    );
-  }, 1_200_000);
 });
 
 describe("concurrent Workflow publication", () => {
