@@ -273,7 +273,7 @@ export const configAssetSummarySchema = z.object({
 });
 
 // Agent and skill configs are validated against their full schemas by the
-// chat-server workflow without coupling this transport package to config-schema.
+// server service without coupling this transport package to config-schema.
 export const configAssetConfigSchema = z.record(z.string(), z.unknown());
 
 export const configAssetRevisionSchema = z.object({

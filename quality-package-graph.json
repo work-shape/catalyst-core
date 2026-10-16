@@ -3,23 +3,13 @@
     "@work-shape/catalyst-core",
     "@work-shape/catalyst-model-provider"
   ],
-  "@work-shape/catalyst-api-client": [
-    "@work-shape/catalyst-api-contract"
-  ],
-  "@work-shape/catalyst-api-contract": [
-    "@work-shape/catalyst-asset-schemas"
-  ],
-  "@work-shape/catalyst-app-build": [
-    "@work-shape/catalyst-core"
-  ],
-  "@work-shape/catalyst-app-kit": [
-    "@work-shape/catalyst-ui"
-  ],
+  "@work-shape/catalyst-api-client": ["@work-shape/catalyst-api-contract"],
+  "@work-shape/catalyst-api-contract": ["@work-shape/catalyst-asset-schemas"],
+  "@work-shape/catalyst-app-build": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-app-kit": ["@work-shape/catalyst-ui"],
   "@work-shape/catalyst-asset-repo": [],
   "@work-shape/catalyst-asset-schemas": [],
-  "@work-shape/catalyst-auth": [
-    "@work-shape/catalyst-core"
-  ],
+  "@work-shape/catalyst-auth": ["@work-shape/catalyst-core"],
   "@work-shape/catalyst-capability-sdk": [
     "@work-shape/catalyst-core",
     "@work-shape/catalyst-postgres-connector",
@@ -37,9 +27,7 @@
     "@work-shape/catalyst-tool-execution",
     "@work-shape/catalyst-usage-governance"
   ],
-  "@work-shape/catalyst-chat-standalone": [
-    "@work-shape/catalyst-chat-ui"
-  ],
+  "@work-shape/catalyst-chat-standalone": ["@work-shape/catalyst-chat-ui"],
   "@work-shape/catalyst-chat-ui": [
     "@work-shape/catalyst-api-client",
     "@work-shape/catalyst-config-schema",
@@ -79,9 +67,7 @@
     "@work-shape/catalyst-core",
     "@work-shape/catalyst-web-access"
   ],
-  "@work-shape/catalyst-core": [
-    "@work-shape/catalyst-asset-schemas"
-  ],
+  "@work-shape/catalyst-core": ["@work-shape/catalyst-asset-schemas"],
   "@work-shape/catalyst-data-stores": [
     "@work-shape/catalyst-connections",
     "@work-shape/catalyst-core",
@@ -98,42 +84,25 @@
     "@work-shape/catalyst-cli"
   ],
   "@work-shape/catalyst-deployment-kit": [],
-  "@work-shape/catalyst-docs": [
-    "@work-shape/catalyst-api-contract"
-  ],
-  "@work-shape/catalyst-mail": [
-    "@work-shape/catalyst-core"
-  ],
-  "@work-shape/catalyst-model-provider": [
-    "@work-shape/catalyst-core"
-  ],
-  "@work-shape/catalyst-object-storage": [
-    "@work-shape/catalyst-core"
-  ],
+  "@work-shape/catalyst-docs": ["@work-shape/catalyst-api-contract"],
+  "@work-shape/catalyst-mail": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-model-provider": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-object-storage": ["@work-shape/catalyst-core"],
   "@work-shape/catalyst-postgres-connector": [
     "@work-shape/catalyst-core",
     "@work-shape/catalyst-tool-sdk"
   ],
-  "@work-shape/catalyst-postgres-store": [
-    "@work-shape/catalyst-core"
-  ],
+  "@work-shape/catalyst-postgres-store": ["@work-shape/catalyst-core"],
   "@work-shape/catalyst-quality-config": [],
   "@work-shape/catalyst-tool-execution": [
     "@work-shape/catalyst-config-schema",
     "@work-shape/catalyst-core",
     "@work-shape/catalyst-tool-sdk"
   ],
-  "@work-shape/catalyst-tool-sdk": [
-    "@work-shape/catalyst-core"
-  ],
+  "@work-shape/catalyst-tool-sdk": ["@work-shape/catalyst-core"],
   "@work-shape/catalyst-ui": [],
-  "@work-shape/catalyst-usage-governance": [
-    "@work-shape/catalyst-core"
-  ],
-  "@work-shape/catalyst-web-access": [
-    "@work-shape/catalyst-core",
-    "@work-shape/catalyst-tool-sdk"
-  ],
+  "@work-shape/catalyst-usage-governance": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-web-access": ["@work-shape/catalyst-core", "@work-shape/catalyst-tool-sdk"],
   "@work-shape/catalyst-workflows": [
     "@work-shape/catalyst-connections",
     "@work-shape/catalyst-core",

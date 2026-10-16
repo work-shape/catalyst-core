@@ -8,7 +8,7 @@ const denied = /exampledata|(?<![a-z])datev|exampletax|musterbau|(?<![a-z])extra
 // These pinned third-party chart bundles contain updateView and repeatCount, not names.
 const vendoredCharts = new Set(
   ["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"].map(
-    (version) => `chat-server/vendor/app-kit/${version}/charts.js`
+    (version) => `server/vendor/app-kit/${version}/charts.js`
   )
 );
 

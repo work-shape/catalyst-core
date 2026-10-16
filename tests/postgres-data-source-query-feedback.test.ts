@@ -8,7 +8,10 @@ import {
   type Logger,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
-import { createDataSourceRegistry, createDataSourceTools } from "@work-shape/catalyst-postgres-connector";
+import {
+  createDataSourceRegistry,
+  createDataSourceTools
+} from "@work-shape/catalyst-postgres-connector";
 import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
 import { createTestToolRunner } from "./support/tool-runner";
 import { usePostgresSuite } from "./support/postgres-suite";

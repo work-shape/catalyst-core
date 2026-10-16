@@ -33,7 +33,10 @@ import {
   loadClientInstanceConfigFromFile,
   validateConfigAssetBundle
 } from "@work-shape/catalyst-config-schema";
-import { createDataSourceTools, createDataSourceRegistry } from "@work-shape/catalyst-postgres-connector";
+import {
+  createDataSourceTools,
+  createDataSourceRegistry
+} from "@work-shape/catalyst-postgres-connector";
 import { createWebFetchToolDefinitions } from "@work-shape/catalyst-web-access";
 import {
   createBuiltInToolDefinitions,

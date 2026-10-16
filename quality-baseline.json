@@ -228,13 +228,6 @@
     {
       "target": "lint",
       "rule": "import-x/no-relative-packages",
-      "scope": "scripts",
-      "count": 3,
-      "owner": "CB-8b"
-    },
-    {
-      "target": "lint",
-      "rule": "import-x/no-relative-packages",
       "scope": "tests",
       "count": 150,
       "owner": "CB-2"

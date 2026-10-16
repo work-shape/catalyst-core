@@ -199,9 +199,7 @@ const isServerSource = (filename) => {
   return (
     directory !== undefined &&
     /^packages\/[^/]+\/src\//.test(relative(root, filename).replaceAll("\\", "/")) &&
-    !["config-cli", "chat-ui", "ui", "chat-widget", "chat-standalone"].some(
-      (name) => directory === `packages/${name}`
-    )
+    !["config-cli", "chat-ui", "ui"].some((name) => directory === `packages/${name}`)
   );
 };
 
@@ -321,17 +319,14 @@ const plugin = {
     // ESLint's no-restricted-globals and no-restricted-properties would cover these three,
     // but under one rule name. The baseline counts by rule and each boundary has its own owner.
     "sql-boundary": rule(
-      "SQL drivers and Drizzle belong in postgres-store, auth, data-source or postgres-connector",
+      "SQL drivers and Drizzle belong in postgres-store, auth or postgres-connector",
       (filename) => {
         const directory = packageAt(filename)?.directory;
         return (
           directory !== undefined &&
-          ![
-            "packages/postgres-store",
-            "packages/auth",
-            "packages/data-source",
-            "packages/postgres-connector"
-          ].includes(directory)
+          !["packages/postgres-store", "packages/auth", "packages/postgres-connector"].includes(
+            directory
+          )
         );
       },
       (_context, report) => {

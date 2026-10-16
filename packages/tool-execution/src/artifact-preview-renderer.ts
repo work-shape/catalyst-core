@@ -16,7 +16,7 @@ import {
   MODEL_PAGE_IMAGE_MIME_TYPE,
   NativeProcessError,
   renderPdfPage
-} from "@work-shape/catalyst-tool-execution/native-document";
+} from "./native-document";
 import { previewFailure } from "./artifact-preview-failures";
 import {
   formatSpreadsheetRangeSelector,

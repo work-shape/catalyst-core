@@ -93,6 +93,46 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  clients/chat-standalone:
+    dependencies:
+      '@work-shape/catalyst-chat-ui':
+        specifier: workspace:*
+        version: link:../../packages/chat-ui
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.7
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.3.0
+        version: 4.3.0(vite@8.0.16(@types/node@24.13.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
+      '@types/node':
+        specifier: ^24.13.1
+        version: 24.13.1
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.2
+        version: 6.0.2(vite@8.0.16(@types/node@24.13.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
+      tailwindcss:
+        specifier: ^4.3.0
+        version: 4.3.0
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.16
+        version: 8.0.16(@types/node@24.13.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1)
+
   clients/demo:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -364,9 +404,9 @@ importers:
       '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@work-shape/catalyst-data-source':
+      '@work-shape/catalyst-postgres-connector':
         specifier: workspace:*
-        version: link:../data-source
+        version: link:../postgres-connector
       '@work-shape/catalyst-tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
@@ -380,104 +420,6 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-
-  packages/chat-server:
-    dependencies:
-      '@fastify/cors':
-        specifier: ^11.2.0
-        version: 11.2.0
-      '@fastify/multipart':
-        specifier: ^9.3.0
-        version: 9.4.0
-      '@work-shape/catalyst-api-contract':
-        specifier: workspace:*
-        version: link:../api-contract
-      '@work-shape/catalyst-app-build':
-        specifier: workspace:*
-        version: link:../app-build
-      '@work-shape/catalyst-asset-repo':
-        specifier: workspace:*
-        version: link:../asset-repo
-      '@work-shape/catalyst-auth':
-        specifier: workspace:*
-        version: link:../auth
-      '@work-shape/catalyst-config-schema':
-        specifier: workspace:*
-        version: link:../config-schema
-      '@work-shape/catalyst-core':
-        specifier: workspace:*
-        version: link:../core
-      '@work-shape/catalyst-mail':
-        specifier: workspace:*
-        version: link:../mail
-      '@work-shape/catalyst-model-provider':
-        specifier: workspace:*
-        version: link:../model-provider
-      '@work-shape/catalyst-tool-execution':
-        specifier: workspace:*
-        version: link:../tool-execution
-      '@work-shape/catalyst-usage-governance':
-        specifier: workspace:*
-        version: link:../usage-governance
-      ai:
-        specifier: ^6.0.199
-        version: 6.0.224(zod@4.4.3)
-      fastify:
-        specifier: ^5.8.5
-        version: 5.8.5
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: ^24.13.1
-        version: 24.13.1
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.1)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/chat-standalone:
-    dependencies:
-      '@work-shape/catalyst-chat-ui':
-        specifier: workspace:*
-        version: link:../chat-ui
-      react:
-        specifier: ^19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.2.7
-        version: 19.2.7(react@19.2.7)
-    devDependencies:
-      '@tailwindcss/vite':
-        specifier: ^4.3.0
-        version: 4.3.0(vite@8.0.16(@types/node@24.13.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
-      '@types/node':
-        specifier: ^24.13.1
-        version: 24.13.1
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.17)
-      '@vitejs/plugin-react':
-        specifier: ^6.0.2
-        version: 6.0.2(vite@8.0.16(@types/node@24.13.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))
-      tailwindcss:
-        specifier: ^4.3.0
-        version: 4.3.0
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.16
-        version: 8.0.16(@types/node@24.13.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1)
 
   packages/chat-ui:
     dependencies:
@@ -585,34 +527,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/chat-widget:
-    dependencies:
-      '@work-shape/catalyst-chat-ui':
-        specifier: workspace:*
-        version: link:../chat-ui
-      react:
-        specifier: ^19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.2.7
-        version: 19.2.7(react@19.2.7)
-    devDependencies:
-      '@types/node':
-        specifier: ^24.13.1
-        version: 24.13.1
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.17)
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.1)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/client-assembly:
     dependencies:
       '@work-shape/catalyst-agent-runtime':
@@ -645,9 +559,6 @@ importers:
       '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@work-shape/catalyst-data-source':
-        specifier: workspace:*
-        version: link:../data-source
       '@work-shape/catalyst-data-stores':
         specifier: workspace:*
         version: link:../data-stores
@@ -660,12 +571,15 @@ importers:
       '@work-shape/catalyst-object-storage':
         specifier: workspace:*
         version: link:../object-storage
+      '@work-shape/catalyst-postgres-connector':
+        specifier: workspace:*
+        version: link:../postgres-connector
       '@work-shape/catalyst-postgres-store':
         specifier: workspace:*
         version: link:../postgres-store
       '@work-shape/catalyst-server':
         specifier: workspace:*
-        version: link:../chat-server
+        version: link:../server
       '@work-shape/catalyst-tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
@@ -807,31 +721,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/data-source:
-    dependencies:
-      '@work-shape/catalyst-core':
-        specifier: workspace:*
-        version: link:../core
-      '@work-shape/catalyst-tool-sdk':
-        specifier: workspace:*
-        version: link:../tool-sdk
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: ^24.13.1
-        version: 24.13.1
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.1)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/data-stores:
     dependencies:
       '@work-shape/catalyst-connections':
@@ -880,18 +769,6 @@ importers:
       vite:
         specifier: ^7.3.5
         version: 7.3.5(@types/node@24.13.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.1)
-
-  packages/document-execution:
-    devDependencies:
-      '@types/node':
-        specifier: ^24.13.1
-        version: 24.13.1
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.1)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
 
   packages/mail:
     dependencies:
@@ -961,6 +838,9 @@ importers:
       '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
+      '@work-shape/catalyst-tool-sdk':
+        specifier: workspace:*
+        version: link:../tool-sdk
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
@@ -1031,7 +911,63 @@ importers:
         specifier: ^24.0.0
         version: 24.13.1
 
-  packages/registry-canary: {}
+  packages/server:
+    dependencies:
+      '@fastify/cors':
+        specifier: ^11.2.0
+        version: 11.2.0
+      '@fastify/multipart':
+        specifier: ^9.3.0
+        version: 9.4.0
+      '@work-shape/catalyst-api-contract':
+        specifier: workspace:*
+        version: link:../api-contract
+      '@work-shape/catalyst-app-build':
+        specifier: workspace:*
+        version: link:../app-build
+      '@work-shape/catalyst-asset-repo':
+        specifier: workspace:*
+        version: link:../asset-repo
+      '@work-shape/catalyst-auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@work-shape/catalyst-config-schema':
+        specifier: workspace:*
+        version: link:../config-schema
+      '@work-shape/catalyst-core':
+        specifier: workspace:*
+        version: link:../core
+      '@work-shape/catalyst-mail':
+        specifier: workspace:*
+        version: link:../mail
+      '@work-shape/catalyst-model-provider':
+        specifier: workspace:*
+        version: link:../model-provider
+      '@work-shape/catalyst-tool-execution':
+        specifier: workspace:*
+        version: link:../tool-execution
+      '@work-shape/catalyst-usage-governance':
+        specifier: workspace:*
+        version: link:../usage-governance
+      ai:
+        specifier: ^6.0.199
+        version: 6.0.224(zod@4.4.3)
+      fastify:
+        specifier: ^5.8.5
+        version: 5.8.5
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.1
+        version: 24.13.1
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.1)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/tool-execution:
     dependencies:
@@ -1041,9 +977,6 @@ importers:
       '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
-      '@work-shape/catalyst-document-execution':
-        specifier: workspace:*
-        version: link:../document-execution
       '@work-shape/catalyst-tool-sdk':
         specifier: workspace:*
         version: link:../tool-sdk
@@ -2637,12 +2570,6 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
-  '@napi-rs/wasm-runtime@1.1.4':
-    resolution: {integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==}
-    peerDependencies:
-      '@emnapi/core': ^1.7.1
-      '@emnapi/runtime': ^1.7.1
-
   '@napi-rs/wasm-runtime@1.2.5':
     resolution: {integrity: sha512-HshSvXzmBxNzqejd3k/KemgQ3hdREUYFRRrgxOZ+gPljDIsO2SDZrVZMd4Z/HsxudQbE62OVyVFE8z9BCurfjA==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=23.5.0}
@@ -4164,9 +4091,6 @@ packages:
   '@tanstack/virtual-file-routes@1.162.0':
     resolution: {integrity: sha512-uhOeFyxLcU41HzvrxsGpiWdcMbScY1EDgbZ5K7DVRMYInbLYWAC0EA/kx9wXAoSM8q82bUG2hRl8+EAjE6XAbA==}
     engines: {node: '>=20.19'}
-
-  '@tybys/wasm-util@0.10.2':
-    resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -8637,7 +8561,7 @@ snapshots:
       '@types/hast': 3.0.4
       '@types/mdast': 4.0.4
       js-yaml: 4.3.2
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       retext-smartypants: 6.2.0
       shiki: 4.2.0
       smol-toml: 1.6.1
@@ -9823,7 +9747,7 @@ snapshots:
 
   '@img/sharp-wasm32@0.34.5':
     dependencies:
-      '@emnapi/runtime': 1.10.0
+      '@emnapi/runtime': 1.11.2
     optional: true
 
   '@img/sharp-win32-arm64@0.34.5':
@@ -9912,11 +9836,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@napi-rs/wasm-runtime@1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
+  '@napi-rs/wasm-runtime@1.2.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
-      '@tybys/wasm-util': 0.10.2
+      '@tybys/wasm-util': 0.10.4
     optional: true
 
   '@napi-rs/wasm-runtime@1.2.5(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
@@ -10920,7 +10844,7 @@ snapshots:
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
-      '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@napi-rs/wasm-runtime': 1.2.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
     optional: true
 
   '@rolldown/binding-win32-arm64-msvc@1.0.3':
@@ -10935,7 +10859,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
       estree-walker: 2.0.2
-      picomatch: 4.0.4
+      picomatch: 4.0.7
     optionalDependencies:
       rollup: 4.61.1
 
@@ -11282,11 +11206,6 @@ snapshots:
   '@tanstack/store@0.9.3': {}
 
   '@tanstack/virtual-file-routes@1.162.0': {}
-
-  '@tybys/wasm-util@0.10.2':
-    dependencies:
-      tslib: 2.8.1
-    optional: true
 
   '@tybys/wasm-util@0.10.4':
     dependencies:
@@ -11928,7 +11847,7 @@ snapshots:
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
-      '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@napi-rs/wasm-runtime': 1.2.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
     optional: true
 
   '@unrs/resolver-binding-win32-arm64-msvc@1.12.2':
@@ -15812,8 +15731,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.4)
-      picomatch: 4.0.4
+      fdir: 6.5.0(picomatch@4.0.7)
+      picomatch: 4.0.7
 
   tinyrainbow@3.1.0: {}
 
@@ -16140,7 +16059,7 @@ snapshots:
   vite@8.0.16(@types/node@24.13.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.32.0
-      picomatch: 4.0.4
+      picomatch: 4.0.7
       postcss: 8.5.15
       rolldown: 1.0.3
       tinyglobby: 0.2.17

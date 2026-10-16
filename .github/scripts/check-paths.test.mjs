@@ -70,7 +70,7 @@ test("browser and isolated image builds follow the current workspace dependency 
   ]) {
     assert.equal(selectChecks([`packages/${name}/src/index.ts`]).browser, true, name);
   }
-  assert.deepEqual(selectChecks(["packages/registry-canary/src/index.ts"]), {
+  assert.deepEqual(selectChecks(["clients/chat-standalone/src/main.tsx"]), {
     code: true,
     browser: false,
     images: false
@@ -101,8 +101,8 @@ test("new transitive dependencies are discovered from manifests, including cycle
   assert.deepEqual(browserDependencyPaths(root).sort(), [
     "clients/demo/",
     "packages/builder/",
-    "packages/server/",
     "packages/direct/",
+    "packages/server/",
     "packages/transitive/"
   ]);
 });

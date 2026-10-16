@@ -22,7 +22,7 @@ const CONSUMER_SET = [
 const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000;
 // ui ships src/ next to dist/ for Tailwind scanning; chat-ui scans dist/ and ships only its
-// unbuilt stylesheet and Vite helpers beside it. chat-server ships the pinned
+// unbuilt stylesheet and Vite helpers beside it. server ships the pinned
 // view runtime it serves, about 230 kB packed, its own code, about 150 kB packed, and every
 // released App Kit version, about 385 kB packed each, most of it the chart engine; 1.3.0 is about
 // 450 kB, because the library it bundles gained the flow canvas, and 1.4.0, which drops the
@@ -41,7 +41,7 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   // Raised on 2026-10-14 for App Kit 1.4.0 and the guardrail assets of EW-6a. Follow-up
   // KIT-SHARE-1: vendored App Kit versions share React and the chart engine; then lower the
   // limit again.
-  "chat-server": 2_700_000,
+  server: 2_700_000,
   "postgres-store": 850_000
 };
 const FORBIDDEN_FILES = [
@@ -272,7 +272,7 @@ if (drifted.length > 0) {
   problems.push(`metadata out of date in ${drifted.join(", ")}; run pnpm release:metadata`);
 }
 for (const pkg of packages) {
-  if (!pkg.publishable && pkg.dir !== "registry-canary" && pkg.manifest.private !== true) {
+  if (!pkg.publishable && pkg.manifest.private !== true) {
     problems.push(`${pkg.dir}: listed as unpublished but not marked private`);
   }
 }
