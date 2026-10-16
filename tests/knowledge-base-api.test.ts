@@ -187,7 +187,7 @@ describe("a Knowledge Base on a Data Store", () => {
     expect((await query(instance, { sql: "select 1" })).statusCode).toBe(404);
   });
 
-  it("refuses a definition with a field of a later slice and one without a backend", async () => {
+  it("refuses a definition with a field of a later slice, and tables or SQL without a Data Store", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
 
     const prompted = await putKnowledgeBase(instance, { ...definition(), answerPrompt: "Be nice" });
@@ -198,8 +198,8 @@ describe("a Knowledge Base on a Data Store", () => {
     for (const refused of [prompted, builtIn, semantic]) {
       expect(refused.statusCode, refused.body).toBe(422);
     }
-    expect(builtIn.body).toContain("DS-4");
-    expect(semantic.body).toContain("structured");
+    expect(builtIn.body).toContain("'backend: { dataStore: <id> }'");
+    expect(semantic.body).toContain("answers the method 'structured' alone");
   });
 
   it("answers a member only with `knowledge_base.use`, and needs no right on the store behind it", async () => {

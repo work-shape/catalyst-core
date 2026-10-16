@@ -25,6 +25,7 @@ import { queryInputSchema, rowsSchema, RUN_TIMEOUT_MS } from "../operations";
 import {
   knowledgeBaseDefinitionSchema,
   knowledgeTargetOf,
+  type DataStoreKnowledgeDefinition,
   type KnowledgeBaseDefinition
 } from "./definition";
 import { checkKnowledgeBase, type KnowledgeRuntime } from "./runtime";
@@ -81,11 +82,22 @@ const stateOutputSchema = z.object({
 type StateOutput = z.infer<typeof stateOutputSchema>;
 
 /** A Knowledge Base as its operations read it: its published definition and its asset. */
-interface PublishedKnowledgeBase {
+interface PublishedKnowledgeBase<
+  Definition extends KnowledgeBaseDefinition = KnowledgeBaseDefinition
+> {
   asset: ConfigAssetRecord;
   revision: number;
-  definition: KnowledgeBaseDefinition;
+  definition: Definition;
   resource: OperationResource;
+}
+
+/** A published Knowledge Base on a Data Store, which answers `structured` over its tables. */
+type StructuredKnowledgeBase = PublishedKnowledgeBase<DataStoreKnowledgeDefinition>;
+
+function isStructured(
+  knowledgeBase: PublishedKnowledgeBase
+): knowledgeBase is StructuredKnowledgeBase {
+  return "backend" in knowledgeBase.definition;
 }
 
 function publishedKnowledgeBase(asset: ConfigAssetRecord): PublishedKnowledgeBase | undefined {
@@ -189,7 +201,7 @@ async function checkAfterFailure(
 
 function queryOperation(
   runtime: KnowledgeRuntime,
-  knowledgeBase: PublishedKnowledgeBase
+  knowledgeBase: StructuredKnowledgeBase
 ): OperationDefinition {
   const { definition } = knowledgeBase;
   return {
@@ -291,7 +303,6 @@ function checkOperation(
         await runtime.backend.grant(
           runtime.stores,
           knowledgeTargetOf(definition, asset.id),
-          undefined,
           signal
         );
       }
@@ -300,8 +311,13 @@ function checkOperation(
   };
 }
 
+/**
+ * The operations of one Knowledge Base by the last part of their names. `query` is answered
+ * only on a Data Store; the built-in backend answers search, which arrives with KB-7.
+ */
 const OPERATIONS = {
-  query: queryOperation,
+  query: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
+    isStructured(knowledgeBase) ? queryOperation(runtime, knowledgeBase) : undefined,
   state: stateOperation,
   check: checkOperation
 } as const;
@@ -337,6 +353,7 @@ export function createKnowledgeOperationSource(runtime: KnowledgeRuntime): Opera
         operations: assets
           .slice(0, KNOWLEDGE_LIST_MAX_COUNT)
           .flatMap((asset) => publishedKnowledgeBase(asset) ?? [])
+          .filter(isStructured)
           .filter(
             ({ resource }) =>
               scope.workspaceId === undefined ||
@@ -360,7 +377,7 @@ export function createKnowledgeOperationSource(runtime: KnowledgeRuntime): Opera
 }
 
 /** What an agent reads of one Knowledge Base: what it holds and each table with its sentence. */
-function knowledgeBaseSection({ definition }: PublishedKnowledgeBase): string {
+function knowledgeBaseSection({ definition }: StructuredKnowledgeBase): string {
   return [
     `- ${definition.name} ("${definition.title}"): ${definition.description}`,
     ...definition.tables.map((table) => `  - table ${table.name}: ${table.description}`)
@@ -425,9 +442,11 @@ export function createKnowledgeToolSource(runtime: KnowledgeRuntime): DataToolSo
         names: wanted,
         limit: wanted.length
       });
+      // A Knowledge Base that keeps documents has no tables to query: search arrives with KB-7.
       const published = wanted.flatMap((name) => {
         const asset = assets.find((candidate) => candidate.name === name);
-        return (asset && publishedKnowledgeBase(asset)) ?? [];
+        const knowledgeBase = asset && publishedKnowledgeBase(asset);
+        return knowledgeBase && isStructured(knowledgeBase) ? [knowledgeBase] : [];
       });
       if (published.length === 0) return [];
       const each = published.map((knowledgeBase): DataToolDescriptor => ({

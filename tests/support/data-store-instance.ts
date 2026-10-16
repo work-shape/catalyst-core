@@ -83,9 +83,10 @@ export function useDataStoreInstance(): {
     guardrails?: Record<string, unknown>,
     /**
      * The module `knowledge` on beside the Data Stores, with agents that may be created and
-     * given Knowledge Bases.
+     * given Knowledge Bases. `embedding` also approves an embedding model on the instance, so
+     * a Knowledge Base may search by meaning.
      */
-    knowledge?: boolean
+    knowledge?: boolean | { embedding: true }
   ): Promise<DataStoreInstance>;
   /** Closes the processes of every instance the test started. */
   close(): Promise<unknown>;
@@ -139,7 +140,7 @@ export function useDataStoreInstance(): {
     changing?: PolicyValue,
     developmentAuth?: unknown,
     guardrails?: Record<string, unknown>,
-    knowledge = false
+    knowledge: boolean | { embedding: true } = false
   ): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
@@ -167,6 +168,15 @@ export function useDataStoreInstance(): {
                 allowAgentCreation: true
               }
             }
+          }
+        : {}),
+      ...(typeof knowledge === "object"
+        ? {
+            // The deterministic adapter, which keeps every text inside the instance.
+            modelBindings: [
+              { id: "embedding", providerId: "local", kind: "embedding", dimensions: 8 }
+            ],
+            knowledge: { defaultEmbeddingBinding: "embedding" }
           }
         : {}),
       secretStore: { keys: [{ id: "k1", ref: KEY_VARIABLE }] },

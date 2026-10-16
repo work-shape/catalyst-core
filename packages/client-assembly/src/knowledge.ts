@@ -1,15 +1,25 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { RouteRegistration, WorkflowAssetKind } from "@work-shape/catalyst-server";
 import { AppError, KNOWLEDGE_BASE_ACTIONS } from "@work-shape/catalyst-core";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   createKnowledgeBases,
   knowledgeModule,
   knowledgeOperationName,
-  type KnowledgeBases
+  type KnowledgeBases,
+  type KnowledgeEmbedding
 } from "@work-shape/catalyst-data-stores";
 import type { ModuleSeam } from "./module-assembly";
 
 export { knowledgeModule };
+
+/** The embedding model release config approves for Knowledge Bases, as both seams are given it. */
+export function knowledgeEmbedding(
+  config: Pick<ClientInstanceConfig, "knowledge">
+): KnowledgeEmbedding {
+  const defaultBinding = config.knowledge.defaultEmbeddingBinding;
+  return defaultBinding === undefined ? {} : { defaultBinding };
+}
 
 /** The kind `knowledge_base` as the asset workflow of the API registers it. */
 function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
@@ -75,6 +85,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
     backend,
+    embedding: knowledgeEmbedding(parts.config),
     logger: parts.logger
   });
   return {

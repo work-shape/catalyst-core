@@ -2,8 +2,8 @@ import { z } from "zod";
 import {
   AppError,
   DATA_STORE_ACTIONS,
+  type DataStoreKnowledgeTarget,
   type KnowledgeBackend,
-  type KnowledgeBaseTarget,
   type KnowledgeCheckResult
 } from "@work-shape/catalyst-core";
 import { catalogTarget, rowsOf } from "../catalog";
@@ -39,10 +39,10 @@ const relationRow = z.object({ name: z.string(), readable: z.boolean() });
 /** The published store a Knowledge Base names, or nothing where none has that id. */
 async function storeOf(
   runtime: DataStoreRuntime,
-  target: KnowledgeBaseTarget
+  dataStore: string
 ): Promise<PublishedStore | undefined> {
-  const { stores } = await readStores(runtime, [target.backend.dataStore]);
-  return stores.find((store) => store.record.name === target.backend.dataStore);
+  const { stores } = await readStores(runtime, [dataStore]);
+  return stores.find((store) => store.record.name === dataStore);
 }
 
 /**
@@ -51,10 +51,10 @@ async function storeOf(
  */
 async function reachableStore(
   runtime: DataStoreRuntime,
-  target: KnowledgeBaseTarget
+  target: DataStoreKnowledgeTarget
 ): Promise<{ store: PublishedStore } | { problem: string }> {
-  const name = target.backend.dataStore;
-  const store = await storeOf(runtime, target);
+  const name = target.dataStore;
+  const store = await storeOf(runtime, name);
   if (!store) {
     return {
       problem: `The Data Store '${name}' is not available: no published Data Store has that id. It may have been deleted.`
@@ -65,12 +65,36 @@ async function reachableStore(
     : { problem: `The Data Store '${name}' has no database yet: it is being provisioned.` };
 }
 
-export function createDataStoreKnowledgeBackend(runtime: DataStoreRuntime): KnowledgeBackend {
-  return {
-    async requirePublishRight(target, access) {
-      const store = await storeOf(runtime, target);
-      // A store the caller may not read is not named to it: the check refuses it as missing.
+export function createDataStoreKnowledgeBackend(
+  runtime: DataStoreRuntime
+): KnowledgeBackend<DataStoreKnowledgeTarget> {
+  const backend: KnowledgeBackend<DataStoreKnowledgeTarget> = {
+    async publish(stores, { target, replaced, access }) {
+      const store = await storeOf(runtime, target.dataStore);
+      // The publisher hands the store's rows to whoever holds the Knowledge Base's `use`. A
+      // store the publisher may not read is not named to them: the check refuses it as missing.
       if (store) access.require(DATA_STORE_ACTIONS.read, store.resource);
+      const result = await backend.check(target);
+      if (result.status !== "ok") {
+        const missing = result.tables.filter((table) => !table.readable).map(({ name }) => name);
+        throw new AppError(
+          "VALIDATION_FAILED",
+          result.problem ??
+            `The Knowledge Base cannot read ${missing.length === 1 ? "the table" : "the tables"} ${missing.map((name) => `'${name}'`).join(", ")} of the Data Store '${target.dataStore}'. Describe tables the store has, or publish the store's migration that makes them.`,
+          { reason: "knowledge_base_needs_attention", tables: missing },
+          { exposeMessage: true }
+        );
+      }
+      // Away from the store before first: at no step may it read in both.
+      const before = replaced?.backend === "dataStore" ? replaced.dataStore : undefined;
+      if (before !== undefined && before !== target.dataStore) {
+        const old = await storeOf(runtime, before);
+        if (old?.record.status === "ready") {
+          await revokeReader(runtime, old.record, target.assetId, undefined);
+        }
+      }
+      await backend.grant(stores, target);
+      return result;
     },
 
     async check(target, signal): Promise<KnowledgeCheckResult> {
@@ -105,22 +129,14 @@ export function createDataStoreKnowledgeBackend(runtime: DataStoreRuntime): Know
       };
     },
 
-    async grant(stores, target, replaced, signal) {
+    async grant(stores, target, signal) {
       const reached = await reachableStore(runtime, target);
       if ("problem" in reached) throw unavailable(reached.problem);
-      // Away from the store before first: at no step may it read in both.
-      const before = replaced?.backend.dataStore;
-      if (before !== undefined && before !== target.backend.dataStore) {
-        const old = await storeOf(runtime, { ...target, backend: { dataStore: before } });
-        if (old?.record.status === "ready") {
-          await revokeReader(runtime, old.record, target.assetId, signal);
-        }
-      }
       await grantReader(runtime, stores.connections, reached.store.record, target, signal);
     },
 
     async retire(stores, target, signal) {
-      const store = await storeOf(runtime, target);
+      const store = await storeOf(runtime, target.dataStore);
       if (store?.record.status === "ready") {
         await revokeReader(runtime, store.record, target.assetId, signal);
       }
@@ -157,6 +173,7 @@ export function createDataStoreKnowledgeBackend(runtime: DataStoreRuntime): Know
       }
     }
   };
+  return backend;
 }
 
 function unavailable(problem: string): AppError {

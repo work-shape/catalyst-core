@@ -17,6 +17,7 @@ import {
   type DataStores
 } from "@work-shape/catalyst-data-stores";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
+import { knowledgeEmbedding } from "./knowledge";
 import type { ModuleSeam } from "./module-assembly";
 
 export { dataStoresModule };
@@ -115,6 +116,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
       sizeLimitBytes: sizeLimitBytes(config.dataStores.sizeLimit),
       poolMaxConnections: config.dataStores.poolMaxConnections
     },
+    embedding: knowledgeEmbedding(config),
     logger: parts.logger
   });
   return {

@@ -55,6 +55,7 @@
 {"name":"conversation.title_generated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.title_generation_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"data_store.before_publish","legacy":false,"audited":false,"phases":["before"]}
+{"name":"data_store.dropped","legacy":false,"audited":true,"phases":["after"]}
 {"name":"data_store.migrated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"data_store.migration_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"data_store.provisioned","legacy":true,"audited":true,"phases":["after"]}

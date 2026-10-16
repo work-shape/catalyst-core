@@ -246,12 +246,14 @@ export function dataStoreOperationName(store: string, verb: DataStoreOperationVe
 /**
  * The job kinds of the store. `provision` creates the database and the roles of a new store,
  * `migrate` applies the pending migrations of a publish, `measure_size` records the size of
- * every store once a day. Spec: One data store primitive.
+ * every store once a day, and `drop` removes the database, the roles and the record of a store
+ * whose Knowledge Base was deleted. Spec: One data store primitive; Knowledge Base on top.
  */
 export const DATA_STORE_JOB_KINDS = {
   provision: "data_store.provision",
   migrate: "data_store.migrate",
-  measureSize: "data_store.measure_size"
+  measureSize: "data_store.measure_size",
+  drop: "data_store.drop"
 } as const;
 
 export type DataStoreJobKind = (typeof DATA_STORE_JOB_KINDS)[keyof typeof DATA_STORE_JOB_KINDS];
@@ -278,8 +280,22 @@ export interface DataStoreRecordsStore {
     clientInstanceId: ClientInstanceId;
     limit: number;
   }): Promise<DataStoreRecord[]>;
+  /**
+   * The records that name the database or one of the roles, whatever their status. A drop
+   * reads them first, so that it drops nothing the record of another store names.
+   */
+  listDataStoresNaming(input: {
+    clientInstanceId: ClientInstanceId;
+    database: string;
+    roles: readonly string[];
+  }): Promise<DataStoreRecord[]>;
   /** Inserts the record, or replaces the one of the same id. */
   putDataStore(record: DataStoreRecord): Promise<void>;
+  /**
+   * Removes the record, once the database it names is dropped. Only the store a Knowledge Base
+   * owns is dropped: the record of a store of its own asset outlives the asset.
+   */
+  deleteDataStore(input: { clientInstanceId: ClientInstanceId; id: string }): Promise<void>;
 }
 
 /** A Data Store as a manifest names it. Spec: apps-and-pages.md, Manifest, `dataStores`. */

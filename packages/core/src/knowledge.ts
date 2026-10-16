@@ -2,8 +2,9 @@ import type { AgentConfig } from "@work-shape/catalyst-asset-schemas";
 import { KNOWLEDGE_CHECK_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindActions } from "./asset-kinds";
 import type { ConnectionsStore } from "./connections";
-import type { DataStoreRows, DataStoreStatement } from "./data-stores";
+import type { DataStoreRecordsStore, DataStoreRows, DataStoreStatement } from "./data-stores";
 import type { ClientInstanceId } from "./ids";
+import type { JobsStore } from "./jobs";
 import type { ActorAccess } from "./permissions";
 import type { ISODateString } from "./time";
 
@@ -22,6 +23,12 @@ import type { ISODateString } from "./time";
 // parameter, nor a row. An agent's call puts SQL and rows into its conversation, which keeps
 // them under the conversation's retention and sends them to the model of the agent's model
 // binding, in that binding's region. No embedding is made and no embedding provider is asked.
+//
+// A Knowledge Base without a backend keeps its documents in a Data Store it owns (the built-in
+// backend). This release makes that store with its empty tables and drops it with the Knowledge
+// Base; no document is added, sent anywhere or searched yet. Spec: Embeddings and documents on
+// the built-in backend, "Documents in a Knowledge Base: retention, audit, authorization and
+// provider region".
 
 /**
  * The asset kind of a Knowledge Base. A kind of its own, with rights of its own: a Data Store
@@ -89,69 +96,97 @@ export interface KnowledgeTableCheck {
 
 /**
  * What a check of a Knowledge Base found. `needs_attention` where a described table cannot be
- * read or the backend cannot be reached: a query then fails, and a publish is refused.
+ * read, the backend cannot be reached, or the store a Knowledge Base owns is not ready: a
+ * query then fails. A Knowledge Base on a Data Store is not published in that state.
  */
 export interface KnowledgeCheckResult {
   status: (typeof KNOWLEDGE_CHECK_STATUSES)[number];
-  /** Every described table, in the order of the definition. */
+  /** Every described table, in the order of the definition. None on the built-in backend. */
   tables: KnowledgeTableCheck[];
-  /** Why the backend could not be asked at all, as a sentence. It names no row value. */
+  /** Why the backend cannot serve it, as a sentence. It names no row value. */
   problem?: string;
 }
 
-/** Where a Knowledge Base's tables are, as its definition names it under `backend`. */
-export interface KnowledgeBackendReference {
-  /** The id of the Data Store whose tables it describes. */
-  dataStore: string;
-}
+/**
+ * The methods a Knowledge Base on the built-in backend searches its documents with: by meaning,
+ * which embeds every passage and every query with the instance's embedding model, and by words.
+ * Spec: Retrieval methods (P38).
+ */
+export const KNOWLEDGE_SEARCH_METHODS = ["semantic", "keyword"] as const;
 
-/** The described tables of a Knowledge Base and where a backend finds them. */
-export interface KnowledgeBaseTarget {
+export type KnowledgeSearchMethod = (typeof KNOWLEDGE_SEARCH_METHODS)[number];
+
+/** A Knowledge Base that describes tables of a Data Store, and the tables a backend finds there. */
+export interface DataStoreKnowledgeTarget {
+  backend: "dataStore";
   /** The id of the Knowledge Base's asset, which its access on the backend is bound to. */
   assetId: string;
   /** The id of the Knowledge Base. */
   name: string;
-  backend: KnowledgeBackendReference;
+  /** The id of the Data Store whose tables it describes. */
+  dataStore: string;
   tables: readonly { name: string }[];
 }
 
 /**
- * What a backend of a Knowledge Base answers. The kind asks it and never which backend it is.
- * Spec: build order WD-2, a backend port.
+ * A Knowledge Base whose documents the platform keeps in a Data Store the Knowledge Base owns:
+ * the built-in backend, which a definition names by naming no backend.
  */
-export interface KnowledgeBackend {
+export interface BuiltinKnowledgeTarget {
+  backend: "builtin";
+  /** The id of the Knowledge Base's asset, which is also the id of the store it owns. */
+  assetId: string;
+  /** The id of the Knowledge Base. */
+  name: string;
+  methods: readonly KnowledgeSearchMethod[];
+}
+
+/** A Knowledge Base as a backend is asked about it. */
+export type KnowledgeBaseTarget = DataStoreKnowledgeTarget | BuiltinKnowledgeTarget;
+
+/** The rows a backend writes beside a publish, bound to the publish's transaction. */
+export interface KnowledgeBackendStores {
+  connections: ConnectionsStore;
+  dataStores: DataStoreRecordsStore;
+  jobs: JobsStore;
+}
+
+/**
+ * What a backend of a Knowledge Base answers. The kind asks it and never which backend it is.
+ * `Target` narrows the Knowledge Bases one backend serves; the one the kind is given serves
+ * every target. Spec: build order WD-2, a backend port.
+ */
+export interface KnowledgeBackend<Target extends KnowledgeBaseTarget = KnowledgeBaseTarget> {
   /**
-   * Throws `FORBIDDEN` where the person who publishes may not hand the backend's rows to the
-   * Knowledge Base's users: a published Knowledge Base answers whoever holds its `use` right.
+   * What publishing `target` does beside moving the published pointer, with `stores` bound to
+   * the transaction of the publish: whether the publisher may hand the backend's content to
+   * the Knowledge Base's users, whether the backend can serve the revision, and then what the
+   * Knowledge Base is given on the backend, `replaced` being the revision published before.
+   * Answers what the check found, for the platform to keep. A throw refuses the publish.
    */
-  requirePublishRight(target: KnowledgeBaseTarget, access: ActorAccess): Promise<void>;
-  /** Whether every described table can be read. It reads the catalog and no row. */
-  check(target: KnowledgeBaseTarget, signal?: AbortSignal): Promise<KnowledgeCheckResult>;
+  publish(
+    stores: KnowledgeBackendStores,
+    input: { target: Target; replaced: KnowledgeBaseTarget | undefined; access: ActorAccess }
+  ): Promise<KnowledgeCheckResult>;
+  /** Whether the backend can serve the Knowledge Base now. It reads no row of its content. */
+  check(target: Target, signal?: AbortSignal): Promise<KnowledgeCheckResult>;
   /**
-   * Lets the Knowledge Base read exactly the tables `target` describes, and nothing it read
-   * for `replaced`, the revision that was published before. At no step can it read more than
-   * one of the two revisions describes. Repeating it changes nothing. What it keeps of the
-   * access, such as a password, it writes to `stores`, which a publish binds to its own
-   * transaction: a write beside it would wait for that transaction to end.
+   * Gives the Knowledge Base on the backend what its published revision needs, as a check
+   * that found nothing missing does again. Repeating it changes nothing.
    */
-  grant(
-    stores: { connections: ConnectionsStore },
-    target: KnowledgeBaseTarget,
-    replaced: KnowledgeBaseTarget | undefined,
-    signal?: AbortSignal
-  ): Promise<void>;
-  /** Takes every access of a deleted Knowledge Base away. Repeating it changes nothing. */
-  retire(
-    stores: { connections: ConnectionsStore },
-    target: KnowledgeBaseTarget,
-    signal?: AbortSignal
-  ): Promise<void>;
+  grant(stores: KnowledgeBackendStores, target: Target, signal?: AbortSignal): Promise<void>;
+  /**
+   * Takes from the backend what it held for a deleted Knowledge Base: its access, or the store
+   * it owned. Repeating it changes nothing.
+   */
+  retire(stores: KnowledgeBackendStores, target: Target, signal?: AbortSignal): Promise<void>;
   /**
    * Runs one read-only statement with bound parameters, under the backend's row and byte caps,
-   * with the access `grant` gave the Knowledge Base and no other.
+   * with the access `grant` gave the Knowledge Base and no other. Only a backend that answers
+   * the method `structured` runs one.
    */
   query(
-    target: KnowledgeBaseTarget,
+    target: Target,
     statement: DataStoreStatement,
     signal?: AbortSignal
   ): Promise<DataStoreRows>;

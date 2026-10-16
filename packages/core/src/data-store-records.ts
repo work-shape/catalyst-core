@@ -52,7 +52,7 @@ export interface DataStoreFailure {
 }
 
 export interface DataStoreRecord {
-  /** The id of the store's asset. */
+  /** The id of the store's asset, or of the asset of the Knowledge Base that owns it. */
   id: string;
   clientInstanceId: ClientInstanceId;
   /** The id a manifest and an operation name the store by. Held while the record exists. */
@@ -82,4 +82,11 @@ export interface DataStoreRecord {
   createdAt: ISODateString;
   updatedAt: ISODateString;
   retiredAt?: ISODateString;
+  /**
+   * The id of the Knowledge Base whose documents the store keeps. Such a store has no asset and
+   * no migrations of its own: the Knowledge Base's publish makes it, the platform's release
+   * brings its tables, and deleting the Knowledge Base drops it. Missing for a store of its own
+   * asset.
+   */
+  ownerKnowledgeBaseId?: string;
 }

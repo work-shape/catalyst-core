@@ -2,6 +2,7 @@ import type {
   ClientInstanceId,
   KnowledgeBackend,
   KnowledgeBaseState,
+  KnowledgeCheckResult,
   Logger,
   PlatformStores
 } from "@work-shape/catalyst-core";
@@ -17,10 +18,25 @@ export interface KnowledgeRuntime {
   now(): Date;
 }
 
-/**
- * Checks one revision of a Knowledge Base against its backend and keeps what the check found
- * in `stores`, which a publish binds to its transaction.
- */
+/** Keeps what a check of one revision of a Knowledge Base found, in `stores`. */
+export async function keepKnowledgeCheck(
+  runtime: KnowledgeRuntime,
+  stores: Pick<PlatformStores, "knowledgeBases">,
+  input: { assetId: string; revision: number },
+  result: KnowledgeCheckResult
+): Promise<KnowledgeBaseState> {
+  const state: KnowledgeBaseState = {
+    ...result,
+    assetId: input.assetId,
+    clientInstanceId: runtime.clientInstanceId,
+    revision: input.revision,
+    checkedAt: runtime.now().toISOString()
+  };
+  await stores.knowledgeBases.putKnowledgeBaseState(state);
+  return state;
+}
+
+/** Checks one revision of a Knowledge Base against its backend and keeps what it found. */
 export async function checkKnowledgeBase(
   runtime: KnowledgeRuntime,
   stores: Pick<PlatformStores, "knowledgeBases">,
@@ -31,13 +47,5 @@ export async function checkKnowledgeBase(
     knowledgeTargetOf(input.definition, input.assetId),
     signal
   );
-  const state: KnowledgeBaseState = {
-    ...result,
-    assetId: input.assetId,
-    clientInstanceId: runtime.clientInstanceId,
-    revision: input.revision,
-    checkedAt: runtime.now().toISOString()
-  };
-  await stores.knowledgeBases.putKnowledgeBaseState(state);
-  return state;
+  return keepKnowledgeCheck(runtime, stores, input, result);
 }

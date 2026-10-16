@@ -169,7 +169,11 @@ describe("a Data Store on an assembled instance", () => {
       jobs: Object.values(DATA_STORE_JOB_KINDS),
       schedules: [DATA_STORE_JOB_KINDS.measureSize],
       // A scheduled measurement is not retried by hand: the next tick is its retry.
-      retries: [DATA_STORE_JOB_KINDS.provision, DATA_STORE_JOB_KINDS.migrate]
+      retries: [
+        DATA_STORE_JOB_KINDS.provision,
+        DATA_STORE_JOB_KINDS.migrate,
+        DATA_STORE_JOB_KINDS.drop
+      ]
     });
   });
 

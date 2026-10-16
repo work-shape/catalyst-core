@@ -7461,7 +7461,7 @@
     "/api/v1/data-stores": {
       "get": {
         "operationId": "data_stores.list",
-        "summary": "List the Data Stores the caller may read, each with its size, its number of tables and the estimate of its rows as last measured",
+        "summary": "List the Data Stores the caller may read, and the stores of the Knowledge Bases it may read, each with its size, its number of tables and the estimate of its rows as last measured",
         "tags": [
           "Data Stores"
         ],
@@ -7542,6 +7542,17 @@
                           },
                           "measuredAt": {
                             "type": "string"
+                          },
+                          "ownedBy": {
+                            "type": "object",
+                            "properties": {
+                              "knowledgeBase": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "knowledgeBase"
+                            ]
                           }
                         },
                         "required": [

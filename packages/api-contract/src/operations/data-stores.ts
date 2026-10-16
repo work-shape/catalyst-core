@@ -132,9 +132,9 @@ const cursorSchema = z.string().min(1).max(8_192);
 const dataStoreListResponseSchema = z.object({
   items: z.array(
     z.object({
-      /** The id of the store's asset. */
+      /** The id of the store's asset, or of the Knowledge Base's asset that owns it. */
       id: z.string(),
-      /** The id operations and routes name the store by. */
+      /** The id operations and routes name the store by. A store a Knowledge Base owns has no operations. */
       name: z.string(),
       title: z.string(),
       description: z.string().optional(),
@@ -146,7 +146,12 @@ const dataStoreListResponseSchema = z.object({
       tableCount: z.number().int().optional(),
       /** The planner's estimate over all tables, not a count. */
       rowEstimate: z.number().int().optional(),
-      measuredAt: z.string().optional()
+      measuredAt: z.string().optional(),
+      /**
+       * The Knowledge Base whose documents the store keeps, which made it and drops it. Such a
+       * store has no migrations of its own and no App binds it.
+       */
+      ownedBy: z.object({ knowledgeBase: z.string() }).optional()
     })
   ),
   /** More stores exist than one list reads. */
@@ -270,7 +275,7 @@ export const dataStoreOperations = {
     method: "GET",
     path: "/api/v1/data-stores",
     summary:
-      "List the Data Stores the caller may read, each with its size, its number of tables and the estimate of its rows as last measured",
+      "List the Data Stores the caller may read, and the stores of the Knowledge Bases it may read, each with its size, its number of tables and the estimate of its rows as last measured",
     response: json(dataStoreListResponseSchema),
     errors: []
   }),

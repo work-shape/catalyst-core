@@ -33,7 +33,8 @@ import {
   readDataStoreFiles
 } from "./definition";
 import { createDataStoreJobs, publishDataStore, retireDataStore } from "./jobs";
-import { createDataStoreKnowledgeBackend } from "./knowledge/backend";
+import type { KnowledgeEmbedding } from "./knowledge/definition";
+import { createKnowledgeBackend } from "./knowledge/backends";
 import { listDataStores } from "./list";
 import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
 import { ensureVectorExtension } from "./provisioning";
@@ -42,6 +43,7 @@ import { createDataStoreServer } from "./server";
 
 export { sizeLimitBytes } from "./definition";
 export { createKnowledgeBases, knowledgeOperationName, type KnowledgeBases } from "./knowledge";
+export type { KnowledgeEmbedding } from "./knowledge/definition";
 export { dataStoreStateOperationName } from "./state";
 
 /**
@@ -80,8 +82,8 @@ export const dataStoresModule = defineModule({
 /**
  * Knowledge Bases: the asset kind `knowledge_base` and the operations of each, and the one
  * agent tool over an agent's. A module of its own, because a Knowledge Base on an existing
- * database will need no Data Store. Its only backend so far is the Data Store, so it needs
- * that module on.
+ * database will need no Data Store. Both its backends so far are Data Stores, one it describes
+ * and one it owns, so it needs that module on.
  */
 export const knowledgeModule = defineModule({
   name: "knowledge",
@@ -120,7 +122,11 @@ export interface DataStores {
   readonly jobHandlers: readonly RegisteredJobHandler[];
   readonly schedules: readonly JobSchedule[];
   readonly jobRetries: readonly JobRetry[];
-  /** The Data Store as the backend of a Knowledge Base, on the same pools as the store's own reads. */
+  /**
+   * The backends of Knowledge Bases, on the same pools as the stores' own reads: a Data Store
+   * whose tables a Knowledge Base describes, and the store a Knowledge Base without a backend
+   * owns.
+   */
   readonly knowledgeBackend: KnowledgeBackend;
   /**
    * Creates pgvector in the database of a provisioned store, as the platform's role: for a
@@ -150,6 +156,8 @@ export function createDataStores(input: {
    * refused as `not_supported_yet`.
    */
   datasets?: DataStoreDatasetReader;
+  /** The embedding model release config approves for Knowledge Bases (`knowledge`), if any. */
+  embedding?: KnowledgeEmbedding;
   logger: Logger;
 }): DataStores {
   const { clientInstanceId, stores, limits, logger } = input;
@@ -210,7 +218,7 @@ export function createDataStores(input: {
     jobHandlers: jobs.handlers,
     schedules: jobs.schedules,
     jobRetries: jobs.retries,
-    knowledgeBackend: createDataStoreKnowledgeBackend(runtime),
+    knowledgeBackend: createKnowledgeBackend(runtime, input.embedding ?? {}),
     async ensureVectorExtension(storeId, signal) {
       const record = await stores.dataStores.getDataStore({ clientInstanceId, id: storeId });
       if (!record || record.status === "retired") {

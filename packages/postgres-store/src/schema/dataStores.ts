@@ -47,7 +47,11 @@ export const dataStores = pgTable(
     conditions: jsonb("conditions").$type<DataStoreCondition[]>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
-    retiredAt: timestamp("retired_at", { withTimezone: true })
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    // The id of the Knowledge Base whose documents the store keeps, which owns it: it is made
+    // when that Knowledge Base is published and dropped when it is deleted. Null for a store
+    // of its own asset.
+    ownerKnowledgeBaseId: text("owner_knowledge_base_id")
   },
   (table) => [
     // A name is held while its record exists, retired or not: the database of a retired

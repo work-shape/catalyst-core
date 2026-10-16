@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import type { DataStoreRecord, DataStoreRecordsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { dataStores } from "./schema";
@@ -27,7 +27,8 @@ function mapRecord(row: Row): DataStoreRecord {
     conditions: row.conditions,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    ...(row.retiredAt ? { retiredAt: row.retiredAt.toISOString() } : {})
+    ...(row.retiredAt ? { retiredAt: row.retiredAt.toISOString() } : {}),
+    ...(row.ownerKnowledgeBaseId === null ? {} : { ownerKnowledgeBaseId: row.ownerKnowledgeBaseId })
   };
 }
 
@@ -55,7 +56,8 @@ function rowOf(record: DataStoreRecord): Row {
     conditions: record.conditions,
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt),
-    retiredAt: record.retiredAt ? new Date(record.retiredAt) : null
+    retiredAt: record.retiredAt ? new Date(record.retiredAt) : null,
+    ownerKnowledgeBaseId: record.ownerKnowledgeBaseId ?? null
   };
 }
 
@@ -88,12 +90,34 @@ export function createPostgresDataStoreRecordsStore(db: PostgresConnection): Dat
         .limit(limit);
       return rows.map(mapRecord);
     },
+    async listDataStoresNaming({ clientInstanceId, database, roles }) {
+      const rows = await db
+        .select()
+        .from(dataStores)
+        .where(
+          and(
+            eq(dataStores.clientInstanceId, clientInstanceId),
+            or(
+              eq(dataStores.databaseName, database),
+              inArray(dataStores.appRole, [...roles]),
+              inArray(dataStores.migrationRole, [...roles])
+            )
+          )
+        )
+        .orderBy(asc(dataStores.id));
+      return rows.map(mapRecord);
+    },
     async putDataStore(record) {
       const { id, createdAt, ...changed } = rowOf(record);
       await db
         .insert(dataStores)
         .values({ id, createdAt, ...changed })
         .onConflictDoUpdate({ target: dataStores.id, set: changed });
+    },
+    async deleteDataStore({ clientInstanceId, id }) {
+      await db
+        .delete(dataStores)
+        .where(and(eq(dataStores.clientInstanceId, clientInstanceId), eq(dataStores.id, id)));
     }
   };
 }

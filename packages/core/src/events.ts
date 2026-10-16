@@ -312,6 +312,23 @@ export const EVENTS = {
     audited: false,
     phases: ["before"]
   },
+  // The database of a store a Knowledge Base owned is dropped, once that Knowledge Base was
+  // deleted. The subject is the store.
+  // The store a Knowledge Base owned, dropped with its rows and roles after the Knowledge Base
+  // was deleted. Its metadata names the store; it holds nothing the store held.
+  "data_store.dropped": {
+    name: "data_store.dropped",
+    subject: "data_store",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["name"],
+      properties: { name: { type: "string" } }
+    }
+  },
   "data_store.migrated": {
     ...LEGACY_AUDIT,
     name: "data_store.migrated",

@@ -4,6 +4,7 @@ import {
   DATA_STORE_ASSET_KIND,
   DATA_STORE_JOB_KINDS,
   DATA_STORE_MANIFEST_FILE,
+  KNOWLEDGE_BASE_ASSET_KIND,
   NonRetryableJobError,
   claimSubjectRow,
   defineJobHandler,
@@ -28,10 +29,14 @@ import {
   type DataStoreDefinition
 } from "./definition";
 import { describeDatabaseFailure } from "./failures";
+import { applyKnowledgeStoreSchema } from "./knowledge/builtin/store-schema";
+import { knowledgeBaseDefinitionSchema } from "./knowledge/definition";
 import { DataStoreMigrationRefusal, applyMigration, readSignedMigrations } from "./migrating";
 import {
   DataStoreProvisioningError,
+  dropStoreDatabase,
   ensureStoreSchema,
+  ensureVectorExtension,
   provisionDataStore,
   readStoreConditions
 } from "./provisioning";
@@ -75,8 +80,14 @@ const storeJob = {
 /** Creates the database and the roles of one store. The payload names the store and holds nothing of it. */
 const provisionJob = defineJobKind({ ...storeJob, kind: DATA_STORE_JOB_KINDS.provision });
 
-/** Applies the migrations the published revision of one store has and its database lacks. */
+/**
+ * Applies the migrations the published revision of one store has and its database lacks. For
+ * the store a Knowledge Base owns, they are the platform's tables of this release.
+ */
 const migrateJob = defineJobKind({ ...storeJob, kind: DATA_STORE_JOB_KINDS.migrate });
+
+/** Drops the database, the roles and the record of a store whose Knowledge Base was deleted. */
+const dropJob = defineJobKind({ ...storeJob, kind: DATA_STORE_JOB_KINDS.drop });
 
 const measureSizeJob = defineJobKind({
   kind: DATA_STORE_JOB_KINDS.measureSize,
@@ -94,8 +105,8 @@ const measureSizeJob = defineJobKind({
  * `behind` names a job that is running and has read the published revision already: the new
  * one is then queued under the store's second key, and runs once that one ended.
  */
-async function enqueueStoreJob(
-  stores: PlatformStores,
+export async function enqueueStoreJob(
+  stores: Pick<PlatformStores, "jobs">,
   record: Pick<DataStoreRecord, "id" | "clientInstanceId" | "status">,
   behind?: Pick<Job, "dedupeKey">
 ): Promise<void> {
@@ -108,6 +119,26 @@ async function enqueueStoreJob(
       clientInstanceId: record.clientInstanceId,
       subject: record.id,
       dedupeKey: behind?.dedupeKey === first ? `${first}:next` : first,
+      concurrencyKey: record.id
+    }
+  );
+}
+
+/**
+ * Queues the job that drops the store a deleted Knowledge Base owned. While one is queued for
+ * the store this inserts nothing.
+ */
+export async function enqueueStoreDrop(
+  stores: Pick<PlatformStores, "jobs">,
+  record: Pick<DataStoreRecord, "id" | "clientInstanceId">
+): Promise<void> {
+  await stores.jobs.enqueue(
+    dropJob,
+    { storeId: record.id },
+    {
+      clientInstanceId: record.clientInstanceId,
+      subject: record.id,
+      dedupeKey: subjectDedupeKey(dropJob.kind, record.id),
       concurrencyKey: record.id
     }
   );
@@ -334,27 +365,73 @@ async function provision(
   control: JobControl
 ): Promise<void> {
   const { storeId } = job.payload;
-  const record = await claimStore(runtime, control, storeId);
-  if (!record || record.status !== "provisioning") return;
-  let conditions: DataStoreCondition[];
+  const claimed = await claimSubjectRow(control, async (stores) => {
+    const row = await stores.dataStores.getDataStore({
+      clientInstanceId: runtime.clientInstanceId,
+      id: storeId,
+      lock: true
+    });
+    return abandoned(row) || row?.status === "provisioning"
+      ? { status: "claimed" as const, row: { record: row } }
+      : { status: "finished" as const };
+  });
+  if (!claimed) return;
+  const { record } = claimed;
+  if (record === undefined || abandoned(record)) {
+    return removeAbandoned(runtime, job, control, storeId, record);
+  }
+  let made: { conditions: DataStoreCondition[] } | { error: unknown };
   try {
     const secrets = await storeSecrets(runtime, control, storeId);
     await provisionDataStore(runtime.server, record, secrets, control.signal);
-    conditions = await readStoreConditions(runtime.server, record, control.signal);
+    made = { conditions: await readStoreConditions(runtime.server, record, control.signal) };
   } catch (error) {
+    made = { error };
+  }
+  // Every CREATE of this attempt is done. A delete that landed meanwhile may have dropped the
+  // store before some of them: what is there now goes. A delete that lands after this read
+  // queues its drop after them.
+  const current = await control.transaction((stores) =>
+    stores.dataStores.getDataStore({ clientInstanceId: runtime.clientInstanceId, id: storeId })
+  );
+  if (!sameStore(current, record)) {
+    return removeAbandoned(runtime, job, control, storeId, current);
+  }
+  if ("error" in made) {
     return failAttempt(
       runtime,
       control,
       job,
       "data_store.provisioning_failed",
-      provisioningFailure(error)
+      provisioningFailure(made.error)
     );
   }
-  const ready = await writeOutcome(runtime, control, storeId, async (current, stores) => {
-    const next: DataStoreRecord = { ...current, status: "ready", conditions };
+  const { conditions } = made;
+  // Written only onto the record this attempt provisioned, read again under its lock: a delete
+  // and a new publish may both have landed since the read above.
+  const written = await control.transaction(async (stores) => {
+    const latest = await stores.dataStores.getDataStore({
+      clientInstanceId: runtime.clientInstanceId,
+      id: storeId,
+      lock: true
+    });
+    if (!sameStore(latest, record)) return { replaced: latest };
+    if (latest.status !== "provisioning") return { ready: undefined };
+    const { failure: _cleared, ...kept } = latest;
+    const next: DataStoreRecord = {
+      ...kept,
+      status: "ready",
+      conditions,
+      updatedAt: new Date().toISOString()
+    };
+    await stores.dataStores.putDataStore(next);
     await enqueueStoreJob(stores, next);
-    return next;
+    return { ready: next };
   });
+  if ("replaced" in written) {
+    return removeAbandoned(runtime, job, control, storeId, written.replaced);
+  }
+  const { ready } = written;
   if (ready) {
     if (ready.conditions.length > 0) {
       runtime.logger.warn(
@@ -371,6 +448,61 @@ async function provision(
       metadata: { name: ready.name, conditions: ready.conditions }
     });
   }
+}
+
+/**
+ * Whether nothing wants the database of a store any more: its record is gone, or it is the
+ * store of a deleted Knowledge Base. A retired store of its own asset keeps its database.
+ */
+function abandoned(record: DataStoreRecord | undefined): boolean {
+  return (
+    record === undefined ||
+    (record.status === "retired" && record.ownerKnowledgeBaseId !== undefined)
+  );
+}
+
+/**
+ * Whether the record is still the one an attempt claimed: there, not dropped, and not deleted
+ * and made again under the same id meanwhile. `createdAt` is written once, when the record is
+ * made, so a record made again has another.
+ */
+function sameStore(
+  current: DataStoreRecord | undefined,
+  claimed: DataStoreRecord
+): current is DataStoreRecord {
+  return current !== undefined && !abandoned(current) && current.createdAt === claimed.createdAt;
+}
+
+/** The record was deleted and made again while this attempt worked: the next attempt makes the new one. */
+function storeMadeAgain(): AppError {
+  return new AppError(
+    "CONFLICT",
+    "The Data Store was made again while it was provisioned. The next attempt provisions it.",
+    { reason: "store_made_again" }
+  );
+}
+
+/**
+ * Drops what provisioning made of a store that was deleted meanwhile, as its drop does. Where
+ * the store was made again since, under the same id and so the same names, the job's next
+ * attempt provisions the new record: its publish queued no job of its own while this one ran.
+ */
+async function removeAbandoned(
+  runtime: DataStoreRuntime,
+  job: Job<StorePayload>,
+  control: JobControl,
+  storeId: string,
+  record: DataStoreRecord | undefined
+): Promise<void> {
+  runtime.logger.warn(
+    { storeId },
+    "A Data Store was deleted while it was provisioned; what was made of it is dropped"
+  );
+  await dropOwnedStore(runtime, job, control, storeId, record);
+  const now = await control.transaction((stores) =>
+    stores.dataStores.getDataStore({ clientInstanceId: runtime.clientInstanceId, id: storeId })
+  );
+  if (now?.status === "provisioning") throw storeMadeAgain();
 }
 
 /** The published definition of a store, or nothing where its asset is gone or unpublished. */
@@ -401,6 +533,9 @@ async function migrate(
   const record = await claimStore(runtime, control, storeId);
   // A store without a database is migrated by the job its provisioning queues.
   if (!record || record.status !== "ready") return;
+  if (record.ownerKnowledgeBaseId !== undefined) {
+    return migrateOwnedStore(runtime, job, control, record);
+  }
   const published = await publishedDefinition(runtime, record);
   if (!published) return;
   const { definition } = published;
@@ -545,7 +680,198 @@ async function migrate(
   }
 }
 
-/** The handlers, the schedule and the manual retries of the store's three job kinds. */
+/**
+ * The published definition of the Knowledge Base that owns a store, or nothing where it is gone,
+ * unpublished, or no longer on the built-in backend.
+ */
+async function owningKnowledgeBase(runtime: DataStoreRuntime, record: DataStoreRecord) {
+  if (record.ownerKnowledgeBaseId === undefined) return undefined;
+  const asset = await runtime.stores.configAssets.getConfigAsset({
+    clientInstanceId: runtime.clientInstanceId,
+    kind: KNOWLEDGE_BASE_ASSET_KIND,
+    name: record.ownerKnowledgeBaseId
+  });
+  if (asset?.id !== record.id || asset.status !== "active") return undefined;
+  const definition = knowledgeBaseDefinitionSchema.safeParse(asset.publishedConfig);
+  return definition.success && !("backend" in definition.data) ? definition.data : undefined;
+}
+
+/**
+ * Brings the store a Knowledge Base owns to what its published revision needs: pgvector where
+ * it searches by meaning, and the platform's tables of this release. Nothing of an author
+ * runs: the store has no migrations of its own.
+ */
+async function migrateOwnedStore(
+  runtime: DataStoreRuntime,
+  job: Job<StorePayload>,
+  control: JobControl,
+  record: DataStoreRecord
+): Promise<void> {
+  const owner = await owningKnowledgeBase(runtime, record);
+  if (!owner) return;
+  try {
+    if (owner.methods.includes("semantic")) {
+      await ensureVectorExtension(runtime.server, record, control.signal);
+    }
+  } catch (error) {
+    return failAttempt(
+      runtime,
+      control,
+      job,
+      "data_store.provisioning_failed",
+      provisioningFailure(error)
+    );
+  }
+  let applied;
+  try {
+    applied = await applyKnowledgeStoreSchema(runtime.server, record, control.signal);
+  } catch (error) {
+    const failure = describeDatabaseFailure(error, "Making the tables of the Knowledge Base");
+    return failAttempt(runtime, control, job, "data_store.migration_failed", {
+      ...failure,
+      code: "migration_failed",
+      message: failure.sentence
+    });
+  }
+  const level = applied.at(-1)?.number ?? 0;
+  const done = await writeOutcome(runtime, control, record.id, (current) =>
+    Promise.resolve({ ...current, level, migrations: applied })
+  );
+  if (done && record.level !== level) {
+    await runtime.auditRecorder.record({
+      type: "data_store.migrated",
+      status: "success",
+      subject: done.id,
+      correlationId: job.correlationId,
+      metadata: { name: done.name, level, appliedCount: level - record.level }
+    });
+  }
+}
+
+/**
+ * Why the database and the roles of a store may not be dropped: its record names others than
+ * the ones its id gives, or the record of another store names them. Nothing where they are
+ * its own and no other record's.
+ */
+async function foreignStoreObjects(
+  runtime: DataStoreRuntime,
+  stores: PlatformStores,
+  storeId: string,
+  record: DataStoreRecord | undefined
+): Promise<{ reason: string; message: string } | undefined> {
+  const names = runtime.server.namesOf(storeId);
+  if (
+    record &&
+    (record.location.database !== names.database ||
+      record.roles.app !== names.app ||
+      record.roles.migration !== names.migration)
+  ) {
+    return {
+      reason: "store_names_not_its_own",
+      message:
+        "The record of the store names a database or roles other than the ones its id gives. Nothing was dropped: an operator checks the record."
+    };
+  }
+  const naming = await stores.dataStores.listDataStoresNaming({
+    clientInstanceId: runtime.clientInstanceId,
+    database: names.database,
+    roles: [names.app, names.migration]
+  });
+  if (naming.some((other) => other.id !== storeId)) {
+    return {
+      reason: "store_names_shared",
+      message:
+        "The record of another Data Store names the database or a role of this store. Nothing was dropped: an operator checks the records."
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Drops the database and the two roles the id of a store gives, after reading that they are
+ * its own. Where they are not, nothing is dropped, the refusal is logged and audited, and the
+ * job fails without another attempt.
+ */
+async function dropOwnedStore(
+  runtime: DataStoreRuntime,
+  job: Job<StorePayload>,
+  control: JobControl,
+  storeId: string,
+  record: DataStoreRecord | undefined
+): Promise<void> {
+  const foreign = await control.transaction((stores) =>
+    foreignStoreObjects(runtime, stores, storeId, record)
+  );
+  if (foreign) {
+    runtime.logger.warn(
+      { storeId, reason: foreign.reason },
+      "The database of a Data Store was not dropped: its names are not its own"
+    );
+    await runtime.auditRecorder.record({
+      type: "data_store.dropped",
+      status: "failed",
+      subject: storeId,
+      reason: foreign.reason,
+      correlationId: job.correlationId,
+      metadata: { name: record?.name ?? storeId }
+    });
+    throw new NonRetryableJobError(foreign.message, { reason: foreign.reason });
+  }
+  try {
+    await dropStoreDatabase(runtime.server, storeId, control.signal);
+  } catch (error) {
+    if (control.signal.aborted)
+      throw new AppError("CONFLICT", "The work on a Data Store was stopped");
+    const failure = describeDatabaseFailure(
+      error,
+      "Dropping the store of a deleted Knowledge Base"
+    );
+    throw new AppError("CONFLICT", failure.sentence, { reason: "drop_failed" });
+  }
+}
+
+/**
+ * Drops the store a deleted Knowledge Base owned: its database with every row in it, its two
+ * roles, their secrets, and its record. A store of its own asset is never dropped here: it
+ * outlives its asset until an operator removes it.
+ */
+async function drop(
+  runtime: DataStoreRuntime,
+  job: Job<StorePayload>,
+  control: JobControl
+): Promise<void> {
+  const { storeId } = job.payload;
+  const record = await claimSubjectRow(control, async (stores) => {
+    const row = await stores.dataStores.getDataStore({
+      clientInstanceId: runtime.clientInstanceId,
+      id: storeId,
+      lock: true
+    });
+    return row?.status === "retired" && row.ownerKnowledgeBaseId !== undefined
+      ? { status: "claimed" as const, row }
+      : { status: "finished" as const };
+  });
+  if (!record) return;
+  await dropOwnedStore(runtime, job, control, storeId, record);
+  await control.transaction(async (stores) => {
+    for (const secret of ["app", "migration", "ledger"] as const) {
+      await runtime.credentials.remove(stores.connections, storeId, secret);
+    }
+    await stores.dataStores.deleteDataStore({
+      clientInstanceId: runtime.clientInstanceId,
+      id: storeId
+    });
+  });
+  await runtime.auditRecorder.record({
+    type: "data_store.dropped",
+    status: "success",
+    subject: record.id,
+    correlationId: job.correlationId,
+    metadata: { name: record.name }
+  });
+}
+
+/** The handlers, the schedule and the manual retries of the store's job kinds. */
 export function createDataStoreJobs(runtime: DataStoreRuntime): {
   handlers: RegisteredJobHandler[];
   schedules: JobSchedule[];
@@ -567,10 +893,15 @@ export function createDataStoreJobs(runtime: DataStoreRuntime): {
         kind: measureSizeJob,
         slots: 1,
         run: (_job, control) => measureDataStores(runtime, control)
+      }),
+      defineJobHandler({
+        kind: dropJob,
+        slots: DATA_STORE_JOB_SLOTS,
+        run: (job, control) => drop(runtime, job, control)
       })
     ],
     schedules: [defineSchedule({ kind: measureSizeJob, every: DATA_STORE_MEASURE_INTERVAL_MS })],
-    // Both read the record and the published revision anew.
-    retries: [{ kind: provisionJob }, { kind: migrateJob }]
+    // Each reads the record, and the published revision, anew.
+    retries: [{ kind: provisionJob }, { kind: migrateJob }, { kind: dropJob }]
   };
 }

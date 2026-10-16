@@ -5,8 +5,8 @@ import type { DataStoreRole } from "./credentials";
 import { platformIsSuperuser, writeStoreRoles } from "./roles";
 import { quoteIdentifier, type DataStoreServer } from "./server";
 
-// The one place a store's database, its roles and their grants are made. Every statement is
-// built from names this package derived, never from a caller's text.
+// The one place a store's database, its roles and their grants are made, and dropped. Every
+// statement is built from names this package derived, never from a caller's text.
 
 /** How long making the database or its grants may take before the attempt fails. */
 const DATA_STORE_PROVISION_STEP_TIMEOUT_MS = 120_000;
@@ -210,6 +210,35 @@ export async function provisionDataStore(
        alter default privileges in schema public
          grant usage, select on sequences to ${app};`
     )
+  );
+}
+
+/**
+ * Drops the database of a store with every row in it, ending the sessions still on it, and then
+ * its two roles, as the platform's role. The names are the ones the store's id gives, as
+ * provisioning gave them, never the ones a record holds. What is already gone is passed over,
+ * so a retried attempt finishes what an earlier one began. Only for the store a deleted
+ * Knowledge Base owned, once the caller found no other record that names them.
+ */
+export async function dropStoreDatabase(
+  server: DataStoreServer,
+  storeId: string,
+  signal: AbortSignal
+): Promise<void> {
+  const names = server.namesOf(storeId);
+  await server.executor.change(
+    // `drop database` runs in no transaction, and alone.
+    {
+      ...server.asPlatform(server.platformDatabase),
+      timeoutMs: DATA_STORE_PROVISION_STEP_TIMEOUT_MS,
+      signal,
+      transaction: false
+    },
+    async (sql) => {
+      await sql.script(`drop database if exists ${quoteIdentifier(names.database)} with (force)`);
+      await sql.script(`drop role if exists ${quoteIdentifier(names.app)}`);
+      await sql.script(`drop role if exists ${quoteIdentifier(names.migration)}`);
+    }
   );
 }
 

@@ -1,0 +1,1 @@
+ALTER TABLE "data_stores" ADD COLUMN "owner_knowledge_base_id" text;

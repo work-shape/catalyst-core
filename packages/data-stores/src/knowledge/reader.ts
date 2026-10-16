@@ -1,7 +1,7 @@
 import type {
   ConnectionsStore,
-  DataStoreRecord,
-  KnowledgeBaseTarget
+  DataStoreKnowledgeTarget,
+  DataStoreRecord
 } from "@work-shape/catalyst-core";
 import { asStoreRole, writeReaderRole } from "../roles";
 import type { DataStoreRuntime } from "../runtime";
@@ -73,7 +73,7 @@ export async function grantReader(
   /** Where the role's password is kept: the rows of the caller's transaction, where it has one. */
   secrets: ConnectionsStore,
   store: Store,
-  target: KnowledgeBaseTarget,
+  target: DataStoreKnowledgeTarget,
   signal: AbortSignal | undefined
 ): Promise<void> {
   const { server, credentials } = runtime;

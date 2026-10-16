@@ -516,12 +516,13 @@ async function readStore(
 
 /**
  * The published stores of the instance, or those of the names: two reads, whatever their
- * number. `truncated` says that more stores exist than one listing reads.
+ * number. `owned` are the records of the stores Knowledge Bases own, which have no asset and
+ * no operation of their own. `truncated` says that more stores exist than one listing reads.
  */
 export async function readStores(
   runtime: DataStoreRuntime,
   names?: readonly string[]
-): Promise<{ stores: PublishedStore[]; truncated: boolean }> {
+): Promise<{ stores: PublishedStore[]; owned: DataStoreRecord[]; truncated: boolean }> {
   const { clientInstanceId, stores } = runtime;
   const [assets, records] = await Promise.all([
     stores.configAssets.listPublishedConfigAssets({
@@ -537,6 +538,9 @@ export async function readStores(
     stores: assets
       .slice(0, DATA_STORE_LIST_MAX_STORES)
       .flatMap((asset) => publishedStore(asset, recordOf.get(asset.id)) ?? []),
+    owned: records
+      .slice(0, DATA_STORE_LIST_MAX_STORES)
+      .filter((record) => record.ownerKnowledgeBaseId !== undefined && record.status !== "retired"),
     truncated: Math.max(assets.length, records.length) > DATA_STORE_LIST_MAX_STORES
   };
 }

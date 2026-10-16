@@ -18,25 +18,29 @@ import {
   KNOWLEDGE_BASE_NAME_PATTERN,
   KNOWLEDGE_BASE_NAME_RULE,
   knowledgeBaseDefinitionSchema,
-  knowledgeTargetOf
+  knowledgeTargetOf,
+  semanticSearchIssue,
+  type KnowledgeEmbedding
 } from "./definition";
 import { createKnowledgeOperationSource, createKnowledgeToolSource } from "./operations";
-import { checkKnowledgeBase, type KnowledgeRuntime } from "./runtime";
+import { keepKnowledgeCheck, type KnowledgeRuntime } from "./runtime";
 
 export { knowledgeOperationName } from "./operations";
 
 /** What the Knowledge Bases of one process are made of, for the assembly to put in place. */
 export interface KnowledgeBases {
   /**
-   * The kind `knowledge_base`: a definition that describes tables of its backend, with a draft
-   * and a published revision. A workspace or the instance owns one.
+   * The kind `knowledge_base`: a definition that describes tables of a Data Store, or keeps
+   * documents in a store of its own, with a draft and a published revision. A workspace or the
+   * instance owns one.
    */
   readonly assetKind: RegisteredAssetKind<typeof KNOWLEDGE_BASE_ASSET_KIND>;
   /**
    * What a publish does beside moving the published pointer, with `stores` bound to the
-   * transaction of the publish: the publisher must be let to hand the backend's rows on, every
-   * described table must be readable, and then the Knowledge Base is let to read those tables
-   * and no others, `replaced` being the revision published before. A throw refuses the publish.
+   * transaction of the publish: the backend is asked to serve the revision, `replaced` being
+   * the revision published before, and what its check found is kept. On a Data Store the
+   * publisher must be let to hand its rows on and every described table must be readable; the
+   * built-in backend makes the store the Knowledge Base owns. A throw refuses the publish.
    */
   publish(
     stores: PlatformStores,
@@ -49,8 +53,9 @@ export interface KnowledgeBases {
     }
   ): Promise<void>;
   /**
-   * What deleting the asset does: its last check goes, and its access to the backend with the
-   * role it read as. No table and no row of the backend is touched.
+   * What deleting the asset does: its last check goes, and what the backend held for it: on a
+   * Data Store its access with the role it read as, and no table or row; on the built-in
+   * backend the store it owned, which a job drops with every row.
    */
   retire(stores: PlatformStores, assetId: string, published: unknown): Promise<void>;
   readonly operationSource: OperationSource;
@@ -62,8 +67,10 @@ export function createKnowledgeBases(input: {
   clientInstanceId: ClientInstanceId;
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;
-  /** Where the described tables are read. */
+  /** Where the described tables are read and the owned stores made. */
   backend: KnowledgeBackend;
+  /** The embedding model release config approves for Knowledge Bases (`knowledge`), if any. */
+  embedding: KnowledgeEmbedding;
   logger: Logger;
   now?: () => Date;
 }): KnowledgeBases {
@@ -88,6 +95,13 @@ export function createKnowledgeBases(input: {
       lifecycle: "draft_published",
       owners: [...ASSET_OWNER_KINDS],
       validate: () => [],
+      // Searching by meaning is the instance's to offer, so a stored definition that asks for it
+      // is no reason to refuse a write to another.
+      validateWrite: (context, knowledgeBases) =>
+        knowledgeBases
+          .filter((knowledgeBase) => context.changes(KNOWLEDGE_BASE_ASSET_KIND, knowledgeBase.name))
+          .flatMap((knowledgeBase) => semanticSearchIssue(knowledgeBase, input.embedding) ?? [])
+          .map((message) => ({ message })),
       summarize: (knowledgeBase) => ({
         name: knowledgeBase.name,
         title: knowledgeBase.title,
@@ -95,27 +109,21 @@ export function createKnowledgeBases(input: {
       })
     }),
     async publish(stores, { access, assetId, revision, config, replaced }) {
-      const definition = knowledgeBaseDefinitionSchema.parse(config);
-      const target = knowledgeTargetOf(definition, assetId);
-      await runtime.backend.requirePublishRight(target, access);
-      const state = await checkKnowledgeBase(runtime, stores, { assetId, revision, definition });
-      if (state.status === "ok") {
-        const before = knowledgeBaseDefinitionSchema.safeParse(replaced);
-        await runtime.backend.grant(
-          stores,
-          target,
-          before.success ? knowledgeTargetOf(before.data, assetId) : undefined
+      const target = knowledgeTargetOf(knowledgeBaseDefinitionSchema.parse(config), assetId);
+      const before = knowledgeBaseDefinitionSchema.safeParse(replaced);
+      const previous = before.success ? knowledgeTargetOf(before.data, assetId) : undefined;
+      // What the old backend holds would stay behind: the documents of a store the Knowledge
+      // Base owns, or a role that reads a Data Store.
+      if (previous && previous.backend !== target.backend) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Knowledge Base '${target.name}' is published ${previous.backend === "builtin" ? "with documents in a store of its own" : "on a Data Store"}, and a published Knowledge Base keeps its backend. Make a new Knowledge Base for the other backend.`,
+          { reason: "knowledge_backend_changed" },
+          { exposeMessage: true }
         );
-        return;
       }
-      const missing = state.tables.filter((table) => !table.readable).map((table) => table.name);
-      throw new AppError(
-        "VALIDATION_FAILED",
-        state.problem ??
-          `The Knowledge Base cannot read ${missing.length === 1 ? "the table" : "the tables"} ${missing.map((name) => `'${name}'`).join(", ")} of the Data Store '${definition.backend.dataStore}'. Describe tables the store has, or publish the store's migration that makes them.`,
-        { reason: "knowledge_base_needs_attention", tables: missing },
-        { exposeMessage: true }
-      );
+      const result = await runtime.backend.publish(stores, { target, replaced: previous, access });
+      await keepKnowledgeCheck(runtime, stores, { assetId, revision }, result);
     },
     async retire(stores, assetId, published) {
       await stores.knowledgeBases.deleteKnowledgeBaseState({
