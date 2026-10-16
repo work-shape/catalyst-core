@@ -286,25 +286,22 @@ jobs:
           tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
           -t "in the runner image|gives the workspace"
   browser-shard:
-    name: browser ${{ matrix.shard }}/10
+    name: browser ${{ matrix.shard }}/14
     needs: [paths, build]
     if: needs.paths.outputs.browser == 'true'
-    # Individual tests (except explicit serial groups) are spread across ten isolated
+    # Individual tests (except explicit serial groups) are spread across fourteen isolated
     # databases. One worker per shard avoids extra concurrent mutations of shared accounts
     # and fixed-port beforeAll servers, and splits the former 15-minute standalone file.
-    # Run 38778358978: groups 1 and 4 took 9:47 and 10:41; the other groups
-    # took 3:44–7:36. Give only those two groups extra CPU; keep one worker.
+    # Measured duration lists balance the work on uniform runners. A probe with twelve
+    # shards met the per-job budget but not the overall one; fourteen leave room for
+    # build/setup and aggregation while retaining one worker per database. No shard sets
+    # matrix.runner any more; the expression stays as it was for the check-limit guard.
     runs-on: ${{ matrix.runner || 'blacksmith-2vcpu-ubuntu-2404' }}
     timeout-minutes: 15 # check-limit
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        include:
-          - shard: 1
-            runner: blacksmith-4vcpu-ubuntu-2404
-          - shard: 4
-            runner: blacksmith-4vcpu-ubuntu-2404
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -338,7 +335,17 @@ jobs:
           E2E_SKIP_BUILD: "1"
           E2E_FULLY_PARALLEL: "1"
           SHARD: ${{ matrix.shard }}
-        run: pnpm test:e2e --retries=1 --reporter=./e2e/ci-reporter.ts --workers=1 --shard="$SHARD/10" 2>&1 | tee browser-run.log
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/browser-durations.json
+        run: pnpm test:e2e --retries=1 --reporter=./e2e/ci-reporter.ts,json --workers=1 --duration-shard="$SHARD/14" 2>&1 | tee browser-run.log
+      - name: Keep measured durations and selected test list
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-durations-${{ matrix.shard }}
+          path: |
+            test-results/browser-durations.json
+            .tmp/e2e/shard-${{ matrix.shard }}.txt
+          retention-days: 14
       - name: Keep traces and the server log of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -361,9 +368,10 @@ jobs:
         run: |
           if [ "$SELECTED" = true ]; then test "$SHARDS" = success
           else test "$SHARDS" = skipped; fi
+  # Validate the shard result directly, in parallel with the legacy browser aggregate.
+  # Both aggregates enforce the same selected/skipped contract; neither runs tests.
   check:
-    needs:
-      [paths, changes, build, static, docs, tests, upgrade, release, images, browser-shard, browser]
+    needs: [paths, changes, build, static, docs, tests, upgrade, release, images, browser-shard]
     if: ${{ always() && (github.event_name != 'pull_request' || github.event.label.name == 'ci') }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 2 # check-limit
@@ -373,4 +381,4 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
-          echo "$RESULTS" | jq -e '.paths.result == "success" and .changes.result == "success" and .docs.result == "success" and .browser.result == "success"'
+          echo "$RESULTS" | jq -e '.paths.result == "success" and .changes.result == "success" and .docs.result == "success" and (if .paths.outputs.browser == "true" then .["browser-shard"].result == "success" else .["browser-shard"].result == "skipped" end)'
