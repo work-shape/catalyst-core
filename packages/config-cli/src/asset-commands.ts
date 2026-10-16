@@ -9,6 +9,13 @@ import {
 } from "@work-shape/catalyst-api-contract";
 import type { OperationOutcome } from "@work-shape/catalyst-api-client";
 import { ConfigApiError, type ConfigApi } from "./api";
+import {
+  APP_VERBS,
+  AppUsageError,
+  isAppVerb,
+  runAppCommand,
+  type AppCommandOptions
+} from "./app-commands";
 import { readAssetSource } from "./asset-sources";
 import { runFollowCommand } from "./follow-commands";
 import {
@@ -30,6 +37,7 @@ import {
   writeOutput,
   type ConfigCommandOptions
 } from "./command-support";
+import { formatAssetHelp } from "./asset-help";
 import { askBeforePublish } from "./publish-question";
 
 // `catalyst context`, `kinds`, `references` and `catalyst <kind> <verb>`: one command per
@@ -63,6 +71,7 @@ const OPTIONS = {
   confirm: { type: "string" },
   yes: { type: "boolean", default: false },
   withdraw: { type: "string" },
+  published: { type: "boolean", default: false },
   help: { type: "boolean", short: "h", default: false }
 } as const;
 
@@ -568,13 +577,21 @@ async function guardrailDryRunBeforePublish(
   return EXIT.refused;
 }
 
+/** The options of the App commands beside the common ones. */
+const APP_FLAGS = {
+  pull: ["revision", "published"],
+  push: [],
+  publish: ["revision", "yes"],
+  status: []
+} as const satisfies Record<keyof typeof APP_VERBS, readonly OptionName[]>;
+
 /** The words before the kind that are commands of their own. */
 const INSTANCE_COMMANDS = ["context", "kinds", "references", "operation", "requests"] as const;
 
 /** Runs `catalyst <argv>` for every command but `config`. */
 export async function runAssetCommand(
   argv: readonly string[],
-  base: Omit<ConfigCommandOptions, "dir" | "instance">
+  base: Omit<AppCommandOptions, "dir" | "instance">
 ): Promise<number> {
   const [noun = "", ...rest] = argv;
   let values: Values;
@@ -588,7 +605,7 @@ export async function runAssetCommand(
     );
     return EXIT.usage;
   }
-  const options: ConfigCommandOptions = {
+  const options: AppCommandOptions = {
     ...base,
     ...(values.dir === undefined ? {} : { dir: values.dir }),
     ...(values.instance === undefined ? {} : { instance: values.instance })
@@ -624,6 +641,10 @@ export async function runAssetCommand(
       if (values.withdraw !== undefined) required(values.withdraw, "--withdraw <id>");
       return await runInstanceCommand(instanceCommand, values, options, name);
     }
+    if ((noun === "app" || noun === "apps") && isAppVerb(verbName)) {
+      refuseFlags(values, [...COMMON_FLAGS, ...APP_FLAGS[verbName]], verbName);
+      return await runAppCommand(verbName, positionals.slice(1), values, options);
+    }
     const verb = VERBS[verbName];
     if (verb === undefined) throw new UsageError(`Unknown command '${noun} ${verbName}'.`);
     refuseFlags(values, [...COMMON_FLAGS, ...verb.flags], verbName);
@@ -643,7 +664,7 @@ export async function runAssetCommand(
       options
     });
   } catch (error) {
-    if (error instanceof UsageError) {
+    if (error instanceof UsageError || error instanceof AppUsageError) {
       writeError(options, error.message);
       return EXIT.usage;
     }
@@ -767,33 +788,4 @@ function refuseFlags(values: Values, allowed: readonly OptionName[], command: st
 /** A command line this tool cannot run. Nothing was sent. */
 class UsageError extends Error {}
 
-export const assetHelpText = `Usage: catalyst <command> [options]
-
-Instance:
-  context                   The instance, your rights on it and its asset kinds (platform.context.get)
-  kinds                     The asset kinds: their command word, lifecycle and rights
-  references                Models, efforts and tools a definition may name (platform.references.get)
-  operation show <run-id>    Follow your call to its decision (operations.get_run)
-  requests [--withdraw <id>] List your requests, or withdraw one of them
-
-Assets, for every kind the instance registers (agent, skill, app, workflow, data-store, ...):
-${Object.values(VERBS)
-  .map((verb) => `  catalyst <kind> ${verb.usage}\n      ${verb.summary}`)
-  .join("\n")}
-
-Options:
-  --instance <name-or-url>  An instance of catalyst.yaml, or its URL. Left out: the
-                            defaultInstance of catalyst.yaml; outside a working copy,
-                            the one instance a key is saved for
-  --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
-  --workspace <id>          Address the assets one workspace owns. Left out in a working
-                            copy bound to a workspace: that workspace
-  --json                    Print the instance's answer as JSON
-  --help                    Show this help
-
-The instance decides every right and every check, and a refusal is printed as it gave it.
-A write names the revision it was made against: read it with 'show' or 'history'.
-A publish of an App or a Workflow asks you first and needs your answer in a terminal; --yes
-publishes nothing. If you may not approve it yourself, it then waits for an approver.
-Exit codes: 0 done, 1 refused or failed, 2 usage, 3 waits for an approval (nothing changed yet).
-`;
+export const assetHelpText = formatAssetHelp(Object.values(VERBS));

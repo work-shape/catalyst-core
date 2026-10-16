@@ -146,8 +146,7 @@ function detailLines(details: unknown): string[] {
   if (!isRecord(details)) return [];
   const lines: string[] = [];
   for (const issue of records(details.issues)) {
-    const path = Array.isArray(issue.path) && issue.path.length > 0 ? issue.path.join(".") : "";
-    lines.push(`- ${path ? `${path}: ` : ""}${String(issue.message)}`);
+    lines.push(`- ${issueLocation(issue)}${String(issue.message)}`);
   }
   for (const conflict of records(details.conflicts)) {
     const at =
@@ -170,6 +169,19 @@ function detailLines(details: unknown): string[] {
     }
   }
   return lines;
+}
+
+/**
+ * Where an issue lies: a file of a build with its line and column as `file:line:column: `,
+ * the way editors and terminals open them, or the path into a definition.
+ */
+function issueLocation(issue: Record<string, unknown>): string {
+  if (typeof issue.file === "string" && issue.file !== "") {
+    const line = typeof issue.line === "number" ? `:${issue.line}` : "";
+    const column = line && typeof issue.column === "number" ? `:${issue.column}` : "";
+    return `${issue.file}${line}${column}: `;
+  }
+  return Array.isArray(issue.path) && issue.path.length > 0 ? `${issue.path.join(".")}: ` : "";
 }
 
 function scopeLabel(scope: Asset["scope"]): string {

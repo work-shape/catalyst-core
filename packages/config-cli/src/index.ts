@@ -13,6 +13,7 @@ import { loginCommand, logoutCommand } from "./login";
 import { isLocalAgentTool, SETUP_USAGE, setupCommand } from "./setup";
 
 export * from "./api";
+export { publishReview, type PublishReview } from "./app-commands";
 export * from "./commands";
 export * from "./diff";
 export * from "./serialization";
