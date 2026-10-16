@@ -430,6 +430,15 @@ function pageFilesPlugin(sources: ReadonlyMap<string, Uint8Array>, kitVersion: s
           /^\d+\.\d+\.\d+\//u.test(kitAsset) &&
           fileSetPathIssue(kitAsset) === undefined
         ) {
+          if (!kitAsset.startsWith(`${kitVersion}/`)) {
+            return {
+              errors: [
+                {
+                  text: `The CSS reference '${args.path}' cannot be imported. This App uses kit version '${kitVersion}'.`
+                }
+              ]
+            };
+          }
           return { path: args.path, external: true };
         }
         if (args.path.startsWith("data:")) {

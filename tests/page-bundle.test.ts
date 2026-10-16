@@ -116,6 +116,38 @@ body { font-family: Bungee; }`
     expect([...files.keys()].sort()).toEqual(["app.css", "app.js", "index.html"]);
   });
 
+  it.each(["1.4.0", "1.5.1"])(
+    "refuses CSS references to kit %s in an App using 1.5.0",
+    async (version) => {
+      for (const [reference, css] of [
+        [
+          `/app-runtime/kit/${version}/fonts/fonts.css`,
+          (path: string) => `@import url("${path}");`
+        ],
+        [
+          `/app-runtime/kit/${version}/fonts/bungee/bungee-latin-400-normal.woff2`,
+          (path: string) => `@font-face { font-family: Bungee; src: url("${path}"); }`
+        ]
+      ] as const) {
+        const result = await buildPage({
+          files: pageFiles({
+            "app.yaml": reactManifest.replace("1.0.0", "1.5.0"),
+            "src/routes/__root.tsx": rootRoute,
+            "src/routes/index.tsx": `import "../fonts.css";\n${fileRoute("/")}`,
+            "src/fonts.css": css(reference)
+          })
+        });
+        expect(errorsOf(result)).toEqual([
+          expect.objectContaining({
+            file: "src/fonts.css",
+            code: "import_unavailable",
+            message: `The CSS reference '${reference}' cannot be imported. This App uses kit version '1.5.0'.`
+          })
+        ]);
+      }
+    }
+  );
+
   it.each([
     "/fonts/outside.woff2",
     "/app-runtime/other/1.5.0/fonts.css",
