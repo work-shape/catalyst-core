@@ -220,7 +220,7 @@ test.describe("a generated view loads its runtime from the instance alone", () =
     const traffic = await allowInstanceOnly(context, siteOrigin);
     // The widget hands the shell no route, and a token session of this build opens no
     // conversation by itself. The site's copy of the widget passes the conversation's route on.
-    const widgetPath = `/@fs${resolve("packages/chat-widget/src/index.tsx")}`;
+    const widgetPath = `/@fs${resolve("packages/chat-ui/src/widget.tsx")}`;
     const widgetModule = await (await request.get(`${uiOrigin}${widgetPath}`)).text();
     const tokenProp = "token: options.token,";
     expect(widgetModule).toContain(tokenProp);

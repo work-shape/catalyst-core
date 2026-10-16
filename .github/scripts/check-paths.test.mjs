@@ -11,7 +11,7 @@ test("PRs select checks from the union of their changed paths", () => {
     browser: true,
     images: true
   });
-  assert.deepEqual(selectChecks(["packages/chat-server/src/index.ts"]), {
+  assert.deepEqual(selectChecks(["packages/server/src/index.ts"]), {
     code: true,
     browser: true,
     images: true
@@ -70,7 +70,7 @@ test("browser and isolated image builds follow the current workspace dependency 
   ]) {
     assert.equal(selectChecks([`packages/${name}/src/index.ts`]).browser, true, name);
   }
-  assert.deepEqual(selectChecks(["packages/registry-canary/src/index.ts"]), {
+  assert.deepEqual(selectChecks(["clients/chat-standalone/src/main.tsx"]), {
     code: true,
     browser: false,
     images: false
@@ -82,7 +82,7 @@ test("new transitive dependencies are discovered from manifests, including cycle
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const manifests = {
     "clients/demo": { name: "@work-shape/catalyst-demo", dependencies: { direct: "workspace:*" } },
-    "packages/chat-server": {
+    "packages/server": {
       name: "@work-shape/catalyst-server",
       devDependencies: { builder: "workspace:*" }
     },
@@ -101,8 +101,8 @@ test("new transitive dependencies are discovered from manifests, including cycle
   assert.deepEqual(browserDependencyPaths(root).sort(), [
     "clients/demo/",
     "packages/builder/",
-    "packages/chat-server/",
     "packages/direct/",
+    "packages/server/",
     "packages/transitive/"
   ]);
 });

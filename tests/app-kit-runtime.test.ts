@@ -21,7 +21,7 @@ import { callTestPath, createTestInstanceWith } from "./support/test-instance";
 // per version, each with a manifest of file hashes. A Page names its version and loads these
 // files from the instance and from nowhere else.
 
-const kitRoot = "packages/chat-server/vendor/app-kit";
+const kitRoot = "packages/server/vendor/app-kit";
 const manifestSchema = z.object({
   version: z.string(),
   files: z.array(z.object({ file: z.string(), bytes: z.number(), sha256: z.string() })),

@@ -327,7 +327,7 @@ describe("a changing operation is registered or named as plain", () => {
       rightDecidedBy: z.record(
         z.string(),
         // `asset_right`: the handler asks for an action of an asset kind, on the instance or in a
-        // Namespace (`registerPlatformRoutes` in chat-server/src/routes/platform-routes.ts).
+        // Namespace (`registerPlatformRoutes` in server/src/routes/platform-routes.ts).
         // `holder_right`: the handler checks own rights or administration of the named holder.
         z.enum([
           "workspace_role",

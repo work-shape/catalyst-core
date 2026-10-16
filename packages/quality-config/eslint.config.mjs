@@ -37,7 +37,7 @@ const root = process.cwd();
  */
 const processLocalTimers = [
   {
-    file: "packages/chat-server/src/http/rate-limit.ts",
+    file: "packages/server/src/http/rate-limit.ts",
     within: "count",
     count: 1,
     why: "removes the rate limiter's run-out counters from this process's memory"
@@ -199,9 +199,7 @@ const isServerSource = (filename) => {
   return (
     directory !== undefined &&
     /^packages\/[^/]+\/src\//.test(relative(root, filename).replaceAll("\\", "/")) &&
-    !["config-cli", "chat-ui", "ui", "chat-widget", "chat-standalone"].some(
-      (name) => directory === `packages/${name}`
-    )
+    !["config-cli", "chat-ui", "ui"].some((name) => directory === `packages/${name}`)
   );
 };
 
@@ -275,9 +273,9 @@ const routeMethods = ["get", "head", "post", "put", "patch", "delete", "options"
  * @type {{ directory: string, file: string, allows: (path: string | undefined) => boolean }[]}
  */
 const routeRegistrars = [
-  { directory: "packages/chat-server", file: "src/http/route.ts", allows: () => true },
+  { directory: "packages/server", file: "src/http/route.ts", allows: () => true },
   {
-    directory: "packages/chat-server",
+    directory: "packages/server",
     file: "src/routes/better-auth-routes.ts",
     allows: (path) => path?.startsWith("/api/auth/") ?? false
   },
@@ -321,17 +319,14 @@ const plugin = {
     // ESLint's no-restricted-globals and no-restricted-properties would cover these three,
     // but under one rule name. The baseline counts by rule and each boundary has its own owner.
     "sql-boundary": rule(
-      "SQL drivers and Drizzle belong in postgres-store, auth, data-source or postgres-connector",
+      "SQL drivers and Drizzle belong in postgres-store, auth or postgres-connector",
       (filename) => {
         const directory = packageAt(filename)?.directory;
         return (
           directory !== undefined &&
-          ![
-            "packages/postgres-store",
-            "packages/auth",
-            "packages/data-source",
-            "packages/postgres-connector"
-          ].includes(directory)
+          !["packages/postgres-store", "packages/auth", "packages/postgres-connector"].includes(
+            directory
+          )
         );
       },
       (_context, report) => {
@@ -500,7 +495,7 @@ const plugin = {
     },
     // The receiver's type decides, so no variable name and no alias hides a registration.
     "route-registration": rule(
-      "Routes are registered through the route helper in chat-server/src/http/route.ts",
+      "Routes are registered through the route helper in server/src/http/route.ts",
       (filename) => packageAt(filename) !== undefined,
       (context, report) => {
         const services = context.sourceCode.parserServices;
@@ -743,8 +738,8 @@ const config = [
       "**/dist/**",
       "packages/postgres-store/migrations/**",
       // Third-party files and released App Kit versions, served as published; tests hold hashes.
-      "packages/chat-server/vendor/view-runtime/**",
-      "packages/chat-server/vendor/app-kit/**",
+      "packages/server/vendor/view-runtime/**",
+      "packages/server/vendor/app-kit/**",
       // The source of the demo's seeded Apps: files the seed writes to an instance, built there
       // against the App Kit, and no part of this workspace's own code.
       "clients/demo/seed/apps/**",

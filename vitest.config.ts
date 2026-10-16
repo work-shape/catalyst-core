@@ -9,6 +9,10 @@ import {
 } from "./scripts/test-postgres-capacity.mjs";
 
 const sourceAlias = {
+  "@work-shape/catalyst-tool-execution/native-document":
+    "packages/tool-execution/src/native-document.ts",
+  "@work-shape/catalyst-chat-ui/widget": "packages/chat-ui/src/widget.tsx",
+
   "@work-shape/catalyst-cli": "packages/config-cli/src/index.ts",
   "@work-shape/catalyst-agent-runtime": "packages/agent-runtime/src/index.ts",
   "@work-shape/catalyst-asset-repo": "packages/asset-repo/src/index.ts",
@@ -22,7 +26,7 @@ const sourceAlias = {
   "@work-shape/catalyst-app-build": "packages/app-build/src/index.ts",
   "@work-shape/catalyst-auth": "packages/auth/src/index.ts",
   "@work-shape/catalyst-core": "packages/core/src/index.ts",
-  "@work-shape/catalyst-server": "packages/chat-server/src/index.ts",
+  "@work-shape/catalyst-server": "packages/server/src/index.ts",
   "@work-shape/catalyst-chat-ui/access": "packages/chat-ui/src/admin/access/index.ts",
   "@work-shape/catalyst-chat-ui/build-area": "packages/chat-ui/src/studio/build-area/index.ts",
   "@work-shape/catalyst-chat-ui/operations": "packages/chat-ui/src/admin/operations/index.ts",
@@ -47,16 +51,15 @@ const sourceAlias = {
   "@work-shape/catalyst-chat-ui/admin": "packages/chat-ui/src/admin.tsx",
   "@work-shape/catalyst-chat-ui/vite": "packages/chat-ui/src/vite.js",
   "@work-shape/catalyst-chat-ui": "packages/chat-ui/src/index.tsx",
-  "@work-shape/catalyst-chat-widget": "packages/chat-widget/src/index.tsx",
   "@work-shape/catalyst-capability-sdk": "packages/capability-sdk/src/index.ts",
   "@work-shape/catalyst-client-assembly": "packages/client-assembly/src/index.ts",
   "@work-shape/catalyst-config-schema": "packages/config-schema/src/index.ts",
   "@work-shape/catalyst-connections": "packages/connections/src/index.ts",
   "@work-shape/catalyst-data-stores": "packages/data-stores/src/index.ts",
-  "@work-shape/catalyst-data-source": "packages/data-source/src/index.ts",
+
   "@work-shape/catalyst-demo/sample-mcp": "clients/demo/sample-mcp/index.ts",
   "@work-shape/catalyst-demo/seed": "clients/demo/src/seed/index.ts",
-  "@work-shape/catalyst-document-execution": "packages/document-execution/src/index.ts",
+
   "@work-shape/catalyst-mail": "packages/mail/src/index.ts",
   "@work-shape/catalyst-model-provider": "packages/model-provider/src/index.ts",
   "@work-shape/catalyst-object-storage": "packages/object-storage/src/index.ts",

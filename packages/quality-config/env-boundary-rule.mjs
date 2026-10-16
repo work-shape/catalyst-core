@@ -69,7 +69,7 @@ export const envBoundaryRule = ({
         MetaProperty: (node) => {
           if (node.meta.name !== "import" || node.property.name !== "meta") return;
           const frontendEntries = [
-            "/packages/chat-standalone/src/main.tsx",
+            "/clients/chat-standalone/src/main.tsx",
             "/clients/demo/src/chat-main.tsx"
           ];
           const filename = context.filename.replaceAll("\\", "/");

@@ -2,7 +2,6 @@
 set -euo pipefail
 
 kit_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-platform_dir="$(cd "$kit_dir/../.." && pwd)"
 fakes="$kit_dir/tests/fakes"
 catalyst_deploy="$kit_dir/bin/catalyst-deploy"
 scratch="$(mktemp -d)"
@@ -291,36 +290,16 @@ helpers.assert(
 NODE
 }
 
-# Callers that pin the layout before the kit became a package use these paths.
-test_legacy_paths() {
-  local legacy="$platform_dir/scripts/deployment-kit" script
+# Consumers call the packaged entry points directly after freeze C.
+test_kit_paths() {
+  local script
   for script in check-release.sh update-release.sh prepare-build-workspace.sh; do
-    "$legacy/$script" --help > "$scratch/legacy-help"
-    assert_contains "$scratch/legacy-help" "$script"
+    bash "$kit_dir/lib/$script" --help > "$scratch/kit-help"
+    assert_contains "$scratch/kit-help" "$script"
   done
-  node "$legacy/compose-watch-preflight.mjs" --help > "$scratch/legacy-help"
-  assert_contains "$scratch/legacy-help" "compose-watch-preflight.mjs"
-  expect_failure node "$legacy/ensure-compose-dev-images.mjs" --unknown-option
-  LEGACY="$legacy" node --input-type=module <<'NODE'
-import { pathToFileURL } from "node:url";
-const helpers = await import(
-  pathToFileURL(`${process.env.LEGACY}/verify-compose-helpers.mjs`)
-);
-for (const name of [
-  "assert",
-  "assertWorkerIsolation",
-  "extractDockerStage",
-  "extractServiceBlock",
-  "modelSecretNames",
-  "reachesDockerSocket",
-  "readPlatformDockerfile",
-  "resolveCompose",
-  "serviceNames",
-  "workflowTagsImageSuffix"
-]) {
-  if (typeof helpers[name] !== "function") throw new Error(`${name} is not exported`);
-}
-NODE
+  node "$kit_dir/dev/compose-watch-preflight.mjs" --help > "$scratch/kit-help"
+  assert_contains "$scratch/kit-help" "compose-watch-preflight.mjs"
+  expect_failure node "$kit_dir/dev/ensure-compose-dev-images.mjs" --unknown-option
 }
 
 digest_a="sha256:$(printf '%064d' 1)"
@@ -1127,7 +1106,7 @@ test_packed_layout() {
 test_shell_files() {
   local file
   local files=("$kit_dir/bin/catalyst-deploy" "$kit_dir"/lib/*.sh "$kit_dir"/host/*.sh
-    "$kit_dir"/tests/*.sh "$kit_dir"/tests/fakes/* "$platform_dir"/scripts/deployment-kit/*.sh)
+    "$kit_dir"/tests/*.sh "$kit_dir"/tests/fakes/*)
   for file in "${files[@]}"; do
     bash -n "$file"
   done
@@ -1147,7 +1126,7 @@ test_resolve_entry_points
 test_compose_watch_preflight
 test_ensure_compose_dev_images
 test_compose_helpers
-test_legacy_paths
+test_kit_paths
 test_deployment_env
 test_release_manifest
 test_publish

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Writes one released version of the App Kit: the files an instance serves under
-// `/app-runtime/kit/<version>/`, into `packages/chat-server/vendor/app-kit/<version>/`.
+// `/app-runtime/kit/<version>/`, into `packages/server/vendor/app-kit/<version>/`.
 //
 //   pnpm --dir platform kit:release            writes the version of KIT_VERSION below
 //
@@ -26,7 +26,7 @@ const KIT_VERSION = "1.4.0";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const platformRoot = resolve(packageRoot, "../..");
 const uiRoot = resolve(platformRoot, "packages/ui");
-const outputRoot = resolve(platformRoot, "packages/chat-server/vendor/app-kit", KIT_VERSION);
+const outputRoot = resolve(platformRoot, "packages/server/vendor/app-kit", KIT_VERSION);
 const require = createRequire(join(packageRoot, "package.json"));
 
 /** The four names a Page imports React by. One file answers all of them. */

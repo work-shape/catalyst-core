@@ -40,12 +40,10 @@ const NODE_ENGINE = ">=22";
 // Packages under packages/ that are not published, with the reason.
 export const UNPUBLISHED = {
   "app-kit":
-    "Source of the App Kit; a Page never installs it, the instance serves its released files from chat-server",
-  "chat-standalone": "Vite application, not a library; deployments build their own UI entry",
+    "Source of the App Kit; a Page never installs it, the instance serves its released files from server",
   docs: "Astro documentation site",
   "quality-config":
-    "Check tooling for this repository and capabilities, used from the platform checkout",
-  "registry-canary": "GitHub Packages canary from the superseded registry decision"
+    "Check tooling for this repository and capabilities, used from the platform checkout"
 };
 
 // Everything else under packages/ is published with `files: ["dist"]` and
@@ -74,7 +72,7 @@ const OVERRIDES = {
   // ships, read at runtime from ../skills relative to dist/.
   "config-cli": { files: ["dist", "skills"], sideEffects: undefined },
   // Ships the pinned view runtime it serves, read at runtime from ../vendor relative to dist/.
-  "chat-server": { files: ["dist", "vendor"] },
+  server: { files: ["dist", "vendor"] },
   // Migrations are read at runtime from ../migrations relative to dist/. The
   // `./migration-statements` export is plain JavaScript with a declaration file, so the
   // migration checks can import it without a build.

@@ -183,7 +183,7 @@ describe("the public runtime boundary", () => {
     await exerciseLifecycle(await createTestInstance({ config: createTestConfig(), tools: [] }));
   });
 
-  it.each(["chat-server", "client-assembly", "core"])(
+  it.each(["server", "client-assembly", "core"])(
     "keeps the web framework out of the built declarations of %s",
     async (name) => {
       const declarations = await readFile(

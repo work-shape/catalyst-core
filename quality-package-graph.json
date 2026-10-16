@@ -12,7 +12,7 @@
   "@work-shape/catalyst-auth": ["@work-shape/catalyst-core"],
   "@work-shape/catalyst-capability-sdk": [
     "@work-shape/catalyst-core",
-    "@work-shape/catalyst-data-source",
+    "@work-shape/catalyst-postgres-connector",
     "@work-shape/catalyst-tool-sdk"
   ],
   "@work-shape/catalyst-server": [
@@ -34,7 +34,6 @@
     "@work-shape/catalyst-core",
     "@work-shape/catalyst-ui"
   ],
-  "@work-shape/catalyst-chat-widget": ["@work-shape/catalyst-chat-ui"],
   "@work-shape/catalyst-client-assembly": [
     "@work-shape/catalyst-agent-runtime",
     "@work-shape/catalyst-api-client",
@@ -47,7 +46,7 @@
     "@work-shape/catalyst-config-schema",
     "@work-shape/catalyst-connections",
     "@work-shape/catalyst-core",
-    "@work-shape/catalyst-data-source",
+    "@work-shape/catalyst-postgres-connector",
     "@work-shape/catalyst-data-stores",
     "@work-shape/catalyst-mail",
     "@work-shape/catalyst-model-provider",
@@ -69,10 +68,6 @@
     "@work-shape/catalyst-web-access"
   ],
   "@work-shape/catalyst-core": ["@work-shape/catalyst-asset-schemas"],
-  "@work-shape/catalyst-data-source": [
-    "@work-shape/catalyst-core",
-    "@work-shape/catalyst-tool-sdk"
-  ],
   "@work-shape/catalyst-data-stores": [
     "@work-shape/catalyst-connections",
     "@work-shape/catalyst-core",
@@ -90,17 +85,18 @@
   ],
   "@work-shape/catalyst-deployment-kit": [],
   "@work-shape/catalyst-docs": ["@work-shape/catalyst-api-contract"],
-  "@work-shape/catalyst-document-execution": [],
   "@work-shape/catalyst-mail": ["@work-shape/catalyst-core"],
   "@work-shape/catalyst-model-provider": ["@work-shape/catalyst-core"],
   "@work-shape/catalyst-object-storage": ["@work-shape/catalyst-core"],
-  "@work-shape/catalyst-postgres-connector": ["@work-shape/catalyst-core"],
+  "@work-shape/catalyst-postgres-connector": [
+    "@work-shape/catalyst-core",
+    "@work-shape/catalyst-tool-sdk"
+  ],
   "@work-shape/catalyst-postgres-store": ["@work-shape/catalyst-core"],
   "@work-shape/catalyst-quality-config": [],
   "@work-shape/catalyst-tool-execution": [
     "@work-shape/catalyst-config-schema",
     "@work-shape/catalyst-core",
-    "@work-shape/catalyst-document-execution",
     "@work-shape/catalyst-tool-sdk"
   ],
   "@work-shape/catalyst-tool-sdk": ["@work-shape/catalyst-core"],
@@ -112,7 +108,6 @@
     "@work-shape/catalyst-core",
     "@work-shape/catalyst-tool-execution"
   ],
-  "@vivd-solutions/registry-canary": [],
   "@work-shape/catalyst-cli": [
     "@work-shape/catalyst-api-client",
     "@work-shape/catalyst-api-contract",

@@ -49,7 +49,7 @@
     "@work-shape/catalyst-config-schema": "workspace:*",
     "@work-shape/catalyst-connections": "workspace:*",
     "@work-shape/catalyst-core": "workspace:*",
-    "@work-shape/catalyst-data-source": "workspace:*",
+    "@work-shape/catalyst-postgres-connector": "workspace:*",
     "@work-shape/catalyst-data-stores": "workspace:*",
     "@work-shape/catalyst-mail": "workspace:*",
     "@work-shape/catalyst-model-provider": "workspace:*",

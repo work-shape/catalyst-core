@@ -42,10 +42,8 @@ x-backend-package-watch-ignore: &backend-package-watch-ignore
   - "**/.venv/**"
   - "**/.vite/**"
   - "**/.astro/**"
-  - "chat-standalone/**"
   - "chat-ui/**"
   - "ui/**"
-  - "chat-widget/**"
   - "docs/**"
 
 x-app-environment: &app-environment

@@ -116,7 +116,7 @@
     {
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
-      "scope": "packages/chat-server",
+      "scope": "packages/server",
       "count": 5,
       "owner": "CB-4d"
     },
@@ -144,8 +144,8 @@
     {
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
-      "scope": "packages/document-execution",
-      "count": 1,
+      "scope": "packages/tool-execution",
+      "count": 5,
       "owner": "CB-8b"
     },
     {
@@ -161,13 +161,6 @@
       "scope": "packages/postgres-store",
       "count": 39,
       "owner": "CB-3a"
-    },
-    {
-      "target": "lint",
-      "rule": "@typescript-eslint/no-unsafe-type-assertion",
-      "scope": "packages/tool-execution",
-      "count": 4,
-      "owner": "EW-1"
     },
     {
       "target": "lint",
@@ -235,13 +228,6 @@
     {
       "target": "lint",
       "rule": "import-x/no-relative-packages",
-      "scope": "scripts",
-      "count": 3,
-      "owner": "CB-8b"
-    },
-    {
-      "target": "lint",
-      "rule": "import-x/no-relative-packages",
       "scope": "tests",
       "count": 150,
       "owner": "CB-2"
@@ -249,21 +235,21 @@
     {
       "target": "lint",
       "rule": "knip/dependencies",
-      "scope": "packages/chat-server",
+      "scope": "packages/server",
       "count": 1,
       "owner": "CB-4d"
     },
     {
       "target": "lint",
       "rule": "knip/dependencies",
-      "scope": "packages/chat-standalone",
+      "scope": "clients/chat-standalone",
       "count": 2,
       "owner": "CB-8b"
     },
     {
       "target": "lint",
       "rule": "knip/devDependencies",
-      "scope": "packages/chat-standalone",
+      "scope": "clients/chat-standalone",
       "count": 2,
       "owner": "CB-8b"
     },
@@ -284,7 +270,7 @@
     {
       "target": "lint",
       "rule": "knip/duplicates",
-      "scope": "packages/data-source",
+      "scope": "packages/postgres-connector",
       "count": 1,
       "owner": "CS-5"
     },
@@ -305,7 +291,7 @@
     {
       "target": "lint",
       "rule": "knip/exports",
-      "scope": "packages/chat-server",
+      "scope": "packages/server",
       "count": 1,
       "owner": "CB-4d"
     },
@@ -333,7 +319,7 @@
     {
       "target": "lint",
       "rule": "knip/types",
-      "scope": "packages/chat-server",
+      "scope": "packages/server",
       "count": 2,
       "owner": "CB-4d"
     },
@@ -480,7 +466,7 @@
     {
       "target": "lint",
       "rule": "catalyst/retired-terms",
-      "scope": "packages/chat-server",
+      "scope": "packages/server",
       "count": 276,
       "owner": "NS-RETIRE"
     },
@@ -559,98 +545,98 @@
     {
       "key": "lint|catalyst/retired-terms|clients/demo",
       "to": 63,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|e2e",
       "to": 75,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/api-contract",
       "to": 69,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/asset-schemas",
       "to": 3,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
-      "key": "lint|catalyst/retired-terms|packages/chat-server",
+      "key": "lint|catalyst/retired-terms|packages/server",
       "to": 276,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/chat-ui",
       "to": 656,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/client-assembly",
       "to": 1,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/config-cli",
       "to": 34,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/core",
       "to": 80,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/docs",
       "to": 1,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/postgres-store",
       "to": 81,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/tool-execution",
       "to": 3,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|packages/ui",
       "to": 5,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     },
     {
       "key": "lint|catalyst/retired-terms|tests",
       "to": 865,
-      "reason": "Initial measured retired-terms ratchet requested in freeze D4\u2032; NS-RETIRE owns reductions.",
+      "reason": "Initial measured retired-terms ratchet requested in freeze D4′; NS-RETIRE owns reductions.",
       "acceptedBy": "manager (D4′, 2026-10-15)",
       "date": "2026-10-15"
     }

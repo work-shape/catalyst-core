@@ -173,7 +173,7 @@ describe("rename-scope codemod", () => {
 
   it("renames the server package and the local exampletax assembly without moving files", () => {
     const platform = createTree({
-      "packages/chat-server/package.json": JSON.stringify({ name: `${OLD}/chat-server` }),
+      "packages/server/package.json": JSON.stringify({ name: `${OLD}/chat-server` }),
       "src/server.ts": `export * from "${OLD}/chat-server";\n`
     });
     const deployment = createTree({
@@ -182,7 +182,7 @@ describe("rename-scope codemod", () => {
     });
 
     expect(run("--write", platform, deployment).status).toBe(0);
-    expect(JSON.parse(read(platform, "packages/chat-server/package.json")).name).toBe(
+    expect(JSON.parse(read(platform, "packages/server/package.json")).name).toBe(
       "@work-shape/catalyst-server"
     );
     expect(read(platform, "src/server.ts")).toContain('"@work-shape/catalyst-server"');

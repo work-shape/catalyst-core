@@ -4,7 +4,7 @@
     "packages/*": {
       "entry": [
         "src/index.{ts,tsx}",
-        "src/{shell,admin}.tsx",
+        "src/{shell,admin,widget}.tsx",
         "src/vite.js",
         "scripts/**/*.{ts,mjs,js}",
         "*.config.{ts,js,mjs}"
@@ -19,7 +19,7 @@
     "packages/chat-ui": {
       "entry": [
         "src/index.tsx",
-        "src/{shell,admin}.tsx",
+        "src/{shell,admin,widget}.tsx",
         "src/vite.js",
         "src/studio/agents/index.ts",
         "src/studio/apps/index.ts",
@@ -92,7 +92,7 @@
       ],
       "vite": false
     },
-    "packages/chat-standalone": {
+    "clients/chat-standalone": {
       "entry": ["src/main.tsx", "vite.config.ts"],
       "project": ["src/**/*.{ts,tsx,mts,cts}", "vite.config.ts"],
       "vite": false

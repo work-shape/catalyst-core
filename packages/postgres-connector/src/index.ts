@@ -47,3 +47,5 @@ export {
   type PostgresLocation,
   type PostgresSocketPlan
 } from "./executor/socket";
+
+export * from "./data-source";

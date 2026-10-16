@@ -5,7 +5,7 @@
 # - Docs-only: packages/docs/**, changes/** and *.md outside packages/*/src/** run
 #   docs, format and changes, plus the small selection/required-result jobs.
 # - Other changes run build, static, docs, four test shards, upgrade/compatibility,
-#   and release packaging. Browser tests additionally need clients/demo, chat-server
+#   and release packaging. Browser tests additionally need clients/demo, server
 #   or any of their transitive workspace dependencies, e2e/** or tests/fixtures/**.
 # - Images additionally need a demo/server dependency change, docker/**, any
 #   Dockerfile, package.json or lockfile (including source-only import changes).

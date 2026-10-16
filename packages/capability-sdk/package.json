@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@work-shape/catalyst-core": "workspace:*",
-    "@work-shape/catalyst-data-source": "workspace:*",
+    "@work-shape/catalyst-postgres-connector": "workspace:*",
     "@work-shape/catalyst-tool-sdk": "workspace:*"
   },
   "devDependencies": {

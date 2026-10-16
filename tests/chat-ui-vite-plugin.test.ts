@@ -186,7 +186,7 @@ describe("vivdCatalystChatUiPlugin", () => {
 
     for (const copy of [
       "clients/demo/public/favicon.svg",
-      "packages/chat-standalone/public/favicon.svg"
+      "clients/chat-standalone/public/favicon.svg"
     ]) {
       expect(await readFile(platformFile(copy), "utf8"), copy).toBe(mark);
     }

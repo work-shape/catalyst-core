@@ -41,7 +41,7 @@ Platform test compiler errors are 101 in untouched `tests` and one imported CSS 
 
 The relative imports into another package are almost all tests that import a package's source files directly (218 in platform `tests`, 3 in `scripts`). CB-2 owns the test entries.
 
-Module cycles count one finding per member file. Platform has three groups with 4, 6 and 6 members (chat-server, chat-ui, core), capabilities has five groups with 11 members in all, in artifact-helpers.
+Module cycles count one finding per member file. Platform has three groups with 4, 6 and 6 members (server, chat-ui, core), capabilities has five groups with 11 members in all, in artifact-helpers.
 
 S3-07 moved the environment reads of package sources into each package's one environment module. Six reads in two scripts remain: three in `packages/deployment-kit/verify/compose-helpers.mjs` in platform and three in `packages/artifact-helpers/scripts/artifact-parity-probe.mjs` in capabilities. The other 30 capabilities findings are artifact-helper CLI entries that pass the whole `process` object to the command runner, whose contract reads only stdout, stderr and exitCode.
 

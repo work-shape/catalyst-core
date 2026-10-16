@@ -180,7 +180,7 @@ describe("the file sets of a Page", () => {
 
     // No statement of the product updates the table.
     const sources: string[] = [];
-    for (const root of ["packages/postgres-store/src", "packages/chat-server/src"]) {
+    for (const root of ["packages/postgres-store/src", "packages/server/src"]) {
       for (const entry of await readdir(root, { recursive: true, withFileTypes: true })) {
         if (entry.isFile() && entry.name.endsWith(".ts")) {
           sources.push(await readFile(join(entry.parentPath, entry.name), "utf8"));

@@ -42,7 +42,7 @@ import type {
   DataSourceQueryResult,
   DataSourceRegistry,
   DataSourceRegistration
-} from "@work-shape/catalyst-data-source";
+} from "@work-shape/catalyst-postgres-connector";
 import {
   defineTool,
   defineConfiguredTool,
