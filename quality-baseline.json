@@ -474,7 +474,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "packages/chat-ui",
-      "count": 656,
+      "count": 655,
       "owner": "NS-RETIRE"
     },
     {
@@ -523,7 +523,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "packages/ui",
-      "count": 5,
+      "count": 4,
       "owner": "NS-RETIRE"
     },
     {

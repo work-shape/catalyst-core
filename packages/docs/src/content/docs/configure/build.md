@@ -12,13 +12,13 @@ Studio works on the [asset API](/reference/api/assets/): it reads a list page by
 The Studio row shows for a person who holds a right on at least one agent or skill:
 
 - `config_assets.read` or `config_assets.write` on the instance, or
-- a grant in a [Namespace](/operate/rights-and-namespaces/).
+- a [grant](/operate/rights-for-one-person/) in a Shared Workspace or on one asset.
 
-A person with a grant in a Namespace sees the assets of that Namespace and nothing else. A person with no such right has no Studio row, and the address says that Studio is not available.
+A person with no such right has no Studio row, and the address says that Studio is not available.
 
 A grant on one single asset, or on what one workspace owns, is checked by the instance on every read and write. The interface learns only that the person may read some asset of the kind: a read grant gives the Studio row and the list of the kind, which holds the assets the person may read. Such an asset opens read-only. A grant that allows another action and no reading gives no Studio row.
 
-On an instance with the module [`connections`](/configure/modules/#connections) on, Studio also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant on one Connection, who sees that Connection. A read grant written earlier in a Namespace or on a workspace shows the Connections it covers until it is revoked. A grant to use a Connection gives no entry in Studio. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). The list is **Studio > Connections**; the German interface names it **Studio › Verbindungen**.
+On an instance with the module [`connections`](/configure/modules/#connections) on, Studio also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant on one Connection, who sees that Connection. A read grant written earlier on a workspace shows the Connections it covers until it is revoked. A grant to use a Connection gives no entry in Studio. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). The list is **Studio > Connections**; the German interface names it **Studio › Verbindungen**.
 
 ## Connecting an outside system
 
@@ -62,7 +62,7 @@ A Connection made in Studio is changed on its page by a person who may change Co
 - **Operations**: each accepted operation with its tool name `connection.<name>.<operation>`, whether it reads or changes, who may call it (agents, Apps, Workflows, outside clients or nobody) and its status. On a Connection made on the instance, a person with `connection.write` opens an operation to outside clients with the check box **Outside clients (CLI, MCP)** (German: **Externe Clients (CLI, MCP)**), and closes it again by clearing it. It is off on every operation until somebody ticks it, because what such a call returns is copied to the computer that holds the key. Only an operation with the status **Ready** can be called. **Awaiting discovery** means the instance has not read it from the outside system yet, **Needs review** that the outside system describes it differently than was accepted, **Unknown** that the outside system does not offer it, and **Disabled** that the operator switched it off. On a Connection made in Studio, **Accept new description** clears **Needs review**, and **Remove** takes an operation away.
 - **Discovered tools** (German: **Gefundene Tools**), for a person who may change the Connection: the tools the server offers. For each, check **What it does** (**Was es tut**: Reading or Changing), untick **Agents can use it** (**Agenten dürfen es nutzen**) if agents should not call it, then **Accept** (**Akzeptieren**) to add it as an operation. **Read tools again** asks the server once more.
 - **Used by**: the agents that carry a tool of the Connection, of those the reader may read.
-- **Who may use it**: the people and service principals given this Connection by itself. Rights on a whole Namespace are on the Access page.
+- **Who may use it**: the people and service principals given this Connection by itself. Other rights are on the [Access page](/operate/rights-for-one-person/).
 
 **Test connection** asks the connector type to check the Connection and records the answer. It is offered to a person who may change Connections (`connection.write`); a person who may only read sees the recorded state. A test that a policy holds for an approval has not run: it waits in the Inbox.
 
@@ -82,19 +82,20 @@ What to do depends on where the Connection comes from. A Connection made in Stud
 
 ## The list
 
-Each kind has a list. For **Agents** and **Skills** a row shows the name, the Namespace if the asset is in one, the id and when it was last changed. A row is a link, so it opens in a new tab like any other link.
+Each kind has a list. For **Agents** and **Skills** a row shows the name, the id and when it was last changed. A row is a link, so it opens in a new tab like any other link.
 
 - **Search** asks the instance for names and ids that contain the text.
-- **Namespace** narrows the list to one Namespace. It shows when you hold rights in more than one.
 - **Show more** reads the next 50 rows.
 
 The names in the list are in the instance's default language.
+
+On an instance that registered [Namespaces](/operate/how-rights-work/#namespaces-registered-earlier) before they were retired, a row also names the Namespace of its name, and a **Namespace** filter shows for a person with rights in more than one.
 
 ## Create
 
 Where no agent that builds is offered, **New agent** or **New skill** opens a dialog that asks for the name, and for an agent what it should do. Its address, the id, is made from the name under **Advanced** and follows the name until you change it. It is checked while you type: a taken address, or one the kind does not allow, is named at the field, the fold opens, and **Continue** waits until it is fixed. The address cannot be changed after the asset is saved.
 
-If you hold the write right in a Namespace, **Advanced** offers that Namespace and the address starts with its prefix. Only Namespaces you may write in are offered. The choice **No Namespace** is offered to people who may write every asset of the instance.
+An asset made while you work in a Shared Workspace belongs to that workspace, and a right in the workspace covers it. See [What a workspace owns](/operate/how-rights-work/#what-a-workspace-owns).
 
 **Continue** opens the page of the new asset. Nothing is stored until you press **Create agent** or **Create skill** there.
 
@@ -114,7 +115,7 @@ The changes are saved with the save bar like any other field. Where a file besid
 
 ### When a save is refused
 
-- **A tool, model or skill that is not allowed.** A Namespace can limit the tools and models of its agents. The refusal stands under the field it concerns, and the form keeps what you typed.
+- **A tool, model or skill that is not allowed.** For example a tool the instance does not enable, or a model setting you may not change. The refusal stands under the field it concerns, and the form keeps what you typed.
 - **Somebody else saved first.** The page saves against the revision it loaded. If the asset changed in between, nothing is overwritten. A notice offers **Load the newer version** and asks before it replaces what you typed, so you can copy what you need first. Until then the page saves nothing. If the newer version cannot be loaded, the page says so and keeps your text.
 - **Somebody deleted it.** The notice says that the asset was deleted. Your text stays so that you can copy it, and the notice leads back to the list.
 - **A skill you may not read.** An agent can only be given skills you may read yourself. A skill it already has stays when you save other changes.
@@ -131,11 +132,10 @@ The changes are saved with the save bar like any other field. Where a file besid
 
 ## Limits
 
-| What                                                                 | Value     |
-| -------------------------------------------------------------------- | --------- |
-| Rows read per list request                                           | 50        |
-| Wait after typing before a search                                    | 250 ms    |
-| Skills offered per search in an agent's skill picker                 | 50        |
-| How long the list of your Namespaces is kept before it is read again | 5 minutes |
+| What                                                 | Value  |
+| ---------------------------------------------------- | ------ |
+| Rows read per list request                           | 50     |
+| Wait after typing before a search                    | 250 ms |
+| Skills offered per search in an agent's skill picker | 50     |
 
-The list never holds more than the pages you asked for. The Namespace filter and the create dialog list the Namespaces you hold rights in. History reads 50 revisions of the one asset when it opens, and **Show more** reads the next 50.
+The list never holds more than the pages you asked for. History reads 50 revisions of the one asset when it opens, and **Show more** reads the next 50.

@@ -32,7 +32,7 @@ If a different file is already at that path, the command keeps it and says so. R
 
 ## What the tool may do
 
-The key acts as you and never does more than you may do at the moment of each call. The scopes you tick narrow it further, for example reading agents only, or writing agents in one Namespace. A right an administrator takes from you is gone from the key at once.
+The key acts as you and never does more than you may do at the moment of each call. The scopes you tick narrow it further, for example reading agents only. A right an administrator takes from you is gone from the key at once.
 
 The skill tells the tool to pull before it pushes, to show you a change before it is sent, to never delete assets on the instance without asking you, and to treat a refusal as final.
 

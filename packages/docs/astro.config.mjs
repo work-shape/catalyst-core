@@ -49,6 +49,10 @@ export default defineConfig({
       }
     }
   },
+  // Pages that moved keep their old address.
+  redirects: {
+    "/operate/rights-and-namespaces": "/catalyst/operate/rights-for-one-person/"
+  },
   integrations: [
     starlight({
       title: "Workshape Catalyst",
@@ -95,7 +99,7 @@ export default defineConfig({
           label: "Manage",
           items: [
             "operate/how-rights-work",
-            "operate/rights-and-namespaces",
+            "operate/rights-for-one-person",
             "manage/guardrails",
             "operate/governance"
           ]

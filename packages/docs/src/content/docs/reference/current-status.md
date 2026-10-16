@@ -19,7 +19,7 @@ The open platform contains:
 - custom code tools through the tool SDK, and capabilities through the capability SDK
 - data sources with guarded, read-only Postgres query tools
 - generated views, web search and web fetch
-- standalone sign-in, service principals with API keys, personal API keys and `catalyst login` (module `personalApiKeys`), roles, individual rights, Namespaces and grants
+- standalone sign-in, service principals with API keys, personal API keys and `catalyst login` (module `personalApiKeys`), roles, individual rights, and grants in a workspace or on one asset
 - retention for conversations and audit events, minimized audit events, usage records with budgets and a customer rate card, and rate limits
 - modules, mail for invitations and password reset, and the background jobs page
 - execution workspaces with a sandboxed command runner, off unless an instance enables them

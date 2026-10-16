@@ -306,7 +306,7 @@ function DocsLinkSamples({ text }: { text: GalleryText }) {
     <p className="max-w-prose text-body text-muted-foreground">
       {text.docsLinkSentence}{" "}
       <DocsLink
-        path="/operate/how-rights-work/#namespaces"
+        path="/operate/how-rights-work/#what-a-workspace-owns"
         accessibleName={text.docsLinkLearnMoreName}
       >
         {text.docsLinkLearnMore}

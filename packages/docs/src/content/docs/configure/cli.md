@@ -51,7 +51,7 @@ catalyst login --instance https://chat.example.com
 
 The tool prints an address and a code such as `BCDF-GHJK`. Open the address, signed in as yourself; it leads to **Settings > You > API keys** (German: **Einstellungen › Du › API-Schlüssel**). Check that the code is the one your terminal shows, choose what the key may do and until when, and confirm. The tool then collects the key and saves it. Nothing is pasted anywhere: the code you confirm cannot be used to sign in, and the key travels only from the instance to the tool. A code expires after 15 minutes and is collected once.
 
-A key acts as you, narrowed to its scopes. A scope is a right such as `agent.write`, optionally limited to one Namespace: `agent.write:tax-`. A key never does more than you may at the moment of each call: a right an administrator takes from you is gone from the key on its next call. A key lives at most a year. A new key starts with no scope ticked: tick the ones the key needs. **Settings > You > API keys** lists your keys and revokes them; a revoked key is refused on its next call. Whoever administers API access sees and revokes every person's keys. No key issues another key.
+A key acts as you, narrowed to its scopes. A scope is a right such as `agent.write`. A key never does more than you may at the moment of each call: a right an administrator takes from you is gone from the key on its next call. A key lives at most a year. A new key starts with no scope ticked: tick the ones the key needs. **Settings > You > API keys** lists your keys and revokes them; a revoked key is refused on its next call. Whoever administers API access sees and revokes every person's keys. No key issues another key.
 
 `catalyst logout --instance <address>` removes the saved key from this machine. It stays valid until you revoke it under **Settings > You > API keys**.
 
@@ -59,32 +59,20 @@ A key acts as you, narrowed to its scopes. A scope is a right such as `agent.wri
 
 A command without `--instance` works on the `defaultInstance` of the working copy's `catalyst.yaml`; one without a default is refused with the instances it names, and a saved key never chooses among them. Outside a working copy it works on the one instance a key is saved for, unless `CATALYST_API_KEY` is set. With none or several saved it names the saved ones and asks for `--instance`. `catalyst --version` prints the version of the tool.
 
-A working copy that belongs to one Namespace names it beside the instance:
-
-```yaml
-instances:
-  production:
-    url: https://chat.example.com
-    namespace: tax-
-defaultInstance: production
-```
-
-Its `push` names the Namespace, as the instance asks of everyone but the holder of the release right, and never changes the instance's default agent. Its `pull`, `diff` and `list` read only the agents and skills the key may read, and neither the instance's version nor its default agent, which only a reader of every agent and skill may read; a key of one Namespace pulls, diffs and lists its Namespace.
-
-A working copy can instead belong to one Shared Workspace: then the agents and skills it pushes are the workspace's own, and a pull reads only what the workspace owns. Bind an empty working copy once with its first pull:
+A working copy can belong to one Shared Workspace: then the agents and skills it pushes are the workspace's own, and a pull reads only what the workspace owns. Bind an empty working copy once with its first pull:
 
 ```sh
 catalyst config pull --workspace <workspace-id>
 ```
 
-The pull writes `workspace: <workspace-id>` beside the instance's `url` in `catalyst.yaml`, and every later command of that working copy names the workspace. A working copy is bound once: one bound to another workspace, one of a Namespace and one that already pulled the instance's own assets are refused, so pull another workspace into a directory of its own. Its `push` is never a release and never changes the instance's default agent, which only an agent of the instance can be; an agent it creates starts hidden until an instance admin offers it, and a guardrail it creates belongs to the workspace as well. A workspace's agent may name the workspace's skills and the instance's skills you may read; no agent outside the workspace may name the workspace's skills.
+The pull writes `workspace: <workspace-id>` beside the instance's `url` in `catalyst.yaml`, and every later command of that working copy names the workspace. A working copy is bound once: one bound to another workspace and one that already pulled the instance's own assets are refused, so pull another workspace into a directory of its own. Its `push` is never a release and never changes the instance's default agent, which only an agent of the instance can be; an agent it creates starts hidden until an instance admin offers it, and a guardrail it creates belongs to the workspace as well. A workspace's agent may name the workspace's skills and the instance's skills you may read; no agent outside the workspace may name the workspace's skills.
 
 ## One command per asset operation
 
 Every operation on assets has a command, for every kind the instance registers: agents, skills, Apps, Workflows, Connections, Data Stores, guardrails. The kind is the first word, by its id, its plural or with dashes (`data-store`). The instance names its kinds; a kind a later release adds works without a new CLI.
 
 ```sh
-catalyst context                  # the instance, your rights in Namespaces and workspaces, its kinds
+catalyst context                  # the instance, your rights in it and its workspaces, its kinds
 catalyst kinds                    # each kind: lifecycle, folder or definition, rights
 catalyst references               # models, efforts and tools a definition may name
 catalyst agent list --prefix tax-

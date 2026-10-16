@@ -7,7 +7,7 @@ import { useTranslation, type TranslationKey } from "./i18n";
  */
 const DOCS_PAGES = {
   rightsInShort: "/operate/how-rights-work/#the-short-version",
-  namespaceOrWorkspace: "/operate/how-rights-work/#namespace-or-workspace",
+  namespaceOrWorkspace: "/operate/how-rights-work/#building-and-using",
   rightDecision: "/operate/how-rights-work/#do-you-hold-the-right-here"
 } as const;
 

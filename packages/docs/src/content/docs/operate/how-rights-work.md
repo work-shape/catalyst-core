@@ -1,6 +1,6 @@
 ---
 title: How rights work
-description: Who may do what in Workshape Catalyst, explained from the start. Roles, single rights, grants, Namespaces, the checks an action passes, and which screen sets which of them.
+description: Who may do what in Workshape Catalyst, explained from the start. Roles, single rights, grants, what a workspace owns, the checks an action passes, and which screen sets which of them.
 ---
 
 ## The short version
@@ -41,107 +41,51 @@ description: Who may do what in Workshape Catalyst, explained from the start. Ro
 <figcaption>An action passes these layers from top to bottom, and any layer can stop it. Layers 4 and 5 exist for the actions on the full path, which the section on the path lists.</figcaption>
 </figure>
 
-This page explains the rights system to a reader who has never seen it. For the exact rules of the Access page, see [Rights for one person or asset](/operate/rights-and-namespaces/).
+This page explains the rights system to a reader who has never seen it. For the exact rules of the Access page, see [Rights for one person or asset](/operate/rights-for-one-person/).
 
 Three words come up on every screen, so here they are once.
 
 - A **right** is the permission to do one kind of thing, such as "write agents". In the API a right has a short name like `agent.write`.
 - A **grant** is one row that gives or refuses one person one right in one place. A Service Principal can hold a grant too, see [API keys and Service Principals](#api-keys-and-service-principals). You write grants on the Access page.
-- A **Namespace** is a registered beginning of a name, such as `tax-`. Every agent and skill whose name starts with it belongs to it, and so does every Connection where that module is on. See [Namespaces](#namespaces). It is not a workspace, as the next section shows. Namespaces are being retired: a new right is no longer given in one, and those already registered keep working until a later release removes them.
+- The **owner** of an agent or a skill is the instance or the one Collaboration Workspace it was made in, a Personal or a Shared Workspace. It is set when the asset is made. A right in a Shared Workspace covers everything that workspace owns. See [What a workspace owns](#what-a-workspace-owns).
 
-## Namespace or workspace?
+## Building and using
 
-They are two different things. A **workspace** is where people work and what they see: its conversations, their files and the agents they can choose there. A **Namespace** is a name prefix, such as `tax-`, that says which agents and skills a right covers. Since an agent or skill made in a Shared Workspace belongs to that workspace, a right can also be given on what a workspace owns, and the workspace takes over the Namespace's job. In practice they often come together, because a team tends to have a workspace and a prefix, and that is why they get mixed up.
+A **workspace** is where people work and what they see: its conversations, their files and the agents they can choose there. It also owns the agents and skills made in it. Two things follow from that, and they are often mixed up. Who may **build** an agent is a right in the workspace, given on the Access page. Who may **use** an agent is where it is available, and membership of a workspace. Membership makes nobody a builder, and a right to build gives no access to conversations.
 
-<figure class="docs-diagram docs-diagram-wide">
-<svg viewBox="0 0 660 534" role="img" aria-labelledby="rights-fig-5-title rights-fig-5-desc">
-<title id="rights-fig-5-title">Namespace and workspace side by side</title>
-<desc id="rights-fig-5-desc">A table in two columns. A Namespace is a registered start of a name and groups agents and skills. A workspace is a place where people work together in conversations and has members. The only bridge between them is the setting Available in on each agent.</desc>
-<defs><marker id="rights-arrow-5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
-<rect class="box-accent" x="150" y="8" width="245" height="40" rx="8"/>
-<text x="272.5" y="33" class="strong" text-anchor="middle">Namespace</text>
-<rect class="box-ok" x="405" y="8" width="245" height="40" rx="8"/>
-<text x="527.5" y="33" class="strong" text-anchor="middle">Workspace</text>
-<text x="8" y="84" class="small-strong">What it is</text>
-<rect class="box" x="150" y="58" width="245" height="74" rx="8"/>
-<rect class="box" x="405" y="58" width="245" height="74" rx="8"/>
-<text x="164" y="82" class="small">A registered start of a name,</text>
-<text x="164" y="100" class="small">such as tax-.</text>
-<text x="419" y="82" class="small">A place where people work</text>
-<text x="419" y="100" class="small">together in conversations.</text>
-<text x="8" y="166" class="small-strong">What belongs to it</text>
-<rect class="box" x="150" y="140" width="245" height="74" rx="8"/>
-<rect class="box" x="405" y="140" width="245" height="74" rx="8"/>
-<text x="164" y="164" class="small">Agents and skills whose names</text>
-<text x="164" y="182" class="small">start with the prefix. Optional lists</text>
-<text x="164" y="200" class="small">of allowed tools and models.</text>
-<text x="419" y="164" class="small">Conversations with their files,</text>
-<text x="419" y="182" class="small">and members with a role:</text>
-<text x="419" y="200" class="small">owner, admin or member.</text>
-<text x="8" y="248" class="small-strong">Who decides</text>
-<rect class="box" x="150" y="222" width="245" height="74" rx="8"/>
-<rect class="box" x="405" y="222" width="245" height="74" rx="8"/>
-<text x="164" y="246" class="small">A person with Manage users</text>
-<text x="164" y="264" class="small">registers it and writes its grants.</text>
-<text x="419" y="246" class="small">Its owners and admins manage</text>
-<text x="419" y="264" class="small">the members.</text>
-<text x="8" y="330" class="small-strong">Where you see it</text>
-<rect class="box" x="150" y="304" width="245" height="74" rx="8"/>
-<rect class="box" x="405" y="304" width="245" height="74" rx="8"/>
-<text x="164" y="328" class="small">Settings &gt; Instance &gt; Access,</text>
-<text x="164" y="346" class="small">and in Studio beside each name.</text>
-<text x="419" y="328" class="small">The workspace switcher, and the</text>
-<text x="419" y="346" class="small">settings of the workspace.</text>
-<text x="8" y="412" class="small-strong">What it does not do</text>
-<rect class="box" x="150" y="386" width="245" height="74" rx="8"/>
-<rect class="box" x="405" y="386" width="245" height="74" rx="8"/>
-<text x="164" y="410" class="small">It has no members and no</text>
-<text x="164" y="428" class="small">conversations. It does not decide</text>
-<text x="164" y="446" class="small">where an agent can be used.</text>
-<text x="419" y="410" class="small">Membership gives no right to</text>
-<text x="419" y="428" class="small">read or change the definition</text>
-<text x="419" y="446" class="small">of an agent or a skill.</text>
-<text x="8" y="498" class="small-strong">The one bridge</text>
-<rect class="frame" x="150" y="468" width="500" height="58" rx="8"/>
-<text x="164" y="492" class="small">Each agent has a setting "Available in" that names the workspaces</text>
-<text x="164" y="510" class="small">where people can choose it. It is set per agent, not per Namespace.</text>
-</svg>
-<figcaption>A Namespace groups agents by name for the people who build them. A workspace groups conversations for the people who use them.</figcaption>
-</figure>
+### An example: the tax team
 
-### When they go hand in hand
-
-Take the tax team of a company. It has both.
+Take the tax team of a company.
 
 - The Shared Workspace **Tax team** is where its twelve people chat. Its owner added them as members, and members reach the shared conversations in it. A private conversation stays with the person who created it. A Superadmin can enter every Shared Workspace without being a member.
-- The Namespace `tax-` holds the agents the team uses, such as `tax-vat-helper`. Mara and one colleague hold grants in it. They are the two people of the team who build those agents. An Admin or a Superadmin of the instance can change them too.
+- The workspace owns the agents the team uses, such as `tax-vat-helper`, because they were made in it. Mara and one colleague hold rights to write agents in Tax team. They are the two people of the team who build those agents. An Admin or a Superadmin of the instance can change them too.
 
 <figure class="docs-diagram">
 <svg viewBox="0 0 420 372" role="img" aria-labelledby="rights-fig-6-title rights-fig-6-desc">
-<title id="rights-fig-6-title">The tax team has a workspace and a Namespace</title>
-<desc id="rights-fig-6-desc">Two boxes, one above the other. On top, the Namespace tax- holds three assets, and two people hold grants in it. Below, the workspace Tax team has twelve members and their conversations. One arrow goes down from the Namespace to the workspace. It stands for the setting Available in, which is set for each agent. Nothing else connects the two boxes.</desc>
+<title id="rights-fig-6-title">The tax team builds and uses its agents</title>
+<desc id="rights-fig-6-desc">Two boxes, one above the other. On top, the agents and skills the workspace Tax team owns: three assets, and two people hold rights to build them. Below, the members of Tax team and their conversations. One arrow goes down from the top box to the bottom one. It stands for the setting Available in, which is set for each agent.</desc>
 <defs><marker id="rights-arrow-6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
 <rect class="box-accent" x="10" y="8" width="400" height="150" rx="10"/>
-<text x="28" y="36" class="strong">Namespace tax-</text>
-<text x="28" y="62" class="small">A prefix that says what a right covers.</text>
+<text x="28" y="36" class="strong">What Tax team owns</text>
+<text x="28" y="62" class="small">The agents and skills made in the workspace.</text>
 <text x="28" y="90" class="small">tax-vat-helper, tax-year-end, tax-audit-notes</text>
-<text x="28" y="110" class="small">Grants: Mara and one colleague</text>
+<text x="28" y="110" class="small">Rights to build: Mara and one colleague</text>
 <text x="28" y="138" class="small-strong">Decides who builds.</text>
 <path class="line" d="M120 158 L120 212" marker-end="url(#rights-arrow-6)"/>
 <text x="136" y="190" class="small">Available in, per agent</text>
 <rect class="box" x="10" y="214" width="400" height="150" rx="10"/>
-<text x="28" y="242" class="strong">Workspace "Tax team"</text>
+<text x="28" y="242" class="strong">Members of Tax team</text>
 <text x="28" y="268" class="small">Where people work and what they see.</text>
 <text x="28" y="296" class="small">12 members, their conversations and files</text>
 <text x="28" y="316" class="small">The agents they can choose</text>
 <text x="28" y="344" class="small-strong">Decides who uses.</text>
 </svg>
-<figcaption>One team, two things. The only arrow between them is the setting <strong>Available in</strong>, which somebody sets on each agent. No setting says "the agents of <code>tax-</code> belong to the workspace Tax team".</figcaption>
+<figcaption>One team, two questions. A right in the workspace decides who builds. The setting <strong>Available in</strong>, set on each agent, decides where people can choose it.</figcaption>
 </figure>
 
-So ten people of the team use the agents and two build them. Membership in the workspace makes nobody a builder, and a grant in the Namespace gives no access to the team's conversations.
+So ten people of the team use the agents and two build them. Membership in the workspace makes nobody a builder, and a right to build in it gives no access to the team's conversations.
 
-### How an agent of the Namespace reaches the workspace
+### How an agent reaches a workspace
 
 Each agent has a setting named **Available in**. It lists the workspaces whose members can choose the agent in the chat.
 
@@ -150,13 +94,13 @@ Each agent has a setting named **Available in**. It lists the workspaces whose m
 
 A new agent starts in the workspace it was made in. Mara opens Studio while she works in Tax team, or asks the Build Agent in a conversation there, and her new `tax-travel-costs` can be chosen in Tax team and nowhere else. An agent made in a personal workspace, pushed with the CLI, or written through the API without a workspace starts hidden everywhere, and the answer says so. A person with the instance-wide right may choose **All workspaces** in the dialog that starts the agent.
 
-To offer an agent in more workspaces, or to show a hidden one, somebody opens it in Studio, goes to **Available in** and chooses **All workspaces**, or **Selected workspaces** with the workspaces ticked. That somebody needs "Edit agent configuration" for the whole instance. Mara's grant in `tax-` does not show her this section, so she cannot do it herself.
+To offer an agent in more workspaces, or to show a hidden one, somebody opens it in Studio, goes to **Available in** and chooses **All workspaces**, or **Selected workspaces** with the workspaces ticked. That somebody needs "Edit agent configuration" for the whole instance. Mara's right in Tax team does not show her this section, so she cannot do it herself.
 
 Two exceptions. The default agent of the instance is always available everywhere, so the first agent of an instance starts there. And an agent that arrives through a release push starts in all workspaces, and hidden when the same push deletes an agent that was limited to selected workspaces, because that is a rename and the new name must not reach more people than the old one did.
 
-Nothing links a Namespace to a workspace. You cannot say "the agents of `tax-` belong to the workspace Tax team". What does link an agent to a workspace is where it was made: an agent or skill made in Tax team belongs to Tax team. To offer an agent in further workspaces, the **Available in** setting is the bridge, agent by agent, and only a person with the instance-wide right sets it.
+Offering an agent in further workspaces lets their members use it. It never lets them edit it: the agent still belongs to the workspace it was made in, and only a right there, or on the instance, lets somebody change it. Only a person with the instance-wide right sets **Available in**.
 
-A new grant on agents or skills can name a Shared Workspace. It covers everything of that kind the workspace owns, also what is made later, and gives no access to its conversations. A grant to read or use Connections is written on one Connection: the instance owns every Connection, so a grant on a workspace would cover nothing, and the instance refuses one. A Connection grant written on a workspace before keeps applying until it is revoked. It says nothing about agents, skills or conversations.
+A grant on agents or skills can name a Shared Workspace. It covers everything of that kind the workspace owns, also what is made later, and gives no access to its conversations. A grant to read or use Connections is written on one Connection: the instance owns every Connection, so a grant on a workspace would cover nothing, and the instance refuses one. A Connection grant written on a workspace before keeps applying until it is revoked. It says nothing about agents, skills or conversations.
 
 ## The four questions
 
@@ -191,7 +135,7 @@ The instance collects everything that speaks about you:
 
 1. Your **role** gives you a fixed set of rights on the whole instance.
 2. A **single right** on the Users page adds one right to that set or takes one away, also for the whole instance.
-3. A **grant** on the Access page allows or denies one action in one place. A new grant is written on one asset. Grants written before in a Namespace, and Connection grants written before on a Shared Workspace, keep applying until they are revoked.
+3. A **grant** on the Access page allows or denies one action in one place: everything one Shared Workspace owns, or one asset. Connection grants written before on a Shared Workspace keep applying until they are revoked.
 
 Then it decides:
 
@@ -201,7 +145,7 @@ Then it decides:
 
 A "no" gets `403 FORBIDDEN`. The message names the missing right, for example `Missing the right 'agent.write'`.
 
-Example: Mara has the role User, which carries no administrative right. A grant allows her to write agents in the Namespace `tax-`. She can save `tax-vat-helper`. She cannot save `hr-onboarding`, because nothing she holds covers that name.
+Example: Mara has the role User, which carries no administrative right. A grant allows her to write agents in the workspace Tax team. She can save `tax-vat-helper`, which Tax team owns. She cannot save `hr-onboarding`, which the instance owns, because nothing she holds covers it.
 
 ### Does it need a second pair of eyes
 
@@ -251,7 +195,7 @@ Some things are reserved for a Superadmin. Only a Superadmin gives somebody the 
 
 "Manage users" does not let you hand out more than you hold. Giving a person a role, a switch or a grant asks whether you hold every right it carries, at the place it is given. Writing a deny, and taking one away, ask the same of the right the deny names. Nobody gives a right to themselves, and nobody writes or lifts a grant of their own, even one they already hold.
 
-A deny of yours counts wherever it lies. If you are denied a right on one agent, you cannot give that right for a whole Namespace, a workspace or the instance that contains the agent, and you cannot give a role that carries it: the person would hold what you are refused. Give it on single assets outside the deny instead, or ask someone without the deny. The refusal names the asset only if you may read it.
+A deny of yours counts wherever it lies. If you are denied a right on one agent, you cannot give that right for a whole workspace or the instance that contains the agent, and you cannot give a role that carries it: the person would hold what you are refused. Give it on single assets outside the deny instead, or ask someone without the deny. The refusal names the asset only if you may read it.
 
 Changing a person's account asks whether you hold every right the person holds: their role, their switches, their grants and the Shared Workspaces they are a member of. Their own Personal Workspace does not count. This covers the name and email, the password, a sign-in, the status, the role, the switches and the tool rights, and it holds for a person who is switched off as well, since switching them on is a change too. The check runs again as the change is written, so a role or a grant the person was given in the meantime counts. So a person with "Manage users" and nothing else can change only people who hold nothing beyond their Personal Workspace. Where a personal API key makes the call, its scopes count too. A refusal names the first right that is missing.
 
@@ -274,89 +218,69 @@ A role and a single right always apply to the whole instance. A grant is for eve
 | Who | One person. A Service Principal gets its grants on the API access page. |
 | Kind | Agents, or skills. Connections and Workflows too, where their modules are on. |
 | Action | Read, write, delete for agents and skills. Read and use for Connections. Read, use, write and publish for Workflows. |
-| Where | For agents and skills: what one Shared Workspace owns, or one existing asset. For Connections and Workflows: one existing item. Rows written before in a Namespace stay until they are revoked. |
+| Where | For agents and skills: what one Shared Workspace owns, or one existing asset. For Connections and Workflows: one existing item. |
 | Effect | Allow, or deny. |
 
 So the answer to "can rights only be given to single people" is yes. A grant names one person or one Service Principal. There are no groups, and a role cannot hold a grant.
 
-**Deny wins.** A deny on an asset beats every allow, including the one from the Admin role. Use it for the one agent that even administrators should not change by accident. A deny has limits of its own, which [Rights for one person or asset](/operate/rights-and-namespaces/#grants) lists.
+**Deny wins.** A deny on an asset beats every allow, including the one from the Admin role. Use it for the one agent that even administrators should not change by accident. A deny has limits of its own, which [Rights for one person or asset](/operate/rights-for-one-person/#grants) lists.
 
 **Read and write are separate.** A person who should edit agents needs both. With write alone they cannot open the agent they are meant to change.
 
 **Check before you guess.** The tab **Check** on the Access page takes a person and a name and says for each action whether it is allowed and what decided. The name does not have to exist yet. The tab covers agents and skills. To get a result you need "View agent configuration" beside "Manage users", because the tab looks up the assets.
 
-## Namespaces
+## What a workspace owns
 
-Namespaces are being retired. The **New right** dialog no longer offers one, and a later release removes them. Until then the Namespaces already registered, their lists and the grants that name them keep working, and this section explains them.
+Every agent and skill has an owner: the instance, or the one Collaboration Workspace it was made in, a Personal or a Shared Workspace. The owner is set when the asset is made and does not change.
 
-A Namespace answers the question "which agents belong to this team". It does that through names.
+- An agent made in Studio or by the Build Agent while you work in a workspace belongs to that workspace, your Personal Workspace included.
+- An agent pushed with `catalyst config push` from a working copy bound to a workspace with `catalyst config pull --workspace <workspace-id>` belongs to that workspace. See [the CLI](/configure/cli/).
+- An agent pushed from a working copy bound to no workspace, or written through the API without a workspace, belongs to the instance.
 
-You register a prefix, for example `tax-`. From then on every agent and skill of the instance whose name starts with `tax-` belongs to the Namespace. That includes agents somebody creates next month. A grant "write agents in `tax-`" therefore covers the whole family, and you never have to list the members.
+A grant can name a Shared Workspace, not a Personal one. A grant "write agents in Tax team" covers every agent Tax team owns, also the ones somebody makes next month. You never have to list them.
 
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 660 430" role="img" aria-labelledby="rights-fig-3-title rights-fig-3-desc">
 <title id="rights-fig-3-title">Where a right can sit</title>
-<desc id="rights-fig-3-desc">The Client Instance contains the agents and skills of the instance and the Collaboration Workspaces. Among the agents and skills, the Namespace tax- holds three assets and is covered by one grant. In the Namespace hr-, a grant sits on the single asset hr-onboarding. The asset helpdesk is in no Namespace. Workspaces hold conversations, and access to them comes from membership. No new grant names a workspace.</desc>
-<defs><marker id="rights-arrow-3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
+<desc id="rights-fig-3-desc">The Client Instance contains the agents and skills the instance owns and the Shared Workspaces. The workspace Tax team owns three assets, and one grant covers all of them. Among the assets of the instance, a grant sits on the single asset hr-onboarding. The asset helpdesk is covered by no grant. Access to the conversations of a workspace comes from membership.</desc>
 <rect class="frame" x="8" y="8" width="644" height="414" rx="12"/>
 <text x="24" y="34" class="strong">Client Instance</text>
 <text x="24" y="54" class="small">Roles and the single rights of the Users page apply to everything in here.</text>
-<rect class="box" x="24" y="72" width="400" height="330" rx="10"/>
-<text x="40" y="98" class="strong">Agents and skills of the instance</text>
-<rect class="box-accent" x="40" y="114" width="368" height="128" rx="8"/>
-<text x="54" y="138" class="strong">Namespace tax-</text>
-<text x="54" y="156" class="small">A grant here covers every name that starts with tax-</text>
-<rect class="box" x="54" y="170" width="110" height="56" rx="6"/>
-<text x="109" y="203" class="small" text-anchor="middle">tax-vat-helper</text>
-<rect class="box" x="172" y="170" width="110" height="56" rx="6"/>
-<text x="227" y="203" class="small" text-anchor="middle">tax-audit-notes</text>
-<rect class="box" x="290" y="170" width="110" height="56" rx="6"/>
-<text x="345" y="203" class="small" text-anchor="middle">later ones too</text>
-<rect class="box" x="40" y="256" width="236" height="130" rx="8"/>
-<text x="54" y="280" class="strong">Namespace hr-</text>
-<rect class="box-accent" x="54" y="296" width="150" height="74" rx="6"/>
-<text x="129" y="326" class="small" text-anchor="middle">hr-onboarding</text>
-<text x="129" y="346" class="small" text-anchor="middle">a grant on this one asset</text>
-<rect class="box" x="290" y="256" width="118" height="130" rx="8"/>
-<text x="349" y="280" class="small-strong" text-anchor="middle">No Namespace</text>
-<rect class="box" x="300" y="296" width="98" height="74" rx="6"/>
-<text x="349" y="338" class="small" text-anchor="middle">helpdesk</text>
-<rect class="box" x="440" y="72" width="196" height="330" rx="10"/>
-<text x="456" y="98" class="strong">Workspaces</text>
-<text x="456" y="124" class="small">Collaboration Workspaces hold</text>
-<text x="456" y="144" class="small">conversations and their files.</text>
-<text x="456" y="184" class="small">Access to conversations comes</text>
-<text x="456" y="204" class="small">from Workspace Membership.</text>
-<text x="456" y="244" class="small">No new grant names</text>
-<text x="456" y="264" class="small">a workspace.</text>
+<rect class="box" x="24" y="72" width="250" height="330" rx="10"/>
+<text x="40" y="98" class="strong">Owned by the instance</text>
+<rect class="box-accent" x="40" y="114" width="218" height="110" rx="8"/>
+<text x="149" y="160" class="small" text-anchor="middle">hr-onboarding</text>
+<text x="149" y="180" class="small" text-anchor="middle">a grant on this one asset</text>
+<rect class="box" x="40" y="240" width="218" height="110" rx="8"/>
+<text x="149" y="298" class="small" text-anchor="middle">helpdesk</text>
+<rect class="box-accent" x="290" y="72" width="346" height="330" rx="10"/>
+<text x="306" y="98" class="strong">Shared Workspace Tax team</text>
+<text x="306" y="118" class="small">A grant here covers everything Tax team owns.</text>
+<rect class="box" x="306" y="134" width="96" height="56" rx="6"/>
+<text x="354" y="167" class="small" text-anchor="middle">tax-vat-helper</text>
+<rect class="box" x="410" y="134" width="104" height="56" rx="6"/>
+<text x="462" y="167" class="small" text-anchor="middle">tax-audit-notes</text>
+<rect class="box" x="522" y="134" width="98" height="56" rx="6"/>
+<text x="571" y="167" class="small" text-anchor="middle">later ones too</text>
+<text x="306" y="240" class="small">Its conversations and their files.</text>
+<text x="306" y="260" class="small">Access to them comes from</text>
+<text x="306" y="280" class="small">Workspace Membership, not from a grant.</text>
 </svg>
-<figcaption>The tinted boxes show where a grant can sit: one asset, or a whole Namespace for a grant written before Namespaces were retired. Everything wider is a role or a single right on the Users page.</figcaption>
+<figcaption>The tinted boxes show where a grant can sit: one asset, or everything a Shared Workspace owns. Everything wider is a role or a single right on the Users page.</figcaption>
 </figure>
 
 ### An example
 
-A company has a tax team. Its agents are named `tax-vat-helper` and `tax-year-end`, and it has a skill named `tax-audit-notes`.
+A company has a tax team with the Shared Workspace Tax team. Its agents `tax-vat-helper` and `tax-year-end` and its skill `tax-audit-notes` were made there, so Tax team owns them.
 
-1. The instance has the Namespace `tax-` with the display name "Tax team", registered before Namespaces were retired.
-2. Mara holds read and write on agents in `tax-`, granted at that time.
-3. Mara opens **Studio**. She sees the two tax agents and can change them. She does not see `hr-onboarding` or `helpdesk`.
-4. Mara creates `tax-travel-costs`. The name starts with the prefix, so her grant covers it at once.
-5. Jonas from the same team gets a grant on one asset instead, read on `tax-year-end`. He sees **Studio** with a list of agents that holds this one agent and nothing else. It opens read-only.
+1. Mara holds read and write on agents in Tax team.
+2. Mara opens **Studio**. She sees the two tax agents and can change them. She does not see `hr-onboarding` or `helpdesk`, which the instance owns.
+3. Mara creates `tax-travel-costs` while she works in Tax team. Tax team owns it, so her grant covers it at once.
+4. Jonas from the same team gets a grant on one asset instead, read on `tax-year-end`. He sees **Studio** with a list of agents that holds this one agent and nothing else. It opens read-only.
 
-### Rules for a prefix
+### Offering is not owning
 
-- A prefix is made of lowercase letters and digits, in parts joined by single hyphens. It starts with a letter and ends in a hyphen: `tax-`, `tax-team-`. It has 2 to 32 characters. `tax/` is not a valid prefix.
-- Two Namespaces never overlap. While `tax-` exists, `tax-team-` is refused, so a name belongs to at most one Namespace.
-- A prefix cannot be changed later. The id of an agent cannot be changed either. Decide the names first.
-- Deleting a Namespace needs its grants revoked first. The agents and skills stay.
-
-### A Namespace can also limit tools and models
-
-A Namespace can carry a list of allowed tools and a list of allowed models. An agent in the Namespace is saved only with tools from the tool list and with model bindings from the model list. One way around the model list is left: a person with "Manage agent model settings" can save an agent that names no model binding, and it then runs on the model the instance uses by default. The lists are checked when an agent is saved. They bind every writer, an administrator and the release push included. They are not rights. They are limits on what an agent in this family may be given. The details are in [Rights for one person or asset](/operate/rights-and-namespaces/#namespaces).
-
-### A Namespace is not a workspace
-
-A grant in a Namespace covers what the instance itself owns under that prefix: its agents, its skills or its Connections, depending on the kind of the grant. It gives no access to any conversation. [Namespace or workspace?](#namespace-or-workspace) puts the two side by side.
+An agent can be offered in further workspaces with **Available in**. Their members can then choose it in the chat. That gives them no right to read or change its definition: those stay with the workspace that owns it. A grant in a workspace also gives no access to any conversation.
 
 ## The path of one action
 
@@ -477,8 +401,8 @@ Three things about the order are worth knowing.
 
 ### Which actions take the whole path
 
-- **All 12 steps:** every tool call of an agent. Reading, saving, deleting and reverting agents and skills in Studio and through the asset API, and the release push. Writing or revoking a grant, and creating, changing or deleting a Namespace. Creating, changing and deleting a user, and changing a user's sign-in identities, password or invitation. Creating and changing a Service Principal, and creating and revoking an API key. The retry of a background job.
-- **Steps 1 to 4, a simpler input check and step 7:** everything else, for example conversations, workspaces, the lists of grants and Namespaces, the default agent, the **Available in** setting, usage and the audit log. These calls are refused the same way for a missing sign-in, module, scope or right. They have no policy step, cannot wait for an approval and leave no Operation Run.
+- **All 12 steps:** every tool call of an agent. Reading, saving, deleting and reverting agents and skills in Studio and through the asset API, and the release push. Writing or revoking a grant. Creating, changing and deleting a user, and changing a user's sign-in identities, password or invitation. Creating and changing a Service Principal, and creating and revoking an API key. The retry of a background job.
+- **Steps 1 to 4, a simpler input check and step 7:** everything else, for example conversations, workspaces, the list of grants, the default agent, the **Available in** setting, usage and the audit log. These calls are refused the same way for a missing sign-in, module, scope or right. They have no policy step, cannot wait for an approval and leave no Operation Run.
 
 ### Approvals
 
@@ -528,7 +452,6 @@ Beside guardrails, fixed limits protect an instance:
 | Limit | What it stops | Set in |
 | --- | --- | --- |
 | Module switches | A whole feature, for everybody | [release config](/configure/modules/) |
-| Tool and model lists of a Namespace | An agent with a tool or model off the list | Access, tab Namespaces |
 | Editable fields of an agent | A change in the interface to a field the release owns | [release config](/configure/config-assets/#interactive-editing-and-field-ownership) |
 | Usage limits and budgets | Model calls beyond a daily or monthly amount | [Capacity and limits](/operate/capacity-and-limits/) |
 | Rate limits | Too many requests in a short time | release config |
@@ -543,12 +466,12 @@ Beside the run, the instance writes Audit Events, for example `permission.grante
 
 ## A worked example
 
-Mara has the role User and two grants: read and write on agents in `tax-`. The instance runs with the default policy.
+Mara has the role User and two grants: read and write on agents in Tax team. The instance runs with the default policy.
 
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 660 424" role="img" aria-labelledby="rights-fig-4-title rights-fig-4-desc">
 <title id="rights-fig-4-title">Mara saves an agent of the tax team</title>
-<desc id="rights-fig-4-desc">A sequence between Mara, the Studio area, the instance and its records. Mara saves the agent tax-vat-helper. The instance checks the sign-in, the module, the right through her Namespace grant, the policy and the tool list, then records the Operation Run and answers that the agent was saved.</desc>
+<desc id="rights-fig-4-desc">A sequence between Mara, the Studio area, the instance and its records. Mara saves the agent tax-vat-helper. The instance checks the sign-in, the module, the right through her grant in Tax team, the policy and the guardrails, then records the Operation Run and answers that the agent was saved.</desc>
 <defs><marker id="rights-arrow-4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
 <path class="lifeline" d="M62 48 L62 416"/>
 <path class="lifeline" d="M196 48 L196 416"/>
@@ -569,9 +492,9 @@ Mara has the role User and two grants: read and write on agents in `tax-`. The i
 <text x="346" y="142" class="small">signed in: yes</text>
 <text x="346" y="172" class="small">module assetManagement: on</text>
 <text x="346" y="202" class="small">right agent.write on tax-vat-helper:</text>
-<text x="346" y="232" class="small">allowed by her grant in tax-</text>
+<text x="346" y="232" class="small">allowed by her grant in Tax team</text>
 <text x="346" y="262" class="small">policy confirm: her own call confirms</text>
-<text x="346" y="292" class="small">lists of tax-: nothing off the list</text>
+<text x="346" y="292" class="small">guardrails: none stops it</text>
 <text x="467.0" y="321" class="small" text-anchor="middle">Operation Run: done, audit rows</text>
 <path class="line" d="M336 328 L598 328" marker-end="url(#rights-arrow-4)"/>
 <text x="266.0" y="351" class="small" text-anchor="middle">200, new revision</text>
@@ -585,7 +508,7 @@ Mara has the role User and two grants: read and write on agents in `tax-`. The i
 Now she tries the same on `hr-onboarding`, which a colleague sent her as a link.
 
 1. Sign-in: yes. Module: on.
-2. Right `agent.read` on `hr-onboarding`: her grant covers names that start with `tax-`. This one does not. Nothing else covers it.
+2. Right `agent.read` on `hr-onboarding`: her grant covers what Tax team owns. The instance owns this one. Nothing else covers it.
 3. The instance answers `403 FORBIDDEN`. Studio says "You may not read this asset."
 4. The refused call is on the Operations page with the status "Denied".
 
@@ -607,7 +530,7 @@ Three things to know afterwards.
 
 - You can send the same dialog again. Rows the person already has are left alone, and the dialog says how many it added.
 - **Check** on the same page confirms the result. Choose the person, enter the agent's name and read the answer for each action. You need "View agent configuration" for that.
-- A save can still be refused for a reason that is not a right. Examples are a tool that is off the list of a Namespace the agent's name lies in, or a model setting that needs "Manage agent model settings". The Check tab lists these under its result.
+- A save can still be refused for a reason that is not a right. An example is a model setting that needs "Manage agent model settings". The Check tab lists such reasons under its result.
 
 To take the right away, open the menu of the line in the list and choose **Revoke** for the action. Once the revocation has run, the next call of your colleague is refused.
 
@@ -622,9 +545,9 @@ Then a person with "Manage API access" creates an **API key** for it and picks t
 
 Nobody gives a Service Principal more than they hold themselves. Giving it a right, switching it back on and issuing it a key each ask whether the person holds every right the Service Principal would act with. Where a personal API key makes the call, its scopes count too. A refusal names the first right that is missing, and the asset only where the person may read it. Taking a right away and switching a Service Principal off ask nothing of it.
 
-A Service Principal has no role. Whoever manages Service Principals can allow one to use a single named resource they may use themselves, such as one Connection: a grant with the holder kind `service_principal`, a use right, and that one asset as scope. The use rights are `connection.use`, `workflow.use`, and `data_store.read`, `data_store.insert` and `data_store.execute` for the rows of a Data Store, each where its module is on. No other grant can be written for one: no right that writes, publishes, deletes or manages, no workspace, Namespace or instance scope, and no deny. A Service Principal never writes a grant, also not for itself. Disabling a Service Principal leaves its grants recorded and without effect. The interface does not offer these grants; they are written through `POST /api/v1/instance/access/grants`.
+A Service Principal has no role. Whoever manages Service Principals can allow one to use a single named resource they may use themselves, such as one Connection: a grant with the holder kind `service_principal`, a use right, and that one asset as scope. The use rights are `connection.use`, `workflow.use`, and `data_store.read`, `data_store.insert` and `data_store.execute` for the rows of a Data Store, each where its module is on. No other grant can be written for one: no right that writes, publishes, deletes or manages, no workspace or instance scope, and no deny. A Service Principal never writes a grant, also not for itself. Disabling a Service Principal leaves its grants recorded and without effect. The interface does not offer these grants; they are written through `POST /api/v1/instance/access/grants`.
 
-A release push reaches every agent and skill of the instance and is not held back by the editing limits of the interface. It is still bound by the tool and model lists of a Namespace and by a deny on an asset. See [config assets](/configure/config-assets/#permissions).
+A release push reaches every agent and skill of the instance and is not held back by the editing limits of the interface. It is still bound by a deny on an asset. See [config assets](/configure/config-assets/#permissions).
 
 ## Which screen for what
 
@@ -633,7 +556,6 @@ A release push reaches every agent and skill of the instance and is not held bac
 | Make somebody an Admin or a Superadmin | Settings > Instance > Users, Role | Manage users. Superadmin for the Superadmin role. |
 | Give or take one right for the whole instance | Settings > Instance > Users, Rights | Manage users |
 | Let somebody edit an agent | Settings > Instance > Access, Rights | Manage users |
-| Change the lists of a Namespace registered before | Settings > Instance > Access, Namespaces | Manage users |
 | Find out why somebody can or cannot do something | Settings > Instance > Access, Check | Manage users and View agent configuration |
 | Create a key of your own for the CLI | Settings > You > API keys, or `catalyst login` | The module `personalApiKeys` on |
 | Create a Service Principal or give it a right | Settings > Instance > API access | Manage Service Principals, and the right you give |
@@ -642,3 +564,7 @@ A release push reaches every agent and skill of the instance and is not held bac
 | See what was called, by whom, and what was refused | Settings > Instance > Operations | View audit log |
 | See who changed which right | Settings > Instance > Audit | View audit log |
 | Switch a feature on or off, set the policy | Release config, then a deploy | The operator |
+
+## Namespaces registered earlier
+
+Rights were once scoped by a Namespace, a registered name prefix such as `tax-`. Namespaces are retired, and a later release removes what is left of them. Until then the Access page still has a tab **Namespaces**. A row written in a Namespace keeps applying, and a Namespace's tool and model lists still bind every save of an agent whose name starts with the prefix, a release push included. [Rights for one person or asset](/operate/rights-for-one-person/#namespaces-registered-earlier) has the details. Give new rights in a workspace or on one asset.
