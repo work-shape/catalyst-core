@@ -4,8 +4,8 @@ import {
   type InfrastructureCheckOutcome,
   type InfrastructureCheckStore
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "../postgres-database";
-import { infrastructureCheckState } from "../schema";
+import type { PostgresConnection } from "./postgres-database";
+import { infrastructureCheckState } from "./schema";
 
 export function createPostgresInfrastructureChecksStore(
   db: PostgresConnection

@@ -5,15 +5,16 @@ import {
   createPlatformId,
   type ApprovalRequest,
   type ApprovalRequestStore,
-  type PlatformStores
+  type PlatformStores,
+  type ApprovalsStore
 } from "@work-shape/catalyst-core";
 import { requireClaimedAgentRun } from "./postgres-agent-run-worker-operations";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { mapApprovalRequest } from "./rows";
 import { approvalRequests } from "./schema";
 import { appendApprovalDecision } from "./postgres-conversation-operations";
 
-export async function createApprovalRequest(
+async function createApprovalRequest(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
@@ -82,7 +83,7 @@ async function requireBelowPendingLimits(
   }
 }
 
-export async function getApprovalRequest(
+async function getApprovalRequest(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["getApprovalRequest"]>[0]
 ): Promise<ApprovalRequest | undefined> {
@@ -99,7 +100,7 @@ export async function getApprovalRequest(
   return row ? mapApprovalRequest(row) : undefined;
 }
 
-export async function listApprovalRequests(
+async function listApprovalRequests(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["listApprovalRequests"]>[0]
 ): Promise<ApprovalRequest[]> {
@@ -118,7 +119,7 @@ export async function listApprovalRequests(
   return rows.map(mapApprovalRequest);
 }
 
-export async function countApprovalRequests(
+async function countApprovalRequests(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["countApprovalRequests"]>[0]
 ): Promise<number> {
@@ -152,7 +153,7 @@ function listFilter(input: Parameters<ApprovalRequestStore["countApprovalRequest
   );
 }
 
-export async function countPendingApprovalRequests(
+async function countPendingApprovalRequests(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["countPendingApprovalRequests"]>[0]
 ): Promise<number> {
@@ -170,7 +171,7 @@ export async function countPendingApprovalRequests(
   return row?.count ?? 0;
 }
 
-export async function countOwnApprovalRequests(
+async function countOwnApprovalRequests(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["countOwnApprovalRequests"]>[0]
 ): Promise<{ pending: number; total: number }> {
@@ -204,13 +205,13 @@ export type TransactWithStores = <Result>(
   fn: (tx: PostgresConnection, stores: PlatformStores) => Promise<Result>
 ) => Promise<Result>;
 
-export async function transitionPendingApprovalRequest(
+async function transitionPendingApprovalRequest(
   transact: TransactWithStores,
   input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
   return transition(transact, input, "pending");
 }
-export async function transitionApprovedApprovalRequest(
+async function transitionApprovedApprovalRequest(
   transact: TransactWithStores,
   input: Parameters<ApprovalRequestStore["transitionApprovedApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
@@ -277,7 +278,7 @@ async function transition(
   });
 }
 
-export async function replaceEndedApprovalRequestPayload(
+async function replaceEndedApprovalRequestPayload(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["replaceEndedApprovalRequestPayload"]>[0]
 ): Promise<boolean> {
@@ -293,4 +294,52 @@ export async function replaceEndedApprovalRequestPayload(
     )
     .returning({ id: approvalRequests.id });
   return rows.length > 0;
+}
+
+export function createPostgresApprovalsStore(
+  db: PostgresConnection,
+  transact: TransactWithStores
+): ApprovalsStore {
+  return {
+    async appendApprovalDecision(request: ApprovalRequest): Promise<void> {
+      await db.transaction((tx) => appendApprovalDecision(tx, request));
+    },
+    createApprovalRequest(input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]) {
+      return createApprovalRequest(db, input);
+    },
+    getApprovalRequest(input: Parameters<ApprovalRequestStore["getApprovalRequest"]>[0]) {
+      return getApprovalRequest(db, input);
+    },
+    listApprovalRequests(input: Parameters<ApprovalRequestStore["listApprovalRequests"]>[0]) {
+      return listApprovalRequests(db, input);
+    },
+    countApprovalRequests(input: Parameters<ApprovalRequestStore["countApprovalRequests"]>[0]) {
+      return countApprovalRequests(db, input);
+    },
+    countPendingApprovalRequests(
+      input: Parameters<ApprovalRequestStore["countPendingApprovalRequests"]>[0]
+    ) {
+      return countPendingApprovalRequests(db, input);
+    },
+    countOwnApprovalRequests(
+      input: Parameters<ApprovalRequestStore["countOwnApprovalRequests"]>[0]
+    ) {
+      return countOwnApprovalRequests(db, input);
+    },
+    transitionPendingApprovalRequest(
+      input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0]
+    ) {
+      return transitionPendingApprovalRequest(transact, input);
+    },
+    transitionApprovedApprovalRequest(
+      input: Parameters<ApprovalRequestStore["transitionApprovedApprovalRequest"]>[0]
+    ) {
+      return transitionApprovedApprovalRequest(transact, input);
+    },
+    replaceEndedApprovalRequestPayload(
+      input: Parameters<ApprovalRequestStore["replaceEndedApprovalRequestPayload"]>[0]
+    ) {
+      return replaceEndedApprovalRequestPayload(db, input);
+    }
+  };
 }

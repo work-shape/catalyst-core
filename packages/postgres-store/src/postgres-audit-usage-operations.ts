@@ -1,16 +1,17 @@
 import { keysetFilter } from "./paging";
-import type { StorePage } from "@work-shape/catalyst-core";
-import { and, desc, eq, gte, lt, sql as drizzleSql } from "drizzle-orm";
 import {
+  type StorePage,
   type AuditEvent,
   type AuditEventInput,
   type ClientInstanceId,
   type ModelUsageEvent,
   type ModelUsageEventStore,
   AppError,
-  createPlatformId
+  createPlatformId,
+  type AuditEventStore
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "./postgres-database";
+import { and, desc, eq, gte, lt, sql as drizzleSql } from "drizzle-orm";
+import { type PostgresConnection } from "./postgres-database";
 import { mapAuditEvent, mapModelUsageEvent } from "./rows";
 import {
   agentRuns,
@@ -44,7 +45,7 @@ export async function appendAuditEvent(
   return mapAuditEvent(row);
 }
 
-export async function listAuditEvents(
+async function listAuditEvents(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
@@ -69,7 +70,7 @@ export async function listAuditEvents(
   return rows.map(mapAuditEvent);
 }
 
-export async function deleteAuditEventsOlderThan(
+async function deleteAuditEventsOlderThan(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; days: number }
 ): Promise<{ deletedCount: number; createdBefore: string }> {
@@ -268,5 +269,24 @@ export async function backfillModelUsageAttribution(
       ? { next: { createdAt: row.last_created_at, id: row.last_id } }
       : {}),
     changedCount: row?.changed_count ?? 0
+  };
+}
+
+export function createPostgresAuditStore(db: PostgresConnection): AuditEventStore {
+  return {
+    async appendAuditEvent(input: AuditEventInput): Promise<AuditEvent> {
+      return appendAuditEvent(db, input);
+    },
+    async listAuditEvents(input: {
+      clientInstanceId: ClientInstanceId;
+      limit?: number;
+      type?: string;
+      page?: StorePage;
+    }): Promise<AuditEvent[]> {
+      return listAuditEvents(db, input);
+    },
+    async deleteAuditEventsOlderThan(input) {
+      return deleteAuditEventsOlderThan(db, input);
+    }
   };
 }

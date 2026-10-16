@@ -18,7 +18,7 @@ import {
   type ServicePrincipalRecord,
   type UpdateServicePrincipalInput
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { mapApiCredential, mapServicePrincipal } from "./rows";
 import { lockRights } from "./rights-lock";
 import {
@@ -29,7 +29,7 @@ import {
 } from "./legacy-permission-lists";
 import { apiCredentials, permissionGrants, productUsers, servicePrincipals } from "./schema";
 
-export async function listServicePrincipals(
+async function listServicePrincipals(
   db: PostgresConnection,
   input: Parameters<ApiAccessStore["listServicePrincipals"]>[0]
 ): Promise<ServicePrincipalRecord[]> {
@@ -46,7 +46,7 @@ export async function listServicePrincipals(
   return rows.map((row) => mapServicePrincipal(row, lists.get(row.id) ?? []));
 }
 
-export async function createServicePrincipal(
+async function createServicePrincipal(
   db: PostgresConnection,
   input: CreateServicePrincipalInput
 ): Promise<ServicePrincipalRecord> {
@@ -157,7 +157,7 @@ async function freeNameFor(
   return taken ? `${base}-${randomBytes(3).toString("hex")}` : base;
 }
 
-export async function findServicePrincipalByName(
+async function findServicePrincipalByName(
   db: PostgresConnection,
   input: Parameters<ApiAccessStore["findServicePrincipalByName"]>[0]
 ): Promise<ServicePrincipalRecord | undefined> {
@@ -174,7 +174,7 @@ export async function findServicePrincipalByName(
   return row ? mapServicePrincipal(row, await principalList(db, row)) : undefined;
 }
 
-export async function updateServicePrincipal(
+async function updateServicePrincipal(
   db: PostgresConnection,
   input: UpdateServicePrincipalInput
 ): Promise<ServicePrincipalRecord> {
@@ -226,7 +226,7 @@ export async function updateServicePrincipal(
  * one that is under way and then removes what it wrote; a grant write that comes later finds
  * no principal. The keys go with the row by their foreign key.
  */
-export async function deleteServicePrincipal(
+async function deleteServicePrincipal(
   db: PostgresConnection,
   input: Parameters<ApiAccessStore["deleteServicePrincipal"]>[0]
 ): Promise<ServicePrincipalRecord | undefined> {
@@ -263,7 +263,7 @@ export async function deleteServicePrincipal(
   });
 }
 
-export async function listApiCredentials(
+async function listApiCredentials(
   db: PostgresConnection,
   input: Parameters<ApiAccessStore["listApiCredentials"]>[0]
 ): Promise<ApiCredentialRecord[]> {
@@ -281,7 +281,7 @@ export async function listApiCredentials(
   return rows.map(mapApiCredential);
 }
 
-export async function createApiCredential(
+async function createApiCredential(
   db: PostgresConnection,
   input: CreateApiCredentialInput
 ): Promise<CreatedApiCredential> {
@@ -311,7 +311,7 @@ export async function createApiCredential(
   return { credential: mapApiCredential(row), secret: material.secret };
 }
 
-export async function revokeApiCredential(
+async function revokeApiCredential(
   db: PostgresConnection,
   input: Parameters<ApiAccessStore["revokeApiCredential"]>[0]
 ): Promise<ApiCredentialRecord> {
@@ -333,7 +333,7 @@ export async function revokeApiCredential(
   return mapApiCredential(row);
 }
 
-export async function resolveApiCredential(
+async function resolveApiCredential(
   db: PostgresConnection,
   input: Parameters<ApiAccessStore["resolveApiCredential"]>[0]
 ): Promise<ResolvedApiCredential | undefined> {
@@ -369,7 +369,7 @@ export async function resolveApiCredential(
   };
 }
 
-export async function updateApiCredentialLastUsed(
+async function updateApiCredentialLastUsed(
   db: PostgresConnection,
   input: Parameters<ApiAccessStore["updateApiCredentialLastUsed"]>[0]
 ): Promise<ApiCredentialRecord> {
@@ -429,4 +429,55 @@ async function requireServicePrincipal(
     throw new AppError("NOT_FOUND", "Service principal is not available");
   }
   return row;
+}
+
+export function createPostgresApiAccessStore(db: PostgresConnection): ApiAccessStore {
+  return {
+    async listServicePrincipals(
+      input: Parameters<ApiAccessStore["listServicePrincipals"]>[0]
+    ): Promise<ServicePrincipalRecord[]> {
+      return listServicePrincipals(db, input);
+    },
+    async findServicePrincipalByName(
+      input: Parameters<ApiAccessStore["findServicePrincipalByName"]>[0]
+    ): Promise<ServicePrincipalRecord | undefined> {
+      return findServicePrincipalByName(db, input);
+    },
+    async createServicePrincipal(
+      input: CreateServicePrincipalInput
+    ): Promise<ServicePrincipalRecord> {
+      return createServicePrincipal(db, input);
+    },
+    async updateServicePrincipal(
+      input: UpdateServicePrincipalInput
+    ): Promise<ServicePrincipalRecord> {
+      return updateServicePrincipal(db, input);
+    },
+    async deleteServicePrincipal(
+      input: Parameters<ApiAccessStore["deleteServicePrincipal"]>[0]
+    ): Promise<ServicePrincipalRecord | undefined> {
+      return deleteServicePrincipal(db, input);
+    },
+    async listApiCredentials(
+      input: Parameters<ApiAccessStore["listApiCredentials"]>[0]
+    ): Promise<ApiCredentialRecord[]> {
+      return listApiCredentials(db, input);
+    },
+    async createApiCredential(input: CreateApiCredentialInput) {
+      return createApiCredential(db, input);
+    },
+    async revokeApiCredential(
+      input: Parameters<ApiAccessStore["revokeApiCredential"]>[0]
+    ): Promise<ApiCredentialRecord> {
+      return revokeApiCredential(db, input);
+    },
+    async resolveApiCredential(input: Parameters<ApiAccessStore["resolveApiCredential"]>[0]) {
+      return resolveApiCredential(db, input);
+    },
+    async updateApiCredentialLastUsed(
+      input: Parameters<ApiAccessStore["updateApiCredentialLastUsed"]>[0]
+    ): Promise<ApiCredentialRecord> {
+      return updateApiCredentialLastUsed(db, input);
+    }
+  };
 }

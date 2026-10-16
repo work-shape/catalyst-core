@@ -13,9 +13,19 @@ import {
   AppError,
   createPlatformId
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { mapModelUsageEvent } from "./rows";
 import { modelUsageCounters, modelUsageDailyRollups, modelUsageEvents } from "./schema";
+import {
+  backfillModelUsageAttribution,
+  clearUserFromModelUsageEvents,
+  clearWorkspaceFromModelUsageEvents,
+  listModelUsageEvents
+} from "./postgres-audit-usage-operations";
+import {
+  readModelUsageMaintenance,
+  writeModelUsageMaintenance
+} from "./postgres-usage-maintenance";
 
 type Store = ModelUsageEventStore;
 
@@ -333,7 +343,7 @@ async function countedInsert(
   throw new AppError("INTERNAL", "The usage counters of the period could not be started");
 }
 
-export async function admitModelUsageEvent(
+async function admitModelUsageEvent(
   db: PostgresConnection,
   input: Parameters<Store["admitModelUsageEvent"]>[0]
 ): ReturnType<Store["admitModelUsageEvent"]> {
@@ -388,7 +398,7 @@ function refusalOf(
   return refusal;
 }
 
-export async function appendModelUsageEvent(
+async function appendModelUsageEvent(
   db: PostgresConnection,
   event: ModelUsageEventRecordInput,
   counted?: { tokens: number; costMicros: number }
@@ -424,7 +434,7 @@ export async function appendModelUsageEvent(
  * event's part in the sums of its day. An event that was `abandoned` is in those sums already
  * as a call that used nothing, so that part is taken out again.
  */
-export async function settleModelUsageEvent(
+async function settleModelUsageEvent(
   db: PostgresConnection,
   input: Parameters<Store["settleModelUsageEvent"]>[0]
 ): Promise<boolean> {
@@ -492,7 +502,7 @@ export async function settleModelUsageEvent(
   return (rows[0]?.changed ?? 0) > 0;
 }
 
-export async function listPendingModelUsageEvents(
+async function listPendingModelUsageEvents(
   db: PostgresConnection,
   input: Parameters<Store["listPendingModelUsageEvents"]>[0]
 ): Promise<AdmittedModelCall[]> {
@@ -567,7 +577,7 @@ function toTotals(row: TotalsRow): ModelUsageTotals {
 }
 
 /** The months and the total of the instance, from the sums of its days. */
-export async function summarizeModelUsageHistory(
+async function summarizeModelUsageHistory(
   db: PostgresConnection,
   input: Parameters<Store["summarizeModelUsageHistory"]>[0]
 ): Promise<ModelUsageHistory> {
@@ -601,7 +611,7 @@ type RecentRow = TotalsRow & {
 };
 
 /** The days from `from` on: each in total, and split by model, provider, region and caller. */
-export async function summarizeRecentModelUsage(
+async function summarizeRecentModelUsage(
   db: PostgresConnection,
   input: Parameters<Store["summarizeRecentModelUsage"]>[0]
 ): Promise<RecentModelUsage> {
@@ -647,7 +657,7 @@ export async function summarizeRecentModelUsage(
 const reconciliationLock = (clientInstanceId: string): SQL =>
   drizzleSql`select pg_advisory_xact_lock(hashtextextended(${`model_usage_reconciliation:${clientInstanceId}`}, 0))`;
 
-export function reconcileModelUsage(
+function reconcileModelUsage(
   db: PostgresConnection,
   input: Parameters<Store["reconcileModelUsage"]>[0]
 ): ReturnType<Store["reconcileModelUsage"]> {
@@ -763,4 +773,22 @@ async function reconcileLocked(
     )
   );
   return { correctedCounters, correctedSums: corrected.count };
+}
+
+export function createPostgresUsageStore(db: PostgresConnection): ModelUsageEventStore {
+  return {
+    appendModelUsageEvent: (input, counted) => appendModelUsageEvent(db, input, counted),
+    admitModelUsageEvent: (input) => admitModelUsageEvent(db, input),
+    settleModelUsageEvent: (input) => settleModelUsageEvent(db, input),
+    listPendingModelUsageEvents: (input) => listPendingModelUsageEvents(db, input),
+    summarizeModelUsageHistory: (input) => summarizeModelUsageHistory(db, input),
+    summarizeRecentModelUsage: (input) => summarizeRecentModelUsage(db, input),
+    reconcileModelUsage: (input) => reconcileModelUsage(db, input),
+    readModelUsageMaintenance: (input) => readModelUsageMaintenance(db, input),
+    writeModelUsageMaintenance: (input) => writeModelUsageMaintenance(db, input),
+    listModelUsageEvents: (input) => listModelUsageEvents(db, input),
+    clearUserFromModelUsageEvents: (input) => clearUserFromModelUsageEvents(db, input),
+    clearWorkspaceFromModelUsageEvents: (input) => clearWorkspaceFromModelUsageEvents(db, input),
+    backfillModelUsageAttribution: (input) => backfillModelUsageAttribution(db, input)
+  };
 }

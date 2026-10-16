@@ -16,7 +16,7 @@ import {
   type ServedFileSet
 } from "@work-shape/catalyst-core";
 import { publishedRevisions } from "./postgres-config-asset-operations";
-import type { PostgresConnection } from "./postgres-database";
+import { type PostgresConnection } from "./postgres-database";
 import { configAssetRevisions, configAssets } from "./schema/configAssets";
 import { conversations } from "./schema/conversations";
 import { fileSets, pageBuilds, pages } from "./schema/pages";
@@ -39,10 +39,7 @@ const summaryColumns = {
   createdAt: fileSets.createdAt
 };
 
-export async function ensurePage(
-  db: PostgresConnection,
-  input: Input<"ensurePage">
-): Promise<Page> {
+async function ensurePage(db: PostgresConnection, input: Input<"ensurePage">): Promise<Page> {
   return db.transaction(async (tx) => {
     // One conversation's Pages are counted and added one caller at a time. The lock is the
     // conversation's alone and is held for these three statements.
@@ -91,7 +88,7 @@ export async function ensurePage(
   });
 }
 
-export async function createPageFileSet(
+async function createPageFileSet(
   db: PostgresConnection,
   input: Input<"createPageFileSet">
 ): Promise<FileSet> {
@@ -167,7 +164,7 @@ function ownedByAsset(assetId: string) {
   return and(eq(fileSets.ownerKind, "asset"), eq(fileSets.ownerId, assetId));
 }
 
-export async function createAssetFileSet(
+async function createAssetFileSet(
   db: PostgresConnection,
   input: Input<"createAssetFileSet">
 ): Promise<FileSet> {
@@ -190,7 +187,7 @@ export async function createAssetFileSet(
   });
 }
 
-export async function getAssetFileSet(
+async function getAssetFileSet(
   db: PostgresConnection,
   input: Input<"getAssetFileSet">
 ): Promise<FileSet | undefined> {
@@ -208,7 +205,7 @@ export async function getAssetFileSet(
   return row ? mapFileSet(row) : undefined;
 }
 
-export async function deleteAssetFileSet(
+async function deleteAssetFileSet(
   db: PostgresConnection,
   input: Input<"deleteAssetFileSet">
 ): Promise<boolean> {
@@ -234,10 +231,7 @@ function namedByRevision(assetId: string | SQL, fileSetId: string | SQL): SQL<bo
   return sql<boolean>`exists (select 1 from ${configAssetRevisions} where ${configAssetRevisions.assetId} = ${assetId} and ${configAssetRevisions.fileSetId} = ${fileSetId})`;
 }
 
-export async function listPages(
-  db: PostgresConnection,
-  input: Input<"listPages">
-): Promise<Page[]> {
+async function listPages(db: PostgresConnection, input: Input<"listPages">): Promise<Page[]> {
   const rows = await db
     .select()
     .from(pages)
@@ -251,10 +245,7 @@ export async function listPages(
   return rows.map(mapPage);
 }
 
-export async function getPage(
-  db: PostgresConnection,
-  input: Input<"getPage">
-): Promise<Page | undefined> {
+async function getPage(db: PostgresConnection, input: Input<"getPage">): Promise<Page | undefined> {
   const [row] = await db
     .select()
     .from(pages)
@@ -269,7 +260,7 @@ export async function getPage(
   return row ? mapPage(row) : undefined;
 }
 
-export async function listPageFileSets(
+async function listPageFileSets(
   db: PostgresConnection,
   input: Input<"listPageFileSets">
 ): Promise<FileSetSummary[]> {
@@ -282,7 +273,7 @@ export async function listPageFileSets(
   return rows.map((row) => mapSummary({ ...row, ownerKind: "page" }));
 }
 
-export async function getPageFileSet(
+async function getPageFileSet(
   db: PostgresConnection,
   input: Input<"getPageFileSet">
 ): Promise<FileSet | undefined> {
@@ -301,7 +292,7 @@ export async function getPageFileSet(
   return row ? mapFileSet(row) : undefined;
 }
 
-export async function getServedFileSet(
+async function getServedFileSet(
   db: PostgresConnection,
   input: Input<"getServedFileSet">
 ): Promise<ServedFileSet | undefined> {
@@ -412,7 +403,7 @@ async function getServedPageFileSet(
   return row ? { ...mapFileSet(row.fileSet), conversationId: row.conversationId } : undefined;
 }
 
-export async function listConversationPageIds(
+async function listConversationPageIds(
   db: PostgresConnection,
   input: Input<"listConversationPageIds">
 ): Promise<PageId[]> {
@@ -429,7 +420,7 @@ export async function listConversationPageIds(
   return rows.map((row) => row.id);
 }
 
-export async function deletePage(
+async function deletePage(
   db: PostgresConnection,
   input: Input<"deletePage">
 ): Promise<{ fileSetCount: number }> {
@@ -445,7 +436,7 @@ export async function deletePage(
   });
 }
 
-export async function createPageBuild(
+async function createPageBuild(
   db: PostgresConnection,
   input: Input<"createPageBuild">
 ): Promise<PageBuild> {
@@ -479,7 +470,7 @@ export async function createPageBuild(
   return mapPageBuild(created);
 }
 
-export async function getPageBuild(
+async function getPageBuild(
   db: PostgresConnection,
   input: Input<"getPageBuild">
 ): Promise<PageBuild | undefined> {
@@ -493,7 +484,7 @@ export async function getPageBuild(
   return row ? mapPageBuild(row) : undefined;
 }
 
-export async function finishPageBuild(
+async function finishPageBuild(
   db: PostgresConnection,
   input: Input<"finishPageBuild">
 ): Promise<boolean> {
@@ -511,7 +502,7 @@ export async function finishPageBuild(
   return finished.length > 0;
 }
 
-export async function deletePageBuild(
+async function deletePageBuild(
   db: PostgresConnection,
   input: Input<"deletePageBuild">
 ): Promise<void> {
@@ -581,5 +572,26 @@ function mapFileSet(row: FileSetRow): FileSet {
     manifest: row.manifest,
     sourceFiles: row.sourceFiles,
     builtFiles: row.builtFiles
+  };
+}
+
+export function createPostgresPagesStore(db: PostgresConnection): PagesStore {
+  return {
+    ensurePage: (input) => ensurePage(db, input),
+    createPageFileSet: (input) => createPageFileSet(db, input),
+    listPages: (input) => listPages(db, input),
+    getPage: (input) => getPage(db, input),
+    listPageFileSets: (input) => listPageFileSets(db, input),
+    getPageFileSet: (input) => getPageFileSet(db, input),
+    getServedFileSet: (input) => getServedFileSet(db, input),
+    createAssetFileSet: (input) => createAssetFileSet(db, input),
+    getAssetFileSet: (input) => getAssetFileSet(db, input),
+    deleteAssetFileSet: (input) => deleteAssetFileSet(db, input),
+    listConversationPageIds: (input) => listConversationPageIds(db, input),
+    deletePage: (input) => deletePage(db, input),
+    createPageBuild: (input) => createPageBuild(db, input),
+    getPageBuild: (input) => getPageBuild(db, input),
+    finishPageBuild: (input) => finishPageBuild(db, input),
+    deletePageBuild: (input) => deletePageBuild(db, input)
   };
 }

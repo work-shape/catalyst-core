@@ -10,9 +10,9 @@ import {
   type NamespaceUsage,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
-import { keysetFilter } from "../paging";
-import type { PostgresConnection } from "../postgres-database";
-import { lockRights } from "../rights-lock";
+import { keysetFilter } from "./paging";
+import type { PostgresConnection } from "./postgres-database";
+import { lockRights } from "./rights-lock";
 import {
   collaborationWorkspaces,
   configAssets,
@@ -20,7 +20,7 @@ import {
   permissionGrants,
   productUsers,
   servicePrincipals
-} from "../schema";
+} from "./schema";
 
 type GrantRow = typeof permissionGrants.$inferSelect;
 type NamespaceRow = typeof namespaces.$inferSelect;

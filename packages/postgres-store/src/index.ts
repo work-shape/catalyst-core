@@ -1,3 +1,24 @@
+import {
+  listAgentAvailability as listPostgresAgentAvailability,
+  setAgentAvailability as setPostgresAgentAvailability
+} from "./postgres-agent-availability";
+import { listConfigAssetPage as listPostgresConfigAssetPage } from "./postgres-config-asset-page";
+import {
+  getConfigAssetPageOrigin as getPostgresConfigAssetPageOrigin,
+  listConfigAssetsFromPage as listPostgresConfigAssetsFromPage
+} from "./postgres-config-asset-origins";
+import {
+  deleteWorkspace as deletePostgresWorkspace,
+  getWorkspaceInDeletion as getPostgresWorkspaceInDeletion,
+  lockWorkspacesForOwnerChange as lockPostgresWorkspacesForOwnerChange,
+  markWorkspaceDeletionRequested as markPostgresWorkspaceDeletionRequested
+} from "./postgres-workspace-deletion";
+import {
+  deleteModelProviderContinuation as deletePostgresModelProviderContinuation,
+  getModelProviderContinuation as getPostgresModelProviderContinuation
+} from "./postgres-model-provider-continuation-operations";
+import { searchWorkspaceFiles as searchPostgresWorkspaceFiles } from "./postgres-file-search-operations";
+import { listConversationsWithActiveRun as listPostgresConversationsWithActiveRun } from "./postgres-conversation-list-operations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres, { type Notice } from "postgres";
 import type { DatabaseReadiness, Logger, PlatformStores } from "@work-shape/catalyst-core";
@@ -5,34 +26,34 @@ import type { PostgresConnection } from "./postgres-database";
 import { assertDatabaseMigrated } from "./migrations";
 import { createDatabaseReadinessCheck } from "./readiness";
 import { schema } from "./schema";
-import { createPostgresConversationsStore } from "./stores/conversations";
-import { createPostgresAgentRunsStore } from "./stores/agentRuns";
-import { createPostgresFilesStore } from "./stores/files";
-import { createPostgresAuditStore } from "./stores/audit";
-import { createPostgresUsageStore } from "./stores/usage";
-import { createPostgresUsersStore } from "./stores/users";
-import { createPostgresWorkspacesStore } from "./stores/workspaces";
-import { createPostgresApiAccessStore } from "./stores/apiAccess";
-import { createPostgresPersonalApiKeyStore } from "./stores/personalApiKeys";
-import { createPostgresAccessStore } from "./stores/access";
-import { createPostgresConfigAssetsStore } from "./stores/configAssets";
-import { createPostgresApprovalsStore } from "./stores/approvals";
+import { createPostgresConversationsStore } from "./postgres-conversation-operations";
+import { createPostgresAgentRunsStore } from "./postgres-agent-run-operations";
+import { createPostgresFilesStore } from "./postgres-file-store";
+import { createPostgresAuditStore } from "./postgres-audit-usage-operations";
+import { createPostgresUsageStore } from "./postgres-usage-ledger";
+import { createPostgresUsersStore } from "./postgres-user-operations";
+import { createPostgresWorkspacesStore } from "./postgres-collaboration-workspace-operations";
+import { createPostgresApiAccessStore } from "./postgres-api-access-operations";
+import { createPostgresPersonalApiKeyStore } from "./postgres-personal-api-key-operations";
+import { createPostgresAccessStore } from "./postgres-access-operations";
+import { createPostgresConfigAssetsStore } from "./postgres-config-asset-operations";
+import { createPostgresApprovalsStore } from "./postgres-approval-request-operations";
 import type { TransactWithStores } from "./postgres-approval-request-operations";
-import { createPostgresExecutionWorkspacesStore } from "./stores/executionWorkspaces";
-import { createPostgresStructuredDataStore } from "./stores/structuredData";
+import { createPostgresExecutionWorkspacesStore } from "./postgres-execution-workspace-operations";
+import { createPostgresStructuredDataStore } from "./postgres-structured-data-operations";
 import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
-import { createPostgresOperationRunsStore } from "./stores/operationRuns";
-import { createPostgresLiveOnceSwitchesStore } from "./stores/liveOnceSwitches";
-import { createPostgresInfrastructureChecksStore } from "./stores/infrastructure";
-import { createPostgresPagesStore } from "./stores/pages";
-import { createPostgresConnectionsStore } from "./stores/connections";
-import { createPostgresDataStoreRecordsStore } from "./stores/data-stores";
-import { createPostgresGuardrailsStore } from "./stores/guardrails";
-import { createPostgresKnowledgeBaseStateStore } from "./stores/knowledge-bases";
+import { createPostgresOperationRunsStore } from "./postgres-operation-run-operations";
+import { createPostgresLiveOnceSwitchesStore } from "./postgres-live-once-switch-operations";
+import { createPostgresInfrastructureChecksStore } from "./postgres-infrastructure-check-operations";
+import { createPostgresPagesStore } from "./postgres-page-operations";
+import { createPostgresConnectionsStore } from "./postgres-connection-operations";
+import { createPostgresDataStoreRecordsStore } from "./postgres-data-store-operations";
+import { createPostgresGuardrailsStore } from "./postgres-guardrail-operations";
+import { createPostgresKnowledgeBaseStateStore } from "./postgres-knowledge-base-operations";
 import {
   createPostgresWorkflowRunDatasetsStore,
   createPostgresWorkflowRunsStore
-} from "./stores/workflow-runs";
+} from "./postgres-workflow-run-operations";
 
 export interface PostgresStoresOptions {
   databaseUrl: string;
@@ -85,17 +106,38 @@ function bindStores(
     return result;
   };
   return {
-    conversations: createPostgresConversationsStore(db),
+    conversations: createPostgresConversationsStore(db, {
+      listConversationsWithActiveRun: (input) => listPostgresConversationsWithActiveRun(db, input),
+      searchWorkspaceFiles: (input) => searchPostgresWorkspaceFiles(db, input),
+      deleteModelProviderContinuation: (input) =>
+        deletePostgresModelProviderContinuation(db, input),
+      getModelProviderContinuation: (input) => getPostgresModelProviderContinuation(db, input)
+    }),
     agentRuns: createPostgresAgentRunsStore(db, enqueued),
     files: createPostgresFilesStore(db, enqueued),
     audit: createPostgresAuditStore(db),
     usage: createPostgresUsageStore(db),
     users: createPostgresUsersStore(db),
-    workspaces: createPostgresWorkspacesStore(db),
+    workspaces: createPostgresWorkspacesStore(db, {
+      deleteWorkspace: (input) => deletePostgresWorkspace(db, input),
+      getWorkspaceInDeletion: (input) => getPostgresWorkspaceInDeletion(db, input),
+      lockWorkspacesForOwnerChange: (input) => lockPostgresWorkspacesForOwnerChange(db, input),
+      markWorkspaceDeletionRequested: (input) => markPostgresWorkspaceDeletionRequested(db, input)
+    }),
     apiAccess: createPostgresApiAccessStore(db),
     personalApiKeys: createPostgresPersonalApiKeyStore(db),
     access: createPostgresAccessStore(db, inTransaction),
-    configAssets: createPostgresConfigAssetsStore(db, inTransaction),
+    configAssets: createPostgresConfigAssetsStore(
+      db,
+      {
+        getConfigAssetPageOrigin: (input) => getPostgresConfigAssetPageOrigin(db, input),
+        listConfigAssetsFromPage: (input) => listPostgresConfigAssetsFromPage(db, input),
+        listConfigAssetPage: (input) => listPostgresConfigAssetPage(db, input),
+        listAgentAvailability: (input) => listPostgresAgentAvailability(db, input),
+        setAgentAvailability: (input) => setPostgresAgentAvailability(db, input)
+      },
+      inTransaction
+    ),
     approvals: createPostgresApprovalsStore(db, transact),
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
     structuredData: createPostgresStructuredDataStore(db),

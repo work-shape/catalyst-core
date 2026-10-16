@@ -1,7 +1,6 @@
 import { keysetFilter } from "./paging";
-import type { StorePage } from "@work-shape/catalyst-core";
-import { and, eq, inArray, isNull, sql as drizzleSql } from "drizzle-orm";
 import {
+  type StorePage,
   AppError,
   type AuditEvent,
   type AuditEventInput,
@@ -21,9 +20,11 @@ import {
   createPlatformId,
   createUserId,
   requireUsableUser,
-  userInDeletionError
+  userInDeletionError,
+  type UserStore
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
+import { and, eq, inArray, isNull, sql as drizzleSql } from "drizzle-orm";
+import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
 import {
   legacyPermissionListOf,
@@ -33,8 +34,9 @@ import {
 import { permissionGrants, productUsers, userIdentities } from "./schema";
 import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
 import { lockRights, lockRightsOfUsableUser } from "./rights-lock";
+import { appendAuditEvent as appendPostgresAuditEvent } from "./postgres-audit-usage-operations";
 
-export async function resolveUserIdentity(
+async function resolveUserIdentity(
   db: PostgresConnection,
   input: ResolveUserIdentityInput,
   appendAuditEvent: (input: AuditEventInput) => Promise<AuditEvent>
@@ -253,7 +255,7 @@ async function refreshLinkedSignIn(tx: PostgresTransaction, input: ResolveUserId
   return { userId: user.id, identity: mapUserIdentity(identity), linkedByVerifiedEmail: false };
 }
 
-export async function listUsers(
+async function listUsers(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; page?: StorePage; excludeSuperadmins?: boolean }
 ): Promise<UserRecord[]> {
@@ -307,10 +309,7 @@ export async function listUsers(
   );
 }
 
-export async function createUser(
-  db: PostgresConnection,
-  input: CreateUserInput
-): Promise<UserRecord> {
+async function createUser(db: PostgresConnection, input: CreateUserInput): Promise<UserRecord> {
   return db.transaction(async (tx) => {
     await lockRights(tx, { clientInstanceId: input.clientInstanceId });
     const now = new Date();
@@ -352,7 +351,7 @@ export async function createUser(
   });
 }
 
-export async function getUserModelPreference(
+async function getUserModelPreference(
   db: PostgresConnection,
   input: UserModelPreferenceInput
 ): Promise<UserModelPreference | undefined> {
@@ -368,7 +367,7 @@ export async function getUserModelPreference(
   return row?.modelPreference ?? undefined;
 }
 
-export async function setUserModelPreference(
+async function setUserModelPreference(
   db: PostgresConnection,
   input: UserModelPreferenceInput & { preference: UserModelPreference }
 ): Promise<void> {
@@ -387,10 +386,7 @@ export async function setUserModelPreference(
   }
 }
 
-export async function updateUser(
-  db: PostgresConnection,
-  input: UpdateUserInput
-): Promise<UserRecord> {
+async function updateUser(db: PostgresConnection, input: UpdateUserInput): Promise<UserRecord> {
   const set: Partial<typeof productUsers.$inferInsert> = {
     updatedAt: new Date()
   };
@@ -444,7 +440,7 @@ export async function updateUser(
   return requireUserRecord(db, input.clientInstanceId, row.id);
 }
 
-export async function markUserDeletionRequested(
+async function markUserDeletionRequested(
   db: PostgresConnection,
   input: DeleteUserInput
 ): Promise<boolean> {
@@ -467,10 +463,7 @@ export async function markUserDeletionRequested(
   });
 }
 
-export async function deleteUser(
-  db: PostgresConnection,
-  input: DeleteUserInput
-): Promise<UserRecord> {
+async function deleteUser(db: PostgresConnection, input: DeleteUserInput): Promise<UserRecord> {
   const user = await getUserRecord(db, input.clientInstanceId, input.userId);
   if (!user) {
     throw new AppError("NOT_FOUND", "User is not available");
@@ -505,7 +498,7 @@ export async function deleteUser(
   return user;
 }
 
-export async function upsertUserIdentity(
+async function upsertUserIdentity(
   connection: PostgresConnection,
   input: UpsertUserIdentityInput
 ): Promise<UserRecord> {
@@ -567,7 +560,7 @@ async function upsertLockedUserIdentity(
   return requireUserRecord(db, input.clientInstanceId, input.userId);
 }
 
-export async function deleteUserIdentity(
+async function deleteUserIdentity(
   connection: PostgresConnection,
   input: DeleteUserIdentityInput
 ): Promise<UserRecord> {
@@ -607,7 +600,7 @@ async function deleteLockedUserIdentity(
   return requireUserRecord(db, input.clientInstanceId, input.userId);
 }
 
-export async function getUserRecord(
+async function getUserRecord(
   db: PostgresConnection,
   clientInstanceId: ClientInstanceId,
   userId: string
@@ -706,4 +699,52 @@ function identitiesForUser(user: ProductUserRow, identities: UserIdentityRow[]):
         `${right.authSource}:${right.externalUserId}`
       )
     );
+}
+
+export function createPostgresUsersStore(db: PostgresConnection): UserStore {
+  return {
+    async resolveUserIdentity(input: ResolveUserIdentityInput) {
+      return resolveUserIdentity(db, input, (event) => appendPostgresAuditEvent(db, event));
+    },
+    async getUser(input: Parameters<UserStore["getUser"]>[0]): Promise<UserRecord | undefined> {
+      return getUserRecord(db, input.clientInstanceId, input.userId);
+    },
+    async listUsers(input: {
+      clientInstanceId: ClientInstanceId;
+      page?: StorePage;
+      excludeSuperadmins?: boolean;
+    }): Promise<UserRecord[]> {
+      return listUsers(db, input);
+    },
+    async createUser(input: CreateUserInput): Promise<UserRecord> {
+      return createUser(db, input);
+    },
+    async updateUser(input: UpdateUserInput): Promise<UserRecord> {
+      return updateUser(db, input);
+    },
+    async markUserDeletionRequested(input: DeleteUserInput): Promise<boolean> {
+      return markUserDeletionRequested(db, input);
+    },
+    async deleteUser(input: DeleteUserInput): Promise<UserRecord> {
+      return deleteUser(db, input);
+    },
+    async upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord> {
+      return upsertUserIdentity(db, input);
+    },
+    async deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord> {
+      return deleteUserIdentity(db, input);
+    },
+    async getUserModelPreference(
+      input: UserModelPreferenceInput
+    ): Promise<UserModelPreference | undefined> {
+      return getUserModelPreference(db, input);
+    },
+    async setUserModelPreference(
+      input: UserModelPreferenceInput & {
+        preference: UserModelPreference;
+      }
+    ): Promise<void> {
+      return setUserModelPreference(db, input);
+    }
+  };
 }

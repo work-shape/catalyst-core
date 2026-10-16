@@ -15,12 +15,13 @@ import {
   type WorkspaceMembership,
   createCollaborationWorkspaceId,
   createWorkspaceAccessRequestId,
-  validateWorkspaceCreation
+  validateWorkspaceCreation,
+  type WorkspaceInDeletion
 } from "@work-shape/catalyst-core";
 import { lockRights } from "./rights-lock";
 import { containsPattern } from "./like-pattern";
 import { deleteWorkspaceOwnedAssets } from "./postgres-config-asset-operations";
-import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
+import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { requireNoPendingConversationCleanup } from "./postgres-pending-cleanup";
 import {
   mapCollaborationWorkspace,
@@ -39,7 +40,7 @@ import {
 
 type WorkspaceDatabase = PostgresConnection;
 
-export async function createWorkspace(
+async function createWorkspace(
   db: PostgresConnection,
   input: CreateWorkspaceInput
 ): Promise<CollaborationWorkspace> {
@@ -50,7 +51,7 @@ export async function createWorkspace(
 /** The condition every read carries: a workspace whose deletion was requested is closed. */
 export const notInDeletion = isNull(collaborationWorkspaces.deletionRequestedAt);
 
-export async function getWorkspace(
+async function getWorkspace(
   db: WorkspaceDatabase,
   clientInstanceId: ClientInstanceId,
   collaborationWorkspaceId: CollaborationWorkspaceId
@@ -69,7 +70,7 @@ export async function getWorkspace(
   return row ? mapCollaborationWorkspace(row) : undefined;
 }
 
-export async function listWorkspacesForUser(
+async function listWorkspacesForUser(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listWorkspacesForUser"]>[0]
 ): Promise<CollaborationWorkspaceWithRole[]> {
@@ -97,7 +98,7 @@ export async function listWorkspacesForUser(
   return rows.map(mapCollaborationWorkspaceWithRole);
 }
 
-export async function listDiscoverableWorkspaces(
+async function listDiscoverableWorkspaces(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listDiscoverableWorkspaces"]>[0]
 ): Promise<CollaborationWorkspace[]> {
@@ -116,7 +117,7 @@ export async function listDiscoverableWorkspaces(
   return rows.map(mapCollaborationWorkspace);
 }
 
-export async function listSharedWorkspaces(
+async function listSharedWorkspaces(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listSharedWorkspaces"]>[0]
 ): Promise<CollaborationWorkspace[]> {
@@ -134,7 +135,7 @@ export async function listSharedWorkspaces(
   return rows.map(mapCollaborationWorkspace);
 }
 
-export async function updateWorkspace(
+async function updateWorkspace(
   db: PostgresConnection,
   input: UpdateWorkspaceInput
 ): Promise<CollaborationWorkspace> {
@@ -180,7 +181,7 @@ export async function updateWorkspace(
   return mapCollaborationWorkspace(row);
 }
 
-export async function ensurePersonalWorkspace(
+async function ensurePersonalWorkspace(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["ensurePersonalWorkspace"]>[0]
 ): Promise<CollaborationWorkspace> {
@@ -236,7 +237,7 @@ export async function ensurePersonalWorkspaceInTransaction(
   return workspace;
 }
 
-export async function addMembership(
+async function addMembership(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["addMembership"]>[0]
 ): Promise<WorkspaceMembership> {
@@ -262,7 +263,7 @@ export async function addMembership(
   });
 }
 
-export async function updateMembershipRole(
+async function updateMembershipRole(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["updateMembershipRole"]>[0]
 ): Promise<WorkspaceMembership> {
@@ -286,7 +287,7 @@ export async function updateMembershipRole(
   });
 }
 
-export async function removeMembership(
+async function removeMembership(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["removeMembership"]>[0]
 ): Promise<WorkspaceMembership> {
@@ -309,7 +310,7 @@ export async function removeMembership(
   });
 }
 
-export async function listMemberships(
+async function listMemberships(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listMemberships"]>[0]
 ): Promise<WorkspaceMembership[]> {
@@ -330,7 +331,7 @@ export async function listMemberships(
   return rows.map(mapWorkspaceMembership);
 }
 
-export async function searchMemberCandidates(
+async function searchMemberCandidates(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["searchMemberCandidates"]>[0]
 ): Promise<WorkspaceMemberCandidate[]> {
@@ -412,7 +413,7 @@ export async function searchMemberCandidates(
   });
 }
 
-export async function getMembership(
+async function getMembership(
   db: WorkspaceDatabase,
   input: Parameters<CollaborationWorkspaceStore["getMembership"]>[0]
 ): Promise<WorkspaceMembership | undefined> {
@@ -434,7 +435,7 @@ export async function getMembership(
   return row ? mapWorkspaceMembership(row.membership) : undefined;
 }
 
-export async function createAccessRequest(
+async function createAccessRequest(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["createAccessRequest"]>[0]
 ): Promise<WorkspaceAccessRequest> {
@@ -466,7 +467,7 @@ export async function createAccessRequest(
   return mapWorkspaceAccessRequest(row);
 }
 
-export async function deleteAccessRequest(
+async function deleteAccessRequest(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["deleteAccessRequest"]>[0]
 ): Promise<WorkspaceAccessRequest> {
@@ -478,7 +479,7 @@ export async function deleteAccessRequest(
   return mapWorkspaceAccessRequest(row);
 }
 
-export async function listAccessRequestsForWorkspace(
+async function listAccessRequestsForWorkspace(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listAccessRequestsForWorkspace"]>[0]
 ): Promise<WorkspaceAccessRequest[]> {
@@ -499,7 +500,7 @@ export async function listAccessRequestsForWorkspace(
   return rows.map(mapWorkspaceAccessRequest);
 }
 
-export async function getAccessRequest(
+async function getAccessRequest(
   db: WorkspaceDatabase,
   input: Parameters<CollaborationWorkspaceStore["getAccessRequest"]>[0]
 ): Promise<WorkspaceAccessRequest | undefined> {
@@ -511,7 +512,7 @@ export async function getAccessRequest(
   return row ? mapWorkspaceAccessRequest(row) : undefined;
 }
 
-export async function deleteAccessRequestsForUser(
+async function deleteAccessRequestsForUser(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["deleteAccessRequestsForUser"]>[0]
 ): Promise<number> {
@@ -527,7 +528,7 @@ export async function deleteAccessRequestsForUser(
   return rows.length;
 }
 
-export async function removeMembershipsForUser(
+async function removeMembershipsForUser(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["removeMembershipsForUser"]>[0]
 ): Promise<number> {
@@ -557,7 +558,7 @@ export async function removeMembershipsForUser(
   return rows.length;
 }
 
-export async function deletePersonalWorkspaceForUser(
+async function deletePersonalWorkspaceForUser(
   db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["deletePersonalWorkspaceForUser"]>[0]
 ): Promise<CollaborationWorkspace> {
@@ -746,4 +747,136 @@ function accessRequestWhere(input: {
     ),
     eq(collaborationWorkspaceAccessRequests.userId, input.userId)
   );
+}
+
+// The composition root supplies operations whose query modules depend on this module.
+export function createPostgresWorkspacesStore(
+  db: PostgresConnection,
+  deps: Pick<
+    CollaborationWorkspaceStore,
+    | "deleteWorkspace"
+    | "getWorkspaceInDeletion"
+    | "lockWorkspacesForOwnerChange"
+    | "markWorkspaceDeletionRequested"
+  >
+): CollaborationWorkspaceStore {
+  return {
+    async createWorkspace(input: CreateWorkspaceInput): Promise<CollaborationWorkspace> {
+      return createWorkspace(db, input);
+    },
+    async getWorkspace(
+      clientInstanceId: ClientInstanceId,
+      collaborationWorkspaceId: CollaborationWorkspaceId
+    ): Promise<CollaborationWorkspace | undefined> {
+      return getWorkspace(db, clientInstanceId, collaborationWorkspaceId);
+    },
+    async listWorkspacesForUser(
+      input: Parameters<CollaborationWorkspaceStore["listWorkspacesForUser"]>[0]
+    ): Promise<CollaborationWorkspaceWithRole[]> {
+      return listWorkspacesForUser(db, input);
+    },
+    async listDiscoverableWorkspaces(
+      input: Parameters<CollaborationWorkspaceStore["listDiscoverableWorkspaces"]>[0]
+    ): Promise<CollaborationWorkspace[]> {
+      return listDiscoverableWorkspaces(db, input);
+    },
+    async listSharedWorkspaces(
+      input: Parameters<CollaborationWorkspaceStore["listSharedWorkspaces"]>[0]
+    ): Promise<CollaborationWorkspace[]> {
+      return listSharedWorkspaces(db, input);
+    },
+    async updateWorkspace(input: UpdateWorkspaceInput): Promise<CollaborationWorkspace> {
+      return updateWorkspace(db, input);
+    },
+    async markWorkspaceDeletionRequested(
+      input: Parameters<CollaborationWorkspaceStore["markWorkspaceDeletionRequested"]>[0]
+    ): Promise<boolean> {
+      return deps.markWorkspaceDeletionRequested(input);
+    },
+    async lockWorkspacesForOwnerChange(
+      input: Parameters<CollaborationWorkspaceStore["lockWorkspacesForOwnerChange"]>[0]
+    ): Promise<void> {
+      return deps.lockWorkspacesForOwnerChange(input);
+    },
+    async getWorkspaceInDeletion(
+      input: Parameters<CollaborationWorkspaceStore["getWorkspaceInDeletion"]>[0]
+    ): Promise<WorkspaceInDeletion | undefined> {
+      return deps.getWorkspaceInDeletion(input);
+    },
+    async deleteWorkspace(
+      input: Parameters<CollaborationWorkspaceStore["deleteWorkspace"]>[0]
+    ): Promise<CollaborationWorkspace> {
+      return deps.deleteWorkspace(input);
+    },
+    async ensurePersonalWorkspace(
+      input: Parameters<CollaborationWorkspaceStore["ensurePersonalWorkspace"]>[0]
+    ): Promise<CollaborationWorkspace> {
+      return ensurePersonalWorkspace(db, input);
+    },
+    async addMembership(
+      input: Parameters<CollaborationWorkspaceStore["addMembership"]>[0]
+    ): Promise<WorkspaceMembership> {
+      return addMembership(db, input);
+    },
+    async updateMembershipRole(
+      input: Parameters<CollaborationWorkspaceStore["updateMembershipRole"]>[0]
+    ): Promise<WorkspaceMembership> {
+      return updateMembershipRole(db, input);
+    },
+    async removeMembership(
+      input: Parameters<CollaborationWorkspaceStore["removeMembership"]>[0]
+    ): Promise<WorkspaceMembership> {
+      return removeMembership(db, input);
+    },
+    async listMemberships(
+      input: Parameters<CollaborationWorkspaceStore["listMemberships"]>[0]
+    ): Promise<WorkspaceMembership[]> {
+      return listMemberships(db, input);
+    },
+    async searchMemberCandidates(
+      input: Parameters<CollaborationWorkspaceStore["searchMemberCandidates"]>[0]
+    ): Promise<WorkspaceMemberCandidate[]> {
+      return searchMemberCandidates(db, input);
+    },
+    async getMembership(
+      input: Parameters<CollaborationWorkspaceStore["getMembership"]>[0]
+    ): Promise<WorkspaceMembership | undefined> {
+      return getMembership(db, input);
+    },
+    async createAccessRequest(
+      input: Parameters<CollaborationWorkspaceStore["createAccessRequest"]>[0]
+    ): Promise<WorkspaceAccessRequest> {
+      return createAccessRequest(db, input);
+    },
+    async deleteAccessRequest(
+      input: Parameters<CollaborationWorkspaceStore["deleteAccessRequest"]>[0]
+    ): Promise<WorkspaceAccessRequest> {
+      return deleteAccessRequest(db, input);
+    },
+    async listAccessRequestsForWorkspace(
+      input: Parameters<CollaborationWorkspaceStore["listAccessRequestsForWorkspace"]>[0]
+    ): Promise<WorkspaceAccessRequest[]> {
+      return listAccessRequestsForWorkspace(db, input);
+    },
+    async getAccessRequest(
+      input: Parameters<CollaborationWorkspaceStore["getAccessRequest"]>[0]
+    ): Promise<WorkspaceAccessRequest | undefined> {
+      return getAccessRequest(db, input);
+    },
+    async deleteAccessRequestsForUser(
+      input: Parameters<CollaborationWorkspaceStore["deleteAccessRequestsForUser"]>[0]
+    ): Promise<number> {
+      return deleteAccessRequestsForUser(db, input);
+    },
+    async removeMembershipsForUser(
+      input: Parameters<CollaborationWorkspaceStore["removeMembershipsForUser"]>[0]
+    ): Promise<number> {
+      return removeMembershipsForUser(db, input);
+    },
+    async deletePersonalWorkspaceForUser(
+      input: Parameters<CollaborationWorkspaceStore["deletePersonalWorkspaceForUser"]>[0]
+    ): Promise<CollaborationWorkspace> {
+      return deletePersonalWorkspaceForUser(db, input);
+    }
+  };
 }

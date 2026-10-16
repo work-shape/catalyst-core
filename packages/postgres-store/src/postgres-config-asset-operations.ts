@@ -14,12 +14,20 @@ import {
   type ConfigAssetState,
   type ConfigAssetStore
 } from "@work-shape/catalyst-core";
+import {
+  answerAssetRepoSave,
+  beginAssetRepoSave,
+  getAssetRepoSave,
+  getAssetCheckout,
+  listAssetRepoBundles,
+  nameAssetRepoSaveBundle
+} from "./postgres-asset-repo-operations";
 import * as repo from "./postgres-asset-repo-operations";
 import {
   insertInitialAgentAvailability,
   resolveBatchInitialAvailability
 } from "./postgres-initial-agent-availability";
-import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
+import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import {
   mapAssetScope,
   mapConfigAsset,
@@ -35,6 +43,17 @@ import {
   fileSets,
   permissionGrants
 } from "./schema";
+import {
+  getConfigAssetRevision as getPostgresConfigAssetRevision,
+  getConfigAssetRevisionById as getPostgresConfigAssetRevisionById
+} from "./postgres-config-asset-revisions";
+import {
+  discardConfigAssetDraft as discardPostgresConfigAssetDraft,
+  unpublishConfigAsset as unpublishPostgresConfigAsset,
+  publishConfigAssetRevision as publishPostgresConfigAssetRevision,
+  removeConfigAsset as removePostgresConfigAsset
+} from "./postgres-config-asset-pointers";
+import { sweepAssetRepoSaves } from "./jobs/asset-repo-sweep";
 
 /** The revision the published pointer of an asset names, joined beside the active one. */
 export const publishedRevisions = alias(configAssetRevisions, "published_revisions");
@@ -45,7 +64,7 @@ export const publishedColumns = {
   config: publishedRevisions.config
 };
 
-export async function getConfigAssetState(
+async function getConfigAssetState(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
 ): Promise<ConfigAssetState> {
@@ -66,7 +85,7 @@ const revisionWithoutSkillResources = {
     )
 };
 
-export async function listActiveConfigAssets(
+async function listActiveConfigAssets(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listActiveConfigAssets"]>[0]
 ): Promise<ConfigAssetRecord[]> {
@@ -93,7 +112,7 @@ export async function listActiveConfigAssets(
   return rows.map((row) => mapConfigAsset(row.asset, row.revision));
 }
 
-export async function listPublishedConfigAssets(
+async function listPublishedConfigAssets(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listPublishedConfigAssets"]>[0]
 ): Promise<ConfigAssetRecord[]> {
@@ -119,7 +138,7 @@ export async function listPublishedConfigAssets(
   return rows.map((row) => mapConfigAsset(row.asset, row.revision, row.published));
 }
 
-export async function getConfigAsset(
+async function getConfigAsset(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]
 ): Promise<ConfigAssetRecord | undefined> {
@@ -141,7 +160,7 @@ export async function getConfigAsset(
   return row ? mapConfigAsset(row.asset, row.revision, row.published) : undefined;
 }
 
-export async function listConfigAssetRevisions(
+async function listConfigAssetRevisions(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listConfigAssetRevisions"]>[0]
 ): Promise<ConfigAssetRevisionRecord[]> {
@@ -200,7 +219,7 @@ interface WrittenAsset {
   created: boolean;
 }
 
-export async function applyConfigAssetMutations(
+async function applyConfigAssetMutations(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
 ): ReturnType<ConfigAssetStore["applyConfigAssetMutations"]> {
@@ -547,7 +566,7 @@ async function selectAssetRowsByKey(
     );
 }
 
-export async function listConfigAssetsByKey(
+async function listConfigAssetsByKey(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listConfigAssetsByKey"]>[0]
 ): Promise<ConfigAssetRecord[]> {
@@ -672,4 +691,89 @@ export async function findConfigAssetRow(
     )
     .limit(1);
   return row;
+}
+
+// The composition root supplies operations whose query modules depend on this module.
+export function createPostgresConfigAssetsStore(
+  db: PostgresConnection,
+  deps: Pick<
+    ConfigAssetStore,
+    | "getConfigAssetPageOrigin"
+    | "listConfigAssetsFromPage"
+    | "listConfigAssetPage"
+    | "listAgentAvailability"
+    | "setAgentAvailability"
+  >,
+  inTransaction = false
+): ConfigAssetStore {
+  // The row of a save says which object may be in the store, so it is written for itself and
+  // at once. Inside a transaction a rollback would take the row and leave the object.
+  const own = () => {
+    if (inTransaction) {
+      throw new AppError(
+        "INTERNAL",
+        "A save of a repository is begun, named and swept outside of a transaction"
+      );
+    }
+    return db;
+  };
+  return {
+    async getConfigAssetState(
+      input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
+    ): Promise<ConfigAssetState> {
+      return getConfigAssetState(db, input);
+    },
+    async listActiveConfigAssets(
+      input: Parameters<ConfigAssetStore["listActiveConfigAssets"]>[0]
+    ): Promise<ConfigAssetRecord[]> {
+      return listActiveConfigAssets(db, input);
+    },
+    async listConfigAssetPage(
+      input: Parameters<ConfigAssetStore["listConfigAssetPage"]>[0]
+    ): Promise<ConfigAssetRecord[]> {
+      return deps.listConfigAssetPage(input);
+    },
+    listPublishedConfigAssets: (input) => listPublishedConfigAssets(db, input),
+    async getConfigAsset(
+      input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]
+    ): Promise<ConfigAssetRecord | undefined> {
+      return getConfigAsset(db, input);
+    },
+    async listConfigAssetRevisions(
+      input: Parameters<ConfigAssetStore["listConfigAssetRevisions"]>[0]
+    ): Promise<ConfigAssetRevisionRecord[]> {
+      return listConfigAssetRevisions(db, input);
+    },
+    async getConfigAssetRevision(
+      input: Parameters<ConfigAssetStore["getConfigAssetRevision"]>[0]
+    ): Promise<ConfigAssetRevisionRecord | undefined> {
+      return getPostgresConfigAssetRevision(db, input);
+    },
+    getConfigAssetRevisionById: (input) => getPostgresConfigAssetRevisionById(db, input),
+    listConfigAssetsByKey: (input) => listConfigAssetsByKey(db, input),
+    listConfigAssetsFromPage: (input) => deps.listConfigAssetsFromPage(input),
+    getConfigAssetPageOrigin: (input) => deps.getConfigAssetPageOrigin(input),
+    applyConfigAssetMutations: (input) => applyConfigAssetMutations(db, input),
+    publishConfigAssetRevision: (input) => publishPostgresConfigAssetRevision(db, input),
+    discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),
+    unpublishConfigAsset: (input) => unpublishPostgresConfigAsset(db, input),
+    removeConfigAsset: (input) => removePostgresConfigAsset(db, input),
+    listAssetRepoBundles: (input) => listAssetRepoBundles(db, input),
+    beginAssetRepoSave: (input) => beginAssetRepoSave(own(), input),
+    nameAssetRepoSaveBundle: (input) => nameAssetRepoSaveBundle(own(), input),
+    getAssetRepoSave: (input) => getAssetRepoSave(db, input),
+    answerAssetRepoSave: (input) => answerAssetRepoSave(db, input),
+    sweepAssetRepoSaves: (input) => sweepAssetRepoSaves(own(), input),
+    getAssetCheckout: (input) => getAssetCheckout(db, input),
+    async listAgentAvailability(
+      input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]
+    ): ReturnType<ConfigAssetStore["listAgentAvailability"]> {
+      return deps.listAgentAvailability(input);
+    },
+    async setAgentAvailability(
+      input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
+    ): ReturnType<ConfigAssetStore["setAgentAvailability"]> {
+      return deps.setAgentAvailability(input);
+    }
+  };
 }

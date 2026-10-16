@@ -4,8 +4,8 @@ import type {
   KnowledgeBaseState,
   KnowledgeBaseStateStore
 } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "../postgres-database";
-import { knowledgeBaseStates } from "../schema";
+import type { PostgresConnection } from "./postgres-database";
+import { knowledgeBaseStates } from "./schema";
 
 type Row = typeof knowledgeBaseStates.$inferSelect;
 

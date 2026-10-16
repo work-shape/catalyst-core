@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { DataStoreRecord, DataStoreRecordsStore } from "@work-shape/catalyst-core";
-import type { PostgresConnection } from "../postgres-database";
-import { dataStores } from "../schema";
+import type { PostgresConnection } from "./postgres-database";
+import { dataStores } from "./schema";
 
 type Row = typeof dataStores.$inferSelect;
 
