@@ -340,6 +340,8 @@ test("switching between conversations keeps the composer at the bottom from the 
   // The start page has the composer in the middle, far from where a conversation has it.
   expect(startGap - dockedGap).toBeGreaterThan(COMPOSER_START_PAGE_LIFT_PX);
 
+  await watchComposerAnimations(page);
+
   // Between two conversations the composer is at the bottom in every frame.
   for (const [title, id] of [
     [`Docked two ${stamp}`, second.id],
@@ -350,7 +352,8 @@ test("switching between conversations keeps the composer at the bottom from the 
     const gaps = await frames;
     await expect(page).toHaveURL(conversationUrlPattern(id));
     await expect(chat.getByText(`Opening message for ${title}`).first()).toBeVisible();
-    expect(gaps.length).toBeGreaterThan(COMPOSER_FRAMES_LEAST);
+    expect(await settledComposerBottomGap(page)).toBeCloseTo(dockedGap, 0);
+    await expect(page.locator("html")).not.toHaveAttribute("data-composer-animated", "true");
     expect(gaps.filter((gap) => Math.abs(gap - dockedGap) > 1)).toEqual([]);
   }
 
@@ -363,6 +366,8 @@ test("switching between conversations keeps the composer at the bottom from the 
   const gaps = await frames;
   await expect(page).toHaveURL(conversationUrlPattern(second.id));
   expect(gaps.at(-1)).toBeCloseTo(dockedGap, 0);
+  expect(await settledComposerBottomGap(page)).toBeCloseTo(dockedGap, 0);
+  await expect(page.locator("html")).not.toHaveAttribute("data-composer-animated", "true");
   expect(
     gaps.filter((gap) => Math.abs(gap - dockedGap) > 1 && Math.abs(gap - startGap) > 1)
   ).toEqual([]);
@@ -376,15 +381,25 @@ test("the first message moves the composer from the middle to the bottom", async
   const startGap = await settledComposerBottomGap(page);
 
   await input.fill(`Settles ${Date.now()}`);
-  const frames = recordComposerBottomGaps(page);
+  await watchComposerAnimations(page);
   await input.press("Enter");
-  const gaps = await frames;
   await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+  await expect(page.locator("html")).toHaveAttribute("data-composer-animated", "true");
+  await expect(page.locator("html")).toHaveAttribute("data-composer-settled", "true");
 
   const dockedGap = await settledComposerBottomGap(page);
   expect(startGap - dockedGap).toBeGreaterThan(COMPOSER_START_PAGE_LIFT_PX);
-  // It travels: some frames show it between the two places.
-  expect(gaps.filter((gap) => gap > dockedGap + 2 && gap < startGap - 2).length).toBeGreaterThan(0);
+  expect(
+    await input.evaluate((element) => {
+      let current: Element | null = element;
+      while (current) {
+        if (current.getAnimations().some((animation) => animation.playState === "running"))
+          return true;
+        current = current.parentElement;
+      }
+      return false;
+    })
+  ).toBe(false);
 });
 
 test("start page centres the composer and settles it at the bottom after the first message", async ({
@@ -4083,7 +4098,8 @@ test("panels at the right of the conversation open and close in one step, leave 
   const fileName = `umsatz-${suffix}.csv`;
 
   await page.setViewportSize({ width: 1280, height: 720 });
-  await signInViaUi(page, normalUser);
+  const surfaceUser = await createSurfaceUser(page);
+  await signInViaUi(page, surfaceUser);
   // A stored width wider than the window: the file takes all it may, so the conversation is at
   // its minimum, and room kept for the card on top of that would squash it.
   await page.evaluate(() =>
@@ -4126,6 +4142,9 @@ test("panels at the right of the conversation open and close in one step, leave 
   await resources.getByText(fileName).click();
   await expect(slot).toHaveAttribute("data-surface-kind", "file_preview");
   await expect(slot).toHaveAttribute("data-surface-mode", "beside");
+  await slot.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
   await expect(slot).toHaveCSS("animation-name", "panel-in");
   expectOneStep(await frames.stop(), "the file opens");
   expect(Math.round((await slot.boundingBox())?.width ?? 0)).toBe(620);
@@ -4186,6 +4205,9 @@ test("panels at the right of the conversation open and close in one step, leave 
   await toggle.click();
   await expect(resources).toBeVisible();
   expectOneStep(await frames.stop(), "the card opens");
+
+  // End the previous run before switching the conversation whose surface is observed.
+  await expect(page.getByRole("button", { name: "Stop generating" })).toHaveCount(0);
 
   // A view opens in the same slot, here in a conversation without resources.
   await page.getByRole("button", { name: "New chat", exact: true }).first().click();
@@ -4526,12 +4548,16 @@ test("a surface yields Escape to the layer above it, returns the focus to its op
   const chatOutOfReach = () => composer.evaluate((element) => element.closest("[inert]") !== null);
 
   await page.setViewportSize({ width: 1280, height: 720 });
-  await signInViaUi(page, normalUser);
+  const surfaceUser = await createSurfaceUser(page);
+  await signInViaUi(page, surfaceUser);
   await composer.fill(
     `/tool show_view ${JSON.stringify({ html: "<p>Surface body</p>", mode: "side_panel", title: "Surface view" })}`
   );
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(slot).toHaveAttribute("data-surface-mode", "beside");
+  await slot.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
   expect(await chatOutOfReach()).toBe(false);
 
   // The header of the surface and the header of the chat are one line.
@@ -4547,7 +4573,7 @@ test("a surface yields Escape to the layer above it, returns the focus to its op
   await page.keyboard.press("Escape");
   await expect(palette).toBeHidden();
   await expect(slot).toBeVisible();
-  await page.getByRole("button", { name: "E2E User account" }).click();
+  await page.getByRole("button", { name: `${surfaceUser.displayLabel} account` }).click();
   await expect(page.getByRole("menu")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toBeHidden();
@@ -4821,8 +4847,6 @@ const COMPOSER_START_PAGE_LIFT_PX = 100;
 const COMPOSER_WATCH_MS = 1_000;
 /** The composer rests when it has not moved for this long. */
 const COMPOSER_REST_MS = 400;
-/** A watch that saw fewer frames than this did not see the switch. */
-const COMPOSER_FRAMES_LEAST = 10;
 
 /**
  * Words in a message whose run must still be going on the server while the test acts on the
@@ -4945,6 +4969,30 @@ function expectOneStep(frames: PanelFrames, what: string, limits: { widths?: num
   expect(frames.sideways, `scrolled sideways while ${what}`).toBeLessThanOrEqual(0);
 }
 
+/** Observe a composer animation at its creation, even if the runner misses every painted frame. */
+async function watchComposerAnimations(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (...args) {
+      const animation = animate.apply(this, args);
+      if (this.querySelector("textarea")) {
+        const moving =
+          this.getAnimations().includes(animation) && animation.playState === "running";
+        document.documentElement.dataset.composerAnimated = String(moving);
+        animation.finished.then(
+          () => {
+            document.documentElement.dataset.composerSettled = "true";
+          },
+          () => {
+            document.documentElement.dataset.composerSettled = "cancelled";
+          }
+        );
+      }
+      return animation;
+    };
+  });
+}
+
 /** The gap between the composer and the lower edge of the window, as painted now. */
 function composerBottomGap(page: Page): Promise<number> {
   return page.evaluate(() => {
@@ -5007,6 +5055,29 @@ function currentConversationId(page: Page): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+/** Surface/dock state belongs to this journey's user, never to the shared seeded user. */
+async function createSurfaceUser(page: Page) {
+  const id = randomUUID();
+  const user = {
+    displayLabel: `Surface ${id}`,
+    email: `surface-${id}@example.test`,
+    password: `surface-${id}`
+  };
+  await signInViaApi(page, superadminUser);
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
+    data: {
+      displayLabel: user.displayLabel,
+      email: user.email,
+      roles: ["user"],
+      passwordSignIn: { password: user.password }
+    }
+  });
+  expect(created.ok()).toBe(true);
+  const signedOut = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-out`);
+  expect(signedOut.ok()).toBe(true);
+  return user;
 }
 
 async function signInViaUi(

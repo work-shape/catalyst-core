@@ -473,6 +473,15 @@ test("after the rail leaves its drawer, a row under its faded edge still takes n
 
   await page.setViewportSize(SHORT_RAIL);
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Main navigation" })).toHaveCount(0);
+  await rail(page).evaluate(async (element) => {
+    await Promise.all(
+      element.getAnimations({ subtree: true }).map((animation) => animation.finished)
+    );
+  });
+  // The desktop list is a fresh node. Wait for its IntersectionObserver to mark the
+  // faded row before using elementFromPoint at the edge.
+  await expect(rows).toHaveCount(10);
   const { bottom, rowAt, scrollRowTo } = await fadedEdge(page);
   await scrollRowTo(bottom - 6, "top");
   await expect.poll(() => rowAt(bottom - 3)).toBeNull();
