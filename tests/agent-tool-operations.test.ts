@@ -16,6 +16,7 @@ import { injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-instance";
 import { deferred, waitUntil } from "./support/assertions";
+import { withTestSql } from "./support/test-sql";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // A chat run on an assembled instance whose agent calls tools: each call is a call of the
@@ -511,56 +512,53 @@ describe("an agent's tool calls in a chat run", () => {
     const said = await f.say('/tool demo.change {"text":"secret-orphan"}');
     const [held] = await f.runs();
     const requestId = held?.approvalRequestId ?? "";
-    let entered: () => void = () => undefined;
-    const holding = new Promise<void>((resolve) => {
-      entered = resolve;
-    });
-    let fail: () => void = () => undefined;
-    const failing = new Promise<void>((resolve) => {
-      fail = resolve;
-    });
-    // A decision that holds the request and fails in the end, as one whose commit fails.
-    const decision = f.app.stores.approvals
-      .transitionPendingApprovalRequest({
-        clientInstanceId: f.clientInstanceId,
-        requestId,
-        resolve: async () => {
-          entered();
-          await failing;
-          throw new Error("The decision could not be recorded");
-        }
+    const holding = deferred<void>();
+    const failing = deferred<void>();
+    // A previous-release decision held only the request. Current decisions take the
+    // conversation first, so simulate the old lock directly to retain orphan-cleanup coverage.
+    const decision = withTestSql((sql) =>
+      sql.begin(async (tx) => {
+        await tx`select id from approval_requests where client_instance_id = ${f.clientInstanceId} and id = ${requestId} for update`;
+        holding.resolve();
+        await failing.promise;
+        throw new Error("The decision could not be recorded");
       })
-      .catch(() => undefined);
-    await holding;
-    const deleted = await f.app.call("conversations.delete", {
-      params: { conversationId: said.conversationId }
-    });
-    expect(deleted.statusCode).toBeLessThan(300);
-    fail();
-    await decision;
-    const stored = () =>
-      f.app.stores.approvals.getApprovalRequest({
-        clientInstanceId: f.clientInstanceId,
-        requestId
+    ).catch(() => undefined);
+    try {
+      await holding.promise;
+      const deleted = await f.app.call("conversations.delete", {
+        params: { conversationId: said.conversationId }
       });
-    // The run is gone and the request is open, with what the agent was given.
-    expect(await f.runs()).toEqual([]);
-    expect(await stored()).toMatchObject({ status: "pending" });
+      expect(deleted.statusCode).toBeLessThan(300);
+      failing.resolve();
+      await decision;
+      const stored = () =>
+        f.app.stores.approvals.getApprovalRequest({
+          clientInstanceId: f.clientInstanceId,
+          requestId
+        });
+      // The run is gone and the request is open, with what the agent was given.
+      expect(await f.runs()).toEqual([]);
+      expect(await stored()).toMatchObject({ status: "pending" });
 
-    await f.runJobs();
+      await f.runJobs();
 
-    const request = await stored();
-    expect(request).toMatchObject({
-      status: "superseded",
-      applyResult: {
-        execution: "refused",
-        error: { message: "The call of this request no longer exists." }
-      },
-      payload: { inputRemoved: true }
-    });
-    expect(JSON.stringify(request)).not.toContain("secret-orphan");
-    expect(calls).toEqual([]);
-    await f.app.close();
+      const request = await stored();
+      expect(request).toMatchObject({
+        status: "superseded",
+        applyResult: {
+          execution: "refused",
+          error: { message: "The call of this request no longer exists." }
+        },
+        payload: { inputRemoved: true }
+      });
+      expect(JSON.stringify(request)).not.toContain("secret-orphan");
+      expect(calls).toEqual([]);
+    } finally {
+      failing.resolve();
+      await decision;
+      await f.app.close();
+    }
   });
 
   it("deletes the runs of a conversation with it and leaves a run no conversation caused", async () => {

@@ -13,6 +13,7 @@ import { type PostgresConnection } from "./postgres-database";
 import { mapApprovalRequest } from "./rows";
 import { approvalRequests } from "./schema";
 import { appendApprovalDecision } from "./postgres-conversation-operations";
+import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 
 async function createApprovalRequest(
   db: PostgresConnection,
@@ -240,6 +241,21 @@ async function transition(
       eq(approvalRequests.clientInstanceId, input.clientInstanceId),
       eq(approvalRequests.id, input.requestId)
     );
+    const [seen] = await tx.select().from(approvalRequests).where(identity);
+    if (seen?.origin) {
+      // Refuse competing decisions immediately even while the first waits for Stop's
+      // conversation lock. Do not hold the request row while waiting for that conversation.
+      const [lock] = await tx.execute(sql`
+        select pg_try_advisory_xact_lock(hashtextextended(
+          ${`approval_decision:${input.clientInstanceId}:${input.requestId}`}, 0
+        )) as locked
+      `);
+      if (lock?.locked !== true)
+        throw new AppError("CONFLICT", "Approval request is being decided right now");
+      // Stop owns the conversation before it withdraws the request. Take it before the
+      // request too, then let the handler take run -> operation run as in #200.
+      await lockAgentRunConversations(tx, input.clientInstanceId, [seen.origin.agentRunId]);
+    }
     // The lock is not waited for. A decision that waited would hold its connection for as long
     // as the one before it takes, and a pool of waiting decisions serves nobody else.
     const [row] = await tx
@@ -256,7 +272,10 @@ async function transition(
       });
     if (!row) throw new AppError("NOT_FOUND", "Approval request was not found");
     if (row.status !== expectedStatus)
-      throw new AppError("CONFLICT", `Approval request is no longer ${expectedStatus}`);
+      throw new AppError(
+        "CONFLICT",
+        `Approval request is ${row.status}; it is no longer ${expectedStatus}`
+      );
     const outcome = await input.resolve(mapApprovalRequest(row), stores);
     const [updated] = await tx
       .update(approvalRequests)

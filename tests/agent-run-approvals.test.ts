@@ -45,6 +45,7 @@ async function fixture(startAgentRunJobs = true) {
       users: [
         person("requester", ["user"]),
         person("approver", ["admin"]),
+        person("approver-2", ["admin"]),
         person("stranger", ["user"])
       ],
       defaultUserId: "requester"
@@ -54,14 +55,14 @@ async function fixture(startAgentRunJobs = true) {
     local: { provider: TOOL_CALLING_MODEL_PROVIDER, model: "local" }
   };
   const model = createToolCallingModel();
-  const start = (seedAssets: boolean) =>
+  const start = (seedAssets: boolean, startJobs = startAgentRunJobs) =>
     createTestInstance({
       config,
       env: {},
       tools: [change],
       capabilities: [model.capability],
       seedAssets,
-      startAgentRunJobs,
+      startAgentRunJobs: startJobs,
       operations: {
         centralPolicySettings: (): CentralPolicySetting[] => [
           { operation: change.name, value: "approval" }
@@ -122,9 +123,9 @@ async function fixture(startAgentRunJobs = true) {
         })
       ).map((event) => event.payload);
     },
-    async restart() {
+    async restart(startJobs = startAgentRunJobs) {
       await app.close();
-      app = await start(false);
+      app = await start(false, startJobs);
     }
   };
 }
@@ -204,6 +205,268 @@ describe("agent approval pause (operations checks 4, 5 and 6)", () => {
       }
     }
   );
+
+  it.each(["Stop first", "Approve first"])(
+    "%s withdraws the unexecuted approval atomically and expiry cannot revive it",
+    async (order) => {
+      const f = await fixture();
+      try {
+        const said = await f.say();
+        const requestId = required(said.call.approvalRequestId);
+        await f.restart(false);
+        if (order === "Approve first") {
+          expect((await f.decide(requestId, "approve")).statusCode).toBe(200);
+          expect((await f.run(said.runId)).status).toBe("queued");
+        }
+        const stop = () =>
+          f.app.stores.agentRuns.requestAgentRunCancellation({
+            clientInstanceId: f.clientInstanceId,
+            runId: asAgentRunId(said.runId),
+            requestedAt: new Date().toISOString()
+          });
+        await stop();
+        await stop(); // Repeated Stop must not add a second withdrawal event.
+        const request = await f.app.stores.approvals.getApprovalRequest({
+          clientInstanceId: f.clientInstanceId,
+          requestId
+        });
+        expect(request).toMatchObject({
+          status: "withdrawn",
+          applyResult: { execution: "refused", error: { message: "run stopped" } },
+          payload: { inputRemoved: true }
+        });
+        expect(request?.payload).not.toHaveProperty("input");
+        expect(request?.payload).not.toHaveProperty("heldInput");
+        expect(request?.payload.actor).not.toHaveProperty("authSource");
+        expect(await f.calls(said.runId)).toMatchObject([
+          { id: said.call.id, status: "denied", error: { reason: "cancelled" } }
+        ]);
+        expect((await f.run(said.runId)).status).toBe("cancelled");
+        for (const as of ["approver", "approver-2"]) {
+          const list = await f.app.call("approval_requests.list", {
+            query: { status: "pending" },
+            headers: { "x-dev-user-id": as }
+          });
+          expect(list.statusCode, list.body).toBe(200);
+          expect(
+            list.json<{ items: { id: string }[] }>().items.map((item) => item.id)
+          ).not.toContain(requestId);
+        }
+        const audit = (
+          await f.app.stores.audit.listAuditEvents({
+            clientInstanceId: f.clientInstanceId,
+            type: "approval_request.withdrawn"
+          })
+        ).filter((event) => event.metadata?.requestId === requestId);
+        expect(audit).toHaveLength(1);
+        expect(audit[0]).toMatchObject({
+          reason: "run stopped",
+          metadata: {
+            requestId,
+            kind: "operation_call",
+            status: "withdrawn"
+          }
+        });
+        expect(audit[0]?.metadata).toEqual({
+          requestId,
+          kind: "operation_call",
+          status: "withdrawn"
+        });
+        for (const decision of ["approve", "reject"] as const) {
+          const refused = await f.decide(requestId, decision);
+          expect(refused.statusCode, refused.body).toBe(409);
+          expect(refused.body).toContain("withdrawn");
+        }
+        await withTestSql(async (sql) => {
+          await sql`update operation_runs set expires_at = now() - interval '1 second' where id = ${said.call.id}`;
+          await sql`update platform_jobs set run_after = now() where kind = 'operation_runs.expire' and client_instance_id = ${f.clientInstanceId} and status = 'queued'`;
+        });
+        const before = await f.events(said.runId);
+        await getTestJobs(f.app).runDue();
+        expect(await f.events(said.runId)).toEqual(before);
+        expect(
+          await f.app.stores.approvals.getApprovalRequest({
+            clientInstanceId: f.clientInstanceId,
+            requestId
+          })
+        ).toEqual(request);
+        expect(f.executed).toEqual([]);
+      } finally {
+        await f.app.close();
+      }
+    }
+  );
+
+  it("Stop and Approve serialize behind the conversation without a request/run deadlock", async () => {
+    const f = await fixture();
+    let pending: Promise<PromiseSettledResult<unknown>[]> | undefined;
+    try {
+      const said = await f.say();
+      const requestId = required(said.call.approvalRequestId);
+      await f.restart(false);
+      await f.app.stores.transaction(async (stores) => {
+        // Cancellation holds the conversation and run until the outer transaction commits.
+        await stores.agentRuns.requestAgentRunCancellation({
+          clientInstanceId: f.clientInstanceId,
+          runId: asAgentRunId(said.runId),
+          requestedAt: new Date().toISOString()
+        });
+        pending = Promise.allSettled([f.decide(requestId, "approve")]);
+        await waitUntil(
+          async () =>
+            (
+              await withTestSql(
+                (sql) => sql`
+          select pid from pg_stat_activity where datname = current_database()
+            and wait_event_type = 'Lock' and cardinality(pg_blocking_pids(pid)) > 0
+            and query ilike '%conversations%'
+        `
+              )
+            ).length > 0,
+          "the approval waits for Stop's conversation, not its request"
+        );
+        // It must not wait holding another connection for the same decision.
+        const competing = await f.decide(requestId, "approve");
+        expect(competing.statusCode, competing.body).toBe(409);
+        expect(competing.body).toContain("being decided right now");
+      });
+      expect(await required(pending)).toMatchObject([
+        { status: "fulfilled", value: { statusCode: 409 } }
+      ]);
+      expect(
+        await f.app.stores.approvals.getApprovalRequest({
+          clientInstanceId: f.clientInstanceId,
+          requestId
+        })
+      ).toMatchObject({ status: "withdrawn" });
+      expect(f.executed).toEqual([]);
+    } finally {
+      if (pending) await pending;
+      await f.app.close();
+    }
+  });
+
+  it("rolls back Stop, withdrawal, conversation note and governance event together", async () => {
+    const f = await fixture();
+    try {
+      const said = await f.say();
+      const requestId = required(said.call.approvalRequestId);
+      const messages = await f.messages(said.conversationId);
+      await expect(
+        f.app.stores.transaction(async (stores) => {
+          await stores.agentRuns.requestAgentRunCancellation({
+            clientInstanceId: f.clientInstanceId,
+            runId: asAgentRunId(said.runId),
+            requestedAt: new Date().toISOString()
+          });
+          expect(
+            await stores.approvals.getApprovalRequest({
+              clientInstanceId: f.clientInstanceId,
+              requestId
+            })
+          ).toMatchObject({ status: "withdrawn" });
+          throw new Error("rollback Stop");
+        })
+      ).rejects.toThrow("rollback Stop");
+      expect((await f.run(said.runId)).status).toBe("waiting_for_decision");
+      expect(await f.calls(said.runId)).toMatchObject([{ status: "pending_approval" }]);
+      expect(
+        await f.app.stores.approvals.getApprovalRequest({
+          clientInstanceId: f.clientInstanceId,
+          requestId
+        })
+      ).toMatchObject({ status: "pending" });
+      expect(await f.messages(said.conversationId)).toEqual(messages);
+      expect(
+        (
+          await f.app.stores.audit.listAuditEvents({
+            clientInstanceId: f.clientInstanceId,
+            type: "approval_request.withdrawn"
+          })
+        ).filter((event) => event.metadata?.requestId === requestId)
+      ).toEqual([]);
+    } finally {
+      await f.app.close();
+    }
+  });
+
+  it("Stop withdraws an approved call after the worker claims the run but before execution", async () => {
+    const f = await fixture();
+    const release = deferred<void>();
+    const entering = deferred<void>();
+    const resume = f.app.stores.operationRuns.resume.bind(f.app.stores.operationRuns);
+    f.app.stores.operationRuns.resume = async (input) => {
+      entering.resolve();
+      await release.promise;
+      return resume(input);
+    };
+    try {
+      const said = await f.say();
+      const requestId = required(said.call.approvalRequestId);
+      expect((await f.decide(requestId, "approve")).statusCode).toBe(200);
+      await entering.promise;
+      expect((await f.run(said.runId)).status).toBe("running");
+      await f.app.stores.agentRuns.requestAgentRunCancellation({
+        clientInstanceId: f.clientInstanceId,
+        runId: asAgentRunId(said.runId),
+        requestedAt: new Date().toISOString()
+      });
+      expect(
+        await f.app.stores.approvals.getApprovalRequest({
+          clientInstanceId: f.clientInstanceId,
+          requestId
+        })
+      ).toMatchObject({ status: "withdrawn", applyResult: { error: { message: "run stopped" } } });
+      release.resolve();
+      await f.until(said.runId, "cancelled");
+      expect(await f.calls(said.runId)).toMatchObject([
+        { status: "denied", error: { reason: "cancelled" } }
+      ]);
+      expect(f.executed).toEqual([]);
+    } finally {
+      release.resolve();
+      await f.app.close();
+    }
+  });
+
+  it("Stop preserves the approval of an executed call while withdrawing the next wait", async () => {
+    const f = await fixture();
+    try {
+      const said = await f.say(
+        ['/tool demo.change {"text":"one"}', '/tool demo.change {"text":"two"}'].join("\n")
+      );
+      const requestId = required(said.call.approvalRequestId);
+      expect((await f.decide(requestId, "approve")).statusCode).toBe(200);
+      await waitUntil(async () => (await f.calls(said.runId)).length === 2, "the next call waits");
+      await f.until(said.runId, "waiting_for_decision");
+      const approved = await f.app.stores.approvals.getApprovalRequest({
+        clientInstanceId: f.clientInstanceId,
+        requestId
+      });
+      expect(approved).toMatchObject({ status: "approved", applyResult: { execution: "done" } });
+      await f.app.stores.agentRuns.requestAgentRunCancellation({
+        clientInstanceId: f.clientInstanceId,
+        runId: asAgentRunId(said.runId),
+        requestedAt: new Date().toISOString()
+      });
+      expect(
+        await f.app.stores.approvals.getApprovalRequest({
+          clientInstanceId: f.clientInstanceId,
+          requestId
+        })
+      ).toEqual(approved);
+      const second = required((await f.calls(said.runId)).find((call) => call.id !== said.call.id));
+      expect(
+        await f.app.stores.approvals.getApprovalRequest({
+          clientInstanceId: f.clientInstanceId,
+          requestId: required(second.approvalRequestId)
+        })
+      ).toMatchObject({ status: "withdrawn" });
+      expect(f.executed).toEqual(["one"]);
+    } finally {
+      await f.app.close();
+    }
+  });
 
   it("check 4: pauses and keeps the conversation busy, then resumes after restart and executes once on approval", async () => {
     const f = await fixture();

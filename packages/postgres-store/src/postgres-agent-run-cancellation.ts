@@ -1,4 +1,5 @@
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
+import { withdrawStoppedOperationApproval } from "./postgres-agent-run-approval-withdrawal";
 import {
   AppError,
   type AgentRun,
@@ -69,6 +70,9 @@ export async function requestAgentRunCancellation(
       return mapAgentRun(cancelled);
     }
     if (run.status === "running" || run.status === "cancelling") {
+      // A resumed worker may have claimed the run without taking its approved call yet.
+      // The call's row lock decides whether Stop or execution won; never end a taken call.
+      await cancelWaitingCalls(tx, run, input, false);
       const [cancelling] = await tx
         .update(agentRuns)
         .set({
@@ -90,7 +94,8 @@ export async function requestAgentRunCancellation(
 async function cancelWaitingCalls(
   tx: PostgresTransaction,
   run: typeof agentRuns.$inferSelect,
-  input: RequestAgentRunCancellationInput
+  input: RequestAgentRunCancellationInput,
+  recordDecision = true
 ): Promise<AgentRuntimeEvent[]> {
   const events: AgentRuntimeEvent[] = [];
   for (const waiting of run.resumeState?.waiting ?? []) {
@@ -126,6 +131,9 @@ async function cancelWaitingCalls(
           eq(operationRuns.id, call.id)
         )
       );
+    await withdrawStoppedOperationApproval(tx, call, new Date(input.requestedAt));
+    // An owned worker allocates its own observation sequence and records cancellation.
+    if (!recordDecision) continue;
     events.push({
       type: "tool_decision_recorded",
       runId: input.runId,
