@@ -24,7 +24,7 @@ import {
   failRun,
   OperationNotBegunError,
   requireModuleOn,
-  type OperationEnding,
+  type ApprovedOperationEnd,
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
@@ -55,19 +55,7 @@ export interface OperationDecider {
   comment?: string;
 }
 
-/**
- * What became of a call that was approved. `refused` is a call that was not executed because
- * it may no longer run as the person who made it; `expired` one whose time ran out first.
- */
-export type ApprovedOperationEnd = {
-  run?: OperationRun;
-  /** What the call path answered, where the call was executed or refused on it. */
-  outcome?: OperationEnding;
-} & (
-  | { execution: "done" }
-  | { execution: "failed" | "interrupted" | "refused"; error: { code: string; message: string } }
-  | { execution: "expired" }
-);
+export type { ApprovedOperationEnd } from "./operation-execution";
 
 /**
  * Executes a call another person approved, once, outside the request that approved it.
@@ -93,7 +81,10 @@ export async function executeApprovedOperation(
   waiting: WaitingOperationCall,
   approver: OperationDecider & { at: string },
   deps: RunOperationDeps,
-  options: { signal?: AbortSignal } = {}
+  options: {
+    signal?: AbortSignal;
+    runtime?: Pick<OperationCallRuntime, "locale" | "runFence">;
+  } = {}
 ): Promise<ApprovedOperationEnd> {
   options.signal?.throwIfAborted();
   const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: waiting.runId });
@@ -107,7 +98,7 @@ export async function executeApprovedOperation(
     at: approver.at,
     ...(approver.comment ? { comment: approver.comment } : {})
   };
-  const admitted = await admitAgain(run, waiting, deps, decision);
+  const admitted = await admitAgain(run, waiting, deps, decision, options.runtime);
   if ("end" in admitted) {
     return admitted.end;
   }
@@ -622,7 +613,7 @@ export async function refuseWaitingOperation(
  */
 export function wasTakenForExecution(run: OperationRun | undefined): boolean {
   return (
-    run?.decision?.mode === "approved" ||
+    (run?.decision?.mode === "approved" && run.status !== "pending_approval") ||
     (run?.decision?.mode === "confirmed" && run.status !== "pending_confirmation")
   );
 }

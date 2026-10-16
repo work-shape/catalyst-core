@@ -297,23 +297,6 @@ export function toolResultFromOperationResult(
       };
     case "denied":
       return failed("not_allowed", denialText(result.reason, names));
-    case "pending_approval":
-      return {
-        status: "success",
-        output: {
-          requestId: result.approvalRequestId,
-          status: "pending_approval",
-          expiresAt: result.expiresAt,
-          message:
-            "This call has NOT run. It waits for a person's approval and runs once when it is approved. Do not repeat it; tell the user that it waits in the Inbox."
-        },
-        display: {
-          kind: "catalyst.approval_request",
-          version: 1,
-          mode: "inline",
-          data: { requestId: result.approvalRequestId, kind: OPERATION_CALL_APPROVAL_KIND }
-        }
-      };
     case "failed":
       return result.error.code === "INTERNAL"
         ? internalFailure(names.correlationId)
@@ -322,6 +305,7 @@ export function toolResultFromOperationResult(
           failed("handler_failed", result.error.message);
     case "expired":
     case "pending_confirmation":
+    case "pending_approval":
     // An agent's call carries no draft context yet, so it is never simulated.
     case "dry_run":
       return internalFailure(names.correlationId);
@@ -497,14 +481,16 @@ export function createToolOperationRunner(
         }
       );
       const { result } = outcome;
-      if (result.status === "pending_confirmation") {
-        // The call waits for its person's confirmation: the run pauses here.
+      if (result.status === "pending_confirmation" || result.status === "pending_approval") {
+        // Both decisions hold the step open; neither is a successful tool result.
         return {
           status: "waiting_for_decision",
           operationRunId: result.runId,
           operationId: tool.name,
-          mode: "confirm",
-          frozenInput: unknownToJsonValue(result.preview),
+          mode: result.status === "pending_confirmation" ? "confirm" : "approval",
+          frozenInput: unknownToJsonValue(
+            result.status === "pending_confirmation" ? result.preview : outcome.waitingInput
+          ),
           expiresAt: result.expiresAt
         };
       }

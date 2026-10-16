@@ -33,7 +33,7 @@ describe("a call that waited for an approval", () => {
       }
     });
     const waiting = await path.runTool(toolRequest(WRITE, "data_agent"), context);
-    expect(waiting).toMatchObject({ status: "success", output: { status: "pending_approval" } });
+    expect(waiting).toMatchObject({ status: "waiting_for_decision", mode: "approval" });
     const [call] = held;
     const [run] = path.runs.runs;
     if (!call || !run) throw new Error("Expected one held call with its run");

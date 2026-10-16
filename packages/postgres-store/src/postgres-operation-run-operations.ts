@@ -7,10 +7,12 @@ import {
   type OperationRunStore
 } from "@work-shape/catalyst-core";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { resumeAgentRunAfterApproval } from "./postgres-agent-run-approval-resume";
 import { keysetFilter } from "./paging";
 import { type PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
 import { operationRuns } from "./schema/operationRuns";
+import { agentRuns } from "./schema/agentRuns";
 
 const OPEN_RUN_STATUSES = [
   "running",
@@ -260,7 +262,11 @@ async function resumeOperationRun(
         or(
           and(
             eq(operationRuns.status, "pending_approval"),
-            or(isNull(operationRuns.expiresAt), sql`${operationRuns.expiresAt} > now()`)
+            or(
+              isNull(operationRuns.expiresAt),
+              sql`${operationRuns.expiresAt} > now()`,
+              sql`${operationRuns.decision}->>'mode' = 'approved'`
+            )
           ),
           and(
             eq(operationRuns.status, "pending_confirmation"),
@@ -425,20 +431,102 @@ export function mapOperationRun(row: OperationRunRow): OperationRun {
 }
 
 export function createPostgresOperationRunsStore(db: PostgresConnection): OperationRunStore {
+  const settle = (
+    input: { clientInstanceId: OperationRun["clientInstanceId"]; id: string },
+    write: (tx: PostgresConnection) => Promise<OperationRun | undefined>
+  ) =>
+    db.transaction(async (tx) => {
+      const seen = await getOperationRun(tx, input);
+      // Decisions and Stop lock the agent before its call. Use that order here too.
+      if (seen?.approvalRequestId && seen.origin.kind === "agent") {
+        await tx
+          .select({ id: agentRuns.id })
+          .from(agentRuns)
+          .where(
+            and(
+              eq(agentRuns.clientInstanceId, input.clientInstanceId),
+              eq(agentRuns.id, seen.origin.agentRunId)
+            )
+          )
+          .for("update");
+      }
+      const run = await write(tx);
+      if (run) await resumeApproval(tx, run);
+      return run;
+    });
   return {
     create: (run) => createOperationRun(db, run),
     recordEnded: (run) => recordEndedOperationRun(db, run),
-    finish: (input) => finishOperationRun(db, input),
+    finish: (input) => settle(input, (tx) => finishOperationRun(tx, input)),
     findByIdempotencyKey: (input) => findOperationRunByIdempotencyKey(db, input),
     get: (input) => getOperationRun(db, input),
     list: (input) => listOperationRuns(db, input),
     resume: (input) => resumeOperationRun(db, input),
-    endWaiting: (input) => endWaitingOperationRun(db, input),
+    approveWaiting: async (input) => {
+      let resumesAgent = false;
+      const run = await settle(input, async (tx) => {
+        const seen = await getOperationRun(tx, input);
+        if (!seen || seen.status !== "pending_approval" || !seen.expiresAt) return undefined;
+        if (seen.origin.kind === "agent") {
+          const [agent] = await tx
+            .select({ status: agentRuns.status })
+            .from(agentRuns)
+            .where(
+              and(
+                eq(agentRuns.clientInstanceId, input.clientInstanceId),
+                eq(agentRuns.id, seen.origin.agentRunId)
+              )
+            );
+          // Older releases completed the agent turn while leaving its approval in the
+          // Inbox. Those requests retain their standalone executor after an upgrade.
+          if (
+            agent?.status === "failed" ||
+            agent?.status === "cancelled" ||
+            agent?.status === "cancelling"
+          )
+            return undefined;
+          resumesAgent = agent !== undefined && agent.status !== "completed";
+        }
+        // Agent attribution on a standalone call names no resumable run. It keeps the
+        // standalone executor; only an actual Agent Run records its decision here.
+        if (!resumesAgent) return seen;
+        const [row] = await tx
+          .update(operationRuns)
+          .set({ decision: input.decision, updatedAt: sql`now()` })
+          .where(
+            and(
+              identity(input),
+              eq(operationRuns.status, "pending_approval"),
+              isNull(operationRuns.decision),
+              sql`${operationRuns.expiresAt} > now()`
+            )
+          )
+          .returning();
+        return row ? mapOperationRun(row) : undefined;
+      });
+      return run ? { run, resumesAgent } : undefined;
+    },
+    endWaiting: (input) => settle(input, (tx) => endWaitingOperationRun(tx, input)),
     markExpired: (input) => markOperationRunsExpired(db, input),
     listRunningSince: (input) => listOperationRunsRunningSince(db, input),
     deleteOfConversations: (input) => deleteOperationRunsOfConversations(db, input),
     deleteWithoutConversationOlderThan: (input) =>
       deleteOperationRunsWithoutConversationOlderThan(db, input),
-    markInterrupted: (input) => markOperationRunInterrupted(db, input)
+    markInterrupted: (input) => settle(input, (tx) => markOperationRunInterrupted(tx, input))
   };
+}
+
+/** Only held agent calls have a waiting Agent Run to wake. */
+async function resumeApproval(tx: PostgresConnection, run: OperationRun): Promise<void> {
+  if (
+    run.origin.kind !== "agent" ||
+    !run.approvalRequestId ||
+    (run.status === "pending_approval" && run.decision?.mode !== "approved") ||
+    run.status === "running"
+  )
+    return;
+  await resumeAgentRunAfterApproval(tx, {
+    clientInstanceId: run.clientInstanceId,
+    agentRunId: run.origin.agentRunId
+  });
 }

@@ -13,7 +13,8 @@ import { guardAppOrigin } from "../apps/app-origin-guard";
 import { createHeldAssetPreviewer } from "../approvals/held-asset-preview";
 import {
   createOperationApprovalFiler,
-  createOperationCallApprovalHandler
+  createOperationCallApprovalHandler,
+  executeApprovedOperationCall
 } from "../approvals/operation-call-approval-handler";
 import { publishApprovalKinds } from "../approvals/publish-approval";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
@@ -116,6 +117,15 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       centralSettings: () => options.operations?.centralPolicySettings?.() ?? []
     },
     approvals: options.operations?.approvals ?? filer,
+    approvedToolCall: (run, runtime) =>
+      run.approvalRequestId
+        ? executeApprovedOperationCall(
+            { ...handlerOptions, approvals: options.stores.approvals },
+            run.approvalRequestId,
+            runtime.signal,
+            runtime
+          )
+        : Promise.resolve(undefined),
     liveOnce: options.stores.liveOnceSwitches,
     modules: options.modules,
     agentToolNames: options.agentToolNames,

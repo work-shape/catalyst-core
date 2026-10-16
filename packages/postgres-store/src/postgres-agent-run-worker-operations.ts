@@ -29,6 +29,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { and, asc, sql as drizzleSql, eq, gt, inArray, lt, type SQL } from "drizzle-orm";
 import { enqueueJob } from "./jobs/store";
+import { resumeAgentRunAfterApproval } from "./postgres-agent-run-approval-resume";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { withdrawUnclaimedWorkspaceCommandsOfRuns } from "./postgres-execution-workspace-operations";
@@ -231,6 +232,12 @@ async function insertClaimedRunObservation(
       createdAt: new Date(event.createdAt)
     })
     .returning();
+  if (event.type === "tool_decision_requested" && event.mode === "approval") {
+    await resumeAgentRunAfterApproval(tx, {
+      clientInstanceId: claim.clientInstanceId,
+      agentRunId: claim.runId
+    });
+  }
   return mapRunObservation(row);
 }
 

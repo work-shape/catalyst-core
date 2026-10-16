@@ -546,6 +546,7 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return {
       ending: {
         result: { status: "pending_approval", runId: run.id, approvalRequestId, expiresAt },
+        waitingInput: call.input,
         run: pending
       }
     };

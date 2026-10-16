@@ -346,14 +346,11 @@ describe("an agent's tool call that needs another person's approval", () => {
     expect(runs[0]).toMatchObject({ status: "pending_approval", approvalRequestId: "apr_1" });
     expect(filed).toEqual([runs[0]?.id]);
     expect(result).toMatchObject({
-      status: "success",
-      output: { requestId: "apr_1", status: "pending_approval" },
-      display: {
-        kind: "catalyst.approval_request",
-        version: 1,
-        mode: "inline",
-        data: { requestId: "apr_1", kind: "operation_call" }
-      }
+      status: "waiting_for_decision",
+      operationRunId: runs[0]?.id,
+      operationId: "demo.echo",
+      mode: "approval",
+      frozenInput: { text: "hello" }
     });
   });
 

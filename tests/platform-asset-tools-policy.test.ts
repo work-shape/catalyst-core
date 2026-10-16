@@ -4,9 +4,11 @@ import { z } from "zod";
 import {
   WORKFLOW_ASSET_KIND,
   asClientInstanceId,
+  asAgentRunId,
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
+import { waitUntil } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 
@@ -100,7 +102,25 @@ describe("a policy on assets.put and the agent's save", () => {
         conversationId,
         `/tool platform.assets.put ${JSON.stringify(input)}`
       );
-      const events = await drainRunEvents(app, conversationId, started.run.id);
+      await waitUntil(async () => {
+        const run = await app.stores.agentRuns.getAgentRun({
+          clientInstanceId,
+          runId: asAgentRunId(started.run.id)
+        });
+        return (
+          run?.status === "waiting_for_decision" ||
+          run?.status === "completed" ||
+          run?.status === "failed"
+        );
+      }, "the save completed or paused");
+      const events = JSON.stringify(
+        (
+          await app.stores.agentRuns.listRunObservations({
+            clientInstanceId,
+            runId: asAgentRunId(started.run.id)
+          })
+        ).map((event) => event.payload)
+      );
       const after = await toolTexts();
       return { events, answer: after.length > before ? after.at(-1) : undefined };
     };
@@ -162,8 +182,9 @@ describe("a policy on assets.put and the agent's save", () => {
     const t = await fixture();
     const before = await t.revision();
     t.settings.push({ operation: "assets.put", value: "approval", assetKind: WORKFLOW_ASSET_KIND });
-    const { answer } = await t.save("Under approval");
-    expect(JSON.parse(answer ?? "null")).toMatchObject({ status: "pending_approval" });
+    const { answer, events } = await t.save("Under approval");
+    expect(answer).toBeUndefined();
+    expect(events).toContain('"mode":"approval"');
     expect(await t.revision()).toBe(before);
   }, 120_000);
 

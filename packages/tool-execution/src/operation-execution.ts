@@ -99,6 +99,11 @@ export interface RunOperationDeps {
   };
   /** Without it this process cannot hold a call for an approval and refuses one that needs it. */
   approvals?: OperationApprovalRequests;
+  /** Executes a decided agent approval from its frozen request, under the agent's lease. */
+  approvedToolCall?(
+    run: OperationRun,
+    runtime: OperationCallRuntime
+  ): Promise<ApprovedOperationEnd | undefined>;
   /** "Run live once" on a draft. Without it every changing call of a draft is simulated. */
   liveOnce?: LiveOnceSwitchStore;
   /** Which modules are on. An operation or a tool of a module that is off does not exist. */
@@ -145,6 +150,8 @@ export interface OperationOutcome {
   replayed: boolean;
   /** The whole result of an agent tool, where the operation is one and it was executed. */
   toolResult?: ToolExecutionResult;
+  /** Validated input of a newly held approval, for the paused step and its preview. */
+  waitingInput?: unknown;
   /**
    * The call left no Operation Run: an allowed read of an operation that does not record
    * every call. `run` then says how the call went and is in no store.
@@ -154,7 +161,24 @@ export interface OperationOutcome {
   publishedWouldAsk?: "approval";
 }
 
-export type OperationEnding = Pick<OperationOutcome, "result" | "run" | "toolResult">;
+export type OperationEnding = Pick<
+  OperationOutcome,
+  "result" | "run" | "toolResult" | "waitingInput"
+>;
+
+/**
+ * What became of a call that was approved. `refused` is a call that was not executed because
+ * it may no longer run as the person who made it; `expired` one whose time ran out first.
+ */
+export type ApprovedOperationEnd = {
+  run?: OperationRun;
+  /** What the call path answered, where the call was executed or refused on it. */
+  outcome?: OperationEnding;
+} & (
+  | { execution: "done" }
+  | { execution: "failed" | "interrupted" | "refused"; error: { code: string; message: string } }
+  | { execution: "expired" }
+);
 
 /** One run with what its call path needs to record how it goes on. */
 export interface RunContext {

@@ -464,7 +464,7 @@ describe("a page.save_as_app a guardrail holds, through the operation runner", (
         clientInstanceId,
         correlationId: `corr_${randomUUID()}`
       });
-      expect(JSON.stringify(result)).toContain("This call has NOT run");
+      expect(result).toMatchObject({ status: "waiting_for_decision", mode: "approval" });
 
       const [held] = await t.stores.operationRuns.list({ clientInstanceId });
       expect(held).toMatchObject({ operation: "page.save_as_app", status: "pending_approval" });

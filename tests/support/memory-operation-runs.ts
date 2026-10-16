@@ -106,6 +106,17 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
       if (run?.status !== "pending_approval") return Promise.resolve(undefined);
       return Promise.resolve(replace(run, { status: "running", decision, startedAt }));
     },
+    approveWaiting({ clientInstanceId, id, decision }) {
+      const run = find(clientInstanceId, id);
+      if (
+        run?.status !== "pending_approval" ||
+        run.decision ||
+        !run.expiresAt ||
+        Date.parse(run.expiresAt) <= Date.now()
+      )
+        return Promise.resolve(undefined);
+      return Promise.resolve({ run: replace(run, { decision }), resumesAgent: false });
+    },
     endWaiting({ clientInstanceId, id, end, decision }) {
       const run = find(clientInstanceId, id);
       if (run?.status !== "pending_approval") return Promise.resolve(undefined);
@@ -121,6 +132,7 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
           (run) =>
             run.clientInstanceId === clientInstanceId &&
             run.status === "pending_approval" &&
+            !run.decision &&
             run.expiresAt !== undefined &&
             new Date(run.expiresAt).getTime() <= now
         )

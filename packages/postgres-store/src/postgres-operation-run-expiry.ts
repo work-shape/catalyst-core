@@ -5,7 +5,7 @@ import {
   type AgentRuntimeEvent,
   type OperationRunStore
 } from "@work-shape/catalyst-core";
-import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { enqueueJob } from "./jobs/store";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapAgentRun } from "./rows";
@@ -17,12 +17,12 @@ export async function expireOperationRunsAndResumeAgents(
   input: Parameters<OperationRunStore["markExpired"]>[0]
 ): Promise<(typeof operationRuns.$inferSelect)[]> {
   return db.transaction(async (tx) => {
-    // A timely confirmation is never expired while waiting for its worker.
+    // A timely confirmation or approval never expires while waiting for its worker.
     const due = and(
       eq(operationRuns.clientInstanceId, input.clientInstanceId),
       inArray(operationRuns.status, WAITING_OPERATION_RUN_STATUSES),
       lte(operationRuns.expiresAt, sql`now()`),
-      or(ne(operationRuns.status, "pending_confirmation"), isNull(operationRuns.decision))
+      isNull(operationRuns.decision)
     );
     const candidates = await tx
       .select()
@@ -142,6 +142,15 @@ async function resumeAfterExpiry(
   );
   if (resumes) {
     const agentRun = mapAgentRun(updated);
-    await enqueueJob(tx, executeAgentRunJob, { runId: agentRun.id }, agentRunJobOptions(agentRun));
+    await enqueueJob(
+      tx,
+      executeAgentRunJob,
+      { runId: agentRun.id },
+      {
+        ...agentRunJobOptions(agentRun),
+        // The worker that stored the pause may not have finished its job yet.
+        dedupeKey: `${executeAgentRunJob.kind}:${agentRun.id}:decision:${agentRun.lastSequence}`
+      }
+    );
   }
 }

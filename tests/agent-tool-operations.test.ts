@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ClientInstanceCapability } from "@work-shape/catalyst-capability-sdk";
 import {
+  ENDED_AGENT_RUN_STATUSES,
   asClientInstanceId,
+  asAgentRunId,
   asCollaborationWorkspaceId,
   asUserId,
   createPlatformId,
@@ -10,9 +12,10 @@ import {
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
-import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
+import { injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-instance";
+import { deferred, waitUntil } from "./support/assertions";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // A chat run on an assembled instance whose agent calls tools: each call is a call of the
@@ -92,7 +95,15 @@ async function fixture(centralSettings: CentralPolicySetting[] = []) {
     operations: { centralPolicySettings: () => centralSettings }
   });
   const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
-  /** One conversation with one message to the agent, and the run that answered it. */
+  // Revalidation tests change rights after approval and before the resumed worker claims it.
+  const resume = deferred<void>();
+  const claim = app.stores.agentRuns.claimAgentRunForJob.bind(app.stores.agentRuns);
+  app.stores.agentRuns.claimAgentRunForJob = async (input) => {
+    const run = await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId: input.runId });
+    if (run?.status === "queued" && run.lastSequence > 0) await resume.promise;
+    return claim(input);
+  };
+  /** One conversation with one message to the agent, and the run that answered or paused. */
   const say = async (text: string, inWorkspaceId?: string) => {
     const created = await app.call("conversations.create", {
       payload: {
@@ -105,7 +116,17 @@ async function fixture(centralSettings: CentralPolicySetting[] = []) {
       collaborationWorkspaceId: string;
     }>();
     const started = await injectStartConversationRun(app, conversationId, text);
-    await drainRunEvents(app, conversationId, started.run.id);
+    await waitUntil(async () => {
+      const run = await app.stores.agentRuns.getAgentRun({
+        clientInstanceId,
+        runId: asAgentRunId(started.run.id)
+      });
+      return (
+        run?.status === "completed" ||
+        run?.status === "waiting_for_decision" ||
+        run?.status === "failed"
+      );
+    }, "the tool run answered or paused");
     const messages = await app.call("conversations.messages.list", { params: { conversationId } });
     const toolMessages = messages
       .json<{ items: { role: string; text: string }[] }>()
@@ -114,7 +135,25 @@ async function fixture(centralSettings: CentralPolicySetting[] = []) {
     return { conversationId, workspaceId, agentRunId: started.run.id, toolMessages };
   };
   const runs = () => app.stores.operationRuns.list({ clientInstanceId });
-  return { app, clientInstanceId, say, runs };
+  const runJobs = async () => {
+    resume.resolve();
+    await getTestJobs(app).runDue();
+    await waitUntil(async () => {
+      for (const call of await runs()) {
+        if (call.status === "pending_approval" || call.status === "running") return false;
+        if (call.origin.kind === "agent") {
+          const run = await app.stores.agentRuns.getAgentRun({
+            clientInstanceId,
+            runId: call.origin.agentRunId
+          });
+          if (run && !ENDED_AGENT_RUN_STATUSES.some((status) => status === run.status))
+            return false;
+        }
+      }
+      return true;
+    }, "the approved call and its agent ended");
+  };
+  return { app, clientInstanceId, say, runs, runJobs };
 }
 
 describe("an agent's tool calls in a chat run", () => {
@@ -220,17 +259,15 @@ describe("an agent's tool calls in a chat run", () => {
     await f.app.close();
   });
 
-  it("holds a call an admin set to approval, tells the agent, and executes it once approved", async () => {
+  it("pauses a call an admin set to approval and executes it once approved", async () => {
     const f = await fixture([{ operation: "demo.change", value: "approval" }]);
     const said = await f.say('/tool demo.change {"text":"held"}');
 
     const [held] = await f.runs();
     expect(held).toMatchObject({ operation: "demo.change", status: "pending_approval" });
     expect(calls).toEqual([]);
-    // The agent reads that the call waits, and for what.
-    expect(said.toolMessages).toHaveLength(1);
-    expect(said.toolMessages[0]).toContain("This call has NOT run");
-    expect(said.toolMessages[0]).toContain(held?.approvalRequestId);
+    // The step waits without answering the call as successful.
+    expect(said.toolMessages).toEqual([]);
 
     const requestId = held?.approvalRequestId ?? "";
     const request = await f.app.call("approval_requests.get", { params: { requestId } });
@@ -252,7 +289,7 @@ describe("an agent's tool calls in a chat run", () => {
     expect((await decide()).statusCode).toBe(409);
     // The approval is recorded; the job that executes the call runs the tool.
     expect(calls).toEqual([]);
-    await getTestJobs(f.app).runDue();
+    await f.runJobs();
 
     expect(calls).toEqual(["held"]);
     const [done] = await f.runs();
@@ -293,7 +330,7 @@ describe("an agent's tool calls in a chat run", () => {
     });
     expect(removed).toBeDefined();
 
-    await getTestJobs(f.app).runDue();
+    await f.runJobs();
 
     expect(calls).toEqual([]);
     const [run] = await f.runs();
@@ -347,7 +384,7 @@ describe("an agent's tool calls in a chat run", () => {
       ]
     });
 
-    await getTestJobs(f.app).runDue();
+    await f.runJobs();
 
     expect(calls).toEqual([]);
     const [run] = await f.runs();
@@ -408,7 +445,7 @@ describe("an agent's tool calls in a chat run", () => {
       availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
     });
 
-    await getTestJobs(f.app).runDue();
+    await f.runJobs();
 
     expect(calls).toEqual([]);
     const [run] = await f.runs();
@@ -510,7 +547,7 @@ describe("an agent's tool calls in a chat run", () => {
     expect(await f.runs()).toEqual([]);
     expect(await stored()).toMatchObject({ status: "pending" });
 
-    await getTestJobs(f.app).runDue();
+    await f.runJobs();
 
     const request = await stored();
     expect(request).toMatchObject({

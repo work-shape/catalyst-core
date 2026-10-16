@@ -53,13 +53,22 @@ export function createDecidedToolCallRunner(callDeps: RunOperationDeps): ToolDec
       ...(run.idempotencyKey ? { idempotencyKey: run.idempotencyKey } : {}),
       ...(run.origin.toolRevisionId ? { toolRevisionId: run.origin.toolRevisionId } : {})
     });
-    const end = await executeConfirmedOperation({ runId: run.id, call }, callDeps, {
-      ...(context.signal ? { signal: context.signal } : {}),
-      runtime: {
-        ...(context.locale ? { locale: context.locale } : {}),
-        ...(context.runFence ? { runFence: context.runFence } : {})
-      }
-    });
+    const runtime = {
+      locale: context.locale,
+      runFence: context.runFence,
+      signal: context.signal
+    };
+    const end =
+      run.status === "pending_approval" && run.decision?.mode === "approved"
+        ? await callDeps.approvedToolCall?.(run, runtime)
+        : await executeConfirmedOperation({ runId: run.id, call }, callDeps, {
+            ...(context.signal ? { signal: context.signal } : {}),
+            runtime: {
+              ...(context.locale ? { locale: context.locale } : {}),
+              ...(context.runFence ? { runFence: context.runFence } : {})
+            }
+          });
+    if (!end) return failed("handler_failed", "The approved call is not available. Nothing ran.");
     return decidedToolResult(end, {
       toolName: request.toolName,
       agentName: request.agentName,
@@ -83,10 +92,7 @@ function decidedToolResult(
         output: end.run?.output?.value ?? { status: "done" }
       };
     case "expired":
-      return failed(
-        "not_allowed",
-        "This call waited for the user's confirmation and expired. Nothing ran."
-      );
+      return failed("not_allowed", "This call waited for a decision and expired. Nothing ran.");
     case "refused":
       return failed(
         "not_allowed",

@@ -258,6 +258,15 @@ export interface OperationRunStore {
     decision: OperationRunDecision;
     startedAt: ISODateString;
   }): Promise<OperationRun | undefined>;
+  /**
+   * Records a timely approval and queues the Agent Run atomically. A standalone attributed
+   * call, or a completed turn from before approval pauses, returns `resumesAgent: false`.
+   */
+  approveWaiting(input: {
+    clientInstanceId: ClientInstanceId;
+    id: OperationRunId;
+    decision: OperationRunDecision & { mode: "approved" };
+  }): Promise<{ run: OperationRun; resumesAgent: boolean } | undefined>;
   /** Ends a run that waits for a decision without executing it. `undefined` when it does not wait. */
   endWaiting(input: {
     clientInstanceId: ClientInstanceId;
@@ -267,8 +276,7 @@ export interface OperationRunStore {
   }): Promise<OperationRun | undefined>;
   /**
    * Marks waiting runs whose time ran out by the database's clock and returns them, oldest
-   * first and at most `limit` of them. A confirmed run that waits to be executed has had its
-   * decision and does not expire.
+   * first and at most `limit` of them. A decided run that waits to be executed does not expire.
    */
   markExpired(input: {
     clientInstanceId: ClientInstanceId;

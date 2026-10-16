@@ -271,12 +271,13 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   test.setTimeout(shotsDir ? 180_000 : 90_000);
   await page.setViewportSize({ width: 1280, height: 900 });
 
-  // The member asks the agent for the change. The tool does not run: the agent reads that
-  // its call waits, and says so.
+  // The member asks for the change. The run pauses with the host's approval waiting card.
   await signIn(page, member);
   await page.getByPlaceholder("Message").fill(`/tool ${TOOL} ${JSON.stringify({ text: NOTE })}`);
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page.getByText("This call has NOT run").first()).toBeVisible();
+  await expect(
+    page.locator('[data-testid="tool-decision-card"][data-mode="approval"]')
+  ).toBeVisible();
   await expect(page.getByText(`"recorded"`)).toHaveCount(0);
 
   // The member has no Operations page: it needs the right to view the audit log.
