@@ -43,7 +43,7 @@ async function databaseBeforeAp4() {
   cleanups.push(() => sql.end());
   cleanups.push(() => before.remove());
   await migrateDatabase({ databaseUrl, migrationsDirectory: before.directory });
-  return { databaseUrl, sql };
+  return { databaseUrl, sql, migrationTag: before.tag };
 }
 
 async function seedUser(sql: Sql, id: string, permissions: string[]) {
@@ -135,15 +135,13 @@ async function newAnswers(stores: PostgresStores, kind: "user" | "service_princi
 
 describe("AP-4 r2: rollback round trip with edits on both releases", () => {
   it("keeps every right through upgrade, edit, restore, edit, upgrade", async () => {
-    const { databaseUrl, sql } = await databaseBeforeAp4();
+    const { databaseUrl, sql, migrationTag } = await databaseBeforeAp4();
     await seedUser(sql, "usr_a", ["config_assets.read", "users.manage"]);
     await seedUser(sql, "usr_b", ["!audit.view", "usage.view"]);
     await seedPrincipal(sql, "sp_a", ["config_assets.read", "config_assets.release"]);
 
     // AP-4's migration among them: a later migration of main is applied with it.
-    expect(await migrateDatabase({ databaseUrl })).toContainEqual(
-      expect.stringMatching(/_legacy_permission_grants$/u)
-    );
+    expect(await migrateDatabase({ databaseUrl })).toContain(migrationTag);
     let stores = await storesOn(databaseUrl);
     // Edits on the new release, through the product's stores.
     await stores.users.updateUser({
@@ -188,9 +186,8 @@ describe("AP-4 r2: rollback round trip with edits on both releases", () => {
       sp_a: await oldAnswers(sql, "service_principal", "sp_a")
     };
 
-    expect(await migrateDatabase({ databaseUrl })).toEqual([
-      expect.stringMatching(/_legacy_permission_grants$/u)
-    ]);
+    // All later migrations already ran; only the restored lists must be replayed.
+    expect(await migrateDatabase({ databaseUrl })).toEqual([migrationTag]);
     stores = await storesOn(databaseUrl);
     cleanups.push(() => stores.close());
     expect({

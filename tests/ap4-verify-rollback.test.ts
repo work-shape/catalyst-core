@@ -35,7 +35,7 @@ async function databaseBeforeAp4() {
   cleanups.push(() => sql.end());
   cleanups.push(() => before.remove());
   await migrateDatabase({ databaseUrl, migrationsDirectory: before.directory });
-  return { databaseUrl, sql };
+  return { databaseUrl, sql, migrationTag: before.tag };
 }
 
 async function seedUser(sql: Sql, id: string, permissions: string[]) {
@@ -128,16 +128,15 @@ describe("AP-4 verifier: rollback", () => {
   });
 
   it("a right changed on the old release after a rollback survives the next upgrade", async () => {
-    const { databaseUrl, sql } = await databaseBeforeAp4();
+    const { databaseUrl, sql, migrationTag } = await databaseBeforeAp4();
     await seedUser(sql, "usr_manager", ["users.manage"]);
     await migrateDatabase({ databaseUrl });
     await restoreLegacyColumns({ sql, write: () => undefined });
     // On the old release: users.manage is taken away, audit.view is given.
     await sql`update product_users set permissions = '["audit.view"]'::jsonb where id = 'usr_manager'`;
     // Upgrade again: the restore left a marker, so the migrate step moves the lists again.
-    expect(await migrateDatabase({ databaseUrl })).toEqual([
-      expect.stringMatching(/_legacy_permission_grants$/u)
-    ]);
+    // All later migrations already ran; only the restored lists must be replayed.
+    expect(await migrateDatabase({ databaseUrl })).toEqual([migrationTag]);
     const stores = await storesOn(databaseUrl);
     cleanups.push(() => stores.close());
     const actor: AuthenticatedIdentity = {

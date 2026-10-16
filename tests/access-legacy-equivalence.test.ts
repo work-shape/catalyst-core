@@ -466,7 +466,8 @@ describe("legacy equivalence: the AP-1 migration", () => {
         { id: "cred_unscoped", scopes: null }
       ]);
 
-      // Up to and with the access migration: AP-4 later turns the lists into rows.
+      // Stop at the named access migration, regardless of later journal entries: AP-4
+      // turns the lists into rows, so checking preservation after all migrations is wrong.
       const applied = await migrateDatabase({
         databaseUrl,
         migrationsDirectory: through.directory

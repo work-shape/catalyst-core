@@ -245,8 +245,8 @@ it("backfills only proven path inspections and hides them from resources and fil
     const original = await sql<
       { id: string; metadata: JsonObject }[]
     >`select * from managed_artifacts order by id`;
-    // Later releases append migrations; this backfill must still be the first one applied.
-    expect((await migrateDatabase({ databaseUrl }))[0]).toBe(before.tag);
+    // Later releases append migrations; only this backfill belongs to this guard.
+    expect(await migrateDatabase({ databaseUrl })).toContain(before.tag);
     const migrated = await sql<
       { id: string; metadata: JsonObject }[]
     >`select * from managed_artifacts order by id`;

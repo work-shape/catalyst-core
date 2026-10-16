@@ -40,6 +40,7 @@ afterEach(async () => {
 async function databaseBeforeMigration(): Promise<{
   databaseUrl: string;
   sql: Sql;
+  migrationTag: string;
   migrate(): Promise<string[]>;
 }> {
   const databaseUrl = await fixtures.database(`legacy-migration:${crypto.randomUUID()}`, false);
@@ -52,6 +53,7 @@ async function databaseBeforeMigration(): Promise<{
   return {
     databaseUrl,
     sql,
+    migrationTag: before.tag,
     async migrate() {
       const applied = await migrateDatabase({ databaseUrl });
       expect(applied).toContain(before.tag);
@@ -600,7 +602,7 @@ describe("AP-4 rollback: the columns back for a release that reads them", () => 
 
   it("moves the lists the old release changed into rows again, also after later migrations", async () => {
     const database = await databaseBeforeMigration();
-    const { sql, databaseUrl } = database;
+    const { sql, databaseUrl, migrationTag } = database;
     await seedSmall(sql);
     await database.migrate();
     // A later release's migration is recorded before the rollback.
@@ -616,9 +618,8 @@ describe("AP-4 rollback: the columns back for a release that reads them", () => 
 
     // The process of this release refuses to start until the migration step ran.
     await expect(storesOn(databaseUrl)).rejects.toThrow(/legacy_permission_grants/u);
-    expect(await migrateDatabase({ databaseUrl })).toEqual([
-      expect.stringMatching(/_legacy_permission_grants$/u)
-    ]);
+    // All later migrations already ran; only the restored lists must be replayed.
+    expect(await migrateDatabase({ databaseUrl })).toEqual([migrationTag]);
     expect(await migrateDatabase({ databaseUrl })).toEqual([]);
     expect(sortedRows(await grantRows(sql, "usr_admin"))).toEqual([
       { action: "users.manage", effect: "allow" }
