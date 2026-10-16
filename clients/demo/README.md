@@ -128,7 +128,7 @@ This table is `workflowCheckQuestions` in `src/seed/company.ts`, and `tests/demo
 
 ### What it leaves out
 
-- A conversation with a Page. A Page is saved by an agent's `page.save` during a run, and a run needs a model call, which the seed does not make.
+- A conversation with a preview. A preview is opened by an agent's `workspace.open` during a run, and a run needs a model call, which the seed does not make.
 - The Connection itself and its secret. Release config brings both when the instance starts; the seed only grants rights on the Connection, and says in its output when the instance has none of that name.
 
 ### Limits
@@ -142,7 +142,7 @@ Every feature slice that adds a kind or a screen adds its test data here: the da
 
 ## Execution Workspaces and Pages
 
-The demo runs with Execution Workspaces and the `apps` module on. Its agent reads and writes files in the workspace of a conversation, runs commands there and saves a Page with `page.save`.
+The demo runs with Execution Workspaces and the `apps` module on. Its agent reads and writes files in the workspace of a conversation, runs commands there, shows what it built with `workspace.open` and keeps it as an App with `app.save`.
 
 - Commands and Page builds run in the Docker sandbox. The service `workspace-command-runner` builds the runner image (`vivd-catalyst-demo-workspace-command-runner:local`) and the service `workspace-command-worker` starts one container per command through the Docker socket of the host. The first build of the runner image takes several minutes.
 - The worker keeps the directory of a running command under `/tmp/vivd-catalyst-demo-execution-workspaces` on the host. `WORKSPACE_COMMAND_HOST_ROOT` names another directory; Docker must be allowed to mount it.

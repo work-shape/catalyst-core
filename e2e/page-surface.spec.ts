@@ -532,9 +532,11 @@ test("a save the build refuses says what it found, in the thread and under the P
   await expect(findings).toContainText("src/routes/index.tsx, line 5");
   await expect(findings).toContainText('Expected ">" but found "}"');
   // The thread says the same on the card of the refused save.
-  const refused = page.getByTestId("page-card").filter({ hasText: "The Page could not be built" });
+  const refused = page
+    .getByTestId("page-card")
+    .filter({ hasText: "The preview could not be built" });
   await expect(refused).toHaveAttribute("data-state", "errors");
-  await expect(refused).toContainText("Nothing was saved. Ask the agent to fix the error.");
+  await expect(refused).toContainText("Nothing new is shown. Ask the agent to fix the error.");
 });
 
 test("a new save opens a closed Page again, and coming back to the conversation opens none", async ({

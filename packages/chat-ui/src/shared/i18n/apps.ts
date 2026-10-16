@@ -1,6 +1,6 @@
 import { defineTranslations } from "./translation-area";
 
-/** Apps: their list, an App open full width, its draft, and saving a Page as one. */
+/** Apps: their list, an App open full width, its draft, and saving a preview as one. */
 export const apps = defineTranslations({
   en: {
     "apps.actionCalls": "Calls",
@@ -114,15 +114,15 @@ export const apps = defineTranslations({
     "apps.editWithAgentFailed": "The conversation could not be started.",
     "apps.editWithAgentRefused": "This app is not available to you for editing with the agent.",
     "apps.empty":
-      "No apps in this workspace yet. Describe a tool in chat and the agent builds it as a page; save it as an app so everyone here can use it.",
+      "No apps in this workspace yet. Describe a tool in chat and the agent builds it. Saved as an app, it is yours to use; publishing it decides who else sees it.",
     "apps.emptyReadOnly": "No apps yet. A builder of this workspace can add one.",
     "apps.exampleFeeHint": "Hours times rate, with VAT and the total",
     "apps.exampleFeePrompt":
-      "Build a page that calculates a client's fee from the hours worked and the hourly rate, adds VAT and shows the total.",
+      "Build an app that calculates a client's fee from the hours worked and the hourly rate, adds VAT and shows the total.",
     "apps.exampleFeeTitle": "Fee calculator from hours and rate",
     "apps.exampleLeaveHint": "Dates, reason and the days left",
     "apps.exampleLeavePrompt":
-      "Build a page where people of this workspace request leave with the dates and a reason, and see how many days they have left.",
+      "Build an app where people of this workspace request leave with the dates and a reason, and see how many days they have left.",
     "apps.exampleLeaveTitle": "Leave request for the team",
     "apps.examples": "Examples to start with",
     "apps.failed": "The app could not be loaded.",
@@ -132,15 +132,15 @@ export const apps = defineTranslations({
     "apps.heldBackHosts": "This draft cannot call {hosts} until it is published.",
     "apps.linkCopied": "Link copied",
     "apps.linkBody":
-      "The current draft of this app is replaced by this page as it is now. The published version does not change until someone publishes the draft.",
+      "The current draft of this app is replaced by this preview as it is now. The published version does not change until someone publishes the draft.",
     "apps.linkMoved":
       "The draft of this app was changed just now. If you replace it, that change is lost.",
-    "apps.linkOffer": "Update “{name}” from this page",
+    "apps.linkOffer": "Update “{name}” from this preview",
     "apps.linkOtherConversation":
-      "This app was last updated from a page in another conversation. That page will no longer show “Update app” for it.",
+      "This app was last updated from a preview in another conversation. That preview will no longer show “Update app” for it.",
     "apps.linkOtherPage":
-      "This app was last updated from another page of this conversation. That page will no longer show “Update app” for it.",
-    "apps.linkTitle": "Update “{name}” from this page?",
+      "This app was last updated from another preview of this conversation. That preview will no longer show “Update app” for it.",
+    "apps.linkTitle": "Update “{name}” from this preview?",
     "apps.listFailed": "The apps could not be loaded.",
     "apps.moreActions": "More actions",
     "apps.notPublished": "This app has not been published yet.",
@@ -148,7 +148,7 @@ export const apps = defineTranslations({
     "apps.openNamed": "Open {name}",
     "apps.openDraft": "Open the draft",
     "apps.previewOf": "App {name}",
-    "apps.promptStart": "Build a page for this workspace: ",
+    "apps.promptStart": "Build an app for this workspace: ",
     "apps.publish": "Publish",
     "apps.publishBody": "Everyone in {workspace} gets revision {number} when they open the app.",
     "apps.publishConnections": "Connections it uses",
@@ -173,18 +173,18 @@ export const apps = defineTranslations({
     "apps.revisionsFailed": "The revisions could not be loaded.",
     "apps.save": "Save as app",
     "apps.saveBody":
-      "The newest revision of this page becomes the draft of a new app in {workspace}. Nothing is published yet.",
+      "What this preview shows becomes the draft of a new app in {workspace}. Nothing is published yet.",
     "apps.saveConfirm": "Save",
-    "apps.saveFailed": "The page could not be saved as an app.",
+    "apps.saveFailed": "This could not be saved as an app.",
     "apps.saveId": "ID",
     "apps.saveIdHint":
       "Lowercase letters, digits and hyphens. It is part of the app’s address and stays as it is.",
     "apps.saveIdInvalid":
       "Use lowercase letters, digits and hyphens, at most 63, not starting with a hyphen.",
     "apps.saveIdTaken":
-      "An app with this ID already exists. Choose another ID to save this page as a new app.",
+      "An app with this ID already exists. Choose another ID to save this as a new app.",
     "apps.saveIdTakenWritable":
-      "The app “{name}” already has this ID. Choose another ID to save a new app, or update that app from this page.",
+      "The app “{name}” already has this ID. Choose another ID to save a new app, or update that app from this preview.",
     "apps.saveName": "Name",
     "apps.showMore": "Show more",
     "apps.starting": "The app is starting",
@@ -193,14 +193,14 @@ export const apps = defineTranslations({
     "apps.unpublishedChanges": "Unpublished changes",
     "apps.update": "Update app",
     "apps.updateBody":
-      "The page as it is now becomes the draft of this app. People who use the app see the change only once the draft is published.",
+      "This preview as it is now becomes the draft of this app. People who use the app see the change only once the draft is published.",
     "apps.updateChanged":
-      "The draft of this app was changed somewhere else since it was last updated from this page. Updating replaces those changes.",
+      "The draft of this app was changed somewhere else since it was last updated from this preview. Updating replaces those changes.",
     "apps.updateConfirm": "Update draft",
     "apps.updateDone": "Open the draft to check and publish it.",
     "apps.updateDoneTitle": "The draft of “{name}” is updated",
     "apps.updateFailed": "The app could not be updated.",
-    "apps.updateKeptName": "The app keeps its name “{name}”. The page is called “{page}”.",
+    "apps.updateKeptName": "The app keeps its name “{name}”. The preview is called “{page}”.",
     "apps.updateReplace": "Replace draft",
     "apps.updateTitle": "Update “{name}”?"
   },
@@ -320,16 +320,16 @@ export const apps = defineTranslations({
     "apps.editWithAgentRefused":
       "Diese App ist für dich nicht zum Bearbeiten mit dem Agenten verfügbar.",
     "apps.empty":
-      "In diesem Arbeitsbereich gibt es noch keine Apps. Beschreibe im Chat ein Werkzeug, und der Agent baut es als Page; speichere sie als App, damit alle hier sie nutzen können.",
+      "In diesem Arbeitsbereich gibt es noch keine Apps. Beschreibe im Chat ein Werkzeug, und der Agent baut es. Speicherst du es als App, gehört sie dir; beim Veröffentlichen legst du fest, wer sie noch sieht.",
     "apps.emptyReadOnly":
       "Noch keine Apps. Wer in diesem Arbeitsbereich bauen darf, kann eine hinzufügen.",
     "apps.exampleFeeHint": "Stunden mal Satz, mit Umsatzsteuer und Summe",
     "apps.exampleFeePrompt":
-      "Baue eine Page, die das Honorar eines Mandanten aus den geleisteten Stunden und dem Stundensatz berechnet, die Umsatzsteuer aufschlägt und die Summe zeigt.",
+      "Baue eine App, die das Honorar eines Mandanten aus den geleisteten Stunden und dem Stundensatz berechnet, die Umsatzsteuer aufschlägt und die Summe zeigt.",
     "apps.exampleFeeTitle": "Honorarrechner aus Stunden und Satz",
     "apps.exampleLeaveHint": "Zeitraum, Grund und verbleibende Tage",
     "apps.exampleLeavePrompt":
-      "Baue eine Page, in der die Leute dieses Arbeitsbereichs Urlaub mit Zeitraum und Grund beantragen und sehen, wie viele Tage ihnen bleiben.",
+      "Baue eine App, in der die Leute dieses Arbeitsbereichs Urlaub mit Zeitraum und Grund beantragen und sehen, wie viele Tage ihnen bleiben.",
     "apps.exampleLeaveTitle": "Urlaubsantrag fürs Team",
     "apps.examples": "Beispiele für den Einstieg",
     "apps.failed": "Die App konnte nicht geladen werden.",
@@ -340,15 +340,15 @@ export const apps = defineTranslations({
     "apps.heldBackHosts": "Dieser Entwurf kann {hosts} erst aufrufen, wenn er veröffentlicht ist.",
     "apps.linkCopied": "Link kopiert",
     "apps.linkBody":
-      "Der aktuelle Entwurf dieser App wird durch diese Page ersetzt, so wie sie jetzt ist. Die veröffentlichte Version ändert sich erst, wenn jemand den Entwurf veröffentlicht.",
+      "Der aktuelle Entwurf dieser App wird durch diese Vorschau ersetzt, so wie sie jetzt ist. Die veröffentlichte Version ändert sich erst, wenn jemand den Entwurf veröffentlicht.",
     "apps.linkMoved":
       "Der Entwurf dieser App wurde gerade geändert. Beim Ersetzen geht auch diese Änderung verloren.",
-    "apps.linkOffer": "„{name}“ aus dieser Page aktualisieren",
+    "apps.linkOffer": "„{name}“ aus dieser Vorschau aktualisieren",
     "apps.linkOtherConversation":
-      "Diese App wurde zuletzt aus einer Page in einer anderen Unterhaltung aktualisiert. Jene Page zeigt für sie dann nicht mehr „App aktualisieren“.",
+      "Diese App wurde zuletzt aus einer Vorschau in einer anderen Unterhaltung aktualisiert. Jene Vorschau zeigt für sie dann nicht mehr „App aktualisieren“.",
     "apps.linkOtherPage":
-      "Diese App wurde zuletzt aus einer anderen Page dieser Unterhaltung aktualisiert. Jene Page zeigt für sie dann nicht mehr „App aktualisieren“.",
-    "apps.linkTitle": "„{name}“ aus dieser Page aktualisieren?",
+      "Diese App wurde zuletzt aus einer anderen Vorschau dieser Unterhaltung aktualisiert. Jene Vorschau zeigt für sie dann nicht mehr „App aktualisieren“.",
+    "apps.linkTitle": "„{name}“ aus dieser Vorschau aktualisieren?",
     "apps.listFailed": "Die Apps konnten nicht geladen werden.",
     "apps.moreActions": "Weitere Aktionen",
     "apps.notPublished": "Diese App wurde noch nicht veröffentlicht.",
@@ -356,7 +356,7 @@ export const apps = defineTranslations({
     "apps.openNamed": "{name} öffnen",
     "apps.openDraft": "Entwurf öffnen",
     "apps.previewOf": "App {name}",
-    "apps.promptStart": "Baue eine Page für diesen Arbeitsbereich: ",
+    "apps.promptStart": "Baue eine App für diesen Arbeitsbereich: ",
     "apps.publish": "Veröffentlichen",
     "apps.publishBody": "Alle in {workspace} bekommen Revision {number}, wenn sie die App öffnen.",
     "apps.publishConnections": "Verbindungen, die sie nutzt",
@@ -382,18 +382,18 @@ export const apps = defineTranslations({
     "apps.revisionsFailed": "Die Revisionen konnten nicht geladen werden.",
     "apps.save": "Als App speichern",
     "apps.saveBody":
-      "Die neueste Revision dieser Page wird zum Entwurf einer neuen App in {workspace}. Veröffentlicht wird noch nichts.",
+      "Was diese Vorschau zeigt, wird zum Entwurf einer neuen App in {workspace}. Veröffentlicht wird noch nichts.",
     "apps.saveConfirm": "Speichern",
-    "apps.saveFailed": "Die Page konnte nicht als App gespeichert werden.",
+    "apps.saveFailed": "Das konnte nicht als App gespeichert werden.",
     "apps.saveId": "ID",
     "apps.saveIdHint":
       "Kleinbuchstaben, Ziffern und Bindestriche. Sie ist Teil der Adresse der App und bleibt, wie sie ist.",
     "apps.saveIdInvalid":
       "Verwende Kleinbuchstaben, Ziffern und Bindestriche, höchstens 63, nicht mit einem Bindestrich beginnend.",
     "apps.saveIdTaken":
-      "Es gibt schon eine App mit dieser ID. Wähle eine andere ID, um die Page als neue App zu speichern.",
+      "Es gibt schon eine App mit dieser ID. Wähle eine andere ID, um das als neue App zu speichern.",
     "apps.saveIdTakenWritable":
-      "Die App „{name}“ hat diese ID schon. Wähle eine andere ID für eine neue App, oder aktualisiere diese App aus dieser Page.",
+      "Die App „{name}“ hat diese ID schon. Wähle eine andere ID für eine neue App, oder aktualisiere diese App aus dieser Vorschau.",
     "apps.saveName": "Name",
     "apps.showMore": "Mehr anzeigen",
     "apps.starting": "Die App wird gestartet",
@@ -402,14 +402,14 @@ export const apps = defineTranslations({
     "apps.unpublishedChanges": "Unveröffentlichte Änderungen",
     "apps.update": "App aktualisieren",
     "apps.updateBody":
-      "Die Page wird so, wie sie jetzt ist, zum Entwurf dieser App. Wer die App nutzt, sieht die Änderung erst, wenn der Entwurf veröffentlicht ist.",
+      "Diese Vorschau wird so, wie sie jetzt ist, zum Entwurf dieser App. Wer die App nutzt, sieht die Änderung erst, wenn der Entwurf veröffentlicht ist.",
     "apps.updateChanged":
-      "Der Entwurf dieser App wurde an anderer Stelle geändert, seit er zuletzt aus dieser Page aktualisiert wurde. Beim Aktualisieren werden diese Änderungen ersetzt.",
+      "Der Entwurf dieser App wurde an anderer Stelle geändert, seit er zuletzt aus dieser Vorschau aktualisiert wurde. Beim Aktualisieren werden diese Änderungen ersetzt.",
     "apps.updateConfirm": "Entwurf aktualisieren",
     "apps.updateDone": "Öffne den Entwurf, um ihn zu prüfen und zu veröffentlichen.",
     "apps.updateDoneTitle": "Der Entwurf von „{name}“ ist aktualisiert",
     "apps.updateFailed": "Die App konnte nicht aktualisiert werden.",
-    "apps.updateKeptName": "Die App behält ihren Namen „{name}“. Die Page heißt „{page}“.",
+    "apps.updateKeptName": "Die App behält ihren Namen „{name}“. Die Vorschau heißt „{page}“.",
     "apps.updateReplace": "Entwurf ersetzen",
     "apps.updateTitle": "„{name}“ aktualisieren?"
   }

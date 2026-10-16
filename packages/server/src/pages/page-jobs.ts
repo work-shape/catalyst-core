@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-import type { PageBuildLimits, PageFile } from "@work-shape/catalyst-app-build";
+import {
+  PAGE_MANIFEST_FILE,
+  plainHtmlManifestFile,
+  type PageBuildLimits,
+  type PageFile
+} from "@work-shape/catalyst-app-build";
 import {
   createPageBuildId,
   defineJobHandler,
@@ -178,9 +183,15 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
             await finish(control, buildId, snapshot.result);
             return;
           }
+          // An HTML file opened from a folder without a manifest is built as plain HTML.
+          const { entry } = row.request;
+          const files =
+            entry !== undefined && !snapshot.files.some((file) => file.path === PAGE_MANIFEST_FILE)
+              ? [...snapshot.files, plainHtmlManifestFile(entry)]
+              : snapshot.files;
           const outcome = await build({
             id: buildId,
-            files: snapshot.files,
+            files,
             signal: control.signal,
             ...(limits ? { limits } : {})
           });
@@ -203,7 +214,7 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
           const content = {
             kitVersion: outcome.kitVersion,
             manifest,
-            sourceFiles: snapshot.files,
+            sourceFiles: files,
             builtFiles: outcome.files,
             signal: control.signal,
             ...(row.request.requestedByUserId

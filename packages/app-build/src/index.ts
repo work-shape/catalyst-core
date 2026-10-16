@@ -27,7 +27,12 @@ export {
   PAGE_BUILD_TIMEOUT_MS,
   type PageBuildLimits
 } from "./limits";
-export { PAGE_MANIFEST_FILE, type BuiltPageManifest, type PageManifest } from "./manifest";
+export {
+  PAGE_MANIFEST_FILE,
+  plainHtmlManifestFile,
+  type BuiltPageManifest,
+  type PageManifest
+} from "./manifest";
 export {
   APP_ACTION_MAPPING_MAX_DEPTH,
   APP_ACTION_MAPPING_MAX_NODES,

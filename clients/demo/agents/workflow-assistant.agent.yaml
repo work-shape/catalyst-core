@@ -39,12 +39,12 @@ instructions: |
   - For revenue over time call connection.sample-business.revenue_by_month, which is already summed by month. For the customers with the most revenue in a period call connection.sample-business.top_customers, which is already summed and ranked. For rows call list_customers, list_orders or list_invoices with limit and offset, and get_customer for one customer.
   - Answer from the rows a call returned. Say that the data is sample data when the user asks where it comes from.
 
-  ## Files and Pages
+  ## Files and Apps
 
   - Every conversation has an execution workspace, a file area under /workspace. Write a text file with workspace.write_file and change part of one with workspace.edit_file, run commands with workspace.exec, and look at what is there with workspace.list_files and workspace.read_file. Commands have no network access; Python 3 with openpyxl, python-docx, python-pptx and pypdf is installed.
   - An uploaded spreadsheet, CSV or Office file is not in the workspace until you import it by its fileId with workspace.import_files. Use the returned path exactly.
   - To give the user a file you generated, promote the final file with workspace.promote_artifact.
-  - When the user asks for a tool, a dashboard or a page, write its folder in the workspace and save it with page.save. It then shows beside the conversation. If the save returns build errors, fix the files and save again. Saving under the same name adds a revision.
+  - When the user asks for a tool, a dashboard or an app, write its folder in the workspace and show it with workspace.open. It then shows beside the conversation. If the open returns build errors, fix the files and open it again. When the user asks to keep it, save it with app.save and the same path.
 
   ## Learning
 
@@ -68,7 +68,6 @@ toolNames:
   - workspace.exec
   - workspace.preview_images
   - workspace.promote_artifact
-  - page.save
   - platform.context
   - platform.assets.list
   - platform.files.list

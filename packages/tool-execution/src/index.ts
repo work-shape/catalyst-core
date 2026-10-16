@@ -1,17 +1,18 @@
 export * from "./tool-registry";
 export * from "./built-in-tools";
 export {
-  createPageSaveTool,
-  PAGE_SAVE_TOOL_NAME,
-  type PageSaveToolOptions
-} from "./page-save-tool";
+  createWorkspaceOpenTool,
+  openedPageName,
+  WORKSPACE_OPEN_TOOL_NAME,
+  type WorkspaceOpenToolOptions
+} from "./workspace-open-tool";
 export {
-  createPageSaveAsAppTool,
-  PAGE_SAVE_AS_APP_TOOL_NAME,
-  type PageAppCalls,
-  type PageAppCreated,
-  type PageSaveIntoApp
-} from "./page-app-tool";
+  createAppSaveTool,
+  APP_SAVE_TOOL_NAME,
+  type AppSaveCalls,
+  type AppSaveInput,
+  type AppSaved
+} from "./app-save-tool";
 export * from "./read-skill-tool";
 export { CONNECTION_DRAFT_TOOL_NAME, createConnectionDraftTool } from "./connection-draft-tool";
 export {

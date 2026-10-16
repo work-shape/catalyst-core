@@ -10,6 +10,29 @@ import { RELEASED_KIT_VERSIONS } from "./kit";
 
 /** The file of a Page that says what it is. */
 export const PAGE_MANIFEST_FILE = "app.yaml";
+/**
+ * The manifest of an HTML file opened from a folder that has none: plain HTML on the newest kit,
+ * named by the file. The values are written as JSON strings, which YAML reads as they are.
+ */
+export function plainHtmlManifestFile(entry: string): { path: string; bytes: Uint8Array } {
+  const id =
+    entry
+      .replace(/\.html?$/iu, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, "-")
+      .replace(/^-+|-+$/gu, "")
+      .slice(0, 63)
+      .replace(/-+$/u, "") || "preview";
+  const text = [
+    `id: ${JSON.stringify(id)}`,
+    `name: ${JSON.stringify(entry)}`,
+    `kit: ${JSON.stringify(RELEASED_KIT_VERSIONS.at(-1))}`,
+    `entry: ${JSON.stringify(entry)}`,
+    ""
+  ].join("\n");
+  return { path: PAGE_MANIFEST_FILE, bytes: new TextEncoder().encode(text) };
+}
+
 /** A manifest is a few lines. One larger than this is refused before it is parsed. */
 export const PAGE_MANIFEST_MAX_BYTES = 64 * 1024;
 /** How many connections, Data Stores, actions or hosts one manifest lists. */

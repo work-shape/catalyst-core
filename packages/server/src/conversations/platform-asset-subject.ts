@@ -108,7 +108,7 @@ export async function ofInstance(
 
 /**
  * The kinds the agent's first save of a conversation creates (NAV-2): each has a page the
- * person is taken to. An App is made from a Page (`page.save_as_app`), a Connection by a
+ * person is taken to. An App is made from what the preview shows (`app.save`), a Connection by a
  * person in its dialog.
  */
 export const CREATED_FROM_CHAT: readonly string[] = [

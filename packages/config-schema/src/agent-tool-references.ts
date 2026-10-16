@@ -1,4 +1,5 @@
 import type { AgentConfig } from "./schemas";
+import { isFormerToolName } from "./former-tool-names";
 import { findMissingAgentToolReferences } from "./reference-validation";
 
 /** An explicit tool reference, with the location an author needs to repair it. */
@@ -25,10 +26,11 @@ export function agentToolReferenceLocations(
     "app",
     "data_store"
   ]);
-  const references = agent.toolNames.map((name, index) => ({
-    name,
-    location: `toolNames[${index}]`
-  }));
+  // A former tool name is no reference: it is accepted, and startup warns about it with the
+  // name that replaced it.
+  const references = agent.toolNames.flatMap((name, index) =>
+    isFormerToolName(name) ? [] : [{ name, location: `toolNames[${index}]` }]
+  );
   for (const [index, line] of agent.instructions.split(/\r?\n/u).entries()) {
     // Remove whole addresses and paths before matching, so their dotted parts never leak in.
     const prose = line.replace(
@@ -42,6 +44,7 @@ export function agentToolReferenceLocations(
       const name = match[1];
       if (
         name === undefined ||
+        isFormerToolName(name) ||
         !toolPrefixes.has(name.split(".")[0]) ||
         NON_TOOL_SUFFIX.test(name) ||
         seen.has(name)

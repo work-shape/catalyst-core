@@ -507,7 +507,7 @@ createRoot(document.getElementById("root")!).render(<Button>Go</Button>);
       expect(files.get("about.html")).toBe(`${baseStyles}${themeScript}<p>About</p>\n`);
     });
 
-    // The rule the `page.save` description gives the model, one case for each name a Page may
+    // The rule the `workspace.open` description gives the model, one case for each name a Page may
     // import from the kit. Reported in review: a plain dashboard that only drew a chart with
     // `drawChart` was counted as one of components and lost its margin and its base rules.
     it.each([

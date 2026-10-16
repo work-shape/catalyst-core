@@ -29,7 +29,7 @@ const PLATFORM_TOOLS = [
   "platform.assets.put",
   "platform.assets.operations"
 ];
-const PAGE_TOOLS = ["page.save", "page.save_as_app", "workspace.write_file"];
+const PAGE_TOOLS = ["workspace.open", "app.save", "workspace.write_file"];
 
 const stand = (name: string) =>
   defineTool({
@@ -51,7 +51,12 @@ async function offerFor(agentToolNames: string[], subject?: { kind: string; name
   });
   const platform = createPlatformTools({ stores: harness.store, modules });
   platform.registry(
-    [stand("read_skill"), stand("page.save"), stand("workspace.write_file"), ...platform.tools],
+    [
+      stand("read_skill"),
+      stand("workspace.open"),
+      stand("workspace.write_file"),
+      ...platform.tools
+    ],
     new Set(["workspace.write_file"])
   );
   if (subject) {
@@ -77,7 +82,7 @@ describe("the platform's knowledge of an agent", () => {
       expect(offer.toolNames.filter((name) => PLATFORM_TOOLS.includes(name))).toEqual([]);
       expect(offer.orientation).toBeUndefined();
       expect(offer.skillNames).toEqual([]);
-      // The Page tools are no part of the gate.
+      // The App tools are no part of the gate.
       expect(offer.toolNames).toEqual(expect.arrayContaining(PAGE_TOOLS));
     }
   });

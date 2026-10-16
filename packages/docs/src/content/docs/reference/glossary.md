@@ -59,9 +59,9 @@ A configured AI behavior with instructions, model settings, available tools, and
 
 Instructions an agent reads when a task calls for them, as a folder with a `SKILL.md` and optional files. Some skills ship with the platform and are read-only; **Copy to edit** makes an editable copy.
 
-## Page
+## Preview
 
-What an agent builds in one conversation and shows beside the chat: screens with their files, without a name or a history of its own. **Save as app** (German: **Als App speichern**) turns it into an App.
+What an agent opens beside the chat in one conversation (German: **Vorschau**): an HTML file or an App's folder, built as it is, without a name or a history of its own. Saving it makes it an App: the agent's `app.save`, or **Save as app** (German: **Als App speichern**).
 
 ## App
 

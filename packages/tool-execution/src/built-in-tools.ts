@@ -6,7 +6,7 @@ import {
   type ToolAssemblyDefinition
 } from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
-import { createPageSaveTool, type PageSaveToolOptions } from "./page-save-tool";
+import { createWorkspaceOpenTool, type WorkspaceOpenToolOptions } from "./workspace-open-tool";
 
 /** The part of the instance's `views` config the tool tells the agent about. */
 export interface ShowViewPolicy {
@@ -59,15 +59,18 @@ const showViewOutputSchema = z.object({
 
 /** What the built-in tools of a module need. A module whose entry is missing adds no tool. */
 export interface BuiltInModuleTools {
-  /** The `apps` module: saving a Page. */
-  apps?: PageSaveToolOptions;
+  /** The `apps` module: opening a file or folder in the preview panel. */
+  apps?: WorkspaceOpenToolOptions;
 }
 
 export function createBuiltInToolDefinitions(
   views: ShowViewPolicy = { allowedScriptSrc: [] },
   modules: BuiltInModuleTools = {}
 ): ToolAssemblyDefinition[] {
-  return [createShowViewTool(views), ...(modules.apps ? [createPageSaveTool(modules.apps)] : [])];
+  return [
+    createShowViewTool(views),
+    ...(modules.apps ? [createWorkspaceOpenTool(modules.apps)] : [])
+  ];
 }
 
 export const showViewTool = createShowViewTool();
@@ -87,7 +90,7 @@ export function createShowViewTool(
     icon: "app",
     effect: "reading",
     description: [
-      "Show a small HTML widget inline in your answer: a table, chart, or compact visual that belongs to this one reply. For a standalone visualization, dashboard, or tool, save a Page with page.save instead when you have that tool.",
+      "Show a small HTML widget inline in your answer: a table, chart, or compact visual that belongs to this one reply. For a standalone visualization, dashboard, or tool, write its files and show them with workspace.open instead when you have that tool.",
       showViewLayoutGuidance,
       showViewColorGuidance,
       showViewIconGuidance,

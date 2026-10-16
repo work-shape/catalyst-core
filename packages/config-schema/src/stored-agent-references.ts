@@ -1,4 +1,5 @@
 import type { AgentConfig } from "@work-shape/catalyst-core";
+import { isFormerToolName } from "./former-tool-names";
 import { findMissingAgentToolReferences } from "./reference-validation";
 
 export type UnavailableTool =
@@ -24,7 +25,9 @@ export function resolveStoredAgentReferences(
       (issue) => issue.referenceName
     )
   );
-  const unavailableTools = agent.toolNames.flatMap((name): UnavailableTool[] => {
+  // A former tool name is not missing: it stands for nothing, and startup warns about it.
+  const toolNames = agent.toolNames.filter((name) => !isFormerToolName(name));
+  const unavailableTools = toolNames.flatMap((name): UnavailableTool[] => {
     const module = refs.offToolModule?.(name);
     if (module !== undefined) return [{ name, reason: "module_off", module }];
     return unknownTools.has(name) || refs.isToolAvailable?.(agent, name) === false
@@ -64,7 +67,7 @@ export function resolveStoredAgentReferences(
     chatAvailable,
     agent: {
       ...agent,
-      toolNames: agent.toolNames.filter((name) => !missingTools.has(name)),
+      toolNames: toolNames.filter((name) => !missingTools.has(name)),
       skillNames: agent.skillNames.filter((name) => !missingSkills.has(name))
     }
   };

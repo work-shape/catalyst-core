@@ -2,6 +2,11 @@ import { defineTranslations } from "./translation-area";
 
 export const tools = defineTranslations({
   en: {
+    assetToolAppDraftSaved: "Saved to the draft of {title}",
+    assetToolAppDraftUnchanged: "The draft of {title} was not changed",
+    assetToolAppSaveFailed: "The app could not be saved",
+    assetToolAppSaved: "Saved as the app {title}",
+    assetToolAppSaving: "Saving as an app…",
     assetToolChecking: "Checking the draft…",
     assetToolCheckFailed: "The check could not run",
     assetToolCheckedClean: "Checked the draft: no problems",
@@ -17,9 +22,6 @@ export const tools = defineTranslations({
     assetToolOpening: "Opening the {kind}…",
     assetToolOperations: "Looked up the operations a step may call",
     assetToolOperationsFailed: "The operations could not be looked up",
-    assetToolPageAppFailed: "The Page could not be saved as an app",
-    assetToolPageAppSaved: "Saved the Page as the app {title}",
-    assetToolPageAppSaving: "Saving the Page as an app…",
     assetToolRead: "Read the {kind}",
     assetToolReadFailed: "The asset could not be read",
     assetToolReading: "Reading the {kind}…",
@@ -76,6 +78,11 @@ export const tools = defineTranslations({
       "The workspace step timed out. The agent can retry with a smaller or simpler step."
   },
   de: {
+    assetToolAppDraftSaved: "Im Entwurf von {title} gespeichert",
+    assetToolAppDraftUnchanged: "Der Entwurf von {title} wurde nicht geändert",
+    assetToolAppSaveFailed: "Die App konnte nicht gespeichert werden",
+    assetToolAppSaved: "Als App {title} gespeichert",
+    assetToolAppSaving: "Speichere als App…",
     assetToolChecking: "Prüfe den Entwurf…",
     assetToolCheckFailed: "Die Prüfung konnte nicht laufen",
     assetToolCheckedClean: "Entwurf geprüft: keine Probleme",
@@ -91,9 +98,6 @@ export const tools = defineTranslations({
     assetToolOpening: "Öffne {kind}…",
     assetToolOperations: "Operationen nachgeschlagen, die ein Schritt aufrufen darf",
     assetToolOperationsFailed: "Die Operationen konnten nicht nachgeschlagen werden",
-    assetToolPageAppFailed: "Die Page konnte nicht als App gespeichert werden",
-    assetToolPageAppSaved: "Page als App {title} gespeichert",
-    assetToolPageAppSaving: "Speichere die Page als App…",
     assetToolRead: "{kind} gelesen",
     assetToolReadFailed: "Das Asset konnte nicht gelesen werden",
     assetToolReading: "Lese {kind}…",

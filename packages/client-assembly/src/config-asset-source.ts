@@ -6,6 +6,7 @@ import type {
 } from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
+  formerAgentToolWarnings,
   skillConfigSchema,
   resolveStoredAgentReferences,
   type StoredAgentReferences
@@ -19,8 +20,11 @@ export function createConfigAssetSource(input: {
     agentName: string,
     resolution: ReturnType<typeof resolveStoredAgentReferences>
   ): void;
+  /** A stored agent names former tool names: the warnings name the names that replaced them. */
+  onFormerToolNames?(agentName: string, warnings: string[]): void;
 }): ConfigAssetSource {
   const warned = new Set<string>();
+  const warnedFormer = new Set<string>();
   return {
     async getSnapshot(): Promise<RuntimeAssetSnapshot> {
       // Read for every turn and tool call: the skills come without their resources, which the
@@ -40,6 +44,11 @@ export function createConfigAssetSource(input: {
         .filter((asset) => asset.kind === "agent")
         .flatMap((asset) => {
           const agent = agentConfigSchema.parse(asset.config);
+          const former = formerAgentToolWarnings(agent);
+          if (former.length > 0 && !warnedFormer.has(agent.name)) {
+            warnedFormer.add(agent.name);
+            input.onFormerToolNames?.(agent.name, former);
+          }
           if (!input.references) return [agent];
           const resolved = resolveStoredAgentReferences(agent, skillNames, input.references);
           if (

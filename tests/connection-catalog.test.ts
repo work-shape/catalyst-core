@@ -447,13 +447,17 @@ describe("the names and reasons of Connection operations", () => {
     });
     expect(isDataToolName(name)).toBe(true);
     expect(isDataToolName("connections.test")).toBe(false);
+    // `app.save` is the tool that saves an App; every other name under `app.` is an App's.
+    expect(isDataToolName("app.offers.send")).toBe(true);
+    expect(isDataToolName("app.foo")).toBe(true);
+    expect(isDataToolName("app.save")).toBe(false);
     for (const other of [
       "connections.test",
       "connection.sample",
       "connection..echo",
       "connection.sample.with.dot",
       "connection.Sample.echo",
-      "page.save"
+      "workspace.open"
     ]) {
       expect(parseConnectionOperationName(other)).toBeUndefined();
     }

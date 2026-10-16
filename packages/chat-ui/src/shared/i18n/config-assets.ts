@@ -146,7 +146,8 @@ export const configAssets = defineTranslations({
     configToolGroupFiles: "Files and code",
     configToolGroupFilesText: "Works on files and runs code in the conversation's own files.",
     configToolGroupResults: "Results",
-    configToolGroupResultsText: "Shows and keeps results: widgets, Pages and recorded facts.",
+    configToolGroupResultsText:
+      "Shows and keeps results: widgets, previews, apps and recorded facts.",
     configToolGroupSkills: "Skills",
     configToolGroupSkillsText: "Reads its skills and proposes changes to them.",
     configToolGroupPlatform: "Platform",
@@ -312,7 +313,7 @@ export const configAssets = defineTranslations({
       "Arbeitet mit Dateien und führt Code auf den Dateien der Unterhaltung aus.",
     configToolGroupResults: "Ergebnisse",
     configToolGroupResultsText:
-      "Zeigt und behält Ergebnisse: Widgets, Pages und festgehaltene Fakten.",
+      "Zeigt und behält Ergebnisse: Widgets, Vorschauen, Apps und festgehaltene Fakten.",
     configToolGroupSkills: "Skills",
     configToolGroupSkillsText: "Liest seine Skills und schlägt Änderungen daran vor.",
     configToolGroupPlatform: "Plattform",

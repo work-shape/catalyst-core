@@ -24,11 +24,10 @@ import {
 } from "@work-shape/catalyst-core";
 import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import {
-  createPageSaveTool,
+  createWorkspaceOpenTool,
   LocalWorkspaceCommandProcessExecutor,
   ToolRegistry,
-  WorkspaceCommandService,
-  type PageSaveToolOptions
+  WorkspaceCommandService
 } from "@work-shape/catalyst-tool-execution";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import {
@@ -41,9 +40,9 @@ import {
 import { createTestToolRunner } from "./support/tool-runner";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
-// Saving a Page through the tool an agent calls: the folder in the conversation's Execution
-// Workspace is snapshotted, built by the `page.bundle` job as a command in the sandbox and
-// stored as a file set. The job worker here is the executor's, on Postgres; the sandbox is the
+// Opening a file or folder in the preview through the tool an agent calls: the folder in the
+// conversation's Execution Workspace is snapshotted, built by the `page.bundle` job as a command
+// in the sandbox and stored as a file set of the conversation's preview of that path. The job worker here is the executor's, on Postgres; the sandbox is the
 // local one, which runs the command as a process.
 
 const silent: Logger = {
@@ -61,8 +60,7 @@ const issueSchema = z.looseObject({
   attribute: z.string().optional(),
   code: z.string().optional()
 });
-const saveOutputSchema = z.looseObject({
-  app: z.looseObject({ name: z.string(), saved: z.boolean() }).optional(),
+const openOutputSchema = z.looseObject({
   pageId: z.string().optional(),
   number: z.number().optional(),
   fileSetId: z.string().optional(),
@@ -75,7 +73,7 @@ const workers: JobWorker[] = [];
 
 beforeAll(async () => {
   buildCommand = await pageBuildCommandFromSource();
-  scratch = await mkdtemp(join(tmpdir(), "page-save-test-"));
+  scratch = await mkdtemp(join(tmpdir(), "workspace-open-test-"));
 });
 afterEach(async () => {
   await Promise.all(workers.splice(0).map((worker) => worker.stop()));
@@ -97,8 +95,6 @@ async function createSaveHarness(
     unclaimedMs?: number;
     /** Runs before each object of a built Page is stored. */
     beforeStore?: () => Promise<void>;
-    /** What writes the App the conversation is about from the Page. */
-    apps?: PageSaveToolOptions["apps"];
   } = {}
 ) {
   const harness = await createWorkspaceHarness();
@@ -119,10 +115,9 @@ async function createSaveHarness(
       ? {}
       : { unclaimedMs: options.unclaimedMs, workerCheckIntervalMs: 20 })
   });
-  const tool = createPageSaveTool({
+  const tool = createWorkspaceOpenTool({
     workspace: service.dependencies,
-    builds: options.builds?.(client) ?? client,
-    ...(options.apps ? { apps: options.apps } : {})
+    builds: options.builds?.(client) ?? client
   });
   const execution = createTestToolRunner({
     registry: new ToolRegistry({ tools: [tool] }),
@@ -187,12 +182,12 @@ async function createSaveHarness(
         });
       }
     },
-    async save(name: string, directory: string) {
-      const request = harness.createRequest("page.save", { name, directory });
+    async open(path: string) {
+      const request = harness.createRequest("workspace.open", { path });
       const result = await execution(request, harness.context);
       return {
         status: result.status,
-        output: result.status === "success" ? saveOutputSchema.parse(result.output) : undefined,
+        output: result.status === "success" ? openOutputSchema.parse(result.output) : undefined,
         error: result.status === "failed" ? result.error : undefined
       };
     },
@@ -303,24 +298,24 @@ const reactPage = (routes: Record<string, string>) => ({
   ...Object.fromEntries(Object.entries(routes).map(([name, text]) => [`src/routes/${name}`, text]))
 });
 
-describe("page.save", () => {
-  it("builds the folder into revision 1, and a second save into revision 2", async () => {
+describe("workspace.open", () => {
+  it("builds the folder into revision 1, and a second open into revision 2", async () => {
     const harness = await createSaveHarness();
     await harness.write("calculator", reactPage({ "index.tsx": fileRoute("/") }));
     await harness.write("other", { "notes.txt": "not part of the Page" });
 
-    const first = await harness.save("Calculator", "calculator");
+    const first = await harness.open("calculator");
 
     expect(first).toMatchObject({ status: "success", output: { number: 1 } });
     expect(first.output?.errors).toBeUndefined();
-    // A Page belongs to its conversation and is no subject of it: a save moves nothing the
+    // A preview belongs to its conversation and is no subject of it: an open moves nothing the
     // conversation is about, so it may still be moved into a shared workspace for everyone.
     expect(await harness.subject()).toBeUndefined();
     const [page] = await harness.store.pages.listPages({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id
     });
-    if (!page) throw new Error("The save stored no Page");
+    if (!page) throw new Error("The open stored no preview");
     const stored = await harness.store.pages.getPageFileSet({
       clientInstanceId: harness.clientInstanceId,
       pageId: page.id
@@ -347,7 +342,7 @@ describe("page.save", () => {
     expect(script).toContain("/app-runtime/kit/1.0.0/router.js");
 
     await harness.write("calculator", { "src/routes/history.tsx": fileRoute("/history") });
-    const second = await harness.save("Calculator", "calculator");
+    const second = await harness.open("calculator");
 
     expect(second).toMatchObject({
       status: "success",
@@ -371,7 +366,7 @@ export const Route = createFileRoute("/history")({
       })
     );
 
-    const refused = await harness.save("Broken", "broken");
+    const refused = await harness.open("broken");
 
     expect(refused.status).toBe("success");
     expect(refused.output?.errors).toEqual([
@@ -383,7 +378,7 @@ export const Route = createFileRoute("/history")({
     expect([...(await everyKey(harness.files))]).toEqual([]);
 
     await harness.write("broken", { "src/routes/history.tsx": fileRoute("/history") });
-    expect(await harness.save("Broken", "broken")).toMatchObject({ output: { number: 1 } });
+    expect(await harness.open("broken")).toMatchObject({ output: { number: 1 } });
   });
 
   it("builds a Page whose route throws at import and writes a file, and never runs it", async () => {
@@ -400,36 +395,49 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
       })
     );
 
-    expect(await harness.save("Hostile", "hostile")).toMatchObject({ output: { number: 1 } });
+    expect(await harness.open("hostile")).toMatchObject({ output: { number: 1 } });
     expect(existsSync(marker)).toBe(false);
   });
 
-  // Once the Page became the App of its conversation, the save is the App's draft too. Fails
-  // without the change: a save answered the Page alone and the App stayed as it was made.
-  it("writes the App the conversation is about once the Page is built, and nothing for a refused build", async () => {
-    const written: string[] = [];
-    const harness = await createSaveHarness({
-      apps: {
-        saveIntoSubjectApp: async (_context, input) => {
-          written.push(input.pageId);
-          return { name: "offers", title: "Offers", saved: true, revision: 2 };
-        },
-        pageAppPolicyFloor: async () => undefined
-      }
+  // Check 53 of apps-and-pages: an HTML file opens as it is, and an open keeps nothing. Fails
+  // without the plain manifest of the build: a folder without app.yaml was refused.
+  it("opens a loose index.html as plain HTML, and leaves no asset, App or App revision", async () => {
+    const harness = await createSaveHarness();
+    await harness.write("weather", { "index.html": "<!doctype html><h1>Hamburg</h1>" });
+
+    const opened = await harness.open("weather/index.html");
+
+    expect(opened).toMatchObject({ status: "success", output: { number: 1 } });
+    const [page] = await harness.pages();
+    if (!page) throw new Error("The open stored no preview");
+    expect(page.name).toBe("weather/index.html");
+    const stored = await harness.store.pages.getPageFileSet({
+      clientInstanceId: harness.clientInstanceId,
+      pageId: page.id
     });
-    await harness.write("offers", reactPage({ "index.tsx": fileRoute("/") }));
-
-    const saved = await harness.save("Offers", "offers");
-
-    expect(saved.output).toMatchObject({
-      number: 1,
-      app: { name: "offers", title: "Offers", saved: true, revision: 2 }
+    expect(stored).toMatchObject({
+      kitVersion: "1.4.0",
+      manifest: { id: "index", entry: "index.html" }
     });
-    expect(written).toEqual([saved.output?.pageId]);
+    expect(stored?.builtFiles.map((file) => file.path)).toContain("index.html");
+    // The folder of a later open of the same path has no manifest either: the build's own
+    // stands in for it, so the folder opens again as it is.
+    expect(await harness.open("weather")).toMatchObject({ output: { number: 1 } });
+    expect(await harness.subject()).toBeUndefined();
+    const assets = await harness.store.configAssets.listActiveConfigAssets({
+      clientInstanceId: harness.clientInstanceId
+    });
+    expect(assets.filter((asset) => asset.kind === "app")).toEqual([]);
+  });
 
-    await harness.write("broken", { "index.html": "<p>no manifest</p>" });
-    expect((await harness.save("Broken", "broken")).output?.errors).toHaveLength(1);
-    expect(written).toHaveLength(1);
+  it("refuses to open a file that is no HTML, and builds nothing for it", async () => {
+    const harness = await createSaveHarness({ worker: false });
+    await harness.write("data", { "rows.csv": "a,b\n1,2\n" });
+
+    expect((await harness.open("data/rows.csv")).output?.errors).toEqual([
+      expect.objectContaining({ file: "data/rows.csv", code: "file_invalid" })
+    ]);
+    expect(await harness.queuedBuilds()).toBe(0);
   });
 
   // Ran the file before the refusal matched the route generator's own pattern.
@@ -442,7 +450,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
       "src/routes/sub/a__virtual.js": payload
     });
 
-    expect((await harness.save("Bypass", "bypass")).output?.errors).toEqual([
+    expect((await harness.open("bypass")).output?.errors).toEqual([
       expect.objectContaining({ file: "src/routes/sub/a__virtual.js", code: "routes_invalid" })
     ]);
     expect(existsSync(marker)).toBe(false);
@@ -462,7 +470,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
 `
     });
 
-    const refused = await harness.save("Plain", "plain");
+    const refused = await harness.open("plain");
 
     expect(refused.output?.errors).toEqual([
       expect.objectContaining({
@@ -483,7 +491,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
 </body>
 `
     });
-    const saved = await harness.save("Plain", "plain");
+    const saved = await harness.open("plain");
 
     expect(saved).toMatchObject({ output: { number: 1 } });
     const prefix = `pages/${saved.output?.pageId}/${saved.output?.fileSetId}/dist/`;
@@ -500,28 +508,28 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
     expect(html).toContain('src="./index.inline-2.js"');
   });
 
-  it("queues no build for a folder that cannot be a Page", async () => {
+  it("queues no build for a path that cannot be shown", async () => {
     const harness = await createSaveHarness({ worker: false });
-    await harness.write("empty", { "index.html": "<p>no manifest</p>" });
+    await harness.write("empty", { "notes.txt": "no manifest and no index.html" });
     await harness.write("reserved", { "app.yaml": htmlManifest, "__catalyst/guard.js": "1" });
     await harness.write("large", {
       "app.yaml": htmlManifest,
       "data.json": { declaredBytes: FILE_SET_MAX_FILE_BYTES + 1 }
     });
 
-    expect((await harness.save("Empty", "empty")).output?.errors).toEqual([
+    expect((await harness.open("empty")).output?.errors).toEqual([
       expect.objectContaining({ file: "app.yaml", code: "manifest_invalid" })
     ]);
-    expect((await harness.save("Missing", "no-such-folder")).output?.errors).toEqual([
+    expect((await harness.open("no-such-folder")).output?.errors).toEqual([
       expect.objectContaining({ file: "app.yaml" })
     ]);
-    expect((await harness.save("Reserved", "reserved")).output?.errors).toEqual([
+    expect((await harness.open("reserved")).output?.errors).toEqual([
       expect.objectContaining({ file: "__catalyst/guard.js", code: "file_set_invalid" })
     ]);
-    expect((await harness.save("Large", "large")).output?.errors).toEqual([
+    expect((await harness.open("large")).output?.errors).toEqual([
       expect.objectContaining({ file: "data.json", code: "file_set_too_large" })
     ]);
-    expect(await harness.save("Outside", "../other")).toMatchObject({ status: "failed" });
+    expect(await harness.open("../other")).toMatchObject({ status: "failed" });
     expect(await harness.queuedBuilds()).toBe(0);
     expect(await harness.fileSets()).toEqual([]);
   });
@@ -530,7 +538,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
     const harness = await createSaveHarness({ command: "sleep 30 #", limits: { timeoutMs: 1000 } });
     await harness.write("slow", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
 
-    const result = await harness.save("Slow", "slow");
+    const result = await harness.open("slow");
 
     expect(result).toMatchObject({
       status: "failed",
@@ -552,7 +560,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
     });
     await harness.write("moving", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
 
-    expect(await harness.save("Moving", "moving")).toMatchObject({
+    expect(await harness.open("moving")).toMatchObject({
       status: "failed",
       error: { message: expect.stringContaining("'index.html' changed") }
     });
@@ -563,7 +571,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
     const harness = await createSaveHarness({ worker: false, waitMs: 300 });
     await harness.write("waiting", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
 
-    expect(await harness.save("Waiting", "waiting")).toMatchObject({
+    expect(await harness.open("waiting")).toMatchObject({
       status: "failed",
       error: { message: expect.stringContaining("not built in time") }
     });
@@ -592,7 +600,7 @@ describe("one save and its one revision", () => {
     });
     await harness.write("once", page);
 
-    const saved = await harness.save("Once", "once");
+    const saved = await harness.open("once");
 
     expect(saved.output).toMatchObject({ number: 1 });
     expect((await harness.fileSets()).map((set) => set.number)).toEqual([1]);
@@ -624,7 +632,7 @@ describe("one save and its one revision", () => {
     });
     await harness.write("stopped", page);
 
-    const saved = await harness.save("Stopped", "stopped");
+    const saved = await harness.open("stopped");
 
     expect(saved.output).toMatchObject({ number: 1 });
     expect((await harness.fileSets()).map((set) => set.number)).toEqual([1]);
@@ -653,7 +661,7 @@ describe("one save and its one revision", () => {
     });
     await harness.write("late", page);
 
-    expect(await harness.save("Late", "late")).toMatchObject({
+    expect(await harness.open("late")).toMatchObject({
       status: "failed",
       error: { message: expect.stringContaining("The save gave up.") }
     });
@@ -673,7 +681,7 @@ describe("one save and its one revision", () => {
       });
       await harness.write("forged", page);
 
-      expect(await harness.save("Forged", "forged")).toMatchObject({
+      expect(await harness.open("forged")).toMatchObject({
         status: "failed",
         error: { message: expect.stringContaining("The build has no result.") }
       });
@@ -689,7 +697,7 @@ describe("a save on an instance where no worker takes builds", () => {
     await harness.write("unserved", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
     const started = Date.now();
 
-    const result = await harness.save("Unserved", "unserved");
+    const result = await harness.open("unserved");
 
     expect(result).toMatchObject({
       status: "failed",
@@ -713,7 +721,7 @@ describe("a save on an instance where no worker takes builds", () => {
     }
     const started = Date.now();
 
-    const results = await Promise.all(names.map((name) => harness.save(name, name)));
+    const results = await Promise.all(names.map((name) => harness.open(name)));
 
     expect(results.map((result) => result.error?.message)).toEqual(names.map(() => undefined));
     expect(results.map((result) => result.status)).toEqual(names.map(() => "success"));
@@ -725,7 +733,7 @@ describe("a save on an instance where no worker takes builds", () => {
     const harness = await createSaveHarness({ command: "sleep 2 #", unclaimedMs: 200 });
     await harness.write("slow", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
 
-    const result = await harness.save("Slow", "slow");
+    const result = await harness.open("slow");
 
     // The build ran to its end, which here is a command that wrote nothing.
     expect(result.error?.message).not.toBe(PAGE_BUILD_NO_WORKER_MESSAGE);

@@ -17,7 +17,7 @@ import {
 } from "../../studio/build-area/connection-draft";
 import { ConnectionDraftCard } from "../../studio/build-area/connection-draft-card";
 import { PageSaveCard } from "../../studio/pages/page-card";
-import { PAGE_SAVE_TOOL_NAME } from "../../studio/pages/page-save";
+import { isOpenToolName } from "../../studio/pages/page-save";
 import { ApprovalRequestCard } from "../approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import { useConnectionToolSubject } from "../assistant/tool-subjects";
@@ -148,7 +148,7 @@ export function ToolCallPart({
     );
   }
 
-  if (toolName === PAGE_SAVE_TOOL_NAME) {
+  if (isOpenToolName(toolName)) {
     return <PageSaveCard args={args} result={result} failed={state === "failed"} />;
   }
 

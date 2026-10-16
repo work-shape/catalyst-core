@@ -4,7 +4,7 @@ import type { AuditRecorder } from "./audit";
 import { PAGE_ACTION_OPERATION_PREFIX } from "./app-actions";
 import { DATA_STORE_OPERATION_PREFIX } from "./data-stores";
 import { KNOWLEDGE_OPERATION_PREFIX } from "./knowledge";
-import { DATA_TOOL_PREFIXES } from "./data-tool-names";
+import { dataToolPrefixOf } from "./data-tool-names";
 import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
 import type { OperationBeforeEvent } from "./guardrail-events";
@@ -383,7 +383,7 @@ export interface OperationRegistry {
  * App, `app.<id>.<action>`. An operation of the release may
  * not take such a name. `resolve` asks the release first, so one that did would stand in for
  * the data operation of that name, with rights and a policy of its own. They are the prefixes
- * of the data tools, `DATA_TOOL_PREFIXES`. The names a Page's actions run as,
+ * of the data tools, `dataToolPrefixOf`. The names a Page's actions run as,
  * `page_action.<page id>.<action>`, are kept from the release in the same way: they are no
  * data tool, since no source resolves them and no agent carries them.
  */
@@ -403,9 +403,8 @@ export const SOURCED_OPERATION_PREFIXES = [
 /** The prefix whose sources the name belongs to, where a registered operation may not take it. */
 function sourcePrefixOf(name: string): string | undefined {
   return (
-    [...DATA_TOOL_PREFIXES, PAGE_ACTION_OPERATION_PREFIX].find((prefix) =>
-      name.startsWith(prefix)
-    ) ??
+    dataToolPrefixOf(name) ??
+    (name.startsWith(PAGE_ACTION_OPERATION_PREFIX) ? PAGE_ACTION_OPERATION_PREFIX : undefined) ??
     SOURCED_OPERATION_PREFIXES.find(
       (prefix) => name.startsWith(prefix) && name.indexOf(".", prefix.length) > 0
     )

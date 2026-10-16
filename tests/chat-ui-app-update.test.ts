@@ -94,7 +94,7 @@ describe("Update app", () => {
 
     expect(markup).toContain("Update “Angebotsrechner”?");
     expect(markup).toContain(
-      "The page as it is now becomes the draft of this app. People who use the app see the change only once the draft is published."
+      "This preview as it is now becomes the draft of this app. People who use the app see the change only once the draft is published."
     );
     expect(markup).toContain(">Update draft</button>");
     expect(markup).toContain(">Cancel</button>");
@@ -113,7 +113,7 @@ describe("Update app", () => {
     const markup = dialog({ changedElsewhere: true });
 
     expect(markup).toContain(
-      "The draft of this app was changed somewhere else since it was last updated from this page. Updating replaces those changes."
+      "The draft of this app was changed somewhere else since it was last updated from this preview. Updating replaces those changes."
     );
     expect(markup).toContain(">Replace draft</button>");
     expect(markup).not.toContain(">Update draft</button>");
@@ -200,19 +200,19 @@ describe("a Page put into an App that has the id", () => {
     const markup = save(() => undefined);
 
     expect(markup).toContain(
-      "The app “Angebotsrechner” already has this ID. Choose another ID to save a new app, or update that app from this page."
+      "The app “Angebotsrechner” already has this ID. Choose another ID to save a new app, or update that app from this preview."
     );
-    expect(markup).toContain(">Update “Angebotsrechner” from this page</button>");
+    expect(markup).toContain(">Update “Angebotsrechner” from this preview</button>");
     // Without somebody to take the App over, the sentence stands alone.
-    expect(save(undefined)).not.toContain("from this page</button>");
+    expect(save(undefined)).not.toContain("from this preview</button>");
   });
 
   it("says that the draft is replaced and that nothing published changes, before it writes", () => {
     const markup = dialog();
 
-    expect(markup).toContain("Update “Angebotsrechner” from this page?");
+    expect(markup).toContain("Update “Angebotsrechner” from this preview?");
     expect(markup).toContain(
-      "The current draft of this app is replaced by this page as it is now. The published version does not change until someone publishes the draft."
+      "The current draft of this app is replaced by this preview as it is now. The published version does not change until someone publishes the draft."
     );
     expect(markup).toContain(">Replace draft</button>");
     expect(markup).not.toContain(">Update draft</button>");
@@ -221,10 +221,10 @@ describe("a Page put into an App that has the id", () => {
 
   it("names that the App was last updated from another Page", () => {
     expect(dialog({ link: "other_conversation" })).toContain(
-      "This app was last updated from a page in another conversation. That page will no longer show “Update app” for it."
+      "This app was last updated from a preview in another conversation. That preview will no longer show “Update app” for it."
     );
     expect(dialog({ link: "other_page" })).toContain(
-      "This app was last updated from another page of this conversation."
+      "This app was last updated from another preview of this conversation."
     );
   });
 
@@ -241,7 +241,7 @@ describe("a Page put into an App that has the id", () => {
 
     const other = dialog({ phase: "done", pageName: "Angebotsrechner 2026" });
     expect(other).toContain(
-      "The app keeps its name “Angebotsrechner”. The page is called “Angebotsrechner 2026”."
+      "The app keeps its name “Angebotsrechner”. The preview is called “Angebotsrechner 2026”."
     );
     // An update of the Page's own App says the same about the name.
     const own = dialog({ phase: "done", link: undefined, pageName: "Angebotsrechner 2026" });
@@ -250,16 +250,16 @@ describe("a Page put into an App that has the id", () => {
 
   it("is written in German as well", () => {
     expect(save(() => undefined, "de")).toContain(
-      ">„Angebotsrechner“ aus dieser Page aktualisieren</button>"
+      ">„Angebotsrechner“ aus dieser Vorschau aktualisieren</button>"
     );
     const asked = dialog({ link: "other_conversation" }, "de");
-    expect(asked).toContain("„Angebotsrechner“ aus dieser Page aktualisieren?");
+    expect(asked).toContain("„Angebotsrechner“ aus dieser Vorschau aktualisieren?");
     expect(asked).toContain(
       "Die veröffentlichte Version ändert sich erst, wenn jemand den Entwurf veröffentlicht."
     );
     expect(asked).toContain("in einer anderen Unterhaltung");
     expect(dialog({ phase: "done", pageName: "Rechner" }, "de")).toContain(
-      "Die App behält ihren Namen „Angebotsrechner“. Die Page heißt „Rechner“."
+      "Die App behält ihren Namen „Angebotsrechner“. Die Vorschau heißt „Rechner“."
     );
   });
 });

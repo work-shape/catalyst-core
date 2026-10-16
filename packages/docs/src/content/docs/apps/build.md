@@ -1,13 +1,13 @@
 ---
 title: Build an App
-description: How an agent writes a Page, saves it as an App and gives it named actions on a Connection, a Data Store or a Workflow, and how the App's code calls them.
+description: How an agent writes an App's folder, opens it in the preview, saves it as an App and gives it named actions on a Connection, a Data Store or a Workflow, and how the App's code calls them.
 ---
 
 This page is the technical guide an agent follows. [Apps for people](/automate/apps/) says what a person clicks.
 
-An App is a Page that is kept. An agent writes the Page's files in its execution workspace, saves the folder with `page.save` and shows it beside the conversation. When the person asks to keep it, `page.save_as_app` makes it an App with a draft. A person publishes the draft; an agent never publishes.
+An agent writes an App's files in its execution workspace and shows the folder beside the conversation with `workspace.open`. Opening shows and does nothing more: it keeps nothing and creates no App. When the person asks to keep it, `app.save` makes it an App with a draft, and asks the person nothing: the App is in their Apps list at once and opens at its draft. A person publishes the draft; an agent never publishes.
 
-A quick Page may show data the agent wrote into it. Live data comes through named actions: one file per action in the folder `actions/`, which the build compiles into the manifest. The browser calls an action by its name and nothing else: it never calls a Connection, a Data Store or a Workflow directly, and it never holds a key.
+A quick preview may show data the agent wrote into it. Live data comes through named actions: one file per action in the folder `actions/`, which the build compiles into the manifest. The browser calls an action by its name and nothing else: it never calls a Connection, a Data Store or a Workflow directly, and it never holds a key.
 
 ## Preparing data scope
 
@@ -31,7 +31,7 @@ Follow the [build rules for data scope](/configure/release-config/#build-rules-f
   assets/                     images and other static files
 ```
 
-Write the files with the workspace file tools, then save the folder with `page.save`, giving the Page a name and the folder that holds `app.yaml`. A save builds the Page. It answers the revision, or the build errors with file and line: fix the files and save again. After `page.save_as_app`, each later `page.save` of the same Page name writes the App's next draft, so keep working in the same folder.
+Write the files with the workspace file tools, then open the folder that holds `app.yaml` with `workspace.open`. An open builds the folder and shows it. It answers the revision, or the build errors with file and line: fix the files and open it again. A single HTML file opens as it is, and a folder without `app.yaml` opens its `index.html`. `app.save` with the same path and a name keeps what the preview shows as an App; each later `app.save` of the same path in the conversation writes the App's next draft revision, so keep working in the same folder and open it before each save.
 
 A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-router` and `@work-shape/catalyst-app-kit`. Nothing is installed. A plain HTML App names `entry: index.html`; inline scripts work, inline event handler attributes such as `onclick` do not.
 
@@ -39,17 +39,17 @@ A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-r
 
 `app.yaml` names everything the App reaches. A Connection or a Data Store that the manifest does not list cannot be called.
 
-| Key | What it holds |
-| --- | --- |
-| `id` | Lowercase letters, digits and `-`, at most 63 characters. |
-| `name` | The name people read. |
-| `description`, `icon` | Optional. |
-| `kit` | The exact kit version. Use `1.4.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
-| `entry` | `index.html` for a plain HTML App. A React App leaves it out. |
-| `connections` | The Connections the App's actions call, by name. |
-| `dataStores` | The Data Store the App's `sql` actions use: `{ name, minSchema }`. One at most while the App has `sql` actions. |
-| `actions` | One line per `sql` action: `{ name, file, effect }`. Optional for the other kinds. |
-| `externalHosts` | Internet hosts the browser code may fetch from, such as `api.example.com`. |
+| Key                   | What it holds                                                                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                  | Lowercase letters, digits and `-`, at most 63 characters.                                                                                |
+| `name`                | The name people read.                                                                                                                    |
+| `description`, `icon` | Optional.                                                                                                                                |
+| `kit`                 | The exact kit version. Use `1.4.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
+| `entry`               | `index.html` for a plain HTML App. A React App leaves it out.                                                                            |
+| `connections`         | The Connections the App's actions call, by name.                                                                                         |
+| `dataStores`          | The Data Store the App's `sql` actions use: `{ name, minSchema }`. One at most while the App has `sql` actions.                          |
+| `actions`             | One line per `sql` action: `{ name, file, effect }`. Optional for the other kinds.                                                       |
+| `externalHosts`       | Internet hosts the browser code may fetch from, such as `api.example.com`.                                                               |
 
 Any other key is refused. `pages` is derived from `src/routes/` and is not written by hand.
 
@@ -57,11 +57,11 @@ Any other key is refused. `pages` is derived from `src/routes/` and is not writt
 
 An action's name is the name of its file without the ending: `actions/load-bookings.action.yaml` is the action `load-bookings`. A name has lowercase letters, digits, `-` and `_`.
 
-| Kind | File | Reaches | Effect |
-| --- | --- | --- | --- |
-| `connection` | `actions/<name>.action.yaml` with `connection`, `operation`, `effect` | One operation of a Connection the manifest lists | Written in the file |
-| `sql` | `actions/<name>.sql` plus a line under `actions` in `app.yaml` | The Data Store the manifest lists | Written in the manifest line |
-| `workflow` | `actions/<name>.action.yaml` with `workflow` | A run of the published Workflow | Always `changing` |
+| Kind         | File                                                                  | Reaches                                          | Effect                       |
+| ------------ | --------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------- |
+| `connection` | `actions/<name>.action.yaml` with `connection`, `operation`, `effect` | One operation of a Connection the manifest lists | Written in the file          |
+| `sql`        | `actions/<name>.sql` plus a line under `actions` in `app.yaml`        | The Data Store the manifest lists                | Written in the manifest line |
+| `workflow`   | `actions/<name>.action.yaml` with `workflow`                          | A run of the published Workflow                  | Always `changing`            |
 
 Every call runs as the person who looks at the App, through the platform's policy and audit. In the published App the viewer needs the right to use the App; in its draft, the right to write it. Beside that, for a `connection` action the viewer needs the right to use the Connection, for a `workflow` action the right to use the Workflow. An `sql` action of a published App needs no right on the Data Store: the person who published the App answered for it.
 
@@ -123,7 +123,7 @@ A reading statement answers `{ columns, rows, truncated }`: `rows` is a list of 
 
 The App lists its Data Store under `dataStores` in `app.yaml`, by name, with `minSchema` where it needs at least that migration of the store. The `dataStores` module has to be on. The agent cannot create a Data Store or its tables: a person creates it with its migrations (`store.yaml` and `migrations/0001_<name>.sql`, written with `catalyst data-store put` and published), and the statements read and write the tables those migrations made. Ask the person which Data Store to use, or to create one.
 
-An `sql` action runs only in an App: in a Page a reading `sql` action is refused with `data_store_needs_app`, and a changing one with `draft_safe_mode`. In the App's draft it runs with the viewer's own right on the store: to read it, and for an insert, which the draft simulates, to insert.
+An `sql` action runs only in an App: in a preview that is not yet saved a reading `sql` action is refused with `data_store_needs_app`, and a changing one with `draft_safe_mode`. In the App's draft it runs with the viewer's own right on the store: to read it, and for an insert, which the draft simulates, to insert.
 
 ### A `workflow` action
 
@@ -147,14 +147,14 @@ input:
 A `reading` action runs live everywhere, with the viewer's rights. A `changing` action is carried out only in the published App; before that it runs in safe mode:
 
 - In the draft of an App, a `changing` action of each kind is simulated. It changes nothing and answers `{ status: "dry_run", message, result }`: `message` says what the call would have done, and whether live it would wait for another person's approval; `result` is the input it would have done it with. The call goes through the viewer's rights and the policy as a live call would, so a call that would be refused live is refused here too, and it leaves an Operation Run with the target `dry_run`. Show `message` as it is.
-- "Run live once" on the App's Actions list, under "Technical details" on the draft page, carries out the next call of one changing action of the draft for real. A person who may write the App switches it on for themselves; it covers only their own next call of that action, and every save or discard of the draft clears a switch nobody used, so a `page.save` clears it too. A call it sends live that the policy holds for another person's approval is refused with `approval_unavailable`, since a draft cannot wait. An agent cannot switch it on: when the person wants to try a change for real, tell them where the switch is.
-- In a Page that is not yet an App, a changing `connection` or `sql` action is refused with the code `draft_safe_mode`, and nothing is called. A `workflow` action answers `{ status: "dry_run", message, result }` as in a draft, but leaves no run.
+- "Run live once" on the App's Actions list, under "Technical details" on the draft page, carries out the next call of one changing action of the draft for real. A person who may write the App switches it on for themselves; it covers only their own next call of that action, and every save or discard of the draft clears a switch nobody used, so an `app.save` clears it too. A call it sends live that the policy holds for another person's approval is refused with `approval_unavailable`, since a draft cannot wait. An agent cannot switch it on: when the person wants to try a change for real, tell them where the switch is.
+- In a preview that is not yet an App, a changing `connection` or `sql` action is refused with the code `draft_safe_mode`, and nothing is called. A `workflow` action answers `{ status: "dry_run", message, result }` as in a draft, but leaves no run.
 
 A changing call passes `{ idempotencyKey }` in the draft as in the published App. The published App carries out every action. An action may ask for a stricter `policy` than the instance sets (`confirm`, `approval` or `deny`), written in the action file or, for an `sql` action, in its manifest line. A call that waits for another person's approval answers `status: "pending_approval"` without a result.
 
 An agent never publishes. Tell the person to publish the draft: with the Publish button on the App's page, or with `catalyst app publish <name> --revision <n> --workspace <id>`. Publishing needs the right `app.publish`, which administrators hold. It checks again what a save checked, and that each Data Store is published, at `minSchema` or later, readable (for an insert, `data_store.insert`) by the person who publishes, and of the App's workspace; a retired store, or one of another workspace, is refused. Guardrails may answer the publish too.
 
-Saving checks what it can: when a save writes the App's draft, it refuses a Connection that does not exist, a Data Store that does not exist, an operation the Connection does not accept and a `reading` action on a changing operation. `page.save` then answers the Page as saved and, under `app`, `saved: false` with what was found: fix it and save again. Whether the operation is enabled and offered to Apps (exposure `bridge`) is checked only at the call, which is refused as forbidden: check the operation's exposure on the Connection's page first.
+Saving checks what it can: when a save writes the App's draft, it refuses a Connection that does not exist, a Data Store that does not exist, an operation the Connection does not accept and a `reading` action on a changing operation. `app.save` then answers `saved: false` with what was found: fix it, open the folder and save again. Whether the operation is enabled and offered to Apps (exposure `bridge`) is checked only at the call, which is refused as forbidden: check the operation's exposure on the Connection's page first.
 
 ## Calling an action from the App
 
@@ -377,4 +377,4 @@ The build answers each fault with its file and a sentence that names the fix. Th
 - A missing `connection`, `operation` or `effect` in an action file: add it.
 - `sql_statement_not_allowed`: a reading statement that is not one `SELECT` or `WITH`, or a changing one that is not one `INSERT` of parameters.
 
-At a call, `action_unknown` means the manifest of the shown revision has no action of that name: save the Page again after adding the file.
+At a call, `action_unknown` means the manifest of the shown revision has no action of that name: open the folder and save it again after adding the file.

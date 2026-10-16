@@ -196,7 +196,7 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     // A package's switch turns all its tools on; its folded tools take the one not wanted off.
     await switchToolPackage(tools, "package:results", true);
     const results = await openToolPackage(tools, "package:results");
-    await results.getByRole("checkbox", { name: "Save page" }).uncheck();
+    await results.getByRole("checkbox", { name: "Open in preview" }).uncheck();
     await closeToolPackage(tools, "package:results");
     await expect(toolRow(tools, "package:results").locator("[data-tool-count]")).toHaveText("1/2");
     await page.getByRole("button", { name: "Create agent", exact: true }).click();

@@ -191,6 +191,11 @@ export interface PageBuildRequest {
   /** The folder of the workspace the files were taken from, for messages. */
   directory: string;
   files: PageBuildSourceFile[];
+  /**
+   * An HTML file of the folder opened on its own, where the folder has no `app.yaml`: the build
+   * gives it the manifest of plain HTML with this file as its entry.
+   */
+  entry?: string;
   requestedByUserId?: UserId;
   /**
    * Set for the build of an asset's files. The source files then lie in the `files` store,

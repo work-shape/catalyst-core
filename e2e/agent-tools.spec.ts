@@ -147,7 +147,7 @@ test.describe("the Tools section of an agent, as rows", () => {
       '- checkbox "All tools of Files and code" [checked=false]'
     );
     await expect(toolRow(tools, "package:results")).toContainText(
-      "Shows and keeps results: widgets, Pages and recorded facts."
+      "Shows and keeps results: widgets, previews, apps and recorded facts."
     );
     await expect(toolRow(tools, "own:demo.workflow_summary")).toContainText(
       "demo.workflow_summary"
@@ -163,10 +163,10 @@ test.describe("the Tools section of an agent, as rows", () => {
     await expect(results).toContainText(
       "Shows a small table, chart or overview inside its answer."
     );
-    await expect(results.getByRole("checkbox", { name: "Save page" })).not.toBeChecked();
+    await expect(results.getByRole("checkbox", { name: "Open in preview" })).not.toBeChecked();
     // The mixed switch turns every tool of it on, and then all off; the row stays.
     await switchToolPackage(tools, "package:results", true);
-    await expect(results.getByRole("checkbox", { name: "Save page" })).toBeChecked();
+    await expect(results.getByRole("checkbox", { name: "Open in preview" })).toBeChecked();
     await expect(rowCount(tools, "package:results")).toHaveText("2/2");
     await switchToolPackage(tools, "package:results", false);
     await expect(rowCount(tools, "package:results")).toHaveText("0/2");
@@ -222,7 +222,7 @@ test.describe("the Tools section of an agent, as rows", () => {
       table.getByRole("row", { name: /Show inline widget show_view Reads Core/u })
     ).toBeVisible();
     await expect(
-      table.getByRole("row", { name: /Save page page\.save Changes Apps/u })
+      table.getByRole("row", { name: /Open in preview workspace\.open Changes Apps/u })
     ).toBeVisible();
 
     const saved = page.waitForResponse(
@@ -237,7 +237,7 @@ test.describe("the Tools section of an agent, as rows", () => {
     expect(config.skillNames).toEqual([skillName]);
     expect(config.toolNames).toContain("read_skill");
     expect(config.toolNames).toContain("show_view");
-    expect(config.toolNames).not.toContain("page.save");
+    expect(config.toolNames).not.toContain("workspace.open");
     expect(config.toolNames).not.toContain("demo.weather_forecast");
   });
 

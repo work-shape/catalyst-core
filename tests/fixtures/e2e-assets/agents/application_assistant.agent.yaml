@@ -14,7 +14,7 @@ toolNames:
   - e2e.confirm_note
   - workspace.apply_patch
   - workspace.write_file
-  - page.save
+  - workspace.open
   - platform.context
   - platform.assets.list
   - platform.files.list

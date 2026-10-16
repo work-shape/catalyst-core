@@ -1,20 +1,30 @@
 import type { TranslationContextValue } from "../../shared/i18n";
 import type { PageBuildError, Surface, SurfaceOf } from "../../chat/surface/surface";
 
-// What the thread knows of a Page: the calls of `page.save`. A call names the Page, and its
-// answer is the revision it stored or the findings of the build that refused it.
+// What the thread knows of what an agent opened in the preview: the calls of `workspace.open`.
+// A call names the file or folder, and its answer is the revision it built or the findings of
+// the build that refused it.
 
-export const PAGE_SAVE_TOOL_NAME = "page.save";
+/** The former name of `workspace.open`, whose calls stored conversations still hold. */
+export const FORMER_OPEN_TOOL_NAME = "page.save";
+
+/** The tools whose calls open a revision in the preview. */
+const OPEN_TOOL_NAMES: ReadonlySet<string> = new Set(["workspace.open", FORMER_OPEN_TOOL_NAME]);
+
+/** Whether a call of `toolName` opens a revision in the preview. */
+export function isOpenToolName(toolName: string | undefined): boolean {
+  return toolName !== undefined && OPEN_TOOL_NAMES.has(toolName);
+}
 
 /**
- * What a stored save did to the App the conversation is about, where the Page is that App's:
- * the App's draft revision it wrote, or why it wrote none.
+ * What a call of the former `page.save` did to the App the conversation was about: the App's
+ * draft revision it wrote, or why it wrote none. An open writes no App.
  */
 type PageSaveApp =
   | { title: string; saved: true; revision: number }
   | { title: string; saved: false; message: string };
 
-/** How one call of `page.save` stands. */
+/** How one open stands. */
 export type PageSave =
   | { state: "building"; name: string | undefined }
   | {
@@ -62,18 +72,17 @@ function readSaveApp(value: unknown): PageSaveApp | undefined {
 }
 
 /**
- * Reads one call of `page.save`. `result` is absent while the call runs. An answer that is
- * neither a revision nor a list of findings is a call that failed.
+ * Reads one open. `result` is absent while the call runs. An answer that is neither a revision
+ * nor a list of findings is a call that failed. The name is the path an open names, or the name
+ * a call of the former `page.save` gave.
  */
 export function readPageSave(input: {
   args: unknown;
   result: unknown;
   failed?: boolean;
 }): PageSave {
-  const name =
-    isRecord(input.args) && typeof input.args.name === "string" && input.args.name.trim() !== ""
-      ? input.args.name.trim()
-      : undefined;
+  const named = isRecord(input.args) ? (input.args.path ?? input.args.name) : undefined;
+  const name = typeof named === "string" && named.trim() !== "" ? named.trim() : undefined;
   if (input.failed) {
     return { state: "failed", name };
   }
@@ -135,7 +144,7 @@ interface RunToolCall {
   state?: string;
 }
 
-/** The surface a Page's first save takes while it builds. One per call. */
+/** The surface an open takes while it builds. One per call. */
 export function pageBuildingSurface(
   callId: string,
   save: { name: string | undefined },
@@ -149,19 +158,18 @@ export function pageBuildingSurface(
   };
 }
 
-/** What a run's saves of Pages may change in the surface slot. */
+/** What a run's opens may change in the surface slot. */
 type PageRunSurface = SurfaceOf<"page"> | SurfaceOf<"page_building">;
 
 /**
- * What the calls of `page.save` in a run ask of the surface slot, in the order they were made.
+ * What the opens of a run ask of the surface slot, in the order they were made.
  *
- * - A save that starts takes the slot with its building Page, so the surface opens at the
- *   agent's first write, unless the slot shows a revision of the same Page, which stays until
- *   the new one replaces it, or the conversation is about an App: the save writes the App's
- *   draft, which is shown as the App.
- * - A stored revision opens, except one that wrote the draft of the App the conversation is
- *   about: the App's surface shows it.
- * - Findings go under the revision of the same Page that is shown, or onto its building Page.
+ * - An open that starts takes the slot with what it builds, so the surface opens at the agent's
+ *   first open, unless the slot shows a revision of the same path, which stays until the new
+ *   one replaces it.
+ * - A built revision opens, except one a call of the former `page.save` also wrote into the
+ *   draft of the App the conversation was about: the App's surface shows it.
+ * - Findings go under the revision of the same path that is shown, or onto what it builds.
  *
  * `current` is the surface the slot holds. Each start and each answer counts once: `handled`
  * keeps the ones that did.
@@ -171,8 +179,6 @@ export function pageSurfaceAfterRunCalls(input: {
   parts: readonly RunToolCall[];
   handled: Set<string>;
   current: Surface | undefined;
-  /** The conversation is about an App. */
-  aboutApp?: boolean;
   t: TranslationContextValue["t"];
 }): PageRunSurface | undefined {
   let next: PageRunSurface | undefined;
@@ -180,7 +186,7 @@ export function pageSurfaceAfterRunCalls(input: {
     const callId = part.toolCallId;
     if (
       part.type !== "tool_call" ||
-      part.toolName !== PAGE_SAVE_TOOL_NAME ||
+      !isOpenToolName(part.toolName) ||
       callId === undefined ||
       input.handled.has(callId)
     ) {
@@ -201,15 +207,15 @@ export function pageSurfaceAfterRunCalls(input: {
       input.handled.add(startKey);
       const samePageShown =
         shown?.kind === "page" && save.name !== undefined && shown.title === save.name;
-      if (!input.aboutApp && !samePageShown) {
+      if (!samePageShown) {
         next = pageBuildingSurface(callId, save, input.t);
       }
       continue;
     }
     input.handled.add(callId);
     if (save.state === "built") {
-      // A save that wrote the App's draft is seen as the App. Its building Page, where one was
-      // shown, gives way to the revision rather than stay on.
+      // A former save that wrote the App's draft is seen as the App. What it built, where that
+      // was shown, gives way to the revision rather than stay on.
       if (save.app === undefined || building) {
         next = pageSurface(input.conversationId, save, input.t);
       }

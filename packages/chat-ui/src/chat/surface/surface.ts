@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** One finding of a Page build, as `page.save` reports it. */
+/** One finding of a build, as `workspace.open` reports it. */
 export interface PageBuildError {
   file: string;
   line?: number;

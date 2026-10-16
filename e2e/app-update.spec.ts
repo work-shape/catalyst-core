@@ -190,7 +190,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await updateApp.click();
   const asked = page.getByRole("dialog", { name: `Update “${appName}”?` });
   await expect(asked).toContainText(
-    "The page as it is now becomes the draft of this app. People who use the app see the change only once the draft is published."
+    "This preview as it is now becomes the draft of this app. People who use the app see the change only once the draft is published."
   );
   await shoot(page, "update-app-dialog", ALL, async () => {
     await openSurface();
@@ -266,7 +266,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   const replace = asked.getByRole("button", { name: "Replace draft", exact: true });
   await expect(replace).toBeVisible();
   await expect(asked).toContainText(
-    "The draft of this app was changed somewhere else since it was last updated from this page. Updating replaces those changes."
+    "The draft of this app was changed somewhere else since it was last updated from this preview. Updating replaces those changes."
   );
   expect(await asset()).toMatchObject({ draftRevision: 3 });
   // Asked again later, the Page still says so before anything is written.
@@ -364,7 +364,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   // Saving under the App's id is refused, and the dialog offers the App itself.
   const offer = dialog.getByRole("button", {
     name: new RegExp(
-      `^(?:Update “${appName}” from this page|„${appName}“ aus dieser Page aktualisieren)$`,
+      `^(?:Update “${appName}” from this preview|„${appName}“ aus dieser Vorschau aktualisieren)$`,
       "u"
     )
   });
@@ -385,7 +385,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   };
   await untilOffered();
   await expect(dialog).toContainText(
-    `The app “${appName}” already has this ID. Choose another ID to save a new app, or update that app from this page.`
+    `The app “${appName}” already has this ID. Choose another ID to save a new app, or update that app from this preview.`
   );
   await shoot(page, "save-as-app-id-taken", ALL, async () => {
     await reopened();
@@ -406,10 +406,10 @@ test("a Page is put into an App that was saved before Apps remembered their Page
 
   // The offer says what it replaces and what stays, before anything is written.
   await offer.click();
-  const asked = page.getByRole("dialog", { name: `Update “${appName}” from this page?` });
+  const asked = page.getByRole("dialog", { name: `Update “${appName}” from this preview?` });
   const replace = asked.getByRole("button", { name: "Replace draft", exact: true });
   await expect(asked).toContainText(
-    "The current draft of this app is replaced by this page as it is now. The published version does not change until someone publishes the draft."
+    "The current draft of this app is replaced by this preview as it is now. The published version does not change until someone publishes the draft."
   );
   expect(await asset()).toMatchObject({ draftRevision: 1, publishedRevision: 1 });
   await shoot(page, "link-app-dialog", ALL, async () => {
@@ -435,7 +435,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await replace.click();
   const done = page.getByRole("dialog", { name: `The draft of “${appName}” is updated` });
   await expect(done).toContainText(
-    `The app keeps its name “${appName}”. The page is called “Revenue”.`
+    `The app keeps its name “${appName}”. The preview is called “revenue”.`
   );
   if (shotsDir) {
     await page.screenshot({

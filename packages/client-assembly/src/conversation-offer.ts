@@ -8,10 +8,10 @@ import {
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import {
-  PAGE_SAVE_AS_APP_TOOL_NAME,
-  PAGE_SAVE_TOOL_NAME,
+  APP_SAVE_TOOL_NAME,
+  WORKSPACE_OPEN_TOOL_NAME,
+  createAppSaveTool,
   createConnectionDraftTool,
-  createPageSaveAsAppTool,
   createPlatformAssetBinding,
   createPlatformAssetTools,
   createPlatformDiscoveryTools,
@@ -31,7 +31,7 @@ import { offeredSkillNames } from "./shipped-skills";
 // the platform in its system prompt and the skills the platform ships, the documentation in
 // every conversation, in one about an asset those for its kind and in one about none yet those
 // of every kind, since the agent may open any. Every other agent gets none of them. Every
-// agent, where Pages exist, is offered what builds a Page and makes it an App.
+// agent, where Apps exist, is offered what opens a folder in the preview and saves it as an App.
 
 /** Whether an agent whose definition lists these tools holds the platform's. */
 function holdsPlatformTools(agentToolNames: readonly string[]): boolean {
@@ -41,25 +41,25 @@ function holdsPlatformTools(agentToolNames: readonly string[]): boolean {
 /** The tool an agent reads a skill with. A shipped skill is read through it like any other. */
 const READ_SKILL_TOOL = "read_skill";
 
-/** The tool a Page's folder is written with. Without it no Page can be built. */
+/** The tool an App's folder is written with. Without it nothing can be opened. */
 const WRITE_FILE_TOOL = "workspace.write_file";
 
 /**
- * What every agent builds a Page with: the save, the step to an App, and the file tools that
- * write, change and read the Page's folder. Offered only where a folder can be written and
- * saved, each tool as far as the process has it.
+ * What every agent builds an App with: the open, the save, and the file tools that write,
+ * change and read its folder. Offered only where a folder can be written and opened, each tool
+ * as far as the process has it.
  */
-const PAGE_TOOLS = [
-  PAGE_SAVE_TOOL_NAME,
-  PAGE_SAVE_AS_APP_TOOL_NAME,
+const APP_TOOLS = [
+  WORKSPACE_OPEN_TOOL_NAME,
+  APP_SAVE_TOOL_NAME,
   WRITE_FILE_TOOL,
   "workspace.edit_file",
   "workspace.read_file"
 ];
 
-/** The tools that build a Page, where this process can build one. */
-function pageToolNames(hasTool: (toolName: string) => boolean): string[] {
-  return hasTool(PAGE_SAVE_TOOL_NAME) && hasTool(WRITE_FILE_TOOL) ? PAGE_TOOLS : [];
+/** The tools that build an App, where this process can build one. */
+function appToolNames(hasTool: (toolName: string) => boolean): string[] {
+  return hasTool(WORKSPACE_OPEN_TOOL_NAME) && hasTool(WRITE_FILE_TOOL) ? APP_TOOLS : [];
 }
 
 interface ConversationOfferInput {
@@ -86,7 +86,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(subject ? { subject } : {}),
         toolNames: [
           ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
-          ...pageToolNames(input.hasTool),
+          ...appToolNames(input.hasTool),
           ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
         ].filter((toolName) => input.hasTool(toolName)),
         skillNames,
@@ -140,12 +140,10 @@ export function createPlatformTools(
     bind(options: AssetWorkflowOptions): void {
       platformAssets.bind(createPlatformAssetCalls(options));
     },
-    /** What `page.save` writes the App of a conversation with. */
-    pageApps: platformAssets.calls,
     tools: [
       ...createPlatformDiscoveryTools(platformAssets.calls),
       ...createPlatformAssetTools(platformAssets.calls),
-      createPageSaveAsAppTool(platformAssets.calls),
+      createAppSaveTool(platformAssets.calls),
       ...(input.connections
         ? [
             createConnectionDraftTool({
@@ -166,9 +164,9 @@ export function createPlatformTools(
      * decides which agent holds them, and the switch of their module turns them off. The tool
      * that reads a skill is enabled with them, so that the skills the platform ships are
      * readable wherever they are offered whatever the release enables: an agent's own
-     * definition still lists the tool only where the release names it. So are the two tools of
-     * a Page, which the `apps` module turns off; the file tools a Page is written with stay the
-     * release's to enable.
+     * definition still lists the tool only where the release names it. So are the open and the
+     * save of an App, which the `apps` module turns off; the file tools its folder is written
+     * with stay the release's to enable.
      */
     registry(tools: AnyToolDefinition[], enabledByRelease: ReadonlySet<string>): ToolRegistry {
       attached.tools = new ToolRegistry({
@@ -178,8 +176,8 @@ export function createPlatformTools(
           ...PLATFORM_TOOL_NAMES,
           ...PLATFORM_MODULE_TOOL_NAMES,
           READ_SKILL_TOOL,
-          PAGE_SAVE_TOOL_NAME,
-          PAGE_SAVE_AS_APP_TOOL_NAME
+          WORKSPACE_OPEN_TOOL_NAME,
+          APP_SAVE_TOOL_NAME
         ]),
         modules: input.modules
       });

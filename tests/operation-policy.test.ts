@@ -480,9 +480,15 @@ describe("operation registry: who checks the right", () => {
         /names operations that come from data/u
       );
     }
-    // A name of two parts manages the kind, or is the one knowledge tool: it registers.
+    // A name of two parts manages the kind, or is the one knowledge tool, or the one tool that
+    // saves an App: it registers. Every other name under `app.` is kept for the actions of Apps.
+    for (const name of ["app.offers.send", "app.foo"]) {
+      expect(() => createOperationRegistry().register({ ...definition(), name }), name).toThrow(
+        /starts with 'app\.', which names operations that come from data/u
+      );
+    }
     const registry = createOperationRegistry();
-    for (const name of ["workflows.test", "data_stores.publish", "knowledge.query"]) {
+    for (const name of ["workflows.test", "data_stores.publish", "knowledge.query", "app.save"]) {
       registry.register({ ...definition(), name });
     }
   });

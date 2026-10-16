@@ -20,3 +20,8 @@ export * from "./skill-change";
 export * from "./stored-agent-references";
 
 export * from "./agent-tool-references";
+export {
+  formerAgentToolWarnings,
+  formerReleaseToolWarnings,
+  isFormerToolName
+} from "./former-tool-names";

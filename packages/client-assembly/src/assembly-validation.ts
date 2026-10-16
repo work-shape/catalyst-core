@@ -13,6 +13,7 @@ import {
 import {
   getModelProviderConfigs,
   getModelSelectionForAgent,
+  isFormerToolName,
   type AgentConfig,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
@@ -185,7 +186,8 @@ function findToolReferenceIssues(
   const providedToolNames = new Set(providedTools.keys());
 
   for (const tool of config.tools) {
-    if (tool.name === WEB_SEARCH_MODEL_TOOL_NAME) {
+    // A former tool name starts: the startup warns about it with the name that replaced it.
+    if (tool.name === WEB_SEARCH_MODEL_TOOL_NAME || isFormerToolName(tool.name)) {
       continue;
     }
     // The capability of a module that is off brings no tools, and the config that enables

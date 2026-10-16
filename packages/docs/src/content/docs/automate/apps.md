@@ -9,25 +9,27 @@ The German interface shows the labels in quotes. [Build an App](/apps/build/) is
 
 ## Ask for it in a chat
 
-Describe what you need: who uses it, what it shows, what it should let people do. For example: "Build a page where I can enter a new client and see the last ten."
+Describe what you need: who uses it, what it shows, what it should let people do. For example: "Build an app where I can enter a new client and see the last ten."
 
-The agent builds a **Page** and shows it beside the chat. **Preview** ("Vorschau") shows it working; **Files** ("Dateien") shows what it is made of. Keep asking for changes in the chat; each one the agent saves is the Page's newest revision.
+The agent builds it and shows it beside the chat. **Preview** ("Vorschau") shows it working; **Files** ("Dateien") shows what it is made of. Keep asking for changes in the chat; each one the agent opens is the preview's newest revision.
 
-A Page belongs to its conversation. It cannot change anything in other systems. To keep it and share it, save it as an App.
+The preview belongs to its conversation. It cannot change anything in other systems. To keep it, save it as an App.
 
 When you have no App yet, the **Apps** page offers **Build an app in chat** ("App im Chat bauen"), which starts a chat for this.
 
 ## Keep it as an App
 
-1. In the Page's header, click **Save as app** ("Als App speichern").
+Tell the agent "keep this as an app". It saves the App under the name it was given and asks you nothing.
+
+The App is yours at once: it is in your **Apps** list and opens at its **draft**, with live data. Builders of the workspace see the draft too; nobody else sees it until you share it by publishing.
+
+You can also save it yourself:
+
+1. In the preview's header, click **Save as app** ("Als App speichern").
 2. Give it a **Name** and an **ID**. The ID is part of the App's address and cannot change later.
 3. Click **Save** ("Speichern").
 
-The Page becomes the **draft** of a new App in your workspace. Nothing is published yet: only administrators see it until you publish.
-
-You can also simply tell the agent "keep this as an app".
-
-After that, changes you ask for in the same chat go into the App's draft by themselves. When that did not happen, for example because someone changed the draft elsewhere, the Page offers **Update app** ("App aktualisieren"): **Replace draft** ("Entwurf ersetzen") puts the Page as it is now into the draft.
+After that, each change you ask for in the same chat goes into the App's draft once the agent saves it again. When that did not happen, for example because someone changed the draft elsewhere, the preview offers **Update app** ("App aktualisieren"): **Replace draft** ("Entwurf ersetzen") puts what the preview shows now into the draft.
 
 ## Try it safely
 
@@ -65,5 +67,5 @@ Later changes go to the draft again. The App shows **Unpublished changes** ("Unv
 ## Who may do what
 
 - Everyone in the workspace can open a published App.
-- Saving a Page as an App, editing the draft, **Run live once** and publishing are rights of the administrator role. They cannot be given to one person. If you do not see **Save as app** or **Publish**, ask an administrator.
+- Saving an App, editing the draft, **Run live once** and publishing are rights of the administrator role. They cannot be given to one person. If you do not see **Save as app** or **Publish**, ask an administrator.
 - An action reaches only what the person using the App may reach. The App's screens never hold a key: they call actions by name, and the instance makes the call.

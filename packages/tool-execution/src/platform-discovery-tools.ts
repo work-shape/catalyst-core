@@ -204,22 +204,22 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
     }),
     defineTool({
       name: listFiles.name,
-      title: { en: "Find pages and files", de: "Pages und Dateien finden" },
+      title: { en: "Find previews and files", de: "Vorschauen und Dateien finden" },
       summary: {
-        en: "Finds the Pages and files in this workspace's conversations that the user may see.",
-        de: "Findet die Pages und Dateien in den Unterhaltungen dieses Arbeitsbereichs, die die Person sehen darf."
+        en: "Finds the previews and files in this workspace's conversations that the user may see.",
+        de: "Findet die Vorschauen und Dateien in den Unterhaltungen dieses Arbeitsbereichs, die die Person sehen darf."
       },
       group: "platform",
       icon: "files",
       effect: listFiles.effect,
       description: [
-        "Find the Pages and files in the conversations of this workspace that the user may see: Pages saved with page.save ('page'), files people uploaded ('upload') and files an agent made in a workspace ('generated_file'). Newest first.",
+        "Find the previews and files in the conversations of this workspace that the user may see: folders shown with workspace.open ('page'), files people uploaded ('upload') and files an agent made in a workspace ('generated_file'). Newest first.",
         "Answers the name, the type, the size, when it last changed and the conversation it lives in, never what it holds. What the user may not see is not listed; say that you know none of that name, not that it is hidden.",
         `Give 'text' for part of the name or of the title of its conversation, and 'kind' for one kind. Answers at most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower.`,
         "You can read only what is marked 'inThisConversation', with the tools you read files with. For anything else, tell the user which conversation holds it, so they can open it there or add the file to this one."
       ].join(" "),
       inputSchema: z.object({
-        kind: z.enum(FOUND_FILE_KINDS).optional().describe("Only Pages, uploads or made files."),
+        kind: z.enum(FOUND_FILE_KINDS).optional().describe("Only previews, uploads or made files."),
         text: searchText(200)
           .optional()
           .describe("Part of the name or of the conversation's title, whatever the case.")

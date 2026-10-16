@@ -23,9 +23,9 @@ import {
   type RegisteredJobHandler
 } from "@work-shape/catalyst-core";
 import type {
-  PageSaveToolOptions,
   WorkspaceCommandProcessExecutor,
-  WorkspaceCommandService
+  WorkspaceCommandService,
+  WorkspaceOpenToolOptions
 } from "@work-shape/catalyst-tool-execution";
 import type { ClientInstanceEnv } from "./env";
 import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
@@ -69,7 +69,7 @@ export async function createInstancePages(input: {
   if (!input.config.executionWorkspaces.enabled) {
     throw new AppError(
       "VALIDATION_FAILED",
-      "'modules.apps.enabled' is true, but 'executionWorkspaces.enabled' is not. A Page is saved from a folder of an Execution Workspace and built in its sandbox by the workspace command worker. Enable Execution Workspaces and run that worker, or turn the module off"
+      "'modules.apps.enabled' is true, but 'executionWorkspaces.enabled' is not. An App is opened from a folder of an Execution Workspace and built in its sandbox by the workspace command worker. Enable Execution Workspaces and run that worker, or turn the module off"
     );
   }
   let secret: string | undefined;
@@ -82,7 +82,7 @@ export async function createInstancePages(input: {
   if (!secret || secret.length < APP_CONTENT_SECRET_MIN_CHARS) {
     throw new AppError(
       "VALIDATION_FAILED",
-      `'modules.apps.enabled' is true, but neither of the secrets ${APP_CONTENT_SECRET_NAMES.map((name) => `'${name}'`).join(" and ")} is set with at least ${APP_CONTENT_SECRET_MIN_CHARS} characters. The tokens that serve a Page are signed with a key derived from one of them`
+      `'modules.apps.enabled' is true, but neither of the secrets ${APP_CONTENT_SECRET_NAMES.map((name) => `'${name}'`).join(" and ")} is set with at least ${APP_CONTENT_SECRET_MIN_CHARS} characters. The tokens that serve an App are signed with a key derived from one of them`
     );
   }
   return {
@@ -92,22 +92,19 @@ export async function createInstancePages(input: {
 }
 
 /**
- * What `page.save` needs, for the process that runs the tools. Nothing with the module off.
+ * What `workspace.open` needs, for the process that runs the tools. Nothing with the module off.
  */
-export function createInstancePageSave(input: {
+export function createInstanceWorkspaceOpen(input: {
   modules: ModuleSnapshot;
   stores: PlatformStores;
   workspaceService: WorkspaceCommandService | undefined;
-  /** What writes the App a conversation is about from its Page. */
-  apps: PageSaveToolOptions["apps"];
-}): PageSaveToolOptions | undefined {
+}): WorkspaceOpenToolOptions | undefined {
   if (!input.modules.isEnabled("apps") || !input.workspaceService) {
     return undefined;
   }
   return {
     workspace: input.workspaceService.dependencies,
-    builds: createPageBuildClient({ stores: input.stores }),
-    ...(input.apps ? { apps: input.apps } : {})
+    builds: createPageBuildClient({ stores: input.stores })
   };
 }
 

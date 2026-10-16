@@ -147,7 +147,7 @@ export class PageApps {
     if (!page) {
       throw new AppError(
         "NOT_FOUND",
-        `This conversation has no Page named '${wanted}'. Save it with page.save first`,
+        `Nothing was opened at '${wanted}' in this conversation. Open it with workspace.open first, then save the same path`,
         { reason: "page_not_found" },
         { exposeMessage: true }
       );

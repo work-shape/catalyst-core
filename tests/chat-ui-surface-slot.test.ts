@@ -89,7 +89,7 @@ describe("surface slot frame", () => {
     const order = [
       ">Angebotsvergleich<",
       ">Revision 2<",
-      'aria-label="View of the Page"',
+      'aria-label="Content of the preview"',
       ">Preview<",
       ">Files<",
       'aria-label="View fullscreen"',

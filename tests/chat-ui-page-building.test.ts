@@ -36,15 +36,15 @@ describe("the building Page beside the conversation", () => {
 
   it("holds the place of the preview while the first save builds, in English and German", () => {
     expect(shown(building)).toContain('data-preview-state="starting"');
-    expect(shown(building)).toContain("Building the Page");
-    expect(shown(building, "de")).toContain("Die Page wird gebaut");
+    expect(shown(building)).toContain("Building the preview");
+    expect(shown(building, "de")).toContain("Die Vorschau wird gebaut");
   });
 
   it("says what refused the save, or that it failed", () => {
     const refusedMarkup = shown({ ...building, buildErrors: refused.output.errors });
-    expect(refusedMarkup).toContain("The Page could not be built");
+    expect(refusedMarkup).toContain("The preview could not be built");
     expect(refusedMarkup).toContain("2 build errors");
-    expect(shown({ ...building, failed: true })).toContain("The Page could not be saved");
+    expect(shown({ ...building, failed: true })).toContain("The preview could not be opened");
   });
 });
 

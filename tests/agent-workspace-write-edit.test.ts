@@ -13,7 +13,7 @@ import type { JobWorker, Logger } from "@work-shape/catalyst-core";
 import { modelContentText } from "@work-shape/catalyst-model-provider";
 import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import {
-  createPageSaveTool,
+  createWorkspaceOpenTool,
   createWorkspaceToolDefinitions,
   LocalWorkspaceCommandProcessExecutor,
   ToolRegistry,
@@ -27,9 +27,9 @@ import { createStaticConfigAssetSource } from "./support/static-config-asset-sou
 import { createTestToolRunner } from "./support/tool-runner";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
-// An agent run with a scripted model: the agent writes the files of a Page with
-// `workspace.write_file`, changes one with `workspace.edit_file`, reads it back and saves the
-// folder with `page.save`. The build runs as the instance runs it: a `page.bundle` job on
+// An agent run with a scripted model: the agent writes the files of an App with
+// `workspace.write_file`, changes one with `workspace.edit_file`, reads it back and opens the
+// folder with `workspace.open`. The build runs as the instance runs it: a `page.bundle` job on
 // Postgres, in the local sandbox.
 //
 // Fails without the change: the first two calls name tools that did not exist, so the model
@@ -68,7 +68,7 @@ afterAll(async () => {
 });
 
 describe("an agent that writes and edits workspace files", () => {
-  it("writes a Page's files, edits one, reads it back and saves the folder as a Page", async () => {
+  it("writes an App's files, edits one, reads it back and opens the folder in the preview", async () => {
     const harness = await createWorkspaceHarness();
     const { store, clientInstanceId, objectStore, context } = harness;
     // The harness's own conversation has a run already, and a conversation has one at a time.
@@ -88,16 +88,16 @@ describe("an agent that writes and edits workspace files", () => {
       now: () => new Date().toISOString()
     });
     const pageObjects = new MemoryObjectStorage();
-    const pageSave = createPageSaveTool({
+    const workspaceOpen = createWorkspaceOpenTool({
       workspace: service.dependencies,
       builds: createPageBuildClient({ stores: store, pollIntervalMs: 20 })
     });
-    const tools = [...createWorkspaceToolDefinitions({ service }), pageSave];
+    const tools = [...createWorkspaceToolDefinitions({ service }), workspaceOpen];
     const granted = [
       "workspace.write_file",
       "workspace.edit_file",
       "workspace.read_file",
-      pageSave.name
+      workspaceOpen.name
     ];
     const runTool = createTestToolRunner({
       registry: new ToolRegistry({ tools }),
@@ -211,8 +211,8 @@ describe("an agent that writes and edits workspace files", () => {
               toolCalls: [
                 {
                   toolCallId: "call_save",
-                  toolName: pageSave.name,
-                  input: { name: "Report", directory: "report" }
+                  toolName: workspaceOpen.name,
+                  input: { path: "report" }
                 }
               ],
               usage

@@ -50,7 +50,7 @@ describe("the input schema a model is shown for a tool", () => {
       expect(tools.map((tool) => tool.name)).toEqual(
         expect.arrayContaining([
           "show_view",
-          "page.save",
+          "workspace.open",
           "workspace.exec",
           "workspace.preview_images",
           "structured_data.publish",

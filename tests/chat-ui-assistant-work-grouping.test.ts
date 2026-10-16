@@ -70,14 +70,14 @@ describe("assistant work grouping", () => {
     expect(createVisibleFinalAssistantPartIndices(parts, 0)).toEqual([0]);
   });
 
-  it("keeps the card of a saved Page revision under the answer and folds a refused save away", () => {
-    // Fails without the Page surface: every page.save call folded into the work summary, and
-    // with it the only way to open the revision again.
+  it("keeps the card of an opened revision under the answer and folds a refused open away", () => {
+    // Fails without the preview surface: every open folded into the work summary, and with it
+    // the only way to open the revision again.
     const saved = {
       type: "tool-call" as const,
       toolCallId: "call_saved",
-      toolName: "page.save",
-      args: { name: "Offers", directory: "offers" },
+      toolName: "workspace.open",
+      args: { path: "offers" },
       result: { output: { pageId: "page-1", number: 1, fileSetId: "set-1" } }
     };
     const refused = {
@@ -85,18 +85,23 @@ describe("assistant work grouping", () => {
       toolCallId: "call_refused",
       result: { output: { errors: [{ file: "app.yaml", message: "No kit version." }] } }
     };
-    const parts = [refused, saved, textPart("The Page is ready.")];
+    const parts = [refused, saved, textPart("The app is ready.")];
 
     expect(createCompletedAssistantWorkIndices(parts, 2)).toEqual([0]);
     expect(createVisibleFinalAssistantPartIndices(parts, 2)).toEqual([2, 1]);
+    // A stored conversation's call of the former name keeps its card the same way.
+    const former = parts.map((part) =>
+      part.type === "tool-call" ? { ...part, toolName: "page.save" } : part
+    );
+    expect(createVisibleFinalAssistantPartIndices(former, 2)).toEqual([2, 1]);
   });
 
-  it("shows a save on its own while the run goes on", () => {
-    // Fails without the rule for page.save: the call folded into "1 tool call", and nothing in
-    // the thread said that a Page was being built.
+  it("shows an open on its own while the run goes on", () => {
+    // Fails without the rule for opens: the call folded into "1 tool call", and nothing in the
+    // thread said that something was being built.
     const parts = [
       toolPart("call_patch", "workspace.apply_patch"),
-      toolPart("call_save", "page.save")
+      toolPart("call_save", "workspace.open")
     ];
 
     expect(groupPaths(parts)).toEqual([[ASSISTANT_WORK_GROUP], []]);
@@ -123,20 +128,20 @@ describe("assistant work grouping", () => {
     expect(createVisibleFinalAssistantPartIndices(parts, 3)).toEqual([3, 1]);
   });
 
-  it("keeps the card of a refused save when the answer ended with it", () => {
-    // Fails without the rule for the last save: the card folded into the work summary, and an
-    // answer whose Page was never built showed nothing of what the build found.
+  it("keeps the card of a refused open when the answer ended with it", () => {
+    // Fails without the rule for the last open: the card folded into the work summary, and an
+    // answer whose preview was never built showed nothing of what the build found.
     const refused = {
       type: "tool-call" as const,
       toolCallId: "call_refused",
-      toolName: "page.save",
-      args: { name: "Offers", directory: "offers" },
+      toolName: "workspace.open",
+      args: { path: "offers" },
       result: { output: { errors: [{ file: "app.yaml", message: "No kit version." }] } }
     };
     const parts = [
       { ...refused, toolCallId: "call_first" },
       refused,
-      textPart("The Page could not be built.")
+      textPart("The app could not be built.")
     ];
 
     expect(createCompletedAssistantWorkIndices(parts, 2)).toEqual([0]);

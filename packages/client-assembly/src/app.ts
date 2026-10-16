@@ -27,6 +27,7 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   type ClientInstanceConfig,
+  formerReleaseToolWarnings,
   getClientInstanceId,
   getEnabledToolNames,
   getModelProviderConfigs,
@@ -73,7 +74,7 @@ import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createInstanceInfrastructure, createWorkspacesStore } from "./infrastructure";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
-import { createInstancePageSave, createInstancePages } from "./pages";
+import { createInstancePages, createInstanceWorkspaceOpen } from "./pages";
 import { createJobWorker } from "./job-worker";
 import { createPlatformTools } from "./conversation-offer";
 import { PLATFORM_INSTRUCTIONS, agentListableToolNames } from "./platform-orientation";
@@ -355,8 +356,14 @@ export async function createClientInstanceExecutionAssembly(
         { agentName, unavailableTools, unavailableSkills, unavailableModels, chatAvailable },
         "Stored agent references unavailable items"
       );
+    },
+    onFormerToolNames(agentName, warnings) {
+      for (const warning of warnings) logger.warn({ agentName }, warning);
     }
   });
+  for (const warning of formerReleaseToolWarnings(config.tools.map((tool) => tool.name))) {
+    logger.warn(warning);
+  }
   // Writes check changed agents strictly. Unavailable references of an unchanged stored
   // agent do not stand in the way of repairing another agent or writing a skill.
   const validateAgents = (_agents: AgentConfig[], changed: AgentConfig[]) => [
@@ -428,12 +435,11 @@ export async function createClientInstanceExecutionAssembly(
           : undefined
       })
     : undefined;
-  const apps = platformTools.pageApps;
-  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService, apps });
+  const workspaceOpen = createInstanceWorkspaceOpen({ modules, stores: store, workspaceService });
   const tools = createToolDefinitions({
     config,
     tools: [
-      ...createBuiltInToolDefinitions(config.views, { apps: pageSave }),
+      ...createBuiltInToolDefinitions(config.views, { apps: workspaceOpen }),
       ...(workspaceService ? createWorkspaceToolDefinitions({ service: workspaceService }) : []),
       ...createStructuredDataToolDefinitions({
         store,

@@ -12,7 +12,7 @@ The open platform contains:
 - the chat API under `/api/v1` with streamed agent runs, described by an OpenAPI document, see the [API reference](/reference/api/)
 - the standalone chat interface and an embeddable chat widget, with session tokens issued by a host backend
 - agents and skills as config assets in the database, edited in Studio or synchronized with the `catalyst` CLI; skills may carry files of any type, and a few skills ship with the platform
-- Pages an agent builds in a conversation, and Apps saved from them, with a draft whose changing actions are simulated, **Run live once**, and publishing (module `apps`)
+- Previews an agent opens in a conversation, and Apps saved from them, with a draft whose changing actions are simulated, **Run live once**, and publishing (module `apps`)
 - Workflows with a canvas, test runs, schedules, code steps and a list of runs, acting as a service principal (module `workflows`)
 - Connections to remote MCP servers and to REST interfaces read by GET (`http_api`), created in Studio or in release config, with a key entered on the Connection's page (module `connections`)
 - Data Stores: one Postgres database per store for Apps and Workflows (module `dataStores`)

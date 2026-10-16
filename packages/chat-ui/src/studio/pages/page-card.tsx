@@ -9,6 +9,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { AppWindow, TriangleAlert } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { APP_SAVE_TOOL_NAME, savedDraftCalls } from "../../chat/conversation/subject-run";
 import { useToolDisplayPanel } from "../../chat/tools/tool-display-panel";
 import { useTranslation } from "../../shared/i18n";
 import { usePageConversationId } from "./page-host";
@@ -22,9 +23,9 @@ import {
 import { BuildErrorList } from "./page-surface";
 
 /**
- * The card of one `page.save` call in the thread. A stored revision reopens beside the
- * conversation from here; a refused save shows what the build found. A save that wrote the
- * draft of the App the conversation is about says so, and the App is shown as the App.
+ * The card of one open in the thread. A built revision reopens beside the conversation from
+ * here; a refused open shows what the build found. A call of the former `page.save` that wrote
+ * the draft of the App the conversation was about says so, and the App is shown as the App.
  */
 export function PageSaveCard({
   args,
@@ -171,19 +172,20 @@ interface WatchedRun {
 }
 
 const FINISHED_RUN_STATES = new Set<string>(ENDED_AGENT_RUN_STATUSES);
+/** The surfaces of what a run opened. */
+const PREVIEW_KINDS: ReadonlySet<string> = new Set(["page", "page_building"]);
 
 /**
- * Shows a Page beside the conversation when a run saves it: from the start of the save, as the
- * Page that builds, and then its revision. Only a run seen while it was going counts, so opening
- * a conversation whose Page was built earlier opens nothing: its card does. Each revision opens
- * by itself once, however often the calls of its run are seen again. A save the build refused
- * puts its findings under the revision of that Page that is shown. Where the conversation is
- * about an App (`aboutApp`), its saves are seen as the App and open no Page.
+ * Shows what a run opens beside the conversation: from the start of the open, as what builds,
+ * and then its revision. Only a run seen while it was going counts, so opening a conversation
+ * whose preview was built earlier opens nothing: its card does. Each revision opens by itself
+ * once, however often the calls of its run are seen again. An open the build refused puts its
+ * findings under the revision of the same path that is shown. Once `app.save` wrote what the
+ * preview shows into the App, the preview gives way to the App's draft, which shows it.
  */
 export function useAutoOpenPageSurface(
   activeRun: WatchedRun | undefined,
-  conversationId: string | undefined,
-  aboutApp = false
+  conversationId: string | undefined
 ): void {
   const panel = useToolDisplayPanel();
   const { t } = useTranslation();
@@ -201,15 +203,22 @@ export function useAutoOpenPageSurface(
       }
       watchedRunIds.current.add(runId);
     }
+    const { parts } = activeRun.projection;
     const next = pageSurfaceAfterRunCalls({
       conversationId,
-      parts: activeRun.projection.parts,
+      parts,
       handled: handledCalls.current,
       current: panel.open ? panel.entry : undefined,
-      aboutApp,
       t
     });
+    const kept = savedDraftCalls(parts.filter((part) => part.toolName === APP_SAVE_TOOL_NAME))
+      .map((callId) => `${callId}:kept`)
+      .filter((key) => !handledCalls.current.has(key));
+    for (const key of kept) handledCalls.current.add(key);
     if (!next) {
+      if (kept.length > 0 && panel.open && PREVIEW_KINDS.has(panel.entry?.kind ?? "")) {
+        panel.close();
+      }
       return;
     }
     if (panel.open && panel.entry?.key === next.key) {
@@ -220,5 +229,5 @@ export function useAutoOpenPageSurface(
       // still ending replays the run's calls, and they open nothing a second time.
       panel.showOnce(next);
     }
-  }, [aboutApp, activeRun, conversationId, panel, t]);
+  }, [activeRun, conversationId, panel, t]);
 }

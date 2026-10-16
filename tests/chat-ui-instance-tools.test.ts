@@ -265,7 +265,7 @@ describe("tools an agent holds because of something else", () => {
 describe("the fact sheet, one check box for keeping and reading it", () => {
   const resultTools = [
     { name: "show_view", group: "results", effect: "reading" },
-    { name: "page.save", group: "results", effect: "changing" },
+    { name: "workspace.open", group: "results", effect: "changing" },
     {
       name: "structured_data.publish",
       title: { en: "Keep a fact sheet", de: "Faktenblatt führen" },
@@ -324,7 +324,7 @@ describe("the fact sheet, one check box for keeping and reading it", () => {
 
     expect(view?.tools.map((tool) => tool.name)).toEqual([
       "show_view",
-      "page.save",
+      "workspace.open",
       "structured_data.publish",
       "structured_result.read"
     ]);

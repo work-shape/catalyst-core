@@ -145,17 +145,17 @@ The config of a skill stays where its text is read from: `content` from `SKILL.m
 
 A folder is refused with the path and a reason of its own:
 
-| Reason | What is refused |
-| --- | --- |
-| `skill_manifest_missing`, `skill_manifest_invalid` | no `SKILL.md`, or one whose frontmatter does not read or lacks a description |
-| `skill_frontmatter_alias`, `skill_frontmatter_too_deep`, `skill_frontmatter_too_large` | a frontmatter that uses a YAML anchor with an alias or a merge key, nests deeper than 8 levels, or holds more than 8,192 characters beside the fields of the skill |
-| `skill_path_invalid`, `skill_path_duplicate` | a path that escapes the folder or is not normalized, is longer than 240 characters or has a segment longer than 100, a `SKILL.md` below the root; two paths that differ in case alone, a path that is the folder of another one |
-| `skill_file_not_text` | a file whose extension says script or text and whose bytes are no UTF-8 |
-| `skill_file_executable` | a compiled program by its first bytes (ELF, Mach-O, and PE by both of its headers), whatever its name |
-| `skill_file_lfs_pointer` | a Git LFS pointer in place of the file |
-| `skill_file_too_large` | a file over 2 MiB |
-| `files_too_large`, a schema issue on `files` | more than 8 MiB in all, more than 500 files: the limits of every write of files of the API, which are the skill's too |
-| `files_unavailable` | a file the config cannot hold, on an instance without a `files` object store |
+| Reason                                                                                 | What is refused                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skill_manifest_missing`, `skill_manifest_invalid`                                     | no `SKILL.md`, or one whose frontmatter does not read or lacks a description                                                                                                                                                    |
+| `skill_frontmatter_alias`, `skill_frontmatter_too_deep`, `skill_frontmatter_too_large` | a frontmatter that uses a YAML anchor with an alias or a merge key, nests deeper than 8 levels, or holds more than 8,192 characters beside the fields of the skill                                                              |
+| `skill_path_invalid`, `skill_path_duplicate`                                           | a path that escapes the folder or is not normalized, is longer than 240 characters or has a segment longer than 100, a `SKILL.md` below the root; two paths that differ in case alone, a path that is the folder of another one |
+| `skill_file_not_text`                                                                  | a file whose extension says script or text and whose bytes are no UTF-8                                                                                                                                                         |
+| `skill_file_executable`                                                                | a compiled program by its first bytes (ELF, Mach-O, and PE by both of its headers), whatever its name                                                                                                                           |
+| `skill_file_lfs_pointer`                                                               | a Git LFS pointer in place of the file                                                                                                                                                                                          |
+| `skill_file_too_large`                                                                 | a file over 2 MiB                                                                                                                                                                                                               |
+| `files_too_large`, a schema issue on `files`                                           | more than 8 MiB in all, more than 500 files: the limits of every write of files of the API, which are the skill's too                                                                                                           |
+| `files_unavailable`                                                                    | a file the config cannot hold, on an instance without a `files` object store                                                                                                                                                    |
 
 A write of the config alone is checked the same way: its `SKILL.md` and text resources, beside the files of its index that it keeps, are refused for the reasons above that a text can have, so a resource over 2 MiB, a Git LFS pointer or a resource below another file is refused by its path whichever way it is written.
 
@@ -288,22 +288,22 @@ removed first. Reverting retains the original approval and proposal history.
 
 Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, where `kind` is a registered kind such as `agent` or `skill`. Studio uses these operations, and so can a script or an outside editor. Each changing call is one Operation Run with its actor and outcome. A read is checked the same way and leaves a run only when it is refused or fails. The [API reference](/reference/api/) lists the fields.
 
-| Operation                 | Address                                      | Right                |
-| ------------------------- | -------------------------------------------- | -------------------- |
-| `assets.list`             | `GET /api/v1/assets/{kind}`                  | `<kind>.read`        |
-| `assets.get`              | `GET /api/v1/assets/{kind}/{name}`           | `<kind>.read`        |
-| `assets.put`              | `PUT /api/v1/assets/{kind}/{name}`           | `<kind>.write`       |
-| `assets.delete`           | `POST /api/v1/assets/{kind}/{name}/delete`   | `<kind>.delete`      |
-| `assets.revisions.list`   | `GET /api/v1/assets/{kind}/{name}/revisions` | `<kind>.read`        |
-| `assets.revert`           | `POST /api/v1/assets/{kind}/{name}/revert`   | `<kind>.write`       |
-| `assets.validate`         | `POST /api/v1/assets/{kind}/validate`        | `<kind>.read`        |
-| `assets.check_name`       | `POST /api/v1/assets/{kind}/check-name`      | `<kind>.write`       |
-| `assets.publish` | `POST /api/v1/assets/{kind}/{name}/publish` | `<kind>.publish` |
-| `assets.discard_draft` | `POST /api/v1/assets/{kind}/{name}/discard-draft` | `<kind>.write` |
-| `assets.sync`             | `POST /api/v1/assets/sync`                   | per item             |
-| `assets.sync_check`       | `POST /api/v1/assets/sync/check`             | per item             |
-| `platform.context.get`    | `GET /api/v1/context`                        | any signed-in caller |
-| `platform.references.get` | `GET /api/v1/context/references`             | a right on any kind  |
+| Operation                 | Address                                           | Right                |
+| ------------------------- | ------------------------------------------------- | -------------------- |
+| `assets.list`             | `GET /api/v1/assets/{kind}`                       | `<kind>.read`        |
+| `assets.get`              | `GET /api/v1/assets/{kind}/{name}`                | `<kind>.read`        |
+| `assets.put`              | `PUT /api/v1/assets/{kind}/{name}`                | `<kind>.write`       |
+| `assets.delete`           | `POST /api/v1/assets/{kind}/{name}/delete`        | `<kind>.delete`      |
+| `assets.revisions.list`   | `GET /api/v1/assets/{kind}/{name}/revisions`      | `<kind>.read`        |
+| `assets.revert`           | `POST /api/v1/assets/{kind}/{name}/revert`        | `<kind>.write`       |
+| `assets.validate`         | `POST /api/v1/assets/{kind}/validate`             | `<kind>.read`        |
+| `assets.check_name`       | `POST /api/v1/assets/{kind}/check-name`           | `<kind>.write`       |
+| `assets.publish`          | `POST /api/v1/assets/{kind}/{name}/publish`       | `<kind>.publish`     |
+| `assets.discard_draft`    | `POST /api/v1/assets/{kind}/{name}/discard-draft` | `<kind>.write`       |
+| `assets.sync`             | `POST /api/v1/assets/sync`                        | per item             |
+| `assets.sync_check`       | `POST /api/v1/assets/sync/check`                  | per item             |
+| `platform.context.get`    | `GET /api/v1/context`                             | any signed-in caller |
+| `platform.references.get` | `GET /api/v1/context/references`                  | a right on any kind  |
 
 The right is decided for the one asset: an instance right, a grant in the workspace that owns it, or a grant on the asset. `assets.list` answers only the assets the caller may read, as summaries without content, in the order of their names. It filters by `prefix` (the start of a name, such as `tax-`) and by `text` (a part of the name, in any case), and pages with `limit` and `cursor`. It is built for up to 10,000 assets of a kind.
 
@@ -359,17 +359,19 @@ A write moves the draft and nothing else. The revision the members of the App's 
 
 `apps.get_from_page` (`GET /api/v1/conversations/{conversationId}/pages/{pageId}/app`) answers the App of a Page, or `null`: among the Apps updated from the Page that the caller may write, the one the caller wrote from it last, and otherwise the one created first. `draftFromPage` is `false` where the draft was last written another way than from this Page. With `?app=<id>` the answer also carries `candidate`: that App where the caller may write it, with `page` saying whether it is updated from `none`, `this` Page, an `other_page` of the conversation or one of an `other_conversation`; `null` otherwise. In the interface the header of a Page with an App offers Update app in place of Save as app, and Save as app under the id of an App the reader may write offers to update that App from the Page.
 
-With the module `apps` on, every conversation offers its agent `page.save`, `page.save_as_app` and the file tools a Page's folder is written with (`workspace.write_file`, and `workspace.edit_file` and `workspace.read_file` where the release enables them), whatever the agent's `toolNames` list; without `workspace.write_file` in the release none of them is offered. The surface beside the chat opens when the first save starts, as the Page building. `page.save_as_app` is the agent's Save as app: it saves the newest revision of a Page of the conversation as an App of the conversation's workspace, with `app.created` as above, and makes the App what the conversation is about. It is refused in a conversation shared with its workspace, as an open is. From then on each built `page.save` of that Page in the conversation also writes the next draft revision of the App, as `apps.update_from_page` does; its answer carries `app` with `saved: true`, the revision and the `warnings` of guardrails that warn about the draft, or `saved: false` with the reason where the draft was written another way since, another Page was put into the App, the person may not write it, a guardrail blocked it or asked for an approval, which this save cannot wait for (the person's Update app on the Page can), or the write failed. The Page is saved either way. What an administrator sets on `assets.put` for an App holds for both tools, as it does for `platform.assets.put`; a setting on `apps.create_from_page` holds for `page.save_as_app`, and one on `apps.update_from_page` for `page.save` in a conversation about an App.
+With the module `apps` on, every conversation offers its agent `workspace.open`, `app.save` and the file tools an App's folder is written with (`workspace.write_file`, and `workspace.edit_file` and `workspace.read_file` where the release enables them), whatever the agent's `toolNames` list; without `workspace.write_file` in the release none of them is offered. The preview beside the chat opens when the first open starts, as what builds. `workspace.open` shows and does nothing more: it writes no asset and no App. `app.save` is the agent's Save as app and asks the person nothing: its first call saves the revision the preview shows of the path it names as an App of the conversation's workspace, with an id made from the name it is given and `app.created` as above, and makes the App what the conversation is about. It is refused in a conversation shared with its workspace, as an open is. From then on each `app.save` of that path in the conversation writes the next draft revision of the App, as `apps.update_from_page` does; its answer carries `saved: true`, `created: false`, the revision and the `warnings` of guardrails that warn about the draft, or `saved: false` with the reason where the draft was written another way since, another folder was put into the App, the person may not write it, a guardrail blocked it or asked for an approval, which this save cannot wait for (the person's Update app in the preview can), or the write failed. What an administrator sets on `assets.put` for an App holds for `app.save`, as it does for `platform.assets.put`; a setting on `apps.create_from_page` holds for its first call, and one on `apps.update_from_page` for each later one.
+
+The former names `page.save` and `page.save_as_app` still start: a release config or a stored agent that names one logs a warning at startup with the name that replaced it, and a write of an agent that names one is accepted. Neither is offered to a model. A stored conversation with calls of the former names still shows them. A later release refuses the former names.
 
 `apps.preview` (`POST /api/v1/apps/{app}/preview`) answers the address a frame loads, for the mode `published` or `draft`, and `interfacePath`, the path of the App in the interface. `assets.delete` removes an App with its revisions and its files; its Operation Runs and audit events stay.
 
 The address `apps.preview` answers is the credential of the frame it is loaded in: the sandboxed frame has no origin and cannot send the session, so whoever holds the address is served its files. The address names the person it was made for and one file set, is valid for one hour, and that person's right is asked again at most every 30 seconds. A browser keeps a file no longer than the address is valid. Treat the address as a secret of that person and do not pass it on; share the App by its path in the interface (`interfacePath`).
 
-| Right | Who holds it | What it allows |
-| --- | --- | --- |
-| `app.read`, `app.write`, `app.delete` | admin, superadmin | Read, write and delete Apps. A writer is shown the draft. |
-| `app.publish` | admin, superadmin | Move the published revision. A credential needs the scope `config_assets:publish`, which `config_assets:write` does not include. |
-| `app.use` | every member of the App's workspace | Open the published revision, and see it in `assets.list` and `assets.get`. A member is never shown a draft. |
+| Right                                 | Who holds it                        | What it allows                                                                                                                   |
+| ------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `app.read`, `app.write`, `app.delete` | admin, superadmin                   | Read, write and delete Apps. A writer is shown the draft.                                                                        |
+| `app.publish`                         | admin, superadmin                   | Move the published revision. A credential needs the scope `config_assets:publish`, which `config_assets:write` does not include. |
+| `app.use`                             | every member of the App's workspace | Open the published revision, and see it in `assets.list` and `assets.get`. A member is never shown a draft.                      |
 
 ## Guardrails as assets
 

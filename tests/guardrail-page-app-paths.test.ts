@@ -15,7 +15,7 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   ToolRegistry,
-  createPageSaveAsAppTool,
+  createAppSaveTool,
   createToolOperationRunner,
   registerToolOperations
 } from "@work-shape/catalyst-tool-execution";
@@ -26,10 +26,10 @@ import type { ReleaseGuardrailConfig } from "@work-shape/catalyst-config-schema"
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { getTestJobs, testServerOptions } from "./support/test-instance";
 
-// The ways an App is written from a Page beside `apps.create_from_page` and
-// `apps.update_from_page`: the agent's `page.save_as_app` and the App draft a later `page.save`
-// writes (A3), and a write held by a policy rather than a guardrail. Each writes the Page
-// revision the guardrails read or the approval was asked about.
+// The ways an App is written from a preview beside `apps.create_from_page` and
+// `apps.update_from_page`: the agent's first `app.save` and the App draft a later one writes,
+// and a write held by a policy rather than a guardrail. Each writes the revision the
+// guardrails read or the approval was asked about.
 
 const noIbanInApps = {
   no_iban: noIban({
@@ -198,17 +198,17 @@ describe("an App the agent writes from a Page of its conversation", () => {
       ).id;
   }
 
-  // Fails without the change: page.save_as_app named no before-event, so the agent's App was
+  // Fails without the change: the first save named no before-event, so the agent's App was
   // written past `asset.before_write`, and the tool held nothing for an approval.
-  it("asks the guardrails about the App page.save_as_app writes, and copies the revision they read", async () => {
+  it("asks the guardrails about the App the first app.save writes, and copies the revision they read", async () => {
     const { t, calls } = await setup();
     try {
-      const tool = createPageSaveAsAppTool(calls);
+      const tool = createAppSaveTool(calls);
       expect(tool.heldInputKeys).toEqual([PAGE_FILE_SET_HELD_KEY]);
       const conversationId = await privateConversation(t);
       await t.storePage(`Konto ${IBAN}`, {}, { conversationId });
       const input = { page: "Offers", name: "offers", title: "Offers" };
-      const [event, ...more] = await calls.saveAsAppBeforeEvents(
+      const [event, ...more] = await calls.appSaveBeforeEvents(
         asConversationId(conversationId),
         input
       );
@@ -221,10 +221,10 @@ describe("an App the agent writes from a Page of its conversation", () => {
       const fields = await event.checkable();
       expect(JSON.stringify(fields)).toContain("3704 0044");
 
-      // The revision the event read is the one written, whatever the Page is saved as since.
+      // The revision the event read is the one written, whatever is opened since.
       await t.storePage("a later revision", {}, { conversationId });
-      const created = await calls.saveAsApp(
-        { ...(await contextOf(t, conversationId, "page.save_as_app")), beforeEvents: [event] },
+      const created = await calls.saveApp(
+        { ...(await contextOf(t, conversationId, "app.save")), beforeEvents: [event] },
         input
       );
       expect(created).toMatchObject({ name: "offers", revision: 1 });
@@ -235,22 +235,23 @@ describe("an App the agent writes from a Page of its conversation", () => {
     }
   });
 
-  // Fails without the change: a save of the Page wrote the App's draft past every guardrail.
-  it("leaves the App's draft unwritten where a guardrail blocks the revision page.save stored", async () => {
+  // Fails without the change: a later save wrote the App's draft past every guardrail.
+  it("leaves the App's draft unwritten where a guardrail blocks the revision a later app.save writes", async () => {
     const { t, calls } = await setup();
     try {
       const conversationId = await privateConversation(t);
-      const page = await t.storePage("Angebot ohne Konto", {}, { conversationId });
-      await calls.saveAsApp(await contextOf(t, conversationId, "page.save_as_app"), {
+      await t.storePage("Angebot ohne Konto", {}, { conversationId });
+      await calls.saveApp(await contextOf(t, conversationId, "app.save"), {
         page: "Offers",
         name: "offers",
         title: "Offers"
       });
       await t.storePage(`Konto ${IBAN}`, {}, { conversationId });
-      const saved = await calls.saveIntoSubjectApp(
-        await contextOf(t, conversationId, "page.save"),
-        { pageId: page.pageId }
-      );
+      const saved = await calls.saveApp(await contextOf(t, conversationId, "app.save"), {
+        page: "Offers",
+        name: "offers",
+        title: "Offers"
+      });
       expect(saved).toMatchObject({
         saved: false,
         message: expect.stringContaining(
@@ -271,18 +272,20 @@ describe("an App the agent writes from a Page of its conversation", () => {
     }
   });
 
-  /** An App made from a Page of a new conversation, and a later save of that Page. */
+  /** An App saved from a preview of a new conversation, and a later save of it. */
   async function savedAgain(t: AppInstance, calls: ReturnType<typeof createPlatformAssetCalls>) {
     const conversationId = await privateConversation(t);
-    const page = await t.storePage("Angebot ohne Konto", {}, { conversationId });
-    await calls.saveAsApp(await contextOf(t, conversationId, "page.save_as_app"), {
+    await t.storePage("Angebot ohne Konto", {}, { conversationId });
+    await calls.saveApp(await contextOf(t, conversationId, "app.save"), {
       page: "Offers",
       name: "offers",
       title: "Offers"
     });
     await t.storePage(`Konto ${IBAN}`, {}, { conversationId });
-    return calls.saveIntoSubjectApp(await contextOf(t, conversationId, "page.save"), {
-      pageId: page.pageId
+    return calls.saveApp(await contextOf(t, conversationId, "app.save"), {
+      page: "Offers",
+      name: "offers",
+      title: "Offers"
     });
   }
 
@@ -293,15 +296,17 @@ describe("an App the agent writes from a Page of its conversation", () => {
 
   // Fails without the change: the draft was written and the warning was dropped, so the agent
   // could not tell the person.
-  it("passes a guardrail's warning about the draft page.save writes on to the agent", async () => {
+  it("passes a guardrail's warning about the draft a later app.save writes on to the agent", async () => {
     const { t, calls } = await setup({
       no_iban: { ...noIbanInApps.no_iban, outcome: "warn" }
     });
     try {
       expect(await savedAgain(t, calls)).toEqual({
+        kind: "app",
         name: "offers",
         title: "Offers",
         saved: true,
+        created: false,
         revision: 2,
         warnings: [
           "Guardrail 'No IBAN in Apps' warned about app 'offers': Apps hold no bank account."
@@ -316,17 +321,18 @@ describe("an App the agent writes from a Page of its conversation", () => {
 
   // Fails without the change: the hold was kept as a hit that asked for an approval, which no
   // request was filed for and nobody could give.
-  it("blocks the draft page.save writes where a guardrail asks for an approval, and keeps a block", async () => {
+  it("blocks the draft a later app.save writes where a guardrail asks for an approval, and keeps a block", async () => {
     const { t, calls } = await setup({
       no_iban: { ...noIbanInApps.no_iban, outcome: "require_approval" }
     });
     try {
       expect(await savedAgain(t, calls)).toEqual({
+        kind: "app",
         name: "offers",
         title: "Offers",
         saved: false,
         message:
-          "Guardrail 'No IBAN in Apps' blocked app 'offers': Apps hold no bank account. It asks for another person's approval, which a save of a Page cannot wait for. The App's draft was not written; the Page is saved. Ask the person to use Update app on the Page, where the write can wait for the approval."
+          "Guardrail 'No IBAN in Apps' blocked app 'offers': Apps hold no bank account. It asks for another person's approval, which app.save cannot wait for. The App's draft was not written. Ask the person to use Update app in the preview, where the write can wait for the approval."
       });
       expect(await draftRevisionOf(t, "offers")).toBe(1);
       expect(await hitsOf(t)).toEqual([["asset.before_write", "block", "offers"]]);
@@ -402,7 +408,7 @@ describe("an App the agent writes from a Page of its conversation", () => {
   }
 });
 
-describe("a page.save_as_app a guardrail holds, through the operation runner", () => {
+describe("a first app.save a guardrail holds, through the operation runner", () => {
   // The agent's call takes the path every tool call takes: the operation of the tool, its
   // before-events, the request filed for the hold and the job that runs it once approved.
   it("holds the call, keeps the revision its guardrail read, and writes it once approved", async () => {
@@ -413,9 +419,8 @@ describe("a page.save_as_app a guardrail holds, through the operation runner", (
             no_iban: { ...noIbanInApps.no_iban, outcome: "require_approval" }
           }).events
         },
-        // The agent lists the tool, as a conversation that builds a Page offers it.
-        agentToolNames: (agentName: string) =>
-          agentName === "assistant" ? ["page.save_as_app"] : []
+        // The agent lists the tool, as a conversation that builds an App offers it.
+        agentToolNames: (agentName: string) => (agentName === "assistant" ? ["app.save"] : [])
       })
     });
     try {
@@ -423,7 +428,7 @@ describe("a page.save_as_app a guardrail holds, through the operation runner", (
       const options: ChatServerOptions | undefined = testServerOptions(t.instance);
       const operationCalls = options?.operationCalls;
       if (!options || !operationCalls) throw new Error("The instance has no operation calls");
-      const tool = createPageSaveAsAppTool(createPlatformAssetCalls(options));
+      const tool = createAppSaveTool(createPlatformAssetCalls(options));
       if (!(await operationCalls.registry.resolve(tool.name))) {
         registerToolOperations(operationCalls.registry, [tool], { clientInstanceId });
       }
@@ -448,7 +453,7 @@ describe("a page.save_as_app a guardrail holds, through the operation runner", (
         agentRunId: asAgentRunId(`run_${randomUUID()}`),
         conversationId: asConversationId(conversationId),
         agentName: "assistant",
-        input: { page: "Offers", name: "offers", title: "Offers" }
+        input: { path: "Offers", name: "Offers" }
       };
       const result = await runTool(request, {
         user: {
@@ -467,7 +472,7 @@ describe("a page.save_as_app a guardrail holds, through the operation runner", (
       expect(result).toMatchObject({ status: "waiting_for_decision", mode: "approval" });
 
       const [held] = await t.stores.operationRuns.list({ clientInstanceId });
-      expect(held).toMatchObject({ operation: "page.save_as_app", status: "pending_approval" });
+      expect(held).toMatchObject({ operation: "app.save", status: "pending_approval" });
       const approvalRequestId = held?.approvalRequestId ?? "";
       const filed = await t.stores.approvals.getApprovalRequest({
         clientInstanceId,
@@ -479,7 +484,7 @@ describe("a page.save_as_app a guardrail holds, through the operation runner", (
       });
       expect(await draftRevisionOf(t, "offers")).toBeUndefined();
 
-      // The Page is saved anew while the call waits; the approval writes the revision it held.
+      // The folder is opened anew while the call waits; the approval writes the revision it held.
       await t.storePage("second revision", {}, { conversationId });
       await approve(t, approvalRequestId);
       const [done] = await t.stores.operationRuns.list({ clientInstanceId });

@@ -55,7 +55,7 @@ describe("GR-2b verify: the Page an App is written from changes while it is chec
   // The guardrails read the Page's newest revision in `beforeEvents`; `execute` reads the
   // newest revision again and copies that one. A revision saved in between is copied unread.
   // A judge takes seconds, so the window is wide; the stand-in judge below saves the revision
-  // while it is asked, which is what a second tab or the agent's page.save does in that time.
+  // while it is asked, which is what a second tab or the agent's workspace.open does in that time.
   it("never copies a Page revision that no guardrail read", async () => {
     let t: AppInstance | undefined;
     let conversationId: string | undefined;

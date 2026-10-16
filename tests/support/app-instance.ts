@@ -158,12 +158,13 @@ export interface AppInstance extends AccessInstance {
   /**
    * A Page with one revision in a conversation of the administrator, stored as a save stores
    * it. With `conversationId` the Page of that conversation gets its next revision instead.
-   * `shared` puts a new conversation into the Shared Workspace, where `kai` reads it.
+   * `shared` puts a new conversation into the Shared Workspace, where `kai` reads it. The Page
+   * is named "Offers" unless `pageName` names another.
    */
   storePage(
     marker: string,
     manifest?: Record<string, unknown>,
-    options?: { conversationId?: string; kitVersion?: string; shared?: boolean }
+    options?: { conversationId?: string; kitVersion?: string; shared?: boolean; pageName?: string }
   ): Promise<{ conversationId: string; pageId: string }>;
   /** Every object below the prefix of one asset. */
   objectKeys(assetId: string): string[];
@@ -325,7 +326,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
         { clientInstanceId, stores, pages },
         {
           conversationId: asConversationId(conversationId),
-          pageName: "Offers",
+          pageName: options.pageName ?? "Offers",
           kitVersion: kit,
           manifest: { id: "offers-page", name: "Offers", kit, entry: "index.html", ...manifest },
           sourceFiles: [

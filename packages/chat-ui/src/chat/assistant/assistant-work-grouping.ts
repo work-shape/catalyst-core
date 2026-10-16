@@ -6,7 +6,7 @@ import {
 } from "../../studio/build-area/connection-draft";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import { standingAssetOpen } from "../conversation/subject-run";
-import { PAGE_SAVE_TOOL_NAME, readPageSave } from "../../studio/pages/page-save";
+import { isOpenToolName, readPageSave } from "../../studio/pages/page-save";
 import {
   isWorkspacePromotedArtifactsData,
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE
@@ -195,9 +195,9 @@ function isApprovalRequestToolCall(part: AssistantPartOutline): boolean {
 }
 
 /**
- * A saved Page revision is a result of the run, not a step of it: its card is how the reader
- * opens the revision again, so it stays in the thread. A save the build refused folds away
- * with the other steps, unless it is the last save of the answer: then it is how the answer
+ * A revision an open built is a result of the run, not a step of it: its card is how the reader
+ * opens the revision again, so it stays in the thread. An open the build refused folds away
+ * with the other steps, unless it is the last open of the answer: then it is how the answer
  * ended, and the card says what the build found.
  */
 function isPageSaveOutcome(parts: readonly AssistantPartOutline[], index: number): boolean {
@@ -228,7 +228,7 @@ function isConnectionDraftCard(part: {
 }
 
 function isPageSaveCall(part: { type: string; toolName?: string } | undefined): boolean {
-  return part?.type === "tool-call" && part.toolName === PAGE_SAVE_TOOL_NAME;
+  return part?.type === "tool-call" && isOpenToolName(part.toolName);
 }
 
 /** A call that opened an asset and stood: its line leads to the asset's page. */

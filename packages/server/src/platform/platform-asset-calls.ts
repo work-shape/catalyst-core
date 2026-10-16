@@ -1,7 +1,6 @@
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
-  isPageId,
   moduleOffError,
   operationDenialError,
   POLICY_VALUES,
@@ -20,6 +19,8 @@ import {
   PLATFORM_ASSET_LIST_MAX,
   PLATFORM_ASSET_TOOLS,
   platformAssetWriteRefusal,
+  type AppSaveInput,
+  type AppSaved,
   type PlatformAssetCalls,
   type PlatformAssetPut,
   type PlatformAssetFound,
@@ -29,10 +30,12 @@ import { z } from "zod";
 import {
   DRAFT_CHANGED_ELSEWHERE,
   DRAFT_MOVED_TO_OTHER_PAGE,
+  DRAFT_OF_OTHER_FOLDER,
   askAboutDraft,
   draftNotWritten,
   draftRefusal
 } from "../apps/page-app-drafts";
+import { wasKeptByFormerSave } from "../apps/former-page-saves";
 import { PageApps } from "../apps/page-apps";
 import type { AssetCall } from "../assets/asset-access";
 import { assetWriteEvent } from "../guardrails/asset-guardrail-events";
@@ -57,7 +60,7 @@ import type { AssetWorkflowOptions } from "../types";
 // What carries the agent's asset tools out: the workflow of the asset operations of the API,
 // called for the person the agent acts for, on the subject of the conversation the call came
 // from, and the reads that find what is on the platform. Opening an asset makes it the subject,
-// and so does keeping a Page of the conversation as an App; nothing else does. Nothing of an
+// and so does saving what the conversation opened as an App; nothing else does. Nothing of an
 // asset is decided here: the right, the checks of a
 // definition, the revision and the audit rows are the ones a call of `assets.get`,
 // `assets.validate`, `assets.put`, `assets.list`, `workspaces.files.list` and
@@ -177,6 +180,97 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       page: { limit: APP_REVISIONS_LOOKED_BACK }
     });
     return revisions.some(({ origin }) => origin?.kind === "page" && fromPage(origin));
+  }
+
+  /**
+   * A later save in a conversation about the App `name`: the Page's revision becomes the App's
+   * next draft revision. Only the App this Page became, or was put into, is written; a draft
+   * written elsewhere since is not written over, and the answer says why.
+   */
+  async function saveIntoSubjectApp(
+    context: ToolExecutionContext,
+    conversation: Conversation,
+    name: string,
+    input: AppSaveInput
+  ): Promise<AppSaved> {
+    const row = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: APP_ASSET_KIND,
+      name
+    });
+    if (
+      row?.status !== "active" ||
+      row.scope.kind !== "workspace" ||
+      row.scope.workspaceId !== conversation.collaborationWorkspaceId
+    ) {
+      throw subjectUnavailable();
+    }
+    const app = { name: row.name, title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}) };
+    const page = await pageApps.named(conversation.id, input.page);
+    const origin = await options.configAssets.store.getConfigAssetPageOrigin({
+      clientInstanceId: options.clientInstanceId,
+      assetId: row.id
+    });
+    const fromThisPage = (named: { pageId: string; conversationId: string } | undefined) =>
+      named?.pageId === page.id && named.conversationId === conversation.id;
+    // The folder the former `page.save` kept under another name is the App's folder still: its
+    // first save moves the App to the Page of the path.
+    const linkFormer =
+      !fromThisPage(origin) &&
+      origin?.conversationId === conversation.id &&
+      (await wasKeptByFormerSave(options.stores.conversations, {
+        clientInstanceId: options.clientInstanceId,
+        conversationId: conversation.id,
+        pageId: origin.pageId,
+        pageName: page.name
+      }));
+    if (!fromThisPage(origin) && !linkFormer) {
+      // Another Page was put into the App since this one wrote it: the draft moved away.
+      return draftNotWritten(
+        app,
+        (await wasWrittenFrom(row.name, fromThisPage))
+          ? DRAFT_MOVED_TO_OTHER_PAGE
+          : DRAFT_OF_OTHER_FOLDER
+      );
+    }
+    const draftPageId = linkFormer ? origin?.pageId : page.id;
+    if (row.revisionOrigin?.kind !== "page" || row.revisionOrigin.pageId !== draftPageId) {
+      return draftNotWritten(app, DRAFT_CHANGED_ELSEWHERE);
+    }
+    // The revision the preview shows is the draft, which the guardrails answer first.
+    const asked = await askAboutDraft(options.operationCalls?.deps.events, context, pageApps, {
+      app: row.name,
+      workspaceId: row.scope.workspaceId,
+      fileSetId: input.fileSetId,
+      page
+    });
+    if ("refusal" in asked) return draftNotWritten(app, asked.refusal);
+    const { event, warnings } = asked;
+    try {
+      const updated = await pageApps.update(
+        await callOf(context),
+        page,
+        {
+          app: row.name,
+          workspaceId: row.scope.workspaceId,
+          expectedRevision: row.revision,
+          link: linkFormer,
+          fileSetId: input.fileSetId
+        },
+        [event]
+      );
+      return {
+        kind: "app",
+        ...app,
+        saved: true,
+        created: false,
+        revision: updated.revision,
+        ...(warnings.length > 0 ? { warnings } : {})
+      };
+    } catch (error) {
+      // A write of the App that did not happen is the answer's, not a failed call.
+      return draftNotWritten(app, draftRefusal(error, options.logger));
+    }
   }
 
   /** The call as the asset operations take one. */
@@ -468,14 +562,15 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       }
     },
 
-    async saveAsAppBeforeEvents(conversationId, input) {
+    async appSaveBeforeEvents(conversationId, input) {
       const { clientInstanceId, stores } = options;
       const conversation = await stores.conversations.getConversation(
         clientInstanceId,
         conversationId
       );
       // A conversation that is gone, or a Page it does not hold, is refused by the save itself.
-      if (!conversation) return [];
+      // A later save asks the guardrails when it writes the draft.
+      if (!conversation || conversation.subject?.kind === APP_ASSET_KIND) return [];
       return [
         pageApps.writeEvent({
           app: input.name,
@@ -487,8 +582,12 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       ];
     },
 
-    async saveAsApp(context, input) {
+    async saveApp(context, input) {
       const conversation = await conversationOf(context);
+      const subject = conversation.subject;
+      if (subject?.kind === APP_ASSET_KIND) {
+        return saveIntoSubjectApp(context, conversation, subject.name, input);
+      }
       // The App becomes the subject, which a conversation others read never has. It is the App
       // this call creates, in the conversation's own workspace: never an asset of the instance,
       // which only a person's step makes a subject.
@@ -511,81 +610,14 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         conversationId: conversation.id,
         subject: { kind: APP_ASSET_KIND, name: created.name }
       });
-      return { kind: "app", name: created.name, title: input.title, revision: created.revision };
-    },
-
-    async saveIntoSubjectApp(context, input) {
-      const conversation = await conversationOfCall(context);
-      const subject = conversation?.subject;
-      if (!conversation || subject?.kind !== APP_ASSET_KIND) return undefined;
-      const row = await options.configAssets.store.getConfigAsset({
-        clientInstanceId: options.clientInstanceId,
-        kind: APP_ASSET_KIND,
-        name: subject.name
-      });
-      if (
-        row?.status !== "active" ||
-        row.scope.kind !== "workspace" ||
-        row.scope.workspaceId !== conversation.collaborationWorkspaceId
-      ) {
-        return undefined;
-      }
-      const app = { name: row.name, title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}) };
-      // Only the App this Page became, or was put into, is written by the Page's saves.
-      const origin = await options.configAssets.store.getConfigAssetPageOrigin({
-        clientInstanceId: options.clientInstanceId,
-        assetId: row.id
-      });
-      const fromThisPage = (named: { pageId: string; conversationId: string } | undefined) =>
-        named?.pageId === input.pageId && named.conversationId === conversation.id;
-      if (!fromThisPage(origin) || !isPageId(input.pageId)) {
-        // Another Page was put into the App since this one wrote it: the draft moved away.
-        return (await wasWrittenFrom(row.name, fromThisPage))
-          ? draftNotWritten(app, DRAFT_MOVED_TO_OTHER_PAGE)
-          : undefined;
-      }
-      const page = await options.stores.pages.getPage({
-        clientInstanceId: options.clientInstanceId,
-        conversationId: conversation.id,
-        pageId: input.pageId
-      });
-      if (!page) return undefined;
-      if (row.revisionOrigin?.kind !== "page" || row.revisionOrigin.pageId !== page.id) {
-        return draftNotWritten(app, DRAFT_CHANGED_ELSEWHERE);
-      }
-      // The revision the save just stored is the draft, which the guardrails answer first.
-      const asked = await askAboutDraft(options.operationCalls?.deps.events, context, pageApps, {
-        app: row.name,
-        workspaceId: row.scope.workspaceId,
-        fileSetId: input.fileSetId,
-        page
-      });
-      if ("refusal" in asked) return draftNotWritten(app, asked.refusal);
-      const { event, warnings } = asked;
-      try {
-        const updated = await pageApps.update(
-          await callOf(context),
-          page,
-          {
-            app: row.name,
-            workspaceId: row.scope.workspaceId,
-            expectedRevision: row.revision,
-            link: false,
-            fileSetId: input.fileSetId
-          },
-          [event]
-        );
-        return {
-          ...app,
-          saved: true,
-          revision: updated.revision,
-          ...(warnings.length > 0 ? { warnings } : {})
-        };
-      } catch (error) {
-        // The Page is saved either way: a write of the App that did not happen is the answer's,
-        // not a failed save.
-        return draftNotWritten(app, draftRefusal(error, options.logger));
-      }
+      return {
+        kind: "app",
+        name: created.name,
+        title: input.title,
+        saved: true,
+        created: true,
+        revision: created.revision
+      };
     },
 
     async putPolicyFloor(conversationId, input) {
@@ -608,24 +640,23 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       });
     },
 
-    async pageAppPolicyFloor(conversationId, write) {
+    async appSavePolicyFloor(conversationId) {
       const conversation = await options.stores.conversations.getConversation(
         options.clientInstanceId,
         conversationId
       );
       if (!conversation) return undefined;
       const workspaceId = conversation.collaborationWorkspaceId;
-      if (write === "create") {
-        return centralFloor([APP_FROM_PAGE_OPERATIONS.create, ASSET_WRITE_OPERATION], {
-          kind: APP_ASSET_KIND,
+      // A save in a conversation about an App writes its draft; any other save creates one.
+      const subject = conversation.subject;
+      if (subject?.kind === APP_ASSET_KIND) {
+        return centralFloor([APP_FROM_PAGE_OPERATIONS.draft, ASSET_WRITE_OPERATION], {
+          ...subject,
           workspaceId
         });
       }
-      // A save of a Page writes an App only where the conversation is about one.
-      const subject = conversation.subject;
-      if (subject?.kind !== APP_ASSET_KIND) return undefined;
-      return centralFloor([APP_FROM_PAGE_OPERATIONS.draft, ASSET_WRITE_OPERATION], {
-        ...subject,
+      return centralFloor([APP_FROM_PAGE_OPERATIONS.create, ASSET_WRITE_OPERATION], {
+        kind: APP_ASSET_KIND,
         workspaceId
       });
     },

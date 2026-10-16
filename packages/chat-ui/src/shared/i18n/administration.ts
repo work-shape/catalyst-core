@@ -139,7 +139,7 @@ export const administration = defineTranslations({
       "Keys a person issues for the CLI and scripts, acting as them within the key's scopes.",
     "modules.apps": "Apps",
     "modules.appsDescription":
-      "The Pages of a conversation and the sandboxed frame that shows them.",
+      "Apps, what an agent shows in the preview, and the sandboxed frame that shows them.",
     "modules.connections": "Connections",
     "modules.connectionsDescription":
       "Connections to outside systems: the asset kind, its rights and its list in Studio.",
@@ -330,7 +330,7 @@ export const administration = defineTranslations({
       "Schlüssel, die eine Person für die CLI und Skripte ausstellt und die in ihren Berechtigungen als sie handeln.",
     "modules.apps": "Apps",
     "modules.appsDescription":
-      "Die Pages einer Unterhaltung und der abgeschirmte Rahmen, der sie anzeigt.",
+      "Apps, was ein Agent in der Vorschau zeigt, und der abgeschirmte Rahmen, der sie anzeigt.",
     "modules.connections": "Verbindungen",
     "modules.connectionsDescription":
       "Verbindungen zu externen Systemen: die Asset-Art, ihre Rechte und ihre Liste im Studio.",

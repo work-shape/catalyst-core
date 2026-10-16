@@ -1,6 +1,6 @@
 import {
   AppError,
-  DATA_TOOL_PREFIXES,
+  dataToolPrefixOf,
   type ModuleSnapshot,
   type ToolDescriptor
 } from "@work-shape/catalyst-core";
@@ -79,7 +79,7 @@ export class ToolRegistry {
  * for an operation that rights and a policy of its own guard.
  */
 function assertReleaseToolName(name: string): void {
-  const prefix = DATA_TOOL_PREFIXES.find((candidate) => name.startsWith(candidate));
+  const prefix = dataToolPrefixOf(name);
   if (prefix !== undefined) {
     throw new AppError(
       "VALIDATION_FAILED",

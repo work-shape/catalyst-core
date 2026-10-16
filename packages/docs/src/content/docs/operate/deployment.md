@@ -89,7 +89,7 @@ release's own recovery fails them.
 
 ## Page Builds
 
-With the module `apps` on, the tool `page.save` stores a folder of a conversation's Execution Workspace as a revision of a Page. The build is the job kind `page.bundle`, and the workspace command worker serves it:
+With the module `apps` on, the tool `workspace.open` stores a folder of a conversation's Execution Workspace as a revision of the conversation's preview. The build is the job kind `page.bundle`, and the workspace command worker serves it:
 
 - The worker reads the files by the index the save recorded, checks size and checksum of each, and writes a copy into a temporary directory of its own under `WORKSPACE_COMMAND_TEMP_ROOT`. The directory is removed when the build ends.
 - The build is the fixed command `catalyst-page-build` of the runner image, run in the sandbox like a workspace command: no network, read-only root file system, no capabilities, and the CPU, memory and process limits of `infrastructure.sandbox`. Only that directory is mounted. The command gets no environment variable of the worker.

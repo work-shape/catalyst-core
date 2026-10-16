@@ -75,7 +75,31 @@ describe("the subject a run opens", () => {
     ).toEqual(["1", "4"]);
   });
 
-  it("is the App a Page was kept as, and a save of its Page is a saved draft of it", () => {
+  it("is the App the first app.save made, and a later app.save is a saved draft of it", () => {
+    const appSave = (id: string, output: unknown): SubjectRunPart => ({
+      type: "tool_call",
+      toolCallId: id,
+      toolName: "app.save",
+      state: "output_available",
+      output
+    });
+    const app = { kind: "app", name: "offer-desk", title: "Offer desk" };
+    const made = appSave("5", { ...app, saved: true, created: true, revision: 1 });
+    const next = appSave("6", { ...app, saved: true, created: false, revision: 2 });
+    const unchanged = appSave("7", { ...app, saved: false, message: "No" });
+
+    expect(subjectOpenedInRun([opened("1", "workflow", "intake"), made])).toEqual({
+      subject: { kind: "app", name: "offer-desk" },
+      callId: "5"
+    });
+    // A later save opens nothing new: the conversation is about the App already.
+    expect(subjectOpenedInRun([next, unchanged])).toBeUndefined();
+    expect(savedDraftCalls([made, next, unchanged])).toEqual(["5", "6"]);
+  });
+
+  // Check 54 of apps-and-pages: the calls of the former names in a stored conversation still
+  // read as what they did.
+  it("is the App a call of the former page.save_as_app made, and a former page.save that wrote it a saved draft", () => {
     const keptAsApp: SubjectRunPart = {
       type: "tool_call",
       toolCallId: "5",
@@ -296,19 +320,34 @@ describe("the lines of the asset tools", () => {
     );
   });
 
-  it("say that the agent kept a Page as an App, in English and German", () => {
+  it("say that the agent saved an App or its draft, in English and German, also for the former name", () => {
+    const app = { kind: "app", name: "offer-desk", title: "Offer desk" };
+    const made = { ...app, saved: true, created: true, revision: 1 };
+    expect(assetToolSentence({ toolName: "app.save" }, t)).toBe("Saving as an app…");
+    expect(assetToolSentence({ toolName: "app.save", result: made }, t)).toBe(
+      "Saved as the app Offer desk"
+    );
+    expect(assetToolSentence({ toolName: "app.save", result: made }, de)).toBe(
+      "Als App Offer desk gespeichert"
+    );
+    expect(
+      assetToolSentence(
+        { toolName: "app.save", result: { ...app, saved: true, created: false, revision: 2 } },
+        t
+      )
+    ).toBe("Saved to the draft of Offer desk");
+    expect(
+      assetToolSentence(
+        { toolName: "app.save", result: { ...app, saved: false, message: "No" } },
+        de
+      )
+    ).toBe("Der Entwurf von Offer desk wurde nicht geändert");
+    expect(assetToolSentence({ toolName: "app.save", isError: true }, t)).toBe(
+      "The app could not be saved"
+    );
     const kept = { kind: "app", name: "offer-desk", title: "Offer desk", revision: 1 };
-    expect(assetToolSentence({ toolName: "page.save_as_app" }, t)).toBe(
-      "Saving the Page as an app…"
-    );
     expect(assetToolSentence({ toolName: "page.save_as_app", result: kept }, t)).toBe(
-      "Saved the Page as the app Offer desk"
-    );
-    expect(assetToolSentence({ toolName: "page.save_as_app", result: kept }, de)).toBe(
-      "Page als App Offer desk gespeichert"
-    );
-    expect(assetToolSentence({ toolName: "page.save_as_app", isError: true }, t)).toBe(
-      "The Page could not be saved as an app"
+      "Saved as the app Offer desk"
     );
   });
 

@@ -129,6 +129,31 @@ describe("stored agents with unavailable references", () => {
     expect(warnings()).toHaveLength(2);
   });
 
+  // Check 54 of apps-and-pages: a release config and a stored agent that name a former tool name
+  // start, with a warning that names the new name. Fails without the former names: the agent
+  // reported 'page.save' as an unknown tool, and nothing named 'workspace.open'.
+  it("starts ready with a former tool name in the release and a stored agent, and warns with the new name", async () => {
+    const former = { ...base, toolNames: ["read_skill", "page.save"], skillNames: [] };
+    await storeAgents([former]);
+    const release = config();
+    release.tools = [...release.tools, { name: "page.save", enabled: true, config: {} }];
+    const warn = vi.spyOn(createLogger(), "warn");
+    const instance = await createTestInstance({ config: release, env: {}, tools: [] });
+    try {
+      expect((await instance.call("ready.get")).statusCode).toBe(200);
+      expect(await read(instance)).toMatchObject({ unavailableTools: [] });
+      const messages = warn.mock.calls.map((call) => call.find((part) => typeof part === "string"));
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          "The release config names the tool 'page.save', which is now 'workspace.open'. Rename it: a later release refuses 'page.save'.",
+          "Agent 'test_agent' names the tool 'page.save', which is now 'workspace.open'. Rename it: a later release refuses 'page.save'."
+        ])
+      );
+    } finally {
+      await instance.close();
+    }
+  });
+
   it.each(["web_off", "search_off", "pricing_removed", "unsupported_model"] as const)(
     "starts ready with stored web_search unavailable when %s, while writes remain strict",
     async (cause) => {

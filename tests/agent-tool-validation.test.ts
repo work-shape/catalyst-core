@@ -228,16 +228,16 @@ describe("agent tool references on the target instance", () => {
   });
 
   it.each([false, true])(
-    "checks the unbackticked incident against registered Page tools (enabled: %s)",
+    "checks the unbackticked incident against registered App tools (enabled: %s)",
     async (enabled) => {
-      const pageTools = ["page.save", "page.save_as_app"];
+      const pageTools = ["workspace.open", "app.save"];
       const t = await setupRelease({
         registeredToolNames: [...validationRefs.enabledToolNames, ...pageTools],
         furtherToolNames: enabled ? pageTools : []
       });
       const config = agent("rel-page", {
         instructions:
-          "Help.\nBuild a Page in the chat with page.save. When the user wants to keep or share it, save that Page as an App with page.save_as_app."
+          "Help.\nShow it in the chat with workspace.open. When the user wants to keep it, save it as an App with app.save."
       });
       for (const operation of ["assets.sync_check", "assets.sync"] as const) {
         const response = await asService(t, operation, {
@@ -255,6 +255,23 @@ describe("agent tool references on the target instance", () => {
       expect(Boolean(await t.stored("agent", config.name))).toBe(enabled);
     }
   );
+
+  // Check 54 of apps-and-pages: a former tool name still starts. Fails without the former names:
+  // the write was refused with each name as an unavailable tool.
+  it("accepts an agent that names a former tool name in its tools and its instructions", async () => {
+    const t = await setupRelease({ furtherToolNames: ["workspace.open", "app.save"] });
+    const config = agent("rel-former", {
+      toolNames: ["page.save"],
+      instructions: "Help.\nBuild it with page.save and keep it with page.save_as_app."
+    });
+    for (const operation of ["assets.sync_check", "assets.sync"] as const) {
+      const response = await asService(t, operation, {
+        payload: { items: [putAgent(config.name, config)] }
+      });
+      expect(response.statusCode, response.body).toBe(200);
+    }
+    expect(Boolean(await t.stored("agent", config.name))).toBe(true);
+  });
 
   it("refuses an instruction reference whose tool module is off", async () => {
     const t = await setupRelease({

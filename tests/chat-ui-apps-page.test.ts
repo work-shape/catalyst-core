@@ -184,7 +184,7 @@ describe("the Apps page", () => {
     const markup = render(appsPage([], ALL));
 
     expect(markup).toContain(
-      "No apps in this workspace yet. Describe a tool in chat and the agent builds it as a page; save it as an app so everyone here can use it."
+      "No apps in this workspace yet. Describe a tool in chat and the agent builds it. Saved as an app, it is yours to use; publishing it decides who else sees it."
     );
     expect(markup).toContain(">Build an app in chat</button>");
     expect(markup).toContain('aria-label="Examples to start with"');

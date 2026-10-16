@@ -136,7 +136,7 @@ describe("asset boundary lint fixtures", () => {
     ).toEqual([[]]);
   });
 
-  it("rejects workspace conversation reads, aliases and destructures, including page.save", () => {
+  it("rejects workspace conversation reads, aliases and destructures, including workspace.open", () => {
     const rule = "catalyst/workspace-handle-boundary";
     const sources = [
       "context.toolRequest.conversationId",
@@ -159,7 +159,9 @@ describe("asset boundary lint fixtures", () => {
         sources.map((source) => workspace("workspace-tools/read.ts", source))
       )
     ).toEqual(sources.map(() => [rule]));
-    expect(findings(rule, [workspace("page-save-tool.ts", sources[0] ?? "")])).toEqual([[rule]]);
+    expect(findings(rule, [workspace("workspace-open-tool.ts", sources[0] ?? "")])).toEqual([
+      [rule]
+    ]);
     expect(
       findings(rule, [
         workspace(

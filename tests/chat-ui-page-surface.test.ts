@@ -29,8 +29,8 @@ import {
 } from "@work-shape/catalyst-chat-ui/pages";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
-// A Page built in chat shows beside the conversation. These tests hold the rules of that
-// surface: what a `page.save` call asks of the slot, which messages of a frame the interface
+// What an agent opens shows beside the conversation. These tests hold the rules of that
+// surface: what a `workspace.open` call, or one of its former name `page.save`, asks of the slot, which messages of a frame the interface
 // listens to, and what each state of the surface shows.
 // Every test here fails without the Page surface: the modules it reads did not exist.
 
@@ -50,9 +50,9 @@ const refused = {
   }
 };
 
-describe("a call of page.save", () => {
+describe("a call of workspace.open", () => {
   it("is a build while it has no answer, a revision when it stored one", () => {
-    expect(readPageSave({ args: { name: " Offers " }, result: undefined })).toEqual({
+    expect(readPageSave({ args: { path: " Offers " }, result: undefined })).toEqual({
       state: "building",
       name: "Offers"
     });
@@ -106,7 +106,7 @@ describe("a call of page.save", () => {
       pageId: "page-1",
       fileSetId: "set-2"
     });
-    expect(pageSurface("conv-1", { ...save, name: undefined }, de).title).toBe("Page");
+    expect(pageSurface("conv-1", { ...save, name: undefined }, de).title).toBe("Vorschau");
   });
 });
 
@@ -114,8 +114,8 @@ describe("the calls of a run and the surface slot", () => {
   const call = (toolCallId: string, state: string, output?: unknown, name = "Offers") => ({
     type: "tool_call",
     toolCallId,
-    toolName: "page.save",
-    input: { name, directory: "offers" },
+    toolName: "workspace.open",
+    input: { path: name },
     state,
     output
   });
@@ -230,33 +230,39 @@ describe("the calls of a run and the surface slot", () => {
     expect(failed).toMatchObject({ key: building.key, failed: true });
   });
 
-  it("opens no Page for the saves of a conversation about an App: they write the App's draft", () => {
+  // Check 54 of apps-and-pages: a stored conversation keeps its calls of the former name. Fails
+  // without the former name among the opens: its cards and its surface were gone.
+  it("reads a call of the former page.save as an open, and one that wrote the App's draft as the App", () => {
+    const former = (toolCallId: string, state: string, output?: unknown) => ({
+      ...call(toolCallId, state, output),
+      toolName: "page.save",
+      input: { name: "Offers", directory: "offers" }
+    });
     const intoApp = {
       output: {
         ...built.output,
         app: { name: "offers", title: "Offers", saved: true, revision: 2 }
       }
     };
-    const handled = new Set<string>();
-    const about = (parts: Parameters<typeof ask>[0]) =>
-      pageSurfaceAfterRunCalls({
-        conversationId: "conv-1",
-        parts,
-        handled,
-        current: undefined,
-        aboutApp: true,
-        t
-      });
 
-    expect(about([call("call-1", "input_available")])).toBeUndefined();
-    expect(about([call("call-1", "output_available", intoApp)])).toBeUndefined();
-    // Where the save's building Page was shown, its revision replaces it.
+    expect(ask([former("call-1", "output_available", built)])).toMatchObject({
+      kind: "page",
+      key: "page:page-1:set-2",
+      title: "Offers"
+    });
+    expect(readPageSave({ args: { name: "Offers" }, result: intoApp })).toMatchObject({
+      state: "built",
+      app: { title: "Offers", saved: true, revision: 2 }
+    });
+    // A former save that wrote the App's draft is seen as the App and opens no preview, unless
+    // what it built was shown: then its revision replaces it.
+    expect(ask([former("call-2", "output_available", intoApp)])).toBeUndefined();
     expect(
       pageSurfaceAfterRunCalls({
         conversationId: "conv-1",
-        parts: [call("call-2", "output_available", intoApp)],
-        handled: new Set(["call-2:start"]),
-        current: pageBuildingSurface("call-2", { name: "Offers" }, t),
+        parts: [former("call-3", "output_available", intoApp)],
+        handled: new Set(["call-3:start"]),
+        current: pageBuildingSurface("call-3", { name: "Offers" }, t),
         t
       })
     ).toMatchObject({ kind: "page", key: "page:page-1:set-2" });
@@ -518,10 +524,12 @@ describe("the frame of a Page", () => {
 
     const starting = pane("starting", t("pages.loading"));
     expect(starting).toContain('role="status"');
-    expect(starting).toContain("The Page is loading");
+    expect(starting).toContain("The preview is loading");
     // Nothing to try again while it is on its way.
     expect(starting).not.toContain("again");
-    expect(pane("stopped", t("pages.gone"))).toContain("This Page is no longer available to you.");
+    expect(pane("stopped", t("pages.gone"))).toContain(
+      "This preview is no longer available to you."
+    );
     expect(pane("failed", t("pages.loadFailed"))).toContain("again");
     for (const state of ["starting", "stopped", "failed"] as const) {
       expect(pane(state, "x")).not.toContain("<iframe");
@@ -701,7 +709,7 @@ describe("the files of a revision", () => {
   });
 });
 
-describe("the card of a page.save call", () => {
+describe("the card of an open", () => {
   const card = (
     save: PageSave,
     props: { shown?: boolean; onOpen?: () => void } = {},
@@ -737,8 +745,10 @@ describe("the card of a page.save call", () => {
     const markup = card({ state: "building", name: "Offers" });
 
     expect(markup).toContain('role="status"');
-    expect(markup).toContain("Building the Page");
-    expect(card({ state: "building", name: "Offers" }, {}, "de")).toContain("Die Page wird gebaut");
+    expect(markup).toContain("Building the preview");
+    expect(card({ state: "building", name: "Offers" }, {}, "de")).toContain(
+      "Die Vorschau wird gebaut"
+    );
   });
 
   it("says that the build refused the save and how many findings it has", () => {
@@ -748,20 +758,20 @@ describe("the card of a page.save call", () => {
       errors: [{ file: "src/routes/index.tsx", line: 12, message: "Expected '}'" }]
     });
 
-    expect(markup).toContain("The Page could not be built");
+    expect(markup).toContain("The preview could not be built");
     expect(markup).toContain("1 build error");
     expect(markup).not.toMatch(/>Open</u);
-    // No revision was stored by this save, so the card says that and what to do.
-    expect(markup).toContain("Nothing was saved. Ask the agent to fix the error.");
+    // No revision was built by this open, so the card says that and what to do.
+    expect(markup).toContain("Nothing new is shown. Ask the agent to fix the error.");
     expect(
       card({ state: "errors", name: "Offers", errors: refused.output.errors }, {}, "de")
-    ).toContain("Es wurde nichts gespeichert. Bitte den Agenten, die Fehler zu beheben.");
+    ).toContain("Es wird nichts Neues gezeigt. Bitte den Agenten, die Fehler zu beheben.");
   });
 
-  it("says that the save failed, and names a Page without a name as a Page", () => {
+  it("says that the open failed, and names an open without a name as the preview", () => {
     const markup = card({ state: "failed", name: undefined });
 
-    expect(markup).toContain("The Page could not be saved");
-    expect(markup).toContain(">Page</p>");
+    expect(markup).toContain("The preview could not be opened");
+    expect(markup).toContain(">Preview</p>");
   });
 });

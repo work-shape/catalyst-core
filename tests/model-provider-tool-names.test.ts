@@ -389,6 +389,26 @@ describe.each<Api>(["chat_completions", "responses"])("Readable tool names: %s",
     ]);
   });
 
+  // Check 54 of apps-and-pages: a stored conversation whose history calls a former tool name
+  // continues, with only the new names offered. Fails where a call of a tool no longer offered
+  // is sent under no name the provider accepts.
+  it("continues a conversation whose history calls page.save while workspace.open is offered", async () => {
+    const { provider, bodies } = setup(api);
+    const { completion } = await request(
+      provider,
+      ["workspace.open", "app.save"],
+      history(["page.save", "page.save_as_app"])
+    );
+    const body = captured(bodies);
+    expect(offeredNames(body)).toEqual(["workspace_open", "app_save"]);
+    expect(historyNames(body)).toEqual(["page_save", "page_save_as_app"]);
+    for (const name of historyNames(body)) expect(name).toMatch(validWireName);
+    expect(completion.toolCalls.map((call) => call.toolName)).toEqual([
+      "workspace.open",
+      "app.save"
+    ]);
+  });
+
   it("uses offered collision names in history from the same table", async () => {
     const names = ["a.b_c", "a_b.c", longName];
     const { provider, bodies } = setup(api);

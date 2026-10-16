@@ -91,7 +91,7 @@ describe("the tools the agent page is told of", () => {
     "validates the incident sentence against the assembled registry (apps enabled: %s)",
     async (enabled) => {
       const workspaceObjectRoot = await mkdtemp(join(tmpdir(), "catalyst-page-references-"));
-      const pageTools = ["page.save", "page.save_as_app"];
+      const pageTools = ["workspace.open", "app.save"];
       const config = createTestConfig({
         executionWorkspaces: { enabled: true },
         workspaceObjectRoot,
@@ -136,7 +136,7 @@ describe("the tools the agent page is told of", () => {
           skillNames: [],
           initialPrompts: [],
           instructions:
-            "Help.\nBuild a Page in the chat with page.save. When the user wants to keep or share it, save that Page as an App with page.save_as_app."
+            "Help.\nShow it in the chat with workspace.open. When the user wants to keep it, save it as an App with app.save."
         };
         const validation = await instance.call("assets.validate", {
           params: { kind: "agent" },
@@ -205,7 +205,7 @@ describe("the tools the agent page is told of", () => {
       expect(tools.map((tool) => tool.name)).toEqual(
         expect.arrayContaining([
           "show_view",
-          "page.save",
+          "workspace.open",
           "workspace.exec",
           "structured_data.publish",
           "web_fetch",
@@ -219,6 +219,26 @@ describe("the tools the agent page is told of", () => {
         .filter((tool) => !tool.title?.en || !tool.title.de || !tool.group)
         .map((tool) => tool.name);
       expect(untold).toEqual([]);
+      // Check 53 of apps-and-pages: nothing a model reads of a tool names a former tool name.
+      // Fails without OPEN-1: the descriptions of the open and of the view named page.save.
+      const descriptors = assembly.localAgentRuntimeOptions.toolRegistry.listDescriptorsForAgent(
+        tools.map((tool) => tool.name)
+      );
+      expect(descriptors.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining(["workspace.open", "app.save"])
+      );
+      const naming = descriptors
+        .filter((tool) =>
+          /\bpage\.save/u.test(JSON.stringify([tool.description, tool.inputJsonSchema]))
+        )
+        .map((tool) => tool.name);
+      expect(naming).toEqual([]);
+      // Check 57: what a member reads of the two tools says App and never Page or Seite.
+      const told = tools
+        .filter((tool) => tool.name === "workspace.open" || tool.name === "app.save")
+        .map((tool) => JSON.stringify([tool.title, tool.summary]));
+      expect(told).toHaveLength(2);
+      expect(told.filter((text) => /\b(?:pages?|seiten?)\b/iu.test(text))).toEqual([]);
     } finally {
       await assembly.close();
       await rm(workspaceObjectRoot, { recursive: true, force: true });

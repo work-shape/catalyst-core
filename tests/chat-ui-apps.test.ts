@@ -668,7 +668,7 @@ describe("Save as app", () => {
 
     expect(markup).toContain("Save as app");
     expect(markup).toContain(
-      "The newest revision of this page becomes the draft of a new app in Nordlicht Beratung. Nothing is published yet."
+      "What this preview shows becomes the draft of a new app in Nordlicht Beratung. Nothing is published yet."
     );
     expect(markup).toContain('value="Angebotsrechner 2026"');
     expect(markup).toContain('value="angebotsrechner-2026"');
@@ -690,7 +690,7 @@ describe("Save as app", () => {
     );
 
     expect(markup).toContain(
-      "An app with this ID already exists. Choose another ID to save this page as a new app."
+      "An app with this ID already exists. Choose another ID to save this as a new app."
     );
     expect(markup).toContain('aria-invalid="true"');
     // Nothing is offered about an App the reader may not write.

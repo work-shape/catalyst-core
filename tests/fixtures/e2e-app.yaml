@@ -386,7 +386,7 @@ tools:
     enabled: true
   - name: workspace.write_file
     enabled: true
-  - name: page.save
+  - name: workspace.open
     enabled: true
   - name: demo.workflow_summary
     enabled: true

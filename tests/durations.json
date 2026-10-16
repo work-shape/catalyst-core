@@ -388,7 +388,7 @@
     "tests/page-build-surface.test.ts": 172,
     "tests/page-build-worker.test.ts": 263,
     "tests/page-bundle.test.ts": 343,
-    "tests/page-save-tool.test.ts": 17670,
+    "tests/workspace-open-tool.test.ts": 17670,
     "tests/page-source-files.test.ts": 917,
     "tests/page-tools-offer.test.ts": 454,
     "tests/pages-assembly.test.ts": 1145,

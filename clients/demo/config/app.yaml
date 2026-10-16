@@ -47,7 +47,9 @@ modules:
     enabled: true
   userInvitations:
     enabled: true
-  # Pages: an agent saves a folder of the conversation's Execution Workspace with `page.save`.
+  # Apps: an agent opens a folder of the conversation's Execution Workspace with `workspace.open`
+  # and keeps it with `app.save`; every conversation offers both, and the tools list below names
+  # them so that an agent may name them in its instructions.
   # Needs the `files` store, Execution Workspaces and the workspace command worker below.
   apps:
     enabled: true
@@ -362,7 +364,9 @@ tools:
     enabled: true
   - name: workspace.promote_artifact
     enabled: true
-  - name: page.save
+  - name: workspace.open
+    enabled: true
+  - name: app.save
     enabled: true
   - name: demo.workflow_summary
     enabled: true

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { AppError } from "@work-shape/catalyst-core";
-import { validateConfigAssetBundle } from "@work-shape/catalyst-config-schema";
+import {
+  formerAgentToolWarnings,
+  formerReleaseToolWarnings,
+  validateConfigAssetBundle
+} from "@work-shape/catalyst-config-schema";
 
 describe("config asset bundle validation", () => {
   it("parses a valid agent and skill bundle", () => {
@@ -35,15 +39,14 @@ describe("config asset bundle validation", () => {
 
   it.each([
     {
-      instructions: "Help.\nUse `page.save_as_app`.",
+      instructions: "Help.\nUse `app.save`.",
       toolNames: [],
-      issue:
-        "Agent 'assistant' references unavailable tool 'page.save_as_app' in instructions line 2"
+      issue: "Agent 'assistant' references unavailable tool 'app.save' in instructions line 2"
     },
     {
       instructions: "Help.",
-      toolNames: ["page.save_as_app"],
-      issue: "Agent 'assistant' references unavailable tool 'page.save_as_app' in toolNames[0]"
+      toolNames: ["app.save"],
+      issue: "Agent 'assistant' references unavailable tool 'app.save' in toolNames[0]"
     }
   ])("locates an unavailable explicit tool reference", ({ instructions, toolNames, issue }) => {
     expect(
@@ -59,9 +62,9 @@ describe("config asset bundle validation", () => {
   });
 
   it.each([
-    "Use page.missing, (page.missing); page.missing!",
-    "Use `page.missing()`.",
-    "```text\npage.missing\n```"
+    "Use workspace.missing, (workspace.missing); workspace.missing!",
+    "Use `workspace.missing()`.",
+    "```text\nworkspace.missing\n```"
   ])("checks dotted tokens with punctuation and in code: %s", (instructions) => {
     expect(
       issueMessages(
@@ -73,8 +76,33 @@ describe("config asset bundle validation", () => {
         })
       )
     ).toContainEqual(
-      expect.stringContaining("unavailable tool 'page.missing' in instructions line")
+      expect.stringContaining("unavailable tool 'workspace.missing' in instructions line")
     );
+  });
+
+  // Check 54 of apps-and-pages: a former tool name starts, with a warning that names the new
+  // one. Fails without the former names: 'page.save' was an unavailable tool.
+  it("accepts a former tool name in the tool list and warns with the name that replaced it", () => {
+    const former = agent({
+      toolNames: ["page.save"],
+      instructions: "Help.\nKeep it with page.save_as_app."
+    });
+    expect(() =>
+      validateConfigAssetBundle({
+        agents: [former],
+        skills: [],
+        defaultAgentName: "assistant",
+        refs: { ...refs(), registeredToolNames: [...refs().registeredToolNames, "page.save"] }
+      })
+    ).not.toThrow();
+    expect(formerAgentToolWarnings(former)).toEqual([
+      "Agent 'assistant' names the tool 'page.save', which is now 'workspace.open'. Rename it: a later release refuses 'page.save'.",
+      "Agent 'assistant' names the tool 'page.save_as_app', which is now 'app.save'. Rename it: a later release refuses 'page.save_as_app'."
+    ]);
+    expect(formerAgentToolWarnings(agent({ instructions: "Help." }))).toEqual([]);
+    expect(formerReleaseToolWarnings(["workspace.exec", "page.save"])).toEqual([
+      "The release config names the tool 'page.save', which is now 'workspace.open'. Rename it: a later release refuses 'page.save'."
+    ]);
   });
 
   it("recognizes a registered tool group even when no tool in it is enabled", () => {
@@ -91,12 +119,10 @@ describe("config asset bundle validation", () => {
   it("accepts enabled instruction tools without requiring them in toolNames", () => {
     expect(() =>
       validateConfigAssetBundle({
-        agents: [
-          agent({ instructions: "Use `page.save_as_app()` and `connection.crm.getRecord`." })
-        ],
+        agents: [agent({ instructions: "Use `app.save()` and `connection.crm.getRecord`." })],
         skills: [],
         defaultAgentName: "assistant",
-        refs: { ...refs(), enabledToolNames: ["page.save_as_app", "connection.crm.getRecord"] }
+        refs: { ...refs(), enabledToolNames: ["app.save", "connection.crm.getRecord"] }
       })
     ).not.toThrow();
   });
@@ -350,8 +376,8 @@ function refs() {
     modelProviderIds: ["provider-1"],
     modelBindingIds: ["binding-1"],
     fastModeModelBindingIds: [],
-    enabledToolNames: ["search", "read_skill", "page.save"],
-    registeredToolNames: ["search", "read_skill", "page.save", "page.save_as_app", "workflow.run"]
+    enabledToolNames: ["search", "read_skill", "workspace.open"],
+    registeredToolNames: ["search", "read_skill", "workspace.open", "app.save", "workflow.run"]
   };
 }
 

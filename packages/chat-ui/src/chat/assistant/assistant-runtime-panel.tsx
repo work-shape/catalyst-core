@@ -4,7 +4,6 @@ import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assi
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
-import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
 import type { LocaleCode } from "@work-shape/catalyst-core";
 import {
   createMessageSnapshotKey,
@@ -179,11 +178,7 @@ function AssistantRuntimePane({
     workspaceId: collaborationWorkspaceId
   });
   const pendingOpen = agentOpens.pending;
-  useAutoOpenPageSurface(
-    activeRun,
-    selectedConversationId,
-    conversationSubject?.subject.kind === APP_ASSET_KIND
-  );
+  useAutoOpenPageSurface(activeRun, selectedConversationId);
 
   useEffect(() => {
     activeRef.current = true;

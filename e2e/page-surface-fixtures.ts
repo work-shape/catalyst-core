@@ -11,9 +11,10 @@ const pageBuilder = {
   password: "e2e-pages-password"
 };
 
-export const pageName = "Revenue";
 /** The folder of the Execution Workspace the Page is written to. */
 const pageFolder = "revenue";
+/** What the preview is called: the path it opens. */
+export const pageName = pageFolder;
 
 const rootRoute = `import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
 
@@ -303,9 +304,9 @@ export async function rewritePageFile(page: Page, path: string, content: string)
   await sendToolCall(page, "workspace.write_file", { path: `${pageFolder}/${path}`, content });
 }
 
-/** Lets the agent save the Page's folder as a revision. */
+/** Lets the agent open the Page's folder in the preview, which builds a revision of it. */
 export async function savePage(page: Page): Promise<void> {
-  await sendToolCall(page, "page.save", { name: pageName, directory: pageFolder });
+  await sendToolCall(page, "workspace.open", { path: pageFolder });
 }
 
 /** The surface of the Page beside the conversation. */

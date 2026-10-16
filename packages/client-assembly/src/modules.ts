@@ -64,8 +64,8 @@ const userInvitationsModule = defineModule({
 });
 
 /**
- * Pages: the file sets a conversation keeps, their history, the route that serves them, the
- * tool that saves one and the job that builds it. The build runs in the sandbox, so the
+ * Apps and their previews: the file sets a conversation keeps, their history, the route that
+ * serves them, the tools that open a folder and save it as an App, and the job that builds it. The build runs in the sandbox, so the
  * workspace command worker serves it.
  */
 const appsModule = defineModule({
@@ -88,7 +88,7 @@ const appsModule = defineModule({
     "apps.sessions.get_workflow_run"
   ],
   kinds: ["app"],
-  tools: ["page.save", "page.save_as_app"],
+  tools: ["workspace.open", "app.save"],
   jobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"],
   commandWorkerJobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"]
 });

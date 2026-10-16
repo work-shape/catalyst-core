@@ -6,8 +6,8 @@ import {
 } from "@work-shape/catalyst-core";
 import { AGENT_ASSET_KIND } from "../../shared/build-rights";
 import { AGENTS_BUILD_PATH } from "../../shared/build-route";
-import { PAGE_SAVE_TOOL_NAME } from "../../studio/pages/page-save";
 import type { WorkspaceRoute } from "../../shared/routes";
+import { FORMER_OPEN_TOOL_NAME } from "../../studio/pages/page-save";
 
 // What the calls of a run tell of the asset its conversation is about. Opening an asset makes
 // it the subject on the server; the browser reads the same from the answers of the run, so the
@@ -19,8 +19,13 @@ export const ASSET_GET_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}get`;
 export const ASSET_VALIDATE_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}validate`;
 export const ASSET_PUT_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}put`;
 export const ASSET_OPERATIONS_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}operations`;
-/** Keeps a Page of the conversation as an App, which the conversation is about from then on. */
-export const PAGE_SAVE_AS_APP_TOOL_NAME = "page.save_as_app";
+/**
+ * Keeps what the conversation opened as an App, which the conversation is about from then on;
+ * a later call writes the App's next draft revision.
+ */
+export const APP_SAVE_TOOL_NAME = "app.save";
+/** The former name of `app.save`, whose calls stored conversations still hold. */
+export const FORMER_APP_SAVE_TOOL_NAME = "page.save_as_app";
 
 /** The asset a conversation is about. */
 export interface SubjectAsset {
@@ -59,8 +64,9 @@ function answered(part: SubjectRunPart, toolName: string): Record<string, unknow
 }
 
 /**
- * One open of an asset that stood: an answer of `platform.assets.open`, of `page.save_as_app`,
- * or of the first `platform.assets.put` of a conversation, which creates the asset it opens.
+ * One open of an asset that stood: an answer of `platform.assets.open`, of the `app.save` that
+ * created an App, or of the first `platform.assets.put` of a conversation, which creates the
+ * asset it opens.
  */
 export interface AssetOpen {
   subject: SubjectAsset;
@@ -76,7 +82,7 @@ export interface AssetOpen {
   owner?: string;
 }
 
-/** The open an answer of `platform.assets.open` or of `page.save_as_app` says. */
+/** The open an answer of `platform.assets.open` or of a save that created an asset says. */
 function assetOpenOfAnswer(
   answer: Record<string, unknown> | undefined,
   callId: string | undefined
@@ -117,14 +123,15 @@ export function standingAssetOpen(call: {
 }
 
 /**
- * Every open of the run that stood, in order. A Page kept as an App opens the App, and a first
- * save opens the asset it created.
+ * Every open of the run that stood, in order. The first save of an App or of any asset opens
+ * the asset it created.
  */
 export function opensInRun(parts: readonly SubjectRunPart[]): AssetOpen[] {
   return parts.flatMap((part) => {
     const open = assetOpenOfAnswer(
       answered(part, ASSET_OPEN_TOOL_NAME) ??
-        answered(part, PAGE_SAVE_AS_APP_TOOL_NAME) ??
+        answered(part, FORMER_APP_SAVE_TOOL_NAME) ??
+        createdBy(answered(part, APP_SAVE_TOOL_NAME)) ??
         createdBy(answered(part, ASSET_PUT_TOOL_NAME)),
       part.toolCallId
     );
@@ -183,20 +190,21 @@ export function assetPageRoute(
     : undefined;
 }
 
-/** Whether a save of a Page also wrote the draft of the App the conversation is about. */
+/** Whether a call of the former `page.save` also wrote the draft of the conversation's App. */
 function savedIntoApp(answer: Record<string, unknown> | undefined): boolean {
   const app = answer?.app;
   return isRecord(app) && app.saved === true;
 }
 
 /**
- * The calls of the run that saved a draft of the subject, by their ids: a save of the asset,
- * and a save of the Page whose App the conversation is about.
+ * The calls of the run that saved a draft of the subject, by their ids: a save of the asset or
+ * of the App, and a call of the former `page.save` that wrote the App's draft.
  */
 export function savedDraftCalls(parts: readonly SubjectRunPart[]): string[] {
   return parts.flatMap((part) =>
     (answered(part, ASSET_PUT_TOOL_NAME)?.saved === true ||
-      savedIntoApp(answered(part, PAGE_SAVE_TOOL_NAME))) &&
+      answered(part, APP_SAVE_TOOL_NAME)?.saved === true ||
+      savedIntoApp(answered(part, FORMER_OPEN_TOOL_NAME))) &&
     part.toolCallId !== undefined
       ? [part.toolCallId]
       : []
