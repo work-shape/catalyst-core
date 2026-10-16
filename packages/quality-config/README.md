@@ -69,6 +69,17 @@ Platform `main` is protected with this check required once the pipeline runs; Fe
 
 ## Baselines
 
+The UI library guard (`tests/ui-guard.test.ts`) uses this same comparator and baseline under
+target `ui-guard`, counted by category and package. Its scanner still checks every source file
+and stylesheet and holds the library at zero. After a repair, lower only the reported entry;
+there is no separate UI baseline or update command. The S9 transfer retains the previous
+counts exactly; its acceptance records admit only that transfer, never a later rise.
+
+Rights wording checks discover `// @rights-screen:` and `// @rights-copy:` markers anywhere
+under chat-ui source. Keep these markers with the screens and translation modules when moving
+folders; mark new rights screens and their copy. `// @service-principal-copy:` adds German
+terminology checks to copy outside the rights screens.
+
 The collector compares the exact measured count with each baseline entry by target, rule and package. Literal interface text is counted per folder, so an entry for one folder cannot cover new text in another. A missing entry means zero. A rise fails, and a fall fails until the entry is lowered or removed. No check rewrites the baseline.
 
 A rise names the files that hold the findings for that rule and scope, the first ten, with the number in each. An invalid entry is printed in full.

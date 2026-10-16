@@ -1,3 +1,4 @@
+// @rights-screen: included in the rights wording guard.
 import { Check, X } from "lucide-react";
 import type { AdministeredUser } from "@work-shape/catalyst-api-client";
 import {

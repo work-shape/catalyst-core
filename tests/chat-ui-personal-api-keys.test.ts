@@ -1,6 +1,20 @@
-import { readFile } from "node:fs/promises";
-import { createElement } from "react";
-import { describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createRoot } from "react-dom/client";
+import { act, createElement } from "react";
+import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
+import { createApiClient } from "@work-shape/catalyst-api-client";
+import { apiOperations, safeConfigSchema } from "@work-shape/catalyst-api-contract";
+import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
+import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
+import { createTestConfig } from "./support/fixtures";
+import { CONDITION_WAIT_MS, required } from "./support/assertions";
+import {
+  SettingsPageProvider,
+  type SettingsPageContextValue
+} from "@work-shape/catalyst-chat-ui/settings-page-context";
+import { describe, expect, it, vi } from "vitest";
 import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import { PersonalApiKeysTable } from "../packages/chat-ui/src/admin/control-plane/personal-api-keys-list";
@@ -23,6 +37,7 @@ import {
 } from "../packages/chat-ui/src/admin/settings/catalog";
 import { ConnectCodeConfirm } from "../packages/chat-ui/src/admin/settings/pages/api-keys";
 import {
+  ConnectLocalAgentPage,
   ConnectLocalAgentView,
   LOCAL_AGENT_TOOLS,
   localAgentCommand,
@@ -305,21 +320,125 @@ describe("You > Connect a local agent", () => {
     );
   });
 
-  it("reads the instance's context and nothing else: opening or copying issues no key and no code", async () => {
-    const source = await readFile(
-      new URL(
-        "../packages/chat-ui/src/admin/settings/pages/connect-local-agent.tsx",
-        import.meta.url
-      ),
-      "utf8"
-    );
-    const apiImports = [
-      ...source.matchAll(/import \{([^}]*)\} from "\.\.\/\.\.\/\.\.\/shared\/api\/[^"]+"/gu)
-    ]
-      .flatMap((match) => (match[1] ?? "").split(","))
-      .map((name) => name.trim())
-      .filter((name) => name !== "");
-    expect(apiImports).toEqual(["usePlatformContextQuery"]);
-    expect(source).not.toMatch(/client\.|useMutation|connect_codes|api_keys|fetch\(/u);
-  });
+  it.each([undefined, "1.4.0"])(
+    "opening, switching tools and copying issues no key or code (CLI %s)",
+    async (cliVersion) => {
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+      const calls: string[] = [];
+      const context = { ...platformContext(), release: { version: "1.4.0", cliVersion } };
+      const record: typeof fetch = async (input, init) => {
+        const request = new Request(input, init);
+        calls.push(`${request.method} ${new URL(request.url).pathname}`);
+        return Response.json(context);
+      };
+      // Also record a direct fetch, so bypassing the API client cannot issue a key unseen.
+      vi.stubGlobal("fetch", record);
+      const client = createApiClient({ baseUrl: URL_OF_INSTANCE, fetchImpl: record });
+      const config = createTestConfig();
+      const settings: SettingsPageContextValue = {
+        apiBaseUrl: URL_OF_INSTANCE,
+        authScope: "connect-test",
+        client,
+        user: settingsUser(),
+        config: safeConfigSchema.parse(
+          createSafeConfigView(
+            config,
+            { version: 0, agents: [], skills: [] },
+            resolveInstanceModules(config, []).snapshot
+          )
+        ),
+        locales: ["en", "de"],
+        locale: "en",
+        selectLocale: () => undefined,
+        showContextIndicator: false,
+        setShowContextIndicator: () => undefined,
+        themePreference: "light",
+        selectThemePreference: () => undefined,
+        workspace: undefined,
+        activeWorkspace: personalWorkspace(),
+        onAccountDeleted: () => undefined,
+        onWorkspaceLeft: () => undefined,
+        onWorkspaceDeleted: () => undefined
+      };
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const container = document.createElement("div");
+      document.body.append(container);
+      const root = createRoot(container);
+      const copied: string[] = [];
+      const clipboard = vi
+        .spyOn(navigator.clipboard, "writeText")
+        .mockImplementation(async (value) => {
+          copied.push(value);
+        });
+      try {
+        await act(async () => {
+          root.render(
+            createElement(
+              QueryClientProvider,
+              { client: queryClient },
+              createElement(
+                SettingsPageProvider,
+                { value: settings },
+                createElement(
+                  TranslationProvider,
+                  { locale: "en", children: null },
+                  createElement(
+                    UiRoot,
+                    { mode: "light", labels: uiLabelsEn },
+                    createElement(ConnectLocalAgentPage)
+                  )
+                )
+              )
+            )
+          );
+        });
+        await vi.waitFor(
+          async () => {
+            await act(async () => {
+              expect(container.textContent).toContain(
+                cliVersion ? "npm install" : "The command is not available yet"
+              );
+            });
+          },
+          { timeout: CONDITION_WAIT_MS }
+        );
+        for (const tool of LOCAL_AGENT_TOOLS) {
+          const label = { "claude-code": "Claude Code", codex: "Codex", other: "Other" }[tool];
+          const option = required(
+            [...container.querySelectorAll<HTMLElement>('[role="radio"]')].find(
+              (node) => node.textContent === label
+            )
+          );
+          await act(async () => {
+            option.click();
+          });
+          expect(option.getAttribute("aria-checked")).toBe("true");
+          const copy = container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Copy"], button[aria-label="Copied"]'
+          );
+          if (cliVersion) {
+            expect(container.textContent).toContain(
+              localAgentCommand(tool, cliVersion, URL_OF_INSTANCE)
+            );
+            await act(async () => {
+              required(copy).click();
+            });
+            expect(copied.at(-1)).toBe(localAgentCommand(tool, cliVersion, URL_OF_INSTANCE));
+          } else {
+            expect(copy).toBeNull();
+          }
+          const operation = apiOperations["platform.context.get"];
+          expect(calls).toEqual([`${operation.method} ${operation.buildPath({})}`]);
+        }
+      } finally {
+        await act(async () => {
+          root.unmount();
+        });
+        queryClient.clear();
+        container.remove();
+        clipboard.mockRestore();
+        vi.unstubAllGlobals();
+      }
+    }
+  );
 });

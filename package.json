@@ -69,6 +69,7 @@
     "drizzle-kit": "^0.31.10",
     "esbuild": "0.28.0",
     "exceljs": "4.4.0",
+    "happy-dom": "21.0.3",
     "jszip": "3.10.1",
     "postgres": "^3.4.9",
     "react": "^19.2.7",

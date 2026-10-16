@@ -1,3 +1,4 @@
+// @rights-screen: included in the rights wording guard.
 import { Bot, KeyRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import {

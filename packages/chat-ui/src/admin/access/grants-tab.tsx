@@ -1,3 +1,4 @@
+// @rights-screen: included in the rights wording guard.
 import { Ban, Check, Ellipsis, Undo2 } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 import type {

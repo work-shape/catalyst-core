@@ -1,3 +1,4 @@
+// @rights-screen: included in the rights wording guard.
 import type { AssetSummary } from "@work-shape/catalyst-api-client";
 import { USER_STATUSES } from "@work-shape/catalyst-core";
 import {

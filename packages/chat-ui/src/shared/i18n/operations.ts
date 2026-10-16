@@ -1,3 +1,4 @@
+// @service-principal-copy: included in the German terminology guard.
 import { defineTranslations } from "./translation-area";
 
 /** Instance > Operations and the Inbox item of an operation call that waits for approval. */

@@ -98,6 +98,9 @@
     "./workspace-api-client": {
       "development": "./src/shared/api/workspace-api-client.tsx"
     },
+    "./settings-page-context": {
+      "development": "./src/shared/settings-page-context.tsx"
+    },
     "./control-plane": {
       "development": "./src/admin/control-plane/index.ts"
     }

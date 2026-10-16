@@ -1,3 +1,4 @@
+// @rights-copy: included in the rights wording guard.
 import { defineTranslations } from "./translation-area";
 
 export const connections = defineTranslations({

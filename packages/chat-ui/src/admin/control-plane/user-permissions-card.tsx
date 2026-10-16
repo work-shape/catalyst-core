@@ -1,3 +1,4 @@
+// @rights-screen: included in the rights wording guard.
 import { useEffect, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import type {

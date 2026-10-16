@@ -1,3 +1,4 @@
+// @rights-screen: included in the rights wording guard.
 import { useQueries } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { listAll, type ServicePrincipalDetail } from "@work-shape/catalyst-api-client";

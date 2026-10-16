@@ -279,20 +279,6 @@ function literalAttributeValue(attribute: ts.JsxAttribute): string | undefined {
   return undefined;
 }
 
-/** Counts per file and category, with files and categories in a fixed order. */
-export function countUiGuardFindings(
-  findings: readonly UiGuardFinding[]
-): Record<string, Partial<Record<UiGuardCategory, number>>> {
-  const counts: Record<string, Partial<Record<UiGuardCategory, number>>> = {};
-  for (const finding of [...findings].sort(
-    (a, b) => a.file.localeCompare(b.file) || a.category.localeCompare(b.category)
-  )) {
-    const fileCounts = (counts[finding.file] ??= {});
-    fileCounts[finding.category] = (fileCounts[finding.category] ?? 0) + 1;
-  }
-  return counts;
-}
-
 export function isLibraryFile(file: string): boolean {
   return file.startsWith(LIBRARY_ROOT);
 }

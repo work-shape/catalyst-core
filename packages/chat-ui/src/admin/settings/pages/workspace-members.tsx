@@ -1,3 +1,4 @@
+// @rights-screen: included in the rights wording guard.
 import type {
   CollaborationWorkspaceWithRole,
   LocaleCode,

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
@@ -31,32 +31,23 @@ const rightId = new RegExp(
 );
 
 /** The screens the ticket names: Instance > Access, Users, API access, Members, a Connection. */
-const RIGHTS_SCREENS = [
-  "admin/access/grants-tab.tsx",
-  "admin/access/check-tab.tsx",
-  "admin/access/principal-rights.tsx",
-  "admin/control-plane/api-access-panel.tsx",
-  "admin/control-plane/user-permissions-card.tsx",
-  "admin/control-plane/user-permission-overview.tsx",
-  "admin/settings/pages/access.tsx",
-  "admin/settings/pages/api-access.tsx",
-  "admin/settings/pages/workspace-members.tsx",
-  "studio/build-area/connection-page.tsx"
-];
+const RIGHTS_SCREENS = markedSources("@rights-screen");
 
 /** The words those screens are made of. */
-const RIGHTS_WORDS = [
-  "shared/i18n/rights.ts",
-  "shared/i18n/access.ts",
-  "shared/i18n/api-access.ts",
-  "shared/i18n/administration.ts",
-  "shared/i18n/collaboration-workspace.ts",
-  "shared/i18n/connections.ts",
-  "shared/i18n/settings.ts"
-];
+const RIGHTS_WORDS = markedSources("@rights-copy");
+
+/** Markers travel with screens and copy when feature folders move. */
+function markedSources(marker: string): string[] {
+  const paths = readdirSync(chatUi, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.tsx?$/u.test(entry.name))
+    .map((entry) => join(entry.parentPath, entry.name))
+    .filter((path) => readFileSync(path, "utf8").includes(`// ${marker}:`));
+  expect(paths.length, `No sources marked ${marker}`).toBeGreaterThan(0);
+  return paths;
+}
 
 function source(path: string): string {
-  return readFileSync(join(chatUi, path), "utf8");
+  return readFileSync(path, "utf8");
 }
 
 /** The text of every message a translation file holds, per locale. */
@@ -139,7 +130,7 @@ describe("the words of a right", () => {
   });
 
   it("call a service principal Technisches Konto in German, and the workspace role no Rolle", () => {
-    for (const path of [...RIGHTS_WORDS, "shared/i18n/operations.ts"]) {
+    for (const path of [...RIGHTS_WORDS, ...markedSources("@service-principal-copy")]) {
       for (const text of values(path).de) {
         expect(text, path).not.toMatch(/Principal/u);
       }
@@ -194,6 +185,11 @@ describe("a rights screen with a right of every kind", () => {
       expect(markup, locale).not.toContain("asset_secret_id");
       expect(markup, locale).not.toContain("ws_secret_id");
       expect(markup, locale).toContain("CRM system");
+      for (const action of ACTIONS) {
+        expect(markup, `${locale}: ${action}`).toContain(
+          actionLabel(action, createTranslationContext(locale).t)
+        );
+      }
     }
   });
 

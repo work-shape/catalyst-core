@@ -26,6 +26,9 @@
       "@work-shape/catalyst-tool-execution/native-document": [
         "packages/tool-execution/src/native-document.ts"
       ],
+      "@work-shape/catalyst-chat-ui/settings-page-context": [
+        "packages/chat-ui/src/shared/settings-page-context.tsx"
+      ],
       "@work-shape/catalyst-quality-config/source-aliases": [
         "packages/quality-config/source-aliases.mjs"
       ],

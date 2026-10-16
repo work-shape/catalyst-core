@@ -1,3 +1,4 @@
+// @rights-screen: included in the rights wording guard.
 import { useState } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import {

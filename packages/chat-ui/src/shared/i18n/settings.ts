@@ -1,3 +1,4 @@
+// @rights-copy: included in the rights wording guard.
 import { defineTranslations } from "./translation-area";
 
 /** The Settings area: its rail and groups, and the pages Users, API access, Usage and Audit. */
