@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import { z } from "zod";
 import {
   asAgentRunId,
@@ -22,6 +22,8 @@ import {
 } from "./support/access-instance";
 import type { TestCallInput, TestOperationName } from "./support/operations";
 import { createTestToolRunner } from "./support/tool-runner";
+
+afterEach(() => vi.useRealTimers());
 
 // Administration of grants and Namespaces at the HTTP boundary: who may write what, the tenant
 // and holder boundaries of the store, audit, and the reference check of a tool call. The
@@ -628,6 +630,7 @@ describe("deleting a holder", () => {
 describe("audit of grants and Namespaces", () => {
   it("records each write with holder id, action and scope, and no name or list", async () => {
     const t = await setup();
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date() });
     await t.createNamespace("kai-", { allowedToolNames: ["known.tool"] });
     const grantId = await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
     await t.expectOk(t.admin.id, "namespaces.update", {
@@ -648,7 +651,7 @@ describe("audit of grants and Namespaces", () => {
       .filter(
         (event) => event.type.startsWith("permission.") || event.type.startsWith("namespace.")
       )
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+      .sort((left, right) => left.type.localeCompare(right.type));
     const grantMetadata = {
       grantId,
       holderKind: "user",
@@ -665,28 +668,40 @@ describe("audit of grants and Namespaces", () => {
         subject: event.subject,
         metadata: event.metadata
       }))
-    ).toEqual([
-      {
-        type: "namespace.created",
-        status: "success",
-        subject: "kai-",
-        metadata: { prefix: "kai-", restrictsTools: true, restrictsModels: false }
-      },
-      { type: "permission.granted", status: "success", subject: grantId, metadata: grantMetadata },
-      {
-        type: "namespace.updated",
-        status: "success",
-        subject: "kai-",
-        metadata: { prefix: "kai-", restrictsTools: true, restrictsModels: true }
-      },
-      { type: "permission.revoked", status: "success", subject: grantId, metadata: grantMetadata },
-      {
-        type: "namespace.deleted",
-        status: "success",
-        subject: "kai-",
-        metadata: { prefix: "kai-", restrictsTools: true, restrictsModels: true }
-      }
-    ]);
+    ).toEqual(
+      [
+        {
+          type: "namespace.created",
+          status: "success",
+          subject: "kai-",
+          metadata: { prefix: "kai-", restrictsTools: true, restrictsModels: false }
+        },
+        {
+          type: "permission.granted",
+          status: "success",
+          subject: grantId,
+          metadata: grantMetadata
+        },
+        {
+          type: "namespace.updated",
+          status: "success",
+          subject: "kai-",
+          metadata: { prefix: "kai-", restrictsTools: true, restrictsModels: true }
+        },
+        {
+          type: "permission.revoked",
+          status: "success",
+          subject: grantId,
+          metadata: grantMetadata
+        },
+        {
+          type: "namespace.deleted",
+          status: "success",
+          subject: "kai-",
+          metadata: { prefix: "kai-", restrictsTools: true, restrictsModels: true }
+        }
+      ].sort((left, right) => left.type.localeCompare(right.type))
+    );
     const written = JSON.stringify(events);
     for (const payload of ["Kai Private Name", "known.tool", "plain", '"Kai"', '"Lena"']) {
       expect(written).not.toContain(payload);

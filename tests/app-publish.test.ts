@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi, afterEach } from "vitest";
 import { z } from "zod";
 import { isFileSetId } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
@@ -13,6 +13,8 @@ import {
   type AppInstance
 } from "./support/app-instance";
 import type { TestCallInput, TestOperationName } from "./support/operations";
+
+afterEach(() => vi.useRealTimers());
 
 // An App from its first draft to the revision its workspace is served: who may write, who may
 // publish, who is served which revision, and what a call leaves behind.
@@ -68,7 +70,7 @@ describe("an App with a draft and a published revision", () => {
     );
     const audit = (await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 }))
       .filter((event) => event.correlationId === correlationId)
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+      .sort((left, right) => left.type.localeCompare(right.type));
     return { response, runs, audit };
   };
 
@@ -81,6 +83,7 @@ describe("an App with a draft and a published revision", () => {
       workspaceId: t.workspaceId
     };
 
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date() });
     const refused = await traced(t.kai.id, "apps.create_from_page", { payload });
 
     expectStatus(refused.response, 403);

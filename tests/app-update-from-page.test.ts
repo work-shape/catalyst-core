@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi, afterEach } from "vitest";
 import { z } from "zod";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import {
@@ -9,6 +9,8 @@ import {
   setupAppInstance,
   type AppInstance
 } from "./support/app-instance";
+
+afterEach(() => vi.useRealTimers());
 
 // An App that was saved from a Page takes the Page's newest revision as its next draft: who may
 // ask for that, which App a Page's surface names, and what the draft and the published revision
@@ -172,6 +174,7 @@ describe("an App updated from the Page it was saved from", () => {
 
     expect(await appOf(t.kai.id, page)).toBeNull();
     const correlationId = randomUUID();
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date() });
     const refused = await update(t.kai.id, page, "seen", 1, { "x-correlation-id": correlationId });
 
     expectStatus(refused, 403);
@@ -181,7 +184,7 @@ describe("an App updated from the Page it was saved from", () => {
     });
     const audit = (await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 }))
       .filter((event) => event.correlationId === correlationId)
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+      .sort((left, right) => left.type.localeCompare(right.type));
     expect(audit.map((event) => `${event.type}:${event.status}`)).toEqual([
       "operation.authorization_checked:denied",
       "operation.denied:denied"

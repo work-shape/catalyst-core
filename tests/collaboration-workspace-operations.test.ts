@@ -519,7 +519,10 @@ async function setup(settings: CentralPolicySetting[] = []) {
     runs: async (operation: TestOperationName) =>
       (await t.stores.operationRuns.list({ clientInstanceId }))
         .filter((run) => run.operation === operation)
-        .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+        .sort(
+          (left, right) =>
+            left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+        ),
     rowsOfRun: async (runId: string | undefined) =>
       (await audit())
         .filter((event) => event.metadata?.operationRunId === runId)
