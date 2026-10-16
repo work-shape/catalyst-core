@@ -1,46 +1,40 @@
-import { readToolExecutionEnv } from "./env";
-import { createHash, randomUUID } from "node:crypto";
 import {
-  lstat,
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  rm,
-  stat,
-  utimes,
-  writeFile
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, dirname, join, relative } from "node:path";
-import {
-  type ExecutionWorkspace,
   type AuditRecorder,
+  type ExecutionWorkspace,
   type JobControl,
   type JsonObject,
+  type ObjectStorage,
   type PlatformStores,
   type WorkspaceCommand,
   type WorkspaceCommandChangedFile,
   type WorkspaceCommandError,
-  type WorkspaceCommandFailureCategory,
   type WorkspaceCommandOutput,
   type WorkspaceCommandPromotedArtifact,
-  type WorkspaceFile,
-  readObjectBytes,
-  type ObjectStorage
+  type WorkspaceFile
 } from "@work-shape/catalyst-core";
+import { randomUUID } from "node:crypto";
+import { readdir, rm, stat, utimes } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
+import { readToolExecutionEnv } from "./env";
 import { promoteWorkspaceFile } from "./workspace-artifact-promotion";
-import { putWorkspaceFile, upsertStoredWorkspaceFile } from "./workspace-file-bytes";
 import {
-  normalizeWorkspaceDirectory,
-  normalizeWorkspaceFilePath,
-  resolveWorkspaceFilesystemPath
-} from "./workspace-paths";
+  toWorkspaceCommandError,
+  workspaceCommandError,
+  WorkspaceRunnerFailure
+} from "./workspace-command-errors";
 import {
   LocalWorkspaceCommandProcessExecutor,
   type ProcessResult,
   type WorkspaceCommandProcessExecutor
 } from "./workspace-command-executor";
+import {
+  ensureStandardWorkspaceDirectories,
+  hydrateWorkspace,
+  scanWorkspaceFiles,
+  type HydratedWorkspace,
+  type ScannedWorkspaceFile
+} from "./workspace-command-files";
 import {
   emitWorkspaceCommandTelemetry,
   recordWorkspaceCommandLifecycleAudit,
@@ -48,12 +42,10 @@ import {
   workspaceCommandTelemetryEvent,
   type WorkspaceCommandTelemetry
 } from "./workspace-command-telemetry";
-import { createWorkspaceChecksum } from "./workspace-tool-results";
+import { putWorkspaceFile, upsertStoredWorkspaceFile } from "./workspace-file-bytes";
+import { normalizeWorkspaceDirectory, resolveWorkspaceFilesystemPath } from "./workspace-paths";
 
 const DEFAULT_MAX_PATH_LENGTH = 512;
-const DEFAULT_WORKSPACE_BYTES = 100 * 1024 * 1024;
-/** The folders every command finds in the workspace. None of them can be a file. */
-export const STANDARD_WORKSPACE_DIRECTORIES = ["scripts", "artifacts", "previews", "tmp"] as const;
 
 export type WorkspaceCommandRunnerStore = Pick<PlatformStores, "files" | "executionWorkspaces">;
 
@@ -76,20 +68,6 @@ interface CommandExecutionResult {
   output?: WorkspaceCommandOutput;
   error?: WorkspaceCommandError;
   cancelled?: boolean;
-}
-
-interface HydratedWorkspace {
-  executionDirectory: string;
-  workspaceDirectory: string;
-  baselineFiles: Map<string, WorkspaceFile>;
-}
-
-interface ScannedWorkspaceFile {
-  path: string;
-  bytes: Uint8Array;
-  byteSize: number;
-  checksum: string;
-  mimeType?: string;
 }
 
 interface SyncedWorkspaceFile {
@@ -327,89 +305,24 @@ export class LocalWorkspaceCommandRunner {
     workspace: ExecutionWorkspace,
     command: WorkspaceCommand
   ): Promise<HydratedWorkspace> {
-    await mkdir(this.tempRootDirectory, { recursive: true });
-    const executionDirectory = this.reuseWorkspaceDirectories
-      ? join(this.tempRootDirectory, cachedWorkspaceDirectoryName(this.workerId, workspace.id))
-      : await mkdtemp(join(this.tempRootDirectory, "catalyst-workspace-"));
-    const workspaceDirectory = join(executionDirectory, "workspace");
-    try {
-      let cachedFiles: ScannedWorkspaceFile[] = [];
-      if (this.reuseWorkspaceDirectories) {
-        try {
-          await mkdir(workspaceDirectory, { recursive: true });
-          const accessedAt = new Date();
-          await utimes(executionDirectory, accessedAt, accessedAt);
-          await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
-          cachedFiles = await this.scanWorkspaceFiles(workspaceDirectory, command);
-        } catch {
-          await rm(executionDirectory, { recursive: true, force: true });
-        }
-      }
-      await mkdir(workspaceDirectory, { recursive: true });
-      await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
-      const files = await this.store.executionWorkspaces.listWorkspaceFiles({
-        clientInstanceId: command.clientInstanceId,
-        workspaceId: workspace.id
-      });
-      const durablePaths = new Set(files.map((file) => file.path));
-      const cachedPaths = new Set(cachedFiles.map((file) => file.path));
-      if (this.reuseWorkspaceDirectories && !setsEqual(cachedPaths, durablePaths)) {
-        await rm(executionDirectory, { recursive: true, force: true });
-        await mkdir(workspaceDirectory, { recursive: true });
-        await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
-        cachedFiles = [];
-      }
-      const cachedByPath = new Map(cachedFiles.map((file) => [file.path, file]));
-      const baselineFiles = new Map<string, WorkspaceFile>();
-      for (const file of files) {
-        const normalized = normalizeWorkspaceFilePath(file.path, {
-          maxPathLength: this.maxPathLength
-        });
-        if (normalized.status === "failed") {
-          throw new WorkspaceRunnerFailure(
-            "WORKSPACE_FILE_PATH_REJECTED",
-            normalized.message,
-            "runner_error",
-            normalized.details
-          );
-        }
-        const target = resolveWorkspaceFilesystemPath(workspaceDirectory, normalized.value, {
-          maxPathLength: this.maxPathLength
-        });
-        if (target.status === "failed") {
-          throw new WorkspaceRunnerFailure(
-            "WORKSPACE_FILE_PATH_REJECTED",
-            target.message,
-            "runner_error",
-            target.details
-          );
-        }
-        const cached = cachedByPath.get(normalized.value);
-        if (cached?.checksum !== file.checksum || cached.byteSize !== file.byteSize) {
-          const bytes = await readObjectBytes(this.byteStore, file.objectKey);
-          await mkdir(dirname(target.value), { recursive: true });
-          await writeFile(target.value, bytes);
-        }
-        baselineFiles.set(normalized.value, {
-          ...file,
-          path: normalized.value
-        });
-      }
-      return {
-        executionDirectory,
-        workspaceDirectory,
-        baselineFiles
-      };
-    } catch (error) {
-      await rm(executionDirectory, { recursive: true, force: true });
-      throw error;
-    }
+    return hydrateWorkspace(
+      {
+        store: this.store,
+        byteStore: this.byteStore,
+        workerId: this.workerId,
+        tempRootDirectory: this.tempRootDirectory,
+        maxPathLength: this.maxPathLength,
+        reuseWorkspaceDirectories: this.reuseWorkspaceDirectories,
+        ensureStandardWorkspaceDirectories: this.ensureStandardWorkspaceDirectories.bind(this),
+        scanWorkspaceFiles: this.scanWorkspaceFiles.bind(this)
+      },
+      workspace,
+      command
+    );
   }
 
   private async ensureStandardWorkspaceDirectories(workspaceDirectory: string): Promise<void> {
-    for (const directory of STANDARD_WORKSPACE_DIRECTORIES) {
-      await mkdir(join(workspaceDirectory, directory), { recursive: true });
-    }
+    return ensureStandardWorkspaceDirectories(workspaceDirectory);
   }
 
   private async runProcess(
@@ -460,78 +373,7 @@ export class LocalWorkspaceCommandRunner {
     workspaceDirectory: string,
     command: WorkspaceCommand
   ): Promise<ScannedWorkspaceFile[]> {
-    const scanned: ScannedWorkspaceFile[] = [];
-    let totalBytes = 0;
-    const scanDirectory = async (directory: string): Promise<void> => {
-      const entries = await readdir(directory, { withFileTypes: true });
-      for (const entry of entries) {
-        const absolutePath = join(directory, entry.name);
-        const workspacePath = relative(workspaceDirectory, absolutePath).split("\\").join("/");
-        if (entry.isSymbolicLink()) {
-          throw new WorkspaceRunnerFailure(
-            "WORKSPACE_SYMLINK_REJECTED",
-            "Workspace files must not be symbolic links",
-            "runner_error",
-            { path: workspacePath }
-          );
-        }
-        if (entry.isDirectory()) {
-          await scanDirectory(absolutePath);
-          continue;
-        }
-        if (!entry.isFile()) {
-          throw new WorkspaceRunnerFailure(
-            "WORKSPACE_FILE_TYPE_REJECTED",
-            "Workspace contains an unsupported file type",
-            "runner_error",
-            { path: workspacePath }
-          );
-        }
-        const normalized = normalizeWorkspaceFilePath(workspacePath, {
-          maxPathLength: this.maxPathLength
-        });
-        if (normalized.status === "failed") {
-          throw new WorkspaceRunnerFailure(
-            "WORKSPACE_FILE_PATH_REJECTED",
-            normalized.message,
-            "runner_error",
-            normalized.details
-          );
-        }
-        const stats = await lstat(absolutePath);
-        if (!stats.isFile()) {
-          throw new WorkspaceRunnerFailure(
-            "WORKSPACE_FILE_TYPE_REJECTED",
-            "Workspace contains an unsupported file type",
-            "runner_error",
-            { path: normalized.value }
-          );
-        }
-        totalBytes += stats.size;
-        if (totalBytes > (command.limits.maxWorkspaceBytes ?? DEFAULT_WORKSPACE_BYTES)) {
-          throw new WorkspaceRunnerFailure(
-            "WORKSPACE_SIZE_LIMIT_EXCEEDED",
-            "Workspace size limit exceeded",
-            "runner_error",
-            {
-              path: normalized.value,
-              totalBytes,
-              maxWorkspaceBytes: command.limits.maxWorkspaceBytes ?? DEFAULT_WORKSPACE_BYTES
-            }
-          );
-        }
-        const bytes = await readFile(absolutePath);
-        scanned.push({
-          path: normalized.value,
-          bytes,
-          byteSize: bytes.byteLength,
-          checksum: createWorkspaceChecksum(bytes),
-          mimeType: inferWorkspaceMimeType(normalized.value)
-        });
-      }
-    };
-    await scanDirectory(workspaceDirectory);
-    return scanned.sort((left, right) => left.path.localeCompare(right.path));
+    return scanWorkspaceFiles(this.maxPathLength, workspaceDirectory, command);
   }
 
   private async syncChangedFiles(
@@ -695,51 +537,6 @@ export class LocalWorkspaceCommandRunner {
   }
 }
 
-class WorkspaceRunnerFailure extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly category: WorkspaceCommandFailureCategory,
-    readonly details?: JsonObject
-  ) {
-    super(message);
-  }
-}
-
-function toWorkspaceCommandError(error: unknown): WorkspaceCommandError {
-  if (error instanceof WorkspaceRunnerFailure) {
-    return workspaceCommandError(error.code, error.message, error.category, error.details);
-  }
-  return workspaceCommandError(
-    "WORKSPACE_COMMAND_RUNNER_ERROR",
-    error instanceof Error ? error.message : "Workspace command runner failed",
-    "internal_error"
-  );
-}
-
-function workspaceCommandError(
-  code: string,
-  message: string,
-  category: WorkspaceCommandFailureCategory,
-  details?: JsonObject
-): WorkspaceCommandError {
-  return {
-    code,
-    message,
-    category,
-    details
-  };
-}
-
-function cachedWorkspaceDirectoryName(workerId: string, workspaceId: string): string {
-  const key = createHash("sha256").update(`${workerId}:${workspaceId}`).digest("hex").slice(0, 32);
-  return `catalyst-workspace-${key}`;
-}
-
-function setsEqual(left: Set<string>, right: Set<string>): boolean {
-  return left.size === right.size && [...left].every((value) => right.has(value));
-}
-
 function commandOutputFromProcess(
   processResult: ProcessResult,
   changedFiles: WorkspaceCommandChangedFile[],
@@ -772,35 +569,4 @@ function terminalCommandAuditMetadata(command: WorkspaceCommand): JsonObject {
       : {})
   };
 }
-
-function inferWorkspaceMimeType(path: string): string | undefined {
-  const lower = path.toLowerCase();
-  if (lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".csv")) {
-    return "text/plain";
-  }
-  if (lower.endsWith(".json")) {
-    return "application/json";
-  }
-  if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".cjs")) {
-    return "application/javascript";
-  }
-  if (lower.endsWith(".ts") || lower.endsWith(".tsx")) {
-    return "application/typescript";
-  }
-  if (lower.endsWith(".html")) {
-    return "text/html";
-  }
-  if (lower.endsWith(".xml")) {
-    return "application/xml";
-  }
-  if (lower.endsWith(".pdf")) {
-    return "application/pdf";
-  }
-  if (lower.endsWith(".png")) {
-    return "image/png";
-  }
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
-    return "image/jpeg";
-  }
-  return undefined;
-}
+export { STANDARD_WORKSPACE_DIRECTORIES } from "./workspace-command-files";

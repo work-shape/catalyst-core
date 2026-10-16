@@ -1,117 +1,70 @@
 import {
-  type ISODateString,
   AppError,
-  isSuperadmin,
-  WORKSPACE_ACCENT_COLORS,
   asUserId,
   auditActorFromUser,
   getSubjectUserId,
-  type AuditRecorder,
-  type ActorAccess,
+  isSuperadmin,
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
-  type CollaborationWorkspaceWithRole,
-  type ConversationVisibility,
   type OperationAuthorization,
   type PlatformStores,
   type RuntimeAssetSnapshot,
   type UserRecord,
-  type WorkspaceAccentColor,
   type WorkspaceMemberCandidate,
   type WorkspaceMembership,
-  type WorkspaceMembershipRole,
-  type WorkspaceVisibility
+  type WorkspaceMembershipRole
 } from "@work-shape/catalyst-core";
-import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import { withRightsHeld } from "../access/rights-held";
-import type { ChatServerOptions } from "../types";
-import {
-  effectiveWorkspaceRole,
-  requireWorkspaceAccess,
-  type WorkspaceAccess
-} from "./workspace-access";
 import { assertConversationIdle } from "../conversations/conversation-idle";
 import type { DeletionOutcome } from "../deletion/subject-deletion";
 import {
   requestWorkspaceDeletion,
   type WorkspaceDeletionResult
 } from "../deletion/workspace-deletion";
+import type { ChatServerOptions } from "../types";
+import { getWorkspaceAssetSnapshot } from "./agent-availability";
+import {
+  effectiveWorkspaceRole,
+  requireWorkspaceAccess,
+  type WorkspaceAccess
+} from "./workspace-access";
+import {
+  approveAccessRequestNow,
+  browseDirectory,
+  declineAccessRequest,
+  listAccessRequests,
+  requestAccess
+} from "./workspace-access-requests";
+import {
+  authorizationOf,
+  CANNOT_ADD_MEMBER_MESSAGE,
+  refusalError,
+  requireNoRefusal,
+  requireOwner,
+  requireOwnerOrAdmin,
+  roleRefusal
+} from "./workspace-service-access";
+import {
+  type CreateSharedWorkspaceCommand,
+  type UpdateWorkspaceSettingsCommand,
+  type WorkspaceAccessRequestItem,
+  type WorkspaceChangeCall,
+  type WorkspaceDeletionImpact,
+  type WorkspaceDirectoryItem,
+  type WorkspaceListItem,
+  type WorkspaceMemberItem,
+  type WorkspaceRoleNeeded
+} from "./workspace-service-types";
+import {
+  normalizeDescription,
+  normalizeEmoji,
+  normalizeRequiredName,
+  validateAccentColor,
+  workspaceChangedFields
+} from "./workspace-settings";
 
-const MAX_WORKSPACE_NAME_LENGTH = 120;
-const MAX_WORKSPACE_DESCRIPTION_LENGTH = 500;
-const MAX_WORKSPACE_EMOJI_LENGTH = 32;
-const CANNOT_ADD_MEMBER_MESSAGE =
-  "This user cannot be added. Invitations for people without an eligible account are not available yet.";
 const LAST_OWNER_MESSAGE = "A Shared Workspace must retain at least one active owner";
-
-/** The least role a workspace operation asks of its caller. `member` is any role. */
-export type WorkspaceRoleNeeded = "member" | "admin" | "owner";
-
-/** What a changing workspace operation takes from its Operation Run. */
-export interface WorkspaceChangeCall {
-  /** The operation, which a refusal names: no right a caller can be granted opens it. */
-  operationId: string;
-  user: AuthenticatedUser;
-  /** The caller's rights as the call was admitted; a change of members reads them anew. */
-  access: ActorAccess;
-  /** Writes audit rows that name the run. */
-  audit: AuditRecorder;
-  correlationId: string;
-}
-
-export interface WorkspaceListItem extends CollaborationWorkspaceWithRole {
-  membershipRole: WorkspaceMembershipRole | null;
-  pendingAccessRequestCount: number;
-}
-
-export interface WorkspaceDirectoryItem {
-  id: CollaborationWorkspaceId;
-  name: string;
-  description: string | null;
-  emoji: string | null;
-  accentColor: WorkspaceAccentColor | null;
-  accessState: "member" | "request_pending" | "can_request";
-  createdAt: ISODateString;
-}
-
-export interface WorkspaceMemberItem {
-  userId: UserRecord["id"];
-  displayLabel: string;
-  email: string | null;
-  role: WorkspaceMembershipRole;
-}
-
-export interface WorkspaceAccessRequestItem {
-  userId: UserRecord["id"];
-  displayLabel: string;
-  email: string | null;
-  createdAt: string;
-}
-
-export interface WorkspaceDeletionImpact {
-  conversationCount: number;
-  memberCount: number;
-  pendingAccessRequestCount: number;
-}
-
-export interface CreateSharedWorkspaceCommand {
-  name: string;
-  description?: string | null;
-  visibility?: WorkspaceVisibility;
-  defaultConversationVisibility?: ConversationVisibility;
-  emoji?: string | null;
-  accentColor?: WorkspaceAccentColor | null;
-}
-
-export interface UpdateWorkspaceSettingsCommand {
-  name?: string;
-  description?: string | null;
-  visibility?: WorkspaceVisibility;
-  defaultConversationVisibility?: ConversationVisibility;
-  emoji?: string | null;
-  accentColor?: WorkspaceAccentColor | null;
-}
 
 export class CollaborationWorkspaceWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
@@ -594,96 +547,33 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async browseDirectory(user: AuthenticatedUser): Promise<WorkspaceDirectoryItem[]> {
-    const subjectUserId = asUserId(getSubjectUserId(user));
-    const workspaces = await this.options.stores.workspaces.listDiscoverableWorkspaces({
-      clientInstanceId: this.options.clientInstanceId
-    });
-    return Promise.all(
-      workspaces.map(async (workspace) => {
-        const [membership, request] = await Promise.all([
-          this.options.stores.workspaces.getMembership({
-            clientInstanceId: this.options.clientInstanceId,
-            collaborationWorkspaceId: workspace.id,
-            userId: subjectUserId
-          }),
-          this.options.stores.workspaces.getAccessRequest({
-            clientInstanceId: this.options.clientInstanceId,
-            collaborationWorkspaceId: workspace.id,
-            userId: subjectUserId
-          })
-        ]);
-        return {
-          id: workspace.id,
-          name: workspace.name,
-          description: workspace.description,
-          emoji: workspace.emoji,
-          accentColor: workspace.accentColor,
-          accessState: membership ? "member" : request ? "request_pending" : "can_request",
-          createdAt: workspace.createdAt
-        };
-      })
-    );
+    return browseDirectory({ options: this.options }, user);
   }
 
   async requestAccess(
     call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ) {
-    const subjectUserId = asUserId(getSubjectUserId(call.user));
-    await this.requireDiscoverableWorkspace(collaborationWorkspaceId);
-    if (
-      await this.options.stores.workspaces.getMembership({
-        clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId,
-        userId: subjectUserId
-      })
-    ) {
-      throw new AppError("CONFLICT", "User is already a workspace member");
-    }
-    if (
-      await this.options.stores.workspaces.getAccessRequest({
-        clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId,
-        userId: subjectUserId
-      })
-    ) {
-      throw new AppError("CONFLICT", "A workspace access request is already pending");
-    }
-    const request = await this.options.stores.workspaces.createAccessRequest({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
-      userId: subjectUserId
-    });
-    await this.record(call, collaborationWorkspaceId, "collaboration_workspace.access_requested", {
-      targetUserId: subjectUserId
-    });
-    return request;
+    return requestAccess(
+      {
+        options: this.options,
+        requireDiscoverableWorkspace: this.requireDiscoverableWorkspace.bind(this),
+        record: this.record.bind(this)
+      },
+      call,
+      collaborationWorkspaceId
+    );
   }
 
   async listAccessRequests(
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceAccessRequestItem[]> {
-    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(access);
-    const [requests, users] = await Promise.all([
-      this.options.stores.workspaces.listAccessRequestsForWorkspace({
-        clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId
-      }),
-      this.options.stores.users.listUsers({ clientInstanceId: this.options.clientInstanceId })
-    ]);
-    const usersById = new Map(users.map((candidate) => [candidate.id, candidate]));
-    return requests.map((request) => {
-      const requester = usersById.get(request.userId);
-      if (!requester) throw new AppError("INTERNAL", "Access requester is not available");
-      return {
-        userId: requester.id,
-        displayLabel: requester.displayLabel,
-        email: requester.email ?? null,
-        createdAt: request.createdAt
-      };
-    });
+    return listAccessRequests(
+      { options: this.options, requireWorkspaceAccess: this.requireWorkspaceAccess.bind(this) },
+      user,
+      collaborationWorkspaceId
+    );
   }
 
   async approveAccessRequest(
@@ -701,40 +591,17 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
   ): Promise<WorkspaceMembership> {
-    await this.requireRole(call, collaborationWorkspaceId, "admin");
-    await this.requireSharedWorkspace(collaborationWorkspaceId);
-    const request = await this.options.stores.workspaces.getAccessRequest({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
-      userId: targetUserId
-    });
-    if (!request) throw new AppError("NOT_FOUND", "Workspace Access Request is not available");
-    const users = await this.options.stores.users.listUsers({
-      clientInstanceId: this.options.clientInstanceId
-    });
-    if (
-      !users.some((candidate) => candidate.id === targetUserId && candidate.status === "active")
-    ) {
-      throw new AppError("CONFLICT", CANNOT_ADD_MEMBER_MESSAGE);
-    }
-    const added = await this.options.stores.workspaces.addMembership({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
-      userId: targetUserId,
-      role: "member"
-    });
-    await this.options.stores.workspaces.deleteAccessRequest({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
-      userId: targetUserId
-    });
-    await this.record(
+    return approveAccessRequestNow(
+      {
+        options: this.options,
+        requireRole: this.requireRole.bind(this),
+        requireSharedWorkspace: this.requireSharedWorkspace.bind(this),
+        record: this.record.bind(this)
+      },
       call,
       collaborationWorkspaceId,
-      "collaboration_workspace.access_request_approved",
-      { targetUserId }
+      targetUserId
     );
-    return added;
   }
 
   async declineAccessRequest(
@@ -742,19 +609,16 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
   ) {
-    await this.requireRole(call, collaborationWorkspaceId, "admin");
-    const request = await this.options.stores.workspaces.deleteAccessRequest({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
-      userId: targetUserId
-    });
-    await this.record(
+    return declineAccessRequest(
+      {
+        options: this.options,
+        requireRole: this.requireRole.bind(this),
+        record: this.record.bind(this)
+      },
       call,
       collaborationWorkspaceId,
-      "collaboration_workspace.access_request_declined",
-      { targetUserId }
+      targetUserId
     );
-    return request;
   }
 
   private async toListItem(
@@ -917,104 +781,14 @@ export class CollaborationWorkspaceWorkflow {
     });
   }
 }
-
-/**
- * The one place a role is held against what an operation asks: the sentence a caller whose
- * role is too low reads, or nothing where the role is enough.
- */
-function roleRefusal(access: WorkspaceAccess, needed: WorkspaceRoleNeeded): string | undefined {
-  if (needed === "owner" && access.role !== "owner") return "Workspace Owner access is required";
-  if (needed === "admin" && access.role !== "owner" && access.role !== "admin") {
-    return "Workspace Owner or Admin access is required";
-  }
-  return undefined;
-}
-
-/** A read asks the role and refuses with the same sentence as a change. */
-function requireOwnerOrAdmin(access: WorkspaceAccess): void {
-  const refusal = roleRefusal(access, "admin");
-  if (refusal !== undefined) throw new AppError("FORBIDDEN", refusal);
-}
-
-function requireOwner(access: WorkspaceAccess): void {
-  const refusal = roleRefusal(access, "owner");
-  if (refusal !== undefined) throw new AppError("FORBIDDEN", refusal);
-}
-
-/** What the `authorize` of an operation answers: a refusal names the operation and says the rule. */
-function authorizationOf(operationId: string, refusal: string | undefined): OperationAuthorization {
-  return refusal === undefined
-    ? { allowed: true }
-    : { allowed: false, action: operationId, reason: "no_grant", message: refusal };
-}
-
-/** The same refusal thrown inside the operation. With these details the run ends as denied. */
-function refusalError(operationId: string, message: string): AppError {
-  return new AppError("FORBIDDEN", message, { action: operationId, reason: "no_grant" });
-}
-
-function requireNoRefusal(operationId: string, refusal: string | undefined): void {
-  if (refusal !== undefined) throw refusalError(operationId, refusal);
-}
-
-function normalizeRequiredName(value: string): string {
-  const normalized = value.trim();
-  if (!normalized) throw new AppError("VALIDATION_FAILED", "Workspace name is required");
-  if (normalized.length > MAX_WORKSPACE_NAME_LENGTH) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Workspace name must be at most ${MAX_WORKSPACE_NAME_LENGTH} characters`
-    );
-  }
-  return normalized;
-}
-
-function normalizeDescription(value: string | null | undefined): string | null {
-  if (value === undefined || value === null) return null;
-  const normalized = value.trim();
-  if (normalized.length > MAX_WORKSPACE_DESCRIPTION_LENGTH) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Workspace description must be at most ${MAX_WORKSPACE_DESCRIPTION_LENGTH} characters`
-    );
-  }
-  return normalized || null;
-}
-
-function normalizeEmoji(value: string | null | undefined): string | null {
-  if (value === undefined || value === null) return null;
-  const normalized = value.trim();
-  if (normalized.length > MAX_WORKSPACE_EMOJI_LENGTH) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Workspace emoji must be at most ${MAX_WORKSPACE_EMOJI_LENGTH} characters`
-    );
-  }
-  return normalized || null;
-}
-
-function validateAccentColor(
-  value: WorkspaceAccentColor | null | undefined
-): WorkspaceAccentColor | null {
-  if (value === undefined || value === null) return null;
-  if (!WORKSPACE_ACCENT_COLORS.includes(value)) {
-    throw new AppError("VALIDATION_FAILED", "Workspace accent color is not available");
-  }
-  return value;
-}
-
-function workspaceChangedFields(
-  workspace: CollaborationWorkspace,
-  update: UpdateWorkspaceSettingsCommand
-): string[] {
-  return (
-    [
-      "name",
-      "description",
-      "visibility",
-      "defaultConversationVisibility",
-      "emoji",
-      "accentColor"
-    ] as const
-  ).filter((field) => update[field] !== undefined && update[field] !== workspace[field]);
-}
+export {
+  type CreateSharedWorkspaceCommand,
+  type UpdateWorkspaceSettingsCommand,
+  type WorkspaceAccessRequestItem,
+  type WorkspaceChangeCall,
+  type WorkspaceDeletionImpact,
+  type WorkspaceDirectoryItem,
+  type WorkspaceListItem,
+  type WorkspaceMemberItem,
+  type WorkspaceRoleNeeded
+} from "./workspace-service-types";
