@@ -16,6 +16,18 @@ export const assetBoundaryRules = ({ rule, keyName, staticReads }) => {
   const root = process.cwd();
   /** @param {string} filename */
   const fileOf = (filename) => relative(root, filename).replaceAll("\\", "/");
+  /** @param {AnyNode} expression @returns {boolean} */
+  const describesIdentity = (expression) => {
+    if (expression.type === "TemplateLiteral")
+      return expression.expressions.some(describesIdentity);
+    const name =
+      expression.type === "Identifier"
+        ? expression.name
+        : expression.type === "MemberExpression"
+          ? keyName(expression.property, expression.computed)
+          : undefined;
+    return Boolean(name && /(?:^name$|^id$|Id$)/u.test(name));
+  };
   return {
     "asset-head-description": rule(
       "Asset headers describe the asset's purpose, never its name or id",
@@ -25,14 +37,7 @@ export const assetBoundaryRules = ({ rule, keyName, staticReads }) => {
         "JSXAttribute[name.name='description']": (node) => {
           if (!["PageHeader", "AppHeader"].includes(node.parent.name.name)) return;
           if (node.value?.type !== "JSXExpressionContainer") return;
-          const expression = node.value.expression;
-          const name =
-            expression.type === "Identifier"
-              ? expression.name
-              : expression.type === "MemberExpression"
-                ? keyName(expression.property, expression.computed)
-                : undefined;
-          if (name && /(?:^name$|^id$|Id$)/u.test(name)) report(node);
+          if (describesIdentity(node.value.expression)) report(node);
         },
         Literal: (node) => {
           if (typeof node.value !== "string" || !node.value.includes("<code")) return;

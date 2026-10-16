@@ -100,6 +100,33 @@ describe("asset boundary lint fixtures", () => {
     ).toEqual([[], [], []]);
   });
 
+  it("rejects identity interpolations in header templates while allowing descriptions", () => {
+    const rule = "catalyst/asset-head-description";
+    const invalid = [
+      "`${asset.id}`",
+      "`Name: ${asset.name}`",
+      "`${assetId}`",
+      "`${name} (${id})`",
+      '`${asset["id"]}`',
+      "`${`nested ${asset.id}`}`"
+    ];
+    const fixtures = (values: string[]) =>
+      ["PageHeader", "AppHeader"].flatMap((tag) =>
+        values.map((value) => ({
+          file: "../chat-ui/src/feature/page.tsx",
+          source: `<${tag} description={${value}} />`
+        }))
+      );
+    const headers = fixtures(invalid);
+    expect(findings(rule, headers)).toEqual(headers.map(() => [rule]));
+    const descriptions = fixtures([
+      "`${asset.description}`",
+      "`Purpose: ${description}`",
+      "`Helpful text`"
+    ]);
+    expect(findings(rule, descriptions)).toEqual(descriptions.map(() => []));
+  });
+
   it("rejects a planted route registration outside the catalog helper", () => {
     const rule = "catalyst/route-registration";
     const declaration =

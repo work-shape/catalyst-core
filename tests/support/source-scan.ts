@@ -1,3 +1,4 @@
+import ts from "typescript";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
@@ -14,7 +15,32 @@ const ANY_FILE = /(?:)/u;
 const DEMO_PERMISSION = /["'`]demo-tools["'`]/gu;
 const PERSONAL_PATH = /\/Users\/|[A-Z]:\\{1,2}Users\\{1,2}/gu;
 const GENERATED_FILE = /\.gen\.ts$/u;
-const URL_LITERAL = /https?:\/\/([A-Za-z0-9.-]+)/gu;
+// Keep explicit URLs in comments covered too. Browser authority forms are checked in
+// parsed string values below, so regex escapes such as /\\s/ are never mistaken for hosts.
+const URL_LITERAL = /https?:\/\/([A-Za-z0-9.-]+)|\b(cdn\.tailwindcss\.com|unpkg\.com)\b/giu;
+const BROWSER_URL_LITERAL = /(?:https?:[\\/]+|(?<![:\\/])[\\/]{2,})([A-Za-z0-9.-]+)/giu;
+
+function outsideHosts(text: string, file: string): string[] {
+  const hosts = new Set<string>();
+  const check = (value: string, pattern: RegExp) => {
+    for (const match of value.matchAll(pattern)) {
+      const host = (match[1] ?? match[2] ?? "").toLowerCase();
+      if (!isAddressOfNothing(match[0], host)) hosts.add(host);
+    }
+  };
+  check(text, URL_LITERAL);
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isStringLiteralLike(node) ||
+      ts.isTemplateHead(node) ||
+      ts.isTemplateMiddleOrTemplateTail(node)
+    )
+      check(node.text, BROWSER_URL_LITERAL);
+    ts.forEachChild(node, visit);
+  };
+  visit(ts.createSourceFile(file, text, ts.ScriptTarget.Latest));
+  return [...hosts];
+}
 /** A read of the environment by a name that is computed, such as `env[name]`. */
 const COMPUTED_ENV_READ = /\benv\[(?!["'])[^\]]+\](?!\s*=[^=])/gu;
 const SECRET_NAMED_ENV_READ =
@@ -31,7 +57,7 @@ function isAddressOfNothing(url: string, host: string): boolean {
   return (
     ["127.0.0.1", "localhost", "0.0.0.0", "example.com"].includes(host) ||
     /\.(?:test|example|localhost|invalid)$/u.test(host) ||
-    url.startsWith("http://schemas.") ||
+    url.toLowerCase().startsWith("http://schemas.") ||
     url === "https://git-lfs"
   );
 }
@@ -101,12 +127,7 @@ export async function scanProductSource(repositoryRoot: string): Promise<SourceS
     const path = relative(repositoryRoot, file).replaceAll("\\", "/");
     const text = await readFile(file, "utf8");
     if (!path.includes("/src/adapters/")) {
-      for (const match of text.matchAll(URL_LITERAL)) {
-        const host = match[1] ?? "";
-        if (!isAddressOfNothing(match[0], host)) {
-          scan.hostLiterals.push(`${path} ${host}`);
-        }
-      }
+      for (const host of outsideHosts(text, file)) scan.hostLiterals.push(`${path} ${host}`);
     }
     for (const _match of text.matchAll(COMPUTED_ENV_READ)) {
       scan.computedEnvReads.push(path);
