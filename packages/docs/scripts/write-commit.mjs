@@ -1,4 +1,5 @@
-// Writes the platform commit the site was built from to dist/catalyst/commit.json, as
+// Writes the package version and core commit to dist/catalyst/release.json for deployment
+// provenance. Also keeps the platform commit in dist/catalyst/commit.json, as
 // {"commit": "<sha>"}, so a reader (the hand-over check) can tell which commit the published docs
 // show. Every publish builds with this script, so the file cannot fall out of step with the site.
 //
@@ -9,9 +10,9 @@
 // Git metadata sets that variable; a value that is not 40 hexadecimal characters fails the build.
 // A checkout whose root is not the platform root (a source export inside another repository) is
 // not asked: its HEAD is another repository's. Without either the site is built without the file
-// and the script says so; the hand-over check then reports that the docs name no commit.
+// and the script says so; release:check refuses a site without release provenance.
 import { execFileSync } from "node:child_process";
-import { realpathSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,9 +45,14 @@ if (given !== undefined && given !== "" && !sha.test(given)) {
 }
 const commit = given || platformHead();
 if (commit && sha.test(commit)) {
+  const { version } = JSON.parse(readFileSync(resolve(here, "../package.json"), "utf8"));
   writeFileSync(target, `${JSON.stringify({ commit })}\n`);
+  writeFileSync(
+    resolve(here, "../dist/catalyst/release.json"),
+    `${JSON.stringify({ version, coreCommit: commit })}\n`
+  );
 } else {
   process.stderr.write(
-    "write-commit: no platform commit (no argument, and this package is not in a platform Git checkout); catalyst/commit.json is not written\n"
+    "write-commit: no platform commit (no argument, and this package is not in a platform Git checkout); catalyst/commit.json and catalyst/release.json are not written\n"
   );
 }

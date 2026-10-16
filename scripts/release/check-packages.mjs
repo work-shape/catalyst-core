@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { inspectDocsPackage } from "./check-docs.mjs";
 import { guard } from "./guard.mjs";
 import { inspectPublicPackage, PUBLIC_TOOL_DIR } from "./check-public-tarball.mjs";
 import { findMetadataDrift, listPackages, repoRoot, UNPUBLISHED } from "./package-metadata.mjs";
@@ -331,6 +332,18 @@ try {
     const size = `${(bytes / 1024).toFixed(1)} kB`;
     console.log(`${name.padEnd(40)} ${size.padStart(10)} ${String(fileCount).padStart(5)} files`);
   }
+
+  step("Docs site tarball");
+  const docs = join(workDir, "docs");
+  mkdirSync(docs);
+  run("tar", ["-xzf", tarballs.get("docs").tarball, "-C", docs]);
+  problems.push(
+    ...inspectDocsPackage(
+      join(docs, "package"),
+      lockstepVersion,
+      run("git", ["rev-parse", "HEAD"]).trim()
+    ).map((problem) => `docs: ${problem}`)
+  );
 
   step("Public tool tarball");
   const unpacked = join(workDir, "public-tool");

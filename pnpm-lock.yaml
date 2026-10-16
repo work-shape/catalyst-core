@@ -756,26 +756,25 @@ importers:
   packages/deployment-kit: {}
 
   packages/docs:
-    dependencies:
+    devDependencies:
+      '@astrojs/check':
+        specifier: ^0.9.10
+        version: 0.9.10(@emnapi/runtime@1.11.3)(prettier@3.9.10)(typescript@6.0.3)
       '@astrojs/markdown-remark':
         specifier: ^7.3.3
         version: 7.3.3
       '@astrojs/starlight':
         specifier: ^0.42.6
         version: 0.42.6(@astrojs/markdown-remark@7.3.3)(astro@7.2.10(@astrojs/markdown-remark@7.3.3)(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@24.19.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1))(typescript@6.0.3)
+      '@work-shape/catalyst-api-contract':
+        specifier: workspace:*
+        version: link:../api-contract
       astro:
         specifier: ~7.2.10
         version: 7.2.10(@astrojs/markdown-remark@7.3.3)(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@24.19.2)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.1)
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@24.19.2)
-    devDependencies:
-      '@astrojs/check':
-        specifier: ^0.9.10
-        version: 0.9.10(@emnapi/runtime@1.11.3)(prettier@3.9.10)(typescript@6.0.3)
-      '@work-shape/catalyst-api-contract':
-        specifier: workspace:*
-        version: link:../api-contract
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

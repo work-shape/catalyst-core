@@ -1,8 +1,24 @@
 {
   "name": "@work-shape/catalyst-docs",
   "version": "0.7.0",
-  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/work-shape/catalyst-core",
+    "directory": "packages/docs"
+  },
   "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "build": "rm -rf dist && node scripts/generate-api-reference.mjs && astro build --force && cp -R host/. dist/ && node scripts/write-commit.mjs \"${CATALYST_PLATFORM_COMMIT:-}\"",
     "dev": "node scripts/generate-api-reference.mjs && astro dev --host 127.0.0.1 --port 4321",
@@ -11,13 +27,11 @@
     "preview": "astro preview --host 127.0.0.1 --port 4321",
     "typecheck": "node scripts/generate-api-reference.mjs && astro check"
   },
-  "dependencies": {
+  "devDependencies": {
     "@astrojs/markdown-remark": "^7.3.3",
     "@astrojs/starlight": "^0.42.6",
     "astro": "~7.2.10",
-    "sharp": "^0.35.5"
-  },
-  "devDependencies": {
+    "sharp": "^0.35.5",
     "@astrojs/check": "^0.9.10",
     "@work-shape/catalyst-api-contract": "workspace:*",
     "typescript": "^6.0.3",

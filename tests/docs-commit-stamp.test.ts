@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +35,10 @@ function layout(platform: string) {
   mkdirSync(join(root, "packages/docs/dist/catalyst"), { recursive: true });
   const copy = join(root, "packages/docs/scripts/write-commit.mjs");
   copyFileSync(script, copy);
+  writeFileSync(
+    join(root, "packages/docs/package.json"),
+    JSON.stringify({ version: "0.8.0-rc.1" })
+  );
   return { outer, root, copy, stamp: join(root, "packages/docs/dist/catalyst/commit.json") };
 }
 
@@ -61,6 +73,10 @@ describe("docs commit stamp", () => {
     const run = stamp(paths, "");
     expect(run.status).toBe(0);
     expect(written(paths.stamp)).toEqual({ commit: head });
+    expect(written(join(dirname(paths.stamp), "release.json"))).toEqual({
+      version: "0.8.0-rc.1",
+      coreCommit: head
+    });
   });
 
   it("stamps a given commit, also without Git metadata", () => {
@@ -68,6 +84,10 @@ describe("docs commit stamp", () => {
     const run = stamp(paths, given.toUpperCase());
     expect(run.status).toBe(0);
     expect(written(paths.stamp)).toEqual({ commit: given });
+    expect(written(join(dirname(paths.stamp), "release.json"))).toEqual({
+      version: "0.8.0-rc.1",
+      coreCommit: given
+    });
   });
 
   it("fails on a given value that is not a commit", () => {
@@ -78,6 +98,7 @@ describe("docs commit stamp", () => {
       expect(run.status).toBe(1);
       expect(run.stderr).toContain("is not a 40-character commit");
       expect(existsSync(paths.stamp)).toBe(false);
+      expect(existsSync(join(dirname(paths.stamp), "release.json"))).toBe(false);
     }
   });
 
@@ -87,6 +108,7 @@ describe("docs commit stamp", () => {
     expect(run.status).toBe(0);
     expect(run.stderr).toContain("no platform commit");
     expect(existsSync(paths.stamp)).toBe(false);
+    expect(existsSync(join(dirname(paths.stamp), "release.json"))).toBe(false);
   });
 
   it("does not stamp the commit of another repository the platform tree sits in", () => {
@@ -96,5 +118,6 @@ describe("docs commit stamp", () => {
     expect(run.status).toBe(0);
     expect(run.stderr).toContain("no platform commit");
     expect(existsSync(paths.stamp)).toBe(false);
+    expect(existsSync(join(dirname(paths.stamp), "release.json"))).toBe(false);
   });
 });

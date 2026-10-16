@@ -34,7 +34,6 @@ const NODE_ENGINE = ">=22";
 export const UNPUBLISHED = {
   "app-kit":
     "Source of the App Kit; a Page never installs it, the instance serves its released files from server",
-  docs: "Astro documentation site",
   "quality-config":
     "Check tooling for this repository and capabilities, used from the platform checkout"
 };
@@ -42,6 +41,8 @@ export const UNPUBLISHED = {
 // Everything else under packages/ is published with `files: ["dist"]` and
 // `sideEffects: false` unless listed here.
 const OVERRIDES = {
+  // The static site is installed and deployed as files; it has no module entry.
+  docs: { assetsOnly: true },
   // The OpenAPI document of the release, for consumers that are not written in TypeScript.
   "api-contract": { files: ["dist", "openapi.json"] },
   // Tailwind scans dist/ in published packages. Keep only the unbuilt stylesheet and Vite

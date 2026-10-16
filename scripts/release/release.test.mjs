@@ -16,7 +16,8 @@ import { dirname, join } from "node:path";
 import { afterEach, test } from "node:test";
 import { guard } from "./guard.mjs";
 import { MIRRORED_PATHS, mirror } from "./mirror.mjs";
-import { withPublishMetadata } from "./package-metadata.mjs";
+import { inspectDocsPackage } from "./check-docs.mjs";
+import { listPackages, repoRoot, withPublishMetadata } from "./package-metadata.mjs";
 import { verifyRestricted } from "./registry.mjs";
 import { distributionTag, publish } from "./publish.mjs";
 import { assertReleaseContext, releaseVersion } from "./context.mjs";
@@ -606,4 +607,39 @@ writeFileSync(file, JSON.stringify(state));
   calls = readFileSync(state + ".calls", "utf8");
   assert.match(calls, /"--tag","release-0.7"/u);
   assert.doesNotMatch(calls, /"dist-tag","add"/u);
+});
+
+test("docs joins the restricted assets-only lockstep release set", () => {
+  const docs = listPackages().find((pkg) => pkg.dir === "docs");
+  assert.equal(docs.publishable, true);
+  assert.equal(docs.assetsOnly, true);
+  assert.equal(docs.manifest.private, undefined);
+  assert.deepEqual(docs.group, { license: "UNLICENSED", access: "restricted" });
+  assert.deepEqual(docs.manifest.files, ["dist"]);
+  assert.equal(docs.manifest.version, releaseVersion(repoRoot, `v${docs.manifest.version}`));
+  assert.ok(guard([repoRoot]).some((pkg) => pkg.dir === "docs"));
+});
+
+test("docs tarball requires the host root, matching provenance and no runtime dependencies", () => {
+  const root = fixture();
+  const commit = "0123456789abcdef0123456789abcdef01234567";
+  for (const path of [
+    "dist/catalyst/index.html",
+    "dist/catalyst/404.html",
+    "dist/catalyst/pagefind/pagefind.js",
+    "dist/catalyst/sitemap-index.xml",
+    "dist/robots.txt"
+  ])
+    write(root, path, "built site");
+  write(root, "dist/catalyst/release.json", { version: "0.7.0", coreCommit: commit });
+  assert.deepEqual(inspectDocsPackage(root, "0.7.0", commit), []);
+  assert.match(inspectDocsPackage(root, "0.8.0", commit).join(), /release version/u);
+  assert.match(inspectDocsPackage(root, "0.7.0", "a".repeat(40)).join(), /core commit/u);
+  rmSync(join(root, "dist/catalyst/release.json"));
+  rmSync(join(root, "dist/robots.txt"));
+  write(root, "package.json", { dependencies: { astro: "7.2.10" } });
+  const problems = inspectDocsPackage(root, "0.7.0", commit).join();
+  assert.match(problems, /release provenance/u);
+  assert.match(problems, /robots.txt/u);
+  assert.match(problems, /runtime dependencies/u);
 });
