@@ -553,14 +553,42 @@ describe("starters on the empty chat", () => {
     );
   });
 
-  it("keeps the agent's own prompts as they are, beside the starters", () => {
+  it("shows the agent's own prompts as starters before the skills' ones, in one style", () => {
     const markup = startPage({
       starters,
-      initialPrompts: [{ title: "Check weather", prompt: "Check it." }]
+      initialPrompts: [
+        { title: "Check weather", prompt: "What is the weather in Berlin today?" },
+        { title: "Find risks", prompt: "Find risks" }
+      ]
     });
+    const group = startersOf(markup);
+    const cards = [
+      ...(group ?? "").matchAll(/<button [^>]*class="([^"]*)"[^>]*>(.*?)<\/button>/gsu)
+    ];
 
-    expect(startersOf(markup)).not.toContain("Check weather");
-    expect(markup).toContain("Check weather");
+    // One list, one card for each: the author's prompts first, then the skills' starters.
+    expect(
+      cards.map(([, , content]) => /truncate text-label">([^<]*)</u.exec(content ?? "")?.[1])
+    ).toEqual(["Check weather", "Find risks", "Build a sheet", "Simplify a text"]);
+    expect(new Set(cards.map(([, className]) => className)).size).toBe(1);
+    // Every card leads with an icon on the same tile, so every title starts at the same edge.
+    expect(
+      cards.map(([, , content]) => /data-skill-icon="([^"]*)"/u.exec(content ?? "")?.[1])
+    ).toEqual(["prompt", "prompt", "generic", "generic"]);
+    expect(cards.every(([, , content]) => content?.includes("data-skill-icon-tile"))).toBe(true);
+    // The request stands under its title, unless it only repeats it.
+    expect(cards[0]?.[2]).toContain("What is the weather in Berlin today?");
+    expect(cards[1]?.[2]).not.toContain("text-caption");
+    // No suggestion stands outside the list.
+    expect(markup.match(/<button /gu)).toHaveLength(4);
+  });
+
+  it("shows the agent's own prompts as starters where its skills offer none", () => {
+    const group = startersOf(
+      startPage({ starters: [], initialPrompts: [{ title: "Check weather", prompt: "Check." }] })
+    );
+    expect(group?.match(/<button /gu)).toHaveLength(1);
+    expect(group).toContain("Check weather");
   });
 
   it("shows the empty chat as before for an agent without starters", () => {

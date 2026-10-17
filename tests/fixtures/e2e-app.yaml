@@ -137,6 +137,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member of the chat start spec, who may write no agent. No other spec uses this
+      # member.
+      - email: e2e-chat-start@example.test
+        displayLabel: E2E Zz Chat Start
+        passwordEnvName: E2E_CHAT_START_PASSWORD
+        developmentPassword: e2e-chat-start-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The member of the sidebar sections spec, who holds nothing on Apps or Workflows until
       # the spec gives them a Workflow to read. No other spec uses this member.
       - email: e2e-sidebar-sections@example.test

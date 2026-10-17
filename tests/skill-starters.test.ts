@@ -28,6 +28,17 @@ function startersOf(input: {
   toolNames?: string[];
   skills: ReturnType<typeof skill>[];
   locale?: string;
+  initialPrompts?: { title: string; prompt: string }[];
+}) {
+  return agentOf(input)?.starters;
+}
+
+function agentOf(input: {
+  skillNames: string[];
+  toolNames?: string[];
+  skills: ReturnType<typeof skill>[];
+  locale?: string;
+  initialPrompts?: { title: string; prompt: string }[];
 }) {
   const config = parseClientInstanceConfig({
     version: 1,
@@ -45,14 +56,15 @@ function startersOf(input: {
         displayName: "Agent",
         instructions: "Help.",
         skillNames: input.skillNames,
-        toolNames: input.toolNames ?? []
+        toolNames: input.toolNames ?? [],
+        ...(input.initialPrompts === undefined ? {} : { initialPrompts: input.initialPrompts })
       })
     ],
     skills: input.skills
   };
   return createSafeConfigView(config, assets, resolveInstanceModules(config, []).snapshot, {
     requestedLocale: input.locale ?? "en"
-  }).agents[0]?.starters;
+  }).agents[0];
 }
 
 describe("skill starters", () => {
@@ -105,6 +117,30 @@ describe("skill starters", () => {
     expect(
       startersOf({ skillNames: ["a", "b", "c"], skills })?.map((entry) => entry.title)
     ).toEqual(["A1", "A2", "B1", "B2"]);
+  });
+
+  it("shows four in all with the author's prompts, the author's prompts first", () => {
+    const skills = [
+      skill("a", [starter("A1"), starter("A2")]),
+      skill("b", [starter("B1"), starter("B2")])
+    ];
+    const prompts = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        title: `P${index + 1}`,
+        prompt: `Prompt ${index + 1}.`
+      }));
+    const shown = (count: number) => {
+      const agent = agentOf({ skillNames: ["a", "b"], skills, initialPrompts: prompts(count) });
+      return [
+        ...(agent?.initialPrompts ?? []).map((entry) => entry.title),
+        ...(agent?.starters ?? []).map((entry) => entry.title)
+      ];
+    };
+
+    expect(shown(0)).toEqual(["A1", "A2", "B1", "B2"]);
+    expect(shown(1)).toEqual(["P1", "A1", "A2", "B1"]);
+    expect(shown(3)).toEqual(["P1", "P2", "P3", "A1"]);
+    expect(shown(5)).toEqual(["P1", "P2", "P3", "P4"]);
   });
 
   it("carries the skill's icon for a platform skill only", () => {

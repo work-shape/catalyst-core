@@ -44,7 +44,17 @@ type ModuleSwitches = Record<string, { enabled: boolean }>;
 /** The editing limits of the instance. Each test instance may set its own. */
 type EditingLimits = Record<string, boolean | string[]>;
 
-const configWith = (editingLimits: EditingLimits, modules: ModuleSwitches = {}) =>
+/** The two bindings agents may name, without a choice of reasoning effort. */
+const PLAIN_MODEL_BINDINGS: readonly Record<string, unknown>[] = [
+  { id: "plain", providerId: "local" },
+  { id: "other", providerId: "local" }
+];
+
+const configWith = (
+  editingLimits: EditingLimits,
+  modules: ModuleSwitches = {},
+  modelBindings = PLAIN_MODEL_BINDINGS
+) =>
   parseClientInstanceConfig({
     modules,
     version: 1,
@@ -73,10 +83,7 @@ const configWith = (editingLimits: EditingLimits, modules: ModuleSwitches = {}) 
       }
     },
     infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
-    modelBindings: [
-      { id: "plain", providerId: "local" },
-      { id: "other", providerId: "local" }
-    ],
+    modelBindings,
     tools: [
       { name: "known.tool", enabled: true },
       { name: "second.tool", enabled: true }
@@ -274,6 +281,8 @@ export interface AccessInstanceOptions {
   fastModeModelBindingIds?: string[];
   /** Switches of `modules`, such as `{ connections: { enabled: true } }`. */
   modules?: ModuleSwitches;
+  /** The bindings `plain` and `other` with fields of their own, such as efforts to choose. */
+  modelBindings?: readonly Record<string, unknown>[];
   /**
    * The runtime reads the stored agents and skills, as an assembled instance does, so what a
    * workspace offers follows the writes. Left out, the runtime sees none.
@@ -292,7 +301,7 @@ export async function setupAccessInstance(
   options: AccessInstanceOptions = {}
 ): Promise<AccessInstance> {
   const { operations, furtherToolNames = [], editingLimits = {}, furtherKinds = [] } = options;
-  const config = configWith(editingLimits, options.modules);
+  const config = configWith(editingLimits, options.modules, options.modelBindings);
   const validationRefs = {
     modelProviderIds: ["local"],
     modelBindingIds: ["plain", "other"],

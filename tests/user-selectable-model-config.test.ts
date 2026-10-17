@@ -308,6 +308,66 @@ describe("user-selectable model config", () => {
     ]);
   });
 
+  it("offers a reader who may not write the agent an effort only where its author left it open", () => {
+    const config = parseClientInstanceConfig({
+      version: 1,
+      clientInstance: {
+        id: "effort-choice-test",
+        displayName: "Effort",
+        environment: "development"
+      },
+      infrastructure: {
+        models: {
+          openai: { provider: "openai-compatible", region: "global", model: "gpt-5.6-sol" }
+        }
+      },
+      modelBindings: [
+        { id: "sol", providerId: "openai", model: "gpt-5.6-sol" },
+        { id: "luna", providerId: "openai", model: "gpt-5.6-luna" },
+        { id: "terra", providerId: "openai", model: "gpt-5.6-terra" }
+      ]
+    });
+    const agent = (name: string, fields: Record<string, unknown>) => ({
+      name,
+      displayName: name,
+      instructions: "Help the user.",
+      modelBindingId: "sol",
+      toolNames: [],
+      skillNames: [],
+      initialPrompts: [],
+      ...fields
+    });
+    const assets = {
+      version: 1,
+      agents: [
+        agent("set", { reasoningEffort: "high" }),
+        agent("open", {}),
+        agent("models", {
+          reasoningEffort: "high",
+          userSelectableModelBindingIds: ["luna", "terra"],
+          modelReasoningEfforts: { luna: "low" }
+        })
+      ],
+      skills: []
+    };
+    const view = (mayWriteAgent?: (agentName: string) => boolean) =>
+      createSafeConfigView(config, assets, resolveInstanceModules(config, []).snapshot, {
+        reasoningEffortsOfBinding: adapterEfforts(config),
+        ...(mayWriteAgent === undefined ? {} : { mayWriteAgent })
+      }).agents.map((offered) =>
+        offered.selectableModels.map((model) => model.selectableReasoningEfforts.length)
+      );
+    const all = defaultChoice.selectableReasoningEfforts.length;
+
+    // A member: the effort the author set is no choice, one left open is, and a second model
+    // is a choice by itself.
+    expect(view(() => false)).toEqual([[0], [all], [0, 0, all]]);
+    // Whoever may write the agent is offered what the bindings allow, as is every reader of a
+    // view that names no reader.
+    expect(view((agentName) => agentName === "set")).toEqual([[all], [all], [0, 0, all]]);
+    expect(view()).toEqual([[all], [all], [all, all, all]]);
+  });
+
   it("derives one of six usage tiers from the blended price, on bounds that double", () => {
     // Input and output at the same price blend to that price.
     const tierAt = (price: number) =>

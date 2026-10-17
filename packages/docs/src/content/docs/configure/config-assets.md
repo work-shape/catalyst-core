@@ -93,7 +93,7 @@ starters:
 
 - `title` and the optional `hint` are one line of at most 60 characters each. `prompt` is the text that fills the composer when the starter is chosen. Nothing is sent until the person sends it. Each of the three is one text or one text per language (`en`, `de`).
 - `tools` is optional. A starter shows only for an agent that holds every tool it names, so it never offers what the agent cannot do.
-- The chat shows at most four starters for an agent, the skills in the order the agent lists them. An agent whose skills carry none shows the empty chat as before.
+- The chat shows at most four suggestions for an agent. The agent's own `initialPrompts` come first, and the skills' starters fill the places left, the skills in the order the agent lists them. All of them look the same in one list: an icon, the title, and the prompt or hint as the line under it. An agent with four prompts of its own shows no skill starters.
 
 The server URL can come from a named `catalyst.yaml` instance or directly from `--instance https://catalyst.example.com`. The CLI signs in one of two ways:
 
@@ -232,7 +232,7 @@ modelReasoningEfforts:
 
 - Every id must be a binding agents may use (`agentSelectable` not `false` in release config); anything else is a validation error when the list is saved or pushed. The binding-level `userSelectable` key has no effect. The agent's own `modelBindingId` is always available and need not be listed.
 - Studio shows the models in the agent's **Model** section: **Default model** picks `modelBindingId`, and a tick per model under **Models people can choose in chat** fills this list. The default is always offered and has no tick of its own. Changing the default leaves the other ticks as they are, so tick the previous default to keep offering it.
-- The composer shows a model picker with the agent's own model first, followed by the list. With an empty list there is no model to choose; the picker then appears only if the agent's own model offers a choice of reasoning effort, see [what the model picker shows](/configure/release-config/#what-the-model-picker-shows). Switching the agent updates the options and falls back to the new agent's own model when it does not offer the current pick.
+- The composer shows a model picker with the agent's own model first, followed by the list. With an empty list there is no model to choose; the picker then appears only if the agent's own model offers a choice of reasoning effort, and to a person who may not write the agent only if the agent leaves that effort open (no `reasoningEffort`), see [what the model picker shows](/configure/release-config/#what-the-model-picker-shows). Switching the agent updates the options and falls back to the new agent's own model when it does not offer the current pick.
 - The server rejects a run that requests a model the resolved agent does not offer.
 - An id whose binding is later removed or set to `agentSelectable: false` is ignored instead of failing the agent. It stays in the stored config until the list is next changed.
 - Reasoning effort is set per model. `reasoningEffort` is the effort of the agent's own model. `modelReasoningEfforts` maps a listed binding id to the effort for runs where a user picked that model; without an entry the binding's own default applies. The agent's `reasoningEffort` is never applied to a model the user picked instead. Every key must be in `userSelectableModelBindingIds`; anything else is a validation error.

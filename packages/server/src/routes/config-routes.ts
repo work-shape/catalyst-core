@@ -5,7 +5,7 @@ import {
   moduleConfigKey,
   readDatabaseReadiness
 } from "@work-shape/catalyst-core";
-import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
+import { agentWriter, getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
 import { agentConnections } from "../connections/agent-connections";
 import type { Route } from "../http/route";
 import { resolveRequestLocale } from "./request-context";
@@ -31,14 +31,15 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
     })
   );
 
-  route(apiOperations["config.get"], async ({ request }) => {
+  route(apiOperations["config.get"], async ({ request, user, access }) => {
     // The instance-wide agent list is what the caller sees in their Personal Workspace.
     const assets = await getWorkspaceAssetSnapshot(options, { kind: "personal" });
     const config = createSafeConfigView(options.config, assets, options.modules, {
       requestedLocale: resolveRequestLocale(options, request),
       reasoningEffortsOfBinding: (bindingId) =>
         options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
-      connections: await agentConnections(options)
+      connections: await agentConnections(options),
+      mayWriteAgent: agentWriter({ user, access }, assets)
     });
     return {
       ...config,

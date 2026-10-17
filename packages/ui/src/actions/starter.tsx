@@ -49,6 +49,8 @@ export interface StarterListProps {
 /**
  * Starters side by side in two columns, one column where the room is narrow. The list's own
  * width decides, not the window's: in a dock beside a page it keeps one column at any window.
+ * Every starter of a list stands as high as the highest, so one without a hint or an icon looks
+ * like the others.
  */
 export function StarterList({ label, children, className }: StarterListProps) {
   return (
@@ -57,7 +59,7 @@ export function StarterList({ label, children, className }: StarterListProps) {
       aria-label={label}
       className={cn("@container/starters w-full min-w-0", className)}
     >
-      <div className="grid gap-2 @[32.5rem]/starters:grid-cols-2">{children}</div>
+      <div className="grid auto-rows-fr gap-2 @[32.5rem]/starters:grid-cols-2">{children}</div>
     </div>
   );
 }

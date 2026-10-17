@@ -1,6 +1,7 @@
 import { auditActorFromUser } from "@work-shape/catalyst-core";
 import {
   AppError,
+  type ActorAccess,
   type ConversationFollowUp,
   type PlatformStores,
   type JobId,
@@ -20,12 +21,14 @@ import {
   getAuthPrincipal,
   getAuthScopes,
   getSubjectUserId,
+  authorReasoningEffort,
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
-  reasoningEffortChoiceForBinding
+  reasoningEffortChoiceForBinding,
+  reasoningEffortsOffered
 } from "@work-shape/catalyst-core";
 import { resolveModelBinding } from "@work-shape/catalyst-config-schema";
-import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
+import { agentWriter, getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
 import { createEmptyAttachmentManifest } from "./attachments";
 import { monitorRunLifecycle } from "./run-lifecycle-monitor";
 import { createConversationTitle } from "./conversation-title";
@@ -37,6 +40,11 @@ export interface SendConversationMessageCommand {
   agentName?: string;
   modelBindingId?: string;
   reasoningEffort?: ReasoningEffortConfig;
+  /**
+   * What the caller may do. A caller who may not write the agent is held to the efforts its
+   * author left open. Left out, the caller is held as a writer is.
+   */
+  access?: ActorAccess;
   idempotencyKey?: string;
   text: string;
   followUp?: "queue";
@@ -76,13 +84,15 @@ export class RunStartWorkflow {
    * An agent that is unknown and one that is not available in this workspace are
    * indistinguishable to the caller. A requested model must be one this agent offers to
    * users: its own binding or one of its user-selectable bindings. A requested reasoning
-   * effort must be one the model that will run offers to users.
+   * effort must be one the model that will run offers to users, and for a caller who may not
+   * write the agent one its author left open or the one its author set (UX audit ruling 4).
    */
   private async resolveRunSelection(
     workspace: CollaborationWorkspace,
     requestedAgentName: string | undefined,
     requestedModelBindingId: string | undefined,
     requestedReasoningEffort: ReasoningEffortConfig | undefined,
+    caller: { user: AuthenticatedUser; access?: ActorAccess },
     acceptedFollowUp = false
   ): Promise<{
     agentName: string;
@@ -114,7 +124,8 @@ export class RunStartWorkflow {
     ) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `Model binding '${requestedModelBindingId}' is not available for user selection`
+        `Model binding '${requestedModelBindingId}' is not available for user selection`,
+        { reason: "model_not_offered" }
       );
     }
     // A follow-up already accepted this effort, including an agent default whose picker is
@@ -125,7 +136,7 @@ export class RunStartWorkflow {
         (candidate) => candidate.id === bindingId
       );
       const selection = binding && resolveModelBinding(this.options.config, binding.id);
-      const offered = selection
+      const allowed = selection
         ? reasoningEffortChoiceForBinding(
             binding,
             this.options.modelGateway.capabilities({ bindingId: binding.id }).reasoningEfforts,
@@ -133,10 +144,22 @@ export class RunStartWorkflow {
               selection.reasoningEffort
           ).selectable
         : [];
-      if (!offered.includes(requestedReasoningEffort)) {
+      // The rule the config view offers by: a caller who may not write the agent is offered no
+      // other effort where its author set one, and may still name the author's.
+      const authorEffort = agent && authorReasoningEffort(agent, bindingId);
+      const mayWrite =
+        !agent ||
+        !caller.access ||
+        agentWriter({ user: caller.user, access: caller.access }, assets)(agent.name);
+      const offered = reasoningEffortsOffered(allowed, authorEffort, mayWrite);
+      if (
+        !offered.includes(requestedReasoningEffort) &&
+        !(!mayWrite && requestedReasoningEffort === authorEffort)
+      ) {
         throw new AppError(
           "VALIDATION_FAILED",
-          `Reasoning effort '${requestedReasoningEffort}' is not available for user selection`
+          `Reasoning effort '${requestedReasoningEffort}' is not available for user selection`,
+          { reason: "effort_not_offered" }
         );
       }
     }
@@ -196,6 +219,7 @@ export class RunStartWorkflow {
         command.agentName,
         command.modelBindingId,
         command.reasoningEffort,
+        { user, access: command.access },
         Boolean(command.dispatchFollowUpId)
       );
       const attachments = this.options.attachments;
@@ -390,7 +414,8 @@ export class RunStartWorkflow {
         await this.conversations.resolveTargetWorkspace(user, command.collaborationWorkspaceId),
         command.agentName,
         command.modelBindingId,
-        command.reasoningEffort
+        command.reasoningEffort,
+        { user, access: command.access }
       );
       const conversation = await this.conversations.createConversation(user, context, {
         title: command.title ?? createConversationTitle(command.text),

@@ -26,6 +26,7 @@ import {
   CollaborationWorkspaceWorkflow,
   type WorkspaceChangeCall
 } from "../workspaces/collaboration-workspace-service";
+import { agentWriter } from "../workspaces/agent-availability";
 import { requireWorkspaceAccess } from "../workspaces/workspace-access";
 import { findWorkspaceFiles } from "../workspaces/workspace-files";
 import { deletionState } from "./deletion-answer";
@@ -191,7 +192,8 @@ export function registerCollaborationWorkspaceRoutes(
           requestedLocale: resolveRequestLocale(options, request),
           reasoningEffortsOfBinding: (bindingId) =>
             options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
-          connections: await agentConnections(options)
+          connections: await agentConnections(options),
+          mayWriteAgent: agentWriter({ user, access }, assets)
         }
       );
       return {

@@ -647,8 +647,16 @@ entry and its region.
 ### What the model picker shows
 
 The composer's model picker appears when the agent offers more than one model, or when its
-only model offers a choice of reasoning effort. It opens as a two-row menu, model and
-reasoning; each row leads to its own panel. Four optional binding keys feed it:
+only model offers a choice of reasoning effort. A person who may not write the agent is offered
+a choice of effort only for a model whose effort the agent's author left open: where the agent
+sets `reasoningEffort` for its own model, or an entry of `modelReasoningEfforts` for a listed
+one, the efforts the binding allows are no choice for that person. An agent with one model and
+a set effort therefore shows its members no picker; whoever may write the agent still sees the
+efforts the binding allows. Starting a run holds to the same rule: `conversations.runs.create`
+and `conversations.runs.start` refuse such a person another effort with `422` and the reason
+`effort_not_offered`, and a model the agent does not offer with the reason `model_not_offered`.
+Naming the author's effort, or none, starts the run. It opens as a two-row menu, model and reasoning; each row leads to
+its own panel. Four optional binding keys feed it:
 
 ```yaml
 modelBindings:

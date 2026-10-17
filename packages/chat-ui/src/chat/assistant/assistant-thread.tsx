@@ -483,13 +483,10 @@ export function ThreadWelcomeHeading({
   );
 }
 
-// A suggestion is an outlined pill: hairline, no fill, no shadow, the hover fill.
-const suggestionChipClassName =
-  "inline-flex min-h-8 max-w-full items-center rounded-full border px-3 py-1 text-left text-body transition-colors hover:bg-state-hover focus-visible:focus-ring";
-
 /**
- * What the start page offers under the composer: the starters, then the agent's own prompts.
- * A conversation about an App or a Workflow offers what a person changes on it instead.
+ * What the start page offers under the composer: the starters, then the agent's own prompts,
+ * all in one list of the same cards. A conversation about an App or a Workflow offers what a
+ * person changes on it instead.
  */
 export function ThreadStartBlock({
   initialPrompts,
@@ -525,10 +522,30 @@ export function ThreadStartBlock({
   }
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
-      {/* What the agent's skills offer to begin with. Choosing one fills the composer and
-          sends nothing, so the person reads and completes the request first. */}
-      {starters.length > 0 ? (
+      {/* The requests the agent's author wrote, then what its skills offer to begin with: four
+          at most, which the server keeps. Choosing one fills the composer and sends nothing, so
+          the person reads and completes the request first. */}
+      {starters.length > 0 || initialPrompts.length > 0 ? (
         <StarterList label={t("chatStarters")}>
+          {/* The request itself is the hint of the author's own, unless it only repeats the title. */}
+          {initialPrompts.map((initialPrompt) => (
+            <ThreadPrimitive.Suggestion
+              key={`${initialPrompt.title}:${initialPrompt.prompt}`}
+              prompt={initialPrompt.prompt}
+              asChild
+            >
+              <Starter
+                icon={<SkillIcon icon="prompt" size="lg" />}
+                title={initialPrompt.title}
+                hint={
+                  initialPrompt.prompt.trim() === initialPrompt.title.trim()
+                    ? undefined
+                    : initialPrompt.prompt
+                }
+                onClick={onStarterChosen}
+              />
+            </ThreadPrimitive.Suggestion>
+          ))}
           {starters.map((starter, index) => (
             <ThreadPrimitive.Suggestion
               key={`${index}:${starter.skillName}:${starter.title}`}
@@ -544,19 +561,6 @@ export function ThreadStartBlock({
             </ThreadPrimitive.Suggestion>
           ))}
         </StarterList>
-      ) : null}
-      {initialPrompts.length > 0 ? (
-        <div className="flex flex-wrap justify-center gap-2">
-          {initialPrompts.map((initialPrompt) => (
-            <ThreadPrimitive.Suggestion
-              key={`${initialPrompt.title}:${initialPrompt.prompt}`}
-              prompt={initialPrompt.prompt}
-              className={suggestionChipClassName}
-            >
-              {initialPrompt.title}
-            </ThreadPrimitive.Suggestion>
-          ))}
-        </div>
       ) : null}
       <div data-slot="workspace-apps" className="empty:hidden" />
     </div>

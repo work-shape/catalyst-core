@@ -68,7 +68,7 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
 
   route(
     apiOperations["conversations.runs.start"],
-    async ({ user, context, params, body, request }) => {
+    async ({ user, access, context, params, body, request }) => {
       // The descriptor carries one scope; starting a run needs this second one as well.
       requireAuthScope(user, "run:start");
       const conversationId = conversationIdParam(params);
@@ -77,6 +77,7 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
         agentName: body.agentName,
         modelBindingId: body.modelBindingId,
         reasoningEffort: body.reasoningEffort,
+        access,
         idempotencyKey: body.idempotencyKey,
         text: body.message.text,
         followUp: body.followUp
@@ -92,34 +93,38 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
     }
   );
 
-  route(apiOperations["conversations.runs.create"], async ({ user, context, body, request }) => {
-    // The descriptor carries one scope; starting a run needs this second one as well.
-    requireAuthScope(user, "run:start");
-    const localizedContext = withRequestLocale(context, options, request, body.locale);
-    const started = await startWorkflow.createConversationAndStartMessageRun(
-      user,
-      localizedContext,
-      {
-        agentName: body.agentName,
-        modelBindingId: body.modelBindingId,
-        reasoningEffort: body.reasoningEffort,
-        idempotencyKey: body.idempotencyKey,
-        text: body.message.text,
-        title: body.conversation?.title,
-        collaborationWorkspaceId: body.conversation?.collaborationWorkspaceId
-          ? asCollaborationWorkspaceId(body.conversation.collaborationWorkspaceId)
-          : undefined,
-        ...(body.conversation?.subject ? { subject: body.conversation.subject } : {})
-      }
-    );
-    return createStartRunResponse(
-      request,
-      started.conversation,
-      started.userMessage,
-      started.run,
-      user
-    );
-  });
+  route(
+    apiOperations["conversations.runs.create"],
+    async ({ user, access, context, body, request }) => {
+      // The descriptor carries one scope; starting a run needs this second one as well.
+      requireAuthScope(user, "run:start");
+      const localizedContext = withRequestLocale(context, options, request, body.locale);
+      const started = await startWorkflow.createConversationAndStartMessageRun(
+        user,
+        localizedContext,
+        {
+          agentName: body.agentName,
+          modelBindingId: body.modelBindingId,
+          reasoningEffort: body.reasoningEffort,
+          access,
+          idempotencyKey: body.idempotencyKey,
+          text: body.message.text,
+          title: body.conversation?.title,
+          collaborationWorkspaceId: body.conversation?.collaborationWorkspaceId
+            ? asCollaborationWorkspaceId(body.conversation.collaborationWorkspaceId)
+            : undefined,
+          ...(body.conversation?.subject ? { subject: body.conversation.subject } : {})
+        }
+      );
+      return createStartRunResponse(
+        request,
+        started.conversation,
+        started.userMessage,
+        started.run,
+        user
+      );
+    }
+  );
 
   route(
     apiOperations["conversations.runs.command"],

@@ -91,6 +91,11 @@ export interface RuntimeAssetSnapshot {
   defaultAgentName?: string;
   agents: AgentConfig[];
   skills: RuntimeSkill[];
+  /**
+   * The id and the owner of each agent by its name, where the source read them: what a right
+   * on one agent is decided on.
+   */
+  agentKeys?: ReadonlyMap<string, { id: string; scope: AssetScope }>;
 }
 
 export interface ConfigAssetSource {

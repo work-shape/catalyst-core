@@ -184,11 +184,35 @@ export function defaultReasoningEffortForAgentBinding(
   agent: Pick<AgentConfig, "modelBindingId" | "reasoningEffort" | "modelReasoningEfforts">,
   binding: Pick<ModelBindingConfig, "id" | "reasoningEffort">
 ): ReasoningEffortConfig | undefined {
-  return (
-    (binding.id === agent.modelBindingId
-      ? agent.reasoningEffort
-      : agent.modelReasoningEfforts?.[binding.id]) ?? binding.reasoningEffort
-  );
+  return authorReasoningEffort(agent, binding.id) ?? binding.reasoningEffort;
+}
+
+/**
+ * The reasoning effort the agent's author set for one of its models: `reasoningEffort` for its
+ * own, `modelReasoningEfforts` for one listed for users. Without one the effort is left open.
+ */
+export function authorReasoningEffort(
+  agent: Pick<AgentConfig, "modelBindingId" | "reasoningEffort" | "modelReasoningEfforts">,
+  bindingId: string | undefined
+): ReasoningEffortConfig | undefined {
+  return bindingId === agent.modelBindingId
+    ? agent.reasoningEffort
+    : bindingId === undefined
+      ? undefined
+      : agent.modelReasoningEfforts?.[bindingId];
+}
+
+/**
+ * The efforts a person is offered for one of an agent's models (UX audit ruling 4). Whoever may
+ * write the agent is offered what the model allows. Every other person is offered no other
+ * effort where the author set one: the efforts a model allows are no choice by themselves.
+ */
+export function reasoningEffortsOffered(
+  allowed: readonly ReasoningEffortConfig[],
+  authorEffort: ReasoningEffortConfig | undefined,
+  mayWriteAgent: boolean
+): ReasoningEffortConfig[] {
+  return mayWriteAgent || authorEffort === undefined ? [...allowed] : [];
 }
 
 /**

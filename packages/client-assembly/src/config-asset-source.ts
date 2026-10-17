@@ -69,7 +69,12 @@ export function createConfigAssetSource(input: {
         version: state.version,
         defaultAgentName: defaultAgentExcluded ? agents[0]?.name : state.defaultAgentName,
         agents,
-        skills
+        skills,
+        agentKeys: new Map(
+          assets
+            .filter((asset) => asset.kind === "agent")
+            .map((asset) => [asset.name, { id: asset.id, scope: asset.scope }])
+        )
       };
     },
     async getSkill(name) {

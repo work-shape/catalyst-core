@@ -2,9 +2,11 @@ import { OPERATION_EFFECTS } from "@work-shape/catalyst-asset-schemas";
 import {
   AGENT_STARTERS_MAX,
   SUBJECT_TOOL_PREFIX,
+  authorReasoningEffort,
   defaultReasoningEffortForAgentBinding,
   modelUsageTierFromRates,
   reasoningEffortChoiceForBinding,
+  reasoningEffortsOffered,
   userSelectableModelBindingsForAgent,
   type LocaleCode,
   type LocalizedStringConfig,
@@ -38,6 +40,13 @@ export interface SafeConfigViewOptions extends ConfigLocaleInput {
    * those its own tools reach. Left out, no agent names a Connection.
    */
   connections?: readonly SafeConfigConnection[];
+  /**
+   * Whether the reader may write the agent of this name. A reader who may not is offered a
+   * reasoning effort only where the agent's author left it open: the efforts a model binding
+   * allows are no choice by themselves (UX audit, ruling 4). Left out, every reader is offered
+   * what a writer is.
+   */
+  mayWriteAgent?: (agentName: string) => boolean;
 }
 
 /** One Connection as a conversation names it: what a tool call touched, and its icon. */
@@ -125,7 +134,11 @@ export function createSafeConfigView(
       ),
       ...compactionThresholdView(getModelSelectionForAgent(config, agent).provider),
       ...(agent.modelBindingId ? { defaultModelBindingId: agent.modelBindingId } : {}),
-      selectableModels: agentSelectableModels(models, agent),
+      selectableModels: agentSelectableModels(
+        models,
+        agent,
+        options.mayWriteAgent?.(agent.name) ?? true
+      ),
       ...(agent.toolNames.includes(ASSET_PUT_TOOL) ? { buildsAssets: true } : {}),
       welcomeMessage: resolveLocalizedString(
         agent.welcomeMessage,
@@ -137,7 +150,9 @@ export function createSafeConfigView(
         locale,
         config.localization.defaultLocale
       ),
-      initialPrompts: agent.initialPrompts.map((initialPrompt) => ({
+      // The author's prompts and the skills' starters share the start page's four places,
+      // the author's prompts first.
+      initialPrompts: agent.initialPrompts.slice(0, AGENT_STARTERS_MAX).map((initialPrompt) => ({
         title: resolveLocalizedString(
           initialPrompt.title,
           locale,
@@ -149,7 +164,12 @@ export function createSafeConfigView(
           config.localization.defaultLocale
         )
       })),
-      starters: agentStarters(agent, assets.skills, locale, config.localization.defaultLocale),
+      starters: agentStarters(
+        agent,
+        assets.skills,
+        locale,
+        config.localization.defaultLocale
+      ).slice(0, Math.max(0, AGENT_STARTERS_MAX - agent.initialPrompts.length)),
       connections: agentConnections(agent, options.connections ?? [])
     })),
     ui
@@ -178,7 +198,8 @@ function agentConnections(agent: AgentConfig, connections: readonly SafeConfigCo
 
 /**
  * The starters the empty chat offers for an agent: those of its skills, the skills in the
- * order the agent names them, at most `AGENT_STARTERS_MAX`. A starter that names a tool the
+ * order the agent names them, at most `AGENT_STARTERS_MAX`. The author's own prompts take
+ * places of these first. A starter that names a tool the
  * agent does not hold is left out, so none offers what the agent cannot do. A starter carries
  * its skill's icon only where the skill ships with the platform; every other skill's starter
  * shows the generic skill icon.
@@ -208,26 +229,47 @@ function agentStarters(
     .slice(0, AGENT_STARTERS_MAX);
 }
 
-/** The agent's own model first, then the bindings users may pick instead. */
-function agentSelectableModels(context: ModelViewContext, agent: AgentConfig) {
+/**
+ * The agent's own model first, then the bindings users may pick instead. For a reader who may
+ * not write the agent, a model whose effort the author set offers no other effort, so the
+ * composer shows no model control where the author offered no choice.
+ */
+function agentSelectableModels(context: ModelViewContext, agent: AgentConfig, writer: boolean) {
   const { config } = context;
   const own = getModelSelectionForAgent(config, agent);
+  const offered = <View extends { selectableReasoningEfforts: ReasoningEffortConfig[] }>(
+    view: View,
+    bindingId: string | undefined
+  ): View => ({
+    ...view,
+    selectableReasoningEfforts: reasoningEffortsOffered(
+      view.selectableReasoningEfforts,
+      authorReasoningEffort(agent, bindingId),
+      writer
+    )
+  });
   return [
-    modelView(context, {
-      provider: own.provider,
-      binding: own.binding,
-      model: own.model,
-      reasoningEffort: own.reasoningEffort
-    }),
+    offered(
+      modelView(context, {
+        provider: own.provider,
+        binding: own.binding,
+        model: own.model,
+        reasoningEffort: own.reasoningEffort
+      }),
+      agent.modelBindingId
+    ),
     ...userSelectableModelBindingsForAgent(agent, config.modelBindings).map((binding) => {
       const selection = resolveModelBinding(config, binding.id);
-      return modelView(context, {
-        provider: selection.provider,
-        binding,
-        model: selection.model,
-        reasoningEffort:
-          defaultReasoningEffortForAgentBinding(agent, binding) ?? selection.reasoningEffort
-      });
+      return offered(
+        modelView(context, {
+          provider: selection.provider,
+          binding,
+          model: selection.model,
+          reasoningEffort:
+            defaultReasoningEffortForAgentBinding(agent, binding) ?? selection.reasoningEffort
+        }),
+        binding.id
+      );
     })
   ];
 }

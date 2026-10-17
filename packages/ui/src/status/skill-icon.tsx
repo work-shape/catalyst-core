@@ -36,7 +36,8 @@ export interface SkillIconProps {
  * sits on one neutral tile at `md` and `lg` and stands bare at `sm`: in ink for a skill that
  * ships with the platform, muted for the generic book. The tile is never tinted, because
  * colour means a file type and nothing else. The icon repeats the title, so it is hidden from
- * assistive technology.
+ * assistive technology. A request the agent's author wrote stands beside the skills' starters
+ * with the `prompt` icon on the same tile.
  */
 export function SkillIcon({ icon, size = "md", className }: SkillIconProps) {
   const { Icon, registered } = useRegistryIcon(icon, undefined, "skill");
