@@ -662,6 +662,11 @@ async function seedConnections(
   let created = 0;
   let total = 0;
   for (const grant of connectionGrants) {
+    const target =
+      grant.connection === undefined
+        ? connection
+        : await root.getAsset(CONNECTION_KIND, grant.connection);
+    if (!target) continue;
     const holderId = userIds.get(grant.holder);
     if (!holderId) throw new Error(`The seed has no user for '${grant.holder}'`);
     for (const verb of grant.verbs) {
@@ -674,7 +679,7 @@ async function seedConnections(
           row.action === action &&
           row.effect === "allow" &&
           row.scopeKind === "asset" &&
-          row.scopeId === connection.id
+          row.scopeId === target.id
       );
       if (there) continue;
       await (
@@ -685,7 +690,7 @@ async function seedConnections(
         action,
         effect: "allow",
         scopeKind: "asset",
-        scopeId: connection.id
+        scopeId: target.id
       });
       created += 1;
     }

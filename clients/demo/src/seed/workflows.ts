@@ -8,7 +8,7 @@ import {
   hasConnection,
   type SeedApi
 } from "./api";
-import { WORKFLOW_CONNECTION, workflowPrincipal, workflows } from "./company";
+import { WORKFLOW_CONNECTIONS, workflowPrincipal, workflows } from "./company";
 
 /** The definition of `seed/workflows/<name>/workflow.yaml`, as the engine reads it. */
 export async function readWorkflowFile(
@@ -48,7 +48,8 @@ export async function seedWorkflows(
         permissions: [...workflowPrincipal.permissions]
       })
     ).principal;
-  await grantConnectionUse(root, modules, principal.id);
+  for (const connection of WORKFLOW_CONNECTIONS)
+    await grantConnectionUse(root, modules, principal.id, connection);
   let created = 0;
   for (const name of workflows) {
     let stored = await root.getAsset(WORKFLOW_KIND, name);
@@ -76,10 +77,11 @@ export async function seedWorkflows(
 async function grantConnectionUse(
   root: SeedApi,
   modules: Awaited<ReturnType<SeedApi["listModules"]>>,
-  principalId: string
+  principalId: string,
+  connectionName: string
 ): Promise<void> {
-  if (!(await hasConnection(root, modules, WORKFLOW_CONNECTION))) return;
-  const connection = await root.getAsset(CONNECTION_KIND, WORKFLOW_CONNECTION);
+  if (!(await hasConnection(root, modules, connectionName))) return;
+  const connection = await root.getAsset(CONNECTION_KIND, connectionName);
   if (!connection) return;
   const grant: Parameters<SeedApi["grant"]>[0] = {
     holderKind: "service_principal",

@@ -1,4 +1,5 @@
 import { createEnvironmentSecrets } from "@work-shape/catalyst-client-assembly";
+import { accountingRestOptionsSchema } from "../sample-mcp/accounting/rest-options.js";
 
 /** The environment of the sample MCP server. The key is taken from the secret resolver. */
 export function readSampleMcpEnvironment() {
@@ -6,6 +7,14 @@ export function readSampleMcpEnvironment() {
     secrets: createEnvironmentSecrets(process.env),
     anchor: process.env.SAMPLE_DATA_ANCHOR,
     accountingLastMonth: process.env.SAMPLE_ACCOUNTING_LAST_MONTH,
+    accountingRest: accountingRestOptionsSchema.parse({
+      latencyMs: process.env.SAMPLE_ACCOUNTING_REST_LATENCY_MS,
+      rateLimitAfter: process.env.SAMPLE_ACCOUNTING_REST_RATE_LIMIT_AFTER,
+      rateWindowMs: process.env.SAMPLE_ACCOUNTING_REST_RATE_WINDOW_MS,
+      unavailable: process.env.SAMPLE_ACCOUNTING_REST_UNAVAILABLE,
+      unavailableClientId: process.env.SAMPLE_ACCOUNTING_REST_UNAVAILABLE_CLIENT_ID,
+      scaleDivisor: process.env.SAMPLE_ACCOUNTING_SCALE_DIVISOR
+    }),
     port: process.env.PORT,
     host: process.env.HOST,
     // The OAuth sign-in in front of `/dcr/mcp` and `/registered/mcp`, on where the issuer base

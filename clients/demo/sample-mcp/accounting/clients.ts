@@ -261,6 +261,8 @@ export interface SampleClient {
   /** The count of a month before its variation. */
   usualPostingCount: number;
   business: Business;
+  /** Rehearsal volume only; every source uses the same scaled ledger. */
+  scaleDivisor: number;
 }
 
 type Random = () => number;
@@ -302,7 +304,7 @@ function mandateStart(draw: number): string {
   return new Date(FIRST_MANDATE_DAY + day * DAY_MS + Math.floor(time)).toISOString();
 }
 
-export function createClients(seed: number): SampleClient[] {
+export function createClients(seed: number, scaleDivisor = 1): SampleClient[] {
   const order = seededGenerator(mixedSeed(seed, STREAM.order));
   // The seed decides which client has which form and size, and which pair of words. Each
   // pair occurs once, so every name is distinct, and the names follow no alphabet.
@@ -318,6 +320,7 @@ export function createClients(seed: number): SampleClient[] {
     places.map((_, index) => index),
     order
   );
+  const fullSizeClient = places.findIndex(({ size }) => size.name === "large");
   return places.map(({ form, size }, index) => {
     const random = seededGenerator(mixedSeed(seed, STREAM.client, index));
     const number = String(index + 1).padStart(4, "0");
@@ -329,6 +332,7 @@ export function createClients(seed: number): SampleClient[] {
     const usualPostingCount = Math.round(
       size.minimum * Math.pow(size.maximum / size.minimum, random())
     );
+    const divisor = index === fullSizeClient ? 1 : scaleDivisor;
     return {
       row: {
         client_id,
@@ -355,7 +359,13 @@ export function createClients(seed: number): SampleClient[] {
           : [],
       size,
       usualPostingCount,
-      business: business(profile, form.ownerRun, usualPostingCount, random)
+      scaleDivisor: divisor,
+      business: business(
+        profile,
+        form.ownerRun,
+        Math.max(SIZE_BOUNDS.micro.minimum, Math.round(usualPostingCount / divisor)),
+        random
+      )
     };
   });
 }
@@ -366,7 +376,9 @@ export function postingCount(seed: number, client: SampleClient, monthIndex: num
     mixedSeed(seed, STREAM.postingCount, client.row.client_id, monthIndex)
   );
   const varied = client.usualPostingCount * (1 + MONTHLY_VARIATION * (2 * random() - 1));
-  return Math.min(client.size.maximum, Math.max(client.size.minimum, Math.round(varied)));
+  const original = Math.min(client.size.maximum, Math.max(client.size.minimum, Math.round(varied)));
+  // Fifty rows keeps the business and planted-anomaly construction meaningful at any divisor.
+  return Math.max(SIZE_BOUNDS.micro.minimum, Math.round(original / client.scaleDivisor));
 }
 
 /** The start of the fiscal year the month belongs to, as `YYYYMMDD`. */

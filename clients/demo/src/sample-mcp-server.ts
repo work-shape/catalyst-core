@@ -25,6 +25,7 @@ try {
     key: await environment.secrets.resolve(SAMPLE_MCP_KEY_NAME),
     anchor: environment.anchor,
     accountingLastMonth: environment.accountingLastMonth,
+    accountingRest: environment.accountingRest,
     log: (line) => console.log(line)
   });
   const port = z.coerce
@@ -57,7 +58,7 @@ try {
     error instanceof SampleMcpKeyError ||
     (error instanceof Error && error.name === "SecretNotResolvedError")
       ? error.message
-      : "The sample MCP server could not start. Check SAMPLE_DATA_ANCHOR, SAMPLE_ACCOUNTING_LAST_MONTH, SAMPLE_OAUTH_ISSUER_BASE, SAMPLE_OAUTH_BROWSER_BASE, SAMPLE_OAUTH_REDIRECT_URI, PORT and HOST.";
+      : "The sample MCP server could not start. Check SAMPLE_DATA_ANCHOR, SAMPLE_ACCOUNTING_* settings, SAMPLE_OAUTH_ISSUER_BASE, SAMPLE_OAUTH_BROWSER_BASE, SAMPLE_OAUTH_REDIRECT_URI, PORT and HOST.";
   console.error(message);
   process.exitCode = 1;
 }

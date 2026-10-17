@@ -302,6 +302,8 @@ export const grants: SeedGrant[] = [
 export const SEEDED_CONNECTION = "sample-business";
 
 interface SeedConnectionGrant {
+  /** Left out, the sample business Connection. */
+  connection?: string;
   holder: PersonKey;
   verbs: ("read" | "use")[];
   grantedBy: PersonKey;
@@ -315,7 +317,15 @@ export const connectionGrants: SeedConnectionGrant[] = [
   // Sales reads the business figures and sees the Connection under Studio.
   { holder: "sven", verbs: ["read", "use"], grantedBy: "jonas" },
   // Tax may ask an agent for the figures and does not see the Connection itself.
-  { holder: "tobias", verbs: ["use"], grantedBy: "mara" }
+  { holder: "tobias", verbs: ["use"], grantedBy: "mara" },
+  ...people
+    .filter((person) => person.status === "active" && !person.invited)
+    .map((person): SeedConnectionGrant => ({
+      connection: "sample-accounting-rest",
+      holder: person.key,
+      verbs: ["use"],
+      grantedBy: person.key === "mara" ? "jonas" : "mara"
+    }))
 ];
 
 /**
@@ -416,7 +426,7 @@ export const builder: {
 
 /**
  * The service principal the seeded Workflows run as. A run acts with its rights and with
- * nobody else's: it uses the Connection `WORKFLOW_CONNECTION` and nothing more, by the one
+ * nobody else's: it uses the Connections in `WORKFLOW_CONNECTIONS`, by the scoped
  * grant the seed writes for it. `name` is what a definition names under `runAs`.
  */
 export const workflowPrincipal = {
@@ -427,7 +437,7 @@ export const workflowPrincipal = {
 };
 
 /** The Connection of the demo's release config that the seeded Workflows read. */
-export const WORKFLOW_CONNECTION = "sample-accounting";
+export const WORKFLOW_CONNECTIONS = ["sample-accounting", "sample-accounting-rest"];
 
 /** The Workflows of the demo, each a folder under `seed/workflows` with its `workflow.yaml`. */
 export const workflows = ["accounting-clients"] as const;

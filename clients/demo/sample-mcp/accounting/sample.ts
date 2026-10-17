@@ -51,10 +51,13 @@ export interface AccountingSample {
  */
 export function createAccountingSample({
   seed = ACCOUNTING_SEED,
-  lastMonth = LAST_MONTH
-}: { seed?: number; lastMonth?: string } = {}): AccountingSample {
+  lastMonth = LAST_MONTH,
+  scaleDivisor = 1
+}: { seed?: number; lastMonth?: string; scaleDivisor?: number } = {}): AccountingSample {
+  if (!Number.isSafeInteger(scaleDivisor) || scaleDivisor < 1)
+    throw new Error("scaleDivisor must be a positive safe integer.");
   const months = monthsUntil(lastMonth);
-  const clients = createClients(seed);
+  const clients = createClients(seed, scaleDivisor);
   const clientsById = new Map(clients.map((client) => [client.row.client_id, client]));
 
   function clientOf(client_id: number) {

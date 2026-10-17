@@ -5,6 +5,11 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { createAccountingSample } from "./accounting/sample.js";
 import { registerAccountingTools } from "./accounting/tools.js";
+import { createAccountingRest } from "./accounting/rest.js";
+import {
+  accountingRestOptionsSchema,
+  type AccountingRestOptions
+} from "./accounting/rest-options.js";
 import { createSampleData, utcMonthAnchor } from "./data.js";
 import { createSampleOAuth, type SampleOAuthMode, type SampleOAuthOptions } from "./oauth.js";
 import { registerSampleTools } from "./tools.js";
@@ -114,6 +119,8 @@ export function createSampleMcpServer(options: {
   accountingSeed?: number;
   /** The last month the accounting sample has bookings for, as `YYYY-MM`. Left out, it is the sample's own. */
   accountingLastMonth?: string;
+  /** REST fault injection and shared accounting volume; all off by default. */
+  accountingRest?: AccountingRestOptions;
   /** Receives one line per request to an endpoint, so the developer sees who calls. */
   log?: (line: string) => void;
   /**
@@ -125,11 +132,14 @@ export function createSampleMcpServer(options: {
   const key = z.string().min(MINIMUM_KEY_LENGTH).safeParse(options.key);
   if (!key.success) throw new SampleMcpKeyError();
   const digest = createHash("sha256").update(key.data).digest();
+  const restOptions = accountingRestOptionsSchema.parse(options.accountingRest ?? {});
   const data = createSampleData(options.anchor ?? utcMonthAnchor(options.now ?? new Date()));
   const accounting = createAccountingSample({
     seed: options.accountingSeed,
-    lastMonth: options.accountingLastMonth
+    lastMonth: options.accountingLastMonth,
+    scaleDivisor: restOptions.scaleDivisor
   });
+  const rest = createAccountingRest(accounting, restOptions);
   // Each endpoint stands for one outside system, and a Connection is one MCP address. The key
   // guards them, except the two that the authorization server of `oauth` guards.
   const oauth = options.oauth && createSampleOAuth(options.oauth, options.log);
@@ -167,6 +177,15 @@ export function createSampleMcpServer(options: {
       return;
     }
     if (oauth && (await oauth.handle(request, response, path))) return;
+    if (path.startsWith("/rest/")) {
+      const token = /^Bearer ([^\s]+)$/u.exec(request.headers.authorization ?? "")?.[1];
+      const authorized =
+        token !== undefined && timingSafeEqual(digest, createHash("sha256").update(token).digest());
+      // Do not log profile ids, client paths, headers or query values.
+      response.once("finish", () => options.log?.(`REST ${response.statusCode}`));
+      await rest(request, response, authorized);
+      return;
+    }
     const endpoint = endpoints.get(path);
     if (endpoint === undefined) {
       json(response, 404, { error: "Not found." });

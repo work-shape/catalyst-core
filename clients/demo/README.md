@@ -327,3 +327,120 @@ To exercise the tool path locally, ask for a forecast such as:
 ```text
 Check the weather forecast for Oslo for the next three days.
 ```
+
+### REST over the same sample accounting
+
+`sample-accounting-rest` is an `http_api` Connection beside the MCP Connection. Both read
+one `AccountingSample`, including its planted findings. The REST base is
+`http://sample-mcp:8787/rest` on the existing private egress entry. The key is the existing
+`DEMO_SAMPLE_MCP_KEY`; every REST call also needs `x-client-instance-id: demo-local`.
+The company seed grants `connection.use` on it to the six active demo users and
+to `workflow-demo`. The default superadmin already holds it. Disabled and invited users get
+no new grant. The MCP grants and the sample Workflow remain as they were.
+
+The REST endpoints all answer JSON arrays, with no total or next marker. The `http_api`
+connector exposes an array as `{ items }`:
+
+| Shape                   | GET path below `/rest`                                                                        | Paging                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Enterprise clients      | `/api/accounting/clients`                                                                     | `page` from 1, `page_size` from 1 to 1,000 |
+| Enterprise fiscal years | `/api/accounting/clients/{clientId}/fiscal-years`                                             | same; normally all fit in one page         |
+| Enterprise postings     | `/api/accounting/postings`                                                                    | same                                       |
+| Gateway clients         | `/datevconnect/master-data/v1/clients`                                                        | `top` from 1 to 1,000, `skip` from 0       |
+| Gateway fiscal years    | `/datevconnect/accounting/v1/clients/{clientId}/fiscal-years`                                 | same                                       |
+| Gateway postings        | `/datevconnect/accounting/v1/clients/{clientId}/fiscal-years/{fiscalYearId}/account-postings` | same                                       |
+
+Both sizes default to 100. Continue until a page is shorter than the requested size.
+Gateway client rows have `id`, `number`, `name`, `status`, `organization_number`, following
+[Exampledata's public Gateway example](https://api.exampledata.com/docs/gateway).
+`clientId` is the decimal sample client id, such as `1402`; `fiscalYearId` is its fiscal-year
+start, such as `20260101`, returned as `id` by the fiscal-year endpoint. DATEV's public
+[Accounting 1.7.4 portal](https://developer.datev.de/en/product-detail/accounting/1.7.4/overview)
+did not expose its schema to the code preparation probe. Gateway fiscal years and postings
+therefore keep the Enterprise fields, with the additional fiscal-year `id`. They do not
+claim full DATEV compatibility. The real path identifiers and row sizes still need Monday's
+probe.
+
+Postings accept repeated `filter` values, combined with AND. Fields are `client_id`, `date`
+and `fiscal_year`; operators are `eq`, `gte`, `lt`. Dates use `YYYY-MM-DD`, fiscal years
+`YYYYMMDD`. For example:
+
+```text
+/rest/api/accounting/postings?filter=client_id%20eq%201402&filter=date%20gte%202026-09-01&filter=date%20lt%202026-10-01&page=1&page_size=1000
+```
+
+Order is client id, ledger month, then the same booking order as MCP `list_postings`.
+Date ranges select the ledger period: a full month retains the deliberately wrong-date
+bookings so it equals MCP, even when a planted booking's date lies outside that month.
+For a partial-month range those dates are clamped to the ledger month's first or last day
+before filtering. This is a sample accounting convention, not a claim about DATEV's filter
+semantics. Unfiltered reads span every client and available month; Gateway postings span
+all months in the named fiscal year, including non-calendar fiscal years.
+
+`x-profile-id` is optional. Omitted or `service-account` sees all 600 clients; `team-a` sees
+1001–1300, `team-b` sees 1301–1600. Filtering happens before paging and applies to every
+client, fiscal-year and posting route. Unknown profiles return 403; out-of-scope client paths
+return 404 and posting filters return an empty array. These fixed sample scopes let CS-15
+rehearse person context. They do not enable that feature on the seeded Connection yet.
+
+`GET /rest/api/monitoring/instance/demo-local/datev-connect-health` is the Connection's
+`testPath`: health only, no accounting rows. Authentication uses Exampledata's observed
+`Authentication failed` / `Unauthorized` response; instance and profile refusals are the
+sample's own wording. Logs contain only `REST <status>`, never query values, headers or rows.
+
+The Connection declares `listClients` (Gateway), `listFiscalYears` (Gateway), `listPostings`
+(Enterprise), and `listAccountPostings` (Gateway), exposed to Workflows, agents and App
+bridges. Each description tells the caller where the ids come from and how to page.
+`listPostings.filter` is a single string until CS-5e adds array query parameters; direct REST
+already accepts repeated keys. No operation declares automatic `paging` until EW-13p.
+
+All fault switches are off unless set. They affect REST reads; the volume divisor affects
+the shared MCP/REST generator. Health does not spend the rate window or fail under the
+503 switches.
+
+| Environment variable                           | Default | Effect                                                                                                       |
+| ---------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `SAMPLE_ACCOUNTING_REST_LATENCY_MS`            | `0`     | Delay each REST call; disconnect cancels its delay                                                           |
+| `SAMPLE_ACCOUNTING_REST_RATE_LIMIT_AFTER`      | `0`     | Allow N accounting reads in a shared window, then return 429 with `Retry-After` in whole seconds; 0 disables |
+| `SAMPLE_ACCOUNTING_REST_RATE_WINDOW_MS`        | `60000` | Window length; the next window accepts reads again                                                           |
+| `SAMPLE_ACCOUNTING_REST_UNAVAILABLE`           | `false` | Return 503 `connector_unavailable` on accounting reads                                                       |
+| `SAMPLE_ACCOUNTING_REST_UNAVAILABLE_CLIENT_ID` | unset   | Return that 503 for reads selecting this client; keep client lists available                                 |
+| `SAMPLE_ACCOUNTING_SCALE_DIVISOR`              | `1`     | Divide monthly booking counts, rounding with a floor of 50; keep the first large client at 100,000 per month |
+
+The divisor changes the existing generator's business sizes, counts and planted findings
+together. It keeps all 600 clients, fiscal years and size classes, and with divisor 100 a
+month has fewer than 200,000 bookings including the preserved large client. No second data
+generator or stored ledger is involved. Complete-month pages generate at most the requested
+rows; skipping complete months uses their counts. Partial-month filters inspect the rows of
+overlapping months. Every 1,000-row page of the preserved large client's September ledger
+is tested below 1 MiB.
+
+Compose changes are deliberately deferred until KB-ISO-2 lands. These variables are read
+by the sample server already, so standalone runs can use them now. To try the code without
+touching a shared demo stack, from an installed worktree root:
+
+```sh
+pnpm --filter @work-shape/catalyst-demo exec node scripts/ensure-local-secrets.mjs
+pnpm --filter @work-shape/catalyst-demo build:server
+PORT=18787 HOST=127.0.0.1 SAMPLE_ACCOUNTING_SCALE_DIVISOR=100 \
+  pnpm --filter @work-shape/catalyst-demo start:sample-mcp
+```
+
+In a second terminal, from the same worktree root, this prints client rows without printing
+the key:
+
+```sh
+node --env-file=clients/demo/.env --input-type=module <<'JS'
+const response = await fetch('http://127.0.0.1:18787/rest/datevconnect/master-data/v1/clients?top=2', {
+  headers: { authorization: `Bearer ${process.env.DEMO_SAMPLE_MCP_KEY}`, 'x-client-instance-id': 'demo-local' }
+});
+console.log(response.status, await response.json());
+JS
+```
+
+For Monday's demo setup, `pnpm dev:demo` brings the Connection from release config and the
+normal company seed grants its rights. Test it under Connections, then give an agent
+`connection.sample-accounting-rest.listClients` and ask it to read two clients. The hosted
+integration test performs that call with the deterministic agent and runs a Workflow through
+a real 429 to `done` with operation-step attempt 1. No live instance or configuration is
+changed by this code preparation.

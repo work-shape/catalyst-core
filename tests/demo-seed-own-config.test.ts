@@ -54,7 +54,7 @@ describe("the demo seed on the demo's own config", () => {
       "grant rows": 34,
       "builder assets": 2,
       "approval requests": 2,
-      "connection grant rows": 3,
+      "connection grant rows": 9,
       workspaces: 1,
       "workspace members": 4,
       "workspace assets": 2,
@@ -97,9 +97,12 @@ describe("the demo seed on the demo's own config", () => {
       definitionRevisionId: items[0]?.definitionRevisionId,
       principal: { name: "workflow-demo" }
     });
-    // Its principal holds one grant, the use of the Connection the Workflow reads.
+    // Its principal can use both accounting transports.
     const connection = await client.assets.get({
       params: { kind: "connection", name: "sample-accounting" }
+    });
+    const rest = await client.assets.get({
+      params: { kind: "connection", name: "sample-accounting-rest" }
     });
     const { grants, principals } = seeded().before;
     const runner = principals.find((principal) => principal.displayLabel === "Workflow demo");
@@ -107,7 +110,16 @@ describe("the demo seed on the demo's own config", () => {
       grants
         .filter((row) => row.holderId === runner?.id)
         .map(({ action, scopeKind, scopeId }) => ({ action, scopeKind, scopeId }))
-    ).toEqual([{ action: "connection.use", scopeKind: "asset", scopeId: connection.id }]);
+        .sort((left, right) => (left.scopeId ?? "").localeCompare(right.scopeId ?? ""))
+    ).toEqual(
+      [connection, rest]
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map(({ id }) => ({
+          action: "connection.use",
+          scopeKind: "asset",
+          scopeId: id
+        }))
+    );
   });
 
   it("lists both models the seed names for the tax Namespace", () => {
@@ -137,7 +149,12 @@ describe("the demo seed on the demo's own config", () => {
     const rowsOf = (label: string) => {
       const holder = users.find((user) => user.displayLabel === label);
       return grants
-        .filter((row) => row.holderId === holder?.id && row.action.startsWith("connection."))
+        .filter(
+          (row) =>
+            row.holderId === holder?.id &&
+            row.action.startsWith("connection.") &&
+            row.scopeId === connection.id
+        )
         .map(({ action, effect, scopeKind, scopeId }) => ({ action, effect, scopeKind, scopeId }))
         .sort((left, right) => left.action.localeCompare(right.action));
     };
@@ -149,18 +166,11 @@ describe("the demo seed on the demo's own config", () => {
     });
     expect(rowsOf("Sven Olsen")).toEqual([row("connection.read"), row("connection.use")]);
     expect(rowsOf("Tobias Keller")).toEqual([row("connection.use")]);
-    // No other person holds a row: the admins hold the rights by their role, a user holds none.
-    // The fourth row is the Workflows' principal's, on the other Connection.
-    expect(grants.filter((entry) => entry.action.startsWith("connection."))).toHaveLength(4);
-    expect(
-      grants.filter(
-        (entry) => entry.action.startsWith("connection.") && entry.holderKind === "user"
-      )
-    ).toHaveLength(3);
+    expect(grants.filter((entry) => entry.scopeId === connection.id)).toHaveLength(3);
     for (const [label, held] of [
       ["Sven Olsen", true],
       ["Mara Lindqvist", true],
-      ["Elif Aydin", false]
+      ["Elif Aydin", true]
     ] as const) {
       const holder = users.find((user) => user.displayLabel === label);
       if (!holder) throw new Error(`No seeded user '${label}'`);
@@ -169,6 +179,32 @@ describe("the demo seed on the demo's own config", () => {
       });
       expect(JSON.stringify(effective).includes("connection.use"), label).toBe(held);
     }
+  });
+
+  it("grants REST use only to active demo users and the Workflow principal", async () => {
+    const { client, users, grants } = seeded().before;
+    const connection = await client.assets.get({
+      params: { kind: "connection", name: "sample-accounting-rest" }
+    });
+    const rows = grants.filter((grant) => grant.scopeId === connection.id);
+    expect(rows).toHaveLength(7);
+    expect(rows.every((row) => row.action === "connection.use" && row.effect === "allow")).toBe(
+      true
+    );
+    expect(rows.filter((row) => row.holderKind === "service_principal")).toHaveLength(1);
+    const labels = rows
+      .filter((row) => row.holderKind === "user")
+      .map((row) => users.find((user) => user.id === row.holderId)?.displayLabel);
+    expect(labels.sort()).toEqual(
+      [
+        "Mara Lindqvist",
+        "Jonas Brandt",
+        "Tobias Keller",
+        "Elif Aydin",
+        "Sven Olsen",
+        "Kai Berger"
+      ].sort()
+    );
   });
 
   it("gives the Check tab the answers the demo README promises", async () => {

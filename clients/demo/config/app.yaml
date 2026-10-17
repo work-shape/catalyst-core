@@ -53,8 +53,8 @@ modules:
   # Needs the `files` store, Execution Workspaces and the workspace command worker below.
   apps:
     enabled: true
-  # Connections: outside systems the instance may call. The demo has two, `sample-business` for
-  # its agent and `sample-accounting` for a Workflow, both below.
+  # Connections: outside systems the instance may call: sample business and accounting,
+  # with the accounting ledger available over MCP and REST.
   connections:
     enabled: true
   # Workflows: definitions stored as assets, started by hand and run on the job executor. The
@@ -327,6 +327,73 @@ connections:
       - name: list_accounts
         effect: reading
         exposure: [workflow]
+  # REST over the same accounting ledger. Paging declarations follow in EW-13p.
+  sample-accounting-rest:
+    connectorType: http_api
+    displayName: Sample accounting REST
+    description: The same invented accounting clients and bookings over REST. Read only; no real client data.
+    settings:
+      baseUrl: http://sample-mcp:8787/rest
+      headers:
+        x-client-instance-id: demo-local
+      testPath: /api/monitoring/instance/demo-local/datev-connect-health
+    authScheme: bearer
+    secret: DEMO_SAMPLE_MCP_KEY
+    operations:
+      - name: listClients
+        description: List clients before reading their fiscal years. Gateway fields include id, number and name. Use top (1 to 1000, default 100) and skip (from 0); stop at a short page. Results are under items.
+        effect: reading
+        exposure: [workflow, agent, bridge]
+        method: GET
+        path: /datevconnect/master-data/v1/clients
+        query:
+          top:
+            schema: { type: integer, minimum: 1, maximum: 1000 }
+          skip:
+            schema: { type: integer, minimum: 0 }
+      - name: listFiscalYears
+        description: List one client's fiscal years before reading its postings. clientId is an id from listClients; id in the result is the fiscalYearId. Results are under items; top and skip page as in listClients.
+        effect: reading
+        exposure: [workflow, agent, bridge]
+        method: GET
+        path: /datevconnect/accounting/v1/clients/{clientId}/fiscal-years
+        pathParams:
+          clientId:
+            schema: { type: string, pattern: "^[0-9]+$" }
+        query:
+          top:
+            schema: { type: integer, minimum: 1, maximum: 1000 }
+          skip:
+            schema: { type: integer, minimum: 0 }
+      - name: listPostings
+        description: Read sample ledger bookings with an Enterprise filter such as client_id eq 1402. Results are under items, ordered by client, ledger month and booking position. page starts at 1; page_size is 1 to 1000 (default 100); stop at a short page. Repeated filter values await array query support in CS-5e.
+        effect: reading
+        exposure: [workflow, agent, bridge]
+        method: GET
+        path: /api/accounting/postings
+        query:
+          filter:
+            schema: { type: string }
+          page:
+            schema: { type: integer, minimum: 1 }
+          page_size:
+            schema: { type: integer, minimum: 1, maximum: 1000 }
+      - name: listAccountPostings
+        description: Read one client's fiscal-year bookings through the Gateway path. Uses the sample's Enterprise posting field names. clientId and fiscalYearId come from listClients and listFiscalYears; top and skip page as in listClients. Results are under items.
+        effect: reading
+        exposure: [workflow, agent, bridge]
+        method: GET
+        path: /datevconnect/accounting/v1/clients/{clientId}/fiscal-years/{fiscalYearId}/account-postings
+        pathParams:
+          clientId:
+            schema: { type: string, pattern: "^[0-9]+$" }
+          fiscalYearId:
+            schema: { type: string, pattern: "^[0-9]{8}$" }
+        query:
+          top:
+            schema: { type: integer, minimum: 1, maximum: 1000 }
+          skip:
+            schema: { type: integer, minimum: 0 }
 runtime:
   maxSteps: 64
   repeatedToolCallLimit: 3
