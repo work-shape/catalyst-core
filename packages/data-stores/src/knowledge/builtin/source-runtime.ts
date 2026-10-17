@@ -7,6 +7,7 @@ import {
   type KnowledgeDocumentFormat,
   type KnowledgeSyncJobPayload
 } from "@work-shape/catalyst-core";
+import { requireSourceUse, type SourceAuthority } from "../source-principal";
 import type { DataStoreRuntime } from "../../runtime";
 import { knowledgeBaseDefinitionSchema } from "../definition";
 
@@ -25,6 +26,7 @@ export interface KnowledgeSourceJobsInput {
 export interface SourceJobRuntime {
   data: DataStoreRuntime;
   input: KnowledgeSourceJobsInput;
+  authority?: SourceAuthority;
 }
 export async function sourceTarget(runtime: SourceJobRuntime, payload: KnowledgeSyncJobPayload) {
   const record = await runtime.data.stores.dataStores.getDataStore({
@@ -46,6 +48,7 @@ export async function sourceTarget(runtime: SourceJobRuntime, payload: Knowledge
 export async function sourceCall<T>(
   runtime: SourceJobRuntime,
   connection: string,
+  knowledgeBaseId: string,
   parent: AbortSignal,
   call: (opened: Awaited<ReturnType<KnowledgeSourceJobsInput["openSource"]>>) => Promise<T>
 ): Promise<T> {
@@ -61,6 +64,14 @@ export async function sourceCall<T>(
   try {
     const work = (async () => {
       const opened = await runtime.input.openSource(connection, signal);
+      if (runtime.authority) await runtime.authority.require();
+      else
+        await requireSourceUse(
+          runtime.data.stores,
+          runtime.data.clientInstanceId,
+          knowledgeBaseId,
+          connection
+        );
       signal.throwIfAborted();
       const result = await call(opened);
       signal.throwIfAborted();

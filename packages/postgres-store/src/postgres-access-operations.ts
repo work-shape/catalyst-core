@@ -301,6 +301,13 @@ export function createPostgresAccessStore(
             input.excludeServicePrincipalHolders
               ? ne(permissionGrants.holderKind, "service_principal")
               : undefined,
+            input.excludeOwnedPrincipalHolders
+              ? sql`NOT (${permissionGrants.holderKind} = 'service_principal' AND EXISTS (
+                  SELECT 1 FROM ${servicePrincipals}
+                  WHERE ${servicePrincipals.clientInstanceId} = ${permissionGrants.clientInstanceId}
+                    AND ${servicePrincipals.id} = ${permissionGrants.holderId}
+                    AND ${servicePrincipals.ownerKind} IS NOT NULL))`
+              : undefined,
             input.excludeLegacyKeyRows
               ? or(
                   ne(permissionGrants.scopeKind, "instance"),

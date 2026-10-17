@@ -24,6 +24,8 @@ export const servicePrincipals = pgTable(
       .default(
         sql`('principal-' || substr(md5(random()::text || clock_timestamp()::text), 1, 12))`
       ),
+    ownerKind: text("owner_kind"),
+    ownerAssetId: text("owner_asset_id"),
     displayLabel: text("display_label").notNull(),
     description: text("description"),
     status: text("status").$type<ServicePrincipalRecord["status"]>().notNull(),
@@ -36,6 +38,11 @@ export const servicePrincipals = pgTable(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true })
   },
   (table) => [
+    uniqueIndex("service_principals_client_owner_idx").on(
+      table.clientInstanceId,
+      table.ownerKind,
+      table.ownerAssetId
+    ),
     index("service_principals_client_label_idx").on(table.clientInstanceId, table.displayLabel),
     uniqueIndex("service_principals_client_id_idx").on(table.clientInstanceId, table.id),
     uniqueIndex("service_principals_client_name_idx").on(table.clientInstanceId, table.name),

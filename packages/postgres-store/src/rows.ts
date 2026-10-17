@@ -628,6 +628,9 @@ export function mapServicePrincipal(
     id: asServicePrincipalId(row.id),
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     name: row.name,
+    ...(row.ownerKind && row.ownerAssetId
+      ? { owner: { kind: row.ownerKind, assetId: row.ownerAssetId } }
+      : {}),
     displayLabel: row.displayLabel,
     description: row.description ?? undefined,
     status: row.status,

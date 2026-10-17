@@ -129,6 +129,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     assetKinds: [workflowAssetKind(dataStores)],
     knowledgeBackend: dataStores.knowledgeBackend,
     knowledgeSourceJobs: dataStores.knowledgeSourceJobs,
+    knowledgeSources: dataStores.knowledgeSources,
     operationSources: () => [dataStores.operationSource],
     start: () => ({
       jobHandlers: dataStores.jobHandlers,

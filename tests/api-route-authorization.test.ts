@@ -41,6 +41,8 @@ const authenticated = names.flatMap((name) => {
  * holder's rights are checked after the input, so a refusal for a missing right needs one.
  */
 const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
+  "knowledge_bases.sync": { source: "missing", mode: "full" },
+  "knowledge_bases.retry_documents": { source: "missing", all: true },
   "knowledge_bases.remove_documents": { documentIds: ["missing"] },
   "data_stores.query": { sql: "select 1" },
   "data_stores.insert": { table: "missing", rows: [{ id: 1 }] },
@@ -61,6 +63,7 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
   "namespaces.update": { displayName: "Team" }
 };
 const acceptedQueries: Partial<Record<ApiOperationName, Record<string, string>>> = {
+  "knowledge_bases.locate": { sourceItemId: "missing" },
   "data_stores.preview_rows": { table: "missing" },
   "data_stores.rows": { table: "missing" },
   "data_stores.value": { table: "missing", column: "missing", at: "missing" },

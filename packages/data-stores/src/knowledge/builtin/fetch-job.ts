@@ -1,3 +1,4 @@
+import { sourceAuthority, type SourceAuthority } from "../source-principal";
 import { removeAbandonedSourceSpools, sourceSpool } from "./source-spool";
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
@@ -16,6 +17,7 @@ import {
   knowledgeSourceKey,
   knowledgeIndexPayloadOfFetch,
   type JobControl,
+  type KnowledgeDocumentFailureCode,
   type KnowledgeFetchJobPayload,
   type RegisteredJobHandler
 } from "@work-shape/catalyst-core";
@@ -107,6 +109,12 @@ async function releaseCopy(
   );
 }
 
+class SourceFormatRefusal extends Error {
+  constructor(readonly code: KnowledgeDocumentFailureCode) {
+    super("The source document format is unavailable");
+  }
+}
+
 async function fetchItem(
   runtime: SourceJobRuntime,
   control: JobControl,
@@ -116,7 +124,9 @@ async function fetchItem(
   signal: AbortSignal
 ) {
   const format = sourceFormat(item);
-  if (!format) throw new DocumentSourceError("over_limit", "The source format is unavailable");
+  if (!format) throw new SourceFormatRefusal("knowledge_file_format_unsupported");
+  if (!runtime.input.documentFormats.includes(format))
+    throw new SourceFormatRefusal("knowledge_file_format_unavailable");
   // The store requires a known length for a streamed put, and Managed Files require the
   // checksum at creation. Spool on disk (never in memory), hashing while reading the source,
   // then stream that file into ObjectStorage. The row precedes the stored object, as add_files
@@ -126,25 +136,31 @@ async function fetchItem(
   try {
     const hash = createHash("sha256");
     let size = 0;
-    await sourceCall(runtime, connection, signal, async ({ capability, context }) => {
-      async function* bytes() {
-        for await (const chunk of capability.fetch(
-          { itemId: item.item_id, version: item.version, maxBytes: KNOWLEDGE_FILE_MAX_BYTES },
-          context
-        )) {
-          context.signal.throwIfAborted();
-          size += chunk.byteLength;
-          if (size > KNOWLEDGE_FILE_MAX_BYTES)
-            throw new DocumentSourceError(
-              "over_limit",
-              "The source item exceeds KNOWLEDGE_FILE_MAX_BYTES"
-            );
-          hash.update(chunk);
-          yield chunk;
+    await sourceCall(
+      runtime,
+      connection,
+      payload.knowledgeBaseId,
+      signal,
+      async ({ capability, context }) => {
+        async function* bytes() {
+          for await (const chunk of capability.fetch(
+            { itemId: item.item_id, version: item.version, maxBytes: KNOWLEDGE_FILE_MAX_BYTES },
+            context
+          )) {
+            context.signal.throwIfAborted();
+            size += chunk.byteLength;
+            if (size > KNOWLEDGE_FILE_MAX_BYTES)
+              throw new DocumentSourceError(
+                "over_limit",
+                "The source item exceeds KNOWLEDGE_FILE_MAX_BYTES"
+              );
+            hash.update(chunk);
+            yield chunk;
+          }
         }
+        await pipeline(bytes(), createWriteStream(path), { signal: context.signal });
       }
-      await pipeline(bytes(), createWriteStream(path), { signal: context.signal });
-    });
+    );
     signal.throwIfAborted();
     const contentSha256 = hash.digest("hex");
     const copy = await control.transaction((stores) =>
@@ -198,8 +214,29 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
       const { payload } = job;
       const found = await sourceTarget(runtime, payload);
       if (!found) return;
+      const active = await createSourceStore(
+        runtime.data,
+        payload.knowledgeBaseId,
+        control.signal
+      ).run(payload.syncRunId);
+      if (active?.state === "failed") return;
       const signal = AbortSignal.any([control.signal, AbortSignal.timeout(FETCH_BATCH_TIMEOUT_MS)]);
       const store = createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal);
+      let authority: SourceAuthority;
+      try {
+        authority = await sourceAuthority(
+          runtime.data.stores,
+          runtime.data.clientInstanceId,
+          payload.knowledgeBaseId,
+          found.source.connection
+        );
+      } catch (error) {
+        if (documentSourceErrorCodeOf(error) !== "unauthorized") throw error;
+        await sourceTransaction(runtime.data, payload, control, (store) =>
+          store.finish(payload, "knowledge_source_refused")
+        );
+        return;
+      }
       await removeAbandonedSourceSpools(runtime.data.clientInstanceId, payload.knowledgeBaseId);
       await enqueueKnowledgeFileCleanup(
         {
@@ -239,7 +276,7 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
         let document;
         try {
           document = await fetchItem(
-            runtime,
+            { ...runtime, authority },
             control,
             payload,
             item,
@@ -258,6 +295,12 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
               0
             );
             return;
+          }
+          if (error instanceof SourceFormatRefusal) {
+            await sourceTransaction(runtime.data, payload, control, (store) =>
+              store.failure(payload, item, error.code)
+            );
+            continue;
           }
           const code = documentSourceErrorCodeOf(error);
           if (code === "rate_limited") {

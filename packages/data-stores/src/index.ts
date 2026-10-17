@@ -1,3 +1,5 @@
+import type { KnowledgeSources } from "./knowledge/source-port";
+import { createKnowledgeSources } from "./knowledge/builtin/source-queries";
 import {
   createKnowledgeSourceJobs,
   type KnowledgeSourceJobsInput
@@ -13,6 +15,8 @@ import {
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_BASE_ASSET_KIND,
+  KNOWLEDGE_BASE_SYNC_JOB_KIND,
+  KNOWLEDGE_BASE_FETCH_JOB_KIND,
   StoreBackedAuditRecorder,
   defineAssetKind,
   defineModule,
@@ -110,6 +114,10 @@ export const knowledgeModule = defineModule({
   requires: ["dataStores"],
   kinds: [KNOWLEDGE_BASE_ASSET_KIND],
   operations: [
+    "knowledge_bases.sync",
+    "knowledge_bases.sources",
+    "knowledge_bases.source_items",
+    "knowledge_bases.locate",
     "knowledge_bases.get",
     "knowledge_bases.check",
     "knowledge_bases.query",
@@ -118,7 +126,11 @@ export const knowledgeModule = defineModule({
     "knowledge_bases.retry_documents",
     "knowledge_bases.remove_documents"
   ],
-  jobKinds: [KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND]
+  jobKinds: [
+    KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND,
+    KNOWLEDGE_BASE_SYNC_JOB_KIND,
+    KNOWLEDGE_BASE_FETCH_JOB_KIND
+  ]
 });
 
 /** What the Data Stores of one process are made of, for the assembly to put in place. */
@@ -162,6 +174,7 @@ export interface DataStores {
    * owns.
    */
   readonly knowledgeBackend: KnowledgeBackend;
+  readonly knowledgeSources: KnowledgeSources;
   /** Handlers for connector-source ingestion, on the owned-store pools. */
   knowledgeSourceJobs(input: KnowledgeSourceJobsInput): RegisteredJobHandler[];
   /**
@@ -256,6 +269,7 @@ export function createDataStores(input: {
     schedules: jobs.schedules,
     jobRetries: jobs.retries,
     knowledgeBackend: createKnowledgeBackend(runtime, input.embedding ?? {}),
+    knowledgeSources: createKnowledgeSources(runtime),
     knowledgeSourceJobs: (input) => createKnowledgeSourceJobs(runtime, input),
     async ensureVectorExtension(storeId, signal) {
       const record = await stores.dataStores.getDataStore({ clientInstanceId, id: storeId });

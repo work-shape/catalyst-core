@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "service_principals_client_owner_idx" ON "service_principals" USING btree ("client_instance_id","owner_kind","owner_asset_id");

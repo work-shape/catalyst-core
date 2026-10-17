@@ -168,6 +168,12 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * What a revision reaches beside its live revision, for the review of a held publish. A kind
    * whose publish no guardrail holds leaves it out.
    */
+  /** Unrecorded draft review lines; accounts and source boundaries must never enter runs. */
+  publishQuestion?(input: {
+    assetId: string;
+    scope: AssetScope;
+    config: unknown;
+  }): Promise<string[]>;
   publishReach?(next: JsonObject, live: JsonObject | undefined): PublishReach;
   authorizeLive?(input: {
     actor: AuthenticatedIdentity;

@@ -534,7 +534,11 @@ export async function executeAdmitted(
   let started = false;
   try {
     if (!begin) await context.emit("operation.started", "after", { status: "success" });
+    let joinedRunId: OperationExecutionContext["runId"] | undefined;
     const execution: OperationExecutionContext = {
+      joinAsyncRun: (id) => {
+        joinedRunId = id;
+      },
       runId: run.id,
       actor: call.actor,
       origin: call.origin,
@@ -553,6 +557,34 @@ export async function executeAdmitted(
     if (begin) await context.emit("operation.started", "after", { status: "success" });
     const answer = await executing;
     if (definition.completion) {
+      if (joinedRunId && joinedRunId !== run.id) {
+        const joined = await deps.runs.get({
+          clientInstanceId: run.clientInstanceId,
+          id: joinedRunId
+        });
+        if (!joined || joined.operation !== definition.name)
+          throw new AppError("INTERNAL", "The joined operation run is unavailable");
+        await endRun(context, {
+          status: "done",
+          finishedAt: now().toISOString(),
+          resultRef: `operation_run:${joinedRunId}`
+        });
+        await context.emit("operation.completed", "after", { status: "success" });
+        const result: OperationResult =
+          joined.status === "done"
+            ? { status: "done", runId: joined.id, output: joined.output?.value }
+            : joined.status === "failed"
+              ? {
+                  status: "failed",
+                  runId: joined.id,
+                  error: joined.error ?? {
+                    code: "INTERNAL",
+                    message: "The joined operation failed"
+                  }
+                }
+              : { status: "running", runId: joined.id };
+        return { result, run: joined };
+      }
       // The work goes on after the call. Whoever carries it out ends the run with its result.
       return { result: { status: "running", runId: run.id }, run };
     }

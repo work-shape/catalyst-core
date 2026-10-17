@@ -176,6 +176,14 @@ export class AssetReadWorkflow {
             })
           ).get(asset.id)
         : undefined;
+    const publishQuestion =
+      !publishedOnly && target.kind.publishQuestion
+        ? await target.kind.publishQuestion({
+            assetId: asset.id,
+            scope: asset.scope,
+            config: content.config
+          })
+        : undefined;
     const agentStatus =
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
     return {
@@ -192,6 +200,7 @@ export class AssetReadWorkflow {
         : pointersOf(target.kind, asset)),
       ...content,
       ...(runsAs === undefined ? {} : { runsAs }),
+      ...(publishQuestion?.length ? { publishQuestion } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
       updatedAt: asset.updatedAt

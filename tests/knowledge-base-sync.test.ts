@@ -1,240 +1,24 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { randomBytes } from "node:crypto";
 import postgres from "postgres";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { createJobWorker } from "@work-shape/catalyst-client-assembly";
-import { createFixtureDocumentSource, loadSecretKeyring } from "@work-shape/catalyst-connections";
-import { createDataStores, createKnowledgeBases } from "@work-shape/catalyst-data-stores";
-import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
+import { describe, expect, it, vi } from "vitest";
 import {
-  StoreBackedAuditRecorder,
-  enqueueKnowledgeIndex,
   DocumentSourceError,
-  KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_FILE_MAX_BYTES,
-  knowledgeSyncJob,
   knowledgeFetchJob,
-  knowledgeSourceKey,
   knowledgeExtractionKey,
-  readObjectBytes,
   knowledgeExtractionResultSchema,
-  type ConnectorContext,
-  type DocumentSourceCapability,
-  type KnowledgeFiles,
-  type Logger
+  readObjectBytes,
+  enqueueKnowledgeIndex
 } from "@work-shape/catalyst-core";
 import { eventually, required, waitUntil } from "./support/assertions";
-import { clientInstanceId, useDataStoreInstance } from "./support/data-store-instance";
+import { clientInstanceId } from "./support/data-store-instance";
 import { fileTestDatabaseUrl } from "./support/test-database";
-import { getTestJobs } from "./support/test-instance";
-
+import { useKnowledgeSync } from "./support/knowledge-sync";
 const KB = "sync-test";
 const SOURCE = "source";
-const silent: Logger = { debug() {}, info() {}, warn() {}, error() {}, child: () => silent };
-const target = {
-  protocol: "https",
-  host: "fixture.invalid",
-  port: 443,
-  address: "192.0.2.1",
-  family: 4,
-  network: "public"
-} as const;
-function context(signal: AbortSignal): ConnectorContext {
-  return {
-    connection: {
-      id: "fixture",
-      name: "fixture",
-      revision: 1,
-      settings: {},
-      authScheme: "bearer",
-      operations: []
-    },
-    target,
-    checkEgress: async () => target,
-    credentialFor: () => ({ scheme: "bearer", secret: "test", headers: {} }),
-    signal
-  };
-}
-
 describe("initial and full source import (KB 72, 73)", () => {
-  const { start } = useDataStoreInstance();
-  const cleanups: (() => Promise<unknown>)[] = [];
-  afterEach(async () => {
-    for (const close of cleanups.splice(0).reverse()) await close();
-  });
-
-  async function setup(
-    wrap: (source: DocumentSourceCapability) => DocumentSourceCapability = (source) => source
-  ) {
-    const instance = await start(true, undefined, undefined, undefined, { embedding: true });
-    const definition = {
-      name: KB,
-      title: "Source",
-      description: "Synced test documents",
-      methods: ["keyword", "semantic"]
-    };
-    expect(
-      (
-        await instance.api.call("assets.put", {
-          params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB },
-          payload: { config: definition, expectedRevision: null }
-        })
-      ).statusCode
-    ).toBe(200);
-    expect(
-      (
-        await instance.api.call("assets.publish", {
-          params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB },
-          payload: { revision: 1 }
-        })
-      ).statusCode
-    ).toBe(200);
-    const jobs = getTestJobs(instance.api);
-    const record = await eventually(async () => {
-      await jobs.runDue();
-      const row = await instance.stores.dataStores.findDataStoreByName({
-        clientInstanceId,
-        name: `knowledge-base:${KB}`
-      });
-      expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(3);
-      return required(row);
-    });
-    const url = new URL(await fileTestDatabaseUrl());
-    url.pathname = `/${record.location.database}`;
-    const sql = postgres(url.toString(), { max: 1, onnotice: () => undefined });
-    cleanups.push(() => sql.end());
-    const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice: () => undefined });
-    cleanups.push(() => platform.end());
-    // SRC-1b owns the publishing principal and operations. Exercise SRC-1a below that gate.
-    expect(
-      (
-        await instance.api.call("assets.put", {
-          params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB },
-          payload: {
-            config: {
-              ...definition,
-              sources: [{ id: SOURCE, connection: "fixture", folders: ["folder", "other"] }]
-            },
-            expectedRevision: 1
-          }
-        })
-      ).statusCode
-    ).toBe(200);
-    const revision = required(
-      await instance.stores.configAssets.getConfigAssetRevision({
-        clientInstanceId,
-        kind: KNOWLEDGE_BASE_ASSET_KIND,
-        name: KB,
-        revision: 2
-      })
-    );
-    await instance.stores.configAssets.publishConfigAssetRevision({
-      clientInstanceId,
-      kind: KNOWLEDGE_BASE_ASSET_KIND,
-      name: KB,
-      assetId: record.id,
-      revision: 2,
-      revisionId: revision.id
-    });
-    const fixture = createFixtureDocumentSource({ secret: "test", pageSize: 100 });
-    const capability = wrap(fixture.capability);
-    const objects = createFilesystemObjectStorage(instance.filesRoot);
-    const files: KnowledgeFiles = { objects, open: async () => undefined };
-    const dataStores = createDataStores({
-      clientInstanceId,
-      stores: instance.stores,
-      databaseUrl: await fileTestDatabaseUrl(),
-      keyring: await loadSecretKeyring({
-        keys: [{ id: "test", ref: "test" }],
-        secrets: { resolve: async () => randomBytes(32).toString("base64") }
-      }),
-      limits: { sizeLimitBytes: 1024 ** 3, poolMaxConnections: 3 },
-      logger: silent
-    });
-    cleanups.push(() => dataStores.close());
-    const embed = vi.fn(async ({ texts }: { texts: readonly string[] }) => ({
-      vectors: texts.map(() => Array.from({ length: 8 }, () => 0.25))
-    }));
-    const knowledge = createKnowledgeBases({
-      clientInstanceId,
-      stores: instance.stores,
-      backend: dataStores.knowledgeBackend,
-      embedding: {
-        defaultBinding: "embedding",
-        models: [{ bindingId: "embedding", model: "test", dimensions: 8 }]
-      },
-      documentFormats: ["txt", "markdown"],
-      maxDocuments: 10000,
-      logger: silent
-    });
-    const fileJobs = knowledge.fileJobs(
-      files,
-      new StoreBackedAuditRecorder({ clientInstanceId, store: instance.stores.audit }),
-      embed
-    );
-    const handlers = dataStores.knowledgeSourceJobs({
-      files,
-      documentFormats: ["txt", "markdown"],
-      maxDocuments: 10000,
-      openSource: async (_name, signal) => ({ capability, context: context(signal) })
-    });
-    const worker = createJobWorker({
-      clientInstanceId,
-      stores: instance.stores,
-      handlers: [...handlers, ...fileJobs.handlers],
-      logger: silent
-    });
-    cleanups.push(() => worker.stop());
-    let runNumber = 0;
-    async function sync(mode: "initial" | "full" = "initial") {
-      const syncRunId = `sync-${++runNumber}`;
-      await sql`insert into catalyst_kb.sync_runs (id, source_id, mode, operation_run_id) values (${syncRunId}, ${SOURCE}, ${mode}, 'operation')`;
-      await instance.stores.jobs.enqueue(
-        knowledgeSyncJob,
-        { knowledgeBaseId: record.id, sourceId: SOURCE, syncRunId, operationRunId: "operation" },
-        {
-          clientInstanceId,
-          subject: record.id,
-          concurrencyKey: knowledgeSourceKey(record.id, SOURCE)
-        }
-      );
-      return syncRunId;
-    }
-    async function drain(run: string) {
-      return vi.waitFor(
-        async () => {
-          // Advance only this test's scheduled retries, without depending on wall-clock sleeps.
-          await platform`update platform_jobs set run_after = now() where status = 'queued' and kind in ('knowledge_base.sync', 'knowledge_base.fetch')`;
-          await worker.runDue();
-          const [pending] =
-            await sql`select count(*)::int as n from catalyst_kb.source_items where state = 'discovered'`;
-          const [runRow] = await sql`select state from catalyst_kb.sync_runs where id = ${run}`;
-          expect(pending?.n).toBe(0);
-          expect(runRow?.state).toBe("done");
-          const [unindexed] =
-            await sql`select count(*)::int as n from catalyst_kb.contents where state = 'pending'`;
-          expect(unindexed?.n).toBe(0);
-        },
-        { timeout: 180_000 }
-      );
-    }
-    return {
-      ...fixture,
-      instance,
-      sql,
-      platform,
-      worker,
-      jobs: worker,
-      embed,
-      sync,
-      drain,
-      objects,
-      record
-    };
-  }
-
+  const { setup } = useKnowledgeSync();
   it("finishes an exhausted batch after every document insert fails and permits another sync", async () => {
     const world = await setup();
     for (let i = 0; i < 2; i++)
@@ -487,6 +271,21 @@ describe("initial and full source import (KB 72, 73)", () => {
       { n: 1 }
     ]);
     expect(pages).toBe(13);
+    const statusStarted = performance.now();
+    const status = await world.instance.api.call("knowledge_bases.sources", {
+      params: { knowledgeBase: KB }
+    });
+    const statusMs = performance.now() - statusStarted;
+    expect(status.statusCode, status.body).toBe(200);
+    expect(status.json()).toMatchObject({
+      sources: [
+        {
+          items: { indexed: items - 1, failed: 1 },
+          failures: [{ code: "knowledge_fetch_failed", count: 1 }]
+        }
+      ]
+    });
+    console.info(JSON.stringify({ probe: "SRC-1b source status", items, durationMs: statusMs }));
     expect(fetches).toBe(items + 2);
     expect(world.embed).toHaveBeenCalledTimes(1);
     expect(await world.sql`select count(*)::int as n from catalyst_kb.embeddings_1`).toEqual([

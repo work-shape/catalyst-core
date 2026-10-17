@@ -1,3 +1,10 @@
+import { sourceAuthority } from "../source-principal";
+import {
+  isOperationRunId,
+  type PlatformStores,
+  type ClientInstanceId
+} from "@work-shape/catalyst-core";
+import { sourceSyncStarted } from "./source-lifecycle";
 import { createHash } from "node:crypto";
 import { matchesGlob } from "node:path";
 import {
@@ -77,14 +84,56 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
     async run(job, control) {
       const { payload } = job;
       const store = createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal);
-      const run = await store.run(payload.syncRunId);
+      // The publish queues ids in its transaction; the owned database is provisioned later.
+      // Retry until it exists, then create the initial run exactly once.
+      let run = await store.run(payload.syncRunId);
+      if (!run) {
+        await store.change(async (sql) => {
+          const bound = createSourceStore(
+            runtime.data,
+            payload.knowledgeBaseId,
+            control.signal,
+            runtime.data.stores,
+            sql
+          );
+          const started = await bound.start(payload, "initial");
+          if (started.operationRunId !== payload.operationRunId)
+            await control.transaction((stores) =>
+              settleJoinedInitial(
+                stores,
+                runtime.data.clientInstanceId,
+                payload.operationRunId,
+                started.operationRunId
+              )
+            );
+          if (started.created)
+            await control.transaction((stores) => sourceSyncStarted(stores, runtime.data, payload));
+        });
+        run = await store.run(payload.syncRunId);
+      }
       if (!run || run.state !== "running") return;
       const found = await sourceTarget(runtime, payload);
-      if (!found) return;
+      if (!found) {
+        await sourceTransaction(runtime.data, payload, control, (store) =>
+          store.finish(payload, "knowledge_source_unreachable")
+        );
+        return;
+      }
       if (run.mode === "changes")
         throw new Error("Change-feed ingestion is not available in this release");
       let progress: SourceProgress = run.progress ?? { complete: false };
       try {
+        const authorizedRuntime = {
+          ...runtime,
+          authority: await listing(() =>
+            sourceAuthority(
+              runtime.data.stores,
+              runtime.data.clientInstanceId,
+              payload.knowledgeBaseId,
+              found.source.connection
+            )
+          )
+        };
         if (run.progress) {
           // A crash between the owned page commit and the platform queue commit is recovered
           // here. Keyset pages never load a source's full inventory into the process.
@@ -99,8 +148,9 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
         if (!run.progress) {
           const feed = await listing(() =>
             sourceCall(
-              runtime,
+              authorizedRuntime,
               found.source.connection,
+              payload.knowledgeBaseId,
               control.signal,
               ({ capability, context }) =>
                 capability.changes({ boundary: { folderIds: found.source.folders } }, context)
@@ -114,8 +164,9 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
         while (!progress.complete) {
           const page = await listing(() =>
             sourceCall(
-              runtime,
+              authorizedRuntime,
               found.source.connection,
+              payload.knowledgeBaseId,
               control.signal,
               ({ capability, context }) =>
                 capability.list(
@@ -154,7 +205,12 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
             )
           );
           await queueFetches(runtime, control, payload, result.queued);
-          if (result.limited) return;
+          if (result.limited) {
+            await sourceTransaction(runtime.data, payload, control, (store) =>
+              store.finish(payload, "knowledge_source_limit_reached")
+            );
+            return;
+          }
           progress = next;
         }
         await sourceTransaction(runtime.data, payload, control, (store) => store.finish(payload));
@@ -185,6 +241,27 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
       }
     },
     async onExhausted(job, stores) {
+      const owned = await stores.dataStores.getDataStore({
+        clientInstanceId: runtime.data.clientInstanceId,
+        id: job.payload.knowledgeBaseId
+      });
+      if (!owned || owned.status !== "ready") {
+        const id = job.payload.operationRunId;
+        if (isOperationRunId(id))
+          await stores.operationRuns.finish({
+            clientInstanceId: runtime.data.clientInstanceId,
+            id,
+            end: {
+              status: "failed",
+              finishedAt: new Date().toISOString(),
+              error: {
+                code: "knowledge_source_unreachable",
+                message: "The Knowledge Base source store is unavailable"
+              }
+            }
+          });
+        return;
+      }
       const store = createSourceStore(
         runtime.data,
         job.payload.knowledgeBaseId,
@@ -192,6 +269,24 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
         stores
       );
       await store.finish(job.payload, "knowledge_source_unreachable");
+    }
+  });
+}
+
+async function settleJoinedInitial(
+  stores: PlatformStores,
+  clientInstanceId: ClientInstanceId,
+  candidate: string,
+  joined: string
+) {
+  if (!isOperationRunId(candidate)) return;
+  await stores.operationRuns.finish({
+    clientInstanceId,
+    id: candidate,
+    end: {
+      status: "done",
+      finishedAt: new Date().toISOString(),
+      resultRef: `operation_run:${joined}`
     }
   });
 }

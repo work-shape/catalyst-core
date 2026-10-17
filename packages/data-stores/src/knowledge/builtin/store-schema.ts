@@ -164,6 +164,81 @@ const SOURCES = `
     where source_item_id is not null;
 `;
 
+// A transactionally maintained projection keeps status reads independent of inventory size.
+const SOURCE_COUNTS = `
+  -- A content transition touches only the source items sharing that content, through
+  -- documents_content_idx and this link; it never scans the full source inventory.
+  create index source_items_document_idx on catalyst_kb.source_items(document_id) where document_id is not null;
+  create table catalyst_kb.source_counts (
+    source_id text not null,
+    state text not null,
+    failure_code text not null default '',
+    items bigint not null,
+    primary key(source_id,state,failure_code)
+  );
+
+  -- Deltas lock only the affected counters, in key order. Signed insert deltas let the
+  -- upsert update existing counters atomically; every old state already has its counter.
+  create function catalyst_kb.move_source_count(s text, old_state text, old_code text, new_state text, new_code text, n bigint default 1) returns void language plpgsql as $$
+  begin
+    if old_state is not distinct from new_state and coalesce(old_code,'')=coalesce(new_code,'') then return; end if;
+    insert into catalyst_kb.source_counts(source_id,state,failure_code,items)
+      select s,st,coalesce(fc,''),sum(delta) from (values(old_state,old_code,-n),(new_state,new_code,n)) as moves(st,fc,delta)
+      where st is not null group by st,fc having sum(delta)<>0 order by st,fc
+      on conflict(source_id,state,failure_code) do update set items=source_counts.items+excluded.items;
+  end $$;
+
+  -- Lock the content while projecting an item: an index completion cannot pass a fetch
+  -- handoff and miss the newly fetched item, or count its previous state a second time.
+  create function catalyst_kb.source_projection(item_state text, document text) returns table(state text,code text) language plpgsql as $$
+  declare content_state text; content_code text;
+  begin
+    if item_state='fetched' then
+      select c.state,c.failure_code into content_state,content_code from catalyst_kb.contents c join catalyst_kb.documents d on d.content_sha256=c.sha256 where d.id=document for share of c;
+      return query select case content_state when 'extracted' then 'indexed' when 'failed' then 'failed' else 'fetched' end,case when content_state='failed' then content_code end;
+    else return query select item_state,null::text;
+    end if;
+  end $$;
+
+  create function catalyst_kb.source_item_count_changed() returns trigger language plpgsql as $$
+  declare os text; oc text; ns text; nc text;
+  begin
+    if tg_op='UPDATE' and old.state is not distinct from new.state and old.failure_code is not distinct from new.failure_code and old.document_id is not distinct from new.document_id then return null; end if;
+    if tg_op<>'INSERT' then
+      select state,code into os,oc from catalyst_kb.source_projection(old.state,old.document_id);
+      if old.state='failed' then oc=old.failure_code; end if;
+    end if;
+    if tg_op<>'DELETE' then
+      select state,code into ns,nc from catalyst_kb.source_projection(new.state,new.document_id);
+      if new.state='failed' then nc=new.failure_code; end if;
+    end if;
+    perform catalyst_kb.move_source_count(coalesce(new.source_id,old.source_id),os,oc,ns,nc);
+    return null;
+  end $$;
+  create trigger source_item_count_changed after insert or delete or update of state,failure_code,document_id on catalyst_kb.source_items for each row execute function catalyst_kb.source_item_count_changed();
+
+  create function catalyst_kb.source_content_count_changed() returns trigger language plpgsql as $$
+  declare r record; os text; oc text; ns text; nc text;
+  begin
+    os=case old.state when 'extracted' then 'indexed' when 'failed' then 'failed' else 'fetched' end;
+    ns=case new.state when 'extracted' then 'indexed' when 'failed' then 'failed' else 'fetched' end;
+    oc=case when old.state='failed' then old.failure_code end;
+    nc=case when new.state='failed' then new.failure_code end;
+    if os is not distinct from ns and oc is not distinct from nc then return null; end if;
+    for r in select i.source_id,count(*) as n from catalyst_kb.source_items i join catalyst_kb.documents d on d.id=i.document_id where i.state='fetched' and d.content_sha256=new.sha256 group by i.source_id order by i.source_id loop
+      perform catalyst_kb.move_source_count(r.source_id,os,oc,ns,nc,r.n);
+    end loop;
+    return null;
+  end $$;
+  create trigger source_content_count_changed after update of state,failure_code on catalyst_kb.contents for each row execute function catalyst_kb.source_content_count_changed();
+
+  insert into catalyst_kb.source_counts(source_id,state,failure_code,items)
+    select i.source_id,
+      case when i.state='fetched' then case c.state when 'extracted' then 'indexed' when 'failed' then 'failed' else 'fetched' end else i.state end,
+      coalesce(case when i.state='failed' then i.failure_code when i.state='fetched' and c.state='failed' then c.failure_code end,''),count(*)
+    from catalyst_kb.source_items i left join catalyst_kb.documents d on d.id=i.document_id left join catalyst_kb.contents c on c.sha256=d.content_sha256 group by 1,2,3;
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -174,7 +249,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
     sql: `alter table catalyst_kb.source_items
       add column enqueued_run_id text,
       add column fetch_job_id text;`
-  }
+  },
+  { number: 4, name: "source_counts", sql: SOURCE_COUNTS }
 ];
 
 /** The level the store of a built-in Knowledge Base is at when its tables are this release's. */

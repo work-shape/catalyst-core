@@ -612,10 +612,14 @@ describe("the modules workflows and dataStores", () => {
     expect(knowledgeModule).toEqual({
       ...nothing,
       name: "knowledge",
-      jobKinds: ["knowledge_base.remove_documents"],
+      jobKinds: ["knowledge_base.remove_documents", "knowledge_base.sync", "knowledge_base.fetch"],
       requires: ["dataStores"],
       kinds: [KNOWLEDGE_BASE_ASSET_KIND],
       operations: [
+        "knowledge_bases.sync",
+        "knowledge_bases.sources",
+        "knowledge_bases.source_items",
+        "knowledge_bases.locate",
         "knowledge_bases.get",
         "knowledge_bases.check",
         "knowledge_bases.query",

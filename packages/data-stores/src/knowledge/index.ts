@@ -1,3 +1,7 @@
+import { knowledgePublishQuestion } from "./publish-question";
+import type { KnowledgeSources } from "./source-port";
+import { publishSourcePrincipal } from "./source-principal";
+import { enqueueSourceSync, initialSyncIds } from "./builtin/source-lifecycle";
 import {
   AppError,
   ASSET_OWNER_KINDS,
@@ -6,6 +10,7 @@ import {
   KNOWLEDGE_BASE_ASSET_KIND,
   type ActorAccess,
   type AuditRecorder,
+  type AssetScope,
   type ClientInstanceId,
   type DataToolSource,
   type KnowledgeBackend,
@@ -92,6 +97,11 @@ export interface KnowledgeBases {
   };
   /** Describes the one knowledge tool to an agent that lists Knowledge Bases. */
   readonly toolSource: DataToolSource;
+  publishQuestion(input: {
+    assetId: string;
+    scope: AssetScope;
+    config: unknown;
+  }): Promise<string[]>;
 }
 
 export function createKnowledgeBases(input: {
@@ -100,6 +110,8 @@ export function createKnowledgeBases(input: {
   stores: PlatformStores;
   /** Where the described tables are read and the owned stores made. */
   backend: KnowledgeBackend;
+  sources?: KnowledgeSources;
+  documentSourceOffered?(config: unknown): boolean;
   /** The embedding model release config approves for Knowledge Bases (`knowledge`), if any. */
   embedding: KnowledgeEmbedding;
   /** The formats a file added to a Knowledge Base may be in on this instance. */
@@ -113,12 +125,15 @@ export function createKnowledgeBases(input: {
     clientInstanceId: input.clientInstanceId,
     stores: input.stores,
     backend: input.backend,
+    ...(input.sources ? { sources: input.sources } : {}),
     documentFormats: input.documentFormats,
     maxDocuments: input.maxDocuments,
     logger: input.logger,
     now: input.now ?? (() => new Date())
   };
   return {
+    publishQuestion: (question) =>
+      knowledgePublishQuestion(input.stores, input.clientInstanceId, question),
     assetKind: defineAssetKind({
       kind: KNOWLEDGE_BASE_ASSET_KIND,
       plural: "knowledge_bases",
@@ -147,16 +162,6 @@ export function createKnowledgeBases(input: {
     }),
     async publish(stores, { access, assetId, revision, config, replaced }) {
       const definition = knowledgeBaseDefinitionSchema.parse(config);
-      // SRC-1a serves the source jobs. SRC-1b installs the ingestion principal and starts
-      // imports at publish; keep this gate until that authorization path is available.
-      if (definition.sources?.length) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `Knowledge Base '${definition.name}' names a synced source, and this release does not sync sources yet. The draft is kept; remove 'sources' to publish it now.`,
-          { reason: "not_supported_yet" },
-          { exposeMessage: true }
-        );
-      }
       const target = knowledgeTargetOf(definition, assetId);
       const before = knowledgeBaseDefinitionSchema.safeParse(replaced);
       const previous = before.success ? knowledgeTargetOf(before.data, assetId) : undefined;
@@ -170,10 +175,60 @@ export function createKnowledgeBases(input: {
           { exposeMessage: true }
         );
       }
+      const principal = await publishSourcePrincipal(stores, {
+        clientInstanceId: input.clientInstanceId,
+        assetId,
+        name: definition.name,
+        access,
+        sources: definition.sources ?? [],
+        documentSourceOffered: input.documentSourceOffered,
+        previous: before.success ? (before.data.sources ?? []) : []
+      });
       const result = await runtime.backend.publish(stores, { target, replaced: previous, access });
       await keepKnowledgeCheck(runtime, stores, { assetId, revision }, result);
+      if (principal)
+        for (const source of definition.sources ?? []) {
+          if (before.success && before.data.sources?.some((old) => old.id === source.id)) continue;
+          const payload = initialSyncIds(assetId, source.id);
+          await stores.operationRuns.create({
+            id: payload.operationRunId,
+            clientInstanceId: input.clientInstanceId,
+            operation: `knowledge.${definition.name}.sync`,
+            effect: "changing",
+            actor: { kind: "service_principal", id: principal.id, label: principal.displayLabel },
+            origin: { kind: "user" },
+            target: "live",
+            inputHash: "initial",
+            correlationId: payload.operationRunId,
+            startedAt: runtime.now().toISOString()
+          });
+          await enqueueSourceSync(stores, runtime, payload);
+          await stores.audit.appendAuditEvent({
+            clientInstanceId: input.clientInstanceId,
+            type: "knowledge_base.source_added",
+            status: "success",
+            subject: assetId,
+            correlationId: payload.operationRunId,
+            metadata: { source: source.id, connection: source.connection }
+          });
+        }
     },
     async retire(stores, assetId, published) {
+      const principal = await stores.apiAccess.findServicePrincipalByOwner({
+        clientInstanceId: input.clientInstanceId,
+        owner: { kind: "knowledge_base", assetId }
+      });
+      if (principal) {
+        await stores.apiAccess.updateServicePrincipal({
+          clientInstanceId: input.clientInstanceId,
+          servicePrincipalId: principal.id,
+          status: "disabled"
+        });
+        await stores.apiAccess.deleteServicePrincipal({
+          clientInstanceId: input.clientInstanceId,
+          servicePrincipalId: principal.id
+        });
+      }
       await stores.knowledgeBases.deleteKnowledgeBaseState({
         clientInstanceId: input.clientInstanceId,
         assetId

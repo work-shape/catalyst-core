@@ -130,8 +130,8 @@ export class ApiAccessAdministrationWorkflow {
   /**
    * Changing a principal: the right over principals, and the rule on what the change gives. A
    * key added is given. Enabling a disabled principal lends everything it holds once enabled.
-   * Taking a key away and disabling ask nothing more. A principal the instance does not have
-   * passes: the write answers that itself.
+   * Taking a key away and disabling ask nothing more. Missing and owned principals are
+   * unavailable to administration, including the second check under the rights lock.
    */
   async authorizeUpdatePrincipal(
     operationId: string,
@@ -140,8 +140,7 @@ export class ApiAccessAdministrationWorkflow {
   ): Promise<OperationAuthorization> {
     const administration = authorizePrincipalAdministration(caller, operationId);
     if (!administration.allowed) return administration;
-    const principal = await this.findPrincipal(command.servicePrincipalId);
-    if (!principal) return { allowed: true };
+    const principal = await this.requirePrincipal(command.servicePrincipalId);
     const keys = command.permissions ?? principal.permissions;
     if (principal.status !== "active" && command.status === "active") {
       const held = await principalRights(this.rightsOptions(), principal.id);
@@ -160,8 +159,7 @@ export class ApiAccessAdministrationWorkflow {
 
   /**
    * Issuing a principal a key: `api_access.manage`, and every right the principal holds, since
-   * the key is a bearer copy of them. A principal the instance does not have passes: the write
-   * answers that itself.
+   * the key is a bearer copy of them. Missing and owned principals answer NOT_FOUND.
    */
   async authorizeCreateCredential(
     operationId: string,
@@ -170,8 +168,7 @@ export class ApiAccessAdministrationWorkflow {
   ): Promise<OperationAuthorization> {
     const keyAdministration = authorizePersonHolding(API_ACCESS_ACTION, caller, operationId);
     if (!keyAdministration.allowed) return keyAdministration;
-    const principal = await this.findPrincipal(command.servicePrincipalId);
-    if (!principal) return { allowed: true };
+    const principal = await this.requirePrincipal(command.servicePrincipalId);
     return authorizeGivingToPrincipal(
       this.rightsOptions(),
       caller,
@@ -199,7 +196,9 @@ export class ApiAccessAdministrationWorkflow {
     const principals = await this.options.stores.apiAccess.listServicePrincipals({
       clientInstanceId: this.options.clientInstanceId
     });
-    return Promise.all(principals.map((principal) => this.detail(principal)));
+    return Promise.all(
+      principals.filter((principal) => !principal.owner).map((principal) => this.detail(principal))
+    );
   }
 
   async createServicePrincipal(
@@ -330,13 +329,15 @@ export class ApiAccessAdministrationWorkflow {
     return { clientInstanceId: this.options.clientInstanceId, access: this.options.stores.access };
   }
 
-  private async findPrincipal(
-    servicePrincipalId: string
-  ): Promise<ServicePrincipalRecord | undefined> {
+  private async requirePrincipal(servicePrincipalId: string): Promise<ServicePrincipalRecord> {
     const principals = await this.options.stores.apiAccess.listServicePrincipals({
       clientInstanceId: this.options.clientInstanceId
     });
-    return principals.find((candidate) => candidate.id === servicePrincipalId);
+    const principal = principals.find(
+      (candidate) => candidate.id === servicePrincipalId && !candidate.owner
+    );
+    if (!principal) throw new AppError("NOT_FOUND", "Service principal is not available");
+    return principal;
   }
 
   private async detail(principal: ServicePrincipalRecord): Promise<ServicePrincipalDetail> {

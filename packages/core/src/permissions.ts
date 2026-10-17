@@ -650,6 +650,8 @@ export interface AccessAdministrationStore extends AccessStore, RightsLock {
     excludeSuperadminHolders?: boolean;
     /** Leaves out the rows whose holder is a service principal. */
     excludeServicePrincipalHolders?: boolean;
+    /** Administration hides principals managed by their owning asset. */
+    excludeOwnedPrincipalHolders?: boolean;
     /**
      * Leaves out the instance-wide rows of the actions a legacy key carries, which the legacy
      * permission lists show. An instance-wide row of any other action is listed.

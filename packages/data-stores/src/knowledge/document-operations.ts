@@ -1,3 +1,5 @@
+import { initialSyncIds } from "./builtin/source-lifecycle";
+import type { KnowledgeBaseDefinition } from "./definition";
 import { z } from "zod";
 import {
   AppError,
@@ -9,6 +11,8 @@ import {
   KNOWLEDGE_DOCUMENT_WAIT_CODES,
   KNOWLEDGE_EXTRACTED_FORMATS,
   KNOWLEDGE_OPERATION_PREFIX,
+  knowledgeRetryInputSchema,
+  knowledgeRetryOutputSchema,
   type KnowledgeDocumentStore,
   type KnowledgeFiles,
   type OperationDefinition,
@@ -35,7 +39,6 @@ const LIST_DEFAULT = 50;
 const LIST_MAX = 200;
 
 /** How many documents one retry names at most. */
-const RETRY_MAX = 100;
 
 const LIST_TIMEOUT_MS = 30_000;
 const RETRY_TIMEOUT_MS = 60_000;
@@ -70,28 +73,13 @@ const listOutputSchema = z.object({
   nextCursor: z.string().optional()
 });
 
-const retryInputSchema = z.strictObject({
-  documentIds: z
-    .array(z.string().min(1).max(200))
-    .min(1)
-    .max(RETRY_MAX, {
-      error: `A retry names at most ${RETRY_MAX} documents. Send the rest in another call.`
-    })
-});
-
-const retryOutputSchema = z.object({
-  /** Each named document that is in the Knowledge Base, with its state after the retry. */
-  documents: z.array(z.object({ id: z.string(), state: z.enum(KNOWLEDGE_DOCUMENT_STATES) })),
-  /** How many contents were queued to be indexed again. */
-  queued: z.number().int()
-});
-
 /** The Knowledge Base the operations serve. */
 interface DocumentsTarget {
   name: string;
   assetId: string;
   resource: OperationResource;
   store: KnowledgeDocumentStore;
+  definition?: KnowledgeBaseDefinition;
 }
 
 export function listDocumentsOperation(
@@ -143,17 +131,54 @@ export function retryDocumentsOperation(
     // It runs the indexing of documents already added again.
     changeClass: "reversible",
     action: KNOWLEDGE_BASE_ACTIONS.write,
-    scope: "data_store_rows:write",
+    scope: "config_assets:write",
     auth: "principal",
-    inputSchema: retryInputSchema,
-    outputSchema: retryOutputSchema,
+    inputSchema: knowledgeRetryInputSchema,
+    outputSchema: knowledgeRetryOutputSchema,
     resource: () => knowledgeBase.resource,
     module: "knowledge",
     timeoutMs: RETRY_TIMEOUT_MS,
     async execute(input, context) {
-      const { documentIds } = retryInputSchema.parse(input);
-      const named = [...new Set(documentIds)];
-      const failed = await knowledgeBase.store.failedContents(named, context.runtime.signal);
+      const parsed = knowledgeRetryInputSchema.parse(input);
+      const definitions = knowledgeBase.definition?.sources ?? [];
+      if ("source" in parsed && !definitions.some((source) => source.id === parsed.source))
+        throw new AppError("NOT_FOUND", "The Knowledge Base source is not available");
+      let sourceQueued = 0;
+      if (runtime.sources)
+        for (const source of definitions) {
+          if ("source" in parsed && parsed.source !== source.id) continue;
+          sourceQueued += await runtime.sources.retry(
+            knowledgeBase.assetId,
+            parsed,
+            { ...initialSyncIds(knowledgeBase.assetId, source.id), operationRunId: context.runId },
+            context.runtime.signal ?? new AbortController().signal,
+            files
+          );
+        }
+      if (!("documentIds" in parsed)) return { queued: sourceQueued };
+      const synced = runtime.sources
+        ? new Set(
+            await runtime.sources.syncedDocumentIds(
+              knowledgeBase.assetId,
+              parsed.documentIds,
+              context.runtime.signal ?? new AbortController().signal
+            )
+          )
+        : new Set<string>();
+      const syncedDocuments = await knowledgeBase.store.retryDocuments(
+        [...synced],
+        context.runtime.signal
+      );
+      const named = [...new Set(parsed.documentIds)].filter((id) => !synced.has(id));
+      if (!named.length)
+        return {
+          documents: syncedDocuments.map(({ id, state }) => ({ id, state })),
+          queued: sourceQueued
+        };
+      const failed = await knowledgeBase.store.failedContents(
+        named,
+        context.runtime.signal ?? new AbortController().signal
+      );
       for (const content of failed) {
         if (!KNOWLEDGE_EXTRACTED_FORMATS.some((format) => format === content.format)) continue;
         await discardUnusableKnowledgeExtraction(files, {
@@ -161,7 +186,10 @@ export function retryDocumentsOperation(
           contentSha256: content.contentSha256
         });
       }
-      const documents = await knowledgeBase.store.retryDocuments(named, context.runtime.signal);
+      const documents = await knowledgeBase.store.retryDocuments(
+        named,
+        context.runtime.signal ?? new AbortController().signal
+      );
       if (documents.length === 0) {
         throw new AppError(
           "NOT_FOUND",
@@ -188,8 +216,13 @@ export function retryDocumentsOperation(
         );
       }
       return {
-        documents: documents.map(({ id, state }) => ({ id, state })),
-        queued: contents.size
+        documents: [...documents, ...syncedDocuments]
+          .sort(
+            (left, right) =>
+              parsed.documentIds.indexOf(left.id) - parsed.documentIds.indexOf(right.id)
+          )
+          .map(({ id, state }) => ({ id, state })),
+        queued: contents.size + sourceQueued
       };
     }
   };

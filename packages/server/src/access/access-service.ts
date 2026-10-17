@@ -265,6 +265,12 @@ export class AccessWorkflow {
     command: GrantCommand
   ): Promise<PermissionGrant> {
     requireAuthorized(authorizePrincipalHolderWrite(actor, context.access, GRANT_OPERATION));
+    const principal = await this.findPrincipal(command.holderId);
+    if (!principal) {
+      throw new AppError("NOT_FOUND", "Service principal not found", {
+        reason: "unknown_holder"
+      });
+    }
     const { action } = command;
     if (!isPrincipalGrantableAction(action)) {
       throw refused(
@@ -296,12 +302,6 @@ export class AccessWorkflow {
       );
     }
     const asset = await this.grantableAsset(command);
-    const principal = await this.findPrincipal(command.holderId);
-    if (!principal) {
-      throw new AppError("NOT_FOUND", "Service principal not found", {
-        reason: "unknown_holder"
-      });
-    }
     requireAuthorized(
       await authorizeGivingToPrincipal(
         this.rightsOptions(),
@@ -372,7 +372,10 @@ export class AccessWorkflow {
     }
     if (existing.holderKind === "service_principal") {
       // The list does not show the row to this caller, so neither does a refusal.
-      if (!seesPrincipals(actor, context.access)) {
+      if (
+        !seesPrincipals(actor, context.access) ||
+        !(await this.findPrincipal(existing.holderId))
+      ) {
         throw new AppError("NOT_FOUND", "Grant not found");
       }
       requireAuthorized(authorizePrincipalHolderWrite(actor, context.access, REVOKE_OPERATION));
@@ -441,6 +444,7 @@ export class AccessWorkflow {
       ...filter,
       excludeSuperadminHolders: !isSuperadmin(actor),
       excludeServicePrincipalHolders: !seesPrincipals(actor, access),
+      excludeOwnedPrincipalHolders: true,
       // An instance-wide right a legacy key carries is shown and changed as the legacy list on
       // the Users and API access screens, under their rules, until AP-5b shows rows one by one.
       excludeLegacyKeyRows: true
@@ -732,7 +736,7 @@ export class AccessWorkflow {
     const principals = await this.options.stores.apiAccess.listServicePrincipals({
       clientInstanceId: this.options.clientInstanceId
     });
-    return principals.find((candidate) => candidate.id === servicePrincipalId);
+    return principals.find((candidate) => candidate.id === servicePrincipalId && !candidate.owner);
   }
 
   private async record(

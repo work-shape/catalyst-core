@@ -120,11 +120,7 @@ export async function runOperation(
       idempotencyKey
     });
     if (held && !runsAgain(held, definition)) {
-      return {
-        result: replay(held, definition, actor, inputHash, secretInput),
-        run: held,
-        replayed: true
-      };
+      return replay(held, definition, actor, inputHash, secretInput, deps);
     }
   }
   const target = await decideTarget({
@@ -195,11 +191,7 @@ export async function runOperation(
     // without asking for the right again: the actor had it when the call ran, and a refusal
     // now would hide an outcome that happened and invite the same change under a new key.
     if (held && !runsAgain(held, definition)) {
-      return {
-        result: replay(held, definition, actor, inputHash, secretInput),
-        run: held,
-        replayed: true
-      };
+      return replay(held, definition, actor, inputHash, secretInput, deps);
     }
     if (held && !sameCall(held, definition, actor, inputHash)) {
       throw keyReused();
@@ -343,16 +335,27 @@ function keyReused(): AppError {
 }
 
 /** What the same call answers again, read from the run that holds its key. */
-function replay(
+async function replay(
   held: OperationRun,
   definition: OperationDefinition,
   actor: OperationRunActor,
   inputHash: string,
   /** The call's input held a secret, so no answer was kept whatever the answer was. */
-  secretInput: boolean
-): OperationResult {
+  secretInput: boolean,
+  deps: RunOperationDeps
+): Promise<OperationOutcome> {
   if (!sameCall(held, definition, actor, inputHash)) throw keyReused();
-  return recordedResult(held, definition, secretInput);
+  let run = held;
+  if (definition.completion && held.resultRef?.startsWith("operation_run:")) {
+    const joined = await deps.runs.get({
+      clientInstanceId: deps.clientInstanceId,
+      id: held.resultRef.slice("operation_run:".length)
+    });
+    if (!joined || joined.operation !== definition.name)
+      throw new AppError("INTERNAL", "The joined operation run is unavailable");
+    run = joined;
+  }
+  return { result: recordedResult(run, definition, secretInput), run, replayed: true };
 }
 
 /** The result a run that has an outcome answers with, whoever asks again. */

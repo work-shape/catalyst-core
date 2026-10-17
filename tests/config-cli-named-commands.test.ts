@@ -1,3 +1,4 @@
+import { required } from "./support/assertions";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -479,5 +480,82 @@ describe("named CLI operation faces", () => {
     const json = await run(["workflow", "test", "month-end", "--json"], { fetchImpl });
     expect(json.code, json.err).toBe(3);
     expect(JSON.parse(json.out)).toEqual({ status: "pending_approval", run: pending });
+  });
+});
+
+describe("Knowledge Base source commands", () => {
+  it("sends the frozen sync body and prints the running Operation Run immediately", async () => {
+    const requests: Request[] = [];
+    const response = {
+      href: apiOperations["operations.get_run"].buildPath({ params: { runId: "oprun_sync" } }),
+      id: "oprun_sync",
+      operation: "knowledge.documents.sync",
+      effect: "changing",
+      actor: { kind: "user", id: "kai", label: "Kai" },
+      origin: { kind: "user" },
+      target: "live",
+      status: "running",
+      attempt: 1,
+      inputHash: "hash",
+      correlationId: "sync",
+      createdAt: at,
+      startedAt: at,
+      updatedAt: at
+    };
+    const result = await run(
+      ["knowledge-base", "sync", "documents", "--source", "folder", "--full", "--json"],
+      {
+        fetchImpl: apiFetch((request) => {
+          requests.push(request);
+          return Response.json(response, { status: 202 });
+        })
+      }
+    );
+    expect(result.code, result.err).toBe(0);
+    expect(result.out).toContain("oprun_sync");
+    expect(requests).toHaveLength(1);
+    expect(new URL(required(requests[0]).url).pathname).toBe(
+      apiOperations["knowledge_bases.sync"].buildPath({ params: { knowledgeBase: "documents" } })
+    );
+    expect(await required(requests[0]).json()).toEqual({ source: "folder", mode: "full" });
+  });
+  it("queues only the requested failure code and rejects ambiguous retry selectors", async () => {
+    const bodies: unknown[] = [];
+    const fetchImpl = apiFetch(async (request) => {
+      bodies.push(await request.json());
+      return Response.json({ queued: 3 });
+    });
+    const result = await run(
+      [
+        "knowledge-base",
+        "source",
+        "retry",
+        "documents",
+        "--source",
+        "folder",
+        "--code",
+        "knowledge_fetch_failed",
+        "--json"
+      ],
+      { fetchImpl }
+    );
+    expect(result.code, result.err).toBe(0);
+    expect(bodies).toEqual([{ source: "folder", failureCode: "knowledge_fetch_failed" }]);
+    const bad = await run(
+      [
+        "knowledge-base",
+        "source",
+        "retry",
+        "documents",
+        "--source",
+        "folder",
+        "--all",
+        "--item",
+        "one"
+      ],
+      { fetchImpl }
+    );
+    expect(bad.code).toBe(1);
+    expect(bodies).toHaveLength(1);
   });
 });

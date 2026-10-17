@@ -11,7 +11,7 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 import { getTestJobs } from "./support/test-instance";
 
 // The synced source migrations (SRC-0 and SRC-1a) bring a store made
-// at level 1 to level 3 at the next start, without a publish, and leaves its rows as they
+// at level 1 to level 4 at the next start, without a publish, and leaves its rows as they
 // were, and the `sources` entry of a Knowledge Base is saved with a draft but not published
 // until SRC-1a syncs it. `schedule` is withdrawn. Spec: data-stores-and-knowledge-bases.md, Synced sources, check 71.
 
@@ -70,16 +70,22 @@ describe("catalyst_kb source migrations", () => {
     expect(published.statusCode, published.body).toBe(200);
   };
 
-  it("brings a store at level 1 to level 3 with its documents, contents and chunks unchanged", async () => {
+  it("brings a store at level 1 to level 4 with its documents, contents and chunks unchanged", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
     await writeAndPublish(instance, 1);
-    const made = await settle(instance, 3);
+    const made = await settle(instance, 4);
     const url = new URL(await fileTestDatabaseUrl());
     url.pathname = `/${made.location.database}`;
     const store = postgres(url.toString(), { max: 1, onnotice: () => undefined });
     try {
       // The store as the release before SRC-0 left it: migration 1 alone, whose SQL is unchanged.
       await store.unsafe(`
+        drop trigger source_content_count_changed on catalyst_kb.contents;
+        drop function catalyst_kb.source_content_count_changed();
+        drop table catalyst_kb.source_counts;
+        drop function catalyst_kb.source_item_count_changed() cascade;
+        drop function catalyst_kb.source_projection(text,text);
+        drop function catalyst_kb.move_source_count(text,text,text,text,text,bigint);
         alter table catalyst_kb.documents drop column source_item_id;
         drop table catalyst_kb.source_cursors, catalyst_kb.sync_runs, catalyst_kb.source_items;
         delete from catalyst_kb.migrations where number >= 2;`);
@@ -114,18 +120,19 @@ describe("catalyst_kb source migrations", () => {
       } finally {
         await platform.end();
       }
-      const migrated = await settle(instance, 3);
+      const migrated = await settle(instance, 4);
 
       expect(migrated.migrations.map(({ number, name }) => ({ number, name }))).toEqual([
         { number: 1, name: "documents" },
         { number: 2, name: "sources" },
-        { number: 3, name: "source_fetch_claims" }
+        { number: 3, name: "source_fetch_claims" },
+        { number: 4, name: "source_counts" }
       ]);
       expect(
         (await store`select number from catalyst_kb.migrations order by number`).map(
           (row) => row.number
         )
-      ).toEqual([1, 2, 3]);
+      ).toEqual([1, 2, 3, 4]);
       expect(await rowsOf()).toEqual(before);
       // A document added by hand names no item.
       expect(await store`select source_item_id from catalyst_kb.documents`).toEqual([
@@ -139,6 +146,7 @@ describe("catalyst_kb source migrations", () => {
         "documents",
         "index_generations",
         "migrations",
+        "source_counts",
         "source_cursors",
         "source_items",
         "sync_runs"
@@ -151,7 +159,7 @@ describe("catalyst_kb source migrations", () => {
       ).toContainEqual(
         expect.objectContaining({
           subject: made.id,
-          metadata: expect.objectContaining({ level: 3, appliedCount: 2 })
+          metadata: expect.objectContaining({ level: 4, appliedCount: 3 })
         })
       );
 
@@ -191,7 +199,7 @@ describe("the sources entry of a Knowledge Base", () => {
       payload: { config, expectedRevision }
     });
 
-  it("is saved with a draft and refused at publish with not_supported_yet", async () => {
+  it("is saved with a draft and refuses a missing source Connection at publish", async () => {
     const instance = await start(true, undefined, undefined, undefined, true);
 
     const written = await put(instance, definition({ sources: [source] }));
@@ -201,11 +209,8 @@ describe("the sources entry of a Knowledge Base", () => {
       params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB },
       payload: { revision: 1 }
     });
-    expect(published.statusCode, published.body).toBe(422);
-    expect(published.json<ErrorBody>().error).toMatchObject({
-      details: { reason: "not_supported_yet" }
-    });
-    expect(published.json<ErrorBody>().error.message).toContain("does not sync sources yet");
+    expect(published.statusCode, published.body).toBe(404);
+    expect(published.json<ErrorBody>().error.message).toContain("Connection");
 
     // Without the source it publishes.
     const without = await put(instance, definition(), 1);
@@ -223,7 +228,7 @@ describe("the sources entry of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 3 });
+      expect(record).toMatchObject({ status: "ready", level: 4 });
     });
   });
 

@@ -20,7 +20,14 @@ export function servicePrincipalNameFromLabel(displayLabel: string): string {
   return slug === "" ? "principal" : slug;
 }
 
+/** An asset-owned account has no API keys and is administered through its owner. */
+export interface ServicePrincipalOwner {
+  kind: string;
+  assetId: string;
+}
+
 export interface ServicePrincipalRecord {
+  owner?: ServicePrincipalOwner;
   id: ServicePrincipalId;
   clientInstanceId: ClientInstanceId;
   /**
@@ -67,6 +74,7 @@ export interface ResolvedApiCredential {
 }
 
 export interface CreateServicePrincipalInput {
+  owner?: ServicePrincipalOwner;
   clientInstanceId: ClientInstanceId;
   /**
    * A name another principal of the instance has is refused with `CONFLICT`. Left out, the
@@ -118,6 +126,10 @@ export interface ApiAccessStore {
   findServicePrincipalByName(input: {
     clientInstanceId: ClientInstanceId;
     name: string;
+  }): Promise<ServicePrincipalRecord | undefined>;
+  findServicePrincipalByOwner(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ServicePrincipalOwner;
   }): Promise<ServicePrincipalRecord | undefined>;
   createServicePrincipal(input: CreateServicePrincipalInput): Promise<ServicePrincipalRecord>;
   updateServicePrincipal(input: UpdateServicePrincipalInput): Promise<ServicePrincipalRecord>;

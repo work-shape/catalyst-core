@@ -71,6 +71,9 @@ export interface OperationApproval {
 }
 
 export interface OperationExecutionContext {
+  /** An async start that found existing work returns its canonical run. The candidate call
+   * is settled with only that run id; it never becomes a second owner of the work. */
+  joinAsyncRun?(runId: OperationRunId): void;
   runId: OperationRunId;
   actor: AuthenticatedIdentity;
   origin: OperationOrigin;

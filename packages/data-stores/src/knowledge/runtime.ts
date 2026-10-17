@@ -1,3 +1,4 @@
+import type { KnowledgeSources } from "./source-port";
 import type {
   ClientInstanceId,
   KnowledgeBackend,
@@ -17,6 +18,7 @@ export interface KnowledgeRuntime {
   /** The platform's rows, outside of any transaction. */
   stores: PlatformStores;
   backend: KnowledgeBackend;
+  sources?: KnowledgeSources;
   /** Where added files come from and their copies go. Absent where the process has none. */
   files?: KnowledgeFiles;
   /**

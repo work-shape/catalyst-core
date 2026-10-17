@@ -519,6 +519,11 @@ export const EVENTS = {
   // Files added to a Knowledge Base: the copies it now owns, by id, how many and their bytes.
   // The subject is the Knowledge Base's asset. It names no file name, because the names of
   // personal documents name people, and nothing a file holds.
+  "knowledge_base.sync_started": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.sync_started" },
+  "knowledge_base.sync_finished": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.sync_finished" },
+  "knowledge_base.source_added": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_added" },
+  "knowledge_base.source_narrowed": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_narrowed" },
+  "knowledge_base.source_removed": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_removed" },
   "knowledge_base.files_added": {
     name: "knowledge_base.files_added",
     subject: "config_asset",

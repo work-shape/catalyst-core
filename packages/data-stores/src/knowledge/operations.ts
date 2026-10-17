@@ -1,3 +1,4 @@
+import { sourceOperation } from "./source-operations";
 import {
   isAppError,
   KNOWLEDGE_BASE_ACTIONS,
@@ -350,7 +351,30 @@ function checkOperation(
  * only on a Data Store; `add_files`, `list_documents`, `search` and `retry` only by a Knowledge
  * Base that keeps documents.
  */
+const sourceTarget = (
+  runtime: KnowledgeRuntime,
+  knowledgeBase: PublishedKnowledgeBase,
+  part: "sync" | "sources" | "source_items" | "locate"
+) =>
+  sourceOperation(
+    runtime,
+    {
+      assetId: knowledgeBase.asset.id,
+      name: knowledgeBase.asset.name,
+      resource: knowledgeBase.resource,
+      definition: knowledgeBase.definition
+    },
+    part
+  );
 const OPERATIONS = {
+  sync: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
+    sourceTarget(runtime, kb, "sync"),
+  sources: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
+    sourceTarget(runtime, kb, "sources"),
+  source_items: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
+    sourceTarget(runtime, kb, "source_items"),
+  locate: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
+    sourceTarget(runtime, kb, "locate"),
   query: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
     isStructured(knowledgeBase) ? queryOperation(runtime, knowledgeBase) : undefined,
   add_files: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
@@ -397,7 +421,8 @@ function documentsTargetOf(runtime: KnowledgeRuntime, knowledgeBase: PublishedKn
       name: knowledgeBase.definition.name,
       assetId: knowledgeBase.asset.id,
       resource: knowledgeBase.resource,
-      store
+      store,
+      definition: knowledgeBase.definition
     }
   );
 }

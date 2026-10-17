@@ -77,6 +77,7 @@ export interface DataStoreInstance {
 type StoreFiles = readonly { path: string; text: string }[];
 
 interface KnowledgeOptions {
+  apiAccess?: true;
   embedding?: true;
   /**
    * With `embedding`: the binding is on an OpenAI-compatible provider in region `eu` at this
@@ -205,6 +206,7 @@ export function useDataStoreInstance(): {
       modules: {
         assetManagement: { enabled: true },
         dataStores: { enabled: dataStores },
+        ...(options.apiAccess ? { personalApiKeys: { enabled: true } } : {}),
         ...(knowledge ? { knowledge: { enabled: true } } : {}),
         ...(typeof knowledge === "object" && knowledge.documents
           ? { documents: { enabled: true } }
@@ -261,6 +263,9 @@ export function useDataStoreInstance(): {
       }
     };
     const env = {
+      ...(options.apiAccess
+        ? { SERVICE_ACCESS_TOKEN_SECRET: randomBytes(32).toString("base64") }
+        : {}),
       [KEY_VARIABLE]: randomBytes(32).toString("base64"),
       [EMBEDDING_KEY_VARIABLE]: "embedding-test-key"
     };

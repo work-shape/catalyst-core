@@ -106,6 +106,8 @@ async function insertServicePrincipal(
         id: createServicePrincipalId(),
         clientInstanceId: input.clientInstanceId,
         name,
+        ownerKind: input.owner?.kind ?? null,
+        ownerAssetId: input.owner?.assetId ?? null,
         displayLabel: input.displayLabel,
         description: input.description ?? null,
         status: input.status ?? "active",
@@ -290,7 +292,13 @@ async function createApiCredential(
   // A key is a bearer copy of its principal's rights: issued under the rights lock.
   const [row] = await db.transaction(async (tx) => {
     await lockRights(tx, { clientInstanceId: input.clientInstanceId });
-    await requireServicePrincipal(tx, input.clientInstanceId, input.servicePrincipalId);
+    const principal = await requireServicePrincipal(
+      tx,
+      input.clientInstanceId,
+      input.servicePrincipalId
+    );
+    if (principal.ownerKind)
+      throw new AppError("FORBIDDEN", "An asset-owned service principal has no API keys");
     return tx
       .insert(apiCredentials)
       .values({
@@ -433,6 +441,20 @@ async function requireServicePrincipal(
 
 export function createPostgresApiAccessStore(db: PostgresConnection): ApiAccessStore {
   return {
+    async findServicePrincipalByOwner({ clientInstanceId, owner }) {
+      const [row] = await db
+        .select()
+        .from(servicePrincipals)
+        .where(
+          and(
+            eq(servicePrincipals.clientInstanceId, clientInstanceId),
+            eq(servicePrincipals.ownerKind, owner.kind),
+            eq(servicePrincipals.ownerAssetId, owner.assetId)
+          )
+        )
+        .limit(1);
+      return row ? mapServicePrincipal(row, await principalList(db, row)) : undefined;
+    },
     async listServicePrincipals(
       input: Parameters<ApiAccessStore["listServicePrincipals"]>[0]
     ): Promise<ServicePrincipalRecord[]> {

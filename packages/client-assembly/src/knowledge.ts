@@ -12,6 +12,7 @@ import {
 import type { ModelGateway } from "@work-shape/catalyst-model-provider";
 import {
   getModelProviderConfigs,
+  connectionConfigSchema,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
 import {
@@ -79,6 +80,7 @@ function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
+    publishQuestion: (input) => knowledgeBases.publishQuestion(input),
     onPublish: ({ stores, access, assetId, revision, config, replaced }) =>
       knowledgeBases.publish(stores, { access, assetId, revision, config, replaced }),
     onRemove: ({ stores, assetId, published }) => knowledgeBases.retire(stores, assetId, published)
@@ -101,6 +103,10 @@ const KNOWLEDGE_BASE_NOT_AVAILABLE = "Knowledge Base is not available";
 const knowledgeRoutes: RouteRegistration = (routes) => {
   const bind = (
     part:
+      | "sync"
+      | "sources"
+      | "source_items"
+      | "locate"
       | "query"
       | "state"
       | "check"
@@ -118,6 +124,22 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
     right,
     notFound: KNOWLEDGE_BASE_NOT_AVAILABLE
   });
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.sync"],
+    bind("sync", KNOWLEDGE_BASE_ACTIONS.write)
+  );
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.sources"],
+    bind("sources", KNOWLEDGE_BASE_ACTIONS.read)
+  );
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.source_items"],
+    bind("source_items", KNOWLEDGE_BASE_ACTIONS.read)
+  );
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.locate"],
+    bind("locate", KNOWLEDGE_BASE_ACTIONS.read)
+  );
   routes.resourceOperation(
     apiOperations["knowledge_bases.query"],
     bind("query", KNOWLEDGE_BASE_ACTIONS.use)
@@ -171,6 +193,15 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
     backend,
+    documentSourceOffered: (config) => {
+      const parsed = connectionConfigSchema.safeParse(config);
+      return Boolean(
+        parsed.success &&
+        parsed.data.enabled &&
+        parts.connections?.connectorTypes.get(parsed.data.connectorType)?.documentSource
+      );
+    },
+    sources: earlier.find((assembly) => assembly.knowledgeSources)?.knowledgeSources,
     embedding: knowledgeEmbedding(parts.config),
     documentFormats: parts.modules.isEnabled(DOCUMENTS_MODULE)
       ? KNOWLEDGE_DOCUMENT_FORMATS

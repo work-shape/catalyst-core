@@ -15544,17 +15544,17 @@
         "security": [
           {
             "sessionCookie": [
-              "data_store_rows:write"
+              "config_assets:write"
             ]
           },
           {
             "sessionToken": [
-              "data_store_rows:write"
+              "config_assets:write"
             ]
           },
           {
             "accessToken": [
-              "data_store_rows:write"
+              "config_assets:write"
             ]
           }
         ],
@@ -15595,22 +15595,115 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "documentIds": {
-                    "minItems": 1,
-                    "maxItems": 100,
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1
-                    }
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "documentIds": {
+                        "minItems": 1,
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      }
+                    },
+                    "required": [
+                      "documentIds"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 63
+                      },
+                      "sourceItemIds": {
+                        "minItems": 1,
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "sourceItemIds"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 63
+                      },
+                      "failureCode": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "knowledge_source_unreachable",
+                              "knowledge_source_refused",
+                              "knowledge_fetch_failed",
+                              "knowledge_source_limit_reached",
+                              "knowledge_file_over_limit",
+                              "knowledge_file_format_unsupported"
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "knowledge_file_format_unsupported",
+                              "knowledge_file_over_limit",
+                              "knowledge_file_unreadable",
+                              "knowledge_file_missing",
+                              "knowledge_extraction_failed",
+                              "knowledge_file_format_unavailable",
+                              "knowledge_text_unreadable",
+                              "knowledge_text_empty",
+                              "knowledge_index_failed"
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "failureCode"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 63
+                      },
+                      "all": {
+                        "type": "boolean",
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "all"
+                    ],
+                    "additionalProperties": false
                   }
-                },
-                "required": [
-                  "documentIds"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -15653,7 +15746,6 @@
                     }
                   },
                   "required": [
-                    "documents",
                     "queued"
                   ]
                 }
@@ -15920,6 +16012,138 @@
         },
         "x-catalyst-effect": "changing",
         "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/knowledge-bases/{knowledgeBase}/locate": {
+      "get": {
+        "operationId": "knowledge_bases.locate",
+        "summary": "Locate a source item for erasure: state and lifecycle times without content, file name or path",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sourceItemId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sourceItemId": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "itemId": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "discovered",
+                        "fetched",
+                        "indexed",
+                        "failed",
+                        "withdrawn"
+                      ]
+                    },
+                    "discoveredAt": {
+                      "type": "string"
+                    },
+                    "fetchedAt": {
+                      "type": "string"
+                    },
+                    "withdrawnAt": {
+                      "type": "string"
+                    },
+                    "purgedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sourceItemId",
+                    "source",
+                    "itemId",
+                    "state",
+                    "discoveredAt"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/knowledge-bases/{knowledgeBase}/query": {
@@ -16377,6 +16601,848 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/knowledge-bases/{knowledgeBase}/sources": {
+      "get": {
+        "operationId": "knowledge_bases.sources",
+        "summary": "Read source states, counts, failure codes and sync progress",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "connection": {
+                            "type": "string"
+                          },
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "discovered": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "fetched": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "indexed": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "failed": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "withdrawn": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "discovered",
+                              "fetched",
+                              "indexed",
+                              "failed",
+                              "withdrawn"
+                            ]
+                          },
+                          "failures": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "knowledge_source_unreachable",
+                                        "knowledge_source_refused",
+                                        "knowledge_fetch_failed",
+                                        "knowledge_source_limit_reached",
+                                        "knowledge_file_over_limit",
+                                        "knowledge_file_format_unsupported"
+                                      ]
+                                    },
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "knowledge_file_format_unsupported",
+                                        "knowledge_file_over_limit",
+                                        "knowledge_file_unreadable",
+                                        "knowledge_file_missing",
+                                        "knowledge_extraction_failed",
+                                        "knowledge_file_format_unavailable",
+                                        "knowledge_text_unreadable",
+                                        "knowledge_text_empty",
+                                        "knowledge_index_failed"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "count": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "count"
+                              ]
+                            }
+                          },
+                          "running": {
+                            "type": "object",
+                            "properties": {
+                              "syncRunId": {
+                                "type": "string"
+                              },
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "initial",
+                                  "changes",
+                                  "full"
+                                ]
+                              },
+                              "startedAt": {
+                                "type": "string"
+                              },
+                              "itemsPerMinute": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "estimatedEndAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "syncRunId",
+                              "mode",
+                              "startedAt"
+                            ]
+                          },
+                          "last": {
+                            "type": "object",
+                            "properties": {
+                              "syncRunId": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "initial",
+                                  "changes",
+                                  "full"
+                                ]
+                              },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "cursor_expired"
+                                ]
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "running",
+                                  "done",
+                                  "failed"
+                                ]
+                              },
+                              "counts": {
+                                "type": "object",
+                                "properties": {
+                                  "discovered": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "added": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "changed": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "moved": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "withdrawn": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "failed": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "skipped": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "discovered",
+                                  "added",
+                                  "changed",
+                                  "moved",
+                                  "withdrawn",
+                                  "failed",
+                                  "skipped"
+                                ]
+                              },
+                              "bytesFetched": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "failureCode": {
+                                "type": "string",
+                                "enum": [
+                                  "knowledge_source_unreachable",
+                                  "knowledge_source_refused",
+                                  "knowledge_fetch_failed",
+                                  "knowledge_source_limit_reached"
+                                ]
+                              },
+                              "startedAt": {
+                                "type": "string"
+                              },
+                              "endedAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "syncRunId",
+                              "source",
+                              "mode",
+                              "state",
+                              "counts",
+                              "bytesFetched",
+                              "startedAt"
+                            ]
+                          },
+                          "lastChangeAt": {
+                            "type": "string"
+                          },
+                          "oldestOpenChangeAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "connection",
+                          "items",
+                          "failures"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "sources"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/knowledge-bases/{knowledgeBase}/sources/{source}/items": {
+      "get": {
+        "operationId": "knowledge_bases.source_items",
+        "summary": "Page through the items of a source, newest change first; filter by state or failure code",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "discovered",
+                "fetched",
+                "indexed",
+                "failed",
+                "withdrawn"
+              ]
+            }
+          },
+          {
+            "name": "failureCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "knowledge_source_unreachable",
+                    "knowledge_source_refused",
+                    "knowledge_fetch_failed",
+                    "knowledge_source_limit_reached",
+                    "knowledge_file_over_limit",
+                    "knowledge_file_format_unsupported"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "knowledge_file_format_unsupported",
+                    "knowledge_file_over_limit",
+                    "knowledge_file_unreadable",
+                    "knowledge_file_missing",
+                    "knowledge_extraction_failed",
+                    "knowledge_file_format_unavailable",
+                    "knowledge_text_unreadable",
+                    "knowledge_text_empty",
+                    "knowledge_index_failed"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "itemId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "discovered",
+                              "fetched",
+                              "indexed",
+                              "failed",
+                              "withdrawn"
+                            ]
+                          },
+                          "failureCode": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "knowledge_source_unreachable",
+                                  "knowledge_source_refused",
+                                  "knowledge_fetch_failed",
+                                  "knowledge_source_limit_reached",
+                                  "knowledge_file_over_limit",
+                                  "knowledge_file_format_unsupported"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "knowledge_file_format_unsupported",
+                                  "knowledge_file_over_limit",
+                                  "knowledge_file_unreadable",
+                                  "knowledge_file_missing",
+                                  "knowledge_extraction_failed",
+                                  "knowledge_file_format_unavailable",
+                                  "knowledge_text_unreadable",
+                                  "knowledge_text_empty",
+                                  "knowledge_index_failed"
+                                ]
+                              }
+                            ]
+                          },
+                          "documentId": {
+                            "type": "string"
+                          },
+                          "originLink": {
+                            "type": "string"
+                          },
+                          "changedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "itemId",
+                          "name",
+                          "path",
+                          "state",
+                          "changedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/knowledge-bases/{knowledgeBase}/sync": {
+      "post": {
+        "operationId": "knowledge_bases.sync",
+        "summary": "Start a full source sync and return its Operation Run immediately; concurrent starts join the running sync",
+        "tags": [
+          "Knowledge Bases"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "knowledgeBase",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  },
+                  "mode": {
+                    "type": "string",
+                    "const": "full"
+                  }
+                },
+                "required": [
+                  "source"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "syncRunId": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "initial",
+                        "changes",
+                        "full"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "cursor_expired"
+                      ]
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "running",
+                        "done",
+                        "failed"
+                      ]
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "discovered": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "added": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "changed": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "moved": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "withdrawn": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "skipped": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "discovered",
+                        "added",
+                        "changed",
+                        "moved",
+                        "withdrawn",
+                        "failed",
+                        "skipped"
+                      ]
+                    },
+                    "bytesFetched": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "failureCode": {
+                      "type": "string",
+                      "enum": [
+                        "knowledge_source_unreachable",
+                        "knowledge_source_refused",
+                        "knowledge_fetch_failed",
+                        "knowledge_source_limit_reached"
+                      ]
+                    },
+                    "startedAt": {
+                      "type": "string"
+                    },
+                    "endedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "syncRunId",
+                    "source",
+                    "mode",
+                    "state",
+                    "counts",
+                    "bytesFetched",
+                    "startedAt"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
       }
     },
     "/api/v1/me": {
@@ -25112,6 +26178,12 @@
           },
           "runsAs": {
             "type": "string"
+          },
+          "publishQuestion": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "contentRevision": {
             "type": "integer",

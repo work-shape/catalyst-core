@@ -4394,15 +4394,15 @@ describe("the Catalyst skill the CLI ships", () => {
     // The check sees a command, a verb and an option the CLI does not have.
     expect(
       unlistedInHelp(
-        "Run `catalyst init` and `catalyst agent rename x`, then `catalyst config sync --all` and `catalyst agent hits x`.",
+        "Run `catalyst init` and `catalyst agent rename x`, then `catalyst config sync --unknown-skill-flag` and `catalyst agent hits x`.",
         help
       )
     ).toEqual([
       "command 'init' in: catalyst init",
       "'agent rename' in: catalyst agent rename x",
-      "command 'config sync' in: catalyst config sync --all",
+      "command 'config sync' in: catalyst config sync --unknown-skill-flag",
       "'agent hits' in: catalyst agent hits x",
-      "option '--all'"
+      "option '--unknown-skill-flag'"
     ]);
   });
 

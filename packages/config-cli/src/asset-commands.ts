@@ -263,6 +263,15 @@ const VERBS: Record<string, Verb> = {
         } else if (values.confirm !== undefined) {
           throw new UsageError("--confirm answers the dry run of a guardrail's publish.");
         }
+        if (session.kind.kind === "knowledge_base") {
+          const asset = await session.api.read((client) =>
+            client.assets.get({
+              params: { kind: session.kind.kind, name },
+              query: { revision: String(revision), ...session.scope }
+            })
+          );
+          for (const line of asset.publishQuestion ?? []) writeOutput(session.options, line);
+        }
         let unattended = false;
         if (session.kind.actions.approve !== undefined) {
           const asked = {
