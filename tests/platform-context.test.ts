@@ -5,13 +5,16 @@ import {
   configAssetReferencesSchema,
   platformContextSchema
 } from "@work-shape/catalyst-api-contract";
+import { INSTANCE_ASSET_SCOPE } from "@work-shape/catalyst-core";
 import {
   SCOPES_HEADER,
   SERVICE_HEADER,
+  agent,
   clientInstanceId,
   setupAccessInstance as setup,
   storeTestServicePrincipal
 } from "./support/access-instance";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // `platform.context.get` is the first read of an outside editor: where it is, which kinds
 // exist, and where the caller may do what.
@@ -303,6 +306,93 @@ describe("platform.references.get", () => {
     // The refusal tells nothing of the instance.
     expect(JSON.stringify(error)).not.toContain("known.tool");
   });
+
+  it.each(["asset", "workspace"] as const)(
+    "answers an agent reader granted access to one %s without opening other agents",
+    async (scopeKind) => {
+      const t = await setup();
+      const scope =
+        scopeKind === "asset"
+          ? INSTANCE_ASSET_SCOPE
+          : { kind: "workspace" as const, workspaceId: await t.sharedWorkspace("Reader team") };
+      await applyAtCurrentRevisions(t.stores.configAssets, {
+        clientInstanceId,
+        mutations: ["readable-agent", "hidden-agent"].map((name) => ({
+          type: "upsert",
+          kind: "agent",
+          name,
+          config: agent(name, { instructions: `${name} private instructions` }),
+          scope
+        }))
+      });
+      await t.grant(
+        t.kai.id,
+        "agent.read",
+        scope.kind === "workspace"
+          ? { workspaceId: scope.workspaceId }
+          : { assetId: await t.assetId("agent", "readable-agent") }
+      );
+      await t.grant(
+        t.kai.id,
+        "agent.read",
+        { assetId: await t.assetId("agent", "hidden-agent") },
+        "deny"
+      );
+      const headers = { [SCOPES_HEADER]: "config_assets:read" };
+      const query = scope.kind === "workspace" ? { workspaceId: scope.workspaceId } : {};
+      await t.expectOk(t.kai.id, "assets.get", {
+        params: { kind: "agent", name: "readable-agent" },
+        query,
+        headers
+      });
+
+      // Release metadata supplies the reader's model/tool labels, never other agents' data.
+      const response = await t.expectOk(t.kai.id, "platform.references.get", { headers });
+      expect(response.json()).toEqual({
+        ...references,
+        registeredToolNames: ["known.tool", "second.tool"]
+      });
+      await t.expectRefused(
+        t.kai.id,
+        "assets.get",
+        { params: { kind: "agent", name: "hidden-agent" }, query, headers },
+        t.forbidden("agent.read", "denied")
+      );
+      // A right to references grants no right on another agent. An ungranted name and an
+      // unknown name keep the same refusal; neither response carries agent configuration.
+      const unreadable = await t.expectRefused(
+        t.kai.id,
+        "assets.get",
+        { params: { kind: "agent", name: "assistant" }, headers },
+        t.forbidden("agent.read", "no_grant")
+      );
+      const missing = await t.expectRefused(
+        t.kai.id,
+        "assets.get",
+        { params: { kind: "agent", name: "missing-agent" }, headers },
+        t.forbidden("agent.read", "no_grant")
+      );
+      expect(unreadable).toEqual(missing);
+      if (scope.kind === "workspace") {
+        // In the readable scope, a name owned elsewhere is absent just like an unknown one.
+        for (const name of ["assistant", "missing-agent"]) {
+          const error = await t.expectRefused(
+            t.kai.id,
+            "assets.get",
+            { params: { kind: "agent", name }, query, headers },
+            { status: 404, code: "NOT_FOUND" }
+          );
+          expect(error.message).toBe(`Config agent '${name}' was not found`);
+        }
+      }
+      await t.expectRefused(
+        t.kai.id,
+        "platform.references.get",
+        { headers: { [SCOPES_HEADER]: "chat" } },
+        refused
+      );
+    }
+  );
 
   it("refuses a credential whose scopes open no action its holder is granted", async () => {
     const t = await setup();

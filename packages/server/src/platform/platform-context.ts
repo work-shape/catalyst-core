@@ -109,7 +109,7 @@ async function usableWorkspaces(
  * workspace's assets, where its credential's scopes let it read. Read from the grant rows the
  * request's authorization already loaded: it sends no statement.
  */
-function readActionsOnSingleAssets(options: ContextOptions, context: Caller): string[] {
+export function readActionsOnSingleAssets(options: ContextOptions, context: Caller): string[] {
   if (!hasAuthScope(context.actor, SCOPE_OF_VERB.read)) {
     return [];
   }

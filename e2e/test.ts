@@ -508,16 +508,6 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["the proposal's states and each kind of proposed value, for a writer and a reader"]
   },
   {
-    name: "agent-reader-references",
-    reason:
-      "Known, not fixed here: the agent page asks a reader who may read the one agent and " +
-      "change nothing for the instance's references, which the instance refuses with 403. " +
-      "The page shows the agent without them.",
-    matches: requestAnswered(403),
-    path: /^\/api\/v1\/context\/references$/u,
-    tests: ["the proposal's states and each kind of proposed value, for a writer and a reader"]
-  },
-  {
     name: "unread-configuration-diagnostic",
     reason:
       "The interface writes this line itself when the instance configuration does not fit it, " +

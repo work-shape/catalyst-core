@@ -2,7 +2,11 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { AppError } from "@work-shape/catalyst-core";
 import { configAssetReferences } from "../config-assets/config-asset-service";
 import type { Route } from "../http/route";
-import { readPlatformContext, usableActions } from "../platform/platform-context";
+import {
+  readActionsOnSingleAssets,
+  readPlatformContext,
+  usableActions
+} from "../platform/platform-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerPlatformRoutes(route: Route, options: ChatServerOptions): void {
@@ -14,20 +18,21 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
   });
 
   // What an editor offers for a definition: the models, efforts and tools of this instance.
-  // It is for whoever can use an action of a registered kind somewhere, on the instance as a
-  // whole or in one Namespace, decided as the context decides which Namespaces it lists. The
-  // answer comes from the release config, so the store is read for the Namespaces only, and
-  // only for a caller who holds nothing on the instance as a whole.
+  // Readers of one asset or workspace need the same labels as instance-wide readers. These
+  // references come only from release config; reading an asset still checks its own right.
   route(apiOperations["platform.references.get"], async ({ access, identity }) => {
     const caller = { access, actor: identity };
-    if (usableActions(options, caller).length === 0) {
+    if (
+      usableActions(options, caller).length === 0 &&
+      readActionsOnSingleAssets(options, caller).length === 0
+    ) {
       const namespaces = await options.stores.access.listNamespaceRecords({
         clientInstanceId: options.clientInstanceId
       });
       if (!namespaces.some(({ prefix }) => usableActions(options, caller, prefix).length > 0)) {
         throw new AppError(
           "FORBIDDEN",
-          "Reading the references needs a right on an asset kind, on the instance or in a Namespace"
+          "Reading the references needs a right on an asset kind, on the instance, in a workspace or on one asset"
         );
       }
     }
