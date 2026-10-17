@@ -666,6 +666,13 @@
       "when": 1792201627232,
       "tag": "0094_managed_file_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1792234250133,
+      "tag": "0095_connection_bindings",
+      "breakpoints": true
     }
   ]
 }

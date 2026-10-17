@@ -317,6 +317,10 @@ export async function fixtureOn<Instance extends AccessInstance>(
         resolve(input) {
           sequence.push("resolve credential");
           return resolver.resolve(input);
+        },
+        resolveSignIn(input) {
+          sequence.push("resolve credential");
+          return resolver.resolveSignIn(input);
         }
       };
       const evaluator = createAuthorizer(stores.access);

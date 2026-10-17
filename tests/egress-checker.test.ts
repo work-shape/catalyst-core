@@ -546,7 +546,8 @@ describe("the order around a call", () => {
       resolve({ handle }) {
         resolved.push(handle);
         return Promise.resolve(secret);
-      }
+      },
+      resolveSignIn: () => Promise.reject(new Error("The test Connection has no sign-in"))
     };
     const { checker, asked } = checkerOf(allow, dns);
     const open = (config: ConnectionConfig, egress: EgressChecker = checker) =>

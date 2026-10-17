@@ -2,14 +2,12 @@ import {
   AppError,
   CONNECTION_CALL_REASONS,
   CONNECTION_TRANSIENT_CALL_REASONS,
-  CREDENTIAL_REFUSALS,
   EGRESS_UNRESOLVED,
   connectionCallError,
   connectionCallFailure,
   connectionCallReasonOf,
   isAppError,
   type ConnectionCallReason,
-  type ConnectionCredentialResolver,
   type ConnectionHealth,
   type ConnectionOperationEffect,
   type ConnectorContext,
@@ -24,7 +22,11 @@ import {
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "./connection-reads";
-import { openConnectorContext, type OpenConnectorContextInput } from "./connector-context";
+import {
+  NO_CREDENTIALS,
+  openConnectorContext,
+  type OpenConnectorContextInput
+} from "./connector-context";
 import { compileJsonSchema } from "./json-schema";
 import { jsonOfCheckedValue, outsideSchemaChecker } from "./schema-check";
 
@@ -188,11 +190,6 @@ export class ConnectionCallSlots {
   }
 }
 
-/** A resolver for a process without Secret Store keys: it has no credential to hand out. */
-const NO_CREDENTIALS: ConnectionCredentialResolver = {
-  resolve: () => Promise.reject(connectionCallError(CREDENTIAL_REFUSALS.notConfigured))
-};
-
 /** A host as DNS writes one, or an address. Anything else is not repeated in an error. */
 const HOST_PATTERN = /^[A-Za-z0-9.:_[\]-]{1,255}$/u;
 
@@ -257,7 +254,9 @@ function safeCallError(
 const HEALTH_OF_FAILURE: Partial<Record<ConnectionCallReason, ConnectionHealth>> = {
   upstream_unauthorized: "failed",
   connection_unavailable: "failed",
-  secret_unreadable: "secret_unreadable"
+  secret_unreadable: "secret_unreadable",
+  connection_not_connected: "needs_configuration",
+  connection_needs_reconnect: "failed"
 };
 
 /**

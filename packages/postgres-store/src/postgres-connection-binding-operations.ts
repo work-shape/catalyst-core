@@ -1,0 +1,221 @@
+import { and, eq, getTableColumns, isNull, lte, or, sql } from "drizzle-orm";
+import type {
+  ConnectionBindingKey,
+  ConnectionBindingRecord,
+  ConnectionBindingsStore,
+  ConnectionSetupSessionRecord
+} from "@work-shape/catalyst-core";
+import type { PostgresConnection } from "./postgres-database";
+import { connectionBindings, connectionSetupSessions } from "./schema";
+
+// The rows of sign-in bindings and setup sessions. Every decision about time is the database
+// clock's at the statement (`clock_timestamp()`), so a lease or an expiry reads the same in
+// every process and inside a transaction that started earlier.
+
+type BindingRow = typeof connectionBindings.$inferSelect;
+type SessionRow = typeof connectionSetupSessions.$inferSelect;
+
+const statementTime = sql`clock_timestamp()`;
+const later = (ms: number) =>
+  sql`clock_timestamp() + make_interval(secs => ${ms}::double precision / 1000)`;
+
+function mapBinding(row: BindingRow): ConnectionBindingRecord {
+  return {
+    clientInstanceId: row.clientInstanceId,
+    connectionAssetId: row.connectionAssetId,
+    subject: row.subject,
+    ...(row.userId === null ? {} : { userId: row.userId }),
+    state: row.state,
+    scheme: row.scheme,
+    ...(row.accountId === null ? {} : { accountId: row.accountId }),
+    ...(row.accountLabel === null ? {} : { accountLabel: row.accountLabel }),
+    grantedScopes: row.grantedScopes,
+    secretHandle: row.secretHandle,
+    secretVersion: row.secretVersion,
+    ...(row.accessExpiresAt ? { accessExpiresAt: row.accessExpiresAt.toISOString() } : {}),
+    ...(row.lastRefreshedAt ? { lastRefreshedAt: row.lastRefreshedAt.toISOString() } : {}),
+    connectedAt: row.connectedAt.toISOString(),
+    ...(row.connectedBy === null ? {} : { connectedBy: row.connectedBy }),
+    ...(row.lastUsedOn === null ? {} : { lastUsedOn: row.lastUsedOn }),
+    stateChangedAt: row.stateChangedAt.toISOString(),
+    ...(row.stateChangedBy === null ? {} : { stateChangedBy: row.stateChangedBy }),
+    ...(row.stateReason === null ? {} : { stateReason: row.stateReason }),
+    origin: row.origin,
+    ...(row.leaseOwner === null ? {} : { leaseOwner: row.leaseOwner }),
+    ...(row.leaseExpiresAt ? { leaseExpiresAt: row.leaseExpiresAt.toISOString() } : {}),
+    rowVersion: row.rowVersion
+  };
+}
+
+function mapSession(row: SessionRow): ConnectionSetupSessionRecord {
+  return {
+    id: row.id,
+    clientInstanceId: row.clientInstanceId,
+    connectionAssetId: row.connectionAssetId,
+    connectionRevision: row.connectionRevision,
+    subject: row.subject,
+    actorUserId: row.actorUserId,
+    authSessionId: row.authSessionId,
+    stateHash: row.stateHash,
+    verifier: {
+      keyId: row.verifierKeyId,
+      nonce: row.verifierNonce,
+      ciphertext: row.verifierCiphertext
+    },
+    redirectUri: row.redirectUri,
+    issuer: row.issuer,
+    scopes: row.scopes,
+    createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString()
+  };
+}
+
+const bindingOf = (key: ConnectionBindingKey) =>
+  and(
+    eq(connectionBindings.clientInstanceId, key.clientInstanceId),
+    eq(connectionBindings.connectionAssetId, key.connectionAssetId),
+    eq(connectionBindings.subject, key.subject)
+  );
+
+/** The only code that reads or writes `connection_bindings` and `connection_setup_sessions`. */
+export function createPostgresConnectionBindingOperations(
+  db: PostgresConnection
+): ConnectionBindingsStore {
+  return {
+    async getConnectionBinding(key) {
+      const [row] = await db.select().from(connectionBindings).where(bindingOf(key)).limit(1);
+      return row ? mapBinding(row) : undefined;
+    },
+    async connectConnectionBinding({ expectedRowVersion, ...signIn }) {
+      const values = {
+        userId: signIn.userId ?? null,
+        state: "connected" as const,
+        scheme: signIn.scheme,
+        accountId: signIn.accountId ?? null,
+        accountLabel: signIn.accountLabel ?? null,
+        grantedScopes: [...signIn.grantedScopes],
+        secretHandle: signIn.secretHandle,
+        secretVersion: signIn.secretVersion,
+        accessExpiresAt: signIn.accessExpiresAt ? new Date(signIn.accessExpiresAt) : null,
+        lastRefreshedAt: null,
+        connectedAt: statementTime,
+        connectedBy: signIn.connectedBy ?? null,
+        stateChangedAt: statementTime,
+        stateChangedBy: signIn.connectedBy ?? null,
+        stateReason: null,
+        origin: signIn.origin
+      };
+      if (expectedRowVersion === null) {
+        const [row] = await db
+          .insert(connectionBindings)
+          .values({
+            clientInstanceId: signIn.clientInstanceId,
+            connectionAssetId: signIn.connectionAssetId,
+            subject: signIn.subject,
+            ...values,
+            rowVersion: 1
+          })
+          .onConflictDoNothing()
+          .returning();
+        return row ? mapBinding(row) : undefined;
+      }
+      // A new sign-in replaces the binding whole. The last use and the lease stay: whoever
+      // holds the lease finds the row version changed and uses what is stored now.
+      const [row] = await db
+        .update(connectionBindings)
+        .set({ ...values, rowVersion: sql`${connectionBindings.rowVersion} + 1` })
+        .where(and(bindingOf(signIn), eq(connectionBindings.rowVersion, expectedRowVersion)))
+        .returning();
+      return row ? mapBinding(row) : undefined;
+    },
+    async changeConnectionBindingState({ expectedRowVersion, state, reason, changedBy, ...key }) {
+      const [row] = await db
+        .update(connectionBindings)
+        .set({
+          state,
+          stateReason: reason,
+          stateChangedBy: changedBy ?? null,
+          stateChangedAt: statementTime,
+          rowVersion: sql`${connectionBindings.rowVersion} + 1`
+        })
+        .where(and(bindingOf(key), eq(connectionBindings.rowVersion, expectedRowVersion)))
+        .returning();
+      return row ? mapBinding(row) : undefined;
+    },
+    async takeConnectionBindingLease({ owner, leaseMs, ...key }) {
+      // One statement decides: of two processes that ask at once, the second one's update
+      // waits for the first one's row lock and then finds the lease taken.
+      const [row] = await db
+        .update(connectionBindings)
+        .set({ leaseOwner: owner, leaseExpiresAt: later(leaseMs) })
+        .where(
+          and(
+            bindingOf(key),
+            or(
+              isNull(connectionBindings.leaseOwner),
+              lte(connectionBindings.leaseExpiresAt, statementTime),
+              eq(connectionBindings.leaseOwner, owner)
+            )
+          )
+        )
+        .returning();
+      return row ? mapBinding(row) : undefined;
+    },
+    async releaseConnectionBindingLease({ owner, ...key }) {
+      const released = await db
+        .update(connectionBindings)
+        .set({ leaseOwner: null, leaseExpiresAt: null })
+        .where(and(bindingOf(key), eq(connectionBindings.leaseOwner, owner)))
+        .returning({ subject: connectionBindings.subject });
+      return released.length > 0;
+    },
+    async createConnectionSetupSession({ ttlMs, verifier, ...session }) {
+      const [row] = await db
+        .insert(connectionSetupSessions)
+        .values({
+          ...session,
+          verifierKeyId: verifier.keyId,
+          verifierNonce: verifier.nonce,
+          verifierCiphertext: verifier.ciphertext,
+          createdAt: statementTime,
+          expiresAt: later(ttlMs)
+        })
+        .returning();
+      if (!row) throw new Error("The setup session was not stored");
+      return mapSession(row);
+    },
+    async consumeConnectionSetupSession({ clientInstanceId, stateHash }) {
+      // The delete is the one decision: of two callbacks with the same state, one gets the row.
+      const [row] = await db
+        .delete(connectionSetupSessions)
+        .where(
+          and(
+            eq(connectionSetupSessions.clientInstanceId, clientInstanceId),
+            eq(connectionSetupSessions.stateHash, stateHash)
+          )
+        )
+        .returning({
+          ...getTableColumns(connectionSetupSessions),
+          expired: sql<boolean>`${connectionSetupSessions.expiresAt} <= ${statementTime}`
+        });
+      if (!row) return { outcome: "unknown" };
+      const { expired, ...session } = row;
+      if (expired) return { outcome: "expired" };
+      return { outcome: "consumed", session: mapSession(session) };
+    },
+    async sweepExpiredConnectionSetupSessions({ clientInstanceId }) {
+      // Sessions are made by people who connect a Connection and live 15 minutes, so the
+      // expired ones of one tick are few; the index on (instance, expiry) finds them.
+      const swept = await db
+        .delete(connectionSetupSessions)
+        .where(
+          and(
+            eq(connectionSetupSessions.clientInstanceId, clientInstanceId),
+            lte(connectionSetupSessions.expiresAt, statementTime)
+          )
+        )
+        .returning({ id: connectionSetupSessions.id });
+      return swept.length;
+    }
+  };
+}

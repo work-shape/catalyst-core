@@ -114,7 +114,7 @@ const connectionsModule = defineModule({
   kinds: ["connection"],
   // The agent's draft of a REST API's tools checks them against the instance's Connector types.
   tools: [CONNECTION_DRAFT_TOOL_NAME],
-  jobKinds: ["connection.discover"],
+  jobKinds: ["connection.discover", "connection_setup_sessions.sweep"],
   ui: ["build.connections"]
 });
 

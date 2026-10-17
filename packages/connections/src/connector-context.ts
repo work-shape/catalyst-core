@@ -25,6 +25,18 @@ import { isSameEgressOrigin } from "./egress";
 /** The auth scheme of a Connection that sends no credential. */
 export const AUTH_SCHEME_NONE = "none";
 
+/**
+ * The auth scheme of a Connection whose credential is the access token of a sign-in at its
+ * outside system. The token comes from the Connection's binding, never from its own secret.
+ */
+const AUTH_SCHEME_OAUTH = "oauth";
+
+/** A resolver for a process without Secret Store keys: it has no credential to hand out. */
+export const NO_CREDENTIALS: ConnectionCredentialResolver = {
+  resolve: () => Promise.reject(connectionCallError(CREDENTIAL_REFUSALS.notConfigured)),
+  resolveSignIn: () => Promise.reject(connectionCallError(CREDENTIAL_REFUSALS.notConfigured))
+};
+
 /** A header name as HTTP writes one. A name a type hands over is checked against it. */
 const HEADER_NAME_PATTERN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,64}$/u;
 
@@ -93,9 +105,10 @@ function sealCredential(
 }
 
 /**
- * What an auth scheme makes of the secret. `bearer` and `header` become one request header;
- * every other scheme, such as a database password, is handed the secret itself. No scheme
- * puts a credential into an address or a query: those end up in logs of the other side.
+ * What an auth scheme makes of the secret. `bearer`, an `oauth` access token and `header`
+ * become one request header; every other scheme, such as a database password, is handed the
+ * secret itself. No scheme puts a credential into an address or a query: those end up in logs
+ * of the other side.
  */
 function credentialOf(
   type: ConnectorTypeDefinition,
@@ -103,7 +116,7 @@ function credentialOf(
   settings: JsonObject,
   secret: string
 ): ConnectionCredential {
-  if (scheme === "bearer") {
+  if (scheme === "bearer" || scheme === AUTH_SCHEME_OAUTH) {
     return sealCredential(scheme, secret, { authorization: `Bearer ${secret}` });
   }
   if (scheme === "header") {
@@ -135,6 +148,18 @@ export function connectionOriginOf(
   } catch {
     return undefined;
   }
+}
+
+/** The handle of the Connection's own secret, which a scheme that sends one needs. */
+function storedSecretHandle(config: ConnectionConfig): string {
+  if (config.secretHandle === undefined) {
+    throw new AppError(
+      "CONFLICT",
+      `${CREDENTIAL_REFUSALS.notConfigured}: the Connection has no stored secret`,
+      { reason: CREDENTIAL_REFUSALS.notConfigured }
+    );
+  }
+  return config.secretHandle;
 }
 
 export interface OpenConnectorContextInput {
@@ -173,19 +198,18 @@ export async function openConnectorContext(
 
   let credential: ConnectionCredential | undefined;
   if (config.authScheme !== AUTH_SCHEME_NONE) {
-    if (config.secretHandle === undefined) {
-      throw new AppError(
-        "CONFLICT",
-        `${CREDENTIAL_REFUSALS.notConfigured}: the Connection has no stored secret`,
-        { reason: CREDENTIAL_REFUSALS.notConfigured }
-      );
-    }
-    // Only a secret set for the origin the call goes to is handed out.
-    const secret = await credentials.resolve({
-      handle: config.secretHandle,
-      binding: { connectionAssetId: connection.id, subject: SHARED_CREDENTIAL_SUBJECT },
-      origin: egressOriginOf(target)
-    });
+    // Only a secret set, or a sign-in made, for the origin the call goes to is handed out.
+    const secret =
+      config.authScheme === AUTH_SCHEME_OAUTH
+        ? await credentials.resolveSignIn({
+            connectionAssetId: connection.id,
+            origin: egressOriginOf(target)
+          })
+        : await credentials.resolve({
+            handle: storedSecretHandle(config),
+            binding: { connectionAssetId: connection.id, subject: SHARED_CREDENTIAL_SUBJECT },
+            origin: egressOriginOf(target)
+          });
     // A call that ended while its credential was read is handed none: the secret stays where
     // it was resolved and no type sees it.
     if (signal.aborted) throw connectionCallError("upstream_timeout");

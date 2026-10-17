@@ -140,6 +140,10 @@ export const CONNECTION_CALL_REASONS = {
   connection_unavailable: "CONFLICT",
   connection_not_configured: "CONFLICT",
   secret_unreadable: "CONFLICT",
+  /** The Connection signs in at the outside system, and no sign-in is connected for it. */
+  connection_not_connected: "CONFLICT",
+  /** The outside system refused the Connection's sign-in; someone has to sign in again. */
+  connection_needs_reconnect: "CONFLICT",
   operation_unknown: "NOT_FOUND",
   operation_disabled: "CONFLICT",
   operation_needs_review: "CONFLICT",
@@ -201,6 +205,8 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   connection_unavailable: "the Connection cannot be used now",
   connection_not_configured: "the Connection has no usable credential or settings",
   secret_unreadable: "the stored secret of the Connection cannot be read",
+  connection_not_connected: "nobody has signed in to the outside system for the Connection",
+  connection_needs_reconnect: "the outside system refused the Connection's sign-in",
   operation_unknown: "the Connection has no such operation now",
   operation_disabled: "the operation is disabled",
   operation_needs_review: "the outside system changed the operation and the change is not accepted",
@@ -278,6 +284,10 @@ const CONNECTION_CALL_SENTENCES: Record<
     `${c} is not set up completely, so it cannot be used. Trying again will not help. An administrator can see what is missing under ${WHERE}.`,
   secret_unreadable: (c) =>
     `${c} cannot be used because its stored credential cannot be read. Trying again will not help. An administrator can see what to do under ${WHERE}.`,
+  connection_not_connected: (c) =>
+    `${c} cannot be used because nobody has signed in to the outside system for it. Trying again will not help until an administrator signs in under ${WHERE}.`,
+  connection_needs_reconnect: (c) =>
+    `${c} cannot be used because its sign-in at the outside system has ended. Trying again will not help until an administrator signs in again under ${WHERE}.`,
   operation_unknown: (c) =>
     `${c} does not offer this action at the moment. Trying again will not help. An administrator can check the actions of the connection under ${WHERE}.`,
   operation_disabled: (c) =>

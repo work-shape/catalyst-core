@@ -120,6 +120,14 @@ export const recoverAbandonedModelCallsJob = defineScheduledKind("usage.recover_
 /** Corrects the usage counters and the daily sums from the usage events. */
 export const reconcileUsageJob = defineScheduledKind("usage.reconcile");
 
+/**
+ * Removes the setup sessions of Connection sign-ins that were started and never completed.
+ * A session expires after 15 minutes and is refused from then on; the sweep only clears it.
+ */
+export const sweepConnectionSetupSessionsJob = defineScheduledKind(
+  "connection_setup_sessions.sweep"
+);
+
 /** Asks every provider of the instance whether it answers. */
 export const checkInfrastructureJob = defineScheduledKind("infrastructure.check", 2 * MINUTE_MS);
 
@@ -194,6 +202,10 @@ export const pruneAuditEventsSchedule = defineSchedule({
   every: DAY_MS
 });
 export const pruneJobsSchedule = defineSchedule({ kind: pruneJobsJob, every: DAY_MS });
+export const sweepConnectionSetupSessionsSchedule = defineSchedule({
+  kind: sweepConnectionSetupSessionsJob,
+  every: HOUR_MS
+});
 export const adoptLegacyJobsSchedule = defineSchedule({
   kind: adoptLegacyJobsJob,
   every: MINUTE_MS,

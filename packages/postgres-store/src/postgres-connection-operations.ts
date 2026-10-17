@@ -4,6 +4,7 @@ import type {
   ConnectionsStore,
   StoredSecretRecord
 } from "@work-shape/catalyst-core";
+import { createPostgresConnectionBindingOperations } from "./postgres-connection-binding-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { connectionState, secrets } from "./schema";
 
@@ -40,6 +41,7 @@ function mapState(row: StateRow): ConnectionStateRecord {
 /** The only code that reads or writes `secrets` and `connection_state`. */
 export function createPostgresConnectionsStore(db: PostgresConnection): ConnectionsStore {
   return {
+    ...createPostgresConnectionBindingOperations(db),
     async lockReleaseSeed({ clientInstanceId }) {
       // Held until the transaction ends. Outside of one it would be released at once, which
       // the caller's use inside `transaction` rules out.
@@ -70,11 +72,7 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
       return row ? mapSecret(row) : undefined;
     },
     async putSecret(record) {
-      const values = {
-        handle: record.handle,
-        clientInstanceId: record.clientInstanceId,
-        connectionAssetId: record.connectionAssetId,
-        subject: record.subject,
+      const sealed = {
         version: record.version,
         keyId: record.keyId,
         nonce: record.nonce,
@@ -82,35 +80,49 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
         source: record.source,
         origin: record.origin ?? null
       };
-      const written = await db
-        .insert(secrets)
-        .values({ ...values, createdAt: sql`now()`, updatedAt: sql`now()` })
-        .onConflictDoUpdate({
-          target: [secrets.connectionAssetId, secrets.subject],
-          set: {
-            version: record.version,
-            keyId: record.keyId,
-            nonce: record.nonce,
-            ciphertext: record.ciphertext,
-            source: record.source,
-            origin: record.origin ?? null,
-            updatedAt: sql`now()`
-          },
-          // One statement decides: the row is replaced only by the version that follows the
-          // stored one. Of two writers of the same next version one finds the row changed.
-          setWhere: sql`${secrets.version} = ${record.version} - 1`
-        })
-        .returning({ handle: secrets.handle });
+      // Version 1 is only ever inserted and a later version only ever replaces the one before
+      // it, each in one statement: a version above 1 that finds the row gone writes nothing,
+      // so a write that read a row before a delete cannot put it back.
+      const written =
+        record.version === 1
+          ? await db
+              .insert(secrets)
+              .values({
+                handle: record.handle,
+                clientInstanceId: record.clientInstanceId,
+                connectionAssetId: record.connectionAssetId,
+                subject: record.subject,
+                ...sealed,
+                createdAt: sql`now()`,
+                updatedAt: sql`now()`
+              })
+              .onConflictDoNothing()
+              .returning({ handle: secrets.handle })
+          : await db
+              .update(secrets)
+              .set({ ...sealed, updatedAt: sql`now()` })
+              .where(
+                and(
+                  eq(secrets.clientInstanceId, record.clientInstanceId),
+                  eq(secrets.connectionAssetId, record.connectionAssetId),
+                  eq(secrets.subject, record.subject),
+                  eq(secrets.version, record.version - 1),
+                  // A secret set on the instance is never replaced from the environment.
+                  ...(record.source === "bootstrap" ? [eq(secrets.source, "bootstrap")] : [])
+                )
+              )
+              .returning({ handle: secrets.handle });
       return written.length > 0;
     },
-    async deleteSecrets({ clientInstanceId, connectionAssetId, subject }) {
+    async deleteSecrets({ clientInstanceId, connectionAssetId, subject, source }) {
       await db
         .delete(secrets)
         .where(
           and(
             eq(secrets.clientInstanceId, clientInstanceId),
             eq(secrets.connectionAssetId, connectionAssetId),
-            ...(subject === undefined ? [] : [eq(secrets.subject, subject)])
+            ...(subject === undefined ? [] : [eq(secrets.subject, subject)]),
+            ...(source === undefined ? [] : [eq(secrets.source, source)])
           )
         );
     },

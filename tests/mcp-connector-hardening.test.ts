@@ -75,7 +75,8 @@ describe("the Connector type mcp against a server that holds on", () => {
         connection: { id: `asset-${id}`, revision: 1, config },
         egress: egress.checker,
         credentials: {
-          resolve: () => Promise.reject(new Error("A Connection without a key resolves none"))
+          resolve: () => Promise.reject(new Error("A Connection without a key resolves none")),
+          resolveSignIn: () => Promise.reject(new Error("A Connection without a key resolves none"))
         },
         signal
       });

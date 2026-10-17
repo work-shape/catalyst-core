@@ -211,7 +211,8 @@ describe("the order inside a call", () => {
             resolved.push(secret);
             if (stopping) stop.abort();
             return secret;
-          }
+          },
+          resolveSignIn: (input) => credentials.resolveSignIn(input)
         },
         signal
       });

@@ -34,7 +34,9 @@ import {
   reconcileUsageSchedule,
   recoverAbandonedModelCallsJob,
   recoverAbandonedModelCallsSchedule,
-  retiredRecoverAgentRunsJob
+  retiredRecoverAgentRunsJob,
+  sweepConnectionSetupSessionsJob,
+  sweepConnectionSetupSessionsSchedule
 } from "./jobs/job-kinds";
 import { createOperationCalls } from "./operations/operation-calls";
 import { createOperationRunJobs } from "./operations/operation-run-jobs";
@@ -240,6 +242,18 @@ export function createChatServerJobs(
       kind: reconcileUsageJob,
       slots: 1,
       run: (_job, control) => usageReconciliation.run(control)
+    }),
+    defineJobHandler({
+      kind: sweepConnectionSetupSessionsJob,
+      slots: 1,
+      async run(_job, control) {
+        const swept = await control.transaction((stores) =>
+          stores.connections.sweepExpiredConnectionSetupSessions({
+            clientInstanceId: options.clientInstanceId
+          })
+        );
+        if (swept > 0) control.logger.info({ swept }, "Removed expired Connection setup sessions");
+      }
     })
   ];
   const schedules: JobSchedule[] = [
@@ -249,7 +263,8 @@ export function createChatServerJobs(
     adoptLegacyJobsSchedule,
     backfillUsageAttributionSchedule,
     recoverAbandonedModelCallsSchedule,
-    reconcileUsageSchedule
+    reconcileUsageSchedule,
+    sweepConnectionSetupSessionsSchedule
   ];
 
   // A run executes in an Agent Run worker. Its upkeep is served here as well, so a run whose

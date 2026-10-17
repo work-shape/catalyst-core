@@ -27,7 +27,12 @@ import {
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "./connection-reads";
-import { AUTH_SCHEME_NONE, connectionOriginOf, openConnectorContext } from "./connector-context";
+import {
+  AUTH_SCHEME_NONE,
+  NO_CREDENTIALS,
+  connectionOriginOf,
+  openConnectorContext
+} from "./connector-context";
 import { createSecretStore, type SecretKeyring } from "./secret-store";
 
 // What the Connection's page and the agent editor read beyond the asset, and the test of a
@@ -181,6 +186,8 @@ function testStatusOf(reason: ConnectionCallReason | undefined): ConnectorTestSt
     case "upstream_unauthorized":
     case "connection_not_configured":
     case "secret_unreadable":
+    case "connection_not_connected":
+    case "connection_needs_reconnect":
       return "unauthorized";
     default:
       return "unavailable";
@@ -194,6 +201,7 @@ function healthOfTest(
   if (status === "ready") return "ok";
   if (reason === CREDENTIAL_REFUSALS.unreadable) return "secret_unreadable";
   if (reason === CREDENTIAL_REFUSALS.notConfigured) return "needs_configuration";
+  if (reason === CREDENTIAL_REFUSALS.notConnected) return "needs_configuration";
   return "failed";
 }
 
@@ -274,9 +282,7 @@ export function createConnectionManagement(
             config: connection.config
           },
           egress: deps.egress,
-          credentials: deps.credentials ?? {
-            resolve: () => Promise.reject(connectionCallError(CREDENTIAL_REFUSALS.notConfigured))
-          },
+          credentials: deps.credentials ?? NO_CREDENTIALS,
           signal: controller.signal
         });
         const testing = type.test(context);

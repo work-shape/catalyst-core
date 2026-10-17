@@ -1,0 +1,11 @@
+---
+section: Database
+---
+
+- **Connections:** Add the storage of shared OAuth sign-in (CS-4b1) with migration `0095_connection_bindings`. The new table `connection_bindings` holds one binding per Connection and credential subject: its state (`connected`, `needs_reconnect`, `revoked`), the origin it was signed in for, the granted scopes, a lease and a row version. Every change names the row version it read, and a stale one changes nothing. The new table `connection_setup_sessions` holds a sign-in that is under way: the state as a hash and the PKCE verifier sealed with the Secret Store's keyring. A session is consumed once and expires after its time to live. The hourly job `connection_setup_sessions.sweep` removes expired sessions. `connection_state` gains the nullable column `oauth_client`. No column outside `secrets` holds a token: a binding names its token set by Secret Store handle and version, under the subject `oauth:shared`. This release adds no route and no sign-in yet.
+
+- **Refusals:** A Connection type that lists the `oauth` auth scheme reads its credential from the binding. A Connection without a connected binding for its current origin is refused with `connection_not_connected`, and the call says `…cannot be used because nobody has signed in to the outside system for it. Trying again will not help until an administrator signs in under Studio > Connections.` A binding the outside system ended is refused with `connection_needs_reconnect`. A binding signed in for another origin is never used. No connector type lists `oauth` in this release.
+
+- **Fixed:** Seeding a release secret no longer replaces a secret that was set on the instance between the seed's read and its write (S3-37). The write of a secret's next version now requires the version it follows, and a release seed replaces only a secret the release seeded. Removing a seeded secret that the release no longer names removes only the release's own.
+
+- **Deployment:** Apply migration `0095_connection_bindings` before starting API and worker processes. It adds two new tables and one nullable column, and the previous release stays compatible. Rolling back leaves bindings and setup sessions stored and unused; the previous release neither reads nor sweeps them.

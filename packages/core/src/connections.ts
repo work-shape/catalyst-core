@@ -13,6 +13,7 @@ import {
   type ConnectionHealth
 } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindSchema, AssetValidationIssue } from "./asset-kinds";
+import type { ConnectionBindingsStore } from "./connection-bindings";
 import { AppError } from "./errors";
 import { createPlatformId, type ClientInstanceId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
@@ -371,13 +372,17 @@ export interface ConnectionCredential {
   headers: Readonly<Record<string, string>>;
 }
 
-/** Why a credential is not handed out. No refusal carries a value. */
 /** A secret write that lost against another write of the same secret. Nothing was stored. */
 export const SECRET_WRITE_CONFLICT = "secret_write_conflict";
 
+/** Why a credential is not handed out. No refusal carries a value. */
 export const CREDENTIAL_REFUSALS = {
   notConfigured: "connection_not_configured",
-  unreadable: "secret_unreadable"
+  unreadable: "secret_unreadable",
+  /** No sign-in binding is connected for the Connection's current origin. */
+  notConnected: "connection_not_connected",
+  /** The outside system refused the sign-in; someone has to sign in again. */
+  needsReconnect: "connection_needs_reconnect"
 } as const;
 
 /**
@@ -394,6 +399,15 @@ export interface ConnectionCredentialResolver {
     /** The origin the call goes to (`egressOriginOf`). A Connection's call always names it. */
     origin?: string;
   }): Promise<string>;
+  /**
+   * The access token of the Connection's shared sign-in, for a Connection with auth scheme
+   * `oauth`. It reads the binding first and opens its token set only where the binding is
+   * connected and was made for `origin`. It throws `connection_not_connected` where there is
+   * no such binding or token set, `connection_needs_reconnect` where the outside system
+   * refused the sign-in, and `secret_unreadable` where the token set cannot be opened. It
+   * never falls back to the Connection's own secret.
+   */
+  resolveSignIn(input: { connectionAssetId: string; origin: string }): Promise<string>;
 }
 
 export { CONNECTION_HEALTH_STATES, type ConnectionHealth };
@@ -430,8 +444,11 @@ export interface StoredSecretRecord {
   origin?: string;
 }
 
-/** The rows behind Connections: stored secrets and runtime state. No method returns a value. */
-export interface ConnectionsStore {
+/**
+ * The rows behind Connections: stored secrets, runtime state and sign-in bindings. No method
+ * returns a value.
+ */
+export interface ConnectionsStore extends ConnectionBindingsStore {
   /**
    * Takes the lock of the release seed for this instance and holds it until the surrounding
    * transaction ends. A second process that seeds waits here and then reads what the first
@@ -449,7 +466,9 @@ export interface ConnectionsStore {
   /**
    * Inserts version 1, or replaces the row of the same Connection and subject with the
    * version that follows the stored one, in one statement. Answers `false` and writes
-   * nothing where the stored version is another: somebody else wrote in between.
+   * nothing where the stored version is another, where a version above 1 finds no row, or
+   * where a `bootstrap` record would replace a `runtime` one: somebody else wrote in between,
+   * and a secret set on the instance is never replaced from the environment.
    */
   putSecret(record: StoredSecretRecord): Promise<boolean>;
   deleteSecrets(input: {
@@ -457,6 +476,8 @@ export interface ConnectionsStore {
     connectionAssetId: string;
     /** Only this subject's secret. Left out, every secret of the Connection. */
     subject?: string;
+    /** Only a secret of this source, so a delete never takes one that was set meanwhile. */
+    source?: SecretSource;
   }): Promise<void>;
   getConnectionState(input: {
     clientInstanceId: ClientInstanceId;

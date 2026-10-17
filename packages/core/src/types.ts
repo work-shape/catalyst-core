@@ -27,6 +27,7 @@ export * from "./config";
 export * from "./asset-kinds";
 export * from "./config-assets";
 export * from "./connections";
+export * from "./connection-bindings";
 export * from "./approval-requests";
 export * from "./web-source";
 export * from "./structured-data";

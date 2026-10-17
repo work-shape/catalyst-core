@@ -115,6 +115,8 @@ const FAILURES_NOT_RETRIED: ReadonlySet<string> = new Set([
   "egress_denied",
   "connection_not_configured",
   "secret_unreadable",
+  "connection_not_connected",
+  "connection_needs_reconnect",
   "upstream_unauthorized",
   "output_invalid"
 ]);

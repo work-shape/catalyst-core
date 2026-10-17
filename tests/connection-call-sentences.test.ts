@@ -24,6 +24,8 @@ const REASONS: ConnectionCallReason[] = [
   "connection_unavailable",
   "connection_not_configured",
   "secret_unreadable",
+  "connection_not_connected",
+  "connection_needs_reconnect",
   "operation_unknown",
   "operation_disabled",
   "operation_needs_review",

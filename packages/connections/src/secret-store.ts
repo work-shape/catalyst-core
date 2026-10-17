@@ -10,8 +10,10 @@ import {
   AppError,
   CREDENTIAL_REFUSALS,
   SECRET_WRITE_CONFLICT,
+  SHARED_CREDENTIAL_SUBJECT,
   SecretNotResolvedError,
   createConnectionSecretHandle,
+  signInSecretSubject,
   type ClientInstanceId,
   type ConnectionCredentialResolver,
   type ConnectionsStore,
@@ -20,6 +22,7 @@ import {
   type SecretStore,
   type StoredSecretRecord
 } from "@work-shape/catalyst-core";
+import { z } from "zod";
 
 // The Secret Store: AES-256-GCM over one secret per Connection and subject. A fresh random
 // nonce for every encryption, and associated data that binds a row to its instance, its
@@ -326,52 +329,117 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
   };
 }
 
+/** The member of a token set the resolver hands out. The rest is the refresh's to read. */
+const tokenSetSchema = z.object({ accessToken: z.string().min(1) });
+
 /**
  * The connector auth component's way to a value. It reads one row by its handle and opens it
  * for the binding of the call. A secret set for another origin than the call's is not opened
  * and answers `connection_not_configured`: it is entered again for the origin the Connection
  * has now. A handle of another Connection, a copied row and a key that is gone all answer
  * `secret_unreadable`; none of them says more.
+ *
+ * A Connection that signs in at its outside system has a binding instead. Its token set is a
+ * secret like any other, read the same way, and only after the binding said it may be.
  */
 export function createConnectionCredentialResolver(
   options: SecretStoreOptions
 ): ConnectionCredentialResolver {
   const { clientInstanceId, store } = options;
+  /**
+   * The value of the row behind `handle`. `missing` is the reason where there is no row for
+   * this origin: whoever set it has to set it again for the origin the Connection has now.
+   */
+  async function open(
+    input: { handle: string; binding: SecretBinding; origin?: string },
+    missing: string
+  ): Promise<Buffer> {
+    const { handle, binding, origin } = input;
+    const record = await store.getSecret({ clientInstanceId, handle });
+    if (!record) {
+      throw new AppError("CONFLICT", `${missing}: the Connection has no stored secret`, {
+        reason: missing
+      });
+    }
+    // Fails closed: whatever moved the Connection and left its secret, the secret is not
+    // sent to an origin it was not set for.
+    if (origin !== undefined && record.origin !== origin) {
+      throw new AppError(
+        "CONFLICT",
+        `${missing}: the stored secret was set for another address of the Connection. Enter it again for this one`,
+        { reason: missing }
+      );
+    }
+    const opened =
+      record.connectionAssetId === binding.connectionAssetId && record.subject === binding.subject
+        ? openRecord(options, record, binding)
+        : undefined;
+    if (!opened) throw unreadable();
+    return opened;
+  }
   return {
-    async resolve({ handle, binding, origin }) {
-      const record = await store.getSecret({ clientInstanceId, handle });
-      if (!record) {
-        throw new AppError(
-          "CONFLICT",
-          `${CREDENTIAL_REFUSALS.notConfigured}: the Connection has no stored secret`,
-          { reason: CREDENTIAL_REFUSALS.notConfigured }
-        );
-      }
-      // Fails closed: whatever moved the Connection and left its secret, the secret is not
-      // sent to an origin it was not set for.
-      if (origin !== undefined && record.origin !== origin) {
-        throw new AppError(
-          "CONFLICT",
-          `${CREDENTIAL_REFUSALS.notConfigured}: the stored secret was set for another address of the Connection. Enter it again for this one`,
-          { reason: CREDENTIAL_REFUSALS.notConfigured }
-        );
-      }
-      const opened =
-        record.connectionAssetId === binding.connectionAssetId && record.subject === binding.subject
-          ? openRecord(options, record, binding)
-          : undefined;
-      if (!opened) {
-        throw new AppError(
-          "CONFLICT",
-          `${CREDENTIAL_REFUSALS.unreadable}: the stored secret cannot be opened with the configured keys`,
-          { reason: CREDENTIAL_REFUSALS.unreadable }
-        );
-      }
+    async resolve(input) {
+      const opened = await open(input, CREDENTIAL_REFUSALS.notConfigured);
       try {
         return opened.toString("utf8");
       } finally {
         opened.fill(0);
       }
+    },
+    async resolveSignIn({ connectionAssetId, origin }) {
+      const binding = await store.getConnectionBinding({
+        clientInstanceId,
+        connectionAssetId,
+        subject: SHARED_CREDENTIAL_SUBJECT
+      });
+      if (binding?.state === "needs_reconnect" && binding.origin === origin) {
+        throw new AppError(
+          "CONFLICT",
+          `${CREDENTIAL_REFUSALS.needsReconnect}: the outside system refused the Connection's sign-in`,
+          { reason: CREDENTIAL_REFUSALS.needsReconnect }
+        );
+      }
+      // A binding made for another origin is none for this one, even where the clean-up
+      // after the change of the Connection's address did not run.
+      if (binding?.state !== "connected" || binding.origin !== origin) {
+        throw new AppError(
+          "CONFLICT",
+          `${CREDENTIAL_REFUSALS.notConnected}: nobody has signed in for the Connection's address`,
+          { reason: CREDENTIAL_REFUSALS.notConnected }
+        );
+      }
+      const opened = await open(
+        {
+          handle: binding.secretHandle,
+          binding: { connectionAssetId, subject: signInSecretSubject(binding.subject) },
+          origin
+        },
+        CREDENTIAL_REFUSALS.notConnected
+      );
+      try {
+        const tokenSet = tokenSetSchema.safeParse(parseJson(opened.toString("utf8")));
+        if (!tokenSet.success) throw unreadable();
+        return tokenSet.data.accessToken;
+      } finally {
+        opened.fill(0);
+      }
     }
   };
+}
+
+function unreadable(): AppError {
+  return new AppError(
+    "CONFLICT",
+    `${CREDENTIAL_REFUSALS.unreadable}: the stored secret cannot be opened with the configured keys`,
+    { reason: CREDENTIAL_REFUSALS.unreadable }
+  );
+}
+
+/** JSON of a token set, or nothing where the text is none. Its text is never repeated. */
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }

@@ -6,9 +6,11 @@ import {
   AppError,
   CONNECTION_ASSET_KIND,
   CONNECTION_DECLARATION_FIELDS,
+  SECRET_WRITE_CONFLICT,
   SHARED_CREDENTIAL_SUBJECT,
   createConnectionSecretHandle,
   findConnectorTypeIssues,
+  isAppError,
   resolveOptionalSecret,
   unknownToJsonValue,
   type AssetValidationIssue,
@@ -23,7 +25,8 @@ import {
   sameJson,
   type JsonObject,
   type PlatformStores,
-  type SecretResolver
+  type SecretResolver,
+  type SecretSource
 } from "@work-shape/catalyst-core";
 import { AUTH_SCHEME_NONE, connectionOriginOf } from "./connector-context";
 import { createSecretStore, type SecretKeyring } from "./secret-store";
@@ -315,11 +318,12 @@ export async function seedReleaseConnections(
         handle: handles.get(name),
         binding,
         secretStore,
-        deleteSecret: () =>
+        deleteSecret: (source) =>
           stores.connections.deleteSecrets({
             clientInstanceId,
             connectionAssetId: asset.id,
-            subject: SHARED_CREDENTIAL_SUBJECT
+            subject: SHARED_CREDENTIAL_SUBJECT,
+            ...(source === undefined ? {} : { source })
           }),
         result
       });
@@ -352,6 +356,10 @@ export async function seedReleaseConnections(
  * - A secret set through a later runtime flow is never overwritten.
  * - A secret that came from here follows its environment value: a new value is a new version,
  *   the same value writes nothing, and a variable that is gone removes the stored secret.
+ *
+ * The secret is read here and written after, and an administrator may set one on the instance
+ * in between. So the write and the delete each take only a secret of the environment, in the
+ * statement that changes it, and a secret set meanwhile stays (S3-37).
  */
 async function bootstrapSecret(input: {
   name: string;
@@ -361,7 +369,8 @@ async function bootstrapSecret(input: {
   origin: string | undefined;
   binding: { connectionAssetId: string; subject: string };
   secretStore: ReturnType<typeof createSecretStore> | undefined;
-  deleteSecret(): Promise<void>;
+  /** Deletes the stored secret, or only one of `source`. */
+  deleteSecret(source?: SecretSource): Promise<void>;
   result: ReleaseSeedResult;
 }): Promise<ConnectionHealth | undefined> {
   const { secretStore, binding, result, name } = input;
@@ -379,23 +388,41 @@ async function bootstrapSecret(input: {
     return undefined;
   }
   if (!input.named) {
-    if (status.state !== "not_set") await input.deleteSecret();
+    if (status.state !== "not_set") await input.deleteSecret("bootstrap");
     return undefined;
   }
   if (input.value === undefined) {
-    if (status.state !== "not_set") await input.deleteSecret();
+    if (status.state !== "not_set") await input.deleteSecret("bootstrap");
     result.needsConfiguration.push(name);
     return "needs_configuration";
   }
-  const written = await secretStore.put({
-    binding,
-    value: input.value,
-    source: "bootstrap",
-    ...(input.handle === undefined ? {} : { handle: input.handle }),
-    ...(input.origin === undefined ? {} : { origin: input.origin })
-  });
-  if (written.changed) {
-    result.secretVersions[name] = written.version;
+  try {
+    const written = await secretStore.put({
+      binding,
+      value: input.value,
+      source: "bootstrap",
+      ...(input.handle === undefined ? {} : { handle: input.handle }),
+      ...(input.origin === undefined ? {} : { origin: input.origin })
+    });
+    if (written.changed) {
+      result.secretVersions[name] = written.version;
+    }
+  } catch (error) {
+    // A secret was set on the instance since the read above. It stays, and it is the
+    // instance's from now on.
+    if (isSecretWriteConflict(error)) return undefined;
+    throw error;
   }
   return undefined;
+}
+
+function isSecretWriteConflict(error: unknown): boolean {
+  if (!isAppError(error)) return false;
+  const details = error.details;
+  return (
+    typeof details === "object" &&
+    details !== null &&
+    "reason" in details &&
+    details.reason === SECRET_WRITE_CONFLICT
+  );
 }

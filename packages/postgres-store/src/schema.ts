@@ -55,7 +55,12 @@ import { liveOnceRuns, liveOnceSwitches } from "./schema/liveOnceSwitches";
 import { permissionGrants, namespaces } from "./schema/access";
 import { infrastructureCheckState } from "./schema/infrastructure";
 import { pages, fileSets, pageBuilds } from "./schema/pages";
-import { secrets, connectionState } from "./schema/connections";
+import {
+  secrets,
+  connectionState,
+  connectionBindings,
+  connectionSetupSessions
+} from "./schema/connections";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 import { dataStores } from "./schema/dataStores";
 import { guardrailHits } from "./schema/guardrails";
@@ -108,6 +113,8 @@ export const schema = {
   pageBuilds,
   secrets,
   connectionState,
+  connectionBindings,
+  connectionSetupSessions,
   workflowRuns,
   workflowStepRuns,
   dataStores,

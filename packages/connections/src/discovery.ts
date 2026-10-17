@@ -22,7 +22,7 @@ import {
 import { holdsSecret } from "./call";
 import { buildConnectionCatalog } from "./catalog";
 import { readConnection, type StoredConnection } from "./connection-reads";
-import { openConnectorContext } from "./connector-context";
+import { NO_CREDENTIALS, openConnectorContext } from "./connector-context";
 import {
   outsideSchemaChecker,
   type OutsideSchemaChecker,
@@ -127,11 +127,6 @@ export interface DiscoverConnectionInput {
   /** Instead of `CONNECTION_DISCOVERY_TIMEOUT_MS`. For tests. */
   timeoutMs?: number;
 }
-
-/** A resolver for a process without Secret Store keys: it has no credential to hand out. */
-const NO_CREDENTIALS: ConnectionCredentialResolver = {
-  resolve: () => Promise.reject(connectionCallError(CREDENTIAL_REFUSALS.notConfigured))
-};
 
 /**
  * Why a listed schema is not taken, or nothing. It is measured against the bounds of a schema
@@ -363,9 +358,11 @@ function healthOfFailure(
     case CREDENTIAL_REFUSALS.unreadable:
       return "secret_unreadable";
     case CREDENTIAL_REFUSALS.notConfigured:
+    case CREDENTIAL_REFUSALS.notConnected:
       return "needs_configuration";
     case "upstream_unauthorized":
     case "connection_unavailable":
+    case CREDENTIAL_REFUSALS.needsReconnect:
       return "failed";
     default:
       return previous ?? "unknown";

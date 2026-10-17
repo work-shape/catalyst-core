@@ -173,7 +173,10 @@ describe("the egress checker with egress.allowPublicHttps", () => {
       { allowPublicHttps: true }
     );
     const secret = generateTestSecret();
-    const credentials: ConnectionCredentialResolver = { resolve: () => Promise.resolve(secret) };
+    const credentials: ConnectionCredentialResolver = {
+      resolve: () => Promise.resolve(secret),
+      resolveSignIn: () => Promise.reject(new Error("The test Connection has no sign-in"))
+    };
     const context = await openConnectorContext({
       type: createTestConnector().type,
       connection: {

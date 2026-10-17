@@ -293,6 +293,41 @@ describe("the Secret Store", () => {
     expect(await storeWith().status(second)).toMatchObject({ state: "set", version: 1 });
   });
 
+  it("never writes a later version where the row is gone, nor a seeded one over the instance's (S3-37)", async () => {
+    // Fails without the change: a version 2 written after a delete was inserted as a new row,
+    // and a seeded version replaced a secret an administrator had set.
+    const value = generateTestSecret();
+    const { handle } = await storeWith().put({ binding: first, value, source: "runtime" });
+    const sealed = required((await readRows())[0]);
+    const record = (version: number, source: "bootstrap" | "runtime") => ({
+      handle,
+      clientInstanceId,
+      connectionAssetId: first.connectionAssetId,
+      subject: SHARED_CREDENTIAL_SUBJECT,
+      version,
+      keyId: sealed.key_id,
+      nonce: sealed.nonce,
+      ciphertext: sealed.ciphertext,
+      source
+    });
+    expect(await stores.connections.putSecret(record(2, "bootstrap"))).toBe(false);
+    expect(await readRows()).toMatchObject([{ version: 1, source: "runtime" }]);
+    // Only the seed's own secret goes when the seed removes one.
+    await stores.connections.deleteSecrets({
+      clientInstanceId,
+      connectionAssetId: first.connectionAssetId,
+      subject: SHARED_CREDENTIAL_SUBJECT,
+      source: "bootstrap"
+    });
+    expect(await readRows()).toHaveLength(1);
+
+    await storeWith().delete(first);
+    expect(await stores.connections.putSecret(record(2, "runtime"))).toBe(false);
+    expect(await readRows()).toHaveLength(0);
+    expect(await stores.connections.putSecret(record(1, "runtime"))).toBe(true);
+    expect(await stores.connections.putSecret(record(1, "runtime"))).toBe(false);
+  });
+
   it("hands the value to the resolver for the binding of the call and to nothing else", async () => {
     const store = storeWith();
     const value = generateTestSecret();

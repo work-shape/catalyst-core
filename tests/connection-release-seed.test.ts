@@ -9,15 +9,19 @@ import {
   parseClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
 import {
+  createConnectionCredentialResolver,
   createSecretStore,
   egressTargetOfUrl,
   loadSecretKeyring,
-  openConnectorContext
+  openConnectorContext,
+  seedReleaseConnections
 } from "@work-shape/catalyst-connections";
 import {
   SHARED_CREDENTIAL_SUBJECT,
+  SecretNotResolvedError,
   asClientInstanceId,
   connectionCallSentence,
+  createConnectorTypeRegistry,
   egressOriginOf,
   type JsonObject
 } from "@work-shape/catalyst-core";
@@ -714,6 +718,85 @@ describe("what stops a start, and what a missing or unreadable secret does", () 
     expect((await readStates()).map((row) => row.health)).toEqual(["unknown"]);
     expect(await call(w, w.env)).toBeUndefined();
     expect(required(w.connector.calls[0]).credential?.secret).toBe(w.token);
+  });
+
+  it("keeps a secret set on the instance while the seed ran, and starts (S3-37)", async () => {
+    // Fails without the change: the seed's write ended in a conflict that stopped the start,
+    // and its delete removed the secret the administrator had just set.
+    const w = world();
+    await (await w.start()).close();
+    const instance = await createTestInstance({ postgres: {} });
+    const asset = required((await readAssets())[0]);
+    const binding = { connectionAssetId: asset.id, subject: SHARED_CREDENTIAL_SUBJECT };
+    const keyring = await loadSecretKeyring({
+      keys: [{ id: "k1", ref: KEY_VARIABLE }],
+      secrets: { resolve: () => Promise.resolve(w.key) }
+    });
+    const origin = egressOriginOf(egressTargetOfUrl(`https://${OUTSIDE_HOST}/mcp`));
+    const administrator = createSecretStore({
+      clientInstanceId,
+      keyring,
+      store: instance.stores.connections
+    });
+    const set: string[] = [];
+    /** One seed, during which an administrator sets the secret right after the seed read it. */
+    const seedWhileSet = (env: Record<string, string>) => {
+      let read = false;
+      const stores = instance.stores;
+      return seedReleaseConnections({
+        clientInstanceId,
+        connections: configWith({ outside: outside() }).connections,
+        connectorTypes: createConnectorTypeRegistry([w.connector.type]),
+        keyring,
+        secrets: {
+          resolve: (name) => {
+            const value = env[name];
+            return value === undefined
+              ? Promise.reject(new SecretNotResolvedError(name, "is not set"))
+              : Promise.resolve(value);
+          }
+        },
+        stores: {
+          ...stores,
+          transaction: (work) =>
+            stores.transaction((inside) =>
+              work({
+                ...inside,
+                connections: {
+                  ...inside.connections,
+                  async findSecret(input) {
+                    const found = await inside.connections.findSecret(input);
+                    if (!read) {
+                      read = true;
+                      const value = generateTestSecret();
+                      set.push(value);
+                      await administrator.put({ binding, value, source: "runtime", origin });
+                    }
+                    return found;
+                  }
+                }
+              })
+            )
+        }
+      });
+    };
+
+    const changed = await seedWhileSet({ ...w.env, [TOKEN_VARIABLE]: generateTestSecret() });
+    expect(changed.secretVersions).toEqual({});
+    expect(await readSecrets()).toMatchObject([{ version: 2, source: "runtime" }]);
+    expect(
+      await createConnectionCredentialResolver({
+        clientInstanceId,
+        keyring,
+        store: instance.stores.connections
+      }).resolve({ handle: required((await readSecrets())[0]).handle, binding, origin })
+    ).toBe(set[0]);
+
+    // The secret was the seed's again when it read it, and the variable is gone.
+    await withTestSql((sql) => sql`update secrets set source = 'bootstrap'`);
+    await seedWhileSet({ [KEY_VARIABLE]: w.key });
+    expect(await readSecrets()).toMatchObject([{ version: 3, source: "runtime" }]);
+    await instance.close();
   });
 
   it("re-seals a bootstrap secret under a new first key", async () => {
