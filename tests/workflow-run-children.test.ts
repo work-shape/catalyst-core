@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { type JsonValue, type WorkflowManifest } from "@work-shape/catalyst-core";
+import {
+  type AuditEvent,
+  type JsonValue,
+  type StorePage,
+  type WorkflowManifest
+} from "@work-shape/catalyst-core";
 import { ref, child, parent, start, children } from "./support/workflow-children";
 import { clientInstanceId } from "./support/access-instance";
 import {
@@ -129,7 +134,7 @@ describe("Workflow child runs", () => {
     expect(await children(t, second?.id ?? "")).toHaveLength(0);
   });
 
-  it("cancels every open descendant and starts no more items", async () => {
+  it("cancels every open descendant, audits each once and starts no more items", async () => {
     const definitions = publishedDefinitions();
     definitions.publish(child());
     definitions.publish(parent("child", 600));
@@ -153,6 +158,37 @@ describe("Workflow child runs", () => {
       "cancelled",
       "cancelled"
     ]);
+    await t.expectOk(t.root.id, "workflows.cancel_run", { params: { runId: started.id } });
+    const cancelledChildren = await children(t, started.id);
+    const audit: AuditEvent[] = [];
+    for (let after: StorePage["after"]; ;) {
+      const page = await t.stores.audit.listAuditEvents({
+        clientInstanceId,
+        type: "workflow_run.cancelled",
+        page: { limit: 2, ...(after ? { after } : {}) }
+      });
+      audit.push(...page);
+      const last = page.at(-1);
+      if (!last) break;
+      after = [last.createdAt, last.id];
+    }
+    const childAudit = audit.filter((event) =>
+      cancelledChildren.some((run) => run.id === event.subject)
+    );
+    expect(childAudit).toHaveLength(cancelledChildren.length);
+    for (const run of cancelledChildren) {
+      const events = childAudit.filter((event) => event.subject === run.id);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        status: "success",
+        correlationId: run.correlationId,
+        metadata: {
+          workflow: run.workflow,
+          definitionRevisionId: run.definitionRevisionId,
+          parentRunId: started.id
+        }
+      });
+    }
   });
 
   it("ends a waiting parent at its deadline and cascades cancellation", async () => {

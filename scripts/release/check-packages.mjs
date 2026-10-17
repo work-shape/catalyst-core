@@ -31,9 +31,7 @@ const MAX_TARBALL_BYTES = 300_000; // check-limit
 // kit's `connections.call`, about 485 kB. Five versions are released; the limit moved for the
 // fifth and has room for none more. A version repeats the chart engine and
 // React byte for byte, about 258 kB packed, so sharing those between versions is the way to
-// stop the growth before the limit moves again. postgres-store ships its migrations with one
-// schema snapshot each, about 9 kB packed per migration; 69 migrations are 620 kB, 82 are 814 kB
-// (2026-10-14, the Knowledge Base migration).
+// stop the growth before the limit moves again.
 // chat-ui dropped its duplicate TypeScript source on 2026-10-15; Tailwind scans the compiled
 // components in published packages and the original source during workspace development. It
 // packs to about 540 kB since; its limit went back to 650 kB on 2026-10-15 (Felix approved).

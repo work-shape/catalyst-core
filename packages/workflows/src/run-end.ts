@@ -9,6 +9,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { workflowStepJobKind } from "./step-job";
 import { workflowDeadlineJobKind } from "./run-deadline";
+import { principalActor } from "./run-identity";
 
 /** Parent and child ends share one transaction, including the parent's wakeup. */
 export function createRunEnd(options: {
@@ -48,11 +49,28 @@ export function createRunEnd(options: {
     for (const child of await tx.workflowRuns.listChildRuns({ clientInstanceId, id: run.id })) {
       if (isWorkflowRunEnded(child.status)) continue;
       const locked = await tx.workflowRuns.lockRun({ clientInstanceId, id: child.id });
-      if (locked)
-        await endRun(tx, locked, {
+      if (
+        !locked ||
+        !(await endRun(tx, locked, {
           status: "cancelled",
           ...(end.cancelledBy ? { cancelledBy: end.cancelledBy } : {})
-        });
+        }))
+      )
+        continue;
+      await tx.audit.appendAuditEvent({
+        clientInstanceId,
+        type: "workflow_run.cancelled",
+        status: "success",
+        actor: principalActor(locked),
+        subject: locked.id,
+        correlationId: locked.correlationId,
+        metadata: {
+          workflow: locked.workflow,
+          definitionRevisionId: locked.definitionRevisionId,
+          stepRunCount: locked.stepRunCount,
+          parentRunId: run.id
+        }
+      });
     }
     if (run.parentStepRunId) {
       await tx.jobs.enqueue(

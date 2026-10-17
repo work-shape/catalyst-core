@@ -593,8 +593,11 @@ export type UsageCostStatus = (typeof USAGE_COST_STATUSES)[number];
 
 export const CONNECTION_OPERATION_STATUSES = [
   "ready",
+  /** Accepted, a discovering type, and no discovery has pinned it yet. */
   "awaiting_discovery",
+  /** The catalog's fingerprint differs from the accepted one. */
   "needs_review",
+  /** Accepted, and the last discovery did not list it or listed a schema nothing can check. */
   "unknown",
   "disabled"
 ] as const;
@@ -679,11 +682,16 @@ export const WORKFLOW_STEP_TYPES = [
   "output",
   "agent",
   "notify",
+  /** Starts another Workflow as a child run and waits for it. */
   "workflow"
 ] as const;
 export type WorkflowStepType = (typeof WORKFLOW_STEP_TYPES)[number];
 
-export const WORKFLOW_RESERVED_STEP_TYPES = ["condition", "parallel"] as const;
+export const WORKFLOW_RESERVED_STEP_TYPES = [
+  /** Reserved in the contract: drawn, and run by no engine yet. */
+  "condition",
+  "parallel"
+] as const;
 export type WorkflowReservedStepType = (typeof WORKFLOW_RESERVED_STEP_TYPES)[number];
 
 export const WORKFLOW_TRIGGER_KINDS = ["manual", "schedule", "parent"] as const;
