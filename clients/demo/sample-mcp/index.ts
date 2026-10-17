@@ -8,6 +8,12 @@ export {
 } from "./accounting/tools.js";
 export { connectSampleMcpClient } from "./client.js";
 export { createSampleData, utcMonthAnchor } from "./data.js";
+export {
+  SAMPLE_OAUTH_MODES,
+  SAMPLE_OAUTH_SCOPE,
+  type SampleOAuthMode,
+  type SampleOAuthOptions
+} from "./oauth.js";
 export { createSampleMcpServer, MAXIMUM_BODY_BYTES, MINIMUM_KEY_LENGTH } from "./server.js";
 export {
   DEFAULT_LIMIT,

@@ -111,14 +111,17 @@ type OutputOf<Op extends Operation> = Op["response"] extends {
   schema: infer Schema extends z.ZodType;
 }
   ? AsyncIterable<z.output<Schema>>
-  : Op["response"] extends { schema: infer Schema extends z.ZodType }
-    ? Op extends { accepted: infer Accepted extends z.ZodType }
-      ? Promise<OperationOutcome<z.output<Schema>, z.output<Accepted>>>
-      : Op extends { deferred: true }
-        ? // Undefined: the call was accepted and its work finishes by itself.
-          Promise<z.output<Schema> | undefined>
-        : Promise<z.output<Schema>>
-    : Promise<Blob>;
+  : Op["response"] extends { kind: "redirect" }
+    ? // A browser address: the server sends the browser on, and a call learns nothing more.
+      Promise<undefined>
+    : Op["response"] extends { schema: infer Schema extends z.ZodType }
+      ? Op extends { accepted: infer Accepted extends z.ZodType }
+        ? Promise<OperationOutcome<z.output<Schema>, z.output<Accepted>>>
+        : Op extends { deferred: true }
+          ? // Undefined: the call was accepted and its work finishes by itself.
+            Promise<z.output<Schema> | undefined>
+          : Promise<z.output<Schema>>
+      : Promise<Blob>;
 
 /** What the method of a catalog operation takes: `params`, `query`, `body` or `file`, `signal`. */
 export type OperationInput<Name extends ApiOperationName> = InputOf<Catalog[Name]>;
@@ -278,6 +281,12 @@ function callOperation(
   const { response } = operation;
   if (response.kind === "sse") {
     return streamEvents(transport, operation, response, request);
+  }
+  if (response.kind === "redirect") {
+    return transport.send(operation, request).then(async (answer) => {
+      await answer.body?.cancel();
+      return undefined;
+    });
   }
   if (response.kind === "blob") {
     return transport

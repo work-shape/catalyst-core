@@ -33,6 +33,7 @@ import {
 import { dataStoresConfigSchema } from "./data-store-schema";
 import { releaseGuardrailsConfigSchema } from "./guardrail-schema";
 import { infrastructureConfigSchema } from "./infrastructure";
+import { instanceConfigSchema } from "./instance-schema";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 import { knowledgeConfigSchema, modelBindingConfigSchema } from "./model-binding-schema";
 import {
@@ -478,6 +479,8 @@ export const clientInstanceConfigSchema = z.object({
       allowUserDelete: true
     }),
   infrastructure: infrastructureConfigSchema,
+  /** Where the instance is reached: its public origin. */
+  instance: instanceConfigSchema,
   modelBindings: z.array(modelBindingConfigSchema).default([]),
   /** The Knowledge Bases of the instance: which embedding binding semantic search uses. */
   knowledge: knowledgeConfigSchema,

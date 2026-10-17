@@ -47,6 +47,7 @@ export class IdentityResolvingAuthAdapter implements AuthAdapter {
     return normalizeAuthenticatedUser({
       ...resolved,
       authenticationMethod: claims.authenticationMethod,
+      ...(claims.sessionId === undefined ? {} : { sessionId: claims.sessionId }),
       subjectUserId: resolved.id,
       principal:
         claims.principal?.kind === "service"

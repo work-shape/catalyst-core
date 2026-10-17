@@ -1,0 +1,15 @@
+---
+section: Added
+---
+
+- **Connections:** An `mcp` Connection can sign in to its server with OAuth 2.1 (CS-4b2). Set `authScheme: oauth` and, where the provider issued a client, `settings.oauth.clientId` (and `settings.oauth.scopes`). The new operation `connections.oauth_start` (`POST /api/v1/connections/:name/oauth/start`) reads the server's challenge and metadata, registers a client by Dynamic Client Registration where the provider offers it and no client id is set, and answers the address to open in the browser. The provider sends the browser back to `connections.oauth_complete` (`GET /api/v1/connections/oauth/callback`), which checks the state, the person, their `connection.write`, the Connection's revision and address and the issuer, exchanges the code with PKCE (S256) and `resource`, stores the token set in the Secret Store and connects the shared sign-in. It always answers `303` to `/build/connections?signIn=<connected or reason>&connection=<name>` under `instance.publicUrl`, never with a code, a state or a token. Only a person signed in to the instance in a browser completes a sign-in; a personal API key may start one, a Service Principal may not.
+
+- **Release config:** `instance.publicUrl`, the origin the instance is reached at in a browser. The redirect URI of a sign-in is `<publicUrl>/api/v1/connections/oauth/callback`; without `publicUrl` a sign-in is refused with `oauth_redirect_unconfigured`.
+
+- **Connections:** `connections.test` answers `oauth_required` for a server that refuses with a Bearer challenge and describes its sign-in, by the challenge's `resource_metadata` or by Protected Resource Metadata at its well-known address, and for an `oauth` Connection nobody signed in for. A Bearer refusal that describes no sign-in stays `unauthorized`. Moving a Connection to another origin or setting another auth scheme than `oauth`, at runtime or in release config, sets its sign-in `revoked` and deletes the token set, so moving back needs a new sign-in. A sign-in is refused before the browser is sent to an authorization endpoint that is plain `http` off the local machine. `connections.get` names the shared sign-in (`binding`: state, scopes, since when) and how the client is registered (`oauth`: `dcr` or `preregistered`, the redirect URI, the provider's host). Neither holds a token.
+
+- **Audit:** The events `connection.oauth_client_registered`, `connection.binding_connected` and `connection.oauth_refused` record a registration, a completed sign-in and a refused start or callback with its reason. None holds a code, a state, a verifier, a client secret or a token.
+
+- **Demo:** The sample MCP server serves its tools again behind an OAuth authorization server at `/dcr/mcp` (Dynamic Client Registration) and `/registered/mcp` (a pre-registered client) when `SAMPLE_OAUTH_ISSUER_BASE` is set.
+
+- **Deployment:** Apply migration `0099_oauth_setup_session_resource` before starting API and worker processes. It adds two nullable columns to `connection_setup_sessions`, and the previous release stays compatible. A setup session stored by the previous release ends as expired.

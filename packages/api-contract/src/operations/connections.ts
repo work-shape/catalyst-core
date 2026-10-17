@@ -1,8 +1,10 @@
 import {
+  CONNECTION_BINDING_STATES,
   CONNECTION_EXPOSURES,
   CONNECTION_HEALTH_STATES,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
+  CONNECTION_OAUTH_REGISTRATIONS,
   CONNECTION_OPERATION_STATUSES,
   CONNECTION_SECRET_STATES,
   CONNECTOR_TEST_STATUSES,
@@ -10,7 +12,7 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import { timestampSchema } from "../shared";
-import { defineRegisteredOperation, json } from "./define-operation";
+import { defineRegisteredOperation, json, redirect } from "./define-operation";
 
 // What a Connection's page and an agent's editor read beyond the asset itself, and the test
 // of a Connection. The asset, with name, settings and accepted operations, is read through
@@ -69,6 +71,39 @@ const connectionDiscoveredToolSchema = z.object({
   fingerprint: z.string()
 });
 
+/**
+ * The shared sign-in of a Connection that signs in with OAuth, where one was made for its
+ * address. It holds no token: those stay in the Secret Store.
+ */
+const connectionBindingSchema = z.object({
+  state: z.enum(CONNECTION_BINDING_STATES),
+  /** The account as the provider reports it, where it reports one. */
+  account: z.string().optional(),
+  /** The scopes the provider granted. */
+  scopes: z.array(z.string()),
+  connectedAt: timestampSchema,
+  /** The id of the person who signed in. */
+  connectedBy: z.string().optional(),
+  /** The day of the last call that used the sign-in, `YYYY-MM-DD`. */
+  lastUsedOn: z.string().optional(),
+  accessExpiresAt: timestampSchema.optional(),
+  /** Why the sign-in left `connected`, as a reason code. */
+  reason: z.string().optional()
+});
+
+/** How a Connection that signs in with OAuth is registered at its provider. */
+const connectionOAuthSchema = z.object({
+  /** `preregistered` where the settings name the client id the provider issued. */
+  registration: z.enum(CONNECTION_OAUTH_REGISTRATIONS),
+  /**
+   * The address the provider sends the browser back to. A pre-registered client needs it
+   * entered at the provider. Missing while release config sets no `instance.publicUrl`.
+   */
+  redirectUri: z.string().optional(),
+  /** The host of the authorization server a registration was made at. */
+  providerHost: z.string().optional()
+});
+
 export const connectionDetailSchema = z.object({
   name: z.string(),
   health: z.enum(CONNECTION_HEALTH_STATES),
@@ -84,7 +119,35 @@ export const connectionDetailSchema = z.object({
   usedBy: z.array(
     z.object({ agentName: z.string(), title: z.string(), toolNames: z.array(z.string()) })
   ),
-  discoveredAt: timestampSchema.optional()
+  discoveredAt: timestampSchema.optional(),
+  /** The shared sign-in, where one was made for the Connection's address. */
+  binding: connectionBindingSchema.optional(),
+  /** Only for a Connection whose auth scheme is `oauth`. */
+  oauth: connectionOAuthSchema.optional()
+});
+
+/**
+ * The start of a shared sign-in. `authorizationUrl` is opened in the person's browser; it is
+ * kept nowhere. `providerHost` is the host the browser goes to and `scopes` what is asked for.
+ */
+export const connectionOAuthStartSchema = z.object({
+  authorizationUrl: z.string().url(),
+  providerHost: z.string(),
+  scopes: z.array(z.string()),
+  expiresAt: timestampSchema
+});
+
+/**
+ * What a provider sends the browser back with. Every field is the provider's and untrusted;
+ * the call keeps none of them.
+ */
+const connectionOAuthCallbackQuerySchema = z.object({
+  state: z.string().max(512).optional(),
+  code: z.string().max(4096).optional(),
+  error: z.string().max(256).optional(),
+  error_description: z.string().max(2048).optional(),
+  error_uri: z.string().max(2048).optional(),
+  iss: z.string().max(2048).optional()
 });
 
 export const connectionTestResultSchema = z.object({
@@ -132,6 +195,7 @@ export type ConnectionDiscoveredTool = z.infer<typeof connectionDiscoveredToolSc
 export type ConnectionOperationDetail = z.infer<typeof connectionOperationDetailSchema>;
 export type ConnectionTestResult = z.infer<typeof connectionTestResultSchema>;
 export type ConnectionTools = z.infer<typeof connectionToolsSchema>;
+export type ConnectionOAuthStart = z.infer<typeof connectionOAuthStartSchema>;
 
 /** The one field these operations take: the Connection's name, from the path. */
 export const connectionNameParamsSchema = z.object({ name: connectionNameSchema });
@@ -198,6 +262,45 @@ export const connectionOperations = {
     effect: "changing",
     response: json(connectionDiscoveryRequestSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  "connections.oauth_start": defineRegisteredOperation({
+    id: "connections.oauth_start",
+    method: "POST",
+    path: "/api/v1/connections/:name/oauth/start",
+    summary:
+      "Start the shared OAuth sign-in of one Connection. The answer is the address to open in the person's browser",
+    tag: "Connections",
+    // A person: the callback must prove that the person who started signs in.
+    auth: "user",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    // The address holds the sign-in's state. The run keeps no answer.
+    secret: true,
+    response: json(connectionOAuthStartSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  // Two segments after `/connections/`, so no Connection's name stands in for it.
+  "connections.oauth_complete": defineRegisteredOperation({
+    id: "connections.oauth_complete",
+    method: "GET",
+    path: "/api/v1/connections/oauth/callback",
+    summary:
+      "Where the provider sends the browser back after a sign-in. Answers a redirect to the instance's page, never the code or a token",
+    tag: "Connections",
+    auth: "user",
+    // No scope: who may complete is decided by the state and the person's first-party session,
+    // and a token without a browser session is refused there with its own reason.
+    scope: null,
+    requires: [],
+    effect: "changing",
+    // The query holds a code and a state. The run keeps neither, and no answer.
+    secret: true,
+    query: connectionOAuthCallbackQuerySchema,
+    response: redirect(),
+    errors: ["CONFLICT"],
     rateClass: "write"
   }),
   // A path of its own: `agent-tools` would be a valid Connection name under `/connections/`.

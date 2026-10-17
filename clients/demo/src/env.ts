@@ -7,7 +7,14 @@ export function readSampleMcpEnvironment() {
     anchor: process.env.SAMPLE_DATA_ANCHOR,
     accountingLastMonth: process.env.SAMPLE_ACCOUNTING_LAST_MONTH,
     port: process.env.PORT,
-    host: process.env.HOST
+    host: process.env.HOST,
+    // The OAuth sign-in in front of `/dcr/mcp` and `/registered/mcp`, on where the issuer base
+    // is set (sample-mcp/oauth.ts). The client id and redirect URI are those of the mode
+    // `registered`, as a provider would issue them; neither is a secret.
+    oauthIssuerBase: process.env.SAMPLE_OAUTH_ISSUER_BASE,
+    oauthBrowserBase: process.env.SAMPLE_OAUTH_BROWSER_BASE,
+    oauthClientId: process.env.SAMPLE_OAUTH_CLIENT_ID,
+    oauthRedirectUri: process.env.SAMPLE_OAUTH_REDIRECT_URI
   };
 }
 

@@ -265,6 +265,8 @@ describe("the bindings of Connections", () => {
         verifier: { keyId: "k1", nonce: randomBytes(12), ciphertext: randomBytes(48) },
         redirectUri: "https://instance.example.test/api/connections/oauth/callback",
         issuer: "https://auth.example.test",
+        resource: "https://outside.example.test/mcp",
+        clientId: "client-1",
         scopes: ["read"],
         ttlMs: overrides.ttlMs ?? 15 * 60_000
       });
@@ -506,6 +508,8 @@ describe("an assembled instance", () => {
         verifier: { keyId: "k1", nonce: randomBytes(12), ciphertext: randomBytes(48) },
         redirectUri: "https://instance.example.test/api/connections/oauth/callback",
         issuer: "https://auth.example.test",
+        resource: "https://outside.example.test/mcp",
+        clientId: "client-1",
         scopes: [],
         ttlMs
       });

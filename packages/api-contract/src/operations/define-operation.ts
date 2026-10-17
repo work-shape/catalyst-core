@@ -5,7 +5,7 @@ import {
   type OperationScope,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
-import type { z } from "zod";
+import { z } from "zod";
 import type { ApiErrorCode } from "../errors";
 import { operationRunSchema } from "../operation-runs";
 import { listEnvelopeSchema } from "../shared";
@@ -50,7 +50,20 @@ export type OperationResponse =
       readonly descending: boolean;
     }
   | { readonly kind: "sse"; readonly schema: z.ZodType; readonly skip?: z.ZodType }
-  | { readonly kind: "blob"; readonly contentType: string };
+  | { readonly kind: "blob"; readonly contentType: string }
+  /**
+   * `303 See Other` to an address of the instance, for a browser that a provider sent back.
+   * The handler answers `{ location }`, which the helper sends as the `Location` header with
+   * no body. Only an operation of the registry that keeps no answer (`secret`) declares it.
+   */
+  | { readonly kind: "redirect"; readonly schema: typeof redirectAnswerSchema };
+
+/** What the handler of a `redirect` operation answers: the address to send the browser to. */
+export const redirectAnswerSchema = z.object({ location: z.string().url() });
+
+export function redirect() {
+  return { kind: "redirect", schema: redirectAnswerSchema } as const;
+}
 
 export function json<Schema extends z.ZodType>(schema: Schema) {
   return { kind: "json", schema } as const;
@@ -218,7 +231,7 @@ export function defineOperation<const Config extends OperationConfig>(
 /** What an operation of the registry leaves to `defineRegisteredOperation`. */
 type RegisteredOperationConfig = OperationConfig & {
   readonly auth: "user" | "principal";
-  readonly response: { readonly kind: "json" | "page" };
+  readonly response: { readonly kind: "json" | "page" | "redirect" };
   readonly accepted?: never;
   readonly deferred?: never;
   readonly headers?: never;
@@ -287,6 +300,9 @@ export function defineRegisteredOperation<
 export function defineRegisteredOperation(config: RegisteredOperationConfig): Operation {
   if (config.secret && config.effect !== "changing") {
     throw new Error(`Operation '${config.id}' is reading and cannot declare a secret answer`);
+  }
+  if (config.response.kind === "redirect" && !config.secret) {
+    throw new Error(`Operation '${config.id}' redirects and must keep no answer ('secret')`);
   }
   const changing = config.secret ? REGISTERED_SECRET : REGISTERED_CHANGING;
   return defineOperation({

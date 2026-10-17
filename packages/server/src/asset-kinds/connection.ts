@@ -15,6 +15,7 @@ import {
   egressSettingFor,
   findConnectorTypeIssues,
   parseConnectionOperationName,
+  endConnectionSignIn,
   type AssetValidationIssue,
   type ConnectionConfig,
   type ConnectorTypeRegistry,
@@ -38,6 +39,8 @@ export interface ConnectionAssetKindOptions {
 
 /** The auth scheme that sends no credential, so the Connection holds no secret. */
 const AUTH_SCHEME_NONE = "none";
+/** The auth scheme of a Connection that signs in with OAuth (CS-4b). */
+const AUTH_SCHEME_OAUTH = "oauth";
 /** The kind of the assets that carry a Connection's tools. */
 const AGENT_ASSET_KIND = "agent";
 /** The kind of the assets whose manifest names Connections. */
@@ -319,23 +322,49 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
       if (!asset) return;
       const connectionAssetId = asset.id;
       const authenticates = connection.authScheme !== AUTH_SCHEME_NONE;
-      if (!authenticates || originMoved(options, previous, connection)) {
+      const moved = originMoved(options, previous, connection);
+      if (!authenticates || moved) {
         await stores.connections.deleteSecrets({
           clientInstanceId,
           connectionAssetId,
           subject: SHARED_CREDENTIAL_SUBJECT
         });
       }
-      const secret = authenticates
-        ? await stores.connections.findSecret({
-            clientInstanceId,
-            binding: { connectionAssetId, subject: SHARED_CREDENTIAL_SUBJECT }
-          })
-        : undefined;
+      if (moved) {
+        // A client registered for the old server is no client of the new one.
+        await stores.connections.putConnectionOAuthClient({
+          clientInstanceId,
+          connectionAssetId,
+          oauthClient: null
+        });
+      }
+      if (moved || connection.authScheme !== AUTH_SCHEME_OAUTH) {
+        await endConnectionSignIn(stores.connections, { clientInstanceId, connectionAssetId });
+      }
       const target = targetOf(options, connection);
-      const configured =
-        !authenticates ||
-        (secret !== undefined && target !== undefined && secret.origin === egressOriginOf(target));
+      const origin = target === undefined ? undefined : egressOriginOf(target);
+      const configured = !authenticates || (await credentialFor(origin));
+      /**
+       * Whether the Connection holds what calls to `origin` need. One that signs in has a
+       * sign-in made for that server; its own secret, where it has one, is the client's.
+       * Any other has its own secret, entered for that server.
+       */
+      async function credentialFor(origin: string | undefined): Promise<boolean> {
+        if (origin === undefined) return false;
+        if (connection.authScheme === AUTH_SCHEME_OAUTH) {
+          const binding = await stores.connections.getConnectionBinding({
+            clientInstanceId,
+            connectionAssetId,
+            subject: SHARED_CREDENTIAL_SUBJECT
+          });
+          return binding?.state === "connected" && binding.origin === origin;
+        }
+        const secret = await stores.connections.findSecret({
+          clientInstanceId,
+          binding: { connectionAssetId, subject: SHARED_CREDENTIAL_SUBJECT }
+        });
+        return secret?.origin === origin;
+      }
       if (previous === undefined || reachChanged(previous, connection)) {
         const settingsChanged = !configValuesEqual(
           readDefinitionField(previous, "settings"),

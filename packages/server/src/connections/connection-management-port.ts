@@ -1,10 +1,24 @@
 import type {
   ConnectionDetail,
+  ConnectionOAuthStart,
   ConnectionSecretState,
   ConnectionTestResult,
   ConnectionTools
 } from "@work-shape/catalyst-api-contract";
-import type { AccessResource, OperationResource, PlatformStores } from "@work-shape/catalyst-core";
+import type {
+  AccessResource,
+  AuditActor,
+  AuditRecorder,
+  OperationResource,
+  PlatformStores
+} from "@work-shape/catalyst-core";
+
+/** What a step of a sign-in records its audit events with. */
+interface ConnectionSignInAudit {
+  recorder: AuditRecorder;
+  actor: AuditActor;
+  correlationId: string;
+}
 
 /**
  * How one discovery of a Connection ended. `skipped` is a Connection that has nothing to
@@ -75,4 +89,31 @@ export interface ConnectionManagementPort {
    * the job kind `connection.discover` is then not served.
    */
   discover?(name: string, attempt: ConnectionDiscoveryAttempt): Promise<ConnectionDiscoveryOutcome>;
+  /**
+   * Starts the shared OAuth sign-in of a Connection: answers the provider's authorization
+   * address, which holds the state, and keeps the session that waits for the callback.
+   * `authSessionId` is the first-party session's id, or `key:<id>` for a personal key.
+   */
+  oauthStart(
+    name: string,
+    input: {
+      starter: { userId: string; authSessionId: string };
+      audit: ConnectionSignInAudit;
+      signal?: AbortSignal;
+    }
+  ): Promise<ConnectionOAuthStart>;
+  /**
+   * Completes a sign-in from the provider's callback and answers the in-app address to send
+   * the browser to. A refusal throws with its reason and, where known, the Connection's name
+   * in `details.connection`. Only a person in a first-party session completes one.
+   */
+  oauthComplete(input: {
+    query: { state?: string; code?: string; error?: string; iss?: string };
+    completer: { userId: string; firstPartySessionId: string | undefined } | undefined;
+    mayWrite(resource: OperationResource): boolean;
+    audit: ConnectionSignInAudit;
+    signal?: AbortSignal;
+  }): Promise<{ location: string; connectionName: string }>;
+  /** The in-app address of an outcome, or nothing where `instance.publicUrl` is not set. */
+  oauthLandingUrl(outcome: string, connectionName?: string): string | undefined;
 }

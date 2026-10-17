@@ -614,9 +614,26 @@ export const CONNECTOR_TEST_STATUSES = [
   "ready",
   "unauthorized",
   "network_denied",
-  "unavailable"
+  "unavailable",
+  /** The server asks for an OAuth sign-in, or the Connection signs in and nobody has. */
+  "oauth_required"
 ] as const;
 export type ConnectorTestStatus = (typeof CONNECTOR_TEST_STATUSES)[number];
+
+/**
+ * The state of a Connection's sign-in. `connected`: calls use it. `needs_reconnect`: the
+ * outside system refused it and a new sign-in is needed. `revoked`: someone disconnected it,
+ * or its Connection went away.
+ */
+export const CONNECTION_BINDING_STATES = ["connected", "needs_reconnect", "revoked"] as const;
+export type ConnectionBindingState = (typeof CONNECTION_BINDING_STATES)[number];
+
+/**
+ * How a Connection that signs in with OAuth has its client: registered by the platform
+ * (Dynamic Client Registration) or issued by the provider and named in the settings.
+ */
+export const CONNECTION_OAUTH_REGISTRATIONS = ["dcr", "preregistered"] as const;
+export type ConnectionOAuthRegistration = (typeof CONNECTION_OAUTH_REGISTRATIONS)[number];
 
 export const CONNECTION_ORIGINS = ["release", "runtime"] as const;
 export type ConnectionOrigin = (typeof CONNECTION_ORIGINS)[number];

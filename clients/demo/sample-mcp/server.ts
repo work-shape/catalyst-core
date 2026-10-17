@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createAccountingSample } from "./accounting/sample.js";
 import { registerAccountingTools } from "./accounting/tools.js";
 import { createSampleData, utcMonthAnchor } from "./data.js";
+import { createSampleOAuth, type SampleOAuthMode, type SampleOAuthOptions } from "./oauth.js";
 import { registerSampleTools } from "./tools.js";
 
 export const SAMPLE_MCP_PORT = 8787;
@@ -115,6 +116,11 @@ export function createSampleMcpServer(options: {
   accountingLastMonth?: string;
   /** Receives one line per request to an endpoint, so the developer sees who calls. */
   log?: (line: string) => void;
+  /**
+   * Serves the sample tools a second time behind an OAuth sign-in, at `/dcr/mcp` and
+   * `/registered/mcp`, with the authorization server in front of them (`oauth.ts`).
+   */
+  oauth?: SampleOAuthOptions;
 }) {
   const key = z.string().min(MINIMUM_KEY_LENGTH).safeParse(options.key);
   if (!key.success) throw new SampleMcpKeyError();
@@ -124,9 +130,24 @@ export function createSampleMcpServer(options: {
     seed: options.accountingSeed,
     lastMonth: options.accountingLastMonth
   });
-  // Each endpoint stands for one outside system, and a Connection is one MCP address. All of
-  // them share the key and everything below.
-  const endpoints = new Map<string, { name: string; register(mcp: McpServer): void }>([
+  // Each endpoint stands for one outside system, and a Connection is one MCP address. The key
+  // guards them, except the two that the authorization server of `oauth` guards.
+  const oauth = options.oauth && createSampleOAuth(options.oauth, options.log);
+  interface Endpoint {
+    name: string;
+    register(mcp: McpServer): void;
+    /** The mode of the sign-in that guards it. Without one, the key does. */
+    signIn?: SampleOAuthMode;
+  }
+  const signedIn = (mode: SampleOAuthMode): [string, Endpoint] => [
+    `/${mode}/mcp`,
+    {
+      name: `demo-sample-mcp-${mode}`,
+      register: (mcp) => registerSampleTools(mcp, data),
+      signIn: mode
+    }
+  ];
+  const endpoints = new Map<string, Endpoint>([
     ["/mcp", { name: "demo-sample-mcp", register: (mcp) => registerSampleTools(mcp, data) }],
     [
       "/accounting/mcp",
@@ -134,7 +155,8 @@ export function createSampleMcpServer(options: {
         name: "demo-sample-accounting-mcp",
         register: (mcp) => registerAccountingTools(mcp, accounting)
       }
-    ]
+    ],
+    ...(oauth ? [signedIn("dcr"), signedIn("registered")] : [])
   ]);
   const cleanups = new Set<Promise<void>>();
 
@@ -144,6 +166,7 @@ export function createSampleMcpServer(options: {
       json(response, 200, { status: "ok" });
       return;
     }
+    if (oauth && (await oauth.handle(request, response, path))) return;
     const endpoint = endpoints.get(path);
     if (endpoint === undefined) {
       json(response, 404, { error: "Not found." });
@@ -158,9 +181,15 @@ export function createSampleMcpServer(options: {
     const suppliedDigest = createHash("sha256")
       .update(token ?? "")
       .digest();
-    const matches = timingSafeEqual(digest, suppliedDigest);
+    const matches =
+      endpoint.signIn === undefined
+        ? timingSafeEqual(digest, suppliedDigest)
+        : oauth?.accepts(endpoint.signIn, token) === true;
     if (token === undefined || !matches) {
-      response.setHeader("WWW-Authenticate", "Bearer");
+      response.setHeader(
+        "WWW-Authenticate",
+        endpoint.signIn === undefined || !oauth ? "Bearer" : oauth.challengeOf(endpoint.signIn)
+      );
       options.log?.(requestLine(path, 401));
       json(response, 401, { error: "Unauthorized." });
       return;
@@ -196,6 +225,8 @@ export function createSampleMcpServer(options: {
     });
   });
   return {
+    /** The authorization server in front of the signed-in endpoints, where `oauth` is set. */
+    oauth,
     listen(port: number, host = "127.0.0.1"): Promise<{ port: number }> {
       return new Promise((resolve, reject) => {
         http.once("error", reject);

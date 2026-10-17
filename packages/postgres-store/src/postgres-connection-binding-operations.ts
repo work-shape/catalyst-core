@@ -47,7 +47,9 @@ function mapBinding(row: BindingRow): ConnectionBindingRecord {
   };
 }
 
-function mapSession(row: SessionRow): ConnectionSetupSessionRecord {
+/** The session of a row, or nothing for a row without the resource or client it was started with. */
+function mapSession(row: SessionRow): ConnectionSetupSessionRecord | undefined {
+  if (row.resource === null || row.clientId === null) return undefined;
   return {
     id: row.id,
     clientInstanceId: row.clientInstanceId,
@@ -64,6 +66,8 @@ function mapSession(row: SessionRow): ConnectionSetupSessionRecord {
     },
     redirectUri: row.redirectUri,
     issuer: row.issuer,
+    resource: row.resource,
+    clientId: row.clientId,
     scopes: row.scopes,
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString()
@@ -181,8 +185,9 @@ export function createPostgresConnectionBindingOperations(
           expiresAt: later(ttlMs)
         })
         .returning();
-      if (!row) throw new Error("The setup session was not stored");
-      return mapSession(row);
+      const stored = row ? mapSession(row) : undefined;
+      if (!stored) throw new Error("The setup session was not stored");
+      return stored;
     },
     async consumeConnectionSetupSession({ clientInstanceId, stateHash }) {
       // The delete is the one decision: of two callbacks with the same state, one gets the row.
@@ -201,7 +206,9 @@ export function createPostgresConnectionBindingOperations(
       if (!row) return { outcome: "unknown" };
       const { expired, ...session } = row;
       if (expired) return { outcome: "expired" };
-      return { outcome: "consumed", session: mapSession(session) };
+      const consumed = mapSession(session);
+      // A session started before the release that stores its resource cannot be completed.
+      return consumed ? { outcome: "consumed", session: consumed } : { outcome: "expired" };
     },
     async sweepExpiredConnectionSetupSessions({ clientInstanceId }) {
       // Sessions are made by people who connect a Connection and live 15 minutes, so the

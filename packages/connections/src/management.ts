@@ -10,6 +10,8 @@ import {
   connectionOperationName,
   parseConnectionOperationName,
   type AccessResource,
+  type ConnectionBindingState,
+  type ConnectionOAuthRegistration,
   type ConnectionCallReason,
   type ConnectionExposure,
   type ConnectionHealth,
@@ -33,6 +35,13 @@ import {
   connectionOriginOf,
   openConnectorContext
 } from "./connector-context";
+import { registeredClientOf } from "./oauth/client-registration";
+import {
+  createConnectionSignIn,
+  signInLandingUrl,
+  type ConnectionSignIn,
+  type ConnectionSignInDeps
+} from "./oauth/sign-in";
 import { createSecretStore, type SecretKeyring } from "./secret-store";
 
 // What the Connection's page and the agent editor read beyond the asset, and the test of a
@@ -62,6 +71,31 @@ export interface ConnectionDiscoveredToolView {
   fingerprint: string;
 }
 
+/** The shared sign-in of a Connection that signs in with OAuth. Never a token. */
+export interface ConnectionBindingView {
+  state: ConnectionBindingState;
+  /** The account as the provider reports it, where it reports one. */
+  account?: string;
+  scopes: string[];
+  connectedAt: string;
+  /** The person who signed in. */
+  connectedBy?: string;
+  lastUsedOn?: string;
+  accessExpiresAt?: string;
+  /** Why the binding left `connected`, as a reason code. */
+  reason?: string;
+}
+
+/** How a Connection that signs in with OAuth is registered at its provider. */
+export interface ConnectionOAuthView {
+  /** `preregistered` where the settings name the client id the provider issued. */
+  registration: ConnectionOAuthRegistration;
+  /** The address the provider sends the browser back to. Missing without `instance.publicUrl`. */
+  redirectUri?: string;
+  /** The host of the authorization server a registration was made at. */
+  providerHost?: string;
+}
+
 export interface ConnectionView {
   name: string;
   health: ConnectionHealth;
@@ -73,6 +107,10 @@ export interface ConnectionView {
   discovered: ConnectionDiscoveredToolView[];
   usedBy: { agentName: string; title: string; toolNames: string[] }[];
   discoveredAt?: string;
+  /** The shared sign-in, where one was made for the Connection's address. */
+  binding?: ConnectionBindingView;
+  /** Only for a Connection whose auth scheme is `oauth`. */
+  oauth?: ConnectionOAuthView;
 }
 
 export interface ConnectionTestView {
@@ -121,6 +159,12 @@ export interface ConnectionManagement {
     name: string,
     input: { value: string; expectedVersion: number | null }
   ): Promise<{ state: "set"; version: number }>;
+  /** Starts the shared OAuth sign-in of a Connection. See `ConnectionSignIn`. */
+  oauthStart: ConnectionSignIn["start"];
+  /** Completes a sign-in at its callback. See `ConnectionSignIn`. */
+  oauthComplete: ConnectionSignIn["complete"];
+  /** The in-app address a callback sends the browser to, or nothing without a public URL. */
+  oauthLandingUrl(outcome: string, connectionName?: string): string | undefined;
 }
 
 function resourceOf(connection: StoredConnection): OperationResource {
@@ -186,9 +230,11 @@ function testStatusOf(reason: ConnectionCallReason | undefined): ConnectorTestSt
     case "upstream_unauthorized":
     case "connection_not_configured":
     case "secret_unreadable":
+      return "unauthorized";
+    // A Connection that signs in and has no live sign-in asks for one.
     case "connection_not_connected":
     case "connection_needs_reconnect":
-      return "unauthorized";
+      return "oauth_required";
     default:
       return "unavailable";
   }
@@ -206,13 +252,64 @@ function healthOfTest(
 }
 
 export function createConnectionManagement(
-  deps: ConnectionOperationSourceDeps & {
-    /** The keys of the Secret Store. Without them no secret is stored. */
-    keyring?: SecretKeyring;
-    now?: () => Date;
-  }
+  deps: ConnectionOperationSourceDeps &
+    Pick<ConnectionSignInDeps, "publicUrl" | "oauth"> & {
+      /** The keys of the Secret Store. Without them no secret is stored. */
+      keyring?: SecretKeyring;
+      now?: () => Date;
+    }
 ): ConnectionManagement {
   const now = deps.now ?? (() => new Date());
+  const signIn = createConnectionSignIn(deps);
+
+  /** The binding of the Connection's address, as its page shows it. */
+  async function bindingOf(
+    connection: StoredConnection,
+    origin: string | undefined
+  ): Promise<ConnectionBindingView | undefined> {
+    const binding = await deps.stores.connections.getConnectionBinding({
+      clientInstanceId: deps.clientInstanceId,
+      connectionAssetId: connection.assetId,
+      subject: SHARED_CREDENTIAL_SUBJECT
+    });
+    // A sign-in made for another address is none for this one.
+    if (!binding || origin === undefined || binding.origin !== origin) return undefined;
+    return {
+      state: binding.state,
+      ...(binding.accountLabel === undefined ? {} : { account: binding.accountLabel }),
+      scopes: binding.grantedScopes,
+      connectedAt: binding.connectedAt,
+      ...(binding.connectedBy === undefined ? {} : { connectedBy: binding.connectedBy }),
+      ...(binding.lastUsedOn === undefined ? {} : { lastUsedOn: binding.lastUsedOn }),
+      ...(binding.accessExpiresAt === undefined
+        ? {}
+        : { accessExpiresAt: binding.accessExpiresAt }),
+      ...(binding.stateReason === undefined ? {} : { reason: binding.stateReason })
+    };
+  }
+
+  function oauthOf(connection: StoredConnection): ConnectionOAuthView | undefined {
+    const { type, config } = connection;
+    if (config.authScheme !== "oauth" || !type?.signIn) return undefined;
+    const settings = type.settingsSchema.safeParse(config.settings);
+    const chosen = settings.success ? type.signIn.oauthSettings(settings.data) : {};
+    const registered = registeredClientOf(connection.state?.oauthClient);
+    const redirectUri = signIn.redirectUri();
+    let providerHost: string | undefined;
+    try {
+      providerHost =
+        registered === undefined || chosen.clientId !== undefined
+          ? undefined
+          : new URL(registered.issuer).host;
+    } catch {
+      providerHost = undefined;
+    }
+    return {
+      registration: chosen.clientId === undefined ? "dcr" : "preregistered",
+      ...(redirectUri === undefined ? {} : { redirectUri }),
+      ...(providerHost === undefined ? {} : { providerHost })
+    };
+  }
 
   async function secretOf(connection: StoredConnection): Promise<ConnectionView["secret"]> {
     const record = await deps.stores.connections.findSecret({
@@ -247,6 +344,11 @@ export function createConnectionManagement(
           : [];
       });
       const { state, catalog } = connection;
+      const origin = connection.type
+        ? connectionOriginOf(connection.type, connection.config)
+        : undefined;
+      const binding = await bindingOf(connection, origin);
+      const oauth = oauthOf(connection);
       return {
         name: connection.config.name,
         health: state?.health ?? "unknown",
@@ -257,7 +359,9 @@ export function createConnectionManagement(
         operations: operationsOf(connection),
         discovered: discoveredOf(connection),
         usedBy,
-        ...(catalog ? { discoveredAt: catalog.discoveredAt } : {})
+        ...(catalog ? { discoveredAt: catalog.discoveredAt } : {}),
+        ...(binding === undefined ? {} : { binding }),
+        ...(oauth === undefined ? {} : { oauth })
       };
     },
 
@@ -377,6 +481,13 @@ export function createConnectionManagement(
       }
       return { state: "set", version: written.version };
     },
+
+    oauthStart: (name, input) => signIn.start(name, input),
+    oauthComplete: (input) => signIn.complete(input),
+    oauthLandingUrl: (outcome, connectionName) =>
+      deps.publicUrl === undefined
+        ? undefined
+        : signInLandingUrl(deps.publicUrl, outcome, connectionName),
 
     async listTools(readable) {
       const connections = (await readConnections(deps))

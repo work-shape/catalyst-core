@@ -9,7 +9,19 @@ import { readSampleMcpEnvironment } from "./env.js";
 
 try {
   const environment = readSampleMcpEnvironment();
+  const { oauthIssuerBase, oauthBrowserBase, oauthClientId, oauthRedirectUri } = environment;
   const server = createSampleMcpServer({
+    ...(oauthIssuerBase === undefined
+      ? {}
+      : {
+          oauth: {
+            issuerBase: oauthIssuerBase,
+            ...(oauthBrowserBase === undefined ? {} : { browserBase: oauthBrowserBase }),
+            ...(oauthClientId === undefined || oauthRedirectUri === undefined
+              ? {}
+              : { registeredClient: { clientId: oauthClientId, redirectUri: oauthRedirectUri } })
+          }
+        }),
     key: await environment.secrets.resolve(SAMPLE_MCP_KEY_NAME),
     anchor: environment.anchor,
     accountingLastMonth: environment.accountingLastMonth,
@@ -45,7 +57,7 @@ try {
     error instanceof SampleMcpKeyError ||
     (error instanceof Error && error.name === "SecretNotResolvedError")
       ? error.message
-      : "The sample MCP server could not start. Check SAMPLE_DATA_ANCHOR, SAMPLE_ACCOUNTING_LAST_MONTH, PORT and HOST.";
+      : "The sample MCP server could not start. Check SAMPLE_DATA_ANCHOR, SAMPLE_ACCOUNTING_LAST_MONTH, SAMPLE_OAUTH_ISSUER_BASE, SAMPLE_OAUTH_BROWSER_BASE, SAMPLE_OAUTH_REDIRECT_URI, PORT and HOST.";
   console.error(message);
   process.exitCode = 1;
 }

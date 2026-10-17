@@ -242,6 +242,28 @@ export const EVENTS = {
     name: "config_asset.updated",
     subject: "config_asset"
   },
+  // A sign-in at the outside system was completed for a Connection (CS-4b). The subject is the
+  // Connection's name. The metadata names granted scopes, never a token, a code or an account.
+  "connection.binding_connected": {
+    name: "connection.binding_connected",
+    subject: "connection",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["connectionName", "connectionRevision", "subjectKind", "scopes"],
+      properties: {
+        connectionName: { type: "string" },
+        connectionRevision: { type: "integer" },
+        subjectKind: { type: "string", enum: ["shared"] },
+        scopes: { type: "array", items: { type: "string" } },
+        accountChanged: { type: "boolean" },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
   "connection.discovered": {
     ...LEGACY_AUDIT,
     name: "connection.discovered",
@@ -251,6 +273,48 @@ export const EVENTS = {
     ...LEGACY_AUDIT,
     name: "connection.discovery_failed",
     subject: "connection"
+  },
+  // The platform registered an OAuth client for a Connection at its authorization server by
+  // Dynamic Client Registration. The metadata names the issuer's host, never a client secret.
+  "connection.oauth_client_registered": {
+    name: "connection.oauth_client_registered",
+    subject: "connection",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["connectionName", "connectionRevision", "issuerHost", "method"],
+      properties: {
+        connectionName: { type: "string" },
+        connectionRevision: { type: "integer" },
+        issuerHost: { type: "string" },
+        method: { type: "string", enum: ["dcr"] },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
+  // The start or the callback of a sign-in was refused. The reason is the event's reason; the
+  // metadata names the stage, never a state, a code or the authorization address.
+  "connection.oauth_refused": {
+    name: "connection.oauth_refused",
+    subject: "connection",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["stage", "subjectKind"],
+      properties: {
+        connectionName: { type: "string" },
+        connectionRevision: { type: "integer" },
+        stage: { type: "string", enum: ["start", "callback"] },
+        subjectKind: { type: "string", enum: ["shared"] },
+        operationRunId: { type: "string" }
+      }
+    }
   },
   "conversation.cleanup_completed": {
     ...LEGACY_AUDIT,

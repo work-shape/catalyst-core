@@ -29,7 +29,7 @@ export const AUTH_SCHEME_NONE = "none";
  * The auth scheme of a Connection whose credential is the access token of a sign-in at its
  * outside system. The token comes from the Connection's binding, never from its own secret.
  */
-const AUTH_SCHEME_OAUTH = "oauth";
+export const AUTH_SCHEME_OAUTH = "oauth";
 
 /** A resolver for a process without Secret Store keys: it has no credential to hand out. */
 export const NO_CREDENTIALS: ConnectionCredentialResolver = {

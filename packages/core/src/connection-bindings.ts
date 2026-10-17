@@ -1,16 +1,13 @@
+import type { ConnectionBindingState } from "@work-shape/catalyst-asset-schemas";
 import type { ClientInstanceId } from "./ids";
+
+export type { ConnectionBindingState };
 
 // A Connection's sign-in at its outside system: the binding that says whose account the
 // Connection acts through and in which state that sign-in is, and the short-lived setup
 // session of a sign-in that is under way. Both are runtime state, never an asset revision,
 // and neither holds a token: the token set is a secret of the Secret Store that the binding
 // names by handle and version.
-
-/**
- * `connected`: calls use the binding. `needs_reconnect`: the outside system refused it and a
- * new sign-in is needed. `revoked`: someone disconnected it, or its Connection went away.
- */
-export type ConnectionBindingState = "connected" | "needs_reconnect" | "revoked";
 
 /** How the binding was obtained. `static` is reserved for DT-3 and CS-9a. */
 export type ConnectionBindingScheme = "oauth";
@@ -98,6 +95,13 @@ export interface ConnectionSetupSessionRecord {
   verifier: { keyId: string; nonce: Uint8Array; ciphertext: Uint8Array };
   redirectUri: string;
   issuer: string;
+  /**
+   * The `resource` the authorization request named, from the protected resource metadata. The
+   * code exchange sends the same value.
+   */
+  resource: string;
+  /** The OAuth client the authorization request named. The code exchange uses the same one. */
+  clientId: string;
   scopes: string[];
   createdAt: string;
   expiresAt: string;

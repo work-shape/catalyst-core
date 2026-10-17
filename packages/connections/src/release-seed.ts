@@ -9,6 +9,7 @@ import {
   SECRET_WRITE_CONFLICT,
   SHARED_CREDENTIAL_SUBJECT,
   createConnectionSecretHandle,
+  endConnectionSignIn,
   findConnectorTypeIssues,
   isAppError,
   resolveOptionalSecret,
@@ -28,7 +29,7 @@ import {
   type SecretResolver,
   type SecretSource
 } from "@work-shape/catalyst-core";
-import { AUTH_SCHEME_NONE, connectionOriginOf } from "./connector-context";
+import { AUTH_SCHEME_NONE, AUTH_SCHEME_OAUTH, connectionOriginOf } from "./connector-context";
 import { createSecretStore, type SecretKeyring } from "./secret-store";
 
 // The release seed. When the API process starts it makes the stored Connections of origin
@@ -146,7 +147,12 @@ function definitionOf(
   secretHandle: string | undefined
 ): ConnectionConfig {
   const authenticates = entry.authScheme !== AUTH_SCHEME_NONE;
-  if (authenticates !== (entry.secret !== undefined)) {
+  // An OAuth sign-in names a secret only for a client the provider issued with one.
+  const secretOptional = entry.authScheme === AUTH_SCHEME_OAUTH;
+  if (
+    !(secretOptional && entry.secret === undefined) &&
+    authenticates !== (entry.secret !== undefined)
+  ) {
     throw invalidConfig(name, [
       {
         message: authenticates
@@ -309,10 +315,27 @@ export async function seedReleaseConnections(
       const binding = { connectionAssetId: asset.id, subject: SHARED_CREDENTIAL_SUBJECT };
       const seeded = storedConnection(asset);
       const type = seeded && connectorTypes.get(seeded.connectorType);
+      const origin = seeded && type ? connectionOriginOf(type, seeded) : undefined;
+      // A sign-in made for another address, or kept by a Connection that no longer signs in,
+      // ends: release config that moves the Connection away and back restores none.
+      const signIn = await stores.connections.getConnectionBinding({
+        clientInstanceId,
+        ...binding
+      });
+      if (
+        signIn !== undefined &&
+        signIn.state !== "revoked" &&
+        (seeded?.authScheme !== AUTH_SCHEME_OAUTH || signIn.origin !== origin)
+      ) {
+        await endConnectionSignIn(stores.connections, {
+          clientInstanceId,
+          connectionAssetId: asset.id
+        });
+      }
       const health = await bootstrapSecret({
         name,
         // The environment's secret is for the address release config names now.
-        origin: seeded && type ? connectionOriginOf(type, seeded) : undefined,
+        origin,
         named: input.connections[name]?.secret !== undefined,
         value: values.get(name),
         handle: handles.get(name),

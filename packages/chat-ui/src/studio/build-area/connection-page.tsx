@@ -143,7 +143,9 @@ const TEST_RESULTS: Record<ConnectionTestResult["status"], HealthView> = {
   ready: "ready",
   unauthorized: "unauthorized",
   network_denied: "network_denied",
-  unavailable: "unavailable"
+  unavailable: "unavailable",
+  // Nobody has signed in yet. The page's own sign-in comes with CS-4b4.
+  oauth_required: "not_configured"
 };
 
 /** What the instance recorded, before this page's own test. */

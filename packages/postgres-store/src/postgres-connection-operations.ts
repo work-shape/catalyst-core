@@ -34,6 +34,7 @@ function mapState(row: StateRow): ConnectionStateRecord {
     ...(row.lastTestedAt ? { lastTestedAt: row.lastTestedAt.toISOString() } : {}),
     ...(row.lastErrorCode === null ? {} : { lastErrorCode: row.lastErrorCode }),
     ...(row.catalog === null ? {} : { catalog: row.catalog }),
+    ...(row.oauthClient === null ? {} : { oauthClient: row.oauthClient }),
     updatedAt: row.updatedAt.toISOString()
   };
 }
@@ -165,6 +166,21 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
         .onConflictDoUpdate({
           target: connectionState.connectionAssetId,
           set: { health: input.health, ...named, updatedAt: sql`now()` }
+        });
+    },
+    async putConnectionOAuthClient({ clientInstanceId, connectionAssetId, oauthClient }) {
+      await db
+        .insert(connectionState)
+        .values({
+          connectionAssetId,
+          clientInstanceId,
+          health: "needs_configuration",
+          oauthClient,
+          updatedAt: sql`now()`
+        })
+        .onConflictDoUpdate({
+          target: connectionState.connectionAssetId,
+          set: { oauthClient, updatedAt: sql`now()` }
         });
     },
     async deleteConnectionState({ clientInstanceId, connectionAssetId }) {

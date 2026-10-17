@@ -139,8 +139,10 @@ describe("every operation of the catalog", () => {
   // Neither does the context read of an outside editor, which cuts its answer to the actions
   // the credential's scopes open (tests/platform-context.test.ts).
   const unscoped = authenticated.filter(({ operation }) => operation.scope === null);
-  it("asks a scope of every operation but the reference and the context read", () => {
+  // And the callback of a sign-in, which the state and a first-party session decide.
+  it("asks a scope of every operation but the reference, the context read and the sign-in callback", () => {
     expect(unscoped.map(({ name }) => name)).toEqual([
+      "connections.oauth_complete",
       "platform.context.get",
       "openapi.get",
       "docs.get"

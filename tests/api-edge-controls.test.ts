@@ -41,14 +41,16 @@ function configWithLimits(rateLimits: Partial<RateLimitsConfig>) {
 }
 
 describe("the operation catalog", () => {
-  it("serves no changing operation on GET or HEAD", () => {
+  it("serves no changing operation on GET or HEAD but the browser's return from a sign-in", () => {
     const methods: string[] = ["GET", "HEAD"];
+    // The provider sends the browser back by GET; the callback answers a redirect, is bound to
+    // the person's session and the single-use state, and is not a form a page could post.
     expect(
       Object.values(apiOperations)
         .filter((operation) => operation.effect === "changing")
         .filter((operation) => methods.includes(operation.method))
-        .map((operation) => operation.id)
-    ).toEqual([]);
+        .map((operation) => [operation.id, operation.response.kind])
+    ).toEqual([["connections.oauth_complete", "redirect"]]);
   });
 
   it("limits by default only what no ordinary use comes near", () => {

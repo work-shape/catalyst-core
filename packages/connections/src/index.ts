@@ -8,6 +8,7 @@ export * from "./json-schema";
 export * from "./management";
 export * from "./http-api/connector";
 export * from "./mcp/connector";
+export * from "./oauth";
 export * from "./operation-source";
 export * from "./release-seed";
 export * from "./schema-check";

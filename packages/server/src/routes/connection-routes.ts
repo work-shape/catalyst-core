@@ -1,10 +1,18 @@
-import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { apiOperations, connectionNameParamsSchema } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   CONNECTION_ACTIONS,
   CONNECTION_ASSET_KIND,
+  auditActorFromIdentity,
+  connectionCallReasonOf,
+  connectionOAuthError,
+  connectionOAuthReasonOf,
+  isAppError,
+  isAuthenticatedServicePrincipal,
   type ActorAccess,
+  type AuthenticatedIdentity,
   type OperationAuthorization,
+  type OperationExecutionContext,
   type OperationResource
 } from "@work-shape/catalyst-core";
 import { accessResource, decide } from "../assets/asset-access";
@@ -131,6 +139,52 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     }
   });
 
+  route.operation(apiOperations["connections.oauth_start"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    // A start keeps a sign-in session that ends by itself, and registers a client where the
+    // provider has none for the instance. Nothing is connected before the callback.
+    changeClass: "reversible",
+    module: CONNECTIONS_MODULE,
+    execute: (input, context) =>
+      required().oauthStart(input.name, {
+        starter: signInStarter(context.actor),
+        audit: signInAudit(context),
+        signal: context.runtime.signal
+      })
+  });
+
+  route.operation(apiOperations["connections.oauth_complete"], {
+    // The callback names no Connection: the state does. Whose sign-in it is and the right on
+    // the Connection it names are checked there, once the state is read.
+    authorize: () => ({ allowed: true }),
+    module: CONNECTIONS_MODULE,
+    execute: async (input, context) => {
+      const { actor } = context;
+      const firstParty =
+        !isAuthenticatedServicePrincipal(actor) &&
+        actor.authenticationMethod === "session-cookie" &&
+        actor.delegatedActor === undefined;
+      const completed = await required().oauthComplete({
+        query: input,
+        completer: isAuthenticatedServicePrincipal(actor)
+          ? undefined
+          : {
+              userId: actor.id,
+              firstPartySessionId: firstParty ? actor.sessionId : undefined
+            },
+        mayWrite: (resource) =>
+          context.access.authorize(CONNECTION_ACTIONS.write, resource).allowed,
+        audit: signInAudit(context),
+        signal: context.runtime.signal
+      });
+      // What the outside system offers may depend on the account that signed in.
+      await requestDiscovery(completed.connectionName);
+      return { location: completed.location };
+    },
+    redirectOnError: (error) => connections?.oauthLandingUrl(...signInOutcomeOf(error))
+  });
+
   route.operation(apiOperations["connections.list_tools"], {
     // The list decides the right per Connection. A caller without one receives an empty list.
     authorize: () => ({ allowed: true }),
@@ -147,4 +201,56 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
 /** What the call touches, as its run and its events name it. */
 function connectionResource(input: { name: string }): OperationResource {
   return { kind: CONNECTION_ASSET_KIND, id: input.name, name: input.name };
+}
+
+/**
+ * Who starts a sign-in: a person in their first-party session, or through their personal API
+ * key. A service principal, a Workflow Run and an embedding host's session token are refused:
+ * the account a Connection signs in to is chosen by a person in a browser.
+ */
+function signInStarter(actor: AuthenticatedIdentity): { userId: string; authSessionId: string } {
+  if (!isAuthenticatedServicePrincipal(actor)) {
+    if (actor.delegatedActor?.kind === "api_key") {
+      return { userId: actor.id, authSessionId: `key:${actor.delegatedActor.id}` };
+    }
+    if (
+      actor.delegatedActor === undefined &&
+      actor.authenticationMethod === "session-cookie" &&
+      actor.sessionId !== undefined
+    ) {
+      return { userId: actor.id, authSessionId: actor.sessionId };
+    }
+  }
+  throw connectionOAuthError("oauth_requires_person");
+}
+
+function signInAudit(context: OperationExecutionContext) {
+  return {
+    recorder: context.audit,
+    actor: auditActorFromIdentity(context.actor),
+    correlationId: context.correlationId
+  };
+}
+
+/**
+ * The outcome a refused callback lands with: its reason, never the text of an error, and the
+ * Connection's name where the refusal knows it.
+ */
+function signInOutcomeOf(error: unknown): [outcome: string, connectionName?: string] {
+  const outcome =
+    connectionOAuthReasonOf(error) ??
+    connectionCallReasonOf(error) ??
+    (!isAppError(error)
+      ? "failed"
+      : error.code === "UNAUTHENTICATED"
+        ? "oauth_requires_person"
+        : error.code === "FORBIDDEN"
+          ? "forbidden"
+          : "failed");
+  const details = isAppError(error) ? error.details : undefined;
+  const named =
+    typeof details === "object" && details !== null && "connection" in details
+      ? connectionNameParamsSchema.shape.name.safeParse(details.connection)
+      : undefined;
+  return named?.success ? [outcome, named.data] : [outcome];
 }

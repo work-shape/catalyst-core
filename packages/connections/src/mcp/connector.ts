@@ -17,18 +17,23 @@ import {
   MCP_SOCKETS_PER_CONNECTION,
   MCP_TRANSPORT_HEADER_NAMES,
   createMcpSocketPool,
+  readMcpChallenge,
   withMcpSession
 } from "./client";
 import { MCP_DISCOVERY_MAX_BYTES, MCP_DISCOVERY_TIMEOUT_MS, discoverMcpTools } from "./discovery";
 import { holdsCredential } from "../connector-context";
+import type { BearerChallenge } from "../oauth/challenge";
+import { resourceAllowed } from "../oauth/checks";
+import { createOAuthFetch } from "../oauth/fetch";
+import { createSdkOAuthPort } from "../oauth/sdk-adapter";
 import { mcpToolResult } from "./result";
 
 export { MCP_CLEANUP_TIMEOUT_MS, MCP_POOLED_CONNECTIONS_MAX } from "./client";
 
-// The Connector type `mcp`: a remote MCP server over Streamable HTTP. It has no stdio, no
-// SSE-only transport and no OAuth. Its auth schemes send nothing, a bearer key, or the key
-// in one named header. The tools of the server are read by discovery and never callable by
-// that alone: the Connection's accepted list decides.
+// The Connector type `mcp`: a remote MCP server over Streamable HTTP. It has no stdio and no
+// SSE-only transport. Its auth schemes send nothing, a bearer key, the key in one named
+// header, or the access token of a shared OAuth sign-in (CS-4b). The tools of the server are
+// read by discovery and never callable by that alone: the Connection's accepted list decides.
 
 /** The id a Connection names as its `connectorType`. */
 export const MCP_CONNECTOR_TYPE = "mcp";
@@ -68,10 +73,43 @@ const serverUrl = z
     );
   }, "must be an http or https address without user name, password, query or fragment");
 
-/** `headerName` is the header the key goes into under the auth scheme `header`. */
+/** The most scopes a Connection names for its sign-in. */
+export const MCP_OAUTH_MAX_SCOPES = 64;
+
+/**
+ * The sign-in of the auth scheme `oauth`. `clientId` is a client the provider issued
+ * (pre-registered); without it the platform registers one where the server offers that.
+ * `scopes` are the scopes asked for; without them those the server names.
+ */
+const oauthSettingsSchema = z
+  .object({
+    clientId: z
+      .string()
+      .min(1)
+      .max(256)
+      .regex(/^[\x21-\x7e]+$/u, "must be printable characters without spaces")
+      .optional(),
+    scopes: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(256)
+          .regex(/^[\x21\x23-\x5b\x5d-\x7e]+$/u, "must be a scope name without spaces or quotes")
+      )
+      .max(MCP_OAUTH_MAX_SCOPES)
+      .optional()
+  })
+  .strict();
+
+/**
+ * `headerName` is the header the key goes into under the auth scheme `header`. `oauth` is the
+ * sign-in of the auth scheme `oauth`.
+ */
 const settingsSchema = z
   .object({
     url: serverUrl,
+    oauth: oauthSettingsSchema.optional(),
     headerName: z
       .string()
       .regex(
@@ -93,9 +131,44 @@ function settingsOf(settings: JsonObject): z.infer<typeof settingsSchema> {
   return read.data;
 }
 
-function testStatusOf(error: unknown): ConnectorTestStatus {
+/**
+ * Whether a server that refused with a Bearer challenge describes an OAuth sign-in for this
+ * Connection: the challenge names its metadata, or Protected Resource Metadata at the
+ * well-known places of the server's address (RFC 9728) names this server and an
+ * authorization server. A Bearer refusal without either is a refused key. The metadata is
+ * asked for through the checked fetch of the flow, at the Connection's own origin.
+ */
+async function describesSignIn(
+  challenge: BearerChallenge,
+  url: string,
+  context: ConnectorContext
+): Promise<boolean> {
+  if (challenge.resourceMetadataUrl !== undefined) return true;
+  try {
+    const fetch = createOAuthFetch({
+      egress: { check: (target) => context.checkEgress(target) },
+      signal: AbortSignal.any([context.signal, AbortSignal.timeout(MCP_TEST_TIMEOUT_MS)])
+    });
+    const resource = await createSdkOAuthPort().discoverResource({ resourceUrl: url, fetch });
+    return resourceAllowed(resource.resource, url) && resource.authorizationServers.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function testStatusOf(
+  error: unknown,
+  challenge: BearerChallenge | undefined,
+  url: string,
+  context: ConnectorContext
+): Promise<ConnectorTestStatus> {
   const reason = connectionCallReasonOf(error);
-  if (reason === "upstream_unauthorized") return "unauthorized";
+  // A refusal that describes the server's sign-in asks for an OAuth sign-in, not for
+  // another key.
+  if (reason === "upstream_unauthorized") {
+    const signIn = challenge !== undefined && (await describesSignIn(challenge, url, context));
+    return signIn ? "oauth_required" : "unauthorized";
+  }
   if (reason === "egress_denied") return "network_denied";
   return "unavailable";
 }
@@ -136,7 +209,7 @@ export function createMcpConnectorType(options: McpConnectorOptions = {}): Conne
     type: MCP_CONNECTOR_TYPE,
     description: "A remote MCP server over Streamable HTTP.",
     settingsSchema,
-    authSchemes: ["none", "bearer", "header"],
+    authSchemes: ["none", "bearer", "header", "oauth"],
     secretFields: ["key"],
     target: (settings) => egressTargetOfUrl(settingsOf(settings).url),
     credentialHeaderName: (settings) => settingsOf(settings).headerName,
@@ -147,7 +220,15 @@ export function createMcpConnectorType(options: McpConnectorOptions = {}): Conne
       maxParallelCalls: MCP_MAX_PARALLEL_CALLS
     },
 
+    signIn: {
+      resourceUrl: (settings) => settingsOf(settings).url,
+      oauthSettings: (settings) => settingsOf(settings).oauth ?? {},
+      challenge: ({ target, settings, signal }) =>
+        readMcpChallenge({ target, url: settingsOf(settings).url, signal })
+    },
+
     async test(context) {
+      let challenged: BearerChallenge | undefined;
       try {
         // The handshake and one page of the tool list: the server is there, speaks the
         // protocol and takes the credential. Nothing of what it answers is kept.
@@ -158,6 +239,9 @@ export function createMcpConnectorType(options: McpConnectorOptions = {}): Conne
               timeoutMs: MCP_TEST_TIMEOUT_MS,
               maxResponseBytes: MCP_DISCOVERY_MAX_BYTES,
               tooLarge: "the server's answer is larger than MCP_DISCOVERY_MAX_BYTES"
+            },
+            onChallenge: (challenge) => {
+              challenged = challenge;
             }
           },
           async (opened) => {
@@ -166,7 +250,8 @@ export function createMcpConnectorType(options: McpConnectorOptions = {}): Conne
         );
         return { status: "ready" };
       } catch (error) {
-        return { status: testStatusOf(error) };
+        const { url } = settingsOf(context.connection.settings);
+        return { status: await testStatusOf(error, challenged, url, context) };
       }
     },
 

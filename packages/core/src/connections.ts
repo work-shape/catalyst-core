@@ -421,6 +421,11 @@ export interface ConnectionStateRecord {
   lastErrorCode?: string;
   /** What the last discovery read from the outside system. Untrusted data. */
   catalog?: JsonValue;
+  /**
+   * The OAuth client registered for the Connection by Dynamic Client Registration: issuer,
+   * client id, auth method, time, origin and redirect URI. Never a client secret.
+   */
+  oauthClient?: JsonValue;
   updatedAt: string;
 }
 
@@ -496,6 +501,16 @@ export interface ConnectionsStore extends ConnectionBindingsStore {
     lastErrorCode?: string | null;
     catalog?: JsonValue;
   }): Promise<void>;
+  /**
+   * Writes the registered OAuth client of the Connection, or removes it with `null`. Health,
+   * test time, error code and catalog stay; a Connection without a state row gets one of
+   * health `needs_configuration`.
+   */
+  putConnectionOAuthClient(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+    oauthClient: JsonValue | null;
+  }): Promise<void>;
   deleteConnectionState(input: {
     clientInstanceId: ClientInstanceId;
     connectionAssetId: string;
@@ -543,6 +558,34 @@ export interface ConnectorContext {
 /** What a test of a Connection comes to. It never carries data of the outside system. */
 export type ConnectorTestStatus = (typeof CONNECTOR_TEST_STATUSES)[number];
 
+/** What a server asks for when it refuses a call without a sign-in. Untrusted. */
+export interface ConnectorSignInChallenge {
+  /** Where the server's protected resource metadata is (RFC 9728). */
+  resourceMetadataUrl?: string;
+  /** The scopes the server names. */
+  scopes?: readonly string[];
+}
+
+/**
+ * The part of an OAuth sign-in (CS-4b) that only the Connector type knows. A type that has it
+ * offers the auth scheme `oauth`; the flow itself is the platform's.
+ */
+export interface ConnectorSignIn {
+  /** The protected resource the sign-in is for, read from settings its schema accepted. */
+  resourceUrl(settings: JsonObject): string;
+  /** The Connection's OAuth settings: a pre-registered client id and the scopes chosen. */
+  oauthSettings(settings: JsonObject): { clientId?: string; scopes?: readonly string[] };
+  /**
+   * Asks the server at the checked target, sending no credential, which sign-in it wants.
+   * Nothing where it names none or cannot be asked.
+   */
+  challenge(input: {
+    target: EgressGrant;
+    settings: JsonObject;
+    signal: AbortSignal;
+  }): Promise<ConnectorSignInChallenge | undefined>;
+}
+
 interface ConnectorTypeBase {
   /** The id a Connection names as its `connectorType`. */
   type: string;
@@ -567,6 +610,8 @@ interface ConnectorTypeBase {
    * type is called again under the key of an interrupted call.
    */
   carriesIdempotencyKey?: true;
+  /** The type's part of an OAuth sign-in, where it offers the auth scheme `oauth`. */
+  signIn?: ConnectorSignIn;
   /** A bounded check of reachability and authentication. It changes nothing outside. */
   test(context: ConnectorContext): Promise<{ status: ConnectorTestStatus }>;
   execute(operation: string, input: JsonValue, context: ConnectorContext): Promise<JsonValue>;

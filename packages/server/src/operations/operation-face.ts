@@ -80,6 +80,11 @@ export interface AssembledOperationBinding {
   /** See `approval` of the definition: who decides a call that waits for an approval. */
   approval?: OperationDefinition["approval"];
   execute(input: unknown, context: OperationBindingContext): unknown;
+  /**
+   * For an operation that answers a redirect: where a refused or failed call sends the
+   * browser instead of an error body. Nothing answers the error as for any operation.
+   */
+  redirectOnError?(error: unknown): string | undefined;
 }
 
 export interface OperationFace {
@@ -127,7 +132,7 @@ export function createOperationRegistration(
       throw new Error(`Operation '${operation.id}' must authenticate its caller`);
     }
     const { response } = operation;
-    if (response.kind !== "json" && response.kind !== "page") {
+    if (response.kind !== "json" && response.kind !== "page" && response.kind !== "redirect") {
       throw new Error(`Operation '${operation.id}' must answer JSON`);
     }
     const [action, ...furtherActions] = operation.requires ?? [];
@@ -241,7 +246,11 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
       if (outcome.replayed) void reply.header("idempotent-replayed", "true");
       switch (result.status) {
         case "done":
-          if (operation.response.kind === "json" || operation.response.kind === "page") {
+          if (
+            operation.response.kind === "json" ||
+            operation.response.kind === "page" ||
+            operation.response.kind === "redirect"
+          ) {
             checkResponse(options, operation, operation.response.schema, result.output);
           }
           return result.output;

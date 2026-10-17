@@ -210,7 +210,12 @@ async function buildInstanceConnections(
     operationSource: createConnectionOperationSource(operations),
     toolSource: createConnectionToolSource(operations),
     management: {
-      ...createConnectionManagement({ ...operations, ...(keyring ? { keyring } : {}) }),
+      ...createConnectionManagement({
+        ...operations,
+        ...(keyring ? { keyring } : {}),
+        // Where the provider of an OAuth sign-in sends the browser back to.
+        ...(config.instance.publicUrl === undefined ? {} : { publicUrl: config.instance.publicUrl })
+      }),
       discover: (connectionName, attempt) =>
         discoverConnection({ ...operations, connectionName, ...attempt })
     },

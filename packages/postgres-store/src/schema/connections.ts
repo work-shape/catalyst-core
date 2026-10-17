@@ -167,6 +167,9 @@ export const connectionSetupSessions = pgTable(
     verifierCiphertext: bytes("verifier_ciphertext").notNull(),
     redirectUri: text("redirect_uri").notNull(),
     issuer: text("issuer").notNull(),
+    /** Null only on a row written before the column existed; such a session is not completed. */
+    resource: text("resource"),
+    clientId: text("client_id"),
     scopes: text("scopes").array().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull()

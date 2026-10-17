@@ -109,6 +109,8 @@ const connectionsModule = defineModule({
     "connections.test",
     "connections.set_secret",
     "connections.discover",
+    "connections.oauth_start",
+    "connections.oauth_complete",
     "connections.list_tools"
   ],
   kinds: ["connection"],

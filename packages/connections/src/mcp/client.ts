@@ -17,6 +17,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { egressTargetOfUrl, isSameEgressOrigin } from "../egress";
+import { parseBearerChallenge, type BearerChallenge } from "../oauth/challenge";
 import {
   hostHeaderOf,
   oneRequestAgent,
@@ -199,6 +200,8 @@ interface SessionState {
   abort: AbortController;
   /** The request that is on its way is the call of a tool, which carries the call's key. */
   callingTool: boolean;
+  /** Told the Bearer challenge of a refusal (401 or 403) of the Connection's own origin. */
+  onChallenge: ((challenge: BearerChallenge) => void) | undefined;
 }
 
 function fail(state: SessionState, reason: ConnectionCallReason, message?: string): Error {
@@ -452,7 +455,12 @@ function pinnedFetch(
         continue;
       }
       if (status < 200 || status > 299) {
-        // The body of a refusal is not kept. Its status is all that is taken from it.
+        // The body of a refusal is not kept. Of a refused credential, the challenge says what
+        // the server asks for instead: read from the Connection's own origin only.
+        if ((status === 401 || status === 403) && own) {
+          const challenge = parseBearerChallenge(headerOf(response, "www-authenticate"));
+          if (challenge !== undefined) state.onChallenge?.(challenge);
+        }
         discard(response);
         // Ending a session is a courtesy. A server that refuses it fails nothing.
         if (method === "DELETE") return new Response(null, { status: 405 });
@@ -508,6 +516,8 @@ export async function withMcpSession<Result>(
     bounds: McpSessionBounds;
     /** The address of the server, from the Connection's settings. */
     url: string;
+    /** Told the Bearer challenge of a refused credential. */
+    onChallenge?: (challenge: BearerChallenge) => void;
   },
   work: (session: McpSession) => Promise<Result>
 ): Promise<Result> {
@@ -518,7 +528,8 @@ export async function withMcpSession<Result>(
     remainingBytes: bounds.maxResponseBytes,
     tooLarge: bounds.tooLarge,
     abort: new AbortController(),
-    callingTool: false
+    callingTool: false,
+    onChallenge: input.onChallenge
   };
   const deadline = AbortSignal.any([context.signal, AbortSignal.timeout(bounds.timeoutMs)]);
   const onDeadline = () => state.abort.abort();
@@ -607,5 +618,54 @@ export async function withMcpSession<Result>(
     ending.removeEventListener("abort", onDeadline);
     deadline.removeEventListener("abort", onDeadline);
     state.abort.abort();
+  }
+}
+
+/** How long the question for a server's challenge may take. */
+const MCP_CHALLENGE_TIMEOUT_MS = 10_000;
+
+/**
+ * Asks a server which sign-in it wants: one `initialize` request without a credential to the
+ * checked target, whose refusal carries the challenge. Nothing is kept of the answer but the
+ * challenge of a 401; a server that answers anything else names none.
+ */
+export async function readMcpChallenge(input: {
+  target: EgressGrant;
+  url: string;
+  signal: AbortSignal;
+}): Promise<BearerChallenge | undefined> {
+  const signal = AbortSignal.any([input.signal, AbortSignal.timeout(MCP_CHALLENGE_TIMEOUT_MS)]);
+  const body = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: CLIENT_INFO }
+  });
+  const agent = oneRequestAgent(input.target);
+  try {
+    const response = await sendPinnedRequest({
+      url: new URL(input.url),
+      grant: input.target,
+      method: "POST",
+      headers: {
+        host: hostHeaderOf(input.target),
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        "content-length": String(Buffer.byteLength(body))
+      },
+      body,
+      agent,
+      signal
+    });
+    const challenge =
+      response.statusCode === 401
+        ? parseBearerChallenge(headerOf(response, "www-authenticate"))
+        : undefined;
+    response.destroy();
+    return challenge;
+  } catch {
+    return undefined;
+  } finally {
+    agent.destroy();
   }
 }

@@ -491,10 +491,15 @@ describe("operation catalog", () => {
   // Read through the descriptor's own type: each catalog entry is narrower than a test needs.
   const catalog: readonly Operation[] = Object.values(apiOperations);
 
-  it("serves no changing operation on GET", () => {
-    expect(
-      catalog.filter((operation) => operation.effect === "changing" && operation.method === "GET")
-    ).toEqual([]);
+  // But the callback of an OAuth sign-in: a provider sends the browser back with a GET, and
+  // the state that only the started sign-in knows stands where a cookie's origin check would.
+  it("serves no changing operation on GET but a browser callback that answers a redirect", () => {
+    const changingGets = catalog.filter(
+      (operation) => operation.effect === "changing" && operation.method === "GET"
+    );
+    expect(changingGets.map((operation) => [operation.id, operation.response.kind])).toEqual([
+      ["connections.oauth_complete", "redirect"]
+    ]);
   });
 
   it("names each operation by its catalog key and each method and path once", () => {

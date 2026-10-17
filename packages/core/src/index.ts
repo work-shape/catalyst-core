@@ -19,6 +19,8 @@ export * from "./child-agent-runs";
 
 export * from "./app-actions";
 export * from "./config-asset-concurrency";
+export * from "./connection-oauth";
+export * from "./connection-sign-in-end";
 export * from "./connection-operations";
 export * from "./data-store-records";
 export * from "./data-stores";

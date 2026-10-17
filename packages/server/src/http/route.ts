@@ -1,4 +1,5 @@
 import { checkResponse } from "./check-response";
+import { answerRedirect } from "./redirect-answer";
 import { paginate, pageScope, storePage } from "./paging";
 import { timingSafeEqual } from "node:crypto";
 import {
@@ -127,7 +128,9 @@ type RouteResultOr<Op extends Operation, Sent> = Op["response"] extends {
     ? z.input<Schema> extends { items: infer Items }
       ? ResponseShape<Items>
       : never
-    : Sent;
+    : Op["response"] extends { kind: "redirect"; schema: infer Schema extends z.ZodType }
+      ? z.input<Schema>
+      : Sent;
 
 type RouteResult<Op extends Operation> = RouteResultOr<Op, FastifyReply>;
 
@@ -448,32 +451,36 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       method: operation.method,
       url: operation.path,
       ...(binding.bodyLimitBytes === undefined ? {} : { bodyLimit: binding.bodyLimitBytes }),
-      handler: async (request, reply) => {
-        const { correlationId, caller, params } = await admit(operation, request, reply);
-        if (!caller.identity) {
-          throw new AppError("INTERNAL", `Operation '${operation.id}' was reached by nobody`);
-        }
-        // The fields the descriptor declares are handed on as they arrived: the registry's one
-        // schema parses them, and what it parsed is what the run hashes and the operation
-        // receives. A field of the query or the body that the descriptor does not declare there
-        // is left out, so a query string never stands in for a field of the body.
-        return face.answer(
-          operation,
-          {
-            identity: caller.identity,
-            origin: originOf(caller.identity),
-            correlationId,
-            input: {
-              ...declaredFields(operation.body, request.body),
-              ...declaredFields(operation.query, request.query),
-              ...params
-            },
-            idempotencyKey: readIdempotencyKey(request)
-          },
-          reply
-        );
-      }
+      handler: async (request, reply) =>
+        operation.response.kind === "redirect"
+          ? answerRedirect(reply, binding.redirectOnError, () => call(request, reply))
+          : call(request, reply)
     });
+    async function call(request: FastifyRequest, reply: FastifyReply): Promise<unknown> {
+      const { correlationId, caller, params } = await admit(operation, request, reply);
+      if (!caller.identity) {
+        throw new AppError("INTERNAL", `Operation '${operation.id}' was reached by nobody`);
+      }
+      // The fields the descriptor declares are handed on as they arrived: the registry's one
+      // schema parses them, and what it parsed is what the run hashes and the operation
+      // receives. A field of the query or the body that the descriptor does not declare there
+      // is left out, so a query string never stands in for a field of the body.
+      return face.answer(
+        operation,
+        {
+          identity: caller.identity,
+          origin: originOf(caller.identity),
+          correlationId,
+          input: {
+            ...declaredFields(operation.body, request.body),
+            ...declaredFields(operation.query, request.query),
+            ...params
+          },
+          idempotencyKey: readIdempotencyKey(request)
+        },
+        reply
+      );
+    }
   }
   function registerResourceOperation<const Op extends Operation>(
     operation: Op,

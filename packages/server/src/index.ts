@@ -131,6 +131,7 @@ export type {
 export { appKitFilesOf, loadAppKitFiles } from "./app-kit-runtime";
 export { loadViewRuntimeFiles } from "./view-runtime";
 import { holdsAppContentToken } from "./pages/app-content";
+import { holdsSignInCallback } from "./connections/sign-in-callback";
 export {
   APP_CONTENT_TOKEN_TTL_SECONDS,
   APP_CONTENT_VIEWER_CHECK_MAX_ENTRIES,
@@ -214,9 +215,13 @@ export async function createChatServer(
     // Compose network). X-Forwarded-For is honoured only when the direct peer is a loopback or
     // private address, so a public peer cannot choose its own request.ip.
     trustProxy: ["loopback", "uniquelocal"],
-    // The address of a Page file holds the token that authorizes the request, and the
-    // framework's request lines hold the address. So these requests are not logged.
-    logController: new LogController({ disableRequestLogging: holdsAppContentToken }),
+    // The address of a Page file holds the token that authorizes the request, and that of a
+    // sign-in callback a code and a state; the framework's request lines hold the address.
+    // So these requests are not logged.
+    logController: new LogController({
+      disableRequestLogging: (request) =>
+        holdsAppContentToken(request) || holdsSignInCallback(request)
+    }),
     // An address the framework cannot read is answered without repeating it.
     frameworkErrors: createFrameworkErrorHandler(allowedOrigins)
   });

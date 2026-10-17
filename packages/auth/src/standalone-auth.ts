@@ -139,6 +139,7 @@ type StandaloneProfileRow = typeof standaloneAuthProfiles.$inferSelect;
 interface BetterAuthSessionApi {
   api: {
     getSession(input: { headers: Headers }): Promise<{
+      session: { id: string };
       user: {
         id: string;
         email: string;
@@ -261,6 +262,7 @@ class BetterAuthAdapter implements AuthAdapter {
 
     return {
       authenticationMethod: "session-cookie",
+      sessionId: session.session.id,
       id: profile.authUserId,
       externalUserId: profile.externalUserId,
       displayLabel: profile.displayLabel,
