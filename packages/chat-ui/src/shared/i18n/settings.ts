@@ -102,7 +102,7 @@ export const settings = defineTranslations({
     "settings.usageBudgetBlockedToday": "New model calls are blocked for the rest of today.",
     "settings.usageBudgetDaily": "Daily budget",
     "settings.usageBudgetIncomplete": "Billable cost is incomplete.",
-    "settings.usageBudgetLimitReached": "Limit reached",
+    "settings.usageBudgetLimitReached": "Budget reached",
     "settings.usageBudgetMonthly": "Monthly budget",
     "settings.usageBudgetPercentUsed": "{percent}% used",
     "settings.usageBudgetRemainingMonth": "{amount} remaining this month.",
@@ -240,7 +240,9 @@ export const settings = defineTranslations({
     "settings.usersEmpty": "No users yet.",
     "settings.usersNoMatch": "No users match your search.",
     "settings.usersSummary": "{total} users · {active} active",
-    "settings.usersSummaryInvited": "{total} users · {active} active · {invited} invited"
+    "settings.usersSummaryInvited": "{total} users · {active} active · {invited} invited",
+    "settings.usersSummaryOne": "1 user · {active} active",
+    "settings.usersSummaryOneInvited": "1 user · {active} active · {invited} invited"
   },
   de: {
     "nav.build": "Studio",
@@ -341,7 +343,7 @@ export const settings = defineTranslations({
     "settings.usageBudgetBlockedToday": "Neue Modellaufrufe sind für den Rest des Tages gesperrt.",
     "settings.usageBudgetDaily": "Tagesbudget",
     "settings.usageBudgetIncomplete": "Die Kosten sind unvollständig.",
-    "settings.usageBudgetLimitReached": "Limit erreicht",
+    "settings.usageBudgetLimitReached": "Budget erreicht",
     "settings.usageBudgetMonthly": "Monatsbudget",
     "settings.usageBudgetPercentUsed": "{percent} % verbraucht",
     "settings.usageBudgetRemainingMonth": "Diesen Monat noch {amount} übrig.",
@@ -485,6 +487,8 @@ export const settings = defineTranslations({
     "settings.usersEmpty": "Noch keine Benutzer.",
     "settings.usersNoMatch": "Kein Benutzer passt zu deiner Suche.",
     "settings.usersSummary": "{total} Benutzer · {active} aktiv",
-    "settings.usersSummaryInvited": "{total} Benutzer · {active} aktiv · {invited} eingeladen"
+    "settings.usersSummaryInvited": "{total} Benutzer · {active} aktiv · {invited} eingeladen",
+    "settings.usersSummaryOne": "1 Benutzer · {active} aktiv",
+    "settings.usersSummaryOneInvited": "1 Benutzer · {active} aktiv · {invited} eingeladen"
   }
 });

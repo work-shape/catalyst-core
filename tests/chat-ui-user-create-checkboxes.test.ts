@@ -106,3 +106,20 @@ describe("the sign-in choices of a new user", () => {
     expect(() => checkbox(passwordSignIn)).toThrow();
   });
 });
+
+describe("the advanced rights of a new user", () => {
+  // They folded under a raw `details` element, outside the library and its focus ring.
+  it("fold under the library's disclosure, closed until opened", () => {
+    openCreateForm();
+    expect(document.querySelector("details, summary")).toBeNull();
+    const trigger = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent === "Advanced rights"
+    );
+    expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.body.textContent).not.toContain("Tool rights");
+
+    act(() => trigger?.click());
+    expect(trigger?.getAttribute("aria-expanded")).toBe("true");
+    expect(document.body.textContent).toContain("Tool rights");
+  });
+});

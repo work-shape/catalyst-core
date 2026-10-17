@@ -117,11 +117,27 @@ describe("Usage opens with the month's single answer (UXA-5)", () => {
         expect(cost(card)).toBe(unknown);
         const budget = required(card.querySelector('[data-testid="usage-budget-limit"]'));
         expect(budget.textContent).toBe(limit);
+        // The headline says it once: no badge and no second sentence under the budget.
+        expect(card.textContent).not.toMatch(/incomplete|unvollständig/iu);
       } finally {
         await mounted.unmount();
       }
     }
   );
+
+  it("says once, under the daily budget, that only today's cost is not known", async () => {
+    const usage = createUsageSummary();
+    delete usage.today.cost.billableCostMicros;
+    const mounted = await mountUsagePage(Response.json(usage), "en");
+    try {
+      const card = await monthCard(mounted, "This month");
+      expect(cost(card)).toBe("€100.00 of €400.00");
+      expect(card.textContent?.split("Billable cost is incomplete.")).toHaveLength(2);
+      expect(card.textContent).not.toContain("Incomplete");
+    } finally {
+      await mounted.unmount();
+    }
+  });
 
   it("says the month's cost alone where no monthly budget is set", async () => {
     const usage = createUsageSummary();
@@ -147,11 +163,25 @@ describe("Usage opens with the month's single answer (UXA-5)", () => {
       expect(cost(card)).toBe("€450.00 of €400.00");
       // A known cost says the budget in its headline, and nowhere again.
       expect(card.querySelector('[data-testid="usage-budget-limit"]')).toBeNull();
-      expect(card.textContent).toContain("Limit reached");
+      expect(card.textContent).toContain("Budget reached");
       expect(card.textContent).toContain("New model calls are blocked for the rest of this month.");
       const bar = required(card.querySelector('[role="progressbar"]'));
       expect(bar.getAttribute("aria-label")).toBe("Monthly budget used");
       expect(bar.getAttribute("aria-valuenow")).toBe("100");
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  // The badge said "Limit reached" and "Limit erreicht" of a budget.
+  it("says in German that the budget is reached", async () => {
+    const usage = createUsageSummary();
+    usage.currentMonth.cost = { ...usage.currentMonth.cost, billableCostMicros: 450_000_000 };
+    const mounted = await mountUsagePage(Response.json(usage), "de");
+    try {
+      const card = await monthCard(mounted, "Dieser Monat");
+      expect(card.textContent).toContain("Budget erreicht");
+      expect(card.textContent).not.toContain("Limit");
     } finally {
       await mounted.unmount();
     }
@@ -267,6 +297,71 @@ describe("usage spend budget progress", () => {
     expect(markup).toContain("Incomplete");
     expect(markup).not.toContain("Billed");
   });
+
+  // Fails without the change: a grid item's minimum width is its longest word, so "Unvollständig"
+  // held its column wider than a narrow card and was clipped. HappyDOM cannot lay out CSS; the
+  // pixel fit at 512px is checked in the browser, this test keeps the classes that allow it.
+  it("lets an unbroken German metric value shrink and wrap inside its card", () => {
+    const usage = createUsageSummary();
+    usage.today.cost = {
+      status: "incomplete",
+      currency: "EUR",
+      complete: false,
+      webSearchCostVisible: false,
+      settledModelCallCount: 0,
+      incompleteModelCallCount: 1,
+      settledWebSearchCallCount: 0,
+      incompleteWebSearchCallCount: 0
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "de",
+        children: createElement(UsageView, { usage })
+      })
+    );
+
+    expect(markup).toMatch(
+      /<strong class="(?=[^"]*\bmin-w-0\b)(?=[^"]*\bbreak-words\b)[^"]*">Unvollständig<\/strong>/u
+    );
+  });
+
+  // Each width constraint matters independently of the large value's wrapping above.
+  // Static rendering guards the CSS contract; browser evidence checks the actual fit.
+  it("lets a metric card shrink below its value's unbroken width", () => {
+    const container = document.createElement("div");
+    container.innerHTML = renderToStaticMarkup(
+      createElement(UsageView, { usage: createUsageSummary() })
+    );
+    const values = [...container.querySelectorAll("strong")];
+    expect(values.length).toBeGreaterThan(0);
+    for (const value of values) {
+      expect(required(value.closest("[data-card]")).classList.contains("min-w-0")).toBe(true);
+    }
+  });
+
+  it.each(["min-w-0", "break-words"])(
+    "keeps %s on smaller usage stats so their values can shrink and wrap",
+    (className) => {
+      const usage = createUsageSummary();
+      usage.today.cost.webSearchCostVisible = true;
+      usage.today.cost.complete = false;
+      delete usage.today.cost.webSearchBillableCostMicros;
+      const container = document.createElement("div");
+      container.innerHTML = renderToStaticMarkup(
+        createElement(TranslationProvider, {
+          locale: "de",
+          children: createElement(UsageView, { usage })
+        })
+      );
+      const values = [...container.querySelectorAll("dd")];
+      expect(values.some((value) => value.textContent === "Unvollständig")).toBe(true);
+      for (const value of values) {
+        const target = className === "min-w-0" ? required(value.parentElement) : value;
+        expect(target.classList.contains(className)).toBe(true);
+      }
+    }
+  );
 
   // Fails without the change: a failed and an abandoned call both read "No usage reported",
   // and a call with usage showed the stored value of its source, such as `provider_reported`.

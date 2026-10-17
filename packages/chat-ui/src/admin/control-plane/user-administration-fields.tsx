@@ -1,6 +1,14 @@
 import { useState, type FocusEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { Button, Checkbox, Input, Select } from "@work-shape/catalyst-ui";
+import {
+  Button,
+  Checkbox,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
+  Input,
+  Select
+} from "@work-shape/catalyst-ui";
 import {
   ACCESS_LEVEL_OPTIONS,
   generatePassword,
@@ -162,11 +170,9 @@ export function CreateUserFields({
           </div>
         </Field>
       ) : null}
-      <details className="rounded-md border bg-muted/20 p-3">
-        <summary className="cursor-pointer text-sm font-medium">
-          {t("settings.userAdvancedPermissions")}
-        </summary>
-        <div className="mt-3">
+      <Disclosure variant="outline">
+        <DisclosureTrigger>{t("settings.userAdvancedPermissions")}</DisclosureTrigger>
+        <DisclosureContent>
           <Field
             label={t("settings.userPermissionRefs")}
             hint={t("settings.userPermissionRefsHint")}
@@ -176,8 +182,8 @@ export function CreateUserFields({
               onChange={(event) => onChange({ ...form, permissionRefs: event.target.value })}
             />
           </Field>
-        </div>
-      </details>
+        </DisclosureContent>
+      </Disclosure>
     </>
   );
 }

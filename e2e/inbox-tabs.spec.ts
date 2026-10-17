@@ -66,7 +66,7 @@ test("a tab opened for the first time flashes no loading layout for a fast answe
   );
   const inbox = page.getByRole("region", { name: "Inbox", exact: true });
   // A tab by its label. What another test left in a list before this one read the counts
-  // stands as a count after the label: "Decided, 3 items".
+  // stands as a count after the label: "My requests, 3 items".
   const tabNamed = (label: string) =>
     inbox.getByRole("tab", { name: new RegExp(`^${label}(?: ?, \\d+ items?)?$`, "u") });
   const openInbox = async () => {
@@ -226,13 +226,13 @@ async function selectWithoutFocus(tab: Locator) {
   await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 
-test("at 390 the Inbox's tab row shows the selected tab whole, fades the edge that hides tabs and moves no page sideways", async ({
+test("at 320 the Inbox's tab row shows the selected tab whole, fades the edge that hides tabs and moves no page sideways", async ({
   page
 }) => {
   // Signed in at the default width, where the rail with its search shows; then a phone.
   await signIn(page, reviewer);
-  await page.setViewportSize({ width: 390, height: 844 });
-  // Counts on every tab, as a busy instance has them: the row then does not fit at 390.
+  await page.setViewportSize({ width: 320, height: 844 });
+  // Counts on the tabs that wait, as a busy instance has them: the row then does not fit at 320.
   await page.route(
     (url) =>
       url.origin === new URL(apiBaseUrl).origin &&
@@ -242,13 +242,13 @@ test("at 390 the Inbox's tab row shows the selected tab whole, fades the edge th
       const body: { mine: object } = await response.json();
       await route.fulfill({
         response,
-        json: { ...body, count: 12, decided: 120, mine: { ...body.mine, pending: 3 } }
+        json: { ...body, count: 12, mine: { ...body.mine, pending: 3 } }
       });
     }
   );
   const inbox = page.getByRole("region", { name: "Inbox", exact: true });
   const toDecide = inbox.getByRole("tab", { name: tabName("To decide", 12) });
-  const decided = inbox.getByRole("tab", { name: tabName("Decided", 120) });
+  const decided = inbox.getByRole("tab", { name: "Decided", exact: true });
   // The pictures are taken in both languages, so they find the tabs by place.
   const tabs = page.getByTestId("inbox-area").getByRole("tab");
   const ready = async () => {

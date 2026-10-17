@@ -109,7 +109,7 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceMemberCandidatesLabel: "Member suggestions",
     collaborationWorkspaceMemberCandidatesLoading: "Searching people…",
     collaborationWorkspaceMembersDescription:
-      "Members use this workspace's agents and apps and work in its conversations. Builders may also view and edit what it owns, and Publishers publish it; an instance admin gives both.",
+      "Members use this workspace's agents and apps and work in its conversations. Builders may also edit what this workspace owns, such as its agents and apps; Publishers may publish it. An instance admin grants these rights.",
     collaborationWorkspaceMembersLoadFailed: "Members could not be loaded.",
     collaborationWorkspaceMembersLoadRefused: "You may not see the members of this workspace.",
     collaborationWorkspaceNameLabel: "Name",
@@ -284,7 +284,7 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceMemberCandidatesLabel: "Mitgliedervorschläge",
     collaborationWorkspaceMemberCandidatesLoading: "Personen werden gesucht…",
     collaborationWorkspaceMembersDescription:
-      "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Builder dürfen zusätzlich ansehen und bearbeiten, was ihm gehört, Publisher es veröffentlichen; beides vergibt jemand, der die Instanz verwaltet.",
+      "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Wer das Recht zum Bearbeiten hat, darf zusätzlich bearbeiten, was dem Arbeitsbereich gehört, etwa seine Agenten und Apps; wer das Recht zum Veröffentlichen hat, darf es veröffentlichen. Beide Rechte vergibt jemand, der die Instanz verwaltet.",
     collaborationWorkspaceMembersLoadFailed: "Mitglieder konnten nicht geladen werden.",
     collaborationWorkspaceMembersLoadRefused:
       "Du darfst die Mitglieder dieses Arbeitsbereichs nicht sehen.",

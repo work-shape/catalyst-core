@@ -45,18 +45,17 @@ export function inboxRailEntry(counts: InboxCounts | undefined): { toDecide: num
 
 /**
  * The number on a tab. To decide and a person's own requests count what still waits, and the
- * first of them stands out as it does in the rail. Decided counts what the list holds. A list
- * that would count zero shows no number.
+ * first of them stands out as it does in the rail. Decided shows no number: nothing in it waits,
+ * and its count crowded the tab row. A list that would count zero shows no number.
  */
 export function inboxTabCount(
   tab: InboxTab,
   counts: InboxCounts | undefined
 ): { count: number; tone: "primary" | "muted" } | undefined {
-  if (!counts) {
+  if (!counts || tab === "decided") {
     return undefined;
   }
-  const count =
-    tab === "to_decide" ? counts.count : tab === "mine" ? counts.mine.pending : counts.decided;
+  const count = tab === "to_decide" ? counts.count : counts.mine.pending;
   return count > 0 ? { count, tone: tab === "to_decide" ? "primary" : "muted" } : undefined;
 }
 

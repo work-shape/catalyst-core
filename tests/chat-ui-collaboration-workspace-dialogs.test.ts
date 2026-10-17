@@ -363,8 +363,8 @@ describe("Workspace pages of Settings", () => {
 
     expect(headings).toEqual(["h1 Mitglieder", "h2 Anfragen"]);
     expect(header).toContain("Mitglied hinzufügen");
-    // Who gives Builder and Publisher, in the words a refusal uses for whom to ask.
-    expect(header).toContain("beides vergibt jemand, der die Instanz verwaltet.");
+    // Who gives the edit and publish rights, in the words a refusal uses for whom to ask.
+    expect(header).toContain("Beide Rechte vergibt jemand, der die Instanz verwaltet.");
     expect(markup.indexOf("collaboration-workspace-member-row")).toBeLessThan(
       markup.indexOf("Anfragen</h2>")
     );

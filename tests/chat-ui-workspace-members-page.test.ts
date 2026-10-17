@@ -188,3 +188,30 @@ describe("Workspace > Members, when a change is refused", () => {
     }
   );
 });
+
+describe("Workspace > Members, its description", () => {
+  // Builder and Publisher reach only assets the workspace owns, never its conversations,
+  // Projects or members' files. Name the owner and examples in both languages.
+  it.each([
+    {
+      locale: "en" as const,
+      said: "Members use this workspace's agents and apps and work in its conversations. Builders may also edit what this workspace owns, such as its agents and apps; Publishers may publish it. An instance admin grants these rights."
+    },
+    {
+      locale: "de" as const,
+      said: "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Wer das Recht zum Bearbeiten hat, darf zusätzlich bearbeiten, was dem Arbeitsbereich gehört, etwa seine Agenten und Apps; wer das Recht zum Veröffentlichen hat, darf es veröffentlichen. Beide Rechte vergibt jemand, der die Instanz verwaltet."
+    }
+  ])("limits the extra rights to what this workspace owns ($locale)", async ({ locale, said }) => {
+    const mounted = await mountMembers(locale, {
+      [membersPath]: () => Response.json({ items: [member] })
+    });
+    try {
+      await waitForText(mounted.container, said);
+      if (locale === "de") {
+        expect(mounted.container.textContent).not.toMatch(/Builder|Publisher|ihm gehört|Inhalte/u);
+      }
+    } finally {
+      await mounted.unmount();
+    }
+  });
+});

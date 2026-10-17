@@ -80,10 +80,11 @@ describe("inbox model", () => {
     expect(inboxRailEntry(undefined)).toBeUndefined();
   });
 
-  it("counts what waits in the first two lists and what the decided one holds", () => {
+  it("counts what waits in the first two lists, and nothing in the decided one", () => {
     expect(inboxTabCount("to_decide", reviewer)).toEqual({ count: 2, tone: "primary" });
     expect(inboxTabCount("mine", reviewer)).toEqual({ count: 1, tone: "muted" });
-    expect(inboxTabCount("decided", reviewer)).toEqual({ count: 3, tone: "muted" });
+    // Nothing decided waits, and its count crowded the tab row in German.
+    expect(inboxTabCount("decided", reviewer)).toBeUndefined();
     // A list that counts zero has no number, and none before the counts arrived.
     expect(inboxTabCount("to_decide", { ...reviewer, count: 0 })).toBeUndefined();
     expect(inboxTabCount("mine", { ...reviewer, mine: { pending: 0, total: 4 } })).toBeUndefined();
@@ -453,16 +454,14 @@ describe("inbox area", () => {
 
     expect(markup).toContain(">Eingang</h1>");
     expect(markup.match(/role="tab"/gu)).toHaveLength(3);
-    // The list that waits for the reader has the number of the rail, the decided one a quiet
-    // number that stops at 99+, and the list with nothing waiting has none.
+    // The list that waits for the reader has the number of the rail. The list with nothing
+    // waiting has none, and the decided one none at all: German "Zu entscheiden" must fit.
     // The harness gives the library its English words, so the noun of the count is English.
     expect(markup).toMatch(
       /aria-selected="true"[^>]*>Zu entscheiden<span class="[^"]*bg-primary[^"]*" aria-hidden="true">2<\/span><span class="sr-only">, 2 items<\/span>/u
     );
     expect(markup).toContain(">Meine Anfragen</button>");
-    expect(markup).toMatch(
-      />Entschieden<span class="[^"]*bg-state-pressed[^"]*" aria-hidden="true">99\+<\/span><span class="sr-only">, 120 items<\/span>/u
-    );
+    expect(markup).toContain(">Entschieden</button>");
     expect(markup).toContain('data-testid="inbox-row"');
   });
 
@@ -490,6 +489,6 @@ describe("inbox area", () => {
 
     expect(markup).toContain("Nothing to decide.");
     expect(markup).toMatch(/aria-selected="true"[^>]*>To decide<\/button>/u);
-    expect(markup).toMatch(/>Decided<span[^>]*>1<\/span><span class="sr-only">, 1 item<\/span>/u);
+    expect(markup).toContain(">Decided</button>");
   });
 });

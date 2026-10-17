@@ -178,7 +178,13 @@ export function UserAdministrationPanel({
       <PageHeader
         title={t("settings.users")}
         description={t(
-          invitedUserCount > 0 ? "settings.usersSummaryInvited" : "settings.usersSummary",
+          users.length === 1
+            ? invitedUserCount > 0
+              ? "settings.usersSummaryOneInvited"
+              : "settings.usersSummaryOne"
+            : invitedUserCount > 0
+              ? "settings.usersSummaryInvited"
+              : "settings.usersSummary",
           {
             total: users.length.toLocaleString(locale),
             active: activeUserCount.toLocaleString(locale),

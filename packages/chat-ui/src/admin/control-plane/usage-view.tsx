@@ -307,15 +307,15 @@ function UsageMonthCard({ usage }: { usage: UsageSummary }) {
       limitMicros: usage.spendBudget.dailyLimitMicros
     }
   ].filter((budget): budget is SpendBudgetProgressInput => budget.limitMicros !== undefined);
-  const cost =
-    spentMicros === undefined || currency === undefined
-      ? t("settings.usageCostNotKnownYet")
-      : monthlyLimitMicros === undefined
-        ? formatMicrosCost(spentMicros, currency, i18n)
-        : t("settings.usageBudgetSpent", {
-            spent: formatMicrosCost(spentMicros, currency, i18n),
-            limit: formatMicrosCost(monthlyLimitMicros, currency, i18n)
-          });
+  const costUnknown = spentMicros === undefined || currency === undefined;
+  const cost = costUnknown
+    ? t("settings.usageCostNotKnownYet")
+    : monthlyLimitMicros === undefined
+      ? formatMicrosCost(spentMicros, currency, i18n)
+      : t("settings.usageBudgetSpent", {
+          spent: formatMicrosCost(spentMicros, currency, i18n),
+          limit: formatMicrosCost(monthlyLimitMicros, currency, i18n)
+        });
 
   return (
     <Card padding="md" data-testid="usage-month-budget">
@@ -337,7 +337,12 @@ function UsageMonthCard({ usage }: { usage: UsageSummary }) {
         {budgets.length ? (
           <div className="grid gap-5 md:grid-cols-2">
             {budgets.map((budget) => (
-              <SpendBudgetProgress key={budget.period} {...budget} currency={currency} />
+              <SpendBudgetProgress
+                key={budget.period}
+                {...budget}
+                currency={currency}
+                headlineSaysCostUnknown={costUnknown}
+              />
             ))}
           </div>
         ) : null}
@@ -356,28 +361,27 @@ function SpendBudgetProgress({
   period,
   spentMicros,
   limitMicros,
-  currency
-}: SpendBudgetProgressInput & { currency?: string }) {
+  currency,
+  headlineSaysCostUnknown
+}: SpendBudgetProgressInput & { currency?: string; headlineSaysCostUnknown: boolean }) {
   const i18n = useTranslation();
   const { t } = i18n;
   const text = BUDGET_TEXT_KEYS[period];
   const label = t(text.label);
   if (spentMicros === undefined || currency === undefined) {
     return (
-      <div className="grid gap-2">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium">{label}</p>
-            {/* The headline cannot say the budget beside an unknown cost, so it stands here. */}
-            {currency === undefined ? null : (
-              <p className="text-xs text-muted-foreground" data-testid="usage-budget-limit">
-                {formatMicrosCost(limitMicros, currency, i18n)}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">{t("settings.usageBudgetIncomplete")}</p>
-          </div>
-          <Badge>{t("settings.usageIncomplete")}</Badge>
-        </div>
+      <div>
+        <p className="text-sm font-medium">{label}</p>
+        {/* The headline cannot say the budget beside an unknown cost, so it stands here. */}
+        {currency === undefined ? null : (
+          <p className="text-xs text-muted-foreground" data-testid="usage-budget-limit">
+            {formatMicrosCost(limitMicros, currency, i18n)}
+          </p>
+        )}
+        {/* The card says an unknown cost once: in its headline, or here when only today's is. */}
+        {headlineSaysCostUnknown ? null : (
+          <p className="text-xs text-muted-foreground">{t("settings.usageBudgetIncomplete")}</p>
+        )}
       </div>
     );
   }
@@ -688,14 +692,14 @@ function UsageMetric({
   detail?: string;
 }) {
   return (
-    <Card className="grid content-start gap-1.5 p-4">
+    <Card className="grid min-w-0 content-start gap-1.5 p-4">
       <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
         <span className="grid size-6 place-items-center rounded-md bg-accent text-primary">
           {icon}
         </span>
         {label}
       </span>
-      <strong className="break-words text-2xl font-semibold">{value}</strong>
+      <strong className="min-w-0 break-words text-2xl font-semibold">{value}</strong>
       {detail ? <small className="text-xs text-muted-foreground">{detail}</small> : null}
     </Card>
   );
@@ -712,12 +716,12 @@ function UsageStat({
 }) {
   const { t, locale } = useTranslation();
   return (
-    <div className="rounded-md border bg-card p-3">
+    <div className="min-w-0 rounded-md border bg-card p-3">
       <dt className="inline-flex items-center gap-2 text-xs text-muted-foreground">
         {icon}
         {label}
       </dt>
-      <dd className="mt-1 font-medium">
+      <dd className="mt-1 break-words font-medium">
         {value === undefined
           ? t("settings.usageNotConfigured")
           : typeof value === "number"

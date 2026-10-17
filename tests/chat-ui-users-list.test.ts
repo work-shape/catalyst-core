@@ -90,7 +90,25 @@ describe("Instance > Users", () => {
     expect(markup).toContain("2 users · 1 active · 1 invited");
     expect(markup.match(/>Invited</gu)).toHaveLength(2); // the filter's option and the badge
     expect(markup).toContain('<option value="invited">Invited</option>');
-    expect(panel([user(signedIn)])).toContain("1 users · 1 active<");
+  });
+
+  // The head said "1 users" of a single account.
+  it.each([
+    {
+      locale: "en" as const,
+      said: ["0 users · 0 active<", "1 user · 1 active<", "2 users · 2 active<"]
+    },
+    {
+      locale: "de" as const,
+      said: ["0 Benutzer · 0 aktiv<", "1 Benutzer · 1 aktiv<", "2 Benutzer · 2 aktiv<"]
+    }
+  ])("counts none, one and two people in the right number ($locale)", ({ locale, said }) => {
+    const people = [user({ id: "a", ...signedIn }), user({ id: "b", ...signedIn })];
+    expect([0, 1, 2].map((count) => panel(people.slice(0, count), locale))).toEqual(
+      said.map((summary) => expect.stringContaining(summary))
+    );
+    expect(panel([user()], "en")).toContain("1 user · 0 active · 1 invited<");
+    expect(panel([user()], "de")).toContain("1 Benutzer · 0 aktiv · 1 eingeladen<");
   });
 
   it("reads Eingeladen in German for a person who never signed in, as its filter does", () => {

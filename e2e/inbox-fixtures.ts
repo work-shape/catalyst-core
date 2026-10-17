@@ -116,12 +116,6 @@ export function tabName(label: string, count: number): RegExp {
   );
 }
 
-/** The number a Decided tab reads out, 0 when it reads none: an earlier run may have left some. */
-export async function decidedCount(tab: Locator): Promise<number> {
-  await expect(tab).toHaveAccessibleName(/^Decided(?: ?, \d+ items?)?$/u);
-  return Number(/, (\d+) item/u.exec((await tab.textContent()) ?? "")?.[1] ?? 0);
-}
-
 /** The id of what an answer of the instance created. */
 export function idOf(body: unknown): string {
   if (typeof body !== "object" || body === null || !("id" in body) || typeof body.id !== "string") {
