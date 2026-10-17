@@ -72,7 +72,7 @@ describe("the store a Knowledge Base owns", () => {
     return eventually(async () => {
       await jobs.runDue();
       const record = await ownedRecord(world);
-      expect(record).toMatchObject({ status: "ready", level: 1 });
+      expect(record).toMatchObject({ status: "ready", level: 2 });
       return required(record);
     });
   }
@@ -124,7 +124,10 @@ describe("the store a Knowledge Base owns", () => {
         })
       ).id,
       ownerKnowledgeBaseId: KB,
-      migrations: [expect.objectContaining({ number: 1, name: "documents" })]
+      migrations: [
+        expect.objectContaining({ number: 1, name: "documents" }),
+        expect.objectContaining({ number: 2, name: "sources" })
+      ]
     });
     const { database } = record.location;
     const tables = await inDatabase(
@@ -139,7 +142,10 @@ describe("the store a Knowledge Base owns", () => {
       "contents",
       "documents",
       "index_generations",
-      "migrations"
+      "migrations",
+      "source_cursors",
+      "source_items",
+      "sync_runs"
     ]);
     // The platform's role owns them; no role of the store does.
     for (const table of tables) {
@@ -191,7 +197,7 @@ describe("the store a Knowledge Base owns", () => {
           name: `knowledge-base:${KB}`,
           title: "Objektunterlagen",
           status: "ready",
-          level: 1,
+          level: 2,
           ownedBy: { knowledgeBase: KB }
         }
       ]

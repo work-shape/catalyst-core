@@ -96,7 +96,7 @@ describe("adding files to a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(record).toMatchObject({ status: "ready", level: 1 });
+      expect(record).toMatchObject({ status: "ready", level: 2 });
       return required(record);
     });
   }
@@ -302,6 +302,64 @@ describe("adding files to a Knowledge Base", () => {
       })
     ).toBe(0);
     expect(await ownedStatuses(instance)).toEqual(["available"]);
+  });
+
+  // The store a release before SRC-0 made is at level 1. The next start brings it to this
+  // release's tables, and adding files goes on as before, without a publish.
+  it("adds files to a store an earlier release left at level 1 once the instance starts again, without a publish", async () => {
+    const { instance, record } = await instanceWithFiles();
+    await inDatabase(record.location.database, (sql) =>
+      sql.unsafe(`
+        alter table catalyst_kb.documents drop column source_item_id;
+        drop table catalyst_kb.source_cursors, catalyst_kb.sync_runs, catalyst_kb.source_items;
+        delete from catalyst_kb.migrations where number = 2;`)
+    );
+    await instance.stores.dataStores.putDataStore({
+      ...record,
+      level: 1,
+      migrations: record.migrations.slice(0, 1)
+    });
+    const source = await conversationWithFile(instance, {
+      filename: FILE_NAME,
+      contentType: "text/plain",
+      content: FILE_TEXT
+    });
+    const before = await addFiles(instance, [source]);
+    expect(errorSchema.parse(before.json()).error).toMatchObject({
+      code: "CONFLICT",
+      details: { reason: "knowledge_store_not_ready" }
+    });
+
+    // The worker of the next start makes the waiting tick of the upgrade due at once.
+    await inDatabase(
+      undefined,
+      (sql) => sql`update platform_jobs set run_after = now()
+        where kind = 'data_store.upgrade_owned' and client_instance_id = ${clientInstanceId}
+        and status = 'queued'`
+    );
+    const jobs = getTestJobs(instance.api);
+    const upgraded = await eventually(async () => {
+      await jobs.runDue();
+      const current = await instance.stores.dataStores.findDataStoreByName({
+        clientInstanceId,
+        name: `knowledge-base:${KB}`
+      });
+      expect(current).toMatchObject({ status: "ready", level: 2 });
+      return required(current);
+    });
+    expect(upgraded.migrations.map(({ number }) => number)).toEqual([1, 2]);
+
+    const added = await addFiles(instance, [source]);
+    expect(added.statusCode, added.body).toBe(200);
+    const copyId = required(addedSchema.parse(added.json()).documents[0]).fileId;
+    expect(await documentRows(upgraded)).toEqual([
+      {
+        managed_file_id: copyId,
+        content_sha256: createHash("sha256").update(FILE_TEXT).digest("hex"),
+        title: "Mietvertrag Erika Mustermann",
+        file_name: FILE_NAME
+      }
+    ]);
   });
 
   it("refuses a caller without `knowledge_base.write`, and copies nothing", async () => {

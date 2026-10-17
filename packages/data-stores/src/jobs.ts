@@ -29,7 +29,7 @@ import {
   type DataStoreDefinition
 } from "./definition";
 import { describeDatabaseFailure } from "./failures";
-import { applyKnowledgeStoreSchema } from "./knowledge/builtin/store-schema";
+import { KNOWLEDGE_STORE_LEVEL, applyKnowledgeStoreSchema } from "./knowledge/builtin/store-schema";
 import { knowledgeBaseDefinitionSchema } from "./knowledge/definition";
 import { DataStoreMigrationRefusal, applyMigration, readSignedMigrations } from "./migrating";
 import {
@@ -65,6 +65,12 @@ const DATA_STORE_JOBS_MAX_RUNNING = 4;
 const DATA_STORE_JOB_SLOTS = 2;
 /** How often the size of every store is measured. */
 const DATA_STORE_MEASURE_INTERVAL_MS = 24 * 60 * MINUTE_MS;
+/**
+ * How often the stores Knowledge Bases own are checked against the release's tables, besides
+ * at each start. How many stores one check reads.
+ */
+const DATA_STORE_UPGRADE_INTERVAL_MS = 24 * 60 * MINUTE_MS;
+const DATA_STORE_UPGRADE_MAX_STORES = 2_000;
 
 const storePayloadSchema = z.object({ storeId: z.string().min(1).max(200) });
 type StorePayload = z.infer<typeof storePayloadSchema>;
@@ -91,6 +97,21 @@ const dropJob = defineJobKind({ ...storeJob, kind: DATA_STORE_JOB_KINDS.drop });
 
 const measureSizeJob = defineJobKind({
   kind: DATA_STORE_JOB_KINDS.measureSize,
+  payloadSchema: scheduledJobPayloadSchema,
+  maxAttempts: 1,
+  backoff: { baseMs: 0, maxMs: 0 },
+  leaseMs: 10 * MINUTE_MS,
+  concurrency: { global: 1 },
+  manualRetry: false
+});
+
+/**
+ * Queues the migration of every store a Knowledge Base owns whose tables are behind the
+ * release. Due at each start, so a store an earlier release made gets the tables of this one
+ * without a publish: an operation that needs them refuses until then.
+ */
+const upgradeOwnedJob = defineJobKind({
+  kind: DATA_STORE_JOB_KINDS.upgradeOwned,
   payloadSchema: scheduledJobPayloadSchema,
   maxAttempts: 1,
   backoff: { baseMs: 0, maxMs: 0 },
@@ -701,6 +722,36 @@ async function owningKnowledgeBase(runtime: DataStoreRuntime, record: DataStoreR
  * it searches by meaning, and the platform's tables of this release. Nothing of an author
  * runs: the store has no migrations of its own.
  */
+/**
+ * Queues the migration of each store a Knowledge Base owns that has its database and a level
+ * below the release's. The migration applies the tables of this release, as a publish does.
+ */
+async function upgradeOwnedStores(runtime: DataStoreRuntime, control: JobControl): Promise<void> {
+  const { clientInstanceId, logger } = runtime;
+  const records = await runtime.stores.dataStores.listDataStores({
+    clientInstanceId,
+    limit: DATA_STORE_UPGRADE_MAX_STORES + 1
+  });
+  if (records.length > DATA_STORE_UPGRADE_MAX_STORES) {
+    logger.warn(
+      { limit: DATA_STORE_UPGRADE_MAX_STORES, limitName: "DATA_STORE_UPGRADE_MAX_STORES" },
+      "More Data Stores exist than one upgrade check reads"
+    );
+  }
+  const behind = records
+    .slice(0, DATA_STORE_UPGRADE_MAX_STORES)
+    .filter(
+      (record) =>
+        record.ownerKnowledgeBaseId !== undefined &&
+        record.status === "ready" &&
+        record.level < KNOWLEDGE_STORE_LEVEL
+    );
+  if (behind.length === 0) return;
+  await control.transaction(async (stores) => {
+    for (const record of behind) await enqueueStoreJob(stores, record);
+  });
+}
+
 async function migrateOwnedStore(
   runtime: DataStoreRuntime,
   job: Job<StorePayload>,
@@ -871,7 +922,7 @@ async function drop(
   });
 }
 
-/** The handlers, the schedule and the manual retries of the store's job kinds. */
+/** The handlers, the schedules and the manual retries of the store's job kinds. */
 export function createDataStoreJobs(runtime: DataStoreRuntime): {
   handlers: RegisteredJobHandler[];
   schedules: JobSchedule[];
@@ -895,12 +946,25 @@ export function createDataStoreJobs(runtime: DataStoreRuntime): {
         run: (_job, control) => measureDataStores(runtime, control)
       }),
       defineJobHandler({
+        kind: upgradeOwnedJob,
+        slots: 1,
+        run: (_job, control) => upgradeOwnedStores(runtime, control)
+      }),
+      defineJobHandler({
         kind: dropJob,
         slots: DATA_STORE_JOB_SLOTS,
         run: (job, control) => drop(runtime, job, control)
       })
     ],
-    schedules: [defineSchedule({ kind: measureSizeJob, every: DATA_STORE_MEASURE_INTERVAL_MS })],
+    schedules: [
+      defineSchedule({ kind: measureSizeJob, every: DATA_STORE_MEASURE_INTERVAL_MS }),
+      // A store an earlier release made gets this release's tables as soon as it is up.
+      defineSchedule({
+        kind: upgradeOwnedJob,
+        every: DATA_STORE_UPGRADE_INTERVAL_MS,
+        dueAtStart: true
+      })
+    ],
     // Each reads the record, and the published revision, anew.
     retries: [{ kind: provisionJob }, { kind: migrateJob }, { kind: dropJob }]
   };

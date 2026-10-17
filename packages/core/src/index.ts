@@ -26,6 +26,7 @@ export * from "./data-store-records";
 export * from "./data-stores";
 export * from "./data-tool-names";
 export * from "./data-tools";
+export * from "./document-source";
 export * from "./draft-calls";
 export * from "./events";
 export * from "./file-search";
@@ -33,6 +34,7 @@ export * from "./guardrails";
 export * from "./infrastructure-checks";
 export * from "./knowledge";
 export * from "./knowledge-extraction";
+export * from "./knowledge-sources";
 export * from "./modules";
 export * from "./operation-denial";
 export * from "./operation-policy";
@@ -126,6 +128,12 @@ export {
   KNOWLEDGE_DOCUMENT_FAILURE_CODES,
   KNOWLEDGE_DOCUMENT_STATES,
   KNOWLEDGE_DOCUMENT_WAIT_CODES,
+  KNOWLEDGE_SOURCE_FAILURE_CODES,
+  KNOWLEDGE_SOURCE_ITEM_FAILURE_CODES,
+  KNOWLEDGE_SOURCE_ITEM_STATES,
+  KNOWLEDGE_SYNC_COUNTS,
+  KNOWLEDGE_SYNC_MODES,
+  KNOWLEDGE_SYNC_RUN_STATES,
   LISTED_DATA_STORE_STATUSES,
   LIVE_JOB_STATUSES,
   MESSAGE_FINISH_STATUSES,

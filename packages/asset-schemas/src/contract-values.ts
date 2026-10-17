@@ -725,6 +725,66 @@ export const KNOWLEDGE_DOCUMENT_WAIT_CODES = [
 ] as const;
 export type KnowledgeDocumentWaitCode = (typeof KNOWLEDGE_DOCUMENT_WAIT_CODES)[number];
 
+/**
+ * Why a synced source of a Knowledge Base, or one item of it, did not come in. Beside the
+ * document codes: an item over the size limit or of a format the instance does not read is
+ * recorded with `knowledge_file_over_limit` or `knowledge_file_format_unsupported` and never
+ * fetched. Spec: Synced sources, Contract freezes (SRC-0).
+ */
+export const KNOWLEDGE_SOURCE_FAILURE_CODES = [
+  // The source did not answer.
+  "knowledge_source_unreachable",
+  // The credential or the account's access was refused for the whole source.
+  "knowledge_source_refused",
+  // A fetch failed on every attempt.
+  "knowledge_fetch_failed",
+  // The Knowledge Base holds its document limit; the listing stopped discovering there.
+  "knowledge_source_limit_reached"
+] as const;
+export type KnowledgeSourceFailureCode = (typeof KNOWLEDGE_SOURCE_FAILURE_CODES)[number];
+
+/** The code a failed item of a synced source carries: a source code, or one it shares with a file added by hand. */
+export const KNOWLEDGE_SOURCE_ITEM_FAILURE_CODES = [
+  ...KNOWLEDGE_SOURCE_FAILURE_CODES,
+  "knowledge_file_over_limit",
+  "knowledge_file_format_unsupported"
+] as const satisfies readonly (KnowledgeSourceFailureCode | KnowledgeDocumentFailureCode)[];
+export type KnowledgeSourceItemFailureCode = (typeof KNOWLEDGE_SOURCE_ITEM_FAILURE_CODES)[number];
+
+/**
+ * The state of an item of a synced source as the sync keeps it. It ends at `fetched`: from
+ * then on the item shows its document's state. `withdrawn` is out of search.
+ */
+export const KNOWLEDGE_SOURCE_ITEM_STATES = [
+  "discovered",
+  "fetched",
+  "failed",
+  "withdrawn"
+] as const;
+export type KnowledgeSourceItemState = (typeof KNOWLEDGE_SOURCE_ITEM_STATES)[number];
+
+/**
+ * How a sync of a source walks it: `initial` and `full` list every item below its folders,
+ * `changes` reads the source's change feed from the stored cursor.
+ */
+export const KNOWLEDGE_SYNC_MODES = ["initial", "changes", "full"] as const;
+export type KnowledgeSyncMode = (typeof KNOWLEDGE_SYNC_MODES)[number];
+
+export const KNOWLEDGE_SYNC_RUN_STATES = ["running", "done", "failed"] as const;
+export type KnowledgeSyncRunState = (typeof KNOWLEDGE_SYNC_RUN_STATES)[number];
+
+/** What a sync run counts, in this order wherever it shows them. */
+export const KNOWLEDGE_SYNC_COUNTS = [
+  "discovered",
+  "added",
+  "changed",
+  "moved",
+  "withdrawn",
+  "failed",
+  "skipped"
+] as const;
+export type KnowledgeSyncCount = (typeof KNOWLEDGE_SYNC_COUNTS)[number];
+
 export const DATABASE_RELATION_TYPES = [
   "table",
   "view",

@@ -514,6 +514,8 @@ export const EVENTS = {
   },
   "knowledge_base.deleted": { ...KNOWLEDGE_PURGE_AUDIT, name: "knowledge_base.deleted" },
   // One content indexed or failed: ids, counts and a failure code, never its text or file name.
+  // For files added by hand only: a content of a synced source emits none, and its sync is
+  // audited per run with counts (SRC-0).
   "knowledge_base.content_indexed": {
     name: "knowledge_base.content_indexed",
     subject: "config_asset",

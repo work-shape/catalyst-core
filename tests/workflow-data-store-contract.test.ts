@@ -470,10 +470,15 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       provision: "data_store.provision",
       migrate: "data_store.migrate",
       measureSize: "data_store.measure_size",
+      upgradeOwned: "data_store.upgrade_owned",
       drop: "data_store.drop"
     });
     expectTypeOf<DataStoreJobKind>().toEqualTypeOf<
-      "data_store.provision" | "data_store.migrate" | "data_store.measure_size" | "data_store.drop"
+      | "data_store.provision"
+      | "data_store.migrate"
+      | "data_store.measure_size"
+      | "data_store.upgrade_owned"
+      | "data_store.drop"
     >();
   });
 

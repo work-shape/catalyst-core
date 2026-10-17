@@ -141,7 +141,18 @@ export function createKnowledgeBases(input: {
       })
     }),
     async publish(stores, { access, assetId, revision, config, replaced }) {
-      const target = knowledgeTargetOf(knowledgeBaseDefinitionSchema.parse(config), assetId);
+      const definition = knowledgeBaseDefinitionSchema.parse(config);
+      // The sources entry is frozen (SRC-0) and saved with a draft; syncing it arrives with
+      // SRC-1a, so publishing a source is refused until then.
+      if (definition.sources?.length) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Knowledge Base '${definition.name}' names a synced source, and this release does not sync sources yet. The draft is kept; remove 'sources' to publish it now.`,
+          { reason: "not_supported_yet" },
+          { exposeMessage: true }
+        );
+      }
+      const target = knowledgeTargetOf(definition, assetId);
       const before = knowledgeBaseDefinitionSchema.safeParse(replaced);
       const previous = before.success ? knowledgeTargetOf(before.data, assetId) : undefined;
       // What the old backend holds would stay behind: the documents of a store the Knowledge

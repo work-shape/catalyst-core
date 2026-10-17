@@ -246,13 +246,16 @@ export function dataStoreOperationName(store: string, verb: DataStoreOperationVe
 /**
  * The job kinds of the store. `provision` creates the database and the roles of a new store,
  * `migrate` applies the pending migrations of a publish, `measure_size` records the size of
- * every store once a day, and `drop` removes the database, the roles and the record of a store
- * whose Knowledge Base was deleted. Spec: One data store primitive; Knowledge Base on top.
+ * every store once a day, `upgrade_owned` queues the migration of every store a Knowledge Base
+ * owns whose tables are behind the release, at each start, and `drop` removes the database,
+ * the roles and the record of a store whose Knowledge Base was deleted. Spec: One data store
+ * primitive; Knowledge Base on top.
  */
 export const DATA_STORE_JOB_KINDS = {
   provision: "data_store.provision",
   migrate: "data_store.migrate",
   measureSize: "data_store.measure_size",
+  upgradeOwned: "data_store.upgrade_owned",
   drop: "data_store.drop"
 } as const;
 

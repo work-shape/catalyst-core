@@ -14,6 +14,13 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindSchema, AssetValidationIssue } from "./asset-kinds";
 import type { ConnectionBindingsStore } from "./connection-bindings";
+import type {
+  DocumentSourceChanges,
+  DocumentSourceChangesInput,
+  DocumentSourceFetchInput,
+  DocumentSourceListInput,
+  DocumentSourceListPage
+} from "./document-source";
 import { AppError } from "./errors";
 import { createPlatformId, type ClientInstanceId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
@@ -616,6 +623,34 @@ interface ConnectorTypeBase {
   test(context: ConnectorContext): Promise<{ status: ConnectorTestStatus }>;
   execute(operation: string, input: JsonValue, context: ConnectorContext): Promise<JsonValue>;
   limits: ConnectorLimits;
+  /**
+   * The type holds documents a Knowledge Base can sync: `list`, `changes` and `fetch` over a
+   * boundary of folder ids (`document-source.ts`). Its calls are no catalogue operations; only
+   * the platform's sync calls them, as a Knowledge Base's ingestion principal.
+   */
+  documentSource?: DocumentSourceCapability;
+}
+
+/**
+ * What a Connector type with the `document_source` capability answers. Each call throws a
+ * `DocumentSourceError` for a failure it can name; any other error counts as `unavailable`.
+ */
+export interface DocumentSourceCapability {
+  /** Walks every item below the boundary's folders, recursively, one page per call. */
+  list(input: DocumentSourceListInput, context: ConnectorContext): Promise<DocumentSourceListPage>;
+  /**
+   * Changed, moved and deleted items since the cursor. A cursor the source refuses throws
+   * `cursor_expired`, never an empty list.
+   */
+  changes(
+    input: DocumentSourceChangesInput,
+    context: ConnectorContext
+  ): Promise<DocumentSourceChanges>;
+  /**
+   * The bytes of one version of an item, streamed and never held whole. Every download address
+   * and redirect passes `context.checkEgress` before a byte is read.
+   */
+  fetch(input: DocumentSourceFetchInput, context: ConnectorContext): AsyncIterable<Uint8Array>;
 }
 
 /**

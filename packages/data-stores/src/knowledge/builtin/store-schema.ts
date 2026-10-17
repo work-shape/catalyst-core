@@ -87,9 +87,87 @@ const DOCUMENTS = `
     where state = 'active';
 `;
 
+/**
+ * The state of the synced sources of the Knowledge Base (SRC-0; spec: Synced sources, "The
+ * sync engine"). An item is one row per `(source_id, item_id)`, `source_id` being the `id` of
+ * the entry under `sources`; its own state ends at `fetched`, and from then on it shows its
+ * document's. `purged_at` is when the purge removed what was derived from it, for `locate`. The
+ * cursor of a source is written in the transaction of the page it covers. A document fetched
+ * from a source names its item; one added by hand names none.
+ */
+const SOURCES = `
+  create table catalyst_kb.source_items (
+    id text primary key,
+    source_id text not null,
+    item_id text not null,
+    version text not null,
+    path text not null,
+    name text not null,
+    mime text not null,
+    size bigint not null check (size >= 0),
+    modified_at timestamp with time zone not null,
+    origin_link text,
+    document_id text,
+    state text not null default 'discovered'
+      check (state in ('discovered', 'fetched', 'failed', 'withdrawn')),
+    attempts integer not null default 0 check (attempts >= 0),
+    failure_code text,
+    discovered_at timestamp with time zone not null default now(),
+    changed_at timestamp with time zone not null default now(),
+    fetched_at timestamp with time zone,
+    withdrawn_at timestamp with time zone,
+    purged_at timestamp with time zone,
+    unique (source_id, item_id),
+    check ((state = 'failed') = (failure_code is not null))
+  );
+  create index source_items_source_state_idx on catalyst_kb.source_items (source_id, state);
+  create index source_items_source_changed_idx
+    on catalyst_kb.source_items (source_id, changed_at desc, id);
+
+  create table catalyst_kb.sync_runs (
+    id text primary key,
+    source_id text not null,
+    mode text not null check (mode in ('initial', 'changes', 'full')),
+    reason text,
+    operation_run_id text not null,
+    cursor_before text,
+    cursor_after text,
+    discovered integer not null default 0 check (discovered >= 0),
+    added integer not null default 0 check (added >= 0),
+    changed integer not null default 0 check (changed >= 0),
+    moved integer not null default 0 check (moved >= 0),
+    withdrawn integer not null default 0 check (withdrawn >= 0),
+    failed integer not null default 0 check (failed >= 0),
+    skipped integer not null default 0 check (skipped >= 0),
+    bytes_fetched bigint not null default 0 check (bytes_fetched >= 0),
+    state text not null default 'running' check (state in ('running', 'done', 'failed')),
+    failure_code text,
+    started_at timestamp with time zone not null default now(),
+    ended_at timestamp with time zone,
+    check ((state = 'running') = (ended_at is null))
+  );
+  create index sync_runs_source_started_idx on catalyst_kb.sync_runs (source_id, started_at desc);
+  create unique index sync_runs_running_idx on catalyst_kb.sync_runs (source_id)
+    where state = 'running';
+
+  create table catalyst_kb.source_cursors (
+    source_id text primary key,
+    cursor text not null,
+    last_change_at timestamp with time zone,
+    oldest_open_change_at timestamp with time zone,
+    updated_at timestamp with time zone not null default now()
+  );
+
+  alter table catalyst_kb.documents
+    add column source_item_id text references catalyst_kb.source_items (id);
+  create unique index documents_source_item_idx on catalyst_kb.documents (source_item_id)
+    where source_item_id is not null;
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
-  { number: 1, name: "documents", sql: DOCUMENTS }
+  { number: 1, name: "documents", sql: DOCUMENTS },
+  { number: 2, name: "sources", sql: SOURCES }
 ];
 
 /** The level the store of a built-in Knowledge Base is at when its tables are this release's. */

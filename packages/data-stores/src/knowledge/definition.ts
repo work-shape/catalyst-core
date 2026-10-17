@@ -1,11 +1,18 @@
 import { z } from "zod";
 import {
+  CONNECTION_NAME_MAX_LENGTH,
+  CONNECTION_NAME_PATTERN,
+  CONNECTION_NAME_RULE,
   KNOWLEDGE_SEARCH_METHODS,
   type KnowledgeBaseTarget,
   type KnowledgeEmbeddingModel,
   type KnowledgeSearchMethod
 } from "@work-shape/catalyst-core";
-import { DATA_STORE_NAME_PATTERN } from "../definition";
+import {
+  DATA_STORE_NAME_MAX_LENGTH,
+  DATA_STORE_NAME_PATTERN,
+  DATA_STORE_NAME_RULE
+} from "../definition";
 
 // What a Knowledge Base's definition holds: the fields of this cut, and a refusal that names
 // the slice for each field the spec has and this cut does not build. The definition is the
@@ -46,6 +53,49 @@ const backendSchema = z.strictObject({
   database: later("backend.database", "WD-2, a Knowledge Base on a Postgres Connection")
 });
 
+/** How many synced sources one Knowledge Base has at most. */
+const KNOWLEDGE_SOURCES_MAX_COUNT = 20;
+/** How many folders one source's boundary names at most. */
+const KNOWLEDGE_SOURCE_FOLDERS_MAX_COUNT = 100;
+/** How many patterns one `include` or `exclude` holds at most, and how long one is. */
+const KNOWLEDGE_SOURCE_PATTERNS_MAX_COUNT = 50;
+const KNOWLEDGE_SOURCE_PATTERN_MAX_CHARS = 500;
+
+const sourcePatternsSchema = z
+  .array(z.string().trim().min(1).max(KNOWLEDGE_SOURCE_PATTERN_MAX_CHARS))
+  .min(1)
+  .max(KNOWLEDGE_SOURCE_PATTERNS_MAX_COUNT);
+
+/**
+ * A synced source: documents the platform keeps current from a Connection whose type declares
+ * `document_source` (spec: Synced sources, "The shape"). Adding, narrowing or removing one is a
+ * draft change that takes effect at publish.
+ */
+const sourceSchema = z.strictObject({
+  /** Stable within the Knowledge Base; the operations and the CLI name the source by it. */
+  id: z
+    .string()
+    .max(DATA_STORE_NAME_MAX_LENGTH)
+    .regex(DATA_STORE_NAME_PATTERN, { error: `A source id is ${DATA_STORE_NAME_RULE}` }),
+  /** The Connection the source reads through. */
+  connection: z
+    .string()
+    .max(CONNECTION_NAME_MAX_LENGTH)
+    .regex(CONNECTION_NAME_PATTERN, { error: CONNECTION_NAME_RULE }),
+  /** The boundary: folder ids in the source system, never a path. */
+  folders: z
+    .array(z.string().trim().min(1).max(500))
+    .min(1)
+    .max(KNOWLEDGE_SOURCE_FOLDERS_MAX_COUNT)
+    .refine((folders) => new Set(folders).size === folders.length, {
+      message: "A folder is named once"
+    }),
+  /** Patterns on the file name, such as `*.pdf`. Without it every file below the folders. */
+  include: sourcePatternsSchema.optional(),
+  /** Patterns on the path below the boundary, such as `**\/Personal/**`. */
+  exclude: sourcePatternsSchema.optional()
+});
+
 const tableSchema = z.strictObject({
   /** A table or view of the schema `public` of the backend. */
   name: z.string().min(1).max(KNOWLEDGE_TABLE_NAME_MAX_CHARS),
@@ -83,11 +133,23 @@ const definitionFieldsSchema = z.strictObject({
       message: "A table is described once"
     })
     .optional(),
-  sources: later("sources", "DS-5, documents the platform ingests from a Connection"),
+  sources: z
+    .array(sourceSchema)
+    .max(KNOWLEDGE_SOURCES_MAX_COUNT)
+    .refine((sources) => new Set(sources.map((source) => source.id)).size === sources.length, {
+      message: "A source id is named once"
+    })
+    .optional(),
   indexing: later("indexing", "DS-7, indexing settings"),
   search: later("search", "DS-7, search settings"),
   extraction: later("extraction", "DS-6a, structured extraction"),
-  schedule: later("schedule", "DS-5, ingestion"),
+  // Withdrawn by SPEC-DMS: a schedule of its own would be a second, invisible one.
+  schedule: z
+    .never({
+      error:
+        "'schedule' is withdrawn. A synced source is kept current by its daily Workflow '<Knowledge Base> abgleichen' and by background updates about every 15 minutes. Remove 'schedule'."
+    })
+    .optional(),
   queries: later("queries", "DS-6a, named queries"),
   filters: later("filters", "DS-6b, declared filters")
 });
@@ -127,6 +189,12 @@ export const knowledgeBaseDefinitionSchema = definitionFieldsSchema.transform(
       return z.NEVER;
     };
     if (backend) {
+      if (fields.sources?.length) {
+        return refuse(
+          "sources",
+          "A Knowledge Base on a Data Store reads its tables and syncs no source. Sources fill a Knowledge Base without a backend, which keeps documents."
+        );
+      }
       if (methods?.some((method) => method !== "structured")) {
         return refuse(
           "methods",
