@@ -154,9 +154,10 @@ export async function runOperation(
         ? { takesInterrupted: true as const }
         : {})
     };
-    // The definition says whether an allowed call leaves a run. A read that leaves none is
-    // checked like every call and written only if it is refused or fails.
-    const recorded = recordsAllowedCalls(definition);
+    // Every agent call leaves a trace, including tools that project native API operations.
+    // Other allowed reads leave none unless the definition records every call; refusals and
+    // failures are recorded either way.
+    const recorded = call.origin.kind === "agent" || recordsAllowedCalls(definition);
     const run = recorded ? await deps.runs.create(start) : unrecordedRun(start);
     if (run) {
       const context = createRunContext({

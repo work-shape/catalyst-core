@@ -329,7 +329,10 @@ export async function callStepOperation(input: {
       if (input.draft && isApprovalUnavailable(result.reason)) {
         throw new OperationStepFailure(
           refusal.code,
-          `The policy asks for another person's approval before '${operation}' runs live, and a test run cannot wait for one yet. Without "Run live once" the step is simulated`,
+          `The policy asks for another person's approval before '${operation}' runs live, and a test run cannot wait for one yet. Without "Run live once" the step is simulated` +
+            (input.draft.startConfirmed
+              ? ""
+              : ". To confirm a switched step, start the test run yourself from the Workflow canvas; a separate approval is still required where policy asks for one"),
           trace,
           { systemic: true }
         );

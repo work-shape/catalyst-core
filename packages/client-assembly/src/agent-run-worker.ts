@@ -12,6 +12,7 @@ import type { ClientInstanceCapability } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createClientInstanceAgentRunJobs } from "./agent-run-jobs";
 import { createJobWorker } from "./job-worker";
+import { registerModuleOperations } from "@work-shape/catalyst-server";
 
 // How long a worker that was told to stop lets its runs end on their own. A run that is not
 // done by then ends as interrupted and the person sends the message again.
@@ -47,6 +48,7 @@ export async function createClientInstanceAgentRunWorker(
   input: CreateClientInstanceAgentRunWorkerInput
 ): Promise<ClientInstanceAgentRunWorker> {
   const execution = await createClientInstanceExecutionAssembly(input);
+  registerModuleOperations(execution.operationCalls.registry, execution.modulesStarted.routes);
   const workerId = execution.env.AGENT_RUN_WORKER_ID;
   const worker = createJobWorker({
     stores: execution.store,

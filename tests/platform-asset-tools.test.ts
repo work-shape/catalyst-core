@@ -9,6 +9,7 @@ import { DeterministicModelProvider } from "@work-shape/catalyst-model-provider"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { getTestJobs } from "./support/test-instance";
+import { withTestSql } from "./support/test-sql";
 import {
   createAssetToolsFixture,
   WORKFLOW,
@@ -39,6 +40,119 @@ describe("a conversation about a Workflow", () => {
     });
   });
   afterAll(() => vi.restoreAllMocks());
+
+  it("lets the agent test its subject draft without a prompt and read the run and each step through the real operations", async () => {
+    const t = await createAssetToolsFixture();
+    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
+    await t.call(id, "platform.assets.put", {
+      config: { ...configOf(), manifest: { ...manifest(), name: "Draft month end" } },
+      expectedRevision: t.published
+    });
+    const started = runSchema
+      .extend({
+        mode: z.literal("test"),
+        startedBy: z.object({ kind: z.literal("user"), id: z.string() }),
+        operationRunId: z.string()
+      })
+      .parse(
+        await t.call(id, "workflows.test", {
+          workflow: WORKFLOW,
+          input: { note: "Draft test" }
+        })
+      );
+    const draft = await t.app.stores.configAssets.getConfigAsset({
+      clientInstanceId: t.clientInstanceId,
+      ...subject
+    });
+    expect(started.definitionRevisionId).toBe(draft?.activeRevisionId);
+    expect(started.definitionRevisionId).not.toBe(draft?.publishedRevisionId);
+    const jobs = getTestJobs(t.app);
+    for (let pass = 0; pass < 6; pass++) await jobs.runDue();
+    // The run page polls both reads. A person's successful refresh leaves no governance
+    // record, while the same reads through the agent tools below each leave one.
+    for (const operation of ["workflows.get_run", "workflows.list_step_runs"] as const) {
+      const response = await t.ok(t.app.call(operation, { params: { runId: started.id } }));
+      expect(response.headers["operation-run-id"]).toBeUndefined();
+      const correlationId = z.string().parse(response.headers["x-correlation-id"]);
+      expect(
+        await withTestSql(
+          (sql) => sql`
+          select 'run' as record from operation_runs
+          where client_instance_id = ${t.clientInstanceId} and correlation_id = ${correlationId}
+          union all
+          select 'audit' as record from audit_events
+          where client_instance_id = ${t.clientInstanceId} and correlation_id = ${correlationId}`
+        )
+      ).toEqual([]);
+    }
+    expect(await t.call(id, "workflows.get_run", { runId: started.id })).toMatchObject({
+      id: started.id,
+      mode: "test",
+      status: "done",
+      outputPreview: { text: expect.stringContaining("Draft test") }
+    });
+    expect(await t.call(id, "workflows.list_step_runs", { runId: started.id })).toMatchObject({
+      items: [
+        { stepId: "start", status: "done" },
+        {
+          stepId: "result",
+          status: "done",
+          outputPreview: { text: expect.stringContaining("Draft test") }
+        }
+      ]
+    });
+    const runs = await t.app.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId });
+    const test = runs.find((run) => run.id === started.operationRunId);
+    expect(test).toMatchObject({
+      operation: "workflows.test",
+      status: "done",
+      actor: { kind: "user", id: started.startedBy.id },
+      origin: { kind: "agent", conversationId: id, toolName: "workflows.test" }
+    });
+    expect(test?.decision).toBeUndefined();
+    for (const operation of ["workflows.get_run", "workflows.list_step_runs"]) {
+      const reads = runs.filter((run) => run.operation === operation);
+      expect(reads).toHaveLength(1);
+      const [read] = reads;
+      expect(read).toMatchObject({
+        status: "done",
+        origin: { kind: "agent", conversationId: id, toolName: operation }
+      });
+      expect(
+        (
+          await withTestSql(
+            (sql) => sql<{ type: string; status: string }[]>`
+              select type, status from audit_events
+              where client_instance_id = ${t.clientInstanceId}
+                and metadata ->> 'operationRunId' = ${read?.id ?? ""}`
+          )
+        )
+          .map((event) => `${event.type}:${event.status}`)
+          .sort()
+      ).toEqual([
+        "operation.authorization_checked:success",
+        "operation.completed:success",
+        "operation.started:success"
+      ]);
+    }
+    // The person can write this other draft too; the subject boundary still refuses it.
+    await t.ok(
+      t.app.call("assets.put", {
+        params: { kind: WORKFLOW_ASSET_KIND, name: "another-workflow" },
+        payload: {
+          config: { name: "another-workflow", manifest: { ...manifest(), id: "another-workflow" } },
+          expectedRevision: null
+        }
+      })
+    );
+    const refused = await t.say(
+      id,
+      '/tool workflows.test {"workflow":"another-workflow","input":{"note":"Other draft"}}'
+    );
+    expect(refused.answer).toContain("An agent may test only the conversation's subject Workflow");
+    const malformed = await t.say(id, '/tool workflows.test {"workflow":42,"input":[]}');
+    expect(malformed.answer).toContain("validation");
+  }, 120_000);
 
   it("lets the agent read the definition, be refused its first try, correct it and save a draft that changes nothing that runs", async () => {
     const t = await createAssetToolsFixture();

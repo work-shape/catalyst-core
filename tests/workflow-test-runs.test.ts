@@ -1,7 +1,13 @@
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_ASSET_KIND, type UserRecord } from "@work-shape/catalyst-core";
+import {
+  WORKFLOW_ASSET_KIND,
+  asAgentRunId,
+  asConversationId,
+  asToolCallId,
+  type UserRecord
+} from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { operationOf } from "./support/connection-operations";
 import { fileTestDatabaseUrl } from "./support/test-database";
@@ -122,6 +128,109 @@ describe("a test run of a Workflow draft", () => {
       params: address,
       payload: { part, expectedRevision }
     });
+
+  /** The real registered operation, from an agent working in Kai's subject conversation. */
+  async function agentTest(t: WorkflowFixture) {
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.read");
+    const conversation = await t.expectOk(t.kai.id, "conversations.create", {
+      payload: { title: "Test this draft", subject: address }
+    });
+    const { id } = z.object({ id: z.string() }).parse(conversation.json());
+    t.state.agentTools.set("builder", ["workflows.test"]);
+    const outcome = await t.invoke(
+      t.kai,
+      "workflows.test",
+      {
+        workflow: WORKFLOW,
+        input: { note: NOTE }
+      },
+      {
+        effect: "changing",
+        origin: {
+          kind: "agent",
+          agentName: "builder",
+          agentRunId: asAgentRunId("agent-run"),
+          conversationId: asConversationId(id),
+          toolCallId: asToolCallId("test-call"),
+          toolName: "workflows.test"
+        }
+      }
+    );
+    expect(outcome.result.status).toBe("done");
+    if (outcome.result.status !== "done") throw new Error("The agent's test did not start");
+    expect(outcome.run).toMatchObject({
+      actor: { kind: "user", id: t.kai.id },
+      origin: { kind: "agent", conversationId: id }
+    });
+    return testRunSchema.parse(outcome.result.output);
+  }
+
+  it("starts for the person from an agent without confirmation, and simulates changing steps under both sets of rights", async () => {
+    const t = await ready();
+    const started = await agentTest(t);
+    expect(started).toMatchObject({ mode: "test", startedBy: { kind: "user", id: t.kai.id } });
+    expect((await t.finish(started.id)).status).toBe("done");
+    const steps = await stepRunsOf(t, started.id);
+    const sends = steps.filter((step) => step.stepId === "send");
+    expect(sends).toHaveLength(3);
+    for (const send of sends) {
+      expect(send).toMatchObject({ status: "done", target: "dry_run" });
+      expect(send.outputPreview?.text).toContain('"wouldHaveDone"');
+      expect(send.outputPreview?.text).toContain(NOTE);
+      expect(await operationRun(t, send.operationRunId)).toMatchObject({
+        actor: { kind: "user", id: t.kai.id },
+        origin: { kind: "workflow", boundBy: { id: t.principal.id } }
+      });
+    }
+    expect(t.executed.map((call) => call.operation)).toEqual(["echo"]);
+  });
+
+  it("lends an agent's tester none of the principal's rights", async () => {
+    const t = await ready();
+    const grants = await t.stores.access.listGrants({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.kai.id,
+      action: "connection.use"
+    });
+    expect(grants).not.toHaveLength(0);
+    for (const grant of grants) {
+      await t.stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });
+    }
+    const started = await agentTest(t);
+    expect((await t.finish(started.id)).status).toBe("failed");
+    expect(await stepRunsOf(t, started.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stepId: "clients",
+          status: "failed",
+          error: expect.objectContaining({ code: "tester_missing_right" })
+        })
+      ])
+    );
+    expect(t.executed).toEqual([]);
+  });
+
+  it("does not treat an agent's start as the person's confirmation of a Run live once switch", async () => {
+    const t = await ready();
+    t.state.centralSettings = [];
+    await switchOn(t, 1);
+    const started = await agentTest(t);
+    expect((await t.finish(started.id)).status).toBe("failed");
+    expect(await stepRunsOf(t, started.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stepId: "send",
+          status: "failed",
+          error: expect.objectContaining({
+            code: "POLICY_DENIED",
+            message: expect.stringContaining("start the test run yourself from the Workflow canvas")
+          })
+        })
+      ])
+    );
+    expect(t.executed.filter((call) => call.operation === "write")).toEqual([]);
+  });
 
   // Acceptance check 6.
   it("reads live, simulates the changing step and marks each step with its target", async () => {

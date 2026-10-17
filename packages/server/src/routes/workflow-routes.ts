@@ -10,6 +10,8 @@ import {
   type OperationAuthorization,
   type OperationOrigin,
   type OperationResource,
+  type ClientInstanceId,
+  type PlatformStores,
   type WorkflowRunView,
   type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
@@ -17,6 +19,11 @@ import { decide } from "../assets/asset-access";
 import type { ModuleRoutes, RouteRegistration } from "../http/route";
 import { listedWorkflowActions, workflowOf } from "../workflows/workflow-listing";
 import type { WorkflowRunsPort } from "../workflows/workflow-runs-port";
+
+type WorkflowSubjects = {
+  clientInstanceId: ClientInstanceId;
+  stores: { conversations: Pick<PlatformStores["conversations"], "getConversation"> };
+};
 
 /** The module these operations belong to. */
 const WORKFLOWS_MODULE = "workflows";
@@ -37,13 +44,17 @@ type RunDecision = (
  * Without an engine, which is an instance with the module off, the module gate refuses each
  * call before it reaches one of them.
  */
-export function createWorkflowRoutes(workflows: WorkflowRunsPort | undefined): RouteRegistration {
-  return (route) => registerWorkflowRoutes(route, workflows);
+export function createWorkflowRoutes(
+  workflows: WorkflowRunsPort | undefined,
+  subjects: WorkflowSubjects
+): RouteRegistration {
+  return (route) => registerWorkflowRoutes(route, workflows, subjects);
 }
 
 function registerWorkflowRoutes(
   route: ModuleRoutes,
-  workflows: WorkflowRunsPort | undefined
+  workflows: WorkflowRunsPort | undefined,
+  subjects: WorkflowSubjects
 ): void {
   function required(): WorkflowRunsPort {
     if (!workflows) throw new AppError("NOT_FOUND", "This instance has no Workflows");
@@ -136,19 +147,44 @@ function registerWorkflowRoutes(
       )
   });
 
+  /** Refuses before a policy can prompt, and re-reads at dispatch after any wait. */
+  async function requireTestSubject(workflow: string, origin: OperationOrigin): Promise<void> {
+    if (origin.kind !== "agent") return;
+    const conversation = await subjects.stores.conversations.getConversation(
+      subjects.clientInstanceId,
+      origin.conversationId
+    );
+    if (
+      conversation?.status !== "active" ||
+      conversation.subject?.kind !== WORKFLOW_ASSET_KIND ||
+      conversation.subject.name !== workflow
+    ) {
+      throw new AppError(
+        "FORBIDDEN",
+        "An agent may test only the conversation's subject Workflow",
+        { reason: "workflow_not_subject" },
+        { exposeMessage: true }
+      );
+    }
+  }
+
   // A test run of the draft (ADR-0031). It acts as the person who starts it, bounded by the
   // Workflow's principal, so it needs the right to write the Workflow and nothing that lends
   // the principal's grants: publishing still asks that. Only a person starts one.
   route.operation(apiOperations["workflows.test"], {
-    authorize: async (input, { access, actor }) =>
-      isAuthenticatedServicePrincipal(actor)
+    defaultPolicy: "allow",
+    authorize: async (input, { access, actor, origin }) => {
+      const decision: OperationAuthorization = isAuthenticatedServicePrincipal(actor)
         ? {
             allowed: false,
             action: WORKFLOW_ACTIONS.write,
             reason: "no_grant",
             message: "Only a person starts a test run of a Workflow's draft"
           }
-        : decide(access, WORKFLOW_ACTIONS.write, await resourceOf(input.workflow)),
+        : decide(access, WORKFLOW_ACTIONS.write, await resourceOf(input.workflow));
+      if (decision.allowed) await requireTestSubject(input.workflow, origin);
+      return decision;
+    },
     resource: workflowResource,
     module: WORKFLOWS_MODULE,
     execute: async (input, context) => {
@@ -157,6 +193,7 @@ function registerWorkflowRoutes(
       if (isAuthenticatedServicePrincipal(actor)) {
         throw new AppError("FORBIDDEN", "Only a person starts a test run of a Workflow's draft");
       }
+      await requireTestSubject(input.workflow, context.origin);
       return toRunResource(
         await required().test({
           workflow: input.workflow,

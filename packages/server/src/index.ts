@@ -8,6 +8,7 @@ import { installErrorHandler } from "./errors";
 import { rememberFramework } from "./http/framework";
 import { createInProcessRateLimiter } from "./http/rate-limit";
 import { createRoute, type ChatServerExtensions } from "./http/route";
+export { registerModuleOperations } from "./http/route";
 
 export type {
   ChatServerExtensions,

@@ -616,6 +616,7 @@ describe("the modules workflows and dataStores", () => {
       ...nothing,
       name: "workflows",
       kinds: [WORKFLOW_ASSET_KIND],
+      tools: ["workflows.test", "workflows.get_run", "workflows.list_step_runs"],
       operations: [
         "workflows.list",
         "workflows.start",

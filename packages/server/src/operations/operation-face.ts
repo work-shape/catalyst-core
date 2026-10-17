@@ -115,6 +115,92 @@ export interface OperationFace {
 const recordSchema = z.record(z.string(), z.unknown());
 const runReferenceSchema = z.object({ operationRunId: z.string() });
 
+/** The registration shared by HTTP routes and processes that serve no HTTP. */
+export function createOperationRegistration(
+  registry: OperationRegistry
+): OperationFace["register"] {
+  return (operation, binding) => {
+    if (!isRegisteredOperation(operation)) {
+      throw new Error(`Operation '${operation.id}' is not defined as a registered operation`);
+    }
+    if (operation.auth !== "user" && operation.auth !== "principal") {
+      throw new Error(`Operation '${operation.id}' must authenticate its caller`);
+    }
+    const { response } = operation;
+    if (response.kind !== "json" && response.kind !== "page") {
+      throw new Error(`Operation '${operation.id}' must answer JSON`);
+    }
+    const [action, ...furtherActions] = operation.requires ?? [];
+    if (furtherActions.length > 0) {
+      throw new Error(`Operation '${operation.id}' may require one right`);
+    }
+    // Nothing is unchecked by omission: either the registry checks the right the descriptor
+    // names, or the registration brings the check.
+    const { authorize } = binding;
+    if (action !== undefined && authorize !== undefined) {
+      throw new Error(
+        `Operation '${operation.id}' requires '${action}' and may not check rights itself too`
+      );
+    }
+    const rights =
+      action !== undefined
+        ? { action }
+        : authorize !== undefined
+          ? { action: null, authorize }
+          : undefined;
+    if (!rights) {
+      throw new Error(`Operation '${operation.id}' requires no right and has no check of its own`);
+    }
+    const page =
+      response.kind === "page"
+        ? { order: response.order, descending: response.descending }
+        : undefined;
+    registry.register({
+      name: operation.id,
+      effect: operation.effect,
+      changeClass: binding.changeClass,
+      defaultPolicy: binding.defaultPolicy,
+      ...(binding.recordsEveryCall ? { recordsEveryCall: true } : {}),
+      // The descriptor says it, so the contract and the run agree: no kept answer, no `202`.
+      ...(operation.secret ? { secret: true } : {}),
+      ...rights,
+      scope: operation.scope ?? null,
+      auth: operation.auth,
+      inputSchema: operationInputSchema(operation),
+      outputSchema: response.schema,
+      resource: (input) => binding.resource?.(input),
+      ...(binding.policyTargets ? { policyTargets: binding.policyTargets } : {}),
+      ...(binding.beforeEvents ? { beforeEvents: binding.beforeEvents } : {}),
+      ...(binding.heldInputKeys ? { heldInputKeys: binding.heldInputKeys } : {}),
+      ...(binding.approval ? { approval: binding.approval } : {}),
+      ...(binding.inputWithoutSecrets ? { inputWithoutSecrets: binding.inputWithoutSecrets } : {}),
+      events: binding.events,
+      http: { method: operation.method, path: operation.path },
+      timeoutMs: binding.timeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
+      module: binding.module,
+      async execute(input, context) {
+        if (!page) {
+          return binding.execute(input, { ...context, paging: undefined });
+        }
+        // A list operation returns its rows and the face cuts the page, as for every list.
+        const query = recordSchema.parse(input);
+        const scope = pageScope(operation.id, {}, query);
+        const rows = await binding.execute(input, {
+          ...context,
+          paging: storePage(query, page.order, scope)
+        });
+        return paginate(
+          z.array(z.unknown()).parse(rows),
+          query,
+          page.order,
+          page.descending,
+          scope
+        );
+      }
+    });
+  };
+}
+
 /**
  * The HTTP face of the operation registry. An operation registered here is reached through
  * `runOperation`. Every recorded call is an Operation Run and names it in `Operation-Run-Id`;
@@ -127,90 +213,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
 
   return {
     registry,
-    register(operation, binding) {
-      if (!isRegisteredOperation(operation)) {
-        throw new Error(`Operation '${operation.id}' is not defined as a registered operation`);
-      }
-      if (operation.auth !== "user" && operation.auth !== "principal") {
-        throw new Error(`Operation '${operation.id}' must authenticate its caller`);
-      }
-      const { response } = operation;
-      if (response.kind !== "json" && response.kind !== "page") {
-        throw new Error(`Operation '${operation.id}' must answer JSON`);
-      }
-      const [action, ...furtherActions] = operation.requires ?? [];
-      if (furtherActions.length > 0) {
-        throw new Error(`Operation '${operation.id}' may require one right`);
-      }
-      // Nothing is unchecked by omission: either the registry checks the right the descriptor
-      // names, or the registration brings the check.
-      const { authorize } = binding;
-      if (action !== undefined && authorize !== undefined) {
-        throw new Error(
-          `Operation '${operation.id}' requires '${action}' and may not check rights itself too`
-        );
-      }
-      const rights =
-        action !== undefined
-          ? { action }
-          : authorize !== undefined
-            ? { action: null, authorize }
-            : undefined;
-      if (!rights) {
-        throw new Error(
-          `Operation '${operation.id}' requires no right and has no check of its own`
-        );
-      }
-      const page =
-        response.kind === "page"
-          ? { order: response.order, descending: response.descending }
-          : undefined;
-      registry.register({
-        name: operation.id,
-        effect: operation.effect,
-        changeClass: binding.changeClass,
-        defaultPolicy: binding.defaultPolicy,
-        ...(binding.recordsEveryCall ? { recordsEveryCall: true } : {}),
-        // The descriptor says it, so the contract and the run agree: no kept answer, no `202`.
-        ...(operation.secret ? { secret: true } : {}),
-        ...rights,
-        scope: operation.scope ?? null,
-        auth: operation.auth,
-        inputSchema: operationInputSchema(operation),
-        outputSchema: response.schema,
-        resource: (input) => binding.resource?.(input),
-        ...(binding.policyTargets ? { policyTargets: binding.policyTargets } : {}),
-        ...(binding.beforeEvents ? { beforeEvents: binding.beforeEvents } : {}),
-        ...(binding.heldInputKeys ? { heldInputKeys: binding.heldInputKeys } : {}),
-        ...(binding.approval ? { approval: binding.approval } : {}),
-        ...(binding.inputWithoutSecrets
-          ? { inputWithoutSecrets: binding.inputWithoutSecrets }
-          : {}),
-        events: binding.events,
-        http: { method: operation.method, path: operation.path },
-        timeoutMs: binding.timeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
-        module: binding.module,
-        async execute(input, context) {
-          if (!page) {
-            return binding.execute(input, { ...context, paging: undefined });
-          }
-          // A list operation returns its rows and the face cuts the page, as for every list.
-          const query = recordSchema.parse(input);
-          const scope = pageScope(operation.id, {}, query);
-          const rows = await binding.execute(input, {
-            ...context,
-            paging: storePage(query, page.order, scope)
-          });
-          return paginate(
-            z.array(z.unknown()).parse(rows),
-            query,
-            page.order,
-            page.descending,
-            scope
-          );
-        }
-      });
-    },
+    register: createOperationRegistration(registry),
     async answer(operation, call, reply) {
       const name = call.runs ?? operation.id;
       const absent = call.absent && absentOperation(operation, name, call.absent);

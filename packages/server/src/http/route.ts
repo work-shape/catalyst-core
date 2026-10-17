@@ -29,6 +29,7 @@ import {
   type OperationBeforeEvent,
   type OperationOrigin,
   type OperationResource,
+  type OperationRegistry,
   type OperationScope,
   type PolicyTarget,
   type StorePage,
@@ -38,6 +39,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   createOperationFace,
+  createOperationRegistration,
   type AssembledOperationBinding,
   type OperationBindingContext
 } from "../operations/operation-face";
@@ -262,6 +264,32 @@ export interface Route {
 
 /** Registers the operations of one module through `routes.operation`. */
 export type RouteRegistration = (routes: ModuleRoutes) => void;
+
+/**
+ * Registers a module's operations in a process that serves no HTTP, such as an Agent Run
+ * worker. The same bindings build the same definitions as the API. Per-resource routes add
+ * no definition: their operations already come from the module's OperationSources.
+ */
+export function registerModuleOperations(
+  registry: OperationRegistry,
+  registrations: readonly RouteRegistration[]
+): void {
+  const registerDefinition = createOperationRegistration(registry);
+  function register<const Op extends Operation>(
+    operation: Op,
+    binding: OperationBindingOf<Op, never>
+  ): void;
+  function register(operation: Operation, binding: AssembledOperationBinding): void {
+    registerDefinition(operation, binding);
+  }
+  const routes: ModuleRoutes = {
+    operation: register,
+    resourceOperation() {
+      // The module's OperationSources already supply these definitions.
+    }
+  };
+  for (const registration of registrations) registration(routes);
+}
 
 /** What an assembly adds to a server beside its options. */
 export interface ChatServerExtensions {

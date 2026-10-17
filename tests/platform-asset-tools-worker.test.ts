@@ -11,6 +11,23 @@ import {
   writeSchema
 } from "./support/platform-asset-tools";
 
+it("tests the subject and reads its run and steps through a separate agent-run worker", async () => {
+  const t = await createAssetToolsFixture("separate");
+  const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
+  const started = z
+    .object({ id: z.string(), mode: z.literal("test") })
+    .parse(
+      await t.call(id, "workflows.test", { workflow: WORKFLOW, input: { note: "Worker test" } })
+    );
+  expect(await t.call(id, "workflows.get_run", { runId: started.id })).toMatchObject({
+    id: started.id,
+    mode: "test"
+  });
+  expect(await t.call(id, "workflows.list_step_runs", { runId: started.id })).toMatchObject({
+    items: expect.arrayContaining([expect.objectContaining({ stepId: "start" })])
+  });
+}, 120_000);
+
 it("reads and writes the conversation's asset as its owner through a separate agent-run worker process", async () => {
   const t = await createAssetToolsFixture("separate");
   const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());

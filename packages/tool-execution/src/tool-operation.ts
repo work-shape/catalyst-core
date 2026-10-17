@@ -41,6 +41,7 @@ import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";
 import type { ToolRegistry } from "./tool-registry";
 import { failed } from "./tool-results";
+import { WORKFLOW_TEST_TOOL_NAMES } from "./workflow-test-tools";
 
 /**
  * After how long a tool call that is still `running` counts as interrupted. No tool runs
@@ -179,6 +180,9 @@ export function registerToolOperations(
   options: ToolOperationOptions
 ): void {
   for (const tool of tools) {
+    // These describe existing API operations. Registering a tool operation here would
+    // replace their person-rights and subject checks, or collide when routes register.
+    if (WORKFLOW_TEST_TOOL_NAMES.includes(tool.name)) continue;
     registry.register(toolOperation(tool, options));
   }
 }

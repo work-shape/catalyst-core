@@ -7,7 +7,8 @@ import {
   PLATFORM_ASSET_TOOL_NAMES,
   PLATFORM_DISCOVERY_TOOLS,
   PLATFORM_DISCOVERY_TOOL_NAMES,
-  WORKSPACE_OPEN_TOOL_NAME
+  WORKSPACE_OPEN_TOOL_NAME,
+  WORKFLOW_TEST_TOOL_NAMES
 } from "@work-shape/catalyst-tool-execution";
 import { PLATFORM_DOCS_SKILL_NAME } from "./platform-docs-skill";
 
@@ -43,12 +44,14 @@ export const PLATFORM_TOOL_NAMES: readonly string[] = [
 ];
 
 /**
- * The platform's tools of a module: the agent's draft of a REST API's tools, of `connections`.
- * Like the asset tools no release names them, and an agent holds one only where its own
- * definition lists it; unlike them, one is off with its module, so holding the asset tools does
- * not bring it.
+ * Platform tools that turn off with their module. Connection drafts are explicitly assigned;
+ * Workflow testing and result reads are also offered to agents that hold platform tools.
+ * No release needs to enable them individually.
  */
-export const PLATFORM_MODULE_TOOL_NAMES: readonly string[] = [CONNECTION_DRAFT_TOOL_NAME];
+export const PLATFORM_MODULE_TOOL_NAMES: readonly string[] = [
+  CONNECTION_DRAFT_TOOL_NAME,
+  ...WORKFLOW_TEST_TOOL_NAMES
+];
 
 /** What the platform tells its agents before their own instructions, as an agent page shows it. */
 export const PLATFORM_INSTRUCTIONS: PlatformInstructions = {

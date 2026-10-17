@@ -99,7 +99,7 @@ export interface InstanceWorkflows {
 export function createInstanceWorkflows(parts: InstanceWorkflowsParts): InstanceWorkflows {
   if (!parts.modules.isEnabled(workflowsModule.name)) {
     return {
-      routes: [createWorkflowRoutes(undefined)],
+      routes: [createWorkflowRoutes(undefined, parts)],
       jobHandlers: [],
       jobSchedules: [],
       pruneRunData: () => Promise.resolve({ runs: 0, stepRuns: 0, batches: 0 }),
@@ -181,24 +181,27 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
   }
   return {
     routes: [
-      createWorkflowRoutes({
-        ...engine,
-        listWorkflows,
-        async test({ workflow, ...start }) {
-          // Definitions a test hands in are published revisions without a draft.
-          const draft = given ? undefined : await assets.draft(workflow);
-          if (!draft) throw new AppError("NOT_FOUND", `There is no Workflow '${workflow}'`);
-          // The principal bounds the test run and lends it nothing: it is asked to exist and
-          // be active, and no right over it is asked of the tester (ADR-0031).
-          await workflowRunAsPrincipal(
-            { clientInstanceId, apiAccess: stores.apiAccess },
-            { workflow, runAs: draft.manifest.runAs }
-          );
-          return engine.test({ draft, ...start });
+      createWorkflowRoutes(
+        {
+          ...engine,
+          listWorkflows,
+          async test({ workflow, ...start }) {
+            // Definitions a test hands in are published revisions without a draft.
+            const draft = given ? undefined : await assets.draft(workflow);
+            if (!draft) throw new AppError("NOT_FOUND", `There is no Workflow '${workflow}'`);
+            // The principal bounds the test run and lends it nothing: it is asked to exist and
+            // be active, and no right over it is asked of the tester (ADR-0031).
+            await workflowRunAsPrincipal(
+              { clientInstanceId, apiAccess: stores.apiAccess },
+              { workflow, runAs: draft.manifest.runAs }
+            );
+            return engine.test({ draft, ...start });
+          },
+          // Definitions a test hands in are no assets: a right on them is decided by name.
+          assetIdOf: (workflow) => (given ? Promise.resolve(undefined) : assets.assetIdOf(workflow))
         },
-        // Definitions a test hands in are no assets: a right on them is decided by name.
-        assetIdOf: (workflow) => (given ? Promise.resolve(undefined) : assets.assetIdOf(workflow))
-      })
+        parts
+      )
     ],
     jobHandlers: engine.jobHandlers,
     jobSchedules: engine.jobSchedules,

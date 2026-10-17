@@ -15,6 +15,8 @@ import {
   createPlatformAssetBinding,
   createPlatformAssetTools,
   createPlatformDiscoveryTools,
+  createWorkflowTestTools,
+  WORKFLOW_TEST_TOOL_NAMES,
   ToolRegistry,
   type PlatformAssetBinding
 } from "@work-shape/catalyst-tool-execution";
@@ -63,7 +65,7 @@ function appToolNames(hasTool: (toolName: string) => boolean): string[] {
 }
 
 interface ConversationOfferInput {
-  stores: Pick<PlatformStores, "conversations">;
+  stores: { conversations: Pick<PlatformStores["conversations"], "getConversation"> };
   modules: ModuleSnapshot;
   /** Whether this process has a tool: registered, enabled and of no module that is off. */
   hasTool(toolName: string): boolean;
@@ -86,6 +88,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(subject ? { subject } : {}),
         toolNames: [
           ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
+          ...(holds ? WORKFLOW_TEST_TOOL_NAMES : []),
           ...appToolNames(input.hasTool),
           ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
         ].filter((toolName) => input.hasTool(toolName)),
@@ -143,6 +146,7 @@ export function createPlatformTools(
     tools: [
       ...createPlatformDiscoveryTools(platformAssets.calls),
       ...createPlatformAssetTools(platformAssets.calls),
+      ...createWorkflowTestTools(),
       createAppSaveTool(platformAssets.calls),
       ...(input.connections
         ? [

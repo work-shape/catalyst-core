@@ -5,6 +5,7 @@ import {
   defineModule
 } from "@work-shape/catalyst-core";
 import { WORKFLOW_CODE_JOB_KIND, WORKFLOW_CODE_SWEEP_JOB_KIND } from "./step-job";
+import { WORKFLOW_TEST_TOOL_NAMES } from "@work-shape/catalyst-tool-execution";
 
 /** The operations of the API that belong to the module. Each is off where the module is. */
 export const WORKFLOW_OPERATION_IDS = [
@@ -25,6 +26,7 @@ export const WORKFLOW_OPERATION_IDS = [
 export const workflowsModule = defineModule({
   name: "workflows",
   operations: WORKFLOW_OPERATION_IDS,
+  tools: WORKFLOW_TEST_TOOL_NAMES,
   kinds: [WORKFLOW_ASSET_KIND],
   jobKinds: [
     WORKFLOW_RUN_JOB_KINDS.executeStep,
