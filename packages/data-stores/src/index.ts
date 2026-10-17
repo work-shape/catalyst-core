@@ -1,3 +1,7 @@
+import {
+  createKnowledgeSourceJobs,
+  type KnowledgeSourceJobsInput
+} from "./knowledge/builtin/source-jobs";
 import { KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND } from "./knowledge/removal";
 import type { SecretKeyring } from "@work-shape/catalyst-connections";
 import {
@@ -158,6 +162,8 @@ export interface DataStores {
    * owns.
    */
   readonly knowledgeBackend: KnowledgeBackend;
+  /** Handlers for connector-source ingestion, on the owned-store pools. */
+  knowledgeSourceJobs(input: KnowledgeSourceJobsInput): RegisteredJobHandler[];
   /**
    * Creates pgvector in the database of a provisioned store, as the platform's role: for a
    * store a Knowledge Base with semantic search owns, and for no other (ADR-0023). Throws with
@@ -250,6 +256,7 @@ export function createDataStores(input: {
     schedules: jobs.schedules,
     jobRetries: jobs.retries,
     knowledgeBackend: createKnowledgeBackend(runtime, input.embedding ?? {}),
+    knowledgeSourceJobs: (input) => createKnowledgeSourceJobs(runtime, input),
     async ensureVectorExtension(storeId, signal) {
       const record = await stores.dataStores.getDataStore({ clientInstanceId, id: storeId });
       if (!record || record.status === "retired") {

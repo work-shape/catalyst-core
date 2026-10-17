@@ -54,9 +54,12 @@ const FIXTURE_CHUNK_BYTES = 1_024;
  */
 export function createFixtureDocumentSource(input: {
   secret: string;
+  /** Page size for import tests; the contract kit uses the default of two. */
+  pageSize?: number;
   /** The time each change is stamped with. */
   now?: () => Date;
 }): { capability: DocumentSourceCapability; world: FixtureDocumentWorld } {
+  const pageSize = input.pageSize ?? FIXTURE_PAGE_SIZE;
   const now = input.now ?? (() => new Date());
   const files = new Map<string, StoredFile>();
   const feed: DocumentSourceChange[] = [];
@@ -139,7 +142,7 @@ export function createFixtureDocumentSource(input: {
         .filter((file) => boundary.folderIds.includes(file.folderId))
         .sort((a, b) => (a.id < b.id ? -1 : 1));
       const start = pageToken === undefined ? 0 : below.findIndex((file) => file.id > pageToken);
-      const page = start < 0 ? [] : below.slice(start, start + FIXTURE_PAGE_SIZE);
+      const page = start < 0 ? [] : below.slice(start, start + pageSize);
       const last = page.at(-1);
       const more = last !== undefined && below.at(-1)?.id !== last.id;
       return Promise.resolve({
@@ -154,7 +157,7 @@ export function createFixtureDocumentSource(input: {
         return Promise.resolve({ kind: "changes", changes: [], nextCursor: cursorAt(feed.length) });
       }
       const from = positionOf(cursor);
-      const batch = feed.slice(from, from + FIXTURE_PAGE_SIZE);
+      const batch = feed.slice(from, from + pageSize);
       return Promise.resolve({
         kind: "changes",
         // A feed reports items outside the boundary too; the fixture's does not.
