@@ -211,17 +211,19 @@ test("a message sent during a run waits in a queue both members see, and starts 
   // The member's tab follows the run, and the queue change is one more event on its stream.
   const memberQueue = queueOf(memberPage);
   await expect(memberQueue.getByText(ownText)).toBeVisible();
-  // The thread does not name the author of a queued message yet.
-  await expect(memberQueue).toContainText("From another member");
+  await expect(memberQueue).toContainText("From E2E Zz Follow-ups");
+  await expect(queueOf(page)).not.toContainText("From E2E Zz Follow-ups");
   await expect(memberQueue.getByRole("button", { name: "Edit" })).toHaveCount(0);
   // The queue lives on the server: a reload keeps it.
   await memberPage.reload();
   await expect(queueOf(memberPage).getByText(ownText)).toBeVisible();
+  await expect(queueOf(memberPage)).toContainText("From E2E Zz Follow-ups");
 
   // The member's own message queues behind the owner's.
   const memberText = `And add a short summary ${suffix}`;
   await queueMessage(memberPage, memberText);
   await expect(queueOf(page).getByText(memberText)).toBeVisible();
+  await expect(queueOf(page)).toContainText("From E2E Zz Follow-ups Member");
   await shoot(page, "follow-up-queue-waiting", async () => {
     await expect(queueOf(page).getByText(memberText)).toBeVisible();
   });
@@ -428,7 +430,7 @@ test("when the oldest message of a paused queue is withdrawn, the next author ca
   await expect(memberQueue).toContainText("Queue paused");
   await expect(memberQueue).toContainText("Continues after the next message is answered.");
   // The oldest message is the owner's: only they may start it, and its row says so.
-  await expect(memberQueue).toContainText("From another member · Only they can send it now.");
+  await expect(memberQueue).toContainText("From E2E Zz Follow-ups · Only they can send it now.");
   await expect(memberQueue.getByRole("button", { name: "Send now" })).toHaveCount(0);
   await shoot(memberPage, "follow-up-queue-next-not-own", async () => {
     await expect(queueOf(memberPage).getByText(memberText)).toBeVisible();

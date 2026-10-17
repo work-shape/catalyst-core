@@ -25060,6 +25060,9 @@
           "authorUserId": {
             "type": "string"
           },
+          "authorDisplayLabel": {
+            "type": "string"
+          },
           "text": {
             "type": "string"
           },

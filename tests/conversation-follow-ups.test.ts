@@ -1,232 +1,32 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
-import { z } from "zod";
+import type postgres from "postgres";
+import { describe, expect, it, vi } from "vitest";
 import {
   asAgentRunId,
-  asClientInstanceId,
-  asConversationId,
   createPlatformId,
-  defineProvider,
-  type ConversationFollowUp,
-  type AgentRunStatus
+  type ConversationFollowUp
 } from "@work-shape/catalyst-core";
-import {
-  DETERMINISTIC_CAPABILITIES,
-  type ModelAdapterFactory,
-  type ModelCompletion
-} from "@work-shape/catalyst-model-provider";
-import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-instance";
-import { createTestConfig } from "./support/fixtures";
-import { deferred, required, waitUntil } from "./support/assertions";
-import { injectStartConversationRun } from "./support/chat-server-run-harness";
+import { required, waitUntil } from "./support/assertions";
+import { followUpFixture as fixture } from "./support/follow-up-fixture";
+import { drainRunEvents } from "./support/chat-server-run-harness";
 import { withTestSql } from "./support/test-sql";
 
-const objectRoots: string[] = [];
-afterAll(async () => {
-  await Promise.all(objectRoots.map((root) => rm(root, { recursive: true, force: true })));
+// Count only statements of this read, excluding concurrent worker activity on the pool.
+const counted = await vi.hoisted(async () => {
+  const { AsyncLocalStorage } = await import("node:async_hooks");
+  return new AsyncLocalStorage<string[]>();
 });
-
-const releaseOnCleanup: Array<() => void> = [];
-afterEach(() => {
-  for (const release of releaseOnCleanup.splice(0)) release();
-});
-
-/** One gate per actual model turn, so dispatch cannot finish a second turn in the assertions. */
-async function fixture(
-  separate = false,
-  selection: { defaultEffortOnly?: boolean; attachments?: boolean; streaming?: boolean } = {}
-) {
-  const gates: Array<ReturnType<typeof deferred<void>>> = [];
-  let cleaningUp = false;
-  const deltaGates: Array<ReturnType<typeof deferred<void>>> = [];
-  const completion: ModelCompletion = {
-    text: "Done",
-    toolCalls: [],
-    sources: [],
-    citations: [],
-    usage: {
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      source: "not_reported",
-      webSearchCallCount: 0
-    }
-  };
-  const provider = defineProvider({
-    port: "models",
-    type: "follow-up-test",
-    configSchema: z.object({}),
-    external: false,
-    create(): ModelAdapterFactory {
-      return () => ({
-        capabilities: () => ({
-          ...DETERMINISTIC_CAPABILITIES,
-          reasoningEfforts: [...DETERMINISTIC_CAPABILITIES.reasoningEfforts, "high" as const]
-        }),
-        complete: async () => completion,
-        async *stream() {
-          const gate = deferred<void>();
-          gates.push(gate);
-          yield { type: "text_delta", delta: "Working" };
-          if (selection.streaming) {
-            for (let batch = 0; batch < 4; batch++) {
-              const next = deferred<void>();
-              deltaGates.push(next);
-              if (!cleaningUp) await next.promise;
-              for (let delta = 0; delta < 16; delta++) yield { type: "text_delta", delta: " more" };
-            }
-          }
-          await gate.promise;
-          yield { type: "completed", completion };
-        }
-      });
-    },
-    check: async () => ({ ok: true }),
-    describe: () => ({})
-  });
-  releaseOnCleanup.push(() => {
-    cleaningUp = true;
-    gates.forEach((gate) => gate.resolve());
-    deltaGates.forEach((gate) => gate.resolve());
-  });
-  const objectRoot = selection.attachments
-    ? await mkdtemp(join(tmpdir(), "fu-1a-attachments-"))
-    : undefined;
-  if (objectRoot) objectRoots.push(objectRoot);
-  const config = createTestConfig({
-    ...(objectRoot
-      ? { executionWorkspaces: { enabled: true }, workspaceObjectRoot: objectRoot }
-      : {}),
-    developmentAuth: {
-      enabled: true,
-      defaultUserId: "author",
-      users: ["author", "other"].map((id) => ({
-        id,
-        externalUserId: id,
-        displayLabel: id,
-        email: `${id}@example.test`,
-        roles: id === "author" ? ["user", "admin", "superadmin"] : ["user"]
-      }))
-    },
-    modelBindings: [
-      { id: "first", providerId: "local", userSelectable: true },
-      {
-        id: "picked",
-        providerId: "local",
-        userSelectable: true,
-        reasoningEffort: "high",
-        userSelectableReasoningEfforts: selection.defaultEffortOnly ? [] : ["high"]
+vi.mock("postgres", async (importOriginal) => {
+  type Connect = (url: string, options?: postgres.Options<Record<string, never>>) => postgres.Sql;
+  const actual = await importOriginal<{ default: Connect }>();
+  const connect: Connect = (url, options) =>
+    actual.default(url, {
+      ...options,
+      debug: (_connection, statement) => {
+        counted.getStore()?.push(statement);
       }
-    ],
-    agentModelBindingId: "first",
-    agentUserSelectableModelBindingIds: ["first", "picked"]
-  });
-  config.conversationTitles.enabled = false;
-  config.infrastructure.models = { local: { provider: "follow-up-test", model: "local" } };
-  const app = await createTestInstance({
-    config,
-    env: {},
-    capabilities: [{ name: "follow-up-test", providers: [provider], create: () => ({}) }],
-    tools: [],
-    ...(separate ? { agentRunWorker: "separate" as const } : {})
-  });
-  const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
-  const author = (await app.call("me.get", {}, "author")).json<{ id: string }>();
-  const other = (await app.call("me.get", {}, "other")).json<{ id: string }>();
-  const workspace = (
-    await app.call("workspaces.create", { payload: { name: "Follow-ups" } }, "author")
-  ).json<{ id: string }>();
-  const add = await app.call(
-    "workspaces.members.add",
-    {
-      params: { collaborationWorkspaceId: workspace.id },
-      payload: { email: "other@example.test" }
-    },
-    "author"
-  );
-  expect(add.statusCode, add.body).toBe(200);
-  const created = await app.call(
-    "conversations.create",
-    { payload: { title: "Follow-ups", collaborationWorkspaceId: workspace.id } },
-    "author"
-  );
-  expect(created.statusCode, created.body).toBe(200);
-  const conversationId = asConversationId(created.json<{ id: string }>().id);
-  const scope = { clientInstanceId, conversationId };
-  const run = async (id: string) =>
-    required(await app.stores.agentRuns.getAgentRun({ clientInstanceId, runId: asAgentRunId(id) }));
-  const until = (id: string, status: AgentRunStatus) =>
-    waitUntil(async () => (await run(id)).status === status, `run ${id} is ${status}`);
-  const first = await injectStartConversationRun(app, conversationId, "First");
-  if (!separate) await waitUntil(async () => gates.length === 1, "first model turn is held");
-  return {
-    app,
-    scope,
-    author,
-    other,
-    workspace,
-    first,
-    run,
-    until,
-    release: () => required(gates[0]).resolve(),
-    advance: () => required(deltaGates.at(-1)).resolve(),
-    pending: () => app.stores.followUps.listPending(scope),
-    messages: () => app.stores.conversations.listMessages(scope),
-    async queue(text: string, as = "author", key: string = createPlatformId("send")) {
-      const response = await app.call(
-        "conversations.runs.start",
-        {
-          params: { conversationId },
-          payload: {
-            followUp: "queue",
-            idempotencyKey: key,
-            modelBindingId: "picked",
-            ...(selection.defaultEffortOnly ? {} : { reasoningEffort: "high" }),
-            message: { text }
-          }
-        },
-        as
-      );
-      expect(response.statusCode, response.body).toBe(200);
-      return response.json<{ followUp: ConversationFollowUp }>().followUp;
-    },
-    async fail() {
-      required(gates[0]).reject(new Error("Provider fixture failed"));
-      await until(first.run.id, "failed");
-    },
-    async complete(id = first.run.id, turn = 0) {
-      await waitUntil(async () => gates[turn] !== undefined, "model turn is held");
-      required(gates[turn]).resolve();
-      await until(id, "completed");
-    },
-    async dispatch() {
-      await getTestJobs(app).runDue();
-    },
-    async attachment(recognized = false) {
-      const file = await app.stores.files.createManagedFile({
-        clientInstanceId,
-        ownerUserId: author.id,
-        filename: "queued.txt",
-        mimeType: "text/plain",
-        byteSize: 1,
-        checksum: createPlatformId("checksum"),
-        objectKey: createPlatformId("follow-up-test")
-      });
-      return app.stores.files.createConversationAttachment({
-        ...scope,
-        fileId: file.id,
-        filename: file.filename,
-        mimeType: file.mimeType,
-        byteSize: file.byteSize,
-        checksum: file.checksum,
-        status: "ready",
-        ...(recognized ? { processingMetadata: { source: "execution_workspace_source" } } : {})
-      });
-    }
-  };
-}
+    });
+  return { ...actual, default: Object.assign(connect, actual.default) };
+});
 
 describe("server follow-up queue on Postgres", () => {
   // Repeat with fresh instances to exercise both queue/worker scheduling orders.
@@ -356,14 +156,33 @@ describe("server follow-up queue on Postgres", () => {
       agentName: "test_agent",
       modelBindingId: "picked",
       reasoningEffort: "high",
-      authorUserId: f.other.id
+      authorUserId: f.other.id,
+      authorDisplayLabel: "other"
     });
     expect((await f.messages()).map((message) => message.text)).toEqual(["First"]);
     const snapshot = await f.app.call("conversations.thread.get", {
       params: { conversationId: f.scope.conversationId }
     });
     expect(snapshot.statusCode, snapshot.body).toBe(200);
-    expect(snapshot.json()).toMatchObject({ followUps: [{ id: item.id }] });
+    expect(snapshot.json()).toMatchObject({
+      followUps: [{ id: item.id, authorUserId: f.other.id, authorDisplayLabel: "other" }]
+    });
+    const observations = await f.app.stores.agentRuns.listRunObservations({
+      clientInstanceId: f.scope.clientInstanceId,
+      runId: asAgentRunId(f.first.run.id)
+    });
+    expect(observations.find((event) => event.type === "follow_up_changed")?.payload).toMatchObject(
+      { followUp: { id: item.id, authorDisplayLabel: "other" } }
+    );
+    const stored = await withTestSql(
+      (sql) => sql<{ payload: { followUp: ConversationFollowUp } }[]>`
+      select payload from agent_run_observations
+      where run_id = ${f.first.run.id} and type = 'follow_up_changed'
+    `
+    );
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.payload.followUp).toMatchObject({ id: item.id, authorUserId: f.other.id });
+    expect(stored[0]?.payload.followUp).not.toHaveProperty("authorDisplayLabel");
     await f.complete();
     await f.dispatch();
     const dispatched = required(
@@ -382,6 +201,82 @@ describe("server follow-up queue on Postgres", () => {
         .map((message) => message.text)
     ).toEqual(["First", "Next"]);
   });
+
+  it("resolves current names in one query per observation batch, preserving historical queue state", async () => {
+    const f = await fixture(true);
+    const item = await f.queue("Original", "other");
+    const read = async (limit: number, afterSequence = 0) => {
+      const statements: string[] = [];
+      const observations = await counted.run(statements, () =>
+        f.app.stores.agentRuns.listRunObservations({
+          clientInstanceId: f.scope.clientInstanceId,
+          runId: asAgentRunId(f.first.run.id),
+          limit,
+          afterSequence
+        })
+      );
+      return {
+        observations,
+        count: statements.filter((sql) => !sql.includes("pg_catalog.pg_type")).length
+      };
+    };
+    expect((await read(1)).count).toBe(2);
+    await f.app.stores.followUps.cancel({ ...f.scope, followUpId: item.id });
+    for (let index = 0; index < 10; index++) await f.queue(`Queued ${index}`, "other");
+    await withTestSql(
+      (sql) =>
+        sql`update product_users set display_label = 'Renamed member' where id = ${f.other.id}`
+    );
+    const batch = await read(12);
+    expect(batch.count).toBe(2);
+    expect(batch.observations).toHaveLength(12);
+    expect(batch.observations[0]?.payload).toMatchObject({
+      followUp: { id: item.id, status: "pending", authorDisplayLabel: "Renamed member" }
+    });
+    expect(batch.observations[1]?.payload).toMatchObject({
+      followUp: { id: item.id, status: "cancelled", authorDisplayLabel: "Renamed member" }
+    });
+    expect((await read(12, required(batch.observations.at(-1)).sequence)).count).toBe(1);
+  });
+
+  it.each(["disabled", "deleting", "missing", "removed", "private"])(
+    "omits the %s author's label from the queue and completed run replay",
+    async (status) => {
+      const f = await fixture();
+      const item = await f.queue("Keep this queued", "other");
+      await f.complete();
+      const before = await drainRunEvents(f.app, f.scope.conversationId, f.first.run.id);
+      expect(before).toContain('"authorDisplayLabel":"other"');
+      await withTestSql(async (sql) => {
+        if (status === "missing") {
+          await sql`delete from collaboration_workspace_memberships where user_id = ${f.other.id}`;
+          await sql`delete from collaboration_workspaces where personal_user_id = ${f.other.id}`;
+          await sql`delete from product_users where id = ${f.other.id}`;
+        } else if (status === "private") {
+          await sql`update conversations set visibility = 'private' where id = ${f.scope.conversationId}`;
+        } else if (status === "removed") {
+          await sql`delete from collaboration_workspace_memberships where collaboration_workspace_id = ${f.workspace.id} and user_id = ${f.other.id}`;
+        } else if (status === "deleting") {
+          await sql`update product_users set deletion_requested_at = now() where id = ${f.other.id}`;
+        } else {
+          await sql`update product_users set status = ${status} where id = ${f.other.id}`;
+        }
+      });
+      const snapshot = await f.app.call("conversations.thread.get", {
+        params: { conversationId: f.scope.conversationId }
+      });
+      expect(snapshot.statusCode, snapshot.body).toBe(200);
+      const pending = snapshot.json<{ followUps: ConversationFollowUp[] }>().followUps;
+      expect(pending).toMatchObject([{ id: item.id, authorUserId: f.other.id }]);
+      expect(required(pending[0]).authorDisplayLabel).toBeUndefined();
+      expect(required(pending[0])).not.toHaveProperty("email");
+      const replay = await drainRunEvents(f.app, f.scope.conversationId, f.first.run.id);
+      expect(replay).toContain('"type":"follow_up_changed"');
+      expect(replay).toContain(item.id);
+      expect(replay).not.toContain("authorDisplayLabel");
+      expect(replay).not.toContain("other@example.test");
+    }
+  );
 
   it("FU-1 preserves the configured reasoning effort when the author has no effort picker", async () => {
     const f = await fixture(false, { defaultEffortOnly: true });

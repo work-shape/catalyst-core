@@ -17,9 +17,9 @@ import type { ReasoningEffort } from "../workspace/agent-model-selection";
 import { isLiveRunStatus } from "./conversation-controller-state";
 import {
   followUpDispatchReread,
+  followUpQueueItem,
   followUpQueuePhase,
-  isFollowUpDispatchOverdue,
-  type FollowUpQueueItem
+  isFollowUpDispatchOverdue
 } from "./follow-up-queue-state";
 
 /**
@@ -287,13 +287,7 @@ export function useFollowUpQueueModel(input: {
     if (!conversationId) {
       return undefined;
     }
-    const items = followUps.map((followUp): FollowUpQueueItem => ({
-      id: followUp.id,
-      text: followUp.text,
-      own: followUp.authorUserId === source.currentUserId,
-      // The thread does not name the author yet; the list then says "another member".
-      authorLabel: undefined
-    }));
+    const items = followUps.map((followUp) => followUpQueueItem(followUp, source.currentUserId));
     return {
       items,
       phase,

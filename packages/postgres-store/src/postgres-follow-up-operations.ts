@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  getTableColumns,
+  inArray,
+  isNull,
+  ne,
+  or,
+  sql
+} from "drizzle-orm";
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   AppError,
@@ -6,10 +18,12 @@ import {
   asClientInstanceId,
   asConversationId,
   createPlatformId,
+  type ClientInstanceId,
   type ConversationFollowUp,
   type ConversationFollowUpStore,
   type FollowUpScope,
-  type PrepareConversationRunStartInput
+  type PrepareConversationRunStartInput,
+  type RunObservation
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { lockActiveConversation } from "./postgres-conversation-operations";
@@ -20,13 +34,100 @@ import {
   conversationFollowUps,
   conversationAttachments,
   runStartCommands,
-  conversations
+  conversations,
+  collaborationWorkspaceMemberships,
+  productUsers
 } from "./schema";
 
-export function mapFollowUp(row: typeof conversationFollowUps.$inferSelect): ConversationFollowUp {
+// Resolve names at read time: unavailable authors retain their queued messages without a name.
+function followUpsWithAuthors(db: PostgresConnection) {
+  return db
+    .select({
+      ...getTableColumns(conversationFollowUps),
+      authorDisplayLabel: productUsers.displayLabel
+    })
+    .from(conversationFollowUps)
+    .leftJoin(
+      productUsers,
+      and(
+        eq(productUsers.clientInstanceId, conversationFollowUps.clientInstanceId),
+        eq(productUsers.id, conversationFollowUps.authorUserId),
+        eq(productUsers.status, "active"),
+        isNull(productUsers.deletionRequestedAt),
+        exists(
+          db
+            .select({ id: conversations.id })
+            .from(conversations)
+            .innerJoin(
+              collaborationWorkspaceMemberships,
+              and(
+                eq(
+                  collaborationWorkspaceMemberships.clientInstanceId,
+                  conversations.clientInstanceId
+                ),
+                eq(
+                  collaborationWorkspaceMemberships.collaborationWorkspaceId,
+                  conversations.collaborationWorkspaceId
+                ),
+                eq(collaborationWorkspaceMemberships.userId, productUsers.id)
+              )
+            )
+            .where(
+              and(
+                eq(conversations.clientInstanceId, conversationFollowUps.clientInstanceId),
+                eq(conversations.id, conversationFollowUps.conversationId),
+                or(
+                  eq(conversations.visibility, "workspace"),
+                  eq(conversations.createdByUserId, productUsers.id)
+                )
+              )
+            )
+        )
+      )
+    );
+}
+
+/** Names are a current-access projection, never part of the durable event payload. */
+export async function withFollowUpAuthorLabels(
+  db: PostgresConnection,
+  clientInstanceId: ClientInstanceId,
+  observations: RunObservation[]
+): Promise<RunObservation[]> {
+  const ids = [
+    ...new Set(
+      observations.flatMap(({ payload }) =>
+        payload.type === "follow_up_changed" ? [payload.followUp.id] : []
+      )
+    )
+  ];
+  if (ids.length === 0) return observations;
+  const rows = await followUpsWithAuthors(db).where(
+    and(
+      eq(conversationFollowUps.clientInstanceId, clientInstanceId),
+      inArray(conversationFollowUps.id, ids)
+    )
+  );
+  const labels = new Map(rows.map((row) => [row.id, row.authorDisplayLabel ?? undefined]));
+  return observations.map((observation) => {
+    const { payload } = observation;
+    if (payload.type !== "follow_up_changed") return observation;
+    return {
+      ...observation,
+      payload: {
+        ...payload,
+        followUp: { ...payload.followUp, authorDisplayLabel: labels.get(payload.followUp.id) }
+      }
+    };
+  });
+}
+
+export function mapFollowUp(
+  row: typeof conversationFollowUps.$inferSelect & { authorDisplayLabel?: string | null }
+): ConversationFollowUp {
   return {
     id: row.id,
     authorUserId: row.authorUserId,
+    authorDisplayLabel: row.authorDisplayLabel ?? undefined,
     text: row.text,
     mode: row.mode,
     status: row.status,
@@ -74,7 +175,7 @@ export async function observeFollowUpChange(
     runId: asAgentRunId(run.id),
     sequence,
     createdAt: followUp.updatedAt,
-    followUp
+    followUp: { ...followUp, authorDisplayLabel: undefined }
   };
   await db.insert(agentRunObservations).values({
     clientInstanceId: run.clientInstanceId,
@@ -170,7 +271,11 @@ export async function queueFollowUp(
         eq(conversations.id, input.conversationId)
       )
     );
-  const followUp = mapFollowUp(row);
+  const [queued] = await followUpsWithAuthors(db)
+    .where(and(scopeWhere(input), eq(conversationFollowUps.id, row.id)))
+    .limit(1);
+  if (!queued) throw new AppError("INTERNAL", "Follow-up is not available");
+  const followUp = mapFollowUp(queued);
   await observeFollowUpChange(db, followUp);
   return followUp;
 }
@@ -180,9 +285,7 @@ export function createPostgresFollowUpStore(
   deps: { lockActiveConversation: typeof lockActiveConversation }
 ): ConversationFollowUpStore {
   const pending = (input: FollowUpScope, connection: PostgresConnection = db) =>
-    connection
-      .select()
-      .from(conversationFollowUps)
+    followUpsWithAuthors(connection)
       .where(and(scopeWhere(input), eq(conversationFollowUps.status, "pending")))
       .orderBy(asc(conversationFollowUps.position));
   return {
@@ -200,17 +303,13 @@ export function createPostgresFollowUpStore(
       });
     },
     async get(input) {
-      const [row] = await db
-        .select()
-        .from(conversationFollowUps)
+      const [row] = await followUpsWithAuthors(db)
         .where(and(scopeWhere(input), eq(conversationFollowUps.id, input.followUpId)))
         .limit(1);
       return row && mapFollowUp(row);
     },
     async findByIdempotencyKey(input) {
-      const [row] = await db
-        .select()
-        .from(conversationFollowUps)
+      const [row] = await followUpsWithAuthors(db)
         .where(
           and(
             scopeWhere(input),
@@ -249,9 +348,7 @@ export function createPostgresFollowUpStore(
       return db.transaction(async (tx) => {
         if (!(await deps.lockActiveConversation(tx, input.clientInstanceId, input.conversationId)))
           throw new AppError("NOT_FOUND", "Conversation is not available");
-        const [item] = await tx
-          .select()
-          .from(conversationFollowUps)
+        const [item] = await followUpsWithAuthors(tx)
           .where(and(scopeWhere(input), eq(conversationFollowUps.id, input.followUpId)))
           .limit(1);
         if (!item) throw new AppError("NOT_FOUND", "Follow-up is not available");
@@ -276,7 +373,7 @@ export function createPostgresFollowUpStore(
             )
           );
         if (!row) throw new AppError("INTERNAL", "Follow-up was not cancelled");
-        const result = mapFollowUp(row);
+        const result = mapFollowUp({ ...row, authorDisplayLabel: item.authorDisplayLabel });
         await observeFollowUpChange(tx, result);
         return result;
       });

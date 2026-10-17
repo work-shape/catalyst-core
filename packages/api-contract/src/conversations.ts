@@ -653,6 +653,7 @@ export const conversationFollowUpSchema = z.object({
   clientInstanceId: z.string(),
   conversationId: z.string(),
   authorUserId: z.string(),
+  authorDisplayLabel: z.string().optional(),
   text: z.string(),
   mode: z.enum(FOLLOW_UP_MODES),
   status: z.enum(FOLLOW_UP_STATUSES),

@@ -12,6 +12,8 @@ export interface ConversationFollowUp {
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
   authorUserId: string;
+  /** Read-time label of an active author with current conversation access; never stored in run events. */
+  authorDisplayLabel?: string;
   text: string;
   mode: (typeof FOLLOW_UP_MODES)[number];
   status: (typeof FOLLOW_UP_STATUSES)[number];

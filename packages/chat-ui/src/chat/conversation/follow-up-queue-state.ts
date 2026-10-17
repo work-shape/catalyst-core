@@ -1,4 +1,4 @@
-import type { AgentRun } from "@work-shape/catalyst-api-client";
+import type { AgentRun, ConversationFollowUp } from "@work-shape/catalyst-api-client";
 import { isLiveRunStatus } from "./conversation-controller-state";
 
 /**
@@ -19,6 +19,19 @@ export interface FollowUpQueueItem {
   own: boolean;
   /** Who wrote it, for a message of another member. */
   authorLabel: string | undefined;
+}
+
+/** The server's queued message as seen by this reader. */
+export function followUpQueueItem(
+  followUp: ConversationFollowUp,
+  currentUserId: string | undefined
+): FollowUpQueueItem {
+  return {
+    id: followUp.id,
+    text: followUp.text,
+    own: followUp.authorUserId === currentUserId,
+    authorLabel: followUp.authorDisplayLabel
+  };
 }
 
 export function followUpQueuePhase(input: {

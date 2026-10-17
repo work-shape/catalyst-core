@@ -48,7 +48,12 @@ import {
   type RunObservationStore,
   type AgentRunsStore
 } from "@work-shape/catalyst-core";
-import { queueFollowUp, observeFollowUpChange, mapFollowUp } from "./postgres-follow-up-operations";
+import {
+  queueFollowUp,
+  observeFollowUpChange,
+  mapFollowUp,
+  withFollowUpAuthorLabels
+} from "./postgres-follow-up-operations";
 import { enqueueJob } from "./jobs/store";
 import { lockActiveConversation } from "./postgres-conversation-operations";
 import { type PostgresConnection } from "./postgres-database";
@@ -569,7 +574,8 @@ async function listRunObservations(
     )
     .orderBy(asc(agentRunObservations.sequence));
   const rows = input.limit === undefined ? await query : await query.limit(input.limit);
-  return rows.map(mapRunObservation);
+  // Both live runtime batches and completed-run replay resolve names against current access.
+  return withFollowUpAuthorLabels(db, input.clientInstanceId, rows.map(mapRunObservation));
 }
 
 async function getRunStartCommand(

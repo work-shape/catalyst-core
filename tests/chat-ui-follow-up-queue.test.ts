@@ -9,10 +9,12 @@ import {
 import {
   composerTextAfterEdit,
   followUpDispatchReread,
+  followUpQueueItem,
   followUpQueuePhase,
   isFollowUpDispatchOverdue,
   type FollowUpQueueItem
 } from "@work-shape/catalyst-chat-ui/follow-up-queue-state";
+import type { ConversationFollowUp } from "@work-shape/catalyst-api-client";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 describe("follow-up queue phase", () => {
@@ -142,6 +144,50 @@ describe("follow-up queue above the composer", () => {
       )
     );
   }
+
+  const fromB: ConversationFollowUp = {
+    id: "fu_b",
+    clientInstanceId: "test",
+    conversationId: "shared",
+    authorUserId: "b",
+    authorDisplayLabel: "Bea Berg",
+    text: "A follow-up from B",
+    mode: "queue",
+    status: "pending",
+    position: 1,
+    agentName: "test",
+    createdAt: "2026-10-17T00:00:00.000Z",
+    updatedAt: "2026-10-17T00:00:00.000Z"
+  };
+
+  it.each(["en", "de"] as const)("shows B's server label in A's tab in %s", (locale) => {
+    const item = followUpQueueItem(fromB, "a");
+    expect(item.own).toBe(false);
+    const markup = render(model({ items: [item] }), locale);
+    expect(markup).toContain(locale === "en" ? "From Bea Berg" : "Von Bea Berg");
+    expect(markup).not.toContain('aria-label="Edit"');
+  });
+
+  it("keeps B's own tab unchanged when the server includes B's label", () => {
+    const item = followUpQueueItem(fromB, "b");
+    expect(item.own).toBe(true);
+    const markup = render(model({ items: [item] }));
+    expect(markup).toContain('aria-label="Edit"');
+    expect(markup).toContain('aria-label="Remove"');
+    expect(markup).not.toContain("From Bea Berg");
+  });
+
+  it.each(["en", "de"] as const)(
+    "uses the generic text for an unavailable author in %s",
+    (locale) => {
+      const item = followUpQueueItem({ ...fromB, authorDisplayLabel: undefined }, "a");
+      const markup = render(model({ items: [item] }), locale);
+      expect(markup).toContain(
+        locale === "en" ? "From another member" : "Von einem anderen Mitglied"
+      );
+      expect(markup).not.toContain("Bea Berg");
+    }
+  );
 
   it("lists the queued messages oldest first while the run goes", () => {
     const markup = render(model({}));
