@@ -1,4 +1,5 @@
-import { apiBaseUrl, reviewer, signIn } from "./inbox-fixtures";
+import type { Locator } from "@playwright/test";
+import { apiBaseUrl, reviewer, shoot, signIn, tabName } from "./inbox-fixtures";
 import { expect, test } from "./test";
 
 // How the Inbox behaves while a tab's list is read for the first time. The test writes
@@ -188,4 +189,105 @@ test("a tab opened for the first time flashes no loading layout for a fast answe
   expect(slow.loadingFrames).toBeGreaterThan(0);
   expectUnseenForTheDelay(slow);
   await expect(inbox.getByRole("tabpanel").getByRole("status")).toHaveCount(0);
+});
+
+/** What a phone shows of the Inbox's tab row: the selected tab, the fade and the page width. */
+async function tabRowAt(tab: Locator) {
+  return tab.evaluate((node) => {
+    const clear = String.raw`(?:transparent|rgba\(0, 0, 0, 0\))`;
+    const fadedEdges = (mask: string) => ({
+      fadeStart: new RegExp(`^linear-gradient\\(to right, ${clear} 0`, "u").test(mask),
+      fadeEnd: new RegExp(`${clear} 100%\\)$`, "u").test(mask)
+    });
+    const row = node.closest<HTMLElement>('[data-slot="tab-row"]');
+    if (!row) {
+      throw new Error("The tab stands in no tab row");
+    }
+    const rowBox = row.getBoundingClientRect();
+    const tabBox = node.getBoundingClientRect();
+    return {
+      overflows: row.scrollWidth > row.clientWidth,
+      selectedWhole: tabBox.left >= rowBox.left - 0.5 && tabBox.right <= rowBox.right + 0.5,
+      // Which edges fade: the mask runs from transparent at a hidden edge to opaque.
+      ...fadedEdges(getComputedStyle(row).maskImage),
+      pageSideways: document.documentElement.scrollWidth - document.documentElement.clientWidth
+    };
+  });
+}
+
+/**
+ * Selects a tab the way a script does, without the focus that would scroll it into view itself:
+ * the row has to bring it there.
+ */
+async function selectWithoutFocus(tab: Locator) {
+  await tab.evaluate((node) =>
+    node.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }))
+  );
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+}
+
+test("at 390 the Inbox's tab row shows the selected tab whole, fades the edge that hides tabs and moves no page sideways", async ({
+  page
+}) => {
+  // Signed in at the default width, where the rail with its search shows; then a phone.
+  await signIn(page, reviewer);
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Counts on every tab, as a busy instance has them: the row then does not fit at 390.
+  await page.route(
+    (url) =>
+      url.origin === new URL(apiBaseUrl).origin &&
+      url.pathname === "/api/v1/approval-requests/pending-count",
+    async (route) => {
+      const response = await route.fetch();
+      const body: { mine: object } = await response.json();
+      await route.fulfill({
+        response,
+        json: { ...body, count: 12, decided: 120, mine: { ...body.mine, pending: 3 } }
+      });
+    }
+  );
+  const inbox = page.getByRole("region", { name: "Inbox", exact: true });
+  const toDecide = inbox.getByRole("tab", { name: tabName("To decide", 12) });
+  const decided = inbox.getByRole("tab", { name: tabName("Decided", 120) });
+  // The pictures are taken in both languages, so they find the tabs by place.
+  const tabs = page.getByTestId("inbox-area").getByRole("tab");
+  const ready = async () => {
+    await expect(tabs).toHaveCount(3);
+    await selectWithoutFocus(tabs.last());
+    // The underline changes colour over a short transition; the picture waits for its end.
+    await expect(tabs.first()).toHaveCSS("border-bottom-color", "rgba(0, 0, 0, 0)");
+  };
+  await page.goto("/inbox");
+  await expect(toDecide).toHaveAttribute("aria-selected", "true");
+
+  await expect
+    .poll(() => tabRowAt(toDecide))
+    .toEqual({
+      overflows: true,
+      selectedWhole: true,
+      fadeStart: false,
+      fadeEnd: true,
+      pageSideways: 0
+    });
+
+  await selectWithoutFocus(decided);
+  await expect
+    .poll(() => tabRowAt(decided))
+    .toEqual({
+      overflows: true,
+      selectedWhole: true,
+      fadeStart: true,
+      fadeEnd: false,
+      pageSideways: 0
+    });
+
+  await shoot(page, "ui-lib-1-inbox-tabs-decided", ready, [1280, 390]);
+  await shoot(
+    page,
+    "ui-lib-1-inbox-tabs-to-decide",
+    async () => {
+      await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
+    },
+    [390]
+  );
 });

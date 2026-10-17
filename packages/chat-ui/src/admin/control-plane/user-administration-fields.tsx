@@ -1,6 +1,6 @@
 import { useState, type FocusEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { Button, Input, Select } from "@work-shape/catalyst-ui";
+import { Button, Checkbox, Input, Select } from "@work-shape/catalyst-ui";
 import {
   ACCESS_LEVEL_OPTIONS,
   generatePassword,
@@ -130,24 +130,18 @@ export function CreateUserFields({
         </Field>
       </div>
       {invitationsEnabled ? (
-        <label className="inline-flex w-fit items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.sendInvitation}
-            onChange={(event) => onChange({ ...form, sendInvitation: event.target.checked })}
-          />
-          <span>{t("settings.userInvite")}</span>
-        </label>
+        <Checkbox
+          checked={form.sendInvitation}
+          onCheckedChange={(sendInvitation) => onChange({ ...form, sendInvitation })}
+          label={t("settings.userInvite")}
+        />
       ) : null}
       {form.sendInvitation ? null : (
-        <label className="inline-flex w-fit items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.createPasswordSignIn}
-            onChange={(event) => onChange({ ...form, createPasswordSignIn: event.target.checked })}
-          />
-          <span>{t("settings.userPasswordSignInCreate")}</span>
-        </label>
+        <Checkbox
+          checked={form.createPasswordSignIn}
+          onCheckedChange={(createPasswordSignIn) => onChange({ ...form, createPasswordSignIn })}
+          label={t("settings.userPasswordSignInCreate")}
+        />
       )}
       {form.createPasswordSignIn && !form.sendInvitation ? (
         <Field label={t("settings.passwordInitial")} hint={t("settings.userInitialPasswordHint")}>

@@ -1,5 +1,6 @@
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { z } from "zod";
+import { shoot as shootBothWays } from "./inbox-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
@@ -389,4 +390,49 @@ test("the library's table sample folds into its rows' details as its window narr
       }
     }
   }
+});
+
+test("the new user form's sign-in choices toggle by Space and by a click on their label", async ({
+  page
+}) => {
+  await signInViaApi(page);
+  await page.goto("/settings/instance/users");
+  await page.getByRole("button", { name: "New user", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New user" });
+  const invite = dialog.getByRole("checkbox", {
+    name: "Email an invitation to set a password",
+    exact: true
+  });
+  const passwordSignIn = dialog.getByRole("checkbox", {
+    name: "Create password sign-in",
+    exact: true
+  });
+  const initialPassword = dialog.getByText("Initial password", { exact: true });
+  // An instance that sends invitations offers that choice first, and on.
+  if ((await invite.count()) > 0) {
+    await expect(invite).toBeChecked();
+    await invite.focus();
+    await page.keyboard.press("Space");
+    await expect(invite).not.toBeChecked();
+  }
+
+  const wasChecked = await passwordSignIn.isChecked();
+  await passwordSignIn.focus();
+  await page.keyboard.press("Space");
+  await expect(passwordSignIn).toBeChecked({ checked: !wasChecked });
+  await expect(passwordSignIn).toBeFocused();
+
+  await dialog.getByText("Create password sign-in", { exact: true }).click();
+  await expect(passwordSignIn).toBeChecked({ checked: wasChecked });
+  await expect(initialPassword).toBeVisible({ visible: wasChecked });
+
+  await shootBothWays(
+    page,
+    "ui-lib-1-user-create",
+    async () => {
+      await page.getByRole("button", { name: /^(New user|Neuer Benutzer)$/u }).click();
+      await expect(page.getByRole("dialog").getByRole("checkbox").first()).toBeVisible();
+    },
+    [1280, 390]
+  );
 });

@@ -127,6 +127,37 @@ export function scrollEdgeFadeStyle(
   return mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined;
 }
 
+/**
+ * Where a container scrolls to so that one item in it shows whole and clear of the fade: the
+ * nearest offset, so an item already in view does not move. Offsets and edges are along the
+ * scroll axis, measured from the start of the content.
+ */
+export function revealOffset({
+  offset,
+  visible,
+  length,
+  start,
+  end,
+  inset
+}: {
+  offset: number;
+  visible: number;
+  length: number;
+  start: number;
+  end: number;
+  /** Room kept between the item and the edge, for the fade. */
+  inset: number;
+}): number {
+  const furthest = Math.max(0, length - visible);
+  const target =
+    start - inset < offset || end - start + 2 * inset > visible
+      ? start - inset
+      : end + inset > offset + visible
+        ? end + inset - visible
+        : offset;
+  return Math.min(furthest, Math.max(0, target));
+}
+
 function sameItems(first: readonly unknown[], second: readonly unknown[]): boolean {
   return (
     first.length === second.length && first.every((item, index) => Object.is(item, second[index]))

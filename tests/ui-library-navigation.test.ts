@@ -174,25 +174,37 @@ describe("navigation, page structure and data components", () => {
       )
     );
 
-    for (const [markup, rowPattern, tabPattern, selectedLine] of [
+    // The line is drawn by the frame around the row that scrolls, so the row's edge fade
+    // leaves it whole.
+    for (const [markup, framePattern, rowPattern, tabPattern, selectedLine] of [
       [
         viewTabs,
+        /<div class="([^"]*)"><div[^>]*role="tablist"/u,
         /<div[^>]*role="tablist"[^>]*class="([^"]*)"/u,
         /<button[^>]*role="tab"[^>]*class="([^"]*)"/u,
         "data-[state=active]:border-primary"
       ],
-      [routeTabs, /<nav[^>]*class="([^"]*)"/u, /<a[^>]*class="([^"]*)"/u, "border-primary"]
+      [
+        routeTabs,
+        /<nav[^>]*class="([^"]*)"/u,
+        /<nav[^>]*><div[^>]*class="([^"]*)"/u,
+        /<a[^>]*class="([^"]*)"/u,
+        "border-primary"
+      ]
     ] as const) {
+      const frameClasses = markup.match(framePattern)?.[1]?.split(" ");
+      expect(frameClasses).toContain("shadow-[inset_0_-1px_0_var(--color-border)]");
       const rowClasses = markup.match(rowPattern)?.[1]?.replaceAll("&amp;", "&").split(" ");
       expect(rowClasses).toEqual(
         expect.arrayContaining([
           "overflow-x-auto",
           "overflow-y-hidden",
           "[scrollbar-width:none]",
-          "[&::-webkit-scrollbar]:hidden",
-          "shadow-[inset_0_-1px_0_var(--color-border)]"
+          "[&::-webkit-scrollbar]:hidden"
         ])
       );
+      expect(frameClasses).not.toContain("border-b");
+      expect(frameClasses).not.toContain("pb-px");
       // The row has no border and no padding under the tabs, and no tab is pulled out of
       // it: the underline of the selected tab ends on the edge the row's line ends on.
       expect(rowClasses).not.toContain("border-b");

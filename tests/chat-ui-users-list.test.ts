@@ -116,8 +116,9 @@ describe("Instance > Users", () => {
   });
 
   it("selects with the library's checkbox and names no account by its id", () => {
-    // One box for the page and one per row, all the library's.
-    expect(markup.match(/<button type="button" role="checkbox"/gu)).toHaveLength(3);
+    // One box for the page, one per row and the password sign-in of the New user form, which
+    // the page holds closed: all the library's.
+    expect(markup.match(/<button type="button" role="checkbox"/gu)).toHaveLength(4);
     expect(markup).toContain('aria-label="Select visible users"');
     expect(markup).toContain('aria-label="Select Mara Oyelaran"');
     expect(markup).not.toMatch(/>active</u);
