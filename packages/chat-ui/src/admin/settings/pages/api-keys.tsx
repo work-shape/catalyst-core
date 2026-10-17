@@ -34,6 +34,7 @@ import {
   type KeyProblem
 } from "../../control-plane/personal-api-keys-list";
 import {
+  connectCodeAsksUseLevel,
   connectCodeOfSearch,
   formatConnectCode,
   initialPersonalKeyDraft,
@@ -41,6 +42,8 @@ import {
   isCompleteConnectCode,
   personalKeyActionOffer,
   personalKeyRequest,
+  personalKeyUseOffer,
+  setupKeyActions,
   type PersonalKeyDraft
 } from "../../control-plane/personal-api-keys-model";
 import { useTranslation, type TranslationKey } from "../../../shared/i18n";
@@ -48,10 +51,15 @@ import { apiErrorMessage } from "../../../shared/workspace-utils";
 import { useOptionalSettingsPage, useSettingsPage } from "../../../shared/settings-page-context";
 import { isRefusal, refusalAskingInstanceAdmin } from "../ask-instance-admin";
 
-/** What the key fields offer: the actions and the Namespaces. */
+/** What the key fields offer: the actions, the use level and the Namespaces. */
 interface KeyOffer {
   actions: string[];
+  useActions: string[];
+  /** What the key `catalyst setup` asks for starts with ticked (`setupKeyActions`). */
+  setupActions: string[];
   namespaces: string[];
+  /** The instance has answered what it offers, or failed to. */
+  settled: boolean;
 }
 
 /**
@@ -72,9 +80,13 @@ export function ApiKeysPage() {
   const context = contextQuery.data;
   const offer: KeyOffer = {
     actions: personalKeyActionOffer(context),
-    namespaces: (context?.namespaces ?? []).map((namespace) => namespace.prefix)
+    useActions: personalKeyUseOffer(context),
+    setupActions: setupKeyActions(context),
+    namespaces: (context?.namespaces ?? []).map((namespace) => namespace.prefix),
+    settled: !contextQuery.isPending
   };
   const [initialCode] = useState(() => connectCodeOfSearch(window.location.search));
+  const [asksUseLevel] = useState(() => connectCodeAsksUseLevel(window.location.search));
   const [newKeyOpen, setNewKeyOpen] = useState(false);
   // The key of this person, shown once; another session's person never sees it.
   const [revealed, setRevealed] = useState<RevealedSecret & { ownerUserId: string }>();
@@ -111,6 +123,7 @@ export function ApiKeysPage() {
       >
         <ConnectCli
           initialCode={initialCode}
+          asksUseLevel={asksUseLevel}
           offer={offer}
           onConfirm={(userCode, body) =>
             mutations.confirmConnectCode.mutateAsync({ userCode, body })
@@ -195,6 +208,7 @@ function NewKeyDialog({
         <PersonalKeyFields
           draft={draft}
           actions={offer.actions}
+          useActions={offer.useActions}
           namespaces={offer.namespaces}
           onChange={(next) => {
             setDraft(next);
@@ -209,11 +223,14 @@ function NewKeyDialog({
 /** The connect code field, what the code asks for once it is whole, and its confirmation. */
 function ConnectCli({
   initialCode,
+  asksUseLevel,
   offer,
   confirming,
   onConfirm
 }: {
   initialCode: string;
+  /** The CLI's `setup` sent the person here: its key starts with the use level. */
+  asksUseLevel: boolean;
   offer: KeyOffer;
   confirming: boolean;
   onConfirm(userCode: string, body: ConfirmConnectCodeRequest): Promise<unknown>;
@@ -246,7 +263,7 @@ function ConnectCli({
         <Banner tone="success" title={t("personalApiKeys.connected")}>
           {t("personalApiKeys.connectedDescription")}
         </Banner>
-      ) : !complete ? null : lookup.isPending ? (
+      ) : !complete ? null : lookup.isPending || !offer.settled ? (
         <SkeletonList rows={2} />
       ) : lookup.data ? (
         <ConnectCodeConfirm
@@ -254,6 +271,8 @@ function ConnectCli({
           code={code}
           request={lookup.data}
           offer={offer}
+          // Only the code the CLI sent the person with asks for the level; a typed one does not.
+          asksUseLevel={asksUseLevel && code === initialCode}
           pending={confirming}
           onConfirm={async (body) => {
             await onConfirm(code, body);
@@ -307,12 +326,18 @@ export function ConnectCodeConfirm({
   code,
   request,
   offer,
+  asksUseLevel = false,
   pending,
   onConfirm
 }: {
   code: string;
   request: ConnectCode;
   offer: KeyOffer;
+  /**
+   * Start as `catalyst setup` asks: the person's reading, writing and publishing rights and
+   * the use level ticked.
+   */
+  asksUseLevel?: boolean;
   pending: boolean;
   /** A refusal is thrown and said under the fields. */
   onConfirm(body: ConfirmConnectCodeRequest): Promise<void>;
@@ -320,7 +345,10 @@ export function ConnectCodeConfirm({
   const { t, locale } = useTranslation();
   const keyProblem = useKeyProblem();
   const [draft, setDraft] = useState<PersonalKeyDraft>(() =>
-    initialPersonalKeyDraft(request.clientLabel ?? t("personalApiKeys.cliName"))
+    initialPersonalKeyDraft(
+      request.clientLabel ?? t("personalApiKeys.cliName"),
+      asksUseLevel ? offer.setupActions : []
+    )
   );
   const [problem, setProblem] = useState<KeyProblem>();
   // The same key would be refused again: Confirm waits for a changed field.
@@ -354,6 +382,7 @@ export function ConnectCodeConfirm({
       <PersonalKeyFields
         draft={draft}
         actions={offer.actions}
+        useActions={offer.useActions}
         namespaces={offer.namespaces}
         onChange={(next) => {
           setDraft(next);

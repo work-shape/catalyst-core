@@ -30,7 +30,10 @@ const BASE_KEY_ACTIONS = [
   "skill.delete"
 ];
 
-/** What a key may name: reading, writing, deleting and publishing; never using or approving. */
+/**
+ * What a key's authoring scopes name: reading, writing, deleting and publishing; never
+ * approving. The use level is offered beside them (`personalKeyUseOffer`).
+ */
 const KEY_ACTION = /\.(read|write|delete|publish)$/u;
 
 /**
@@ -48,6 +51,36 @@ export function personalKeyActionOffer(context: PlatformContext | undefined): st
   return [...new Set([...BASE_KEY_ACTIONS, ...fromKinds])].filter((action) =>
     KEY_ACTION.test(action)
   );
+}
+
+/**
+ * The use level a new key offers: the rights to use a Connection, a Data Store, a Knowledge
+ * Base or a Workflow that the person holds somewhere, as the instance names them. A key with
+ * them publishes a Workflow whose technical account uses them (CLI-PUBLISH-USE).
+ */
+export function personalKeyUseOffer(context: PlatformContext | undefined): string[] {
+  return [...(context?.useActions ?? [])];
+}
+
+/**
+ * What the key `catalyst setup` asks for starts with: the reading, writing and publishing
+ * rights the person holds among the ones offered, and the use level. Deleting is ticked by
+ * hand.
+ */
+export function setupKeyActions(context: PlatformContext | undefined): string[] {
+  const offered = new Set(personalKeyActionOffer(context));
+  return [
+    ...(context?.authoringActions ?? []).filter((action) => offered.has(action)),
+    ...personalKeyUseOffer(context)
+  ];
+}
+
+/**
+ * Whether the address the CLI opened asks for the use level: `catalyst setup` adds
+ * `level=use`, so the key a local agent gets can publish what its person may publish.
+ */
+export function connectCodeAsksUseLevel(search: string): boolean {
+  return new URLSearchParams(search).getAll("level").includes("use");
 }
 
 /** A Namespace prefix as the instance writes one: lowercase words joined by hyphens, `kai-`. */
@@ -147,12 +180,16 @@ export interface PersonalKeyDraft {
 /**
  * A new key starts with no scope ticked: it gets only what the person ticks. Ticked in advance,
  * every right the person holds went into the key unless they found and unticked each one, and
- * a click on the scope they wanted took it away.
+ * a click on the scope they wanted took it away. The one exception is the use level a CLI's
+ * `setup` asks for, which its confirmation starts with (`actions`).
  */
-export function initialPersonalKeyDraft(name = ""): PersonalKeyDraft {
+export function initialPersonalKeyDraft(
+  name = "",
+  actions: readonly string[] = []
+): PersonalKeyDraft {
   return {
     name,
-    actions: [],
+    actions: [...actions],
     namespace: "",
     expiryDays: DEFAULT_PERSONAL_KEY_EXPIRY_DAYS
   };

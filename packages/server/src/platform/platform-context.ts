@@ -9,8 +9,10 @@ import {
   FILE_SET_MAX_FILE_BYTES,
   FILE_SET_MAX_FILES,
   FILE_SET_MAX_TOTAL_BYTES,
+  GRANT_SCOPE_KINDS,
   INSTANCE_ACTIONS,
   INSTANCE_ASSET_SCOPE,
+  PERSONAL_API_KEY_USE_ACTIONS,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   asUserId,
@@ -137,6 +139,46 @@ function principalActionsOf(
 }
 
 /**
+ * The rights of the use level a personal key of this caller can carry: each of a kind whose
+ * module is on that the caller holds anywhere, as the issuance of a key asks it.
+ */
+function heldUseActions(options: ContextOptions, caller: Caller): string[] {
+  const held = heldKeyActions(options, caller, (action) =>
+    PERSONAL_API_KEY_USE_ACTIONS.some((use) => use === action)
+  );
+  return PERSONAL_API_KEY_USE_ACTIONS.filter((action) => held.includes(action));
+}
+
+/**
+ * The reading, writing and publishing rights a personal key of this caller can carry, held
+ * anywhere, as `heldUseActions`. Deleting is left out: the key `catalyst setup` asks for
+ * starts with these, and a deletion is ticked by hand.
+ */
+function heldAuthoringActions(options: ContextOptions, caller: Caller): string[] {
+  return heldKeyActions(options, caller, (action) => /\.(read|write|publish)$/u.test(action));
+}
+
+/** The actions of kinds whose module is on that pass `pick` and the caller holds anywhere. */
+function heldKeyActions(
+  options: ContextOptions,
+  caller: Caller,
+  pick: (action: string) => boolean
+): string[] {
+  const offered = options.configAssets.kinds.kinds
+    .filter((kind) => options.modules.offModuleOf("kind", kind.kind) === undefined)
+    .flatMap((kind) => Object.values(kind.actions))
+    .filter((action): action is string => action !== undefined && pick(action));
+  return [...new Set(offered)].filter(
+    (action) =>
+      caller.access.authorize(action).allowed ||
+      caller.access.holdsGrantAt(
+        action,
+        GRANT_SCOPE_KINDS.filter((scope) => scope !== "instance")
+      )
+  );
+}
+
+/**
  * The section rows of the sidebar that belong to no workspace and are there for this caller.
  * The Workflows row stands for whoever may build a Workflow, so the first one has a place to
  * go, and otherwise only while `workflows.list` names one to this caller: the list's own
@@ -219,6 +261,8 @@ export async function readPlatformContext(
     actions: usableActions(options, caller),
     assetActions: readActionsOnSingleAssets(options, caller),
     instanceActions: INSTANCE_ACTIONS.filter((action) => caller.access.authorize(action).allowed),
+    useActions: heldUseActions(options, caller),
+    authoringActions: heldAuthoringActions(options, caller),
     namespaces: namespaces.flatMap((namespace) => {
       const actions = usableActions(options, caller, namespace.prefix);
       return actions.length > 0

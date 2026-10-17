@@ -7,6 +7,7 @@ import { expect, test } from "./test";
 // ticks, by the box or by its label, in the dialog and for a CLI's connect code alike. Each box
 // is named as the rights screens name its action. Ticked in advance, a click on the scope a
 // person wanted took it away, and the key got everything else.
+// The one exception is the use level `catalyst setup` asks for (CLI-PUBLISH-USE).
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
@@ -76,4 +77,44 @@ test("a CLI's connect code starts with no scope ticked and gets exactly the scop
   await form.getByRole("button", { name: "Confirm" }).click();
   const body: unknown = (await confirmed).request().postDataJSON();
   expect(body).toMatchObject({ scopes: ["agent.write", "skill.write"] });
+});
+
+test("the code `catalyst setup` opens starts with the authoring rights and the use level ticked", async ({
+  page
+}) => {
+  await signIn(page);
+  const started = await page.request.post(`${apiBaseUrl}/api/v1/auth/connect-codes`, {
+    data: { clientLabel: "Claude Code on laptop" }
+  });
+  expect(started.ok()).toBe(true);
+  const { confirmPath } = z.object({ confirmPath: z.string() }).parse(await started.json());
+  await page.goto(`${confirmPath}&level=use`);
+  const form = page.locator("form").filter({ has: page.getByRole("checkbox") });
+  const useLevel = form.getByRole("group", { name: "Use" });
+  await expect(useLevel.locator('[role="checkbox"][aria-checked="true"]')).not.toHaveCount(0);
+
+  const confirmed = page.waitForResponse(
+    (response) =>
+      response.url().includes("/me/connect-codes/") && response.request().method() === "POST"
+  );
+  await form.getByRole("button", { name: "Confirm" }).click();
+  const { scopes } = z
+    .object({ scopes: z.array(z.string()) })
+    .parse((await confirmed).request().postDataJSON());
+  // The key pushes and publishes as it is offered: reading and writing are ticked, deleting
+  // is not, and the use level is.
+  expect(scopes).toContain("agent.read");
+  expect(scopes).toContain("agent.write");
+  expect(
+    scopes.filter((scope) =>
+      [
+        "connection.use",
+        "data_store.insert",
+        "data_store.execute",
+        "knowledge_base.use",
+        "workflow.use"
+      ].includes(scope)
+    )
+  ).not.toEqual([]);
+  expect(scopes.filter((scope) => scope.endsWith(".delete"))).toEqual([]);
 });

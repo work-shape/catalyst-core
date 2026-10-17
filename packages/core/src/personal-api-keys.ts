@@ -149,15 +149,32 @@ export const PERSONAL_API_KEY_MAX_LIFETIME_DAYS = 365;
  * it reads a `CONFLICT` that names it and revokes one.
  */
 export const PERSONAL_API_KEYS_PER_USER_MAX = 50;
-/** The most scopes one key names: every key action at instance scope and one Namespace. */
+/** The most scopes one key names: every key action, each at instance scope or in a Namespace. */
 export const PERSONAL_API_KEY_SCOPES_MAX = 64;
 
 /**
- * The actions a personal key can name: reading, writing, deleting and publishing what the
- * owner builds. Using a resource, approving and administering stay with a signed-in person.
+ * The use level of a personal key (CLI-PUBLISH-USE, "verwenden"): the rights to use a
+ * resource that a technical account can be given. A key carries them so that its owner can
+ * publish, from the CLI, a Workflow whose account uses a resource: the no-escalation rule asks
+ * the publisher for each right the account holds, within the key's scopes. They add no
+ * operation scope: a key reaches the operations of authoring, and no others.
  */
-export const PERSONAL_API_KEY_ACTIONS: readonly PlatformAction[] = ACTIONS.filter((action) =>
-  /\.(read|write|delete|publish)$/u.test(action)
+export const PERSONAL_API_KEY_USE_ACTIONS = [
+  "connection.use",
+  "data_store.insert",
+  "data_store.execute",
+  "knowledge_base.use",
+  "workflow.use"
+] as const satisfies readonly PlatformAction[];
+
+/**
+ * The actions a personal key can name: reading, writing, deleting and publishing what the
+ * owner builds, and the use level. Approving and administering stay with a signed-in person.
+ */
+export const PERSONAL_API_KEY_ACTIONS: readonly PlatformAction[] = ACTIONS.filter(
+  (action) =>
+    /\.(read|write|delete|publish)$/u.test(action) ||
+    PERSONAL_API_KEY_USE_ACTIONS.some((use) => use === action)
 );
 
 /** What a key's Namespace is compared with: the resource of a check, as the evaluator reads it. */
@@ -249,7 +266,9 @@ export function personalApiKeyNamesAction(scopes: readonly string[], action: str
 /**
  * The operation scopes a personal key's calls carry: reading the owner's own account, and the
  * asset operations of what its scopes read, write or publish. A key reaches no conversation,
- * no administration and none of the account's changes.
+ * no administration and none of the account's changes. The use level adds none: it counts on
+ * the operations the other scopes reach, such as a Workflow's publish, which lends the rights of
+ * its account, and its start. The rows of a Data Store stay out of reach until CLI-PARITY-4.
  */
 export function operationScopesOfPersonalApiKey(scopes: readonly string[]): OperationScope[] {
   const granted = new Set<OperationScope>(["me:read"]);

@@ -29241,6 +29241,18 @@
               "type": "string"
             }
           },
+          "useActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "authoringActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "namespaces": {
             "type": "array",
             "items": {
@@ -29270,6 +29282,8 @@
           "actions",
           "assetActions",
           "instanceActions",
+          "useActions",
+          "authoringActions",
           "namespaces",
           "workspaces",
           "visibleSections"

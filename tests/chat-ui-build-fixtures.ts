@@ -45,6 +45,8 @@ export function platformContext(
     actions,
     assetActions,
     instanceActions: [],
+    useActions: [],
+    authoringActions: [],
     namespaces,
     workspaces: [],
     visibleSections: []

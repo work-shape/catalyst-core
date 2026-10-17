@@ -10,6 +10,7 @@ import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import {
   PersonalApiKeysTable,
   buildPersonalKeyScopes,
+  connectCodeAsksUseLevel,
   connectCodeOfSearch,
   formatConnectCode,
   initialPersonalKeyDraft,
@@ -20,8 +21,10 @@ import {
   personalKeyDraftProblem,
   personalKeyExpiryOf,
   personalKeyRequest,
+  personalKeyUseOffer,
   personalKeyScopeParts,
   personalKeyState,
+  setupKeyActions,
   settingsCatalog,
   visibleSettingsPages,
   ApiKeysPage,
@@ -46,7 +49,13 @@ import {
 
 const now = new Date("2026-10-13T12:00:00.000Z");
 /** What the key fields of a connect code offer in these tests. */
-const cliOffer = { actions: ["agent.read", "agent.write"], namespaces: [] };
+const cliOffer = {
+  actions: ["agent.read", "agent.write"],
+  useActions: [],
+  setupActions: [],
+  namespaces: [],
+  settled: true
+};
 
 function key(overrides: Partial<PersonalApiKey> = {}): PersonalApiKey {
   return {
@@ -99,6 +108,31 @@ describe("personal API key model", () => {
     expect(offer).toContain("app.publish");
     expect(offer).not.toContain("app.use");
     expect(new Set(offer).size).toBe(offer.length);
+  });
+
+  it("offers as the use level the use rights the instance says the person holds", () => {
+    expect(personalKeyUseOffer(undefined)).toEqual([]);
+    expect(
+      personalKeyUseOffer({ ...platformContext(), useActions: ["connection.use", "workflow.use"] })
+    ).toEqual(["connection.use", "workflow.use"]);
+  });
+
+  it("starts the key `catalyst setup` asks for with the held authoring rights the screen offers and the use level", () => {
+    expect(setupKeyActions(undefined)).toEqual([]);
+    expect(
+      setupKeyActions({
+        ...platformContext(),
+        authoringActions: ["agent.read", "agent.write", "workflow.publish"],
+        useActions: ["connection.use"]
+      })
+    ).toEqual(["agent.read", "agent.write", "connection.use"]);
+  });
+
+  it("reads whether the CLI's setup asked for the use level", () => {
+    expect(connectCodeAsksUseLevel("?code=bcdf-ghjk&level=use")).toBe(true);
+    expect(connectCodeAsksUseLevel("?code=bcdf-ghjk")).toBe(false);
+    expect(connectCodeAsksUseLevel("?code=bcdf-ghjk&level=admin")).toBe(false);
+    expect(initialPersonalKeyDraft("x", ["connection.use"]).actions).toEqual(["connection.use"]);
   });
 
   it("starts a new key with no scope ticked, so it gets only what the person ticks", () => {
@@ -201,25 +235,41 @@ describe("You > API keys", () => {
     expect(ids({ personalApiKeys: { enabled: true } })).toContain("you/api-keys");
   });
 
+  const renderConfirm = (locale: "en" | "de", asksUseLevel?: boolean) =>
+    renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale },
+        createElement(ConnectCodeConfirm, {
+          code: "BCDF-GHJK",
+          request: {
+            clientLabel: "catalyst CLI on fabian-mbp",
+            createdAt: "2026-10-13T11:58:00.000Z",
+            expiresAt: "2026-10-13T12:13:00.000Z"
+          },
+          offer: {
+            ...cliOffer,
+            actions: ["agent.read", "agent.write"],
+            useActions: ["connection.use", "workflow.use"],
+            setupActions: ["agent.read", "agent.write", "connection.use", "workflow.use"]
+          },
+          ...(asksUseLevel === undefined ? {} : { asksUseLevel }),
+          pending: false,
+          onConfirm: async () => undefined
+        })
+      )
+    );
+
+  it("ticks the authoring rights and the use level for the key `catalyst setup` asks for, and nothing for any other", () => {
+    const setup = renderConfirm("en", true);
+    expect(setup).toContain("Use");
+    expect(setup.match(/aria-checked="true"/gu)?.length).toBe(4);
+    expect(renderConfirm("de", true)).toContain("Verwenden");
+    expect(renderConfirm("en").match(/aria-checked="true"/gu)).toBeNull();
+  });
+
   it("shows what a connect code asks for with the warning, in English and German", () => {
-    const render = (locale: "en" | "de") =>
-      renderToStaticMarkup(
-        createElement(
-          TranslationProvider,
-          { children: null, locale },
-          createElement(ConnectCodeConfirm, {
-            code: "BCDF-GHJK",
-            request: {
-              clientLabel: "catalyst CLI on fabian-mbp",
-              createdAt: "2026-10-13T11:58:00.000Z",
-              expiresAt: "2026-10-13T12:13:00.000Z"
-            },
-            offer: cliOffer,
-            pending: false,
-            onConfirm: async () => undefined
-          })
-        )
-      );
+    const render = (locale: "en" | "de") => renderConfirm(locale);
     const english = render("en");
     expect(english).toContain("catalyst CLI on fabian-mbp");
     expect(english).toContain("Only confirm a code your own terminal shows you");

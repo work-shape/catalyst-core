@@ -67,11 +67,13 @@ describe("platform.context.get", () => {
     expect(Object.keys(context).sort()).toEqual([
       "actions",
       "assetActions",
+      "authoringActions",
       "instance",
       "instanceActions",
       "kinds",
       "namespaces",
       "release",
+      "useActions",
       "visibleSections",
       "workspaces"
     ]);
@@ -92,6 +94,8 @@ describe("platform.context.get", () => {
     expect(lena.actions).toEqual([]);
     expect(lena.assetActions).toEqual([]);
     expect(lena.instanceActions).toEqual([]);
+    expect(lena.useActions).toEqual([]);
+    expect(lena.authoringActions).toEqual([]);
 
     const admin = platformContextSchema.parse(
       (await t.expectOk(t.admin.id, "platform.context.get")).json()
@@ -105,6 +109,15 @@ describe("platform.context.get", () => {
     ]);
     // The role administers service principals (RIGHTS-1a).
     expect(admin.instanceActions).toEqual(["service_principals.manage"]);
+    // Agents and skills are used through no right of their own: no use level is offered.
+    expect(admin.useActions).toEqual([]);
+    // What the key `catalyst setup` asks for starts with: reading, writing, never deleting.
+    expect(admin.authoringActions).toEqual([
+      "agent.read",
+      "agent.write",
+      "skill.read",
+      "skill.write"
+    ]);
     // On the instance's assets as a whole the role holds every action: the deny names one
     // Namespace.
     expect(admin.actions).toEqual([

@@ -2858,6 +2858,8 @@ describe("catalyst login", () => {
     expect(await runCli(["login"], { cwd, env, fetchImpl, stdout, sleep })).toBe(0);
     const printed = output.join("");
     expect(printed).toContain("https://catalyst.test/settings/you/api-keys?code=");
+    // A plain login asks for no level: the person ticks what the key gets.
+    expect(printed).not.toContain("level=use");
     expect(printed).toContain("Logged in to https://catalyst.test with the key 'Mini'");
     expect(printed).toContain("See and revoke it at https://catalyst.test/settings/you/api-keys.");
 
@@ -4041,9 +4043,13 @@ describe("catalyst setup", () => {
     const first = await computer.setup(["claude-code", "--instance", SETUP_INSTANCE]);
     expect(first.err).toBe("");
     expect(first.code).toBe(0);
+    // The address asks Settings to start the key with the use level (CLI-PUBLISH-USE).
     expect(computer.opened).toEqual([
-      expect.stringMatching(/^https:\/\/catalyst\.test\/settings\/you\/api-keys\?code=/u)
+      expect.stringMatching(
+        /^https:\/\/catalyst\.test\/settings\/you\/api-keys\?code=[A-Z]{4}-[A-Z]{4}&level=use$/u
+      )
     ]);
+    expect(first.out).toContain("&level=use");
     expect(first.out).toContain(`Instance: ${SETUP_INSTANCE}`);
     expect(first.out).toContain(`Logged in with the key 'Claude Code on ${hostname()}'`);
     expect(first.out).toContain("agent.read:kai-");

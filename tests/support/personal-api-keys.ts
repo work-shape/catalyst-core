@@ -11,6 +11,7 @@ import {
   setupAccessInstance,
   type AccessInstance
 } from "./access-instance";
+import type { TestStore } from "./test-instance";
 
 // The instance behind the personal API key tests: the access test instance, signed in by an
 // access token where a request carries one, with the module `personalApiKeys` and the
@@ -30,45 +31,59 @@ export interface PersonalKeyInstance extends AccessInstance {
   tokenFor(secret: string): Promise<{ authorization: string }>;
 }
 
+/**
+ * What an instance needs to take personal keys: the module on, a request signed in by an
+ * access token where it carries one, and the exchange of a key for a token.
+ */
+export function personalKeyServer(stores: TestStore, moduleOn = true) {
+  const keys = {
+    secret: "a-test-service-access-token-secret-with-enough-length",
+    clientInstanceId,
+    apiAccessStore: stores.apiAccess,
+    ...(moduleOn ? { personalApiKeys: { store: stores.personalApiKeys, users: stores.users } } : {})
+  };
+  return {
+    authAdapter: new CompositeAuthAdapter([
+      new HmacServiceAccessTokenAuthAdapter(keys),
+      recordAuthAdapter()
+    ]),
+    serviceAccessToken: { exchange: new ApiKeyAccessTokenExchange(keys) }
+  };
+}
+
+/** Kai, or whoever is named, issues a key in Settings. Returns the key and its secret. */
+export async function issuePersonalKey(
+  t: AccessInstance,
+  scopes: string[],
+  userId: string = t.kai.id
+) {
+  const response = await t.expectOk(userId, "me.api_keys.create", {
+    payload: { name: "Claude Code", scopes, expiresAt: inDays(30) }
+  });
+  return createdSchema.parse(response.json());
+}
+
+/** What the CLI does with a key: exchange it for an access token, as a request header. */
+export async function personalKeyToken(t: AccessInstance, secret: string) {
+  const response = await t.instance.call("access_tokens.exchange", {
+    headers: { authorization: `Bearer ${secret}` }
+  });
+  expect(response.statusCode, response.body).toBe(200);
+  return bearer(tokenSchema.parse(response.json()).accessToken);
+}
+
 export async function setupPersonalKeyInstance(
   options: { module?: boolean } = {}
 ): Promise<PersonalKeyInstance> {
   const t = await setupAccessInstance({
     modules: { personalApiKeys: { enabled: options.module ?? true } },
-    server: (stores) => {
-      const keys = {
-        secret: "a-test-service-access-token-secret-with-enough-length",
-        clientInstanceId,
-        apiAccessStore: stores.apiAccess,
-        ...(options.module === false
-          ? {}
-          : { personalApiKeys: { store: stores.personalApiKeys, users: stores.users } })
-      };
-      return {
-        authAdapter: new CompositeAuthAdapter([
-          new HmacServiceAccessTokenAuthAdapter(keys),
-          recordAuthAdapter()
-        ]),
-        serviceAccessToken: { exchange: new ApiKeyAccessTokenExchange(keys) }
-      };
-    }
+    server: (stores) => personalKeyServer(stores, options.module !== false)
   });
   await t.createNamespace("kai-");
   return {
     ...t,
-    async issue(scopes: string[], userId = t.kai.id) {
-      const response = await t.expectOk(userId, "me.api_keys.create", {
-        payload: { name: "Claude Code", scopes, expiresAt: inDays(30) }
-      });
-      return createdSchema.parse(response.json());
-    },
-    async tokenFor(secret: string) {
-      const response = await t.instance.call("access_tokens.exchange", {
-        headers: { authorization: `Bearer ${secret}` }
-      });
-      expect(response.statusCode, response.body).toBe(200);
-      return bearer(tokenSchema.parse(response.json()).accessToken);
-    }
+    issue: (scopes, userId) => issuePersonalKey(t, scopes, userId),
+    tokenFor: (secret) => personalKeyToken(t, secret)
   };
 }
 

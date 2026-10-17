@@ -17,7 +17,7 @@ A local agent is an AI tool on your own computer, such as Claude Code or Codex. 
 
    The page fills in the instance's address and the version of the CLI published for it. Until one is published, the page says the command is not available yet and shows none.
 
-4. Your browser opens **Settings > API keys** (German: **API-Schlüssel**) with a code. Check that it is the code your terminal shows, tick what the key may do and until when, and click **Confirm** (German: **Bestätigen**).
+4. Your browser opens **Settings > API keys** (German: **API-Schlüssel**) with a code. Check that it is the code your terminal shows, tick what the key may do and until when, and click **Confirm** (German: **Bestätigen**). The reading, writing and publishing rights you hold start ticked, so the key can pull, push and publish as offered, and so does the **Use** level (German: **Verwenden**); see below. Deleting is never ticked for you.
 5. The terminal says which key it saved and where it wrote the skill. Start your tool.
 
 The command installs the CLI, logs it in with a key of your own, and writes a skill that teaches your tool to use it: for Claude Code to `~/.claude/skills/catalyst/SKILL.md` (below `$CLAUDE_CONFIG_DIR` where that is set), for Codex and other tools to `~/.agents/skills/catalyst/SKILL.md`. For another tool, point it at that file. Nothing else of your tool's settings changes.
@@ -33,6 +33,8 @@ If a different file is already at that path, the command keeps it and says so. R
 ## What the tool may do
 
 The key acts as you and never does more than you may do at the moment of each call. The scopes you tick narrow it further, for example reading agents only. A right an administrator takes from you is gone from the key at once.
+
+The **Use** level lets the key use the Connections, Data Stores, Knowledge Bases and Workflows you may use: `connection.use`, `data_store.insert`, `data_store.execute`, `knowledge_base.use` and `workflow.use`. Settings offers the ones you hold. Your tool needs them to publish a Workflow whose Service Principal uses a resource, since publishing lends the Service Principal's rights and you may lend only what you hold. With them the tool can also start a Workflow you may start. For a key that only reads or writes, untick the level.
 
 The skill tells the tool to pull before it pushes, to show you a change before it is sent, to never delete assets on the instance without asking you, and to treat a refusal as final.
 

@@ -17,12 +17,15 @@ import {
 export function PersonalKeyFields({
   draft,
   actions,
+  useActions,
   namespaces,
   onChange
 }: {
   draft: PersonalKeyDraft;
   /** The actions offered, in order, by their ids. */
   actions: readonly string[];
+  /** The use level offered, in order: the use rights the person holds. */
+  useActions: readonly string[];
   /** The Namespace prefixes the person holds a right in, offered while typing. */
   namespaces: readonly string[];
   onChange(draft: PersonalKeyDraft): void;
@@ -32,6 +35,26 @@ export function PersonalKeyFields({
   // A wrong Namespace is said once the person left the field, not at every keystroke.
   const [namespaceTouched, setNamespaceTouched] = useState(false);
   const problem = personalKeyDraftProblem(draft);
+  const offered = [...actions, ...useActions];
+  const toggle = (action: string) => (checked: boolean) =>
+    onChange({
+      ...draft,
+      actions: checked
+        ? offered.filter((item) => item === action || draft.actions.includes(item))
+        : draft.actions.filter((item) => item !== action)
+    });
+  const boxes = (list: readonly string[]) => (
+    <div className="grid gap-2">
+      {list.map((action) => (
+        <Checkbox
+          key={action}
+          label={actionLabel(action, t)}
+          checked={draft.actions.includes(action)}
+          onCheckedChange={toggle(action)}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <div className="grid gap-5">
@@ -45,24 +68,15 @@ export function PersonalKeyFields({
       <fieldset className="grid gap-2">
         <legend className="text-label">{t("personalApiKeys.actions")}</legend>
         <p className="text-caption text-muted-foreground">{t("personalApiKeys.actionsHint")}</p>
-        <div className="grid gap-2">
-          {actions.map((action) => (
-            <Checkbox
-              key={action}
-              label={actionLabel(action, t)}
-              checked={draft.actions.includes(action)}
-              onCheckedChange={(checked) =>
-                onChange({
-                  ...draft,
-                  actions: checked
-                    ? actions.filter((item) => item === action || draft.actions.includes(item))
-                    : draft.actions.filter((item) => item !== action)
-                })
-              }
-            />
-          ))}
-        </div>
+        {boxes(actions)}
       </fieldset>
+      {useActions.length > 0 ? (
+        <fieldset className="grid gap-2">
+          <legend className="text-label">{t("personalApiKeys.useLevel")}</legend>
+          <p className="text-caption text-muted-foreground">{t("personalApiKeys.useLevelHint")}</p>
+          {boxes(useActions)}
+        </fieldset>
+      ) : null}
       <Field
         label={t("personalApiKeys.namespace")}
         optional

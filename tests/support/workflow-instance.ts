@@ -31,6 +31,7 @@ import {
 } from "@work-shape/catalyst-workflows";
 import { clientInstanceId, setupAccessInstance } from "./access-instance";
 import { fixtureOn, operationOf, type ConnectionOperationsFixture } from "./connection-operations";
+import { personalKeyServer } from "./personal-api-keys";
 
 // The instance behind the tests of the Workflow engine: the instance of the Connection
 // tests with the module `workflows` on, the engine on its call path, and definitions read
@@ -231,6 +232,8 @@ export async function workflowFixture(
     pruneBatch?: InstanceWorkflowsParts["pruneBatch"];
     /** The events of the call path, such as one whose guardrails run. */
     events?: (stores: PlatformStores) => PlatformEventEmitter;
+    /** Personal API keys on: a request with an access token acts as the key's owner. */
+    personalKeys?: true;
   } = {}
 ): Promise<WorkflowFixture> {
   let workflows: InstanceWorkflows | undefined;
@@ -268,10 +271,14 @@ export async function workflowFixture(
         furtherKinds: [...(connectionOptions.furtherKinds ?? []), ...(fromAssets ? [kind] : [])],
         modules: {
           ...connectionOptions.modules,
-          ...(options.moduleOn === false ? {} : { workflows: { enabled: true } })
+          ...(options.moduleOn === false ? {} : { workflows: { enabled: true } }),
+          ...(options.personalKeys ? { personalApiKeys: { enabled: true } } : {})
         },
         server(stores, config) {
-          const server = connectionOptions.server?.(stores, config) ?? {};
+          const server = {
+            ...connectionOptions.server?.(stores, config),
+            ...(options.personalKeys ? personalKeyServer(stores) : {})
+          };
           if (!server.operationCalls) throw new Error("The instance built no call path");
           modules = resolveInstanceModules(config, []).snapshot;
           instanceStores = stores;

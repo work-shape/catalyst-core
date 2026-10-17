@@ -26,6 +26,9 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.actionsHint": "If you lose a right later, the key loses it too.",
     "personalApiKeys.scopeLimited": "{right} in {prefix}",
     "personalApiKeys.startsWith": "Starts with {prefix}",
+    "personalApiKeys.useLevel": "Use",
+    "personalApiKeys.useLevelHint":
+      "Use the Connections, Data Stores, Knowledge Bases and Workflows you may use. Needed to publish a Workflow whose technical account uses them.",
     "personalApiKeys.namespace": "Limit to a Namespace",
     "personalApiKeys.namespaceHint":
       "A Namespace prefix such as tax-. Empty: wherever you hold the chosen rights.",
@@ -83,6 +86,9 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.actionsHint": "Verlierst du später ein Recht, verliert es auch der Schlüssel.",
     "personalApiKeys.scopeLimited": "{right} in {prefix}",
     "personalApiKeys.startsWith": "Beginnt mit {prefix}",
+    "personalApiKeys.useLevel": "Verwenden",
+    "personalApiKeys.useLevelHint":
+      "Verbindungen, Datenspeicher, Wissensdatenbanken und Workflows verwenden, die du verwenden darfst. Nötig, um einen Workflow zu veröffentlichen, dessen technisches Konto sie verwendet.",
     "personalApiKeys.namespace": "Auf einen Namespace begrenzen",
     "personalApiKeys.namespaceHint":
       "Ein Namespace-Präfix wie tax-. Leer: überall, wo du die gewählten Berechtigungen hast.",
