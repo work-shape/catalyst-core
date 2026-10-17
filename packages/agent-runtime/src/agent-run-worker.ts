@@ -102,6 +102,11 @@ export interface AgentRunJobsOptions {
    * once. Without it, and across processes, it is found at the next look at the row.
    */
   cancellations?: AgentRunSignal;
+  /**
+   * Whether nobody watches the run, so a confirmation its calls ask waits in the Inbox of the
+   * person it acts for. A scheduled start says so (EW-8). A subagent's run never is.
+   */
+  unattended?(run: AgentRun): boolean;
 }
 
 /** The job kinds the Agent Run worker serves, with their schedule. */
@@ -473,7 +478,8 @@ async function executeClaimedRun(
         // carries the lease too: an approval request, a dropped provider continuation.
         runFence: { runId: run.id, lease },
         // A subagent never waits for a decision and starts no subagent of its own (CR-1).
-        ...(run.parentRunId ? { subagent: true } : {})
+        ...(run.parentRunId ? { subagent: true } : {}),
+        ...(!run.parentRunId && options.unattended?.(run) ? { unattended: true } : {})
       };
       const execution = await options.execute(input, context, {
         assertLease: async () => {

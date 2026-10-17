@@ -36,6 +36,12 @@ export interface ApprovalRequest {
   summary: string;
   payload: JsonObject;
   requestedBy: Pick<AuthenticatedUser, "id" | "displayLabel">;
+  /**
+   * The one person the request is addressed to: the person a confirmation in the Inbox acts
+   * for (OP-4b). Only they see, count and decide it, whatever rights anyone else holds. A
+   * request without one is decided by the holders of its kind's right.
+   */
+  addresseeUserId?: string;
   origin?: {
     conversationId: ConversationId;
     agentRunId: AgentRunId;

@@ -171,13 +171,26 @@ export interface ApprovalRequestListFilter {
   payloadKey?: string;
   /** Only the requests whose payload's `subject` holds these fields with these values. */
   subjectContains?: JsonObject;
+  /**
+   * The person who reads the list. A request addressed to somebody is then listed only to
+   * that person: one of `kinds` addressed to nobody, or one of `addressedKinds` addressed to
+   * this person. Without it, requests of `kinds` are listed whoever they are addressed to,
+   * for the paths of the instance itself.
+   */
+  reader?: { userId: string; addressedKinds: readonly string[] };
 }
 
 export interface ApprovalRequestStore {
   createApprovalRequest(
     input: Pick<
       ApprovalRequest,
-      "clientInstanceId" | "kind" | "summary" | "payload" | "requestedBy" | "origin"
+      | "clientInstanceId"
+      | "kind"
+      | "summary"
+      | "payload"
+      | "requestedBy"
+      | "origin"
+      | "addresseeUserId"
     > & {
       checks?: ApprovalCheckResult[];
       /** Given when an Agent Run creates the request: refused once the run lost its lease. */
@@ -200,10 +213,9 @@ export interface ApprovalRequestStore {
   ): Promise<ApprovalRequest[]>;
   /** How many requests `listApprovalRequests` answers for the same filter, read to its end. */
   countApprovalRequests(input: ApprovalRequestListFilter): Promise<number>;
-  countPendingApprovalRequests(input: {
-    clientInstanceId: ClientInstanceId;
-    kinds: readonly string[];
-  }): Promise<number>;
+  countPendingApprovalRequests(
+    input: Pick<ApprovalRequestListFilter, "clientInstanceId" | "kinds" | "reader">
+  ): Promise<number>;
   /** How many requests of these kinds one person made: those still pending, and all of them. */
   countOwnApprovalRequests(input: {
     clientInstanceId: ClientInstanceId;
@@ -256,7 +268,10 @@ export interface ApprovalRequestCreator {
     user: AuthenticatedUser,
     /** `runFence` where an Agent Run files the request: refused once the run lost its lease. */
     context: { correlationId: string; runFence?: AgentRunWriteFence },
-    command: Pick<ApprovalRequest, "kind" | "summary" | "payload" | "origin"> & {
+    command: Pick<
+      ApprovalRequest,
+      "kind" | "summary" | "payload" | "origin" | "addresseeUserId"
+    > & {
       pendingLimits?: ApprovalRequestPendingLimits;
     }
   ): Promise<ApprovalRequest>;

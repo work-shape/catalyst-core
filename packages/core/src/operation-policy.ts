@@ -66,6 +66,12 @@ export interface PolicyInput {
   /** Whether the surface can hold the call until the person it acts for confirmed it. */
   canPause: boolean;
   /**
+   * Whether the call acts for a person who is not present: an agent's call in a run marked
+   * unattended (EW-8), or a CLI call sent with `Catalyst-Unattended: 1`. A confirmation it
+   * asks for waits in that person's Inbox (OP-4b). A subagent's call never is one.
+   */
+  personAbsent?: boolean;
+  /**
    * Whether the call is a step of a run of a published Workflow revision: a run from a
    * schedule, or a manual or a parent's start of what is published, never a test run of a
    * draft. Its publisher approved its changing operations when publishing, so a `confirm`
@@ -87,6 +93,9 @@ export type PolicySource =
   /** A `confirm` the publish of a Workflow approved, whose Workflow was deleted since. */
   | "workflow_deleted";
 
+/** Where the confirmation of a call is asked: in the conversation, or in the person's Inbox. */
+export type ConfirmationDelivery = "conversation" | "inbox";
+
 /** The value that applies to a call, where it comes from, and how the call goes on. */
 export type PolicyResolution = { source: PolicySource } & (
   | { value: "allow"; next: "run" }
@@ -102,7 +111,11 @@ export type PolicyResolution = { source: PolicySource } & (
        */
       decisionReason?: OperationRunDecisionReason;
     }
-  | { value: "confirm"; next: "await_confirmation" }
+  /**
+   * `deliver`: where the person the call acts for is asked. In the conversation, where its
+   * run pauses; in their Inbox, where nobody is present to be asked (OP-4b).
+   */
+  | { value: "confirm"; next: "await_confirmation"; deliver: ConfirmationDelivery }
   | { value: "approval"; next: "await_approval" }
   | { value: "deny"; next: "refuse" }
 );
@@ -119,8 +132,9 @@ export type PolicyResolution = { source: PolicySource } & (
  * its confirmation, until the Workflow is deleted: its run's `confirm` is then refused. Any other step of a Workflow Run has nobody to ask and acts for nobody who
  * could be asked later, so its `confirm` is an `approval`; so is a published run's `confirm`
  * that an operation's floor asks for, which no setting and no publish lowers. A surface that can neither confirm nor pause is
- * refused a call that would have to wait for its own caller's confirmation. A call that needs
- * another person's approval waits from every surface.
+ * refused a call that would have to wait for its own caller's confirmation. A call that acts
+ * for a person who is not present waits for that person's confirmation in their Inbox, as the
+ * last step of the order. A call that needs another person's approval waits from every surface.
  */
 export function resolvePolicy(input: PolicyInput): PolicyResolution {
   const { definition } = input;
@@ -217,8 +231,11 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
       if (hasNobodyToAsk(input.origin)) {
         return { value: "approval", next: "await_approval", source };
       }
+      if (input.personAbsent) {
+        return { value, next: "await_confirmation", deliver: "inbox", source };
+      }
       return input.canPause
-        ? { value, next: "await_confirmation", source }
+        ? { value, next: "await_confirmation", deliver: "conversation", source }
         : { value: "deny", next: "refuse", source: "surface_cannot_pause" };
     case "approval":
       // No surface has to hold a call for an approval: the run waits, and the decision of the

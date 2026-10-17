@@ -469,7 +469,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
         operation,
         {
           identity: caller.identity,
-          origin: originOf(caller.identity),
+          origin: originOf(caller.identity, request),
           correlationId,
           input: {
             ...declaredFields(operation.body, request.body),
@@ -538,7 +538,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           operation,
           {
             identity: caller.identity,
-            origin: originOf(caller.identity),
+            origin: originOf(caller.identity, request),
             correlationId,
             input: target.input,
             idempotencyKey: readIdempotencyKey(request),
@@ -623,9 +623,26 @@ async function requireOperationScope(
  * personal API key, or an access token exchanged for either. Everything else is the person,
  * a browser session as much as a session token an embedding host issued for them.
  */
-function originOf(identity: AuthenticatedIdentity): OperationOrigin {
-  if (isAuthenticatedServicePrincipal(identity)) return { kind: "cli" };
-  return identity.delegatedActor?.kind === "api_key" ? { kind: "cli" } : { kind: "user" };
+function originOf(identity: AuthenticatedIdentity, request: FastifyRequest): OperationOrigin {
+  const cli =
+    isAuthenticatedServicePrincipal(identity) || identity.delegatedActor?.kind === "api_key";
+  if (!cli) return { kind: "user" };
+  return readUnattended(request) ? { kind: "cli", unattended: true } : { kind: "cli" };
+}
+
+/**
+ * Whether a CLI call says nobody watches its terminal (`Catalyst-Unattended: 1`). It only ever
+ * moves a confirmation to the person's Inbox, so a caller gains nothing by sending it; a
+ * browser session's call ignores it.
+ */
+function readUnattended(request: FastifyRequest): boolean {
+  const value = request.headers["catalyst-unattended"];
+  if (Array.isArray(value)) {
+    throw new AppError("VALIDATION_FAILED", "A call takes one Catalyst-Unattended");
+  }
+  if (value === undefined) return false;
+  if (value === "1") return true;
+  throw new AppError("VALIDATION_FAILED", "Catalyst-Unattended takes the value 1");
 }
 
 const inputFieldsSchema = z.record(z.string(), z.unknown()).catch({});
@@ -644,7 +661,7 @@ function declaredFields(schema: z.ZodType | undefined, part: unknown): Record<st
   );
 }
 
-/** The caller's key for the call. It is the one header a call's outcome depends on. */
+/** The caller's key for the call. */
 function readIdempotencyKey(request: FastifyRequest): string | undefined {
   const key = request.headers["idempotency-key"];
   if (Array.isArray(key)) {

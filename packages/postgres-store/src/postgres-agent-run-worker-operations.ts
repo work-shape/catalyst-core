@@ -242,7 +242,10 @@ async function insertClaimedRunObservation(
       createdAt: new Date(event.createdAt)
     })
     .returning();
-  if (event.type === "tool_decision_requested" && event.mode === "approval") {
+  // A decision may finish before the worker stored its wait: an approval, or a confirmation
+  // that waits in the Inbox (OP-4b). One in the conversation is decided only once it is
+  // stored, and the resume leaves a run that waits on one alone.
+  if (event.type === "tool_decision_requested") {
     await resumeAgentRunAfterApproval(tx, {
       clientInstanceId: claim.clientInstanceId,
       agentRunId: claim.runId

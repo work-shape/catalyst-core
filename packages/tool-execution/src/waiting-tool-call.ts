@@ -110,5 +110,8 @@ function decidedToolResult(
       );
     case "failed":
       return failed("handler_failed", end.error.message);
+    case "held":
+      // Only a direct call confirmed in the Inbox moves on to an approval; an agent's never.
+      return failed("not_allowed", "This call now waits for an approval. Nothing ran yet.");
   }
 }

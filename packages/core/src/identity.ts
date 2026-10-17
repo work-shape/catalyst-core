@@ -160,6 +160,11 @@ export interface RuntimeCallContext {
    * decision: a call that needs one is refused with `confirmation_required`.
    */
   subagent?: true;
+  /**
+   * Set while the call acts for a person who is not present: a scheduled start of an agent
+   * (EW-8). A confirmation it asks for waits in that person's Inbox (OP-4b).
+   */
+  unattended?: true;
 }
 
 export function createUserPrincipal(user: AuthenticatedUser): AuthPrincipal {

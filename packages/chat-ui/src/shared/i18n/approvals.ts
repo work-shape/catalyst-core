@@ -17,6 +17,7 @@ export const approvals = defineTranslations({
       "Approved by {name}, but the call was interrupted and its outcome is not known",
     approvalDecisionNotExecuted: "Not executed: the call was no longer allowed",
     approvalDecisionExpired: "Expired before it was decided",
+    approvalDecisionHeldForApproval: "Allowed by {name}, now waiting for an approver",
     approvalDecisionChangesRequested: "Changes requested by {name}",
     approvalDecisionChangesRequestedByReviewer:
       "{name} requested changes and is revising the proposal",
@@ -69,6 +70,7 @@ export const approvals = defineTranslations({
     approvalStatusExecutionInterrupted: "Approved, interrupted",
     approvalStatusNotExecuted: "Not executed",
     approvalStatusExpired: "Expired",
+    approvalStatusHeldForApproval: "Allowed, awaiting approval",
     approvalStatusChangesRequested: "Changes requested",
     approvalStatusPending: "Awaiting approval",
     approvalStatusRejected: "Rejected",
@@ -104,6 +106,7 @@ export const approvals = defineTranslations({
       "Freigegeben von {name}, aber der Aufruf wurde unterbrochen und sein Ergebnis ist nicht bekannt",
     approvalDecisionNotExecuted: "Nicht ausgeführt: Der Aufruf war nicht mehr erlaubt",
     approvalDecisionExpired: "Abgelaufen, bevor entschieden wurde",
+    approvalDecisionHeldForApproval: "Erlaubt von {name}, wartet jetzt auf Freigabe",
     approvalDecisionChangesRequested: "Änderung gewünscht von {name}",
     approvalDecisionChangesRequestedByReviewer:
       "{name} hat eine Änderung gewünscht und überarbeitet den Vorschlag",
@@ -158,6 +161,7 @@ export const approvals = defineTranslations({
     approvalStatusExecutionInterrupted: "Freigegeben, unterbrochen",
     approvalStatusNotExecuted: "Nicht ausgeführt",
     approvalStatusExpired: "Abgelaufen",
+    approvalStatusHeldForApproval: "Erlaubt, wartet auf Freigabe",
     approvalStatusChangesRequested: "Änderung angefragt",
     approvalStatusPending: "Wartet auf Freigabe",
     approvalStatusRejected: "Abgelehnt",

@@ -16,7 +16,7 @@ import {
   type UserStore
 } from "@work-shape/catalyst-core";
 import {
-  readApprovedOperationEnd,
+  readDecidedOperationEnd,
   refuseWaitingOperation,
   type RunOperationDeps
 } from "@work-shape/catalyst-tool-execution";
@@ -185,7 +185,10 @@ async function recordAbandonedOperationCall(
   const runId = typeof request.payload.runId === "string" ? request.payload.runId : "";
   const error = { code: "INTERNAL", message: "The approved call could not be started." };
   const run = await stores.operationRuns.get({ clientInstanceId, id: runId });
-  const unstarted = run
+  // A run whose confirmation moved it to wait for an approver waits on that other request now:
+  // this one says so, and the run is left to it.
+  const ownsRun = run !== undefined && (run.approvalRequestId ?? requestId) === requestId;
+  const unstarted = ownsRun
     ? await stores.operationRuns.endWaiting({
         clientInstanceId,
         id: run.id,
@@ -201,7 +204,10 @@ async function recordAbandonedOperationCall(
     requestId,
     unstarted
       ? { execution: "failed", run: unstarted, error }
-      : await readApprovedOperationEnd(runId, { clientInstanceId, runs: stores.operationRuns })
+      : await readDecidedOperationEnd(runId, requestId, {
+          clientInstanceId,
+          runs: stores.operationRuns
+        })
   );
 }
 

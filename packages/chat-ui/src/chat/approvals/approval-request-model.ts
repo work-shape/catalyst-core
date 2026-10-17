@@ -63,7 +63,8 @@ const EXECUTION_PRESENTATION: Record<ApprovalExecution, ApprovalStatusPresentati
   failed: { labelKey: "approvalStatusExecutionFailed", tone: "negative" },
   interrupted: { labelKey: "approvalStatusExecutionInterrupted", tone: "negative" },
   refused: { labelKey: "approvalStatusNotExecuted", tone: "neutral" },
-  expired: { labelKey: "approvalStatusExpired", tone: "neutral" }
+  expired: { labelKey: "approvalStatusExpired", tone: "neutral" },
+  held: { labelKey: "approvalStatusHeldForApproval", tone: "pending" }
 };
 
 /** What a request recorded about a change that ran after its decision, where it did. */
@@ -160,7 +161,8 @@ const EXECUTION_LINE_LABEL_KEY: Record<
   failed: "approvalDecisionExecutionFailed",
   interrupted: "approvalDecisionExecutionInterrupted",
   refused: "approvalDecisionNotExecuted",
-  expired: "approvalDecisionExpired"
+  expired: "approvalDecisionExpired",
+  held: "approvalDecisionHeldForApproval"
 };
 
 export function approvalDecisionLineLabelKey(

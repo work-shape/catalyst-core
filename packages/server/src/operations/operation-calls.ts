@@ -76,7 +76,8 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     effectOf: async (operation) => (await deps.registry.resolve(operation))?.effect
   });
   const handlers = [
-    createOperationCallApprovalHandler(handlerOptions),
+    // A confirmation in the Inbox is an `operation_call`; it shows what a held kind's subject is.
+    createOperationCallApprovalHandler({ ...handlerOptions, subjectKinds: held }),
     ...held.map((kind) => createOperationCallApprovalHandler(handlerOptions, kind))
   ];
   const approvalRequestHandlers = new Map([

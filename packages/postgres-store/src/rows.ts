@@ -768,6 +768,7 @@ export function mapApprovalRequest(row: typeof approvalRequests.$inferSelect): A
     ...row,
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     origin: row.origin ?? undefined,
+    addresseeUserId: row.addresseeUserId ?? undefined,
     decision,
     reversion: row.decision?.reversion,
     applyResult: row.applyResult ?? undefined,

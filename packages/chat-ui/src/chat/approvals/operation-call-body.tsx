@@ -35,7 +35,8 @@ const OUTCOME: Record<
   failed: { label: "operations.callOutcomeFailed", tone: "danger" },
   interrupted: { label: "operations.callOutcomeInterrupted", tone: "danger" },
   refused: { label: "operations.callOutcomeRefused", tone: "warning" },
-  expired: { label: "operations.callOutcomeExpired", tone: "warning" }
+  expired: { label: "operations.callOutcomeExpired", tone: "warning" },
+  held: { label: "operations.callOutcomeHeld", tone: "info" }
 };
 
 /** How a sentence names the kind of an asset. A kind without words of its own is "the asset". */

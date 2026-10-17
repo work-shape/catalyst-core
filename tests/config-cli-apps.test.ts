@@ -33,9 +33,14 @@ function cliAs(
   instance: TestInstance,
   userId: string,
   cwd: string,
-  prompt?: (question: string) => Promise<string>
+  prompt?: (question: string) => Promise<string>,
+  /** Signs in through the user's personal key, as the CLI does, instead of their session. */
+  personalKey = false
 ) {
-  const serverFetch = createTestFetch(instance, { "x-test-user": userId });
+  const serverFetch = createTestFetch(instance, {
+    "x-test-user": userId,
+    ...(personalKey ? { "x-test-key": "personal" } : {})
+  });
   const fetchImpl: typeof fetch = async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
     if (new URL(request.url).pathname === testOperations["access_tokens.exchange"].path) {
@@ -251,14 +256,14 @@ describe("catalyst app commands", () => {
     }
   });
 
-  it("shows what a publish makes live and keeps the terminal question and refuses --yes", async () => {
+  it("shows what a publish makes live, keeps the terminal question, and sends --yes to the Inbox", async () => {
     const t = await setupAppInstance({ explicitCredentials: true, build: passThroughBuild });
     try {
       const cwd = await temporaryDirectory();
       const run = cliAs(t.instance, t.admin.id, cwd);
       await writeFolder(join(cwd, "offers"), { "app.yaml": manifest(), "index.html": "<p>1</p>" });
       expect((await run("app", "push", "offers", "--workspace", t.workspaceId)).code).toBe(0);
-      const scripted = await cliAs(t.instance, t.admin.id, cwd, async () => "y")(
+      const scripted = await cliAs(t.instance, t.admin.id, cwd, async () => "y", true)(
         "app",
         "publish",
         "offers",
@@ -266,8 +271,11 @@ describe("catalyst app commands", () => {
         t.workspaceId,
         "--yes"
       );
-      expect(scripted.code).toBe(1);
-      expect(scripted.err).toContain("--yes publishes nothing");
+      // `--yes` asks nothing and publishes nothing: the publish waits in the admin's own Inbox.
+      expect(scripted.code).toBe(3);
+      expect(scripted.err).toMatch(
+        /Waits in your Inbox for your confirmation; nothing has changed yet \(request \S+, Operation Run \S+\)/u
+      );
       expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
       const first = await cliAs(t.instance, t.admin.id, cwd, async () => "y")(
         "app",
@@ -290,7 +298,7 @@ describe("catalyst app commands", () => {
       expect(asked.code).toBe(1);
       expect(asked.out).toContain("Publish revision 2 of App 'offers' in place of revision 1.");
       expect(asked.out).toContain("External hosts it calls:\n  api.example.org  (added)");
-      expect(asked.err).toContain("needs your answer here or your click in the interface");
+      expect(asked.err).toContain("needs your answer here, so a run without a terminal");
       expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
 
       const questions: string[] = [];

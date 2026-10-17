@@ -124,7 +124,7 @@ function createSubagentModel() {
 
 const model = createSubagentModel();
 
-async function fixture(policies: CentralPolicySetting[] = []) {
+async function fixture(policies: CentralPolicySetting[] = [], unattended = false) {
   executed.length = 0;
   model.reset();
   const config = createTestConfig({
@@ -137,7 +137,9 @@ async function fixture(policies: CentralPolicySetting[] = []) {
     env: {},
     capabilities: [model.capability],
     tools: [change],
-    operations: { centralPolicySettings: () => policies }
+    operations: { centralPolicySettings: () => policies },
+    // Nobody watches the runs, as for a scheduled start (EW-8): a subagent's run still is not.
+    ...(unattended ? { unattendedRuns: () => true } : {})
   });
   const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
   const agentRun = async (runId: string): Promise<AgentRun> =>
@@ -306,33 +308,41 @@ describe("subagents of a chat agent", () => {
     await f.app.close();
   });
 
-  it("answers a call needing a confirmation in a child as confirmation_required", async () => {
-    const f = await fixture([{ operation: change.name, value: "confirm" }]);
-    const task = `/tool demo.change ${JSON.stringify({ text: "one" })}`;
-    const said = await f.say(runAgent({ description: "Ändern", task }));
-    await f.until(said.runId, "completed");
+  it.each([
+    ["", false],
+    [" with the runtime marked unattended (operations check 38)", true]
+  ] as const)(
+    "answers a call needing a confirmation in a child as confirmation_required%s",
+    async (_, unattended) => {
+      const f = await fixture([{ operation: change.name, value: "confirm" }], unattended);
+      const task = `/tool demo.change ${JSON.stringify({ text: "one" })}`;
+      const said = await f.say(runAgent({ description: "Ändern", task }));
+      await f.until(said.runId, "completed");
 
-    const child = required((await f.children(said.runId))[0]);
-    expect(await f.agentRun(child.subagentRunId)).toMatchObject({ status: "completed" });
-    expect(executed).toEqual([]);
-    // No card and no decision: the child read the refusal and went on.
-    const childEvents = await f.events(child.subagentRunId);
-    expect(childEvents.some((event) => event.type === "tool_decision_requested")).toBe(false);
-    const refused = required(
-      childEvents.find(
-        (event) => event.type === "tool_call_failed" || event.type === "tool_call_completed"
+      const child = required((await f.children(said.runId))[0]);
+      expect(await f.agentRun(child.subagentRunId)).toMatchObject({ status: "completed" });
+      expect(executed).toEqual([]);
+      // No card and no decision: the child read the refusal and went on.
+      const childEvents = await f.events(child.subagentRunId);
+      expect(childEvents.some((event) => event.type === "tool_decision_requested")).toBe(false);
+      const refused = required(
+        childEvents.find(
+          (event) => event.type === "tool_call_failed" || event.type === "tool_call_completed"
+        )
+      );
+      expect(JSON.stringify(refused)).toContain("confirmation_required");
+      expect(JSON.stringify(refused)).toContain(change.name);
+      const pending = (
+        await f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId })
       )
-    );
-    expect(JSON.stringify(refused)).toContain("confirmation_required");
-    expect(JSON.stringify(refused)).toContain(change.name);
-    const pending = (
-      await f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId })
-    )
-      .filter((run) => run.origin.kind === "agent" && run.origin.agentRunId === child.subagentRunId)
-      .filter((run) => run.status === "pending_confirmation");
-    expect(pending).toEqual([]);
-    await f.app.close();
-  });
+        .filter(
+          (run) => run.origin.kind === "agent" && run.origin.agentRunId === child.subagentRunId
+        )
+        .filter((run) => run.status === "pending_confirmation");
+      expect(pending).toEqual([]);
+      await f.app.close();
+    }
+  );
 
   it("starts a subagent once its person confirmed the run_agent call", async () => {
     const f = await fixture([{ operation: "agents.run", value: "confirm" }]);

@@ -57,7 +57,7 @@ Every instance carries one guardrail of the platform, **Publishing needs an inst
 - Anyone else who may publish waits: their publish lands in the **Inbox** ("Eingang") of the instance admins as **App to publish** ("App zur Veröffentlichung") or **Workflow to publish** ("Workflow zur Veröffentlichung"). The item shows the version and the one it replaces, the files that differ, the changing actions or steps that are new or changed, the outside hosts it adds, the Connections, the Data Stores and the account a Workflow runs as. **Approve and publish** makes exactly that version live; if the draft or the live version changed meanwhile, the item says so and can no longer be approved. Publishing again replaces the waiting request.
 - An instance admin can switch it off on that card, after a question. Then whoever may publish makes a new version live with their own click. Switching it off and on is recorded in the audit log, and an update of the platform never switches it back on.
 
-Whatever the switch says, a new version goes live only on a person's click: `--yes` on the CLI publishes nothing, and neither does a publish from an agent or another program.
+Whatever the switch says, a new version goes live only on a person's click. `--yes` on the CLI publishes nothing by itself: the publish waits in your own Inbox, which nobody else sees, and your **Allow** there is your click on Publish. An instance approver's Allow makes it live at once; anyone else's files the item above for the instance admins. A publish from an agent or another program publishes nothing.
 
 ## Where guardrails come from
 

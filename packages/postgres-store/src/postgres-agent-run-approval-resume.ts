@@ -42,8 +42,9 @@ export async function resumeAgentRunAfterApproval(
         )
       )
     );
-  // Confirmations have their own decision transaction. A timely approval resumes in the
-  // agent worker, which executes the frozen call under the agent's lease.
+  // Confirmations in the conversation have their own decision transaction. A timely
+  // approval, or a confirmation given in the Inbox (OP-4b), resumes in the agent worker, which
+  // executes the frozen call under the agent's lease.
   if (
     calls.length !== waiting.length ||
     calls.some(
@@ -51,7 +52,7 @@ export async function resumeAgentRunAfterApproval(
         !call.approvalRequestId ||
         call.status === "running" ||
         (call.status === "pending_approval" && call.decision?.mode !== "approved") ||
-        call.status === "pending_confirmation"
+        (call.status === "pending_confirmation" && call.decision?.mode !== "confirmed")
     )
   )
     return;
@@ -70,7 +71,7 @@ export async function resumeAgentRunAfterApproval(
       outcome:
         call.status === "expired"
           ? "expired"
-          : decision?.mode === "approved"
+          : decision?.mode === "approved" || decision?.mode === "confirmed"
             ? "confirmed"
             : "declined",
       ...(decision?.by ? { decidedBy: decision.by } : {}),

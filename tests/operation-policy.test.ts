@@ -267,6 +267,7 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
     expect(resolve({ callerCanConfirm: false, canPause: true })).toEqual({
       value: "confirm",
       next: "await_confirmation",
+      deliver: "conversation",
       source: "instance_default"
     });
     expect(resolve({ callerCanConfirm: false, canPause: false })).toEqual({
@@ -274,6 +275,31 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
       next: "refuse",
       source: "surface_cannot_pause"
     });
+  });
+
+  it("delivers a confirmation to the Inbox when the person the call acts for is not there (OP-4b)", () => {
+    // Nobody present: the confirmation waits in the person's Inbox, whether or not the
+    // surface could pause, and only after the earlier steps of the order answered.
+    expect(resolve({ callerCanConfirm: false, canPause: false, personAbsent: true })).toEqual({
+      value: "confirm",
+      next: "await_confirmation",
+      deliver: "inbox",
+      source: "instance_default"
+    });
+    expect(resolve({ callerCanConfirm: false, canPause: true, personAbsent: true })).toMatchObject({
+      next: "await_confirmation",
+      deliver: "inbox"
+    });
+    // A caller who confirms by calling is never asked, absent or not.
+    expect(resolve({ callerCanConfirm: true, personAbsent: true })).toMatchObject({
+      next: "run",
+      decisionMode: "direct"
+    });
+    // A Workflow's step still has nobody to ask: its confirm becomes an approval (check 38).
+    const origin = { kind: "workflow", workflowRunId: "wf", stepRunId: "step" } as const;
+    expect(
+      resolve({ origin, callerCanConfirm: false, canPause: false, personAbsent: true })
+    ).toEqual({ value: "approval", next: "await_approval", source: "instance_default" });
   });
 
   it("takes the confirmation of a Workflow step, which has nobody to ask, as an approval", () => {
@@ -363,7 +389,12 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
     };
     expect(
       resolve({ origin: agent, callerCanConfirm: false, canPause: true, publishedRun: true })
-    ).toEqual({ value: "confirm", next: "await_confirmation", source: "instance_default" });
+    ).toEqual({
+      value: "confirm",
+      next: "await_confirmation",
+      deliver: "conversation",
+      source: "instance_default"
+    });
   });
 
   it("names the guardrail that asked for an approval a call cannot wait for", () => {

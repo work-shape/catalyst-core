@@ -2,6 +2,7 @@ import { createLogger } from "./logger";
 import {
   StoreBackedAgentRuntime,
   createAgentRunSignal,
+  type AgentRunJobsOptions,
   type WorkerLocalAgentRuntimeOptions
 } from "@work-shape/catalyst-agent-runtime";
 import {
@@ -110,6 +111,11 @@ export interface CreateClientInstanceAppInput {
   operations?: ChatServerOptions["operations"];
   allowedOrigins?: string | string[];
   agentRunWorker?: AgentRunWorkerPlacement;
+  /**
+   * Which Agent Runs nobody watches, so a confirmation they ask waits in their person's Inbox.
+   * A scheduled start says so once EW-8 builds it. For tests until then.
+   */
+  unattendedRuns?: AgentRunJobsOptions["unattended"];
 }
 
 /** Listens on `HOST` and `PORT` of the instance's environment unless told otherwise. */
@@ -221,7 +227,9 @@ export async function createClientInstanceApp(
     handlers: [...serverJobs.handlers, ...execution.modulesStarted.jobHandlers],
     schedules: [...serverJobs.schedules, ...execution.modulesStarted.schedules]
   });
-  const agentRunJobs = inProcess ? createInProcessAgentRunWorker(execution, inProcess) : undefined;
+  const agentRunJobs = inProcess
+    ? createInProcessAgentRunWorker(execution, inProcess, input.unattendedRuns)
+    : undefined;
 
   return {
     config,

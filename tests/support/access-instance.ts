@@ -94,6 +94,11 @@ const USER_HEADER = "x-test-user";
 export const SERVICE_HEADER = "x-test-service";
 /** The scopes of the credential, separated by spaces. Left out, the credential carries all. */
 export const SCOPES_HEADER = "x-test-scopes";
+/**
+ * `personal` signs the user in through their personal API key, as the CLI is: the call's
+ * origin is then `cli`. Left out, the user's own session.
+ */
+const KEY_HEADER = "x-test-key";
 /** The keys of the service the header names; `storeTestServicePrincipal` writes their rows. */
 const TEST_SERVICE_KEYS = ["config_assets.read", "config_assets.release"];
 const signedInUserSchema = z.object({
@@ -154,7 +159,17 @@ export function recordAuthAdapter(): AuthAdapter {
         permissionRefs: user.permission_refs,
         clientInstanceId,
         authSource: "test",
-        scopes
+        scopes,
+        ...(request.headers[KEY_HEADER] === "personal"
+          ? {
+              delegatedActor: {
+                kind: "api_key" as const,
+                id: asApiCredentialId("key_test"),
+                displayLabel: "Test key",
+                authSource: "test"
+              }
+            }
+          : {})
       };
     }
   };

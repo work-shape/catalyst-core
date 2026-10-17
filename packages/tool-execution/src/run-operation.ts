@@ -11,7 +11,6 @@ import {
   type ActorAccess,
   type JsonObject,
   type NewOperationRun,
-  type OperationApproval,
   type OperationAuthorization,
   type OperationCall,
   type OperationCallRuntime,
@@ -45,7 +44,7 @@ import {
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
-import { resolveGuardedPolicy } from "./operation-policy-call";
+import { approvedByCaller, resolveGuardedPolicy } from "./operation-policy-call";
 import { hashInput } from "./input-hash";
 
 /**
@@ -56,6 +55,9 @@ const PENDING_APPROVAL_EXPIRES_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** How long a call an Agent Run holds waits for its person's confirmation (S8). */
 const PENDING_CONFIRMATION_EXPIRES_AFTER_MS = 24 * 60 * 60 * 1000;
+
+/** How long a confirmation waits in its person's Inbox, as an approval waits (OP-4b). */
+const INBOX_CONFIRMATION_EXPIRES_AFTER_MS = PENDING_APPROVAL_EXPIRES_AFTER_MS;
 
 /** How often a call looks again when the holder of its key changed while it looked. */
 const IDEMPOTENCY_CLAIM_ATTEMPTS = 3;
@@ -509,11 +511,16 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     };
   }
   if (policy.next === "await_confirmation") {
-    return { ending: await holdForConfirmation(context) };
+    return {
+      ending:
+        policy.deliver === "inbox"
+          ? await holdInInbox(context, policy)
+          : await holdForConfirmation(context)
+    };
   }
   if (policy.next === "await_approval") {
     const approval = await definition.approval?.(call.input);
-    if (approval && approvedByCaller(context, policy, approval, accessOf(rights))) {
+    if (approval && approvedByCaller(context.call, policy, approval, accessOf(rights))) {
       return {
         access: accessOf(rights),
         decision: { mode: "approved", reason: "approved_by_caller" }
@@ -615,23 +622,59 @@ async function holdForConfirmation(context: RunContext): Promise<OperationEnding
 }
 
 /**
- * Whether the caller's own call is the approval a guardrail asked for: they hold the right at
- * instance scope and clicked in the interface. A CLI origin never counts: the server cannot
- * tell a person at a terminal from an agent driving it.
+ * Holds a call that acts for a person who is not present until that person confirms it in
+ * their Inbox (OP-4b): an `operation_call` request with the frozen call, addressed to them
+ * alone. The run waits `pending_confirmation` on that item for 7 days. A call whose answer
+ * holds a secret, a draft's call, and a call nobody could address cannot wait there.
  */
-function approvedByCaller(
+async function holdInInbox(
   context: RunContext,
-  policy: PolicyResolution,
-  approval: OperationApproval,
-  access: ActorAccess
-): boolean {
-  const { call } = context;
-  return (
-    policy.source === "guardrail" &&
-    call.origin.kind === "user" &&
-    call.draft === undefined &&
-    access.authorize(approval.action).allowed
-  );
+  policy: PolicyResolution
+): Promise<OperationEnding> {
+  const { run, definition, call, deps, now } = context;
+  const refused: OperationDenial = { kind: "policy", operation: definition.name };
+  if (definition.secret || call.draft || context.unrecorded || !deps.approvals) {
+    return denyRun(context, refused);
+  }
+  const expiresAt = new Date(now().getTime() + INBOX_CONFIRMATION_EXPIRES_AFTER_MS).toISOString();
+  const heldInput = await heldInputOf(context);
+  // What the call is about, where its operation names it, so the item shows it as the
+  // approval it may file next does: the publish review of a publish.
+  const approval = await definition.approval?.(call.input);
+  const filed = await deps.approvals.request({
+    run,
+    call,
+    ...(Object.keys(heldInput).length > 0 ? { heldInput } : {}),
+    resource: context.resource,
+    runtime: context.runtime,
+    expiresAt,
+    policySource: policy.source,
+    ...(approval ? { approval } : {}),
+    confirmation: true
+  });
+  if (!filed) {
+    return denyRun(context, refused);
+  }
+  const { approvalRequestId } = filed;
+  const pending = await endRun(context, {
+    status: "pending_confirmation",
+    finishedAt: now().toISOString(),
+    approvalRequestId,
+    inputRef: `approval_request:${approvalRequestId}`,
+    expiresAt
+  });
+  return {
+    result: {
+      status: "pending_confirmation",
+      runId: run.id,
+      expiresAt,
+      preview: call.input,
+      inputHash: run.inputHash,
+      approvalRequestId
+    },
+    waitingInput: call.input,
+    run: pending
+  };
 }
 
 /** What the before-events of a call hold beside its input, in the keys its operation declares. */

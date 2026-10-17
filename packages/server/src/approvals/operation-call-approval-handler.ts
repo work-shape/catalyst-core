@@ -27,6 +27,8 @@ import {
   OPERATION_CALL_APPROVAL_KIND,
   declineWaitingOperation,
   executeApprovedOperation,
+  executeConfirmedOperation,
+  executeInboxConfirmedOperation,
   refuseWaitingOperation,
   wasTakenForExecution,
   type ApprovedOperationEnd,
@@ -84,6 +86,11 @@ export interface OperationCallApprovalOptions {
   assetPreview?: HeldAssetPreviewer;
   /** Where a kind reads what its request is about, outside a decision. */
   configAssets: Pick<ConfigAssetStore, "getConfigAsset">;
+  /**
+   * The kinds of held call, for a request of another kind that is about the same subject: a
+   * confirmation in the Inbox of a publish shows and checks the publish as its kind does.
+   */
+  subjectKinds?: readonly HeldCallApprovalKind[];
 }
 
 /**
@@ -93,6 +100,10 @@ export interface OperationCallApprovalOptions {
  * Nothing of the call runs in the
  * request that approves it. Whoever holds `operations.approve` decides, the caller included;
  * for a kind of held call, whoever holds its own right.
+ *
+ * A request in mode `confirmation` is the confirmation of the person the call acts for, who
+ * was not present (OP-4b). Its run waits `pending_confirmation`; Allow records `confirmed` and
+ * Deny `declined`. Only that person decides it: the request is addressed to them.
  *
  * Inside a decision the handler reads and writes through the stores of the decision's
  * transaction alone, so a decision holds one connection however many are made at once.
@@ -111,6 +122,12 @@ export function createOperationCallApprovalHandler(
   ): Pick<ApprovalTransactionStores, "configAssets"> =>
     context.transaction ?? { configAssets: options.configAssets };
   const runIdOf = (payload: JsonObject) => payloadSchema.pick({ runId: true }).safeParse(payload);
+  /** The kind that knows what the call is about: its own, or the one its subject names. */
+  const subjectKindOf = (call: OperationCallPayload): HeldCallApprovalKind | undefined =>
+    held ??
+    (call.subjectKind === undefined
+      ? undefined
+      : options.subjectKinds?.find((kind) => kind.kind === call.subjectKind));
 
   return {
     kind: held?.kind ?? OPERATION_CALL_APPROVAL_KIND,
@@ -129,9 +146,10 @@ export function createOperationCallApprovalHandler(
           ? await options.assetPreview?.(unknownToJsonValue(call.input), context.viewer)
           : undefined;
       // What the call is about, while it waits.
+      const about = subjectKindOf(call);
       const review =
-        held && call.subject && context.status === "pending"
-          ? await held.review(call.subject, context.viewer?.inList ?? false)
+        about && call.subject && context.status === "pending"
+          ? await about.review(call.subject, context.viewer?.inList ?? false)
           : undefined;
       return toJsonObject({
         ...previewOf(call),
@@ -148,21 +166,22 @@ export function createOperationCallApprovalHandler(
         return { result: refusedResult(runId, GONE) };
       }
       const now = (options.deps().now ?? (() => new Date()))();
+      // A confirmation in the Inbox waits as a confirmation, an approval as an approval.
+      const waiting = call.mode === "confirmation" ? "pending_confirmation" : "pending_approval";
       if (
         run.status === "expired" ||
-        (run.status === "pending_approval" &&
-          run.expiresAt !== undefined &&
-          new Date(run.expiresAt) <= now)
+        (run.status === waiting && run.expiresAt !== undefined && new Date(run.expiresAt) <= now)
       ) {
         // The decision came too late to count. The expiry job marks the run where it has not.
         return { result: { runId, execution: "expired" }, undecided: true };
       }
-      if (run.status !== "pending_approval") {
+      if (run.status !== waiting) {
         return { result: refusedResult(runId, run.error ?? WAITS_NO_MORE) };
       }
+      const about = subjectKindOf(call);
       const moved =
-        held && call.subject
-          ? await held.moved(call.subject, storesOf(context).configAssets)
+        about && call.subject
+          ? await about.moved(call.subject, storesOf(context).configAssets)
           : undefined;
       if (moved) {
         // Nothing of it is approved any more: the call ends refused with the request.
@@ -184,25 +203,37 @@ export function createOperationCallApprovalHandler(
         : false;
     },
     async apply(payload, approver, context) {
-      const { runId } = parsePayload(payload);
+      const { runId, mode } = parsePayload(payload);
       if (!context.transaction) {
         throw new AppError("INTERNAL", "An operation call is approved inside its decision");
       }
       const run = await context.transaction.operationRuns.get({ clientInstanceId, id: runId });
       let resumesAgent = false;
-      if (run?.origin.kind === "agent") {
+      // A confirmation always records its decision on the run: only a confirmed call is taken.
+      if (mode === "confirmation" && !run) {
+        throw new AppError(
+          "CONFLICT",
+          "This call no longer waits for your confirmation. Nothing ran."
+        );
+      }
+      if (run && (run.origin.kind === "agent" || mode === "confirmation")) {
         const approved = await context.transaction.operationRuns.approveWaiting({
           clientInstanceId,
           id: run.id,
           decision: {
-            mode: "approved",
+            mode: mode === "confirmation" ? "confirmed" : "approved",
             by: approver.id,
             byLabel: approver.displayLabel,
             at: (options.deps().now ?? (() => new Date()))().toISOString()
           }
         });
         if (!approved)
-          throw new AppError("CONFLICT", "This call no longer waits for approval. Nothing ran.");
+          throw new AppError(
+            "CONFLICT",
+            mode === "confirmation"
+              ? "This call no longer waits for your confirmation. Nothing ran."
+              : "This call no longer waits for approval. Nothing ran."
+          );
         resumesAgent = approved.resumesAgent;
       }
       if (!resumesAgent)
@@ -258,11 +289,14 @@ export function minimizedOperationCallPayload(payload: JsonObject): JsonObject {
     return { inputRemoved: true };
   }
   const { runId, operation, effect, actor, origin, workspaceId, expiresAt, subject } = parsed.data;
+  const { mode, subjectKind } = parsed.data;
   return toJsonObject({
     runId,
     operation,
     effect,
+    ...(mode ? { mode } : {}),
     ...(subject ? { subject } : {}),
+    ...(subjectKind ? { subjectKind } : {}),
     actor: { id: actor.id, label: actor.label },
     origin,
     ...(workspaceId ? { workspaceId } : {}),
@@ -331,7 +365,9 @@ export async function endHeldOperationCalls(
       "conversationId" | "requestedById" | "kinds" | "subjectContains"
     >
   >,
-  reason: { denial: OperationDenial; message: string }
+  reason: { denial: OperationDenial; message: string },
+  /** A run that is not ended with its request: the call that files the newer one. */
+  keepRunId?: string
 ): Promise<number> {
   const { clientInstanceId, approvals } = options;
   let ended = 0;
@@ -356,7 +392,7 @@ export async function endHeldOperationCalls(
             const run = runId.success
               ? await stores.operationRuns.get({ clientInstanceId, id: runId.data.runId })
               : undefined;
-            if (run) {
+            if (run && run.id !== keepRunId) {
               await refuseWaitingOperation(run.id, reason.denial, {
                 clientInstanceId,
                 runs: stores.operationRuns,
@@ -464,6 +500,14 @@ async function runFrozenCall(
     },
     ...(payload.heldInput ? { heldInput: toJsonObject(payload.heldInput) } : {})
   };
+  if (payload.mode === "confirmation") {
+    // The person confirmed their own call in the Inbox. An agent's call is executed as
+    // confirmed; a direct call is asked again as the person's own click (OP-4b).
+    const confirmedOptions = { ...(signal ? { signal } : {}), ...(runtime ? { runtime } : {}) };
+    return run.origin.kind === "agent"
+      ? executeConfirmedOperation(waiting, deps, confirmedOptions)
+      : executeInboxConfirmedOperation(waiting, deps, confirmedOptions);
+  }
   return executeApprovedOperation(
     waiting,
     {
@@ -488,6 +532,21 @@ export async function recordApprovedOperationCallEnd(
       clientInstanceId: options.clientInstanceId,
       requestId,
       resolve: (approved) => {
+        if (end.execution === "held") {
+          // The confirmation is decided; the call now waits for another person's approval,
+          // which keeps the input in its own request.
+          return Promise.resolve({
+            status: "approved",
+            decision: approved.decision,
+            applyResult: {
+              ...(end.run ? { runId: end.run.id } : {}),
+              requestId,
+              execution: "held",
+              approvalRequestId: end.approvalRequestId
+            },
+            payload: minimizedOperationCallPayload(approved.payload)
+          });
+        }
         if (end.execution === "refused" || end.execution === "expired") {
           return Promise.resolve({
             ...endedOperationCallOutcome(approved, {
@@ -577,22 +636,37 @@ export function createOperationApprovalFiler(
   options: OperationApprovalFilerOptions
 ): OperationApprovalRequests {
   return {
-    async request({ run, call, heldInput, runtime, expiresAt, policySource, approval }) {
+    async request({
+      run,
+      call,
+      heldInput,
+      runtime,
+      expiresAt,
+      policySource,
+      approval,
+      confirmation
+    }) {
       const { actor, origin } = call;
       if (isAuthenticatedServicePrincipal(actor)) {
         return undefined;
       }
-      const kind = approval?.kind ?? OPERATION_CALL_APPROVAL_KIND;
+      // A confirmation is the person's own, in their Inbox: always an `operation_call`, and
+      // about the subject of the approval it would otherwise be, where its operation names one.
+      const kind = confirmation
+        ? OPERATION_CALL_APPROVAL_KIND
+        : (approval?.kind ?? OPERATION_CALL_APPROVAL_KIND);
       const held = options.held.find((entry) => entry.kind === kind);
       if (held && approval?.subject) {
-        // The newer request about the same thing replaces the one that still waits.
+        // The newer request about the same thing replaces the one that still waits. The call
+        // that files it keeps waiting: it moves on from its confirmation to this request.
         await endHeldOperationCalls(
           options,
           { kinds: [kind], subjectContains: held.subjectKey(approval.subject) },
           {
             denial: { kind: "policy", operation: run.operation, reason: "approval_stale" },
             message: "A newer request about the same replaced this one."
-          }
+          },
+          run.id
         );
       }
       const input = unknownToJsonValue(call.input);
@@ -610,7 +684,9 @@ export function createOperationApprovalFiler(
         effect: run.effect,
         input,
         ...(heldInput ? { heldInput } : {}),
+        ...(confirmation ? { mode: "confirmation" as const } : {}),
         ...(approval?.subject ? { subject: approval.subject } : {}),
+        ...(confirmation && approval?.subject ? { subjectKind: approval.kind } : {}),
         actor: {
           id: actor.id,
           label: actor.displayLabel,
@@ -652,6 +728,8 @@ export function createOperationApprovalFiler(
             // The name of the operation. The Inbox words the item in the reader's language.
             summary: run.operation,
             payload: toJsonObject(payload),
+            // Only the person the call acts for sees and decides their confirmation.
+            ...(confirmation ? { addresseeUserId: actor.id } : {}),
             // Counted and filed under one lock, so calls made at the same moment cannot
             // each pass a limit the others fill.
             pendingLimits: {

@@ -37,8 +37,18 @@ export const payloadSchema = z.object({
   input: z.unknown().optional(),
   /** What the call is about, as `approval` of its operation froze it when it was held. */
   subject: z.record(z.string(), z.json()).optional(),
+  /**
+   * The kind of held call whose `subject` this is, where the request is of another kind: a
+   * confirmation in the Inbox of a publish is an `operation_call` about an `app_publish`.
+   */
+  subjectKind: z.string().optional(),
   /** Set once the request ended: the input and how the person was signed in are gone. */
   inputRemoved: z.literal(true).optional(),
+  /**
+   * `confirmation`: the request is the confirmation of the person the call acts for, who was
+   * not present, addressed to them alone (OP-4b). Without it, another person's approval.
+   */
+  mode: z.literal("confirmation").optional(),
   actor: z.object({
     id: z.string().min(1),
     label: z.string(),
@@ -102,6 +112,7 @@ export function previewOf(payload: OperationCallPayload) {
     runId: payload.runId,
     operation: payload.operation,
     effect: payload.effect,
+    ...(payload.mode ? { mode: payload.mode } : {}),
     actor: { kind: "user", id: payload.actor.id, label: payload.actor.label },
     origin: payload.origin,
     ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}),

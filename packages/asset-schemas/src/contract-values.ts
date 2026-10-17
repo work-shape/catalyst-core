@@ -329,7 +329,10 @@ export const APPROVAL_EXECUTIONS = [
   "failed",
   "interrupted",
   "refused",
-  "expired"
+  "expired",
+  // A confirmation in the Inbox whose Allow left the call waiting for an approver: it ended
+  // here, and the call waits as the approval request `approvalRequestId` of `applyResult`.
+  "held"
 ] as const;
 export type ApprovalExecution = (typeof APPROVAL_EXECUTIONS)[number];
 
@@ -807,7 +810,8 @@ export const ENDED_APPROVAL_EXECUTIONS = [
   "failed",
   "interrupted",
   "refused",
-  "expired"
+  "expired",
+  "held"
 ] as const satisfies readonly ApprovalExecution[];
 export type EndedApprovalExecution = (typeof ENDED_APPROVAL_EXECUTIONS)[number];
 

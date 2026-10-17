@@ -118,7 +118,9 @@ export type OperationQuerySchema = z.ZodObject<Record<string, z.ZodType>>;
  */
 export const OPERATION_HEADERS = {
   request: {
-    "Idempotency-Key": `A key the caller chooses for one changing call, up to ${IDEMPOTENCY_KEY_MAX_LENGTH} characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.`
+    "Idempotency-Key": `A key the caller chooses for one changing call, up to ${IDEMPOTENCY_KEY_MAX_LENGTH} characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.`,
+    "Catalyst-Unattended":
+      "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it."
   },
   response: {
     "Operation-Run-Id":
@@ -244,7 +246,7 @@ const REGISTERED_READING = {
 const REGISTERED_CHANGING = {
   accepted: operationRunSchema,
   headers: {
-    request: ["Idempotency-Key"],
+    request: ["Idempotency-Key", "Catalyst-Unattended"],
     response: ["Operation-Run-Id", "Location", "Idempotent-Replayed"]
   }
 } as const;

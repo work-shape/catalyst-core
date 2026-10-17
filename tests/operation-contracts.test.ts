@@ -347,6 +347,7 @@ describe("operation contracts", () => {
           expiresAt: ISODateString;
           preview: unknown;
           inputHash: string;
+          approvalRequestId?: string;
         }
       | {
           status: "pending_approval";

@@ -17,6 +17,7 @@ import {
   setAssetAvailability,
   setAssetDefault
 } from "../assets/asset-placement";
+import { publishPolicyFloor } from "../approvals/publish-approval";
 import { AssetWorkflow } from "../assets/asset-service";
 import { AgentProposals, PROPOSED_KIND } from "../assets/agent-proposals";
 import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
@@ -119,6 +120,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     beforeEvents: (input) => publishEvents(options, input),
     // A publish a guardrail holds waits for the holders of the kind's `approve` right.
     approval: (input) => workflow.publishApproval(input),
+    policyFloorOf: publishPolicyFloor,
     execute: (input, context) => workflow.drafts.publish(context, input)
   });
 

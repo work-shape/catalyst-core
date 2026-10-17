@@ -72,10 +72,23 @@ type IdempotencyPart<Op> = Op extends {
     : unknown
   : unknown;
 
+/**
+ * An operation that takes `Catalyst-Unattended` is sent with it when `unattended` is set: nobody
+ * watches the caller's terminal, so a call that needs a confirmation waits in the Inbox.
+ */
+type UnattendedPart<Op> = Op extends {
+  headers: { request: readonly (infer Header extends OperationRequestHeader)[] };
+}
+  ? "Catalyst-Unattended" extends Header
+    ? { unattended?: boolean }
+    : unknown
+  : unknown;
+
 type InputOf<Op extends Operation> = ParamsPart<Op["path"]> &
   QueryPart<Op> &
   BodyPart<Op> &
   IdempotencyPart<Op> &
+  UnattendedPart<Op> &
   ControlPart<Op>;
 
 /**
@@ -89,7 +102,10 @@ export type OperationOutcome<Output, Run = unknown> = {
   replayed: boolean;
 } & (
   | { status: "done"; output: Output }
-  /** Nothing ran yet: somebody else decides. `location` is where the run is read again. */
+  /**
+   * Nothing ran yet: somebody decides it, an approver or, for a run `pending_confirmation`, the
+   * caller in their Inbox. `location` is where the run is read again.
+   */
   | { status: "pending_approval"; run: Run; location: string | undefined }
 );
 

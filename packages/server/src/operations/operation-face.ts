@@ -79,6 +79,8 @@ export interface AssembledOperationBinding {
   heldInputKeys?: readonly string[];
   /** See `approval` of the definition: who decides a call that waits for an approval. */
   approval?: OperationDefinition["approval"];
+  /** See `policyFloorOf` of the definition: the value no call of this origin is looser than. */
+  policyFloorOf?: OperationDefinition["policyFloorOf"];
   execute(input: unknown, context: OperationBindingContext): unknown;
   /**
    * For an operation that answers a redirect: where a refused or failed call sends the
@@ -178,6 +180,7 @@ export function createOperationRegistration(
       ...(binding.beforeEvents ? { beforeEvents: binding.beforeEvents } : {}),
       ...(binding.heldInputKeys ? { heldInputKeys: binding.heldInputKeys } : {}),
       ...(binding.approval ? { approval: binding.approval } : {}),
+      ...(binding.policyFloorOf ? { policyFloorOf: binding.policyFloorOf } : {}),
       ...(binding.inputWithoutSecrets ? { inputWithoutSecrets: binding.inputWithoutSecrets } : {}),
       events: binding.events,
       http: { method: operation.method, path: operation.path },
@@ -210,7 +213,7 @@ export function createOperationRegistration(
  * The HTTP face of the operation registry. An operation registered here is reached through
  * `runOperation`. Every recorded call is an Operation Run and names it in `Operation-Run-Id`;
  * an allowed read of an operation that does not record every call leaves none and names none.
- * The status of the answer says how the call went: `200` with the output, `202` with the run while it waits for an approval,
+ * The status of the answer says how the call went: `200` with the output, `202` with the run while it waits for an approval or, sent unattended, for its person's confirmation in the Inbox,
  * `403` for a refusal, the operation's own error for a failure.
  */
 export function createOperationFace(options: OperationFaceOptions): OperationFace {
@@ -257,6 +260,8 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         case "pending_approval":
         // The operation's work goes on after the call: the run says when it ended.
         case "running":
+        // A confirmation of a call sent unattended waits in its person's Inbox (OP-4b).
+        case "pending_confirmation":
           void reply.status(202).header("location", operationRunHref(run));
           return toOperationRunResource(run);
         case "denied":
@@ -275,8 +280,6 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
             "The call expired before it was approved. Call again with a new Idempotency-Key.",
             { operationRunId: run.id }
           );
-        case "pending_confirmation":
-          throw new AppError("INTERNAL", "A direct call cannot wait for a confirmation");
         case "dry_run":
           throw new AppError("INTERNAL", "A direct call is no call of a draft");
       }

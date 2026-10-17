@@ -2961,8 +2961,18 @@ describe("catalyst asset commands against an instance", () => {
    * call reaches the instance signed in as that user. Each request is recorded.
    */
   /** The CLI as `userId`. `answers` are typed at its questions, in order; without them nobody can be asked. */
-  function cliAs(instance: TestInstance, userId: string, cwd: string, answers?: string[]) {
-    const serverFetch = createTestFetch(instance, { "x-test-user": userId });
+  function cliAs(
+    instance: TestInstance,
+    userId: string,
+    cwd: string,
+    answers?: string[],
+    /** Signs in through the user's personal key, as the CLI does, instead of their session. */
+    personalKey = false
+  ) {
+    const serverFetch = createTestFetch(instance, {
+      "x-test-user": userId,
+      ...(personalKey ? { "x-test-key": "personal" } : {})
+    });
     const requests: string[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init);
@@ -3364,8 +3374,8 @@ describe("catalyst asset commands against an instance", () => {
       // An App is published on a person's answer to the question, and on nothing else.
       const unasked = await run("app", "publish", "offers", "--revision", "1", ...workspace);
       expect(unasked.code).toBe(1);
-      expect(unasked.err).toContain("needs your answer here or your click in the interface");
-      const scripted = await cliAs(t.instance, t.admin.id, cwd, ["y"]).run(
+      expect(unasked.err).toContain("add --yes to confirm it in your Inbox");
+      const scripted = await cliAs(t.instance, t.admin.id, cwd, ["y"], true).run(
         "app",
         "publish",
         "offers",
@@ -3374,8 +3384,9 @@ describe("catalyst asset commands against an instance", () => {
         "--yes",
         ...workspace
       );
-      expect(scripted.code).toBe(1);
-      expect(scripted.err).toContain("--yes publishes nothing");
+      // `--yes` publishes nothing by itself: the publish waits in the caller's own Inbox.
+      expect(scripted.code).toBe(3);
+      expect(scripted.err).toContain("Waits in your Inbox for your confirmation");
       const declining = cliAs(t.instance, t.admin.id, cwd, ["n"]);
       const declined = await declining.run(
         "app",

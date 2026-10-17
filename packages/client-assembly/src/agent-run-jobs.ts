@@ -2,6 +2,7 @@ import {
   createAgentRunJobs,
   createLocalAgentRunExecutor,
   type AgentRunJobs,
+  type AgentRunJobsOptions,
   type AgentRunSignal,
   type WorkerLocalAgentRuntimeOptions
 } from "@work-shape/catalyst-agent-runtime";
@@ -9,7 +10,6 @@ import {
   AppError,
   asUserId,
   type AgentRun,
-  type AgentRunId,
   type AuthenticatedUser,
   type ClientInstanceId,
   type JobWorker,
@@ -44,7 +44,7 @@ interface AgentRunExecutionAssembly {
 /** The job kinds that execute Agent Runs, for the process that serves them. */
 export function createClientInstanceAgentRunJobs(
   execution: AgentRunExecutionAssembly,
-  options: { onObservation?: (runId: AgentRunId) => void; cancellations?: AgentRunSignal } = {}
+  options: Pick<AgentRunJobsOptions, "onObservation" | "cancellations" | "unattended"> = {}
 ): AgentRunJobs {
   return createAgentRunJobs({
     clientInstanceId: execution.clientInstanceId,
@@ -53,7 +53,8 @@ export function createClientInstanceAgentRunJobs(
     loadCurrentUser: (run) => loadCurrentUser(execution.store, run),
     execute: createLocalAgentRunExecutor(execution.localAgentRuntimeOptions),
     onObservation: options.onObservation,
-    cancellations: options.cancellations
+    cancellations: options.cancellations,
+    ...(options.unattended ? { unattended: options.unattended } : {})
   });
 }
 
@@ -64,7 +65,8 @@ export function createClientInstanceAgentRunJobs(
  */
 export function createInProcessAgentRunWorker(
   execution: AgentRunExecutionAssembly & { logger: Logger },
-  signals: { observations: AgentRunSignal; cancellations: AgentRunSignal }
+  signals: { observations: AgentRunSignal; cancellations: AgentRunSignal },
+  unattended?: AgentRunJobsOptions["unattended"]
 ): JobWorker {
   return createJobWorker({
     stores: execution.store,
@@ -72,7 +74,8 @@ export function createInProcessAgentRunWorker(
     logger: execution.logger,
     ...createClientInstanceAgentRunJobs(execution, {
       onObservation: (runId) => signals.observations.notify(runId),
-      cancellations: signals.cancellations
+      cancellations: signals.cancellations,
+      ...(unattended ? { unattended } : {})
     })
   });
 }

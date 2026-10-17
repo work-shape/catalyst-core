@@ -60,6 +60,15 @@ export async function decideWaitingToolCall(
     }
     const [callRow] = await tx.select().from(operationRuns).where(ofOperationRun).for("update");
     if (!callRow) throw new AppError("NOT_FOUND", "This call is not available");
+    // A confirmation that waits in the person's Inbox is decided there and nowhere else, so
+    // one call never has two answers (OP-4b).
+    if (callRow.status === "pending_confirmation" && callRow.approvalRequestId) {
+      throw new AppError(
+        "CONFLICT",
+        `This call waits in your Inbox as request ${callRow.approvalRequestId}. Decide it there.`,
+        { operationRunId: callRow.id, approvalRequestId: callRow.approvalRequestId }
+      );
+    }
 
     const earlier = callRow.decision?.mode;
     if (earlier === "confirmed" || earlier === "declined") {

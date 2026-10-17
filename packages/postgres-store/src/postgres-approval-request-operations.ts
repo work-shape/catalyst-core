@@ -1,5 +1,5 @@
 import { keysetFilter } from "./paging";
-import { and, count, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   AppError,
   createPlatformId,
@@ -105,7 +105,7 @@ async function listApprovalRequests(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["listApprovalRequests"]>[0]
 ): Promise<ApprovalRequest[]> {
-  if (input.kinds.length === 0) return [];
+  if (listsNothing(input)) return [];
   const rows = await db
     .select()
     .from(approvalRequests)
@@ -124,16 +124,46 @@ async function countApprovalRequests(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["countApprovalRequests"]>[0]
 ): Promise<number> {
-  if (input.kinds.length === 0) return 0;
+  if (listsNothing(input)) return 0;
   const [row] = await db.select({ count: count() }).from(approvalRequests).where(listFilter(input));
   return row?.count ?? 0;
 }
 
+type ListFilter = Parameters<ApprovalRequestStore["countApprovalRequests"]>[0];
+
+/** Whether no kind could be listed at all, so nothing needs to be asked. */
+function listsNothing(input: Pick<ListFilter, "kinds" | "reader">): boolean {
+  return input.kinds.length === 0 && (input.reader?.addressedKinds.length ?? 0) === 0;
+}
+
+/**
+ * Which kinds a list holds, and to whom: for a reader, a request addressed to somebody only
+ * where it is addressed to them (OP-4b); for the instance itself, every request of the kinds.
+ */
+function audienceFilter(input: Pick<ListFilter, "kinds" | "reader">) {
+  const { reader } = input;
+  if (!reader) return inArray(approvalRequests.kind, [...input.kinds]);
+  return or(
+    input.kinds.length === 0
+      ? undefined
+      : and(
+          isNull(approvalRequests.addresseeUserId),
+          inArray(approvalRequests.kind, [...input.kinds])
+        ),
+    reader.addressedKinds.length === 0
+      ? undefined
+      : and(
+          eq(approvalRequests.addresseeUserId, reader.userId),
+          inArray(approvalRequests.kind, [...reader.addressedKinds])
+        )
+  );
+}
+
 /** Which requests a list holds. The list and its count share it, so they cannot disagree. */
-function listFilter(input: Parameters<ApprovalRequestStore["countApprovalRequests"]>[0]) {
+function listFilter(input: ListFilter) {
   return and(
     eq(approvalRequests.clientInstanceId, input.clientInstanceId),
-    inArray(approvalRequests.kind, [...input.kinds]),
+    audienceFilter(input),
     input.status === undefined ? undefined : eq(approvalRequests.status, input.status),
     input.excludeStatus === undefined
       ? undefined
@@ -158,14 +188,14 @@ async function countPendingApprovalRequests(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["countPendingApprovalRequests"]>[0]
 ): Promise<number> {
-  if (input.kinds.length === 0) return 0;
+  if (listsNothing(input)) return 0;
   const [row] = await db
     .select({ count: count() })
     .from(approvalRequests)
     .where(
       and(
         eq(approvalRequests.clientInstanceId, input.clientInstanceId),
-        inArray(approvalRequests.kind, [...input.kinds]),
+        audienceFilter(input),
         eq(approvalRequests.status, "pending")
       )
     );

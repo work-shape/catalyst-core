@@ -11,6 +11,9 @@ export const approvalRequests = pgTable(
     summary: text("summary").notNull(),
     payload: jsonb("payload").$type<JsonObject>().notNull(),
     requestedBy: jsonb("requested_by").$type<ApprovalRequest["requestedBy"]>().notNull(),
+    // The one person a confirmation in the Inbox is addressed to (OP-4b). Null for a request
+    // the holders of its kind's right decide.
+    addresseeUserId: text("addressee_user_id"),
     origin: jsonb("origin").$type<ApprovalRequest["origin"]>(),
     status: text("status").$type<ApprovalRequest["status"]>().notNull(),
     // Reversion metadata shares the decision JSON; the public request exposes it separately.
@@ -37,6 +40,10 @@ export const approvalRequests = pgTable(
       table.clientInstanceId,
       sql`(${table.requestedBy}->>'id')`,
       table.createdAt.desc()
-    )
+    ),
+    // The requests addressed to one person: their To decide list and its count.
+    index("approval_requests_client_addressee_idx")
+      .on(table.clientInstanceId, table.addresseeUserId, table.status)
+      .where(sql`${table.addresseeUserId} is not null`)
   ]
 );

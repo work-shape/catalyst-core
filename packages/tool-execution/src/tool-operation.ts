@@ -500,6 +500,7 @@ export function createToolOperationRunner(
           signal: context.signal,
           runFence: context.runFence,
           ...(context.subagent ? { subagent: true } : {}),
+          ...(context.unattended ? { unattended: true } : {}),
           unreadableInput: options.unreadableInput
         }
       );

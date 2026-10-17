@@ -44,7 +44,12 @@ export type OperationOrigin =
       toolRevisionId?: string;
     }
   | { kind: "user" }
-  | { kind: "cli" }
+  /**
+   * An API credential. `unattended`: the call was sent with `Catalyst-Unattended: 1`, so
+   * nobody answers for it at the terminal and it is not its caller's own confirmation: a
+   * `confirm` waits in the person's Inbox (OP-4b). The header only makes a call stricter.
+   */
+  | { kind: "cli"; unattended?: true }
   | { kind: "mcp"; clientName?: string }
   | {
       kind: "app";
@@ -134,7 +139,7 @@ export interface OperationCall<TInput = unknown> {
  */
 export type OperationCallRuntime = Pick<
   RuntimeCallContext,
-  "locale" | "deadline" | "signal" | "runFence" | "subagent"
+  "locale" | "deadline" | "signal" | "runFence" | "subagent" | "unattended"
 > & {
   /**
    * Set where the surface could not read the caller's input at all. The call then ends as an
@@ -168,6 +173,8 @@ export type OperationResult<TOutput = unknown> =
       expiresAt: ISODateString;
       preview: unknown;
       inputHash: string;
+      /** The Inbox item the confirmation waits in, where it waits in its person's Inbox (OP-4b). */
+      approvalRequestId?: string;
     }
   | {
       status: "pending_approval";
@@ -202,7 +209,8 @@ export type OperationResult<TOutput = unknown> =
 /**
  * Whether the caller of this origin is present and the call is its own, so that the call
  * itself is the confirmation a `confirm` policy asks for. An agent, a workflow and a schedule
- * act for somebody who is not the caller.
+ * act for somebody who is not the caller, and a CLI call marked unattended has nobody at its
+ * terminal to answer for it.
  */
 export function callerCanConfirm(origin: OperationOrigin): boolean {
   return originConfirms(origin);
@@ -222,8 +230,9 @@ export function callConfirmedByCaller(call: Pick<OperationCall, "origin" | "draf
 
 function originConfirms(origin: OperationOrigin): boolean {
   switch (origin.kind) {
-    case "user":
     case "cli":
+      return origin.unattended !== true;
+    case "user":
     case "mcp":
     case "app":
       return true;

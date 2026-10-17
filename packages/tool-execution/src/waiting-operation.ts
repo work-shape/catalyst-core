@@ -13,7 +13,8 @@ import {
   type OperationRun,
   type OperationRunDecision,
   type OperationRunEnd,
-  type OperationRunId
+  type OperationRunId,
+  type PolicyResolution
 } from "@work-shape/catalyst-core";
 import {
   authorizeActor,
@@ -28,7 +29,7 @@ import {
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
-import { resolveGuardedPolicy } from "./operation-policy-call";
+import { approvedByCaller, resolveGuardedPolicy } from "./operation-policy-call";
 import { hashInput } from "./input-hash";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */
@@ -130,6 +131,139 @@ export async function executeConfirmedOperation(
 }
 
 /**
+ * How long a call its person confirmed in the Inbox then waits for another person's approval,
+ * as every approval waits.
+ */
+const HELD_AFTER_CONFIRMATION_EXPIRES_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Executes a direct call its person confirmed in their Inbox (OP-4b), such as a publish sent
+ * with `catalyst app publish --yes`. The Allow is the person's click in the interface: the
+ * frozen call is asked again as their own direct call, as they are now, before-events and
+ * guardrails included. Where that call would have run, it runs once, taken in one statement.
+ * Where it would have waited for another person's approval, it files that approval as the
+ * person's own click does and waits for it on the same run: `held`.
+ */
+export async function executeInboxConfirmedOperation(
+  waiting: WaitingOperationCall,
+  deps: RunOperationDeps,
+  options: { signal?: AbortSignal; runtime?: Pick<OperationCallRuntime, "locale" | "runFence"> }
+): Promise<ApprovedOperationEnd> {
+  options.signal?.throwIfAborted();
+  const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: waiting.runId });
+  const decision = run?.decision;
+  if (
+    run?.status !== "pending_confirmation" ||
+    decision?.mode !== "confirmed" ||
+    run.origin.kind === "agent"
+  ) {
+    return readDecidedOperationEnd(waiting.runId, run?.approvalRequestId, deps);
+  }
+  const asClicked: WaitingOperationCall = {
+    ...waiting,
+    call: { ...waiting.call, origin: { kind: "user" } }
+  };
+  const admitted = await admitAgain(run, asClicked, deps, decision, options.runtime);
+  if ("end" in admitted) {
+    return admitted.end;
+  }
+  const { context, policy } = admitted;
+  if (policy.next !== "await_approval") {
+    return executeWithinTime(context, decision, options.signal);
+  }
+  const approval = await context.definition.approval?.(context.call.input);
+  const access = await deps.authorizer.forActor(context.call.actor);
+  if (approval && approvedByCaller(context.call, policy, approval, access)) {
+    // An approver's own click is the approval, as when they click Publish themselves.
+    return executeWithinTime(
+      context,
+      {
+        mode: "approved",
+        reason: "approved_by_caller",
+        by: context.call.actor.id,
+        at: context.now().toISOString()
+      },
+      options.signal
+    );
+  }
+  return holdForApproval(context, policy, waiting.heldInput, approval);
+}
+
+/**
+ * Files the approval a confirmed call waits for next and moves its run on to wait for it. A
+ * call nothing can hold for an approval is refused, as its person's own call would be.
+ */
+async function holdForApproval(
+  context: RunContext,
+  policy: PolicyResolution,
+  heldInput: JsonObject | undefined,
+  approval: Awaited<ReturnType<NonNullable<OperationDefinition["approval"]>>>
+): Promise<ApprovedOperationEnd> {
+  const { run, definition, call, deps } = context;
+  const refuse = async () => {
+    const end = deniedEnd(context, {
+      kind: "policy",
+      operation: definition.name,
+      reason: "approval_unavailable"
+    });
+    const ended = await deps.runs.endWaiting({
+      clientInstanceId: deps.clientInstanceId,
+      id: run.id,
+      end,
+      ...(run.decision ? { decision: run.decision } : {})
+    });
+    return ended
+      ? { execution: "refused" as const, run: ended, error: ended.error ?? UNKNOWN_END }
+      : readDecidedOperationEnd(run.id, run.approvalRequestId, deps);
+  };
+  if (!deps.approvals || definition.secret) return refuse();
+  const expiresAt = new Date(
+    context.now().getTime() + HELD_AFTER_CONFIRMATION_EXPIRES_AFTER_MS
+  ).toISOString();
+  const filed = await deps.approvals.request({
+    run,
+    call,
+    ...(heldInput ? { heldInput } : {}),
+    resource: context.resource,
+    runtime: context.runtime,
+    expiresAt,
+    policySource: policy.source,
+    ...(approval ? { approval } : {})
+  });
+  if (!filed) return refuse();
+  const moved = await deps.runs.holdConfirmedForApproval({
+    clientInstanceId: deps.clientInstanceId,
+    id: run.id,
+    approvalRequestId: filed.approvalRequestId,
+    inputRef: `approval_request:${filed.approvalRequestId}`,
+    expiresAt
+  });
+  if (!moved) return readDecidedOperationEnd(run.id, run.approvalRequestId, deps);
+  return { execution: "held", run: moved, approvalRequestId: filed.approvalRequestId };
+}
+
+/**
+ * What a decided call that does not wait for its own request any more says: `held` where it
+ * now waits for another person's approval on a newer request, else as an approved call.
+ */
+export async function readDecidedOperationEnd(
+  runId: string,
+  requestId: string | undefined,
+  deps: Pick<RunOperationDeps, "clientInstanceId" | "runs">
+): Promise<ApprovedOperationEnd> {
+  const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: runId });
+  if (
+    run?.status === "pending_approval" &&
+    run.approvalRequestId !== undefined &&
+    requestId !== undefined &&
+    run.approvalRequestId !== requestId
+  ) {
+    return { execution: "held", run, approvalRequestId: run.approvalRequestId };
+  }
+  return readApprovedOperationEnd(runId, deps);
+}
+
+/**
  * What a run that does not wait any more says about its approved call. A run that is still
  * `running` is ended as interrupted: only the one executor of the run may ask.
  */
@@ -199,7 +333,7 @@ async function admitAgain(
   deps: RunOperationDeps,
   decision: OperationRunDecision,
   runtime: Pick<OperationCallRuntime, "locale" | "runFence"> = {}
-): Promise<{ context: RunContext } | { end: ApprovedOperationEnd }> {
+): Promise<{ context: RunContext; policy: PolicyResolution } | { end: ApprovedOperationEnd }> {
   const now = deps.now ?? (() => new Date());
   /** Ends the waiting run. Without a run to answer, the run did not wait any more. */
   const endWaiting = (end: Extract<OperationRunEnd, { status: "denied" | "failed" }>) =>
@@ -373,7 +507,7 @@ async function admitAgain(
   if ("denial" in guarded) {
     return refuse(guarded.denial);
   }
-  return { context };
+  return { context, policy: guarded.policy };
 }
 
 /**

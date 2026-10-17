@@ -82,6 +82,11 @@ export interface OperationApprovalRequests {
     policySource: PolicySource;
     /** Who decides it, where the operation names them: see `approval` of its definition. */
     approval?: OperationApproval;
+    /**
+     * The request is the confirmation of the person the call acts for, who is not present:
+     * it is addressed to them alone and decided in their Inbox (OP-4b).
+     */
+    confirmation?: true;
   }): Promise<{ approvalRequestId: string } | undefined>;
 }
 
@@ -178,6 +183,11 @@ export type ApprovedOperationEnd = {
   | { execution: "done" }
   | { execution: "failed" | "interrupted" | "refused"; error: { code: string; message: string } }
   | { execution: "expired" }
+  /**
+   * A call its person confirmed in the Inbox that now waits for another person's approval,
+   * as their own direct call would have (OP-4b): `approvalRequestId` is that request.
+   */
+  | { execution: "held"; approvalRequestId: string }
 );
 
 /** One run with what its call path needs to record how it goes on. */

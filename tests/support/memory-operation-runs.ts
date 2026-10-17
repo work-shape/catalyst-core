@@ -108,14 +108,34 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
     },
     approveWaiting({ clientInstanceId, id, decision }) {
       const run = find(clientInstanceId, id);
+      const waiting = decision.mode === "confirmed" ? "pending_confirmation" : "pending_approval";
       if (
-        run?.status !== "pending_approval" ||
+        run?.status !== waiting ||
         run.decision ||
         !run.expiresAt ||
-        Date.parse(run.expiresAt) <= Date.now()
+        Date.parse(run.expiresAt) <= Date.now() ||
+        (waiting === "pending_confirmation" && !run.approvalRequestId)
       )
         return Promise.resolve(undefined);
       return Promise.resolve({ run: replace(run, { decision }), resumesAgent: false });
+    },
+    holdConfirmedForApproval({ clientInstanceId, id, approvalRequestId, inputRef, expiresAt }) {
+      const run = find(clientInstanceId, id);
+      if (
+        run?.status !== "pending_confirmation" ||
+        run.decision?.mode !== "confirmed" ||
+        run.origin.kind === "agent"
+      )
+        return Promise.resolve(undefined);
+      return Promise.resolve(
+        replace(run, {
+          status: "pending_approval",
+          approvalRequestId,
+          inputRef,
+          expiresAt,
+          decision: undefined
+        })
+      );
     },
     endWaiting({ clientInstanceId, id, end, decision }) {
       const run = find(clientInstanceId, id);

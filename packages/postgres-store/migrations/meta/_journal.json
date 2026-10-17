@@ -708,6 +708,20 @@
       "when": 1792245406574,
       "tag": "0100_workflow_step_operation_wait",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1792247656857,
+      "tag": "0101_approval_request_addressee",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1792247662864,
+      "tag": "0102_approval_request_addressee_index",
+      "breakpoints": true
     }
   ]
 }

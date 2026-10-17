@@ -177,6 +177,8 @@ export const operations = defineTranslations({
     "operations.callOutcomeRefused":
       "Not executed. When the call should run, it was no longer allowed.",
     "operations.callOutcomeExpired": "Expired before it was decided. Nothing was executed.",
+    "operations.callOutcomeHeld":
+      "Allowed. The call now waits for an approver; nothing was executed yet.",
     "operations.callOutcomeReason": "Reason: {reason}",
     "operations.callExpires": "Expires",
     "operations.callExpiresHint": "After that the call expires and does not run.",
@@ -360,6 +362,8 @@ export const operations = defineTranslations({
       "Nicht ausgeführt. Als der Aufruf laufen sollte, war er nicht mehr erlaubt.",
     "operations.callOutcomeExpired":
       "Abgelaufen, bevor entschieden wurde. Es wurde nichts ausgeführt.",
+    "operations.callOutcomeHeld":
+      "Erlaubt. Der Aufruf wartet jetzt auf eine Freigabe; noch wurde nichts ausgeführt.",
     "operations.callOutcomeReason": "Grund: {reason}",
     "operations.callExpires": "Läuft ab",
     "operations.callExpiresHint": "Danach verfällt der Aufruf und läuft nicht.",

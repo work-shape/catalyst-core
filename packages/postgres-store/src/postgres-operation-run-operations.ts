@@ -160,7 +160,12 @@ async function finishOperationRun(
             expiresAt: new Date(end.expiresAt)
           }
         : end.status === "pending_confirmation"
-          ? { inputRef: end.inputRef, expiresAt: new Date(end.expiresAt) }
+          ? {
+              inputRef: end.inputRef,
+              expiresAt: new Date(end.expiresAt),
+              // A confirmation that waits in its person's Inbox names its item.
+              ...(end.approvalRequestId ? { approvalRequestId: end.approvalRequestId } : {})
+            }
           : { finishedAt }),
       ...(end.status === "done"
         ? {
@@ -479,9 +484,14 @@ export function createPostgresOperationRunsStore(
     resume: (input) => resumeOperationRun(db, input),
     approveWaiting: async (input) => {
       let resumesAgent = false;
+      // A confirmation in the Inbox waits `pending_confirmation`, an approval
+      // `pending_approval`; each takes only the decision of its own kind.
+      const waitingStatus =
+        input.decision.mode === "confirmed" ? "pending_confirmation" : "pending_approval";
       const run = await settle(input, async (tx) => {
         const seen = await getOperationRun(tx, input);
-        if (!seen || seen.status !== "pending_approval" || !seen.expiresAt) return undefined;
+        if (!seen || seen.status !== waitingStatus || !seen.expiresAt) return undefined;
+        if (waitingStatus === "pending_confirmation" && !seen.approvalRequestId) return undefined;
         if (seen.origin.kind === "agent") {
           const [agent] = await tx
             .select({ status: agentRuns.status })
@@ -503,15 +513,16 @@ export function createPostgresOperationRunsStore(
           resumesAgent = agent !== undefined && agent.status !== "completed";
         }
         // Agent attribution on a standalone call names no resumable run. It keeps the
-        // standalone executor; only an actual Agent Run records its decision here.
-        if (!resumesAgent) return seen;
+        // standalone executor; only an actual Agent Run records its approval here. A
+        // confirmation always records its decision: it is what lets the call be taken.
+        if (!resumesAgent && waitingStatus === "pending_approval") return seen;
         const [row] = await tx
           .update(operationRuns)
           .set({ decision: input.decision, updatedAt: sql`now()` })
           .where(
             and(
               identity(input),
-              eq(operationRuns.status, "pending_approval"),
+              eq(operationRuns.status, waitingStatus),
               isNull(operationRuns.decision),
               sql`${operationRuns.expiresAt} > now()`
             )
@@ -520,6 +531,29 @@ export function createPostgresOperationRunsStore(
         return row ? mapOperationRun(row) : undefined;
       });
       return run ? { run, resumesAgent } : undefined;
+    },
+    holdConfirmedForApproval: async (input) => {
+      const [row] = await db
+        .update(operationRuns)
+        .set({
+          status: "pending_approval",
+          approvalRequestId: input.approvalRequestId,
+          inputRef: input.inputRef,
+          expiresAt: new Date(input.expiresAt),
+          // The new wait is another person's to decide; the confirmation stays on its item.
+          decision: null,
+          updatedAt: sql`now()`
+        })
+        .where(
+          and(
+            identity(input),
+            eq(operationRuns.status, "pending_confirmation"),
+            sql`${operationRuns.decision}->>'mode' = 'confirmed'`,
+            sql`${operationRuns.origin}->>'kind' <> 'agent'`
+          )
+        )
+        .returning();
+      return row ? mapOperationRun(row) : undefined;
     },
     endWaiting: (input) => settle(input, (tx) => endWaitingOperationRun(tx, input)),
     markExpired: (input) => markOperationRunsExpired(db, input),
@@ -537,6 +571,7 @@ async function resumeApproval(tx: PostgresConnection, run: OperationRun): Promis
     run.origin.kind !== "agent" ||
     !run.approvalRequestId ||
     (run.status === "pending_approval" && run.decision?.mode !== "approved") ||
+    (run.status === "pending_confirmation" && run.decision?.mode !== "confirmed") ||
     run.status === "running"
   )
     return;

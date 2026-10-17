@@ -66,7 +66,10 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   async createRequest(
     user: AuthenticatedUser,
     context: CallContext,
-    command: Pick<ApprovalRequest, "kind" | "summary" | "payload" | "origin"> & {
+    command: Pick<
+      ApprovalRequest,
+      "kind" | "summary" | "payload" | "origin" | "addresseeUserId"
+    > & {
       pendingLimits?: ApprovalRequestPendingLimits;
     }
   ): Promise<ApprovalRequest> {
@@ -130,13 +133,16 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     filter: { status?: ApprovalRequestStatus; scope?: "decided"; page?: StorePage } = {}
   ): Promise<ApprovalRequestView[]> {
     const kinds = this.reviewableKinds(user, access);
-    if (kinds.length === 0) {
+    // A person without any kind's right reads the confirmations addressed to them, and
+    // nothing else; one who has none is refused the queue as before (OP-4b).
+    if (kinds.length === 0 && !(await this.hasAddressedRequests(user))) {
       throw new AppError("FORBIDDEN", "Approval review requires a registered kind's permission");
     }
     const { scope, ...storeFilter } = filter;
     const requests = await this.options.store.listApprovalRequests({
       clientInstanceId: this.options.clientInstanceId,
       kinds,
+      reader: this.reader(user),
       ...storeFilter,
       ...(scope === "decided" ? decidedListFilter() : {})
     });
@@ -177,15 +183,18 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     mine: { pending: number; total: number };
   }> {
     const kinds = this.reviewableKinds(user, access);
+    const reader = this.reader(user);
     const [count, decided, mine] = await Promise.all([
       this.options.store.countPendingApprovalRequests({
         clientInstanceId: this.options.clientInstanceId,
-        kinds
+        kinds,
+        reader
       }),
       // What the decided list holds for this person: the same kinds and the same filter.
       this.options.store.countApprovalRequests({
         clientInstanceId: this.options.clientInstanceId,
         kinds,
+        reader,
         ...decidedListFilter()
       }),
       this.options.store.countOwnApprovalRequests({
@@ -194,7 +203,8 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         requestedById: user.id
       })
     ]);
-    return { count, canReview: kinds.length > 0, decided, mine };
+    // A confirmation addressed to the person is theirs to review whatever rights they hold.
+    return { count, canReview: kinds.length > 0 || count + decided > 0, decided, mine };
   }
 
   async decideRequest(
@@ -209,7 +219,12 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   ): Promise<ApprovalRequest> {
     const request = await this.visibleRequest(user, access, command.requestId);
     const handler = this.handler(request.kind);
-    access.require(handler.requiredPermission);
+    // A request addressed to a person is theirs to decide, whatever rights they hold; only
+    // they reach it here.
+    if (request.addresseeUserId === undefined) access.require(handler.requiredPermission);
+    else if (command.decision === "request_changes") {
+      throw new AppError("VALIDATION_FAILED", "A confirmation is allowed or denied");
+    }
     const comment = command.comment?.trim();
     if (command.decision === "request_changes" && !comment) {
       throw new AppError("VALIDATION_FAILED", "Requesting changes requires a comment");
@@ -284,6 +299,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const request = await this.visibleRequest(user, access, requestId);
     if (request.requestedBy.id !== user.id) {
       throw new AppError("FORBIDDEN", "Only the requester can withdraw an approval request");
+    }
+    if (request.addresseeUserId !== undefined) {
+      throw new AppError("CONFLICT", "A confirmation in your Inbox is answered with Allow or Deny");
     }
     const updated = await this.options.store.transitionPendingApprovalRequest({
       clientInstanceId: this.options.clientInstanceId,
@@ -453,12 +471,31 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const handler = request ? this.options.handlers.get(request.kind) : undefined;
     if (
       !request ||
-      (request.requestedBy.id !== user.id &&
-        (!handler || !access.authorize(handler.requiredPermission).allowed))
+      // A request addressed to a person is theirs alone: to anyone else it does not exist,
+      // an instance admin and a holder of the kind's right included (OP-4b).
+      (request.addresseeUserId !== undefined
+        ? request.addresseeUserId !== user.id
+        : request.requestedBy.id !== user.id &&
+          (!handler || !access.authorize(handler.requiredPermission).allowed))
     ) {
       throw new AppError("NOT_FOUND", "Approval request was not found");
     }
     return request;
+  }
+
+  /** Whether any request, in any status, is addressed to the caller. */
+  private async hasAddressedRequests(user: AuthenticatedUser): Promise<boolean> {
+    const count = await this.options.store.countApprovalRequests({
+      clientInstanceId: this.options.clientInstanceId,
+      kinds: [],
+      reader: this.reader(user)
+    });
+    return count > 0;
+  }
+
+  /** Who reads a list: requests addressed to somebody are listed to that person alone. */
+  private reader(user: AuthenticatedUser): { userId: string; addressedKinds: string[] } {
+    return { userId: user.id, addressedKinds: this.registeredKinds() };
   }
 
   private async view(
@@ -470,6 +507,11 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const { access } = viewer;
     const handler = this.handler(request.kind);
     const canDecideWithToken = hasAuthScope(user, APPROVAL_DECIDE_AUTH_SCOPE);
+    // A request addressed to a person is decided by that person, and by the right of nobody.
+    const decides =
+      request.addresseeUserId !== undefined
+        ? request.addresseeUserId === user.id
+        : access.authorize(handler.requiredPermission).allowed;
     return {
       ...request,
       preview: await handler.preview(handler.validate(request.payload), {
@@ -478,16 +520,11 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       }),
       // A flag is true only if the route would also accept the caller's token scopes.
       canRevert:
-        request.status === "approved" &&
-        Boolean(handler.revert) &&
-        canDecideWithToken &&
-        access.authorize(handler.requiredPermission).allowed,
-      canDecide:
-        request.status === "pending" &&
-        canDecideWithToken &&
-        access.authorize(handler.requiredPermission).allowed,
+        request.status === "approved" && Boolean(handler.revert) && canDecideWithToken && decides,
+      canDecide: request.status === "pending" && canDecideWithToken && decides,
       canWithdraw:
         request.status === "pending" &&
+        request.addresseeUserId === undefined &&
         request.requestedBy.id === user.id &&
         (hasAuthScope(user, APPROVAL_WITHDRAW_AUTH_SCOPE) ||
           (user.keyScopes !== undefined &&

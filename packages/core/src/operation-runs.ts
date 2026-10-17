@@ -185,7 +185,16 @@ export type OperationRunEnd = { finishedAt: ISODateString } & (
       inputRef: string;
       expiresAt: ISODateString;
     }
-  | { status: "pending_confirmation"; inputRef: string; expiresAt: ISODateString }
+  | {
+      status: "pending_confirmation";
+      inputRef: string;
+      expiresAt: ISODateString;
+      /**
+       * The Inbox item the confirmation waits in, where it waits in its person's Inbox and not
+       * in a conversation (OP-4b).
+       */
+      approvalRequestId?: string;
+    }
 );
 
 /**
@@ -267,8 +276,25 @@ export interface OperationRunStore {
   approveWaiting(input: {
     clientInstanceId: ClientInstanceId;
     id: OperationRunId;
-    decision: OperationRunDecision & { mode: "approved" };
+    /**
+     * `approved` for a call that waits for another person's approval; `confirmed` for one
+     * that waits in its own person's Inbox (OP-4b), whose decision is always recorded here.
+     */
+    decision: OperationRunDecision & { mode: "approved" | "confirmed" };
   }): Promise<{ run: OperationRun; resumesAgent: boolean } | undefined>;
+  /**
+   * Moves a call its person confirmed in the Inbox on to wait for another person's approval,
+   * which their own direct call would have waited for: the run waits `pending_approval` on
+   * the new request, without a decision. `undefined` when the run is no confirmed call that
+   * waits.
+   */
+  holdConfirmedForApproval(input: {
+    clientInstanceId: ClientInstanceId;
+    id: OperationRunId;
+    approvalRequestId: string;
+    inputRef: string;
+    expiresAt: ISODateString;
+  }): Promise<OperationRun | undefined>;
   /** Ends a run that waits for a decision without executing it. `undefined` when it does not wait. */
   endWaiting(input: {
     clientInstanceId: ClientInstanceId;

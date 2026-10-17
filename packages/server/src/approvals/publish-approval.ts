@@ -1,5 +1,6 @@
 import {
   WORKFLOW_ACTIONS,
+  callerCanConfirm,
   WORKFLOW_ASSET_KIND,
   WORKFLOW_MANIFEST_FILE,
   isJsonObject,
@@ -13,7 +14,8 @@ import {
   type OperationEffect,
   type OperationOrigin,
   type PagesStore,
-  type PlatformAction
+  type PlatformAction,
+  type PolicyValue
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { APP_ACTIONS, APP_ASSET_KIND } from "../apps/app-kind";
@@ -84,9 +86,10 @@ export function publishApproval(
 
 /**
  * The refusal of a publish that is no person's click, for a kind whose publish an approver's
- * click makes live: a revision of it goes live only on the interface's Publish or the answer
- * to the CLI's question. Until a call of an agent or an MCP client can wait as a confirmation
- * in the person's Inbox (OP-4), it is refused. Nothing for a person's own call.
+ * click makes live: a revision of it goes live only on the interface's Publish, the answer to
+ * the CLI's question, or the person's Allow of an unattended CLI publish in their Inbox (see
+ * `publishPolicyFloor`). An agent's or an MCP client's publish is refused until it can wait
+ * the same way. Nothing for a person's own call.
  */
 export function publishFromAPerson(
   target: AssetTarget,
@@ -100,6 +103,15 @@ export function publishFromAPerson(
     reason: "user_only",
     message: `Publishing a ${target.kind.kind} needs a person's click: publish it in the interface, or answer the question of 'catalyst ${target.kind.kind} publish' in a terminal.`
   };
+}
+
+/**
+ * The floor of a publish that is not its caller's own confirmation, such as `catalyst <kind>
+ * publish --yes`: at least `confirm`, whatever a central setting says, so the person confirms
+ * it in their Inbox (Confirmation in the Inbox). Nothing for a call that is its own.
+ */
+export function publishPolicyFloor(origin: OperationOrigin): PolicyValue | undefined {
+  return callerCanConfirm(origin) ? undefined : "confirm";
 }
 
 /**

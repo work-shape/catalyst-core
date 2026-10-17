@@ -31,7 +31,9 @@ export async function withdrawStoppedOperationApproval(
     "origin",
     "workspaceId",
     "expiresAt",
-    "subject"
+    "subject",
+    "subjectKind",
+    "mode"
   ]) {
     const value = seen.payload[key];
     if (value !== undefined) payload[key] = value;
