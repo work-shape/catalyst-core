@@ -462,6 +462,9 @@ export const MODEL_PROVIDER_AUTH_MODES = ["bearer", "api-key"] as const;
 export type ModelProviderAuthMode = (typeof MODEL_PROVIDER_AUTH_MODES)[number];
 
 export const CONVERSATION_VISIBILITIES = ["workspace", "private"] as const;
+/** A conversation a person has, or the run thread of a Child Agent Run. */
+export const CONVERSATION_KINDS = ["chat", "run_thread"] as const;
+export type ConversationKind = (typeof CONVERSATION_KINDS)[number];
 export type ConversationVisibility = (typeof CONVERSATION_VISIBILITIES)[number];
 
 export const WEB_SOURCE_PROVIDERS = [
@@ -500,6 +503,7 @@ export const AGENT_RUN_STATUSES = [
   "queued",
   "running",
   "waiting_for_decision",
+  "waiting_for_subagents",
   "cancelling",
   "completed",
   "cancelled",
@@ -794,6 +798,7 @@ export const ACTIVE_AGENT_RUN_STATUSES = [
   "queued",
   "running",
   "waiting_for_decision",
+  "waiting_for_subagents",
   "cancelling"
 ] as const satisfies readonly AgentRunStatus[];
 export type ActiveAgentRunStatus = (typeof ACTIVE_AGENT_RUN_STATUSES)[number];

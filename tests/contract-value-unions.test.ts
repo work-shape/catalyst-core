@@ -71,6 +71,7 @@ it("preserves the exported unions when contract lists become shared", () => {
     | "queued"
     | "running"
     | "waiting_for_decision"
+    | "waiting_for_subagents"
     | "cancelling"
     | "completed"
     | "cancelled"

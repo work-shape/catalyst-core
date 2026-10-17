@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   integer,
   jsonb,
@@ -25,7 +26,18 @@ export const agentRuns = pgTable(
     conversationId: text("conversation_id")
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
-    ownerUserId: text("owner_user_id").notNull(),
+    // The person the run acts for. Null only on an agent step's run, which acts as its
+    // Workflow's principal (`principal_id`); exactly one of the two is set.
+    ownerUserId: text("owner_user_id"),
+    principalId: text("principal_id"),
+    // A Child Agent Run: the run that started it, the run at the top of its tree, its depth
+    // and the Operation Run of the `agents.run` call. Null on a root run.
+    parentRunId: text("parent_run_id"),
+    rootRunId: text("root_run_id"),
+    depth: integer("depth").notNull().default(0),
+    parentOperationRunId: text("parent_operation_run_id"),
+    // The step run of the Workflow `agent` step that started the run.
+    workflowStepRunId: text("workflow_step_run_id"),
     inputMessageId: text("input_message_id")
       .notNull()
       .references(() => messages.id, { onDelete: "cascade" }),
@@ -54,9 +66,33 @@ export const agentRuns = pgTable(
     resumeState: jsonb("resume_state").$type<AgentRunResumeState>()
   },
   (table) => [
+    check(
+      "agent_runs_owner_check",
+      sql`(${table.ownerUserId} is null) <> (${table.principalId} is null)`
+    ),
+    check(
+      "agent_runs_lineage_check",
+      sql`(${table.parentRunId} is null and ${table.rootRunId} is null and ${table.parentOperationRunId} is null and ${table.depth} = 0) or (${table.parentRunId} is not null and ${table.rootRunId} is not null and ${table.parentOperationRunId} is not null and ${table.depth} = 1)`
+    ),
+    check(
+      "agent_runs_started_by_check",
+      sql`${table.parentOperationRunId} is null or ${table.workflowStepRunId} is null`
+    ),
     uniqueIndex("agent_runs_active_conversation_idx")
       .on(table.clientInstanceId, table.conversationId)
-      .where(sql`${table.status} in ('queued', 'running', 'waiting_for_decision', 'cancelling')`),
+      .where(
+        sql`${table.status} in ('queued', 'running', 'waiting_for_decision', 'waiting_for_subagents', 'cancelling')`
+      ),
+    // A retried `agents.run` call finds the child it started, a retried agent step its run.
+    uniqueIndex("agent_runs_parent_operation_idx")
+      .on(table.clientInstanceId, table.parentOperationRunId)
+      .where(sql`${table.parentOperationRunId} is not null`),
+    uniqueIndex("agent_runs_workflow_step_idx")
+      .on(table.clientInstanceId, table.workflowStepRunId)
+      .where(sql`${table.workflowStepRunId} is not null`),
+    index("agent_runs_parent_idx")
+      .on(table.clientInstanceId, table.parentRunId)
+      .where(sql`${table.parentRunId} is not null`),
     uniqueIndex("agent_runs_idempotency_idx")
       .on(table.clientInstanceId, table.conversationId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null`),
@@ -85,7 +121,8 @@ export const agentRunObservations = pgTable(
     conversationId: text("conversation_id")
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
-    ownerUserId: text("owner_user_id").notNull(),
+    // Null on the events of an agent step's run, which acts for no person.
+    ownerUserId: text("owner_user_id"),
     sequence: integer("sequence").notNull(),
     type: text("type").$type<RunObservation["type"]>().notNull(),
     payload: jsonb("payload").$type<RunObservation["payload"]>().notNull(),

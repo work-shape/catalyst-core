@@ -50,6 +50,11 @@ export function startRunConnectionManager(
         onCaughtUp: () => {
           streamCaughtUp = true;
         },
+        // An event of a newer server this client does not know: its place still counts.
+        onSkipped: (skipped) => {
+          if (skipped.runId !== runId) return;
+          cursorStorage.rememberCursor(conversationId, runId, skipped.sequence);
+        },
         signal: abortController.signal
       })) {
         if (cancelled) {
@@ -62,7 +67,12 @@ export function startRunConnectionManager(
           observation.sequence
         );
         const applied = input.applyObservation(observation);
-        if (observation.payload.type === "tool_call_completed") {
+        // A started subagent is a row of the conversation's Resources, as a finished call's
+        // file is one.
+        if (
+          observation.payload.type === "tool_call_completed" ||
+          observation.payload.type === "subagent_started"
+        ) {
           input.onToolCallCompleted?.(observation.conversationId);
         }
         if (isTerminalObservation(observation)) {

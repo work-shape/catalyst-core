@@ -37,6 +37,54 @@ async function cleanUpConversationData(
   conversationId: ConversationId,
   deletedAt: string
 ): Promise<ConversationDataDeletionTotals> {
+  // A chat Conversation's runs and its subagents' runs stop first, parents before children;
+  // then its run threads are cleaned up as it is (CR-1).
+  await cancelRunsOfConversation(options, conversationId);
+  const threads = await options.stores.childAgentRuns.listRunThreadIds({
+    clientInstanceId: options.clientInstanceId,
+    rootConversationId: conversationId
+  });
+  for (const threadId of threads) await cleanUpOneConversation(options, threadId, deletedAt);
+  return cleanUpOneConversation(options, conversationId, deletedAt);
+}
+
+/** The reason a run of a deleted Conversation carries. */
+const RUN_CANCELLED_WITH_CONVERSATION = "The conversation of this run was deleted.";
+
+/**
+ * Asks every run of a deleted Conversation and of its run threads that has not ended to stop.
+ * A parent's end cancels its open subagents too; one that ended meanwhile needs no request.
+ */
+async function cancelRunsOfConversation(
+  options: ChatServerOptions,
+  rootConversationId: ConversationId
+): Promise<void> {
+  const runs = await options.stores.agentRuns.listAgentRunsInProgress({
+    clientInstanceId: options.clientInstanceId,
+    rootConversationId
+  });
+  for (const run of runs) {
+    if (run.status === "cancelling") continue;
+    try {
+      await options.stores.agentRuns.requestAgentRunCancellation({
+        clientInstanceId: options.clientInstanceId,
+        runId: run.id,
+        requestedAt: new Date().toISOString(),
+        reason: RUN_CANCELLED_WITH_CONVERSATION
+      });
+    } catch (error) {
+      if (!isAppError(error) || (error.code !== "CONFLICT" && error.code !== "NOT_FOUND")) {
+        throw error;
+      }
+    }
+  }
+}
+
+async function cleanUpOneConversation(
+  options: ChatServerOptions,
+  conversationId: ConversationId,
+  deletedAt: string
+): Promise<ConversationDataDeletionTotals> {
   // A Build conversation's Try conversations go with it.
   await deleteTryConversations(
     options,

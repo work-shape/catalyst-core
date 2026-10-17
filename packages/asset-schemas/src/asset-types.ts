@@ -42,6 +42,11 @@ export interface AgentConfig {
   modelReasoningEfforts?: Record<string, ReasoningEffortConfig>;
   maxSteps?: number;
   toolNames: string[];
+  /**
+   * The other agents this agent may start as subagents with `run_agent`, besides itself. Each
+   * is started only where the person may use it in the conversation's workspace.
+   */
+  subagentNames?: string[];
   skillNames: string[];
   /**
    * The Knowledge Bases the agent answers from, by id. However many it lists, the agent has one

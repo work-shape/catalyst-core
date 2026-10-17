@@ -21,6 +21,7 @@ import {
   type RuntimeCallContext,
   type StartAgentRunInput
 } from "@work-shape/catalyst-core";
+import type { SubagentOutcomeReader } from "./subagents";
 import type { ModelCall, ModelCompletion, ModelGateway } from "@work-shape/catalyst-model-provider";
 import type { RunState, RunFailureError } from "../run-state";
 import type {
@@ -58,6 +59,8 @@ export interface LocalAgentRuntimeOptions {
    * resumes no run: only an Agent Run's worker pauses one.
    */
   runDecidedTool?: ToolDecisionRunner;
+  /** Where a run reads how its subagents ended. Only an Agent Run's worker runs subagents. */
+  subagents?: SubagentOutcomeReader;
   /**
    * What a conversation is offered beyond its agent's definition: the tools the server binds
    * to the subject of a conversation about an asset, and the skills the platform ships for

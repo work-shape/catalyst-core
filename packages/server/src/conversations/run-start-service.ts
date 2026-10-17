@@ -196,7 +196,10 @@ export class RunStartWorkflow {
     context: RuntimeCallContext,
     command: SendConversationMessageCommand
   ): Promise<ConversationMessageRunResult> {
-    const conversation = await this.conversations.requireConversationAccess(conversationId, user);
+    const conversation = await this.conversations.requireChatConversationAccess(
+      conversationId,
+      user
+    );
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({

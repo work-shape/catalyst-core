@@ -9,6 +9,7 @@ import type {
   RunObservation
 } from "@work-shape/catalyst-api-client";
 import {
+  ACTIVE_AGENT_RUN_STATUSES,
   applyAgentRunObservation,
   type AgentRunProjection as CoreAgentRunProjection,
   type RunObservation as CoreRunObservation
@@ -279,12 +280,7 @@ export function completeRunObservationStreamInControllerState(
 }
 
 export function isLiveRunStatus(status: AgentRun["status"]): boolean {
-  return (
-    status === "queued" ||
-    status === "running" ||
-    status === "waiting_for_decision" ||
-    status === "cancelling"
-  );
+  return ACTIVE_AGENT_RUN_STATUSES.some((active) => active === status);
 }
 
 export function isTerminalObservation(observation: RunObservation): boolean {

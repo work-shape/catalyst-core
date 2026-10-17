@@ -52,7 +52,12 @@ type ControlPart<Op extends Operation> = {
   ? {
       /** Called when the server has nothing after the given position and sends no stream. */
       onCaughtUp?: () => void;
-    }
+    } & (Op["response"] extends { skip: infer Skip extends z.ZodType }
+      ? {
+          /** Called for an event this client does not know, which the stream passes over. */
+          onSkipped?: (value: z.output<Skip>) => void;
+        }
+      : unknown)
   : unknown);
 
 /**
@@ -272,7 +277,7 @@ function callOperation(
 ): AsyncIterable<unknown> | Promise<unknown> {
   const { response } = operation;
   if (response.kind === "sse") {
-    return streamEvents(transport, operation, response.schema, request);
+    return streamEvents(transport, operation, response, request);
   }
   if (response.kind === "blob") {
     return transport
@@ -310,7 +315,7 @@ function callOperation(
 async function* streamEvents(
   transport: ApiTransport,
   operation: Operation,
-  schema: z.ZodType,
+  response: { schema: z.ZodType; skip?: z.ZodType },
   request: OperationRequest
 ): AsyncGenerator<unknown, void, undefined> {
   const answer = await transport.send(operation, request);
@@ -323,7 +328,12 @@ async function* streamEvents(
   }
   try {
     for await (const data of readServerSentEvents(answer.body)) {
-      yield parseJson(transport, data, schema, answer.status);
+      const event = readEvent(transport, data, response, answer.status);
+      if (event.skipped) {
+        request.onSkipped?.(event.value);
+        continue;
+      }
+      yield event.value;
     }
   } catch (error) {
     throw asCallFailure(error, request);
@@ -341,6 +351,32 @@ async function readBody<Body>(read: () => Promise<Body>, request: OperationReque
 /** An abort stays the caller's own abort; anything else that cuts an answer is a failed call. */
 function asCallFailure(error: unknown, request: OperationRequest): unknown {
   return error instanceof ApiError || request.signal?.aborted ? error : transportError(error);
+}
+
+/**
+ * One event of a stream. One that fails `schema` but matches `skip` is of a type this client
+ * does not know and is passed over; one that matches neither fails as any unreadable answer.
+ */
+function readEvent(
+  transport: ApiTransport,
+  text: string,
+  response: { schema: z.ZodType; skip?: z.ZodType },
+  status: number
+): { skipped: boolean; value: unknown } {
+  const { skip } = response;
+  if (skip) {
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch (error) {
+      throw unreadableResponseError(status, error);
+    }
+    const parsed = response.schema.safeParse(value);
+    if (parsed.success) return { skipped: false, value: parsed.data };
+    const skipped = skip.safeParse(value);
+    if (skipped.success) return { skipped: true, value: skipped.data };
+  }
+  return { skipped: false, value: parseJson(transport, text, response.schema, status) };
 }
 
 function parseJson(

@@ -58,6 +58,8 @@ export const modelUsageEvents = pgTable(
     userId: text("user_id"),
     collaborationWorkspaceId: text("collaboration_workspace_id"),
     operationRunId: text("operation_run_id"),
+    // The Workflow run a call of an `agent` step counts to.
+    workflowRunId: text("workflow_run_id"),
     correlationId: text("correlation_id").notNull(),
     // A row a previous release writes names no status: its call is over when it is written.
     status: text("status").$type<ModelUsageEventStatus>().notNull().default("settled"),
@@ -90,6 +92,9 @@ export const modelUsageEvents = pgTable(
     index("model_usage_events_workspace_idx")
       .on(table.collaborationWorkspaceId)
       .where(sql`${table.collaborationWorkspaceId} is not null`),
+    index("model_usage_events_workflow_run_idx")
+      .on(table.workflowRunId)
+      .where(sql`${table.workflowRunId} is not null`),
     // What recovery finds the calls by that never settled. Holds the calls in flight only.
     index("model_usage_events_pending_idx")
       .on(table.clientInstanceId, table.createdAt)

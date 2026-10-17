@@ -10,6 +10,7 @@ import {
   type PausedToolCall,
   type RuntimeCallContext,
   type StartAgentRunInput,
+  type StartedSubagent,
   type ToolDecisionRunner
 } from "@work-shape/catalyst-core";
 import type { ModelMessage, ModelToolCall } from "@work-shape/catalyst-model-provider";
@@ -18,6 +19,12 @@ import type { RunState } from "../run-state";
 import { emitToolCallEnd } from "../tool-call-execution";
 import type { ModelInput } from "./model-input";
 import type { ToolDispatch, ToolDispatchOutcome } from "./tool-dispatch";
+import {
+  isRunAgentCall,
+  readSubagentAnswers,
+  startedSubagentOf,
+  type SubagentOutcomeReader
+} from "./subagents";
 
 // Where a run that waited for a decision goes on (EW-2a): the model's input as it was when the
 // run paused, and the rest of the paused step's calls.
@@ -116,8 +123,14 @@ export async function finishPausedStep(input: {
 }): Promise<ToolDispatchOutcome & { answeredToolCallIds: string[] }> {
   const { resume, context, state } = input;
   const answered = new Set(resume.doneToolCallIds);
+  // A call that started its subagent is answered once the step's calls are through.
+  const startedBefore = resume.subagents ?? [];
+  const started = new Set(startedBefore.map((subagent) => subagent.toolCallId));
   const answeredNow: string[] = [];
-  const pending = resume.toolCalls.filter((call) => !answered.has(call.toolCallId));
+  const subagents: StartedSubagent[] = [];
+  const pending = resume.toolCalls.filter(
+    (call) => !answered.has(call.toolCallId) && !started.has(call.toolCallId)
+  );
   let next = 0;
   for (const call of pending) {
     const waited = resume.waiting.find((entry) => entry.toolCallId === call.toolCallId);
@@ -142,6 +155,16 @@ export async function finishPausedStep(input: {
       },
       context
     );
+    next += 1;
+    // A decided `run_agent` call started its subagent: it is answered with the others.
+    const subagent = isRunAgentCall(call.toolName)
+      ? startedSubagentOf(call.toolCallId, result, waited.operationRunId)
+      : undefined;
+    if (subagent) {
+      state.emit({ type: "subagent_started", runId: input.runId, ...subagent.event });
+      subagents.push(subagent.started);
+      continue;
+    }
     const answer = await emitToolCallEnd(
       {
         modelContext: input.modelInput.modelContextOptions(context),
@@ -161,10 +184,9 @@ export async function finishPausedStep(input: {
       input.messages
     );
     answeredNow.push(call.toolCallId);
-    next += 1;
   }
   const rest = pending.slice(next).map(toModelToolCall);
-  if (rest.length === 0) return { kind: "answered", answeredToolCallIds: answeredNow };
+  if (rest.length === 0) return { kind: "answered", answeredToolCallIds: answeredNow, subagents };
   const outcome = await input.toolDispatch.dispatchToolCalls(
     input.runId,
     input.startInput,
@@ -173,14 +195,84 @@ export async function finishPausedStep(input: {
     rest,
     input.repeatedToolCalls,
     input.messages,
-    input.offeredDataTools
+    input.offeredDataTools,
+    startedBefore.length + subagents.length
   );
+  if (outcome.kind === "stopped") return { ...outcome, answeredToolCallIds: answeredNow };
   return outcome.kind === "paused"
     ? {
         ...outcome,
-        answeredToolCallIds: [...answeredNow, ...outcome.answeredToolCallIds]
+        answeredToolCallIds: [...answeredNow, ...outcome.answeredToolCallIds],
+        subagents: [...subagents, ...outcome.subagents]
       }
-    : { ...outcome, answeredToolCallIds: answeredNow };
+    : {
+        ...outcome,
+        answeredToolCallIds: answeredNow,
+        subagents: [...subagents, ...outcome.subagents]
+      };
+}
+
+/**
+ * At the end of a step that started subagents: answers each `run_agent` call with how its
+ * subagent ended, in the order of the calls, once all of them ended. While one has not, this
+ * execution ends with the run waiting for them, keeping `resume` with the subagents to go on.
+ */
+export async function answerSubagents(input: {
+  runId: AgentRunId;
+  startInput: StartAgentRunInput;
+  context: RuntimeCallContext;
+  state: RunState;
+  reader: SubagentOutcomeReader | undefined;
+  subagents: StartedSubagent[];
+  /** The step as the run goes on from it; every call but the subagents' is answered. */
+  resume: Omit<AgentRunResumeState, "version" | "waiting" | "subagents" | "doneToolCallIds">;
+  modelInput: ModelInput;
+  toolDispatch: ToolDispatch;
+  messages: ModelMessage[];
+}): Promise<"answered" | "waiting" | "stopped"> {
+  const { context, state, subagents, resume } = input;
+  const answers = await readSubagentAnswers(input.reader, input.runId, context, subagents);
+  if (context.signal?.aborted) return "stopped";
+  if (answers.kind === "waiting") {
+    const started = new Set(subagents.map((subagent) => subagent.toolCallId));
+    state.waitForSubagents({
+      version: 1,
+      ...resume,
+      doneToolCallIds: resume.toolCalls
+        .map((call) => call.toolCallId)
+        .filter((toolCallId) => !started.has(toolCallId)),
+      waiting: [],
+      subagents
+    });
+    return "waiting";
+  }
+  for (const [index, subagent] of subagents.entries()) {
+    const call = resume.toolCalls.find((entry) => entry.toolCallId === subagent.toolCallId);
+    const result = answers.results[index];
+    if (!call || !result) {
+      throw new AppError("INTERNAL", "A subagent's call is not part of its step");
+    }
+    const toolCall = toModelToolCall(call);
+    const answer = await emitToolCallEnd(
+      {
+        modelContext: input.modelInput.modelContextOptions(context),
+        runId: input.runId,
+        startInput: input.startInput,
+        state,
+        toolCall
+      },
+      result
+    );
+    await input.toolDispatch.answerToolCall(
+      input.runId,
+      input.startInput,
+      context,
+      toolCall,
+      answer,
+      input.messages
+    );
+  }
+  return "answered";
 }
 
 /** Ends this execution of the run at the call that waits, keeping what it goes on from. */

@@ -1,5 +1,6 @@
 import {
   AppError,
+  asConversationId,
   createPlatformId,
   type ClientInstanceId,
   type ConversationId,
@@ -17,7 +18,7 @@ export async function ensureExecutionWorkspace(
   input: EnsureExecutionWorkspaceInput
 ): Promise<ExecutionWorkspace> {
   const now = input.now ? new Date(input.now) : new Date();
-  await requireActiveConversation(db, {
+  const conversationId = await requireActiveConversation(db, {
     clientInstanceId: input.clientInstanceId,
     conversationId: input.conversationId
   });
@@ -27,7 +28,7 @@ export async function ensureExecutionWorkspace(
     .values({
       id: createPlatformId<"ExecutionWorkspaceId">("ews"),
       clientInstanceId: input.clientInstanceId,
-      conversationId: input.conversationId,
+      conversationId,
       ownerUserId: input.ownerUserId,
       status: "active",
       createdAt: now,
@@ -45,7 +46,7 @@ export async function ensureExecutionWorkspace(
     .where(
       and(
         eq(executionWorkspaces.clientInstanceId, input.clientInstanceId),
-        eq(executionWorkspaces.conversationId, input.conversationId),
+        eq(executionWorkspaces.conversationId, conversationId),
         ne(executionWorkspaces.status, "deleted")
       )
     )
@@ -105,19 +106,23 @@ export async function findExecutionWorkspaceOfActiveConversation(
     conversationId: ConversationId;
   }
 ): Promise<ExecutionWorkspace | undefined> {
-  await requireActiveConversation(db, input);
-  return getExecutionWorkspaceForConversation(db, input);
+  const conversationId = await requireActiveConversation(db, input);
+  return getExecutionWorkspaceForConversation(db, { ...input, conversationId });
 }
 
+/**
+ * The active Conversation whose Execution Workspace a Conversation uses: its own, or for a
+ * subagent's run thread its root's, so a subagent works on its root's files (CR-1).
+ */
 async function requireActiveConversation(
   db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }
-): Promise<void> {
+): Promise<ConversationId> {
   const [row] = await db
-    .select()
+    .select({ kind: conversations.kind, parentConversationId: conversations.parentConversationId })
     .from(conversations)
     .where(
       and(
@@ -130,6 +135,14 @@ async function requireActiveConversation(
   if (!row) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
+  if (row.kind !== "run_thread") return input.conversationId;
+  if (!row.parentConversationId) {
+    throw new AppError("NOT_FOUND", "Conversation has no Execution Workspace");
+  }
+  return requireActiveConversation(db, {
+    clientInstanceId: input.clientInstanceId,
+    conversationId: asConversationId(row.parentConversationId)
+  });
 }
 
 export async function requireActiveWorkspace(

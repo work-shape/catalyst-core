@@ -1,4 +1,5 @@
 import { CATALYST_INTERNAL_AGENT_PROMPT } from "@work-shape/catalyst-agent-runtime";
+import { RUN_AGENT_TOOL_NAME } from "@work-shape/catalyst-core";
 import type { PlatformInstructions } from "@work-shape/catalyst-server";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
@@ -65,5 +66,12 @@ export const PLATFORM_INSTRUCTIONS: PlatformInstructions = {
  * which no release names and which an agent holds only where its definition lists them.
  */
 export function agentListableToolNames(enabledByRelease: Iterable<string>): string[] {
-  return [...new Set([...enabledByRelease, ...PLATFORM_TOOL_NAMES, ...PLATFORM_MODULE_TOOL_NAMES])];
+  return [
+    ...new Set([
+      ...enabledByRelease,
+      ...PLATFORM_TOOL_NAMES,
+      ...PLATFORM_MODULE_TOOL_NAMES,
+      RUN_AGENT_TOOL_NAME
+    ])
+  ];
 }

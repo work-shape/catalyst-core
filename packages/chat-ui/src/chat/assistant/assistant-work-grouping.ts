@@ -1,4 +1,5 @@
 import { groupPartByType, type GroupByContext, type PartState } from "@assistant-ui/react";
+import { RUN_AGENT_TOOL_NAME } from "@work-shape/catalyst-core";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
@@ -35,9 +36,12 @@ export function createAssistantMessageGroupBy(): (
   });
   // The card of a save says that a Page is being built, so it stands in the thread while the
   // run goes on and does not fold into the count of tool calls. An open of an asset stands
-  // there too: a change of what the conversation is about is always seen.
+  // there too: a change of what the conversation is about is always seen. So does a subagent's
+  // card, which is how the person follows and stops it.
   return (part, context) =>
-    isPageSaveCall(part) || isStandingOpen(part) ? [] : byType(part, context);
+    isPageSaveCall(part) || isStandingOpen(part) || isSubagentCall(part)
+      ? []
+      : byType(part, context);
 }
 
 export function createAssistantWorkTimelineItems(
@@ -179,6 +183,7 @@ function staysVisibleAfterRun(
     isPageSaveOutcome(parts, index) ||
     isStandingOpen(part) ||
     isConnectionDraftCard(part) ||
+    isSubagentCall(part) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
   );
 }
@@ -224,6 +229,16 @@ function isConnectionDraftCard(part: {
     part.type === "tool-call" &&
     part.toolName === CONNECTION_DRAFT_TOOL_NAME &&
     readConnectionDraft(part.result) !== undefined
+  );
+}
+
+/**
+ * A subagent's card is how the person follows it and opens its thread, so it stands on its own
+ * and stays. A call refused before it started a subagent folds away with the other steps.
+ */
+function isSubagentCall(part: { type: string; toolName?: string; isError?: boolean }): boolean {
+  return (
+    part.type === "tool-call" && part.toolName === RUN_AGENT_TOOL_NAME && part.isError !== true
   );
 }
 
@@ -304,7 +319,12 @@ function isStandaloneToolCall(
   if (part.mcp?.app?.resourceUri?.startsWith("ui://")) {
     return true;
   }
-  if (isPageSaveCall(part) || isStandingOpen(part) || isConnectionDraftCard(part)) {
+  if (
+    isPageSaveCall(part) ||
+    isStandingOpen(part) ||
+    isConnectionDraftCard(part) ||
+    isSubagentCall(part)
+  ) {
     return true;
   }
   return context.toolUIs?.[part.toolName]?.[0]?.standalone ?? false;

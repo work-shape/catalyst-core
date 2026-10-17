@@ -1,5 +1,5 @@
 import { CONFIG_ASSET_KINDS } from "@work-shape/catalyst-asset-schemas";
-import { AppError } from "@work-shape/catalyst-core";
+import { AppError, RUN_AGENT_TOOL_NAME } from "@work-shape/catalyst-core";
 import {
   findAgentModelReferenceIssues,
   findDefaultAgentReferenceIssues,
@@ -49,6 +49,7 @@ export function validateConfigAssetBundle(input: {
       : findAgentReferenceIssues({
           agents,
           skillNames: skills.map((skill) => skill.name),
+          agentNames: agents.map((agent) => agent.name),
           refs: input.refs
         }).map(toValidationIssue))
   );
@@ -66,6 +67,8 @@ export function validateConfigAssetBundle(input: {
 export function findAgentReferenceIssues(input: {
   agents: readonly AgentConfig[];
   skillNames: readonly string[];
+  /** Every agent of the set, which a subagent list may name. Unchecked without it. */
+  agentNames?: readonly string[];
   refs: {
     modelProviderIds: readonly string[];
     modelBindingIds: readonly string[];
@@ -92,8 +95,31 @@ export function findAgentReferenceIssues(input: {
     }),
     ...input.agents
       .filter((agent) => agent.skillNames.length > 0 && !agent.toolNames.includes("read_skill"))
-      .map((agent) => `Agent '${agent.name}' references skills but does not allow 'read_skill'`)
+      .map((agent) => `Agent '${agent.name}' references skills but does not allow 'read_skill'`),
+    ...findAgentSubagentReferenceIssues(input.agents, input.agentNames)
   ];
+}
+
+/**
+ * What is wrong with the subagents an agent lists (CR-1): an agent it names that the bundle
+ * does not hold, or a list without the tool that starts them.
+ */
+export function findAgentSubagentReferenceIssues(
+  agents: readonly AgentConfig[],
+  agentNames: readonly string[] | undefined
+): string[] {
+  const names = agentNames && new Set(agentNames);
+  return agents.flatMap((agent) => {
+    const listed = agent.subagentNames ?? [];
+    return [
+      ...(listed.length > 0 && !agent.toolNames.includes(RUN_AGENT_TOOL_NAME)
+        ? [`Agent '${agent.name}' lists subagents but does not allow '${RUN_AGENT_TOOL_NAME}'`]
+        : []),
+      ...listed
+        .filter((name) => names !== undefined && !names.has(name))
+        .map((name) => `Agent '${agent.name}' references missing subagent '${name}'`)
+    ];
+  });
 }
 
 interface ConfigAssetValidationIssue {

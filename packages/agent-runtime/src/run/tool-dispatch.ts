@@ -3,6 +3,7 @@ import type {
   ChatMessage,
   RuntimeCallContext,
   StartAgentRunInput,
+  StartedSubagent,
   ToolDecisionWait,
   ToolExecutionResult
 } from "@work-shape/catalyst-core";
@@ -19,15 +20,18 @@ import { isCancellationRequested } from "./run-events";
 import type { ModelInput } from "./model-input";
 import type { RunEvents } from "./run-events";
 import type { LocalAgentRuntimeOptions } from "./run-events";
+import { isRunAgentCall, stepLimitRefusal } from "./subagents";
 
 const DEFAULT_REPEATED_TOOL_CALL_LIMIT = 3;
 
 /**
- * How the calls of one step went: all answered, the run stopped, or a call waits for a
- * decision. Calls run in order, so the calls after a waiting one have not started (S7).
+ * How the calls of one step went: all through, the run stopped, or a call waits for a
+ * decision. Calls run in order, so the calls after a waiting one have not started (S7). A
+ * `run_agent` call that started its subagent is not answered here: it is in `subagents`, and
+ * answered once the step's calls are through and its subagent ended.
  */
 export type ToolDispatchOutcome =
-  | { kind: "answered" }
+  | { kind: "answered"; subagents: StartedSubagent[] }
   | { kind: "stopped" }
   | {
       kind: "paused";
@@ -35,6 +39,7 @@ export type ToolDispatchOutcome =
       waiting: ToolDecisionWait;
       /** The calls this dispatch answered before the waiting one. */
       answeredToolCallIds: string[];
+      subagents: StartedSubagent[];
     };
 
 export class ToolDispatch {
@@ -53,11 +58,17 @@ export class ToolDispatch {
     repeatedToolCalls: Map<string, number>,
     messages: ModelMessage[],
     /** The data tools the run was offered when it started. A call of another one is refused. */
-    offeredDataTools: ReadonlySet<string>
+    offeredDataTools: ReadonlySet<string>,
+    /** The subagents the step started before these calls, which count to the step's limit. */
+    startedInStep = 0
   ): Promise<ToolDispatchOutcome> {
     const answeredToolCallIds: string[] = [];
+    const subagents: StartedSubagent[] = [];
     for (const toolCall of toolCalls) {
       if (context.signal?.aborted) return { kind: "stopped" };
+      const refusal = isRunAgentCall(toolCall.toolName)
+        ? stepLimitRefusal(startedInStep + subagents.length)
+        : undefined;
       const result = await executeToolCall({
         runId,
         startInput: input,
@@ -66,6 +77,7 @@ export class ToolDispatch {
         toolCall,
         runTool: this.options.runTool,
         unoffered: isUnofferedDataToolCall(toolCall.toolName, offeredDataTools),
+        ...(refusal ? { refusal } : {}),
         modelContext: this.modelInput.modelContextOptions(context),
         repeatedToolCall: this.registerToolCall(
           repeatedToolCalls,
@@ -78,12 +90,22 @@ export class ToolDispatch {
         return { kind: "stopped" };
       }
       if ("waiting" in result) {
-        return { kind: "paused", toolCall, waiting: result.waiting, answeredToolCallIds };
+        return {
+          kind: "paused",
+          toolCall,
+          waiting: result.waiting,
+          answeredToolCallIds,
+          subagents
+        };
+      }
+      if ("subagent" in result) {
+        subagents.push(result.subagent);
+        continue;
       }
       await this.answerToolCall(runId, input, context, toolCall, result, messages);
       answeredToolCallIds.push(toolCall.toolCallId);
     }
-    return { kind: "answered" };
+    return { kind: "answered", subagents };
   }
 
   /** Stores what a call came to and hands it to the model with the next request. */

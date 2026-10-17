@@ -7,6 +7,7 @@ export type { ToolInputParseErrorCode } from "@work-shape/catalyst-asset-schemas
 
 import type { OperationRunId, ToolCallId } from "./ids";
 import type { JsonValue } from "./json";
+import type { StartedSubagent } from "./subagents";
 import type { ISODateString } from "./time";
 
 // A run that pauses on a call that waits for a person's decision, and how it resumes
@@ -100,6 +101,11 @@ export interface AgentRunResumeState {
   providerContinuation?: { providerId: string; state: JsonValue };
   /** Whether an answer of the run compacted the context. */
   compacted: boolean;
+  /**
+   * The subagents the paused step started, in call order (CR-1). A run that waits for its
+   * subagents keeps them here and, once all ended, answers each `run_agent` call with its outcome.
+   */
+  subagents?: StartedSubagent[];
 }
 
 /** What a run that resumes starts from, beside its input. */

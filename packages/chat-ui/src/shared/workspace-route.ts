@@ -33,7 +33,9 @@ export function routeCollaborationWorkspaceId(route: WorkspaceRoute): string | u
 }
 
 export function routeConversationId(route: WorkspaceRoute): string | undefined {
-  return route.kind === "conversation" || route.kind === "legacy-conversation"
+  return route.kind === "conversation" ||
+    route.kind === "legacy-conversation" ||
+    route.kind === "subagent-thread"
     ? route.conversationId
     : undefined;
 }

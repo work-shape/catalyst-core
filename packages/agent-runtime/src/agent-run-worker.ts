@@ -65,6 +65,11 @@ export interface AgentRunExecution {
    * `tool_decision_requested` event is stored, in the transaction that sets it waiting.
    */
   resumeState?(): AgentRunResumeState | undefined;
+  /**
+   * What the run keeps to go on once its events ended at the end of a step whose subagents
+   * have not all ended; `undefined` for a run that does not wait for them.
+   */
+  waitsForSubagents?(): AgentRunResumeState | undefined;
 }
 
 export type ExecuteAgentRun = (
@@ -398,7 +403,11 @@ async function executeClaimedRun(
   const closeRun = async (failure: AgentRunError): Promise<void> => {
     const latest = await store.getAgentRun(ofRun);
     if (!latest) return;
-    if (ENDED_STATUSES.has(latest.status) || latest.status === "waiting_for_decision") {
+    if (
+      ENDED_STATUSES.has(latest.status) ||
+      latest.status === "waiting_for_decision" ||
+      latest.status === "waiting_for_subagents"
+    ) {
       // Someone else ended the run, a worker of the previous release for one. Nothing is left
       // to store.
       terminalWritten = true;
@@ -421,6 +430,33 @@ async function executeClaimedRun(
     await append(closingEvent(latest.lastSequence + 1, failure));
   };
 
+  /**
+   * A step whose subagents have not all ended ends the execution without an event: the run
+   * waits for them without a lease and a job (CR-1). Once the run was asked to cancel, the
+   * wait is refused and the run is ended as cancelled below.
+   */
+  const pauseForSubagents = async (execution: AgentRunExecution): Promise<void> => {
+    const waiting = execution.waitsForSubagents?.();
+    if (!waiting) return;
+    await flushHeldEnd();
+    try {
+      await fenced(() =>
+        options.stores.childAgentRuns.pauseClaimedAgentRunForSubagents({
+          ...ofRun,
+          lease,
+          resumeState: waiting
+        })
+      );
+      terminalWritten = true;
+      options.onObservation?.(run.id);
+    } catch (error) {
+      if (error instanceof JobLeaseLostError) throw error;
+      const latest = await store.getAgentRun(ofRun);
+      if (latest?.status !== "cancelling") throw error;
+      cancellation ??= { reason: latest.cancellationReason };
+    }
+  };
+
   try {
     try {
       const input = await reconstructInput(options, run, resumeState);
@@ -435,7 +471,9 @@ async function executeClaimedRun(
         signal: controller.signal,
         // What a tool or the runtime writes for the run beside its events and messages
         // carries the lease too: an approval request, a dropped provider continuation.
-        runFence: { runId: run.id, lease }
+        runFence: { runId: run.id, lease },
+        // A subagent never waits for a decision and starts no subagent of its own (CR-1).
+        ...(run.parentRunId ? { subagent: true } : {})
       };
       const execution = await options.execute(input, context, {
         assertLease: async () => {
@@ -464,6 +502,9 @@ async function executeClaimedRun(
             : sourceEvent;
         await append(event);
         if (terminalWritten) break;
+      }
+      if (!terminalWritten && stopCause === undefined && !cancellation) {
+        await pauseForSubagents(execution);
       }
       if (!terminalWritten && stopCause !== "lease_lost") await closeRun(EXECUTOR_ENDED_ERROR);
     } catch (error) {
@@ -578,7 +619,8 @@ export function createLocalAgentRunExecutor(
     return {
       events: runtime.observe(handle.runId, context),
       cancel: (reason) => runtime.cancel(handle.runId, reason, context),
-      resumeState: () => runtime.resumeStateOf(handle.runId)
+      resumeState: () => runtime.resumeStateOf(handle.runId),
+      waitsForSubagents: () => runtime.subagentWaitOf(handle.runId)
     };
   };
 }

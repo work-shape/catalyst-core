@@ -33,8 +33,9 @@ import {
   getSnapshotSkillMetadata
 } from "./model-input";
 import { isCancellationRequested, type RunEvents } from "./run-events";
-import { finishPausedStep, pauseRun, resumedModelMessages } from "./resume-entry";
+import { answerSubagents, finishPausedStep, pauseRun, resumedModelMessages } from "./resume-entry";
 import type { ToolDispatch } from "./tool-dispatch";
+import { isRunAgentCall } from "./subagents";
 import type { LocalAgentRuntimeOptions } from "./run-events";
 
 const DEFAULT_MAX_STEPS = 64;
@@ -83,7 +84,7 @@ export class TurnLoop {
           ...listed.toolNames.filter((toolName) => !toolName.startsWith(SUBJECT_TOOL_PREFIX)),
           ...(offer?.toolNames ?? [])
         ])
-      ]
+      ].filter((toolName) => !(context.subagent && isRunAgentCall(toolName)))
     };
     const modelSelection = this.modelInput.getModelSelectionForAgent(
       agent,
@@ -254,13 +255,41 @@ export class TurnLoop {
       offeredDataTools: setup.offeredDataTools
     });
     if (finished.kind === "stopped") return undefined;
+    // The subagents the step started before it paused, and those it started since.
+    const subagents = [...(resume.subagents ?? []), ...finished.subagents];
     if (finished.kind === "paused") {
       pauseRun(state, finished, {
         ...resume,
         doneToolCallIds: [...resume.doneToolCallIds, ...finished.answeredToolCallIds],
-        repeatedToolCalls: Object.fromEntries(repeatedToolCalls)
+        repeatedToolCalls: Object.fromEntries(repeatedToolCalls),
+        ...(subagents.length > 0 ? { subagents } : {})
       });
       return undefined;
+    }
+    if (subagents.length > 0) {
+      const settled = await answerSubagents({
+        runId,
+        startInput: input,
+        context,
+        state,
+        reader: this.options.subagents,
+        subagents,
+        resume: {
+          step: resume.step,
+          stepMessageId: resume.stepMessageId,
+          modelInputFrom: resume.modelInputFrom,
+          toolCalls: resume.toolCalls,
+          repeatedToolCalls: Object.fromEntries(repeatedToolCalls),
+          ...(resume.providerContinuation
+            ? { providerContinuation: resume.providerContinuation }
+            : {}),
+          compacted: resume.compacted
+        },
+        modelInput: this.modelInput,
+        toolDispatch: this.toolDispatch,
+        messages
+      });
+      if (settled !== "answered") return undefined;
     }
     return {
       messages,
@@ -396,25 +425,44 @@ export class TurnLoop {
         offeredDataTools
       );
       if (outcome.kind === "stopped") return;
+      const stepResume = {
+        step,
+        stepMessageId: stepMessage.id,
+        modelInputFrom,
+        toolCalls: toolCalls.map(toPausedToolCall),
+        repeatedToolCalls: Object.fromEntries(repeatedToolCalls),
+        ...(providerContinuation
+          ? {
+              providerContinuation: {
+                providerId: providerContinuation.providerId,
+                state: unknownToJsonValue(providerContinuation.state)
+              }
+            }
+          : {}),
+        compacted: runCompacted
+      };
       if (outcome.kind === "paused") {
         pauseRun(state, outcome, {
-          step,
-          stepMessageId: stepMessage.id,
-          modelInputFrom,
-          toolCalls: toolCalls.map(toPausedToolCall),
+          ...stepResume,
           doneToolCallIds: outcome.answeredToolCallIds,
-          repeatedToolCalls: Object.fromEntries(repeatedToolCalls),
-          ...(providerContinuation
-            ? {
-                providerContinuation: {
-                  providerId: providerContinuation.providerId,
-                  state: unknownToJsonValue(providerContinuation.state)
-                }
-              }
-            : {}),
-          compacted: runCompacted
+          ...(outcome.subagents.length > 0 ? { subagents: outcome.subagents } : {})
         });
         return;
+      }
+      if (outcome.subagents.length > 0) {
+        const settled = await answerSubagents({
+          runId,
+          startInput: input,
+          context,
+          state,
+          reader: this.options.subagents,
+          subagents: outcome.subagents,
+          resume: stepResume,
+          modelInput: this.modelInput,
+          toolDispatch: this.toolDispatch,
+          messages
+        });
+        if (settled !== "answered") return;
       }
     }
 

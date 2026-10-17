@@ -22,6 +22,13 @@ export type WorkspaceRoute =
   | { kind: "legacy-conversation"; conversationId: string }
   | { kind: "new-conversation"; collaborationWorkspaceId: string }
   | { kind: "conversation"; collaborationWorkspaceId: string; conversationId: string }
+  /** The thread of one subagent of a conversation, read-only (CR-1). */
+  | {
+      kind: "subagent-thread";
+      collaborationWorkspaceId: string;
+      conversationId: string;
+      threadId: string;
+    }
   /** The agents a person may use in one workspace. */
   | { kind: "agents"; collaborationWorkspaceId: string }
   /** The Apps of one workspace. */
@@ -109,6 +116,10 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: "/", route: "collaboration-workspace-root" },
       { path: "/w/$collaborationWorkspaceId", route: "new-conversation" },
       { path: "/w/$collaborationWorkspaceId/c/$conversationId", route: "conversation" },
+      {
+        path: "/w/$collaborationWorkspaceId/c/$conversationId/subagents/$threadId",
+        route: "subagent-thread"
+      },
       { path: "/c/$conversationId", route: "legacy-conversation" },
       // The list of every conversation was a page of its own for one release. The rail is
       // that list now, so its addresses lead to the start page of the workspace.
@@ -348,6 +359,10 @@ function routeOf(
     case "conversation":
       return collaborationWorkspaceId && conversationId
         ? { kind, collaborationWorkspaceId, conversationId }
+        : undefined;
+    case "subagent-thread":
+      return collaborationWorkspaceId && conversationId && params.threadId
+        ? { kind, collaborationWorkspaceId, conversationId, threadId: params.threadId }
         : undefined;
     case "legacy-conversation":
       return conversationId ? { kind, conversationId } : undefined;

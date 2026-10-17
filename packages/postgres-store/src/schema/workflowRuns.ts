@@ -145,6 +145,8 @@ export const workflowStepRuns = pgTable(
     // The step's output, wrapped so that an output of `null` is kept.
     output: jsonb("output").$type<{ value: JsonValue }>(),
     operationRunId: text("operation_run_id").$type<OperationRunId>(),
+    // Of an `agent` step: the Agent Run the step waits for.
+    agentRunId: text("agent_run_id"),
     // Of an operation step: what its operation does and the name of what it belongs to.
     effect: text("effect").$type<OperationEffect>(),
     source: text("source"),

@@ -1,6 +1,8 @@
 import {
   type AgentRunId,
   type RuntimeCallContext,
+  type StartedSubagent,
+  type ToolExecutionError,
   type StartAgentRunInput,
   type ToolDecisionWait,
   type ToolExecutionResult,
@@ -14,6 +16,7 @@ import {
   type ModelOutputProjection
 } from "./model-context-projection";
 import type { RunState } from "./run-state";
+import { isRunAgentCall, startedSubagentOf } from "./run/subagents";
 
 export async function executeToolCall(input: {
   runId: AgentRunId;
@@ -28,6 +31,8 @@ export async function executeToolCall(input: {
    * a failure the agent reads, and nothing is run.
    */
   unoffered?: boolean;
+  /** Set for a call refused before it runs, as a `run_agent` call beyond the step's limit. */
+  refusal?: ToolExecutionError;
   modelContext: ModelContextProjectionOptions;
   repeatedToolCall: {
     repeated: boolean;
@@ -38,6 +43,7 @@ export async function executeToolCall(input: {
 }): Promise<
   | { result: ToolExecutionResult; modelOutput: ModelOutputProjection }
   | { waiting: ToolDecisionWait }
+  | { subagent: StartedSubagent }
 > {
   const toolCallId = asToolCallId(input.toolCall.toolCallId);
   input.state.emit({
@@ -57,14 +63,14 @@ export async function executeToolCall(input: {
     input: input.toolCall.input
   };
 
-  if (input.unoffered) {
-    const result = {
-      status: "failed" as const,
-      error: {
-        code: "not_allowed" as const,
+  const refusal: ToolExecutionError | undefined = input.unoffered
+    ? {
+        code: "not_allowed",
         message: `Tool '${input.toolCall.toolName}' is not available in this run`
       }
-    };
+    : input.refusal;
+  if (refusal) {
+    const result = { status: "failed" as const, error: refusal };
     const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
     input.state.emit({
       type: "tool_call_failed",
@@ -115,6 +121,14 @@ export async function executeToolCall(input: {
   // The call waits for a decision: it has not run, and the run pauses on it.
   if (answer.status === "waiting_for_decision") {
     return { waiting: answer };
+  }
+  // A started subagent: the call is answered once the subagent ended, at the end of the step.
+  const subagent = isRunAgentCall(input.toolCall.toolName)
+    ? startedSubagentOf(input.toolCall.toolCallId, answer)
+    : undefined;
+  if (subagent) {
+    input.state.emit({ type: "subagent_started", runId: input.runId, ...subagent.event });
+    return { subagent: subagent.started };
   }
   return emitToolCallEnd(input, answer);
 }

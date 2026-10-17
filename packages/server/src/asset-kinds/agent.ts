@@ -64,6 +64,7 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
           ...findAgentReferenceIssues({
             agents: changed,
             skillNames,
+            agentNames: agents.map((agent) => agent.name),
             refs: options.validationRefs
           }).map((message) => ({ message })),
           // Deleting a skill an unchanged agent still lists remains a refused write.

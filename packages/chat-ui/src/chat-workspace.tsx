@@ -5,7 +5,7 @@ import { DEFAULT_THEME_INPUTS } from "@work-shape/catalyst-ui/theme";
 import { startNewAgent } from "./studio/agents/agents-model";
 import { AgentsPage } from "./studio/agents/agents-page";
 import { ApprovalRevisionHostProvider } from "./chat/approvals/approval-revision-host";
-import { AssistantRuntimePanel } from "./chat/assistant/assistant-runtime-panel";
+import { ConversationPane } from "./chat/subagents/conversation-pane";
 import { AttachmentContentProvider } from "./chat/files/attachment-content";
 import { ChatDropOverlay } from "./chat/files/chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
@@ -602,7 +602,7 @@ function ChatWorkspaceContent({
                                   onDragLeave={chat.fileDropzone.onChatDragLeave}
                                   onDrop={chat.fileDropzone.onChatDrop}
                                 >
-                                  <AssistantRuntimePanel chat={chat} />
+                                  <ConversationPane chat={chat} />
                                   {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
                                   {resourcesAvailable &&
                                   resourcesConversationId &&
@@ -630,14 +630,12 @@ function ChatWorkspaceContent({
                                 <ResourcesPanel
                                   client={resourcesPanel.client}
                                   conversationId={resourcesExit.held}
-                                  error={resourcesPanel.error}
-                                  loading={resourcesPanel.loading}
+                                  {...resourcesPanel.contents}
                                   onClose={resourcesPanel.close}
                                   open
                                   leaving={resourcesExit.leaving}
                                   covered={displayPanel.open}
                                   onAnimationEnd={resourcesExit.onAnimationEnd}
-                                  resources={resourcesPanel.resources}
                                 />
                               ) : null}
                             </PageHostProvider>

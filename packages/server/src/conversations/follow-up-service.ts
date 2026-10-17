@@ -43,7 +43,7 @@ export class FollowUpWorkflow {
     context: RuntimeCallContext
   ): Promise<void> {
     requireAuthScope(user, "run:start");
-    await this.conversations.requireConversationAccess(conversationId, user);
+    await this.conversations.requireChatConversationAccess(conversationId, user);
     await this.options.stores.transaction(async (stores) => {
       const scope = { clientInstanceId: this.options.clientInstanceId, conversationId };
       const oldest = await stores.followUps.getOldestPending(scope);

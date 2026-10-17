@@ -1,6 +1,6 @@
 import {
-  ACTIVE_AGENT_RUN_STATUSES,
   AppError,
+  asConversationId,
   createApprovalDecisionMessage,
   createPlatformId,
   type AppendAssistantMessageInput,
@@ -11,12 +11,10 @@ import {
   type Conversation,
   type ConversationId,
   type ConversationListItem,
-  type ConversationRetentionStore,
   type ConversationsStore,
   type ConversationStore,
   type CreateConversationInput,
   type CreateMessageInput,
-  type ExpireConversationResult,
   type FoundFile,
   type ModelProviderContinuationCheckpoint,
   type ModelProviderContinuationStore,
@@ -24,24 +22,10 @@ import {
   type SetConversationSubjectInput,
   type UserId
 } from "@work-shape/catalyst-core";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  lt,
-  lte,
-  ne,
-  notExists,
-  or,
-  type SQL
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, ne, or } from "drizzle-orm";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
-  agentRuns,
   collaborationWorkspaces,
   conversationFollowUps,
   conversationAttachments,
@@ -136,17 +120,40 @@ async function listPrivateConversationsCreatedByUser(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.status, "active"),
         eq(conversations.visibility, "private"),
-        eq(conversations.createdByUserId, input.userId)
+        eq(conversations.createdByUserId, input.userId),
+        // A thread goes with its root (CR-1).
+        eq(conversations.kind, "chat")
       )
     );
   return rows.map(mapConversation);
 }
 
+/**
+ * Moves a chat Conversation with its run threads; a thread moves only so. The root is locked
+ * first, as a subagent's start locks it before it writes its thread (CR-1): a thread started
+ * before is seen by the update, and one started after reads the new workspace.
+ */
 async function moveConversation(
   db: PostgresConnection,
   input: MoveConversationInput
 ): Promise<Conversation> {
-  const [row] = await db
+  return db.transaction(async (tx) => {
+    if (
+      !(await lockActiveConversation(
+        tx,
+        input.clientInstanceId,
+        input.conversationId,
+        input.fromCollaborationWorkspaceId
+      ))
+    ) {
+      throw new AppError("CONFLICT", "Conversation workspace changed during the move");
+    }
+    return moveLockedConversation(tx, input);
+  });
+}
+
+async function moveLockedConversation(db: PostgresConnection, input: MoveConversationInput) {
+  const rows = await db
     .update(conversations)
     .set({
       collaborationWorkspaceId: input.toCollaborationWorkspaceId,
@@ -155,12 +162,19 @@ async function moveConversation(
     .where(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),
-        eq(conversations.id, input.conversationId),
         eq(conversations.status, "active"),
-        eq(conversations.collaborationWorkspaceId, input.fromCollaborationWorkspaceId)
+        eq(conversations.collaborationWorkspaceId, input.fromCollaborationWorkspaceId),
+        or(
+          and(eq(conversations.id, input.conversationId), eq(conversations.kind, "chat")),
+          and(
+            eq(conversations.parentConversationId, input.conversationId),
+            eq(conversations.kind, "run_thread")
+          )
+        )
       )
     )
     .returning();
+  const row = rows.find((candidate) => candidate.id === input.conversationId);
   if (!row) {
     throw new AppError("CONFLICT", "Conversation workspace changed during the move");
   }
@@ -280,69 +294,6 @@ async function requireNotInDeletion(
           .for("share")
       ).some((user) => user.deletionRequestedAt !== null));
   if (marked) throw new AppError("CONFLICT", "Conversation no longer accepts messages");
-}
-
-function conversationRunsInProgress(db: PostgresConnection) {
-  return db
-    .select({ id: agentRuns.id })
-    .from(agentRuns)
-    .where(
-      and(
-        eq(agentRuns.clientInstanceId, conversations.clientInstanceId),
-        eq(agentRuns.conversationId, conversations.id),
-        inArray(agentRuns.status, ACTIVE_AGENT_RUN_STATUSES)
-      )
-    );
-}
-
-/**
- * The expiry criteria as conditions on a `conversations` row. The list and the claim both use
- * them, so they cannot drift. A Conversation with an agent run in progress meets neither.
- */
-function conversationExpiryCriteria(
-  db: PostgresConnection,
-  input: { now?: string; abandonedBefore?: string }
-): { due: SQL | undefined; abandoned: SQL | undefined } {
-  const idle = notExists(conversationRunsInProgress(db));
-  return {
-    due: input.now ? and(lte(conversations.retainedUntil, new Date(input.now)), idle) : undefined,
-    abandoned: input.abandonedBefore
-      ? and(
-          lte(conversations.updatedAt, new Date(input.abandonedBefore)),
-          notExists(conversationMessages(db)),
-          notExists(conversationDraftAttachments(db)),
-          idle
-        )
-      : undefined
-  };
-}
-
-async function listExpiredConversations(
-  db: PostgresConnection,
-  input: {
-    clientInstanceId: ClientInstanceId;
-    now?: string;
-    abandonedBefore?: string;
-    limit: number;
-  }
-): Promise<Conversation[]> {
-  const criteria = conversationExpiryCriteria(db, input);
-  if (!criteria.due && !criteria.abandoned) {
-    return [];
-  }
-  const rows = await db
-    .select()
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.clientInstanceId, input.clientInstanceId),
-        eq(conversations.status, "active"),
-        or(criteria.due, criteria.abandoned)
-      )
-    )
-    .orderBy(asc(conversations.retainedUntil), asc(conversations.id))
-    .limit(input.limit);
-  return rows.map(mapConversation);
 }
 
 async function replaceConversationTitle(
@@ -604,66 +555,50 @@ async function deleteConversation(
       input.inCollaborationWorkspaceId
     );
     if (!locked) throw new AppError("NOT_FOUND", "Conversation is not available");
-    return markLockedConversationDeleted(tx, { ...input, status: "deleted" });
+    return markLockedConversationTreeDeleted(tx, { ...input, status: "deleted" });
   });
 }
 
-async function expireConversation(
-  db: PostgresConnection,
-  input: {
-    clientInstanceId: ClientInstanceId;
-    conversationId: ConversationId;
-    expiredAt: string;
-    now?: string;
-    abandonedBefore?: string;
-  }
-): Promise<ExpireConversationResult> {
-  return db.transaction(async (tx) => {
-    if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
-      return { status: "not_expired" };
-    }
-    // Evaluated in statements of their own, after the lock is held. A condition inside the
-    // locking statement is answered from the snapshot taken before the wait and would miss the
-    // message or upload the lock holder just committed.
-    const criteria = conversationExpiryCriteria(tx, input);
-    const due = await lockedConversationMeets(tx, input, criteria.due);
-    if (!due && !(await lockedConversationMeets(tx, input, criteria.abandoned))) {
-      return { status: "not_expired" };
-    }
-    const conversation = await markLockedConversationDeleted(tx, {
-      clientInstanceId: input.clientInstanceId,
-      conversationId: input.conversationId,
-      deletedAt: input.expiredAt,
-      status: "retention_expired"
-    });
-    return {
-      status: "expired",
-      conversation,
-      reason: due ? "retention_due" : "abandoned_draft"
-    };
-  });
-}
-
-async function lockedConversationMeets(
+/**
+ * Claims a locked chat Conversation with its run threads (CR-1): the threads are locked in id
+ * order after the root, then each is marked deleted as the root is. A thread is never claimed
+ * alone: it goes with its root.
+ */
+export async function markLockedConversationTreeDeleted(
   tx: PostgresTransaction,
-  input: { clientInstanceId: ClientInstanceId; conversationId: ConversationId },
-  criterion: SQL | undefined
-): Promise<boolean> {
-  if (!criterion) {
-    return false;
+  input: Parameters<typeof markLockedConversationDeleted>[1]
+): Promise<Conversation> {
+  const [root] = await tx
+    .select({ kind: conversations.kind })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.clientInstanceId, input.clientInstanceId),
+        eq(conversations.id, input.conversationId)
+      )
+    );
+  if (root?.kind !== "chat") {
+    throw new AppError("CONFLICT", "A subagent's thread is deleted with its conversation");
   }
-  const [row] = await tx
+  const threads = await tx
     .select({ id: conversations.id })
     .from(conversations)
     .where(
       and(
         eq(conversations.clientInstanceId, input.clientInstanceId),
-        eq(conversations.id, input.conversationId),
-        criterion
+        eq(conversations.parentConversationId, input.conversationId),
+        eq(conversations.status, "active")
       )
     )
-    .limit(1);
-  return row !== undefined;
+    .orderBy(asc(conversations.id))
+    .for("update");
+  for (const thread of threads) {
+    await markLockedConversationDeleted(tx, {
+      ...input,
+      conversationId: asConversationId(thread.id)
+    });
+  }
+  return markLockedConversationDeleted(tx, input);
 }
 
 /**
@@ -767,6 +702,8 @@ export function createPostgresConversationsStore(
     | "searchWorkspaceFiles"
     | "deleteModelProviderContinuation"
     | "getModelProviderContinuation"
+    | "listExpiredConversations"
+    | "expireConversation"
   >
 ): ConversationsStore {
   return {
@@ -804,13 +741,8 @@ export function createPostgresConversationsStore(
     ): Promise<Conversation> {
       return moveConversation(db, input);
     },
-    async listExpiredConversations(input: {
-      clientInstanceId: ClientInstanceId;
-      now?: string;
-      abandonedBefore?: string;
-      limit: number;
-    }): Promise<Conversation[]> {
-      return listExpiredConversations(db, input);
+    async listExpiredConversations(input) {
+      return deps.listExpiredConversations(input);
     },
     async updateConversationTitle(input: {
       clientInstanceId: ClientInstanceId;
@@ -860,10 +792,8 @@ export function createPostgresConversationsStore(
     ): Promise<Conversation> {
       return deleteConversation(db, input);
     },
-    async expireConversation(
-      input: Parameters<ConversationRetentionStore["expireConversation"]>[0]
-    ): Promise<ExpireConversationResult> {
-      return expireConversation(db, input);
+    async expireConversation(input) {
+      return deps.expireConversation(input);
     }
   };
 }

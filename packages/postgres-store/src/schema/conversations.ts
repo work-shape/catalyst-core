@@ -1,6 +1,8 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   bigserial,
+  check,
   foreignKey,
   index,
   jsonb,
@@ -12,8 +14,10 @@ import {
 import type {
   ChatMessage,
   Conversation,
+  ConversationKind,
   ModelProviderContinuationCheckpoint
 } from "@work-shape/catalyst-core";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { collaborationWorkspaces } from "./workspaces";
 
 export const conversations = pgTable(
@@ -21,9 +25,20 @@ export const conversations = pgTable(
   {
     id: text("id").primaryKey(),
     clientInstanceId: text("client_instance_id").notNull(),
-    collaborationWorkspaceId: text("collaboration_workspace_id").notNull(),
-    createdByUserId: text("created_by_user_id").notNull(),
-    createdByExternalUserId: text("created_by_external_user_id").notNull(),
+    // A chat conversation, or the run thread of a Child Agent Run. Every reader that lists,
+    // counts or deletes conversations says which it means.
+    kind: text("kind").$type<ConversationKind>().notNull().default("chat"),
+    // A subagent's thread names its root chat conversation, an agent step's thread its
+    // Workflow run. A chat conversation names neither.
+    parentConversationId: text("parent_conversation_id").references(
+      (): AnyPgColumn => conversations.id,
+      { onDelete: "cascade" }
+    ),
+    workflowRunId: text("workflow_run_id"),
+    // Null only on an agent step's thread, which belongs to no workspace and no person.
+    collaborationWorkspaceId: text("collaboration_workspace_id"),
+    createdByUserId: text("created_by_user_id"),
+    createdByExternalUserId: text("created_by_external_user_id"),
     visibility: text("visibility").$type<Conversation["visibility"]>().notNull(),
     title: text("title").notNull(),
     status: text("status").$type<Conversation["status"]>().notNull(),
@@ -36,6 +51,17 @@ export const conversations = pgTable(
     subjectName: text("subject_name")
   },
   (table) => [
+    check("conversations_kind_check", sql`${table.kind} in ('chat', 'run_thread')`),
+    check(
+      "conversations_run_thread_check",
+      sql`(${table.kind} = 'chat' and ${table.parentConversationId} is null and ${table.workflowRunId} is null and ${table.collaborationWorkspaceId} is not null and ${table.createdByUserId} is not null and ${table.createdByExternalUserId} is not null) or (${table.kind} = 'run_thread' and ((${table.parentConversationId} is not null and ${table.workflowRunId} is null and ${table.collaborationWorkspaceId} is not null and ${table.createdByUserId} is not null and ${table.createdByExternalUserId} is not null) or (${table.parentConversationId} is null and ${table.workflowRunId} is not null and ${table.collaborationWorkspaceId} is null and ${table.createdByUserId} is null and ${table.createdByExternalUserId} is null)))`
+    ),
+    index("conversations_parent_idx")
+      .on(table.clientInstanceId, table.parentConversationId)
+      .where(sql`${table.parentConversationId} is not null`),
+    index("conversations_workflow_run_idx")
+      .on(table.clientInstanceId, table.workflowRunId)
+      .where(sql`${table.workflowRunId} is not null`),
     index("conversations_retention_expiry_idx").on(
       table.clientInstanceId,
       table.status,

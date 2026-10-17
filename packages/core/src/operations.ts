@@ -134,7 +134,7 @@ export interface OperationCall<TInput = unknown> {
  */
 export type OperationCallRuntime = Pick<
   RuntimeCallContext,
-  "locale" | "deadline" | "signal" | "runFence"
+  "locale" | "deadline" | "signal" | "runFence" | "subagent"
 > & {
   /**
    * Set where the surface could not read the caller's input at all. The call then ends as an

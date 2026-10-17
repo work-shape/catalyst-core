@@ -1,6 +1,7 @@
 import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@work-shape/catalyst-server";
 import { HTTP_API_CONNECTOR_TYPE } from "@work-shape/catalyst-connections";
 import {
+  RUN_AGENT_TOOL_NAME,
   SUBJECT_TOOL_PREFIX,
   type ConnectorTypeRegistry,
   type ConversationOfferSource,
@@ -15,6 +16,7 @@ import {
   createPlatformAssetBinding,
   createPlatformAssetTools,
   createPlatformDiscoveryTools,
+  createRunAgentTool,
   createWorkflowTestTools,
   WORKFLOW_TEST_TOOL_NAMES,
   ToolRegistry,
@@ -147,6 +149,7 @@ export function createPlatformTools(
       ...createPlatformDiscoveryTools(platformAssets.calls),
       ...createPlatformAssetTools(platformAssets.calls),
       ...createWorkflowTestTools(),
+      createRunAgentTool(),
       createAppSaveTool(platformAssets.calls),
       ...(input.connections
         ? [
@@ -180,6 +183,7 @@ export function createPlatformTools(
           ...PLATFORM_TOOL_NAMES,
           ...PLATFORM_MODULE_TOOL_NAMES,
           READ_SKILL_TOOL,
+          RUN_AGENT_TOOL_NAME,
           WORKSPACE_OPEN_TOOL_NAME,
           APP_SAVE_TOOL_NAME
         ]),

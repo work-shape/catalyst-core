@@ -2,6 +2,7 @@ import { ToolDecisionCard } from "../approvals/tool-decision-card";
 import { useToolDecision } from "../approvals/tool-decision-context";
 export { ToolDecisionsProvider } from "../approvals/tool-decision-context";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
+import { RUN_AGENT_TOOL_NAME } from "@work-shape/catalyst-core";
 import { cn } from "@work-shape/catalyst-ui";
 import { Wrench } from "lucide-react";
 import {
@@ -50,6 +51,7 @@ import {
 import { useToolDisplayPanel } from "./tool-display-panel";
 import { readDisplayMode, renderBuiltInDisplay } from "./tool-display-rendering";
 import { ToolSurfaceList } from "./tool-surface-card";
+import { SubagentCard } from "../subagents/subagent-card";
 import { readWorkspacePromotedSurfacesData } from "./tool-surfaces";
 import { projectWorkspaceToolDisplay } from "./workspace-tool-display";
 export { ToolCallFoldLabel } from "./tool-call-presentation";
@@ -151,6 +153,17 @@ export function ToolCallPart({
       <div className="chat-tool-part my-3 max-w-3xl" data-testid="tool-call-card">
         <ToolDecisionCard decision={decision} title={toolDisplay.title} toolName={toolName} />
       </div>
+    );
+  }
+
+  // A refused call started no subagent and is drawn as any failed call.
+  if (toolName === RUN_AGENT_TOOL_NAME && state !== "failed") {
+    return (
+      <SubagentCard
+        toolCallId={toolCallId}
+        description={typeof args.description === "string" ? args.description : undefined}
+        result={result}
+      />
     );
   }
 

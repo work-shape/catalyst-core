@@ -494,6 +494,17 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     reason: z.string().optional()
   }),
   z.object({
+    type: z.literal("subagent_started"),
+    runId: z.string(),
+    sequence: z.number(),
+    createdAt: timestampSchema,
+    toolCallId: z.string(),
+    subagentRunId: z.string(),
+    threadId: z.string(),
+    agent: z.string(),
+    description: z.string()
+  }),
+  z.object({
     type: z.literal("tool_call_completed"),
     runId: z.string(),
     sequence: z.number(),
@@ -569,6 +580,14 @@ export const activeRunSummarySchema = z.object({
   lastSequence: z.number().int().nonnegative()
 });
 
+/** On a `run_agent` call that started its subagent: the subagent, for its card. */
+const toolCallSubagentSchema = z.object({
+  runId: z.string(),
+  threadId: z.string(),
+  agent: z.string(),
+  description: z.string()
+});
+
 /** While a call waits for a decision: what the person is asked to decide. */
 const toolCallDecisionSchema = z.object({
   operationRunId: z.string(),
@@ -599,7 +618,8 @@ export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
     state: agentRunProjectionToolCallStateSchema,
     output: z.unknown().optional(),
     errorText: z.string().optional(),
-    decision: toolCallDecisionSchema.optional()
+    decision: toolCallDecisionSchema.optional(),
+    subagent: toolCallSubagentSchema.optional()
   })
 ]);
 
@@ -631,7 +651,8 @@ export const agentRunProjectionSchema = z.object({
       state: agentRunProjectionToolCallStateSchema,
       output: z.unknown().optional(),
       errorText: z.string().optional(),
-      decision: toolCallDecisionSchema.optional()
+      decision: toolCallDecisionSchema.optional(),
+      subagent: toolCallSubagentSchema.optional()
     })
   ),
   error: agentRunErrorSchema.optional()
@@ -647,6 +668,36 @@ export const runObservationSchema = z.object({
   payload: agentRuntimeEventSchema,
   createdAt: timestampSchema
 });
+
+const knownEventTypes: ReadonlySet<string> = new Set(
+  agentRuntimeEventSchema.options.map((option) => option.shape.type.value)
+);
+
+/**
+ * An observation of an event type this release does not know, which a newer server may send.
+ * A client passes it over and keeps its sequence as its position.
+ */
+export const unknownRunObservationSchema = z.object({
+  runId: z.string(),
+  conversationId: z.string(),
+  sequence: z.number().int().positive(),
+  payload: z.object({ type: z.string().refine((type) => !knownEventTypes.has(type)) })
+});
+
+/** A subagent of a chat conversation's runs, for the Resources panel and its thread view. */
+export const subagentSummarySchema = z.object({
+  runId: z.string(),
+  threadId: z.string(),
+  parentRunId: z.string(),
+  toolCallId: z.string(),
+  agentName: z.string(),
+  description: z.string(),
+  status: agentRunStatusSchema,
+  startedAt: timestampSchema,
+  endedAt: timestampSchema.optional()
+});
+
+export const subagentListSchema = z.object({ items: z.array(subagentSummarySchema) });
 
 export const conversationFollowUpSchema = z.object({
   id: z.string(),
@@ -799,6 +850,7 @@ export type RunCommandRequest = z.infer<typeof runCommandRequestSchema>;
 export type RunCommandResponse = z.infer<typeof runCommandResponseSchema>;
 export type ConversationUserState = z.infer<typeof conversationUserStateSchema>;
 export type ConversationFollowUp = z.infer<typeof conversationFollowUpSchema>;
+export type SubagentSummary = z.infer<typeof subagentSummarySchema>;
 
 export type ConversationThreadSnapshot = z.infer<typeof conversationThreadSnapshotSchema>;
 export type CancelRunRequest = z.infer<typeof cancelRunRequestSchema>;

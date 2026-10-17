@@ -1,4 +1,5 @@
 import {
+  AGENTS_RUN_OPERATION,
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
   KNOWLEDGE_OPERATION_PREFIX,
@@ -6,7 +7,9 @@ import {
   OPERATION_DENIAL_REASONS,
   OPERATION_EFFECTS,
   PERMISSION_REF_ACTION_PREFIX,
+  RUN_AGENT_TOOL_NAME,
   answerAsTool,
+  confirmationRequiredMessage,
   isAppError,
   isAuthenticatedServicePrincipal,
   isDataToolName,
@@ -182,7 +185,8 @@ export function registerToolOperations(
   for (const tool of tools) {
     // These describe existing API operations. Registering a tool operation here would
     // replace their person-rights and subject checks, or collide when routes register.
-    if (WORKFLOW_TEST_TOOL_NAMES.includes(tool.name)) continue;
+    // `run_agent` is the call of `agents.run`, which the server registers.
+    if (WORKFLOW_TEST_TOOL_NAMES.includes(tool.name) || tool.name === RUN_AGENT_TOOL_NAME) continue;
     registry.register(toolOperation(tool, options));
   }
 }
@@ -300,7 +304,11 @@ export function toolResultFromOperationResult(
         ...(result.artifacts ? { artifacts: result.artifacts } : {})
       };
     case "denied":
-      return failed("not_allowed", denialText(result.reason, names));
+      return result.reason.kind === "policy" && result.reason.reason === "confirmation_required"
+        ? failed("confirmation_required", confirmationRequiredMessage(result.reason.operation), {
+            operation: result.reason.operation
+          })
+        : failed("not_allowed", denialText(result.reason, names));
     case "failed":
       return result.error.code === "INTERNAL"
         ? internalFailure(names.correlationId)
@@ -439,10 +447,14 @@ export function createToolOperationRunner(
   dataTools?: DataToolRunnerOptions
 ): ToolOperationRunner {
   return async (toolRequest, context, options = {}) => {
-    const projected =
+    const projected:
+      | { request: ToolExecutionRequest; idempotencyKey?: string }
+      | { refusal: ToolHandlerFailureResult } =
       toolRequest.toolName === KNOWLEDGE_QUERY_TOOL_NAME
         ? await knowledgeQueryRequest(toolRequest, deps)
-        : { request: toolRequest };
+        : toolRequest.toolName === RUN_AGENT_TOOL_NAME
+          ? await runAgentRequest(toolRequest, context, deps)
+          : { request: toolRequest };
     if ("refusal" in projected) {
       return projected.refusal;
     }
@@ -473,6 +485,9 @@ export function createToolOperationRunner(
           operation: tool.name,
           effect: tool.effect,
           correlationId: context.correlationId,
+          ...(projected.idempotencyKey === undefined
+            ? {}
+            : { idempotencyKey: projected.idempotencyKey }),
           ...(tool.revisionId === undefined ? {} : { toolRevisionId: tool.revisionId })
         }),
         deps,
@@ -481,6 +496,7 @@ export function createToolOperationRunner(
           deadline: context.deadline,
           signal: context.signal,
           runFence: context.runFence,
+          ...(context.subagent ? { subagent: true } : {}),
           unreadableInput: options.unreadableInput
         }
       );
@@ -498,12 +514,51 @@ export function createToolOperationRunner(
           expiresAt: result.expiresAt
         };
       }
-      return toolResultFromOperationResult(outcome, names);
+      const answered = toolResultFromOperationResult(outcome, names);
+      // The runtime keeps the started subagent's call with the run it waits on.
+      return request.toolName === AGENTS_RUN_OPERATION &&
+        answered.status === "success" &&
+        result.status === "done"
+        ? { ...answered, privateOutput: { operationRunId: result.runId } }
+        : answered;
     } catch (error) {
       const refused = refusalBeforeRun(error, names);
       if (!refused) throw error;
       return refused;
     }
+  };
+}
+
+/**
+ * A call of `run_agent` as the call of `agents.run` (CR-1). The agent's own list is asked
+ * first, as for the knowledge tool. A subagent is never offered `run_agent`, and one whose
+ * model calls it all the same is refused here. The call's key is its run and its tool call,
+ * so a retried call answers the subagent it started.
+ */
+async function runAgentRequest(
+  request: ToolExecutionRequest,
+  context: { subagent?: true },
+  deps: RunOperationDeps
+): Promise<
+  { request: ToolExecutionRequest; idempotencyKey: string } | { refusal: ToolHandlerFailureResult }
+> {
+  if (context.subagent) {
+    return { refusal: failed("not_allowed", "A subagent cannot start subagents of its own.") };
+  }
+  const listed = (await deps.agentToolNames?.(request.agentName, request.conversationId)) ?? [];
+  if (!listed.includes(AGENTS_RUN_OPERATION)) {
+    const action = `${AGENT_TOOL_ACTION_PREFIX}${RUN_AGENT_TOOL_NAME}`;
+    return {
+      refusal: failed(
+        "not_allowed",
+        `Agent '${request.agentName}' is not allowed to use '${RUN_AGENT_TOOL_NAME}'`,
+        { action }
+      )
+    };
+  }
+  return {
+    request: { ...request, toolName: AGENTS_RUN_OPERATION },
+    idempotencyKey: `${request.agentRunId}:${request.toolCallId}`
   };
 }
 
@@ -571,6 +626,10 @@ async function calledTool(
   // The operation of a Knowledge Base the agent lists, as its knowledge tool projected it.
   if (toolName.startsWith(KNOWLEDGE_OPERATION_PREFIX)) {
     return { tool: { name: toolName, effect: "reading" } };
+  }
+  // The start of a subagent, as `run_agent` projected it.
+  if (toolName === AGENTS_RUN_OPERATION) {
+    return { tool: { name: toolName, effect: "changing" } };
   }
   if (!dataTools || !isDataToolName(toolName)) {
     return { refusal: failed("not_allowed", `Tool '${toolName}' is not registered`) };

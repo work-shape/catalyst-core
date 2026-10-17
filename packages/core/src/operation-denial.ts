@@ -37,9 +37,12 @@ export type OperationDenial =
        * call waited for an approval, and what it is about moved since, or a newer call about
        * the same replaced it. `workflow_deleted`: the call is a step of a run of a published
        * Workflow whose `confirm` its publish approved, and the Workflow was deleted since.
+       * `confirmation_required`: the call needs a person's confirmation or approval and a
+       * subagent made it, which never waits for a decision (CR-1); its parent makes it instead.
        * Without a reason the policy refuses the call itself.
        */
-      reason?: "approval_unavailable" | "approval_stale" | "workflow_deleted";
+      reason?:
+        "approval_unavailable" | "approval_stale" | "workflow_deleted" | "confirmation_required";
       /**
        * The guardrail whose `require_approval` asked for the approval, where one did, with
        * its reason where it gave one.
@@ -61,6 +64,12 @@ export function operationDenialError(denial: OperationDenial): AppError {
     case "policy":
       if (denial.reason === "approval_stale") {
         return new AppError("POLICY_DENIED", approvalStaleMessage(denial.operation), {
+          operation: denial.operation,
+          reason: denial.reason
+        });
+      }
+      if (denial.reason === "confirmation_required") {
+        return new AppError("POLICY_DENIED", confirmationRequiredMessage(denial.operation), {
           operation: denial.operation,
           reason: denial.reason
         });
@@ -99,6 +108,14 @@ export function operationDenialError(denial: OperationDenial): AppError {
         ...(denial.comment === undefined ? {} : { comment: denial.comment })
       });
   }
+}
+
+/**
+ * What a subagent reads for a call that needs a person's decision: it did not run, and the
+ * agent that started the subagent can make it, where the person is asked.
+ */
+export function confirmationRequiredMessage(operation: string): string {
+  return `'${operation}' needs the person's confirmation, and a subagent cannot ask for one. Nothing ran. Go on without it, and say in your answer that '${operation}' still has to be called, so the agent that started you can make the call.`;
 }
 
 /** Why a call that waited for an approval can no longer be approved. */

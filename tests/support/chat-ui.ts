@@ -244,6 +244,13 @@ export {
   MarkdownArtifact,
   MarkdownLinkPolicyProvider
 } from "../../packages/chat-ui/src/chat/markdown/markdown-text";
+export {
+  answeredSubagentState,
+  groupSubagents,
+  requestToolCallReveal,
+  subagentState,
+  takeToolCallReveal
+} from "../../packages/chat-ui/src/chat/subagents/subagent-model";
 export { SurfaceSlotFrame } from "../../packages/chat-ui/src/chat/surface/surface-slot";
 export {
   artifactDisplayFilename,
@@ -310,6 +317,7 @@ export {
   WorkspaceRail
 } from "../../packages/chat-ui/src/chat/workspace/workspace-rail";
 export { workspaceSendBlock } from "../../packages/chat-ui/src/chat/workspace/workspace-send-block";
+export { WorkspaceUiStateProvider } from "../../packages/chat-ui/src/chat/workspace/workspace-ui-state";
 export {
   createApiAccessAuthorityKey,
   createApiAccessRevealController
@@ -408,6 +416,7 @@ export {
 export { resolveThemeModePreference } from "../../packages/chat-ui/src/shared/theme";
 export {
   routeCollaborationWorkspaceId,
+  routeConversationId,
   workspaceRouteView
 } from "../../packages/chat-ui/src/shared/workspace-route";
 export {

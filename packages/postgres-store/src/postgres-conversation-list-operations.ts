@@ -1,5 +1,6 @@
-import { and, desc, eq, exists, ilike, notExists, or, sql as drizzleSql } from "drizzle-orm";
+import { and, desc, eq, exists, ilike, inArray, notExists, or } from "drizzle-orm";
 import {
+  ACTIVE_AGENT_RUN_STATUSES,
   asAgentRunId,
   type ClientInstanceId,
   type Conversation,
@@ -45,6 +46,8 @@ export function listedConversations(db: PostgresConnection, input: ListConversat
     eq(conversations.clientInstanceId, input.clientInstanceId),
     eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
     eq(conversations.status, "active"),
+    // A subagent's run thread is read through its root, never listed (CR-1).
+    eq(conversations.kind, "chat"),
     input.titleQuery === undefined
       ? undefined
       : ilike(conversations.title, containsPattern(input.titleQuery)),
@@ -104,7 +107,7 @@ export async function listConversationsWithActiveRun(
       and(
         eq(agentRuns.clientInstanceId, conversations.clientInstanceId),
         eq(agentRuns.conversationId, conversations.id),
-        drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_decision', 'cancelling')`
+        inArray(agentRuns.status, ACTIVE_AGENT_RUN_STATUSES)
       )
     )
     .where(listedConversations(db, input))

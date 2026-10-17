@@ -360,7 +360,7 @@ describe("api client derived from the operation catalog", () => {
       "params" | "file" | "signal"
     >();
     expectTypeOf<keyof OperationInput<"conversations.runs.observe">>().toEqualTypeOf<
-      "params" | "query" | "signal" | "onCaughtUp"
+      "params" | "query" | "signal" | "onCaughtUp" | "onSkipped"
     >();
 
     // The answer is what the response schema parses to, by the kind of the response.

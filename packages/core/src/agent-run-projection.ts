@@ -99,13 +99,28 @@ export function applyAgentRunObservation(
       });
     }
   }
+  if (event.type === "subagent_started") {
+    const started = activeToolCalls.find((entry) => entry.toolCallId === event.toolCallId);
+    if (started) {
+      upsertToolCall(activeToolCalls, parts, {
+        ...started,
+        subagent: {
+          runId: event.subagentRunId,
+          threadId: event.threadId,
+          agent: event.agent,
+          description: event.description
+        }
+      });
+    }
+  }
   if (event.type === "tool_call_completed") {
     upsertToolCall(activeToolCalls, parts, {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
       input: findToolCallInput(activeToolCalls, event.toolCallId),
       state: "output_available",
-      output: toToolOutput(event)
+      output: toToolOutput(event),
+      ...findSubagent(activeToolCalls, event.toolCallId)
     });
   }
   if (event.type === "tool_call_failed") {
@@ -114,7 +129,8 @@ export function applyAgentRunObservation(
       toolName: event.toolName,
       input: findToolCallInput(activeToolCalls, event.toolCallId),
       state: "output_error",
-      errorText: toToolError(event)
+      errorText: toToolError(event),
+      ...findSubagent(activeToolCalls, event.toolCallId)
     });
   }
   if (event.type === "run_failed") {
@@ -243,6 +259,14 @@ function upsertPart(parts: AgentRunProjection["parts"], part: AgentRunProjection
   } else {
     parts.push(part);
   }
+}
+
+function findSubagent(
+  toolCalls: AgentRunProjection["activeToolCalls"],
+  toolCallId: string
+): Pick<AgentRunProjection["activeToolCalls"][number], "subagent"> {
+  const subagent = toolCalls.find((entry) => entry.toolCallId === toolCallId)?.subagent;
+  return subagent ? { subagent } : {};
 }
 
 function findToolCallInput(

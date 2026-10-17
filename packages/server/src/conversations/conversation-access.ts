@@ -26,6 +26,15 @@ export async function requireConversationAccess(
   if (!conversation || conversation.status !== "active") {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
+  // A subagent's run thread has no audience of its own: it is read through its root (CR-1).
+  // Another run thread, an agent step's, is read through its Workflow run only.
+  if (conversation.kind === "run_thread") {
+    if (!conversation.parentConversationId) {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+    await requireConversationAccess(options, conversation.parentConversationId, user);
+    return conversation;
+  }
   try {
     await requireWorkspaceAccess(options, user, conversation.collaborationWorkspaceId);
   } catch (error) {
@@ -39,6 +48,23 @@ export async function requireConversationAccess(
     conversation.createdByUserId !== getSubjectUserId(user)
   ) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
+  }
+  return conversation;
+}
+
+/**
+ * The access check of a write to a Conversation that only a chat Conversation takes: a new
+ * message or run, a title, a subject, a move or a deletion. A subagent's run thread is read
+ * only; it changes with its root.
+ */
+export async function requireChatConversationAccess(
+  options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
+  conversationId: ConversationId,
+  user: AuthenticatedUser
+): Promise<Conversation> {
+  const conversation = await requireConversationAccess(options, conversationId, user);
+  if (conversation.kind === "run_thread") {
+    throw new AppError("CONFLICT", "A subagent's thread is read only", { reason: "run_thread" });
   }
   return conversation;
 }

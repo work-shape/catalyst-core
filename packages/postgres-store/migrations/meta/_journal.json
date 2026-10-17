@@ -673,6 +673,20 @@
       "when": 1792234250133,
       "tag": "0095_connection_bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1792238091763,
+      "tag": "0096_subagent_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1792238102804,
+      "tag": "0097_subagent_run_indexes",
+      "breakpoints": true
     }
   ]
 }

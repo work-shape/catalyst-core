@@ -44,6 +44,7 @@ async function openTryConversation(
     // tried in, never built in. Any other is answered as a missing one.
     if (
       !build ||
+      build.workspaceId === null ||
       build.tryOf !== null ||
       build.subjectKind !== input.agent.kind ||
       build.subjectName !== input.agent.name

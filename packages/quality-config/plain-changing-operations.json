@@ -167,6 +167,7 @@
     "conversations.runs.observe": "conversation_access",
     "conversations.runs.start": "conversation_access",
     "conversations.structured_data.get": "conversation_access",
+    "conversations.subagents.list": "conversation_access",
     "conversations.thread.get": "conversation_access",
     "docs.get": "own",
     "health.get": "public",

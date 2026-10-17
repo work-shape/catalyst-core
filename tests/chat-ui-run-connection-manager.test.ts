@@ -27,13 +27,7 @@ describe("chat UI run connection manager", () => {
                 if (options.signal) {
                   signals.push(options.signal);
                 }
-                yield createObservation({
-                  sequence: 4,
-                  type: "message_delta",
-                  payload: {
-                    delta: " after a gap"
-                  }
-                });
+                yield createObservation(4, { type: "message_delta", delta: " after a gap" });
               }
             }
           }
@@ -172,15 +166,12 @@ describe("chat UI run connection manager", () => {
           conversations: {
             runs: {
               async *observe() {
-                yield createObservation({
-                  sequence: 4,
+                yield createObservation(4, {
                   type: "tool_call_completed",
-                  payload: {
-                    toolCallId: "call_1",
-                    toolName: "publish",
-                    result: { status: "success" },
-                    modelOutput: "{}"
-                  }
+                  toolCallId: "call_1",
+                  toolName: "publish",
+                  result: { status: "success" },
+                  modelOutput: "{}"
                 });
               }
             }
@@ -225,20 +216,14 @@ function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-function createObservation<TType extends RunObservation["payload"]["type"]>({
-  sequence,
-  type,
-  payload = {}
-}: {
-  sequence: number;
-  type: TType;
-  payload?: Partial<
-    Omit<
-      Extract<RunObservation["payload"], { type: TType }>,
-      "runId" | "sequence" | "createdAt" | "type"
-    >
-  >;
-}): RunObservation {
+/** A payload of a run's stream without the fields every payload carries. */
+type PayloadBody = RunObservation["payload"] extends infer Payload
+  ? Payload extends unknown
+    ? Omit<Payload, "runId" | "sequence" | "createdAt">
+    : never
+  : never;
+
+function createObservation(sequence: number, body: PayloadBody): RunObservation {
   const createdAt = `2026-06-26T10:00:0${sequence}.000Z`;
   return {
     clientInstanceId: "client_1",
@@ -246,14 +231,8 @@ function createObservation<TType extends RunObservation["payload"]["type"]>({
     ownerUserId: "user_1",
     runId: "run_1",
     sequence,
-    type,
-    payload: {
-      ...payload,
-      type,
-      runId: "run_1",
-      sequence,
-      createdAt
-    } as RunObservation["payload"],
+    type: body.type,
+    payload: { ...body, runId: "run_1", sequence, createdAt },
     createdAt
   };
 }

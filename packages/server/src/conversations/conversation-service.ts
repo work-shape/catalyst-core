@@ -26,7 +26,7 @@ import { z } from "zod";
 import { getModelSelectionForConversationTitles } from "@work-shape/catalyst-config-schema";
 import { CollaborationWorkspaceWorkflow } from "../workspaces/collaboration-workspace-service";
 import { attemptConversationDataCleanup } from "../deletion/conversation-cleanup";
-import { requireConversationAccess } from "./conversation-access";
+import { requireChatConversationAccess, requireConversationAccess } from "./conversation-access";
 import { assertConversationIdle } from "./conversation-idle";
 import {
   createTitlePrompt,
@@ -150,7 +150,7 @@ export class ConversationWorkflow {
     user: AuthenticatedUser,
     context: RuntimeCallContext
   ): Promise<Conversation> {
-    const conversation = await this.requireConversationAccess(conversationId, user);
+    const conversation = await this.requireChatConversationAccess(conversationId, user);
     if (conversation.title === title) {
       return conversation;
     }
@@ -187,7 +187,7 @@ export class ConversationWorkflow {
     context: { correlationId: string; audit: AuditRecorder },
     command: ConversationSubject & { toolCallId?: string }
   ): Promise<Conversation> {
-    const conversation = await this.requireConversationAccess(conversationId, user);
+    const conversation = await this.requireChatConversationAccess(conversationId, user);
     if (conversation.createdByUserId !== getSubjectUserId(user)) {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
@@ -263,7 +263,7 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     command: MoveConversationCommand
   ): Promise<Conversation> {
-    const conversation = await this.requireConversationAccess(conversationId, user);
+    const conversation = await this.requireChatConversationAccess(conversationId, user);
     const destination = await this.requireMemberWorkspace(user, command.collaborationWorkspaceId);
     if (conversation.collaborationWorkspaceId === command.collaborationWorkspaceId) {
       throw new AppError("VALIDATION_FAILED", "Conversation already belongs to this workspace");
@@ -475,7 +475,7 @@ export class ConversationWorkflow {
         "User conversation deletion is disabled for this client instance"
       );
     }
-    await this.requireConversationAccess(conversationId, user);
+    await this.requireChatConversationAccess(conversationId, user);
     const deletedAt = new Date().toISOString();
     const deleted = await this.options.stores.conversations.deleteConversation({
       clientInstanceId: this.options.clientInstanceId,
@@ -506,6 +506,14 @@ export class ConversationWorkflow {
     user: AuthenticatedUser
   ): Promise<Conversation> {
     return requireConversationAccess(this.options, conversationId, user);
+  }
+
+  /** The same check for a write only a chat Conversation takes; a run thread is read only. */
+  requireChatConversationAccess(
+    conversationId: ConversationId,
+    user: AuthenticatedUser
+  ): Promise<Conversation> {
+    return requireChatConversationAccess(this.options, conversationId, user);
   }
 
   async resolveTargetWorkspace(

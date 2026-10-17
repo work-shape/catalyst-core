@@ -37,8 +37,11 @@ export function createDecidedToolCallRunner(callDeps: RunOperationDeps): ToolDec
           : "The user declined this call. Nothing ran."
       );
     }
+    // The call is carried out as the run kept it: a tool that stands for an operation, such as
+    // `run_agent` for `agents.run`, was projected before it paused, and the run's origin holds
+    // the projected name the agent's rights are asked for.
     const call = operationCallFromToolRequest({
-      request: { ...request, input: frozenInput },
+      request: { ...request, toolName: run.origin.toolName, input: frozenInput },
       actor: {
         ...context.user,
         ...(context.principal ? { principal: context.principal } : {}),

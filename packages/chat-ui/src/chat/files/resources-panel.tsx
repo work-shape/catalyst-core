@@ -1,7 +1,11 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { BarChart3, ChevronDown, Database, Library, X } from "lucide-react";
 import { useCallback, type AnimationEventHandler } from "react";
-import type { ApiClient, ConversationResourceListItem } from "@work-shape/catalyst-api-client";
+import type {
+  ApiClient,
+  ConversationResourceListItem,
+  SubagentSummary
+} from "@work-shape/catalyst-api-client";
 import { cn, Spinner, IconButton } from "@work-shape/catalyst-ui";
 import { ArtifactFileIcon } from "./artifact-download-card";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
@@ -29,8 +33,11 @@ import type { Surface } from "../surface/surface";
 import { useToolDisplayPanel } from "../tools/tool-display-panel";
 import { getArtifactFileType } from "../tools/tool-artifacts";
 import { useWorkspacePreferences } from "../workspace/workspace-ui-state";
+import { SubagentsSection } from "../subagents/subagents-section";
+import { useSubagentsQuery } from "../subagents/subagent-queries";
 
 const AUTH_SCOPE = "standalone";
+const NO_SUBAGENTS: readonly SubagentSummary[] = [];
 
 export function useResourcesPanelState({
   conversationId,
@@ -52,6 +59,9 @@ export function useResourcesPanelState({
     enabled: enabled && Boolean(conversationId)
   });
   const resources = query.data ?? [];
+  const subagents = useSubagentsQuery({ conversationId, enabled }).data ?? NO_SUBAGENTS;
+  // A subagent is a row of the panel as a Resource is.
+  const hasResources = resources.length > 0 || subagents.length > 0;
 
   const open =
     enabled &&
@@ -59,16 +69,15 @@ export function useResourcesPanelState({
     resolveResourcesPanelOpen({
       preference: resourcesPanelPreference,
       roomBeside,
-      hasResources: resources.length > 0
+      hasResources
     });
 
   return {
     client,
-    error: Boolean(query.error),
-    hasResources: resources.length > 0,
-    loading: query.isLoading,
+    /** What the panel lists, as its props take it. */
+    contents: { error: Boolean(query.error), loading: query.isLoading, resources, subagents },
+    hasResources,
     open,
-    resources,
     close: () => setResourcesPanelPreference("closed"),
     openExplicitly: () => setResourcesPanelPreference("open")
   };
@@ -105,7 +114,8 @@ export function ResourcesPanel({
   leaving = false,
   covered = false,
   onAnimationEnd,
-  resources
+  resources,
+  subagents = NO_SUBAGENTS
 }: {
   client: ApiClient;
   conversationId: string;
@@ -119,6 +129,8 @@ export function ResourcesPanel({
   covered?: boolean;
   onAnimationEnd?: AnimationEventHandler<HTMLElement>;
   resources: ConversationResourceListItem[];
+  /** The conversation's subagents, the panel's first section (CR-1). */
+  subagents?: readonly SubagentSummary[];
 }) {
   const { locale, t } = useTranslation();
   const displayPanel = useToolDisplayPanel();
@@ -227,12 +239,13 @@ export function ResourcesPanel({
           <p className="px-3 py-8 text-center text-sm text-muted-foreground">
             {t("resourcesLoadFailed")}
           </p>
-        ) : sections.length === 0 ? (
+        ) : sections.length === 0 && subagents.length === 0 ? (
           <p className="px-3 py-8 text-center text-sm text-muted-foreground">
             {t("resourcesEmpty")}
           </p>
         ) : (
           <div className="grid gap-1">
+            <SubagentsSection conversationId={conversationId} subagents={subagents} />
             {sections.map((section) => (
               <Collapsible.Root key={section.type} defaultOpen>
                 <Collapsible.Trigger className="group flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">

@@ -1,4 +1,5 @@
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
+import { lockParentRunsOf, settleEndedAgentRuns } from "./postgres-agent-run-lineage";
 import {
   dispatchConversationFollowUpJob,
   ACTIVE_AGENT_RUN_STATUSES,
@@ -28,7 +29,7 @@ import {
   type RenewAgentRunJobLeaseInput,
   type RunObservation
 } from "@work-shape/catalyst-core";
-import { and, asc, sql as drizzleSql, eq, gt, inArray, lt, type SQL } from "drizzle-orm";
+import { and, asc, sql as drizzleSql, eq, gt, inArray, lt, or, type SQL } from "drizzle-orm";
 import { enqueueJob } from "./jobs/store";
 import { resumeAgentRunAfterApproval } from "./postgres-agent-run-approval-resume";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
@@ -126,6 +127,7 @@ export async function appendClaimedRunObservation(
 ): Promise<RunObservation> {
   return db.transaction(async (tx) => {
     await requireJobLease(tx, input.lease);
+    if (endsRun(input.event)) await lockParentRunsOf(tx, input.clientInstanceId, [input.runId]);
     await lockClaimedRunConversation(tx, input);
     return insertClaimedRunObservation(tx, input, input.event);
   });
@@ -143,6 +145,8 @@ export async function appendClaimedAgentRunEnd(
 ): Promise<void> {
   await db.transaction(async (tx) => {
     await requireJobLease(tx, input.lease);
+    if (input.events.some(endsRun))
+      await lockParentRunsOf(tx, input.clientInstanceId, [input.runId]);
     await lockClaimedRunConversation(tx, input);
     if (input.message) await insertClaimedAgentRunMessage(tx, input, input.message);
     let sequence: number | undefined;
@@ -202,13 +206,16 @@ async function insertClaimedRunObservation(
       "Agent run has ended, was asked to cancel, or its sequence is stale"
     );
   }
-  if (terminal.status && terminal.status !== "waiting_for_decision")
+  if (terminal.status && terminal.status !== "waiting_for_decision") {
     await withdrawUnclaimedWorkspaceCommandsOfRuns(tx, {
       clientInstanceId: claim.clientInstanceId,
       runIds: [claim.runId]
     });
+    await settleEndedAgentRuns(tx, claim.clientInstanceId, [run], new Date(event.createdAt));
+  }
 
-  if (event.type === "run_completed") {
+  // A subagent's thread takes no follow-ups: it has no composer.
+  if (event.type === "run_completed" && run.parentRunId === null) {
     await enqueueJob(
       tx,
       dispatchConversationFollowUpJob,
@@ -262,6 +269,7 @@ export async function listAgentRunsInProgress(
   db: PostgresConnection,
   input: Parameters<AgentRunStore["listAgentRunsInProgress"]>[0]
 ): Promise<AgentRun[]> {
+  const ofInstance = eq(conversations.clientInstanceId, input.clientInstanceId);
   const subject =
     "ownerUserId" in input
       ? eq(agentRuns.ownerUserId, input.ownerUserId)
@@ -271,10 +279,18 @@ export async function listAgentRunsInProgress(
             .select({ id: conversations.id })
             .from(conversations)
             .where(
-              and(
-                eq(conversations.clientInstanceId, input.clientInstanceId),
-                eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId)
-              )
+              "rootConversationId" in input
+                ? and(
+                    ofInstance,
+                    or(
+                      eq(conversations.id, input.rootConversationId),
+                      eq(conversations.parentConversationId, input.rootConversationId)
+                    )
+                  )
+                : and(
+                    ofInstance,
+                    eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId)
+                  )
             )
         );
   const rows = await db
@@ -286,7 +302,8 @@ export async function listAgentRunsInProgress(
         inArray(agentRuns.status, RUN_IN_PROGRESS_STATUSES),
         subject
       )
-    );
+    )
+    .orderBy(asc(agentRuns.depth), asc(agentRuns.id));
   return rows.map(mapAgentRun);
 }
 
@@ -346,7 +363,7 @@ async function insertClaimedAgentRunMessage(
     tx,
     claim.clientInstanceId,
     asConversationId(run.conversationId),
-    asUserId(run.ownerUserId)
+    run.ownerUserId === null ? undefined : asUserId(run.ownerUserId)
   );
   const createdAt = new Date();
   const [row] = await tx
@@ -408,6 +425,7 @@ export async function failLostAgentRun(
   input: FailLostAgentRunInput
 ): Promise<AgentRun | undefined> {
   return db.transaction(async (tx) => {
+    await lockParentRunsOf(tx, input.clientInstanceId, [input.runId]);
     await lockAgentRunConversations(tx, input.clientInstanceId, [input.runId]);
     const [row] = await tx
       .update(agentRuns)
@@ -439,6 +457,7 @@ export async function failLostAgentRun(
       clientInstanceId: input.clientInstanceId,
       runIds: [input.runId]
     });
+    await settleEndedAgentRuns(tx, input.clientInstanceId, [row], row.failedAt);
     const event = {
       type: "run_failed" as const,
       runId: asAgentRunId(row.id),
@@ -514,6 +533,7 @@ async function failAgentRunsWhere(
       .limit(input.limit);
     if (!chosen.length) return [];
     const runIds = chosen.map((run) => run.id);
+    await lockParentRunsOf(tx, input.clientInstanceId, runIds);
     await lockAgentRunConversations(tx, input.clientInstanceId, runIds);
     const rows = await tx
       .update(agentRuns)
@@ -539,6 +559,12 @@ async function failAgentRunsWhere(
       clientInstanceId: input.clientInstanceId,
       runIds: failed.map(({ row }) => asAgentRunId(row.id))
     });
+    await settleEndedAgentRuns(
+      tx,
+      input.clientInstanceId,
+      failed.map(({ row }) => row),
+      failed[0]?.failedAt ?? new Date()
+    );
     await tx.insert(agentRunObservations).values(
       failed.map(({ row, failedAt }) => ({
         clientInstanceId: row.clientInstanceId,
@@ -593,7 +619,10 @@ export async function listAgentRunsWithoutJob(
  * cannot bury or release the job before this transaction ends: what the transaction stores
  * was stored while the lease was this attempt's.
  */
-async function requireJobLease(tx: PostgresConnection, lease: AgentRunJobLease): Promise<void> {
+export async function requireJobLease(
+  tx: PostgresConnection,
+  lease: AgentRunJobLease
+): Promise<void> {
   const [held] = await tx
     .select({ id: platformJobs.id })
     .from(platformJobs)
@@ -638,19 +667,26 @@ export async function requireClaimedAgentRun(
 }
 
 /** One run as the attempt of a job holds it. */
-interface ClaimedRun {
+export interface ClaimedRun {
   clientInstanceId: ClientInstanceId;
   runId: AgentRun["id"];
   lease: AgentRunJobLease;
 }
 
 /** The run is this attempt's and has not ended. A cancelling run still takes its last writes. */
-function claimedRunWhere(input: ClaimedRun) {
+export function claimedRunWhere(input: ClaimedRun) {
   return and(
     eq(agentRuns.clientInstanceId, input.clientInstanceId),
     eq(agentRuns.id, input.runId),
     eq(agentRuns.leaseToken, input.lease.leaseToken),
     inArray(agentRuns.status, STARTED_STATUSES)
+  );
+}
+
+/** An event after which the run has ended. */
+function endsRun(event: AgentRuntimeEvent): boolean {
+  return (
+    event.type === "run_completed" || event.type === "run_failed" || event.type === "run_cancelled"
   );
 }
 

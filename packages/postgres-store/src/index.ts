@@ -32,7 +32,9 @@ import { schema } from "./schema";
 import { createPostgresFollowUpStore } from "./postgres-follow-up-operations";
 import { lockActiveConversation } from "./postgres-conversation-operations";
 import { createPostgresConversationsStore } from "./postgres-conversation-operations";
+import { expireConversation, listExpiredConversations } from "./postgres-conversation-expiry";
 import { createPostgresAgentRunsStore } from "./postgres-agent-run-operations";
+import { createPostgresChildAgentRunStore } from "./postgres-child-agent-run-operations";
 import { createPostgresFilesStore } from "./postgres-file-store";
 import { createPostgresAuditStore } from "./postgres-audit-usage-operations";
 import { createPostgresUsageStore } from "./postgres-usage-ledger";
@@ -119,10 +121,13 @@ function bindStores(
       searchWorkspaceFiles: (input) => searchPostgresWorkspaceFiles(db, input),
       deleteModelProviderContinuation: (input) =>
         deletePostgresModelProviderContinuation(db, input),
-      getModelProviderContinuation: (input) => getPostgresModelProviderContinuation(db, input)
+      getModelProviderContinuation: (input) => getPostgresModelProviderContinuation(db, input),
+      listExpiredConversations: (input) => listExpiredConversations(db, input),
+      expireConversation: (input) => expireConversation(db, input)
     }),
     followUps: createPostgresFollowUpStore(db, { lockActiveConversation }),
     agentRuns: createPostgresAgentRunsStore(db, enqueued),
+    childAgentRuns: createPostgresChildAgentRunStore(db, enqueued),
     files: createPostgresFilesStore(db, enqueued),
     audit: createPostgresAuditStore(db),
     usage: createPostgresUsageStore(db),

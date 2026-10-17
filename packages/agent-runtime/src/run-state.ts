@@ -197,7 +197,21 @@ export class RunState {
     this.close();
   }
 
-  /** What the run keeps to go on, once it waits for a decision. */
+  /**
+   * Ends this execution of the run at the end of a step whose subagents have not all ended
+   * (CR-1). No event is written: the worker stores the wait, and the run goes on from
+   * `resumeState` once the last of them ended.
+   */
+  waitForSubagents(resumeState: AgentRunResumeState): void {
+    if (this.closed || this.cancellationStarted) {
+      return;
+    }
+    this.status = "waiting_for_subagents";
+    this.resumeState = resumeState;
+    this.close();
+  }
+
+  /** What the run keeps to go on, once it waits for a decision or for its subagents. */
   getResumeState(): AgentRunResumeState | undefined {
     return this.resumeState;
   }

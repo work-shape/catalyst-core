@@ -24,6 +24,20 @@ export function registerConversationResourceRoutes(route: Route, options: ChatSe
     ).items;
   });
 
+  // The subagents of a chat conversation's runs, read with its Resources (CR-1). A thread has
+  // no subagents of its own.
+  route(apiOperations["conversations.subagents.list"], async ({ user, params }) => {
+    const conversationId = conversationIdParam(params);
+    const conversation = await conversations.requireConversationAccess(conversationId, user);
+    if (conversation.kind !== "chat") return { items: [] };
+    return {
+      items: await options.stores.childAgentRuns.listSubagents({
+        clientInstanceId: options.clientInstanceId,
+        conversationId
+      })
+    };
+  });
+
   route(apiOperations["conversations.structured_data.get"], async ({ user, params }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);

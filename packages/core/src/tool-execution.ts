@@ -94,7 +94,13 @@ export type ToolExecutionErrorCode =
   | "handler_failed"
   | "cancelled"
   | "timed_out"
-  | "repeated_tool_call";
+  | "repeated_tool_call"
+  /** A subagent's call needs a person's decision, which a subagent never waits for (CR-1). */
+  | "confirmation_required"
+  /** `run_agent` names an agent the run may not start as a subagent. */
+  | "agent_not_available"
+  /** `run_agent` beyond the subagents one step or one run may start. */
+  | "subagent_limit";
 
 export interface ToolExecutionError {
   code: ToolExecutionErrorCode;

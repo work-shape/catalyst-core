@@ -521,6 +521,8 @@ export async function createClientInstanceExecutionAssembly(
     modelGateway,
     ...createInstanceAgentTools(operationCalls, toolRegistry, toolOptions),
     conversationOffer,
+    // A run reads how its subagents ended at the end of the step that started them.
+    subagents: store.childAgentRuns,
     webAccess: config.webAccess,
     agentSkillChangesEnabled: skillPolicy.enabled,
     maxSteps: config.runtime.maxSteps,

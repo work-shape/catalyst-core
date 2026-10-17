@@ -49,7 +49,7 @@ export type OperationResponse =
       readonly order: readonly string[];
       readonly descending: boolean;
     }
-  | { readonly kind: "sse"; readonly schema: z.ZodType }
+  | { readonly kind: "sse"; readonly schema: z.ZodType; readonly skip?: z.ZodType }
   | { readonly kind: "blob"; readonly contentType: string };
 
 export function json<Schema extends z.ZodType>(schema: Schema) {
@@ -78,8 +78,18 @@ export function page<Schema extends z.ZodType>(
 }
 
 /** A stream of server-sent events whose `data` is one value of `schema`. */
-export function sse<Schema extends z.ZodType>(schema: Schema) {
-  return { kind: "sse", schema } as const;
+export function sse<Schema extends z.ZodType>(schema: Schema): { kind: "sse"; schema: Schema };
+/**
+ * A stream whose events a client built earlier may not all know: an event that does not match
+ * `schema` but matches `skip` is passed over instead of failing the stream, and the client
+ * hears of it to keep its position.
+ */
+export function sse<Schema extends z.ZodType, Skip extends z.ZodType>(
+  schema: Schema,
+  skip: Skip
+): { kind: "sse"; schema: Schema; skip: Skip };
+export function sse(schema: z.ZodType, skip?: z.ZodType) {
+  return skip ? { kind: "sse", schema, skip } : { kind: "sse", schema };
 }
 
 /** A body the handler sends itself: a file, or a page. */

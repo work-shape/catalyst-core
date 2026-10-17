@@ -14,6 +14,8 @@ export * from "./time";
 export * from "./types";
 export * from "./agent-run-decision";
 export * from "./agent-run-resume";
+export * from "./subagents";
+export * from "./child-agent-runs";
 
 export * from "./app-actions";
 export * from "./config-asset-concurrency";

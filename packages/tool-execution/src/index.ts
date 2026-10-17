@@ -14,6 +14,12 @@ export {
   type AppSaved
 } from "./app-save-tool";
 export * from "./read-skill-tool";
+export {
+  createRunAgentTool,
+  runAgentInputSchema,
+  runAgentOutputSchema,
+  type RunAgentInput
+} from "./run-agent-tool";
 export { createWorkflowTestTools, WORKFLOW_TEST_TOOL_NAMES } from "./workflow-test-tools";
 export { CONNECTION_DRAFT_TOOL_NAME, createConnectionDraftTool } from "./connection-draft-tool";
 export {

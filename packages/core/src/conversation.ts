@@ -1,4 +1,8 @@
-import { CHAT_MESSAGE_ROLES, CONVERSATION_VISIBILITIES } from "@work-shape/catalyst-asset-schemas";
+import {
+  CHAT_MESSAGE_ROLES,
+  CONVERSATION_KINDS,
+  CONVERSATION_VISIBILITIES
+} from "@work-shape/catalyst-asset-schemas";
 import type { ActiveRunSummary, AgentRunProjection } from "./agent-runtime";
 import type { SkillResourceConfig } from "./config";
 import type { AgentRunWriteFence } from "./identity";
@@ -14,6 +18,12 @@ import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
 
 export type ConversationStatus = "active" | "deleted" | "retention_expired";
+
+/**
+ * A `chat` conversation is one a person has. A `run_thread` holds the transcript of a Child
+ * Agent Run: a subagent's thread belongs to its root conversation and is read through it.
+ */
+export type ConversationKind = (typeof CONVERSATION_KINDS)[number];
 
 /** `private` restricts a Conversation in a Shared Workspace to the user who created it. */
 export type ConversationVisibility = (typeof CONVERSATION_VISIBILITIES)[number];
@@ -108,6 +118,9 @@ export const SUBJECT_TOOL_PREFIX = "platform.assets.";
 export interface Conversation {
   id: ConversationId;
   clientInstanceId: ClientInstanceId;
+  kind: ConversationKind;
+  /** Of a subagent's run thread: the chat conversation it belongs to. */
+  parentConversationId?: ConversationId;
   collaborationWorkspaceId: CollaborationWorkspaceId;
   createdByUserId: string;
   createdByExternalUserId: string;

@@ -385,12 +385,7 @@ function toPublicChatMessage(message: ChatMessage): ChatMessage {
 function isActiveAgentRunStatus(
   status: AgentRunStatus
 ): status is Extract<AgentRunStatus, (typeof ACTIVE_AGENT_RUN_STATUSES)[number]> {
-  return (
-    status === "queued" ||
-    status === "running" ||
-    status === "waiting_for_decision" ||
-    status === "cancelling"
-  );
+  return ACTIVE_AGENT_RUN_STATUSES.some((active) => active === status);
 }
 
 function toActiveRunSummary(run: AgentRun): ActiveRunSummary {

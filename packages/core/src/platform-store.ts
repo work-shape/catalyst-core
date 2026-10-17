@@ -3,6 +3,7 @@ import type { AgentProposalStore } from "./agent-proposals";
 import type { AgentTryConversationStore } from "./agent-try-conversations";
 import type { AgentRunDecisionStore } from "./agent-run-decision";
 import type { AgentRunStore, RunObservationStore } from "./agent-runtime";
+import type { ChildAgentRunStore } from "./child-agent-runs";
 import type { AuditEventStore } from "./audit";
 import type {
   ConversationRetentionStore,
@@ -72,6 +73,7 @@ export interface PlatformStores {
   conversations: ConversationsStore;
   followUps: ConversationFollowUpStore;
   agentRuns: AgentRunsStore;
+  childAgentRuns: ChildAgentRunStore;
   files: PlatformFileStore;
   audit: AuditEventStore;
   usage: ModelUsageEventStore;

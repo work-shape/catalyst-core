@@ -32,6 +32,7 @@ export interface OperationRequest {
   idempotencyKey?: string;
   signal?: AbortSignal;
   onCaughtUp?: () => void;
+  onSkipped?: (value: unknown) => void;
 }
 
 /**

@@ -117,6 +117,11 @@ export {
 } from "./deletion/workspace-cleanup";
 export type { ExecutionWorkspaceCleanupRunSummary } from "./deletion/workspace-cleanup";
 export { listConversationResources } from "./conversations/conversation-resources";
+export {
+  registerSubagentOperation,
+  subagentOperation,
+  type SubagentOperationOptions
+} from "./conversations/subagent-operation";
 export type {
   ChatServerOptions,
   OperationCalls,

@@ -102,16 +102,34 @@ export type ConfigAssetRow = typeof configAssets.$inferSelect;
 export type ConfigAssetRevisionRow = typeof configAssetRevisions.$inferSelect;
 export type StructuredDataResourceRow = typeof structuredDataResources.$inferSelect;
 
+/**
+ * The rows of a Workflow `agent` step (CR-2) belong to no person and no workspace. No reader of
+ * the conversation and run routes reaches one; the Workflow run's readers map them themselves.
+ */
+const AGENT_STEP_ROW_MESSAGE = "An agent step's run is read through its Workflow run";
+
 export function mapConversation(row: ConversationRow | undefined): Conversation {
   if (!row) {
     throw new AppError("INTERNAL", "Expected conversation row");
   }
+  const { collaborationWorkspaceId, createdByUserId, createdByExternalUserId } = row;
+  if (
+    collaborationWorkspaceId === null ||
+    createdByUserId === null ||
+    createdByExternalUserId === null
+  ) {
+    throw new AppError("INTERNAL", AGENT_STEP_ROW_MESSAGE);
+  }
   return {
     id: asConversationId(row.id),
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
-    collaborationWorkspaceId: asCollaborationWorkspaceId(row.collaborationWorkspaceId),
-    createdByUserId: row.createdByUserId,
-    createdByExternalUserId: row.createdByExternalUserId,
+    kind: row.kind,
+    ...(row.parentConversationId === null
+      ? {}
+      : { parentConversationId: asConversationId(row.parentConversationId) }),
+    collaborationWorkspaceId: asCollaborationWorkspaceId(collaborationWorkspaceId),
+    createdByUserId,
+    createdByExternalUserId,
     visibility: row.visibility,
     title: row.title,
     status: row.status,
@@ -204,11 +222,13 @@ export function mapAgentRun(row: AgentRunRow | undefined): AgentRun {
   if (!row) {
     throw new AppError("INTERNAL", "Expected agent run row");
   }
+  if (row.ownerUserId === null) throw new AppError("INTERNAL", AGENT_STEP_ROW_MESSAGE);
   return {
     id: asAgentRunId(row.id),
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     conversationId: asConversationId(row.conversationId),
     ownerUserId: row.ownerUserId,
+    ...(row.parentRunId === null ? {} : { parentRunId: asAgentRunId(row.parentRunId) }),
     inputMessageId: asMessageId(row.inputMessageId),
     agentName: row.agentName,
     modelBindingId: row.modelBindingId ?? undefined,
@@ -238,6 +258,7 @@ export function mapRunObservation(row: RunObservationRow | undefined): RunObserv
   if (!row) {
     throw new AppError("INTERNAL", "Expected agent run observation row");
   }
+  if (row.ownerUserId === null) throw new AppError("INTERNAL", AGENT_STEP_ROW_MESSAGE);
   return {
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     runId: asAgentRunId(row.runId),

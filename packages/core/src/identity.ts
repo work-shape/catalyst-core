@@ -150,6 +150,11 @@ export interface RuntimeCallContext {
    * it makes for the run, so a run that lost its lease leaves no such write behind.
    */
   runFence?: AgentRunWriteFence;
+  /**
+   * Set while a subagent's worker makes the call (CR-1). A subagent never waits for a
+   * decision: a call that needs one is refused with `confirmation_required`.
+   */
+  subagent?: true;
 }
 
 export function createUserPrincipal(user: AuthenticatedUser): AuthPrincipal {

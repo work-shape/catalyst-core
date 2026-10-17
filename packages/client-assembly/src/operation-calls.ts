@@ -2,11 +2,14 @@ import {
   GuardrailRunner,
   ApprovalRequestWorkflow,
   createOperationCalls,
+  registerSubagentOperation,
   type ChatServerOptions,
   type OperationCalls
 } from "@work-shape/catalyst-server";
 import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
+  AGENTS_RUN_OPERATION,
+  RUN_AGENT_TOOL_NAME,
   createAuthorizer,
   knowledgeOperationNamesOf,
   type ApprovalRequestHandlerRegistry,
@@ -104,12 +107,21 @@ export function createInstanceOperationCalls(
             agentToolNames: listed
           })
         : undefined;
-      // The query of each Knowledge Base the agent lists, which its one knowledge tool calls.
+      // The query of each Knowledge Base the agent lists, which its one knowledge tool calls,
+      // and the start of a subagent, which `run_agent` calls.
       return [
         ...(await conversationToolNames(listed, offer)),
-        ...(agent ? knowledgeOperationNamesOf(agent) : [])
+        ...(agent ? knowledgeOperationNamesOf(agent) : []),
+        ...(listed.includes(RUN_AGENT_TOOL_NAME) ? [AGENTS_RUN_OPERATION] : [])
       ];
     }
+  });
+  // The start of a subagent, which an agent's `run_agent` call is (CR-1).
+  registerSubagentOperation(operationCalls.registry, {
+    clientInstanceId,
+    stores: store,
+    assetSource,
+    agentAvailable: async (input) => (await operationCalls.deps.agentAvailable?.(input)) ?? false
   });
   const approvalRequestCreator = new ApprovalRequestWorkflow({
     clientInstanceId,

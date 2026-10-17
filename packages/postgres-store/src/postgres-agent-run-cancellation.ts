@@ -1,4 +1,5 @@
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
+import { lockParentRunsOf, settleEndedAgentRuns } from "./postgres-agent-run-lineage";
 import { withdrawStoppedOperationApproval } from "./postgres-agent-run-approval-withdrawal";
 import {
   AppError,
@@ -17,7 +18,9 @@ export async function requestAgentRunCancellation(
   input: RequestAgentRunCancellationInput
 ): Promise<AgentRun> {
   return db.transaction(async (tx) => {
-    // Match queue changes before locking the run and its operation runs.
+    // Match queue changes before locking the run and its operation runs. A subagent's end
+    // wakes its parent, which is locked before them.
+    await lockParentRunsOf(tx, input.clientInstanceId, [input.runId]);
     await lockAgentRunConversations(tx, input.clientInstanceId, [input.runId]);
     const [run] = await tx
       .select()
@@ -28,7 +31,12 @@ export async function requestAgentRunCancellation(
       .for("update");
     if (!run) throw new AppError("NOT_FOUND", "Agent run is not available");
     const requestedAt = new Date(input.requestedAt);
-    if (run.status === "queued" || run.status === "waiting_for_decision") {
+    // No worker holds a run that is queued or waits: Stop ends it within the request.
+    if (
+      run.status === "queued" ||
+      run.status === "waiting_for_decision" ||
+      run.status === "waiting_for_subagents"
+    ) {
       const decisions = await cancelWaitingCalls(tx, run, input);
       const event: AgentRuntimeEvent = {
         type: "run_cancelled",
@@ -67,6 +75,7 @@ export async function requestAgentRunCancellation(
           createdAt: requestedAt
         }))
       );
+      await settleEndedAgentRuns(tx, input.clientInstanceId, [run], requestedAt);
       return mapAgentRun(cancelled);
     }
     if (run.status === "running" || run.status === "cancelling") {

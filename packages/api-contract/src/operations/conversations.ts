@@ -18,6 +18,8 @@ import {
   runCommandRequestSchema,
   runCommandResponseSchema,
   runObservationSchema,
+  subagentListSchema,
+  unknownRunObservationSchema,
   startConversationRunRequestSchema,
   startConversationRunResponseSchema,
   structuredDataResourceResponseSchema
@@ -154,6 +156,20 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
+  "conversations.subagents.list": defineOperation({
+    id: "conversations.subagents.list",
+    method: "GET",
+    path: "/api/v1/conversations/:conversationId/subagents",
+    summary: "List the subagents of a conversation's runs",
+    tag: "Conversations",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    response: json(subagentListSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
   "conversations.structured_data.get": defineOperation({
     id: "conversations.structured_data.get",
     method: "GET",
@@ -256,7 +272,7 @@ export const conversationOperations = {
     requires: [],
     effect: "reading",
     query: z.object({ after: z.string().optional() }),
-    response: sse(runObservationSchema),
+    response: sse(runObservationSchema, unknownRunObservationSchema),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),

@@ -43,6 +43,7 @@ const conversation: Conversation = {
   collaborationWorkspaceId: asCollaborationWorkspaceId("workspace"),
   createdByUserId: user.id,
   createdByExternalUserId: user.externalUserId,
+  kind: "chat",
   visibility: "private",
   status: "active",
   title: "Build",

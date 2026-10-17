@@ -1,4 +1,5 @@
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
+import { lockParentRunsOf, settleEndedAgentRuns } from "./postgres-agent-run-lineage";
 import { requestAgentRunCancellation } from "./postgres-agent-run-cancellation";
 import { decideWaitingToolCall } from "./postgres-agent-run-decision-operations";
 import {
@@ -14,8 +15,10 @@ import {
   listAgentRunsWithoutJob,
   renewAgentRunJobLease
 } from "./postgres-agent-run-worker-operations";
-import { and, asc, desc, eq, gt, isNull, lt, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, sql as drizzleSql } from "drizzle-orm";
 import {
+  ACTIVE_AGENT_RUN_STATUSES,
+  ENDED_AGENT_RUN_STATUSES,
   AppError,
   type AgentRun,
   type AgentRunId,
@@ -176,7 +179,7 @@ async function prepareConversationRunStart(
         and(
           eq(agentRuns.clientInstanceId, input.clientInstanceId),
           eq(agentRuns.conversationId, input.conversationId),
-          drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_decision', 'cancelling')`
+          inArray(agentRuns.status, ACTIVE_AGENT_RUN_STATUSES)
         )
       )
       .limit(1);
@@ -466,7 +469,7 @@ async function getActiveConversationAgentRun(
       and(
         eq(agentRuns.clientInstanceId, input.clientInstanceId),
         eq(agentRuns.conversationId, input.conversationId),
-        drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_decision', 'cancelling')`
+        inArray(agentRuns.status, ACTIVE_AGENT_RUN_STATUSES)
       )
     )
     .limit(1);
@@ -498,25 +501,31 @@ async function updateAgentRunStatus(
   db: PostgresConnection,
   input: UpdateAgentRunStatusInput
 ): Promise<AgentRun> {
-  const [row] = await db
-    .update(agentRuns)
-    .set({
-      status: input.status,
-      updatedAt: new Date(input.updatedAt),
-      lastSequence: input.lastSequence,
-      completedAt: input.completedAt ? new Date(input.completedAt) : undefined,
-      cancelledAt: input.cancelledAt ? new Date(input.cancelledAt) : undefined,
-      failedAt: input.failedAt ? new Date(input.failedAt) : undefined,
-      error: input.error
-    })
-    .where(
-      and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId))
-    )
-    .returning();
-  if (!row) {
-    throw new AppError("NOT_FOUND", "Agent run is not available");
-  }
-  return mapAgentRun(row);
+  const ends = ENDED_AGENT_RUN_STATUSES.some((status) => status === input.status);
+  return db.transaction(async (tx) => {
+    if (ends) await lockParentRunsOf(tx, input.clientInstanceId, [input.runId]);
+    const [row] = await tx
+      .update(agentRuns)
+      .set({
+        status: input.status,
+        updatedAt: new Date(input.updatedAt),
+        lastSequence: input.lastSequence,
+        completedAt: input.completedAt ? new Date(input.completedAt) : undefined,
+        cancelledAt: input.cancelledAt ? new Date(input.cancelledAt) : undefined,
+        failedAt: input.failedAt ? new Date(input.failedAt) : undefined,
+        error: input.error
+      })
+      .where(
+        and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, input.runId))
+      )
+      .returning();
+    if (!row) {
+      throw new AppError("NOT_FOUND", "Agent run is not available");
+    }
+    if (ends)
+      await settleEndedAgentRuns(tx, input.clientInstanceId, [row], new Date(input.updatedAt));
+    return mapAgentRun(row);
+  });
 }
 
 async function appendRunObservation(

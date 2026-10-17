@@ -9,6 +9,7 @@ import {
   startConversationRunResponseSchema
 } from "@work-shape/catalyst-api-contract";
 import {
+  ACTIVE_AGENT_RUN_STATUSES,
   AppError,
   type AgentRun,
   type AgentRuntimeEvent,
@@ -227,12 +228,7 @@ function isTerminalRunEventType(type: AgentRuntimeEvent["type"]): boolean {
 }
 
 function isObservableRunStatus(status: string | undefined): boolean {
-  return (
-    status === "queued" ||
-    status === "running" ||
-    status === "waiting_for_decision" ||
-    status === "cancelling"
-  );
+  return ACTIVE_AGENT_RUN_STATUSES.some((active) => active === status);
 }
 
 function readAfterSequence(

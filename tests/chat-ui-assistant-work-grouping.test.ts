@@ -96,6 +96,18 @@ describe("assistant work grouping", () => {
     expect(createVisibleFinalAssistantPartIndices(former, 2)).toEqual([2, 1]);
   });
 
+  it("keeps a subagent's card on its own and folds a refused run_agent call away", () => {
+    // Fails without the rule for subagents: the card folded into the work summary, and with it
+    // Open and Stop of the subagent.
+    const started = toolPart("call_started", "run_agent");
+    const refused = { ...toolPart("call_refused", "run_agent"), isError: true } as PartState;
+    const parts = [toolPart("call_lookup"), started, refused, textPart("Both are done.")];
+
+    expect(groupPaths(parts)).toEqual([[ASSISTANT_WORK_GROUP], [], [ASSISTANT_WORK_GROUP], []]);
+    expect(createCompletedAssistantWorkIndices(parts, 3)).toEqual([0, 2]);
+    expect(createVisibleFinalAssistantPartIndices(parts, 3)).toEqual([3, 1]);
+  });
+
   it("shows an open on its own while the run goes on", () => {
     // Fails without the rule for opens: the call folded into "1 tool call", and nothing in the
     // thread said that something was being built.

@@ -138,6 +138,7 @@ describe("the operation catalog", () => {
         "conversations.runs.observe  GET /api/v1/conversations/:conversationId/runs/:runId/events",
         "conversations.runs.start  POST /api/v1/conversations/:conversationId/runs",
         "conversations.structured_data.get  GET /api/v1/conversations/:conversationId/structured-data/:structuredDataResourceId",
+        "conversations.subagents.list  GET /api/v1/conversations/:conversationId/subagents",
         "conversations.subject.open  PUT /api/v1/conversations/:conversationId/subject",
         "conversations.thread.get  GET /api/v1/conversations/:conversationId/thread",
         "data_stores.app_sources  GET /api/v1/app-data-sources",
@@ -535,7 +536,8 @@ describe("a running instance", () => {
       "agents.proposal.get",
       "agents.proposal.apply",
       "agents.proposal.discard",
-      "agents.try.open"
+      "agents.try.open",
+      "conversations.subagents.list"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

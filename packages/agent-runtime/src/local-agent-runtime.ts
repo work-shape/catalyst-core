@@ -181,6 +181,12 @@ export class LocalAgentRuntime implements AgentRuntime {
     return this.runs.get(runId)?.getResumeState();
   }
 
+  /** What a run that waits for its subagents keeps to go on, once its execution ended. */
+  subagentWaitOf(runId: AgentRunId): AgentRunResumeState | undefined {
+    const state = this.runs.get(runId);
+    return state?.getStatus() === "waiting_for_subagents" ? state.getResumeState() : undefined;
+  }
+
   async getStatus(runId: AgentRunId, context: RuntimeCallContext): Promise<AgentRunStatus> {
     const state = this.runs.get(runId);
     if (state) {

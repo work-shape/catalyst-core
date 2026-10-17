@@ -28,6 +28,7 @@ import type {
   ToolDecisionRecorded,
   ToolDecisionRequested
 } from "./agent-run-resume";
+import type { SubagentRef, SubagentStarted } from "./subagents";
 
 export interface StartAgentRunInput {
   agentName: string;
@@ -83,6 +84,8 @@ export interface AgentRun {
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
   ownerUserId: string;
+  /** Of a subagent: the run whose `run_agent` call started it. It is never started deeper. */
+  parentRunId?: AgentRunId;
   inputMessageId: MessageId;
   agentName: string;
   modelBindingId?: string;
@@ -139,6 +142,8 @@ export type AgentRunProjectionPart =
       errorText?: string;
       /** While the state is `waiting_for_decision`: what the person is asked to decide. */
       decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
+      /** On a `run_agent` call that started its subagent: the subagent, for its card. */
+      subagent?: SubagentRef;
     };
 
 export interface AgentRunProjection {
@@ -165,6 +170,7 @@ export interface AgentRunProjection {
     output?: unknown;
     errorText?: string;
     decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
+    subagent?: SubagentRef;
   }>;
   error?: AgentRunError;
 }
@@ -284,6 +290,12 @@ export type AgentRuntimeEvent =
       sequence: number;
       createdAt: ISODateString;
     } & ToolDecisionRecorded)
+  | ({
+      type: "subagent_started";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+    } & SubagentStarted)
   | {
       type: "tool_call_completed";
       runId: AgentRunId;
@@ -586,12 +598,15 @@ export interface AgentRunStore {
   renewAgentRunJobLease(input: RenewAgentRunJobLeaseInput): Promise<boolean>;
   requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun>;
   /**
-   * The runs that have not ended, a cancelling one included: those a user started, or those
-   * in the Conversations of a workspace.
+   * The runs that have not ended, a cancelling one included: those a user started, those in
+   * the Conversations of a workspace, or those of a chat Conversation and its run threads,
+   * parents before their subagents.
    */
   listAgentRunsInProgress(
     input: { clientInstanceId: ClientInstanceId } & (
-      { ownerUserId: string } | { collaborationWorkspaceId: CollaborationWorkspaceId }
+      | { ownerUserId: string }
+      | { collaborationWorkspaceId: CollaborationWorkspaceId }
+      | { rootConversationId: ConversationId }
     )
   ): Promise<AgentRun[]>;
   /**

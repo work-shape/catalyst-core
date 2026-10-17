@@ -1,0 +1,8 @@
+DROP INDEX CONCURRENTLY IF EXISTS "agent_runs_active_conversation_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "agent_runs_active_conversation_idx" ON "agent_runs" USING btree ("client_instance_id","conversation_id") WHERE "agent_runs"."status" in ('queued', 'running', 'waiting_for_decision', 'waiting_for_subagents', 'cancelling');--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "conversations_parent_idx" ON "conversations" USING btree ("client_instance_id","parent_conversation_id") WHERE "conversations"."parent_conversation_id" is not null;--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "conversations_workflow_run_idx" ON "conversations" USING btree ("client_instance_id","workflow_run_id") WHERE "conversations"."workflow_run_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "agent_runs_parent_operation_idx" ON "agent_runs" USING btree ("client_instance_id","parent_operation_run_id") WHERE "agent_runs"."parent_operation_run_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "agent_runs_workflow_step_idx" ON "agent_runs" USING btree ("client_instance_id","workflow_step_run_id") WHERE "agent_runs"."workflow_step_run_id" is not null;--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "agent_runs_parent_idx" ON "agent_runs" USING btree ("client_instance_id","parent_run_id") WHERE "agent_runs"."parent_run_id" is not null;--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "model_usage_events_workflow_run_idx" ON "model_usage_events" USING btree ("workflow_run_id") WHERE "model_usage_events"."workflow_run_id" is not null;

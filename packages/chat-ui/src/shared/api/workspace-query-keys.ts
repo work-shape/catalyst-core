@@ -91,6 +91,12 @@ export const workspaceQueryKeys = {
     authScope: string,
     conversationId: string | undefined
   ) => ["conversation-resources", apiBaseUrl, authScope, conversationId] as const,
+  /** Under the conversation's Resources: whatever refreshes them refreshes its subagents too. */
+  conversationSubagents: (
+    apiBaseUrl: string,
+    authScope: string,
+    conversationId: string | undefined
+  ) => ["conversation-resources", apiBaseUrl, authScope, conversationId, "subagents"] as const,
   structuredDataResourcesScope: (apiBaseUrl: string, authScope: string, conversationId: string) =>
     ["structured-data-resource", apiBaseUrl, authScope, conversationId] as const,
   structuredDataResource: (
