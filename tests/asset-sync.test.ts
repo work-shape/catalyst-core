@@ -42,7 +42,7 @@ describe("the revision each item of a batch is made against", () => {
   beforeAll(async () => {
     t = await setupNamespace({ furtherToolNames: ["read_skill"] });
     // Lena writes skills of the Namespace and may not read them.
-    await t.grant(t.lena.id, "skill.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.lena.id, "skill.write", { namespace: "kai-" });
   });
 
   const revisionsOf = async (kind: string, name: string) =>

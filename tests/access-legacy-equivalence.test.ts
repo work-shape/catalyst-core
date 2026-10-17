@@ -418,7 +418,7 @@ describe("legacy equivalence: the Access page leaves a legacy list alone", () =>
       { status: 422, code: "VALIDATION_FAILED", details: { reason: "invalid_scope" } }
     );
     expect(refusal.message).toBe(
-      "An instance-wide right is changed on the page of the user or the service principal"
+      "A right a legacy key carries is changed on the page of the user or the service principal"
     );
     expect(await t.stores.access.listGrants({ clientInstanceId: accessClientInstanceId })).toEqual([
       row

@@ -195,7 +195,7 @@ describe("the account checked is the account written", () => {
   it("refuses a change of a user given a right after the call was admitted", async () => {
     const t = await setup();
     beforeNextLocks(t.stores, async () => {
-      await t.grant(t.lena.id, "agent.write", { namespace: "kai-" });
+      await t.seedHistoricalGrant(t.lena.id, "agent.write", { namespace: "kai-" });
     });
     const renamed = await t.call(t.manager.id, "users.update", {
       params: { userId: t.lena.id },
@@ -263,6 +263,7 @@ describe("a deny of the giver", () => {
   // Fails with the call's snapshot of rights asked under the locks: the grant is written.
   it("committed after the call was admitted refuses the grant", async () => {
     const t = await setup();
+    await t.putAgent(t.admin.id, "kai-helper");
     beforeNextLocks(t.stores, async () => {
       await t.stores.access.createGrant({
         clientInstanceId,
@@ -284,8 +285,8 @@ describe("a deny of the giver", () => {
           holderId: t.kai.id,
           action: "agent.read",
           effect: "allow",
-          scopeKind: "namespace",
-          namespace: "kai-"
+          scopeKind: "asset",
+          scopeId: await t.assetId("agent", "kai-helper")
         }
       },
       t.forbidden("agent.read", "denied")
@@ -301,7 +302,12 @@ describe("a change of an account and another write of rights", () => {
     expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
     const assetId = await t.assetId("agent", "kai-helper");
     await t.grant(t.lena.id, "agent.write", { assetId });
-    const deny = await t.grant(t.lena.id, "agent.write", { namespace: "kai-" }, "deny");
+    const deny = await t.seedHistoricalGrant(
+      t.lena.id,
+      "agent.write",
+      { namespace: "kai-" },
+      "deny"
+    );
     return { ...t, deny };
   }
 

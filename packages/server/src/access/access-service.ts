@@ -5,6 +5,7 @@ import {
   isAuthenticatedServicePrincipal,
   isGrantableAction,
   isGrantableAt,
+  isLegacyKeyAction,
   isPlatformAction,
   isPrincipalGrantableAction,
   isSuperadmin,
@@ -50,6 +51,7 @@ import {
   type PrincipalRightsOptions
 } from "./principal-rights";
 import { withRightsHeld } from "./rights-held";
+import { READ_RUN_DATA_ACTION, authorizeRunDataGrant } from "./run-data-grant";
 
 type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
 /**
@@ -206,10 +208,7 @@ export class AccessWorkflow {
       throw refused("unknown_action", `'${command.action}' is not an action`);
     }
     if (!isGrantableAction(command.action)) {
-      throw refused(
-        "action_not_grantable",
-        `'${command.action}' cannot be granted in a Namespace or on one asset`
-      );
+      throw refused("action_not_grantable", `'${command.action}' cannot be granted`);
     }
     // The action carries its kind. A kind of a module that is off has no rights to hand out.
     const module = this.options.modules.offModuleOf("kind", kindOfAction(command.action));
@@ -237,6 +236,7 @@ export class AccessWorkflow {
         gives: { label: holder.displayLabel }
       })
     );
+    if (command.effect === "allow") await this.requireRunDataLendable(context, right);
     // The store refuses the same for a deletion requested after this read.
     if (holder.status === "deleting") throw userInDeletionError();
     return this.options.stores.access.createGrant({
@@ -377,10 +377,10 @@ export class AccessWorkflow {
       }
       requireAuthorized(authorizePrincipalHolderWrite(actor, context.access, REVOKE_OPERATION));
     }
-    if (existing.scopeKind === "instance") {
+    if (existing.scopeKind === "instance" && isLegacyKeyAction(existing.action)) {
       throw refused(
         "invalid_scope",
-        "An instance-wide right is changed on the page of the user or the service principal"
+        "A right a legacy key carries is changed on the page of the user or the service principal"
       );
     }
     const revoked = await this.options.stores.access.deleteGrant({
@@ -441,9 +441,9 @@ export class AccessWorkflow {
       ...filter,
       excludeSuperadminHolders: !isSuperadmin(actor),
       excludeServicePrincipalHolders: !seesPrincipals(actor, access),
-      // An instance-wide right is shown and changed as the legacy list on the Users and API
-      // access screens, under their rules, until the User page shows rows one by one.
-      excludeInstanceScope: true
+      // An instance-wide right a legacy key carries is shown and changed as the legacy list on
+      // the Users and API access screens, under their rules, until AP-5b shows rows one by one.
+      excludeLegacyKeyRows: true
     });
   }
 
@@ -559,18 +559,15 @@ export class AccessWorkflow {
     right: HeldRight;
   }> {
     const { action } = command;
-    if (command.scopeKind === "namespace") {
-      if (command.namespace === undefined || command.scopeId !== undefined) {
-        throw refused("invalid_scope", "A Namespace grant names a prefix and no scope id");
-      }
-      return {
-        scope: { scopeKind: "namespace", namespace: command.namespace },
-        right: { action, resource: { name: command.namespace } }
-      };
-    }
     if (command.scopeKind === "asset") {
       const asset = await this.grantableAsset(command);
       return { scope: { scopeKind: "asset", scopeId: asset.id }, right: assetRight(action, asset) };
+    }
+    if (command.scopeKind === "instance") {
+      if (command.scopeId !== undefined || command.namespace !== undefined) {
+        throw refused("invalid_scope", "An instance-wide grant names no scope id and no Namespace");
+      }
+      return { scope: { scopeKind: "instance" }, right: { action } };
     }
     if (command.scopeKind === "workspace") {
       if (command.scopeId === undefined || command.namespace !== undefined) {
@@ -585,7 +582,26 @@ export class AccessWorkflow {
     }
     throw refused(
       "invalid_scope",
-      "A grant can be written for a Namespace, one asset or one workspace only"
+      "A grant can be written for one asset, one workspace or the instance only"
+    );
+  }
+
+  /**
+   * Reading the data of a Workflow's runs lends what its principal reads, so giving it, or
+   * lifting a deny of it, asks every right of the principal as well (D4).
+   */
+  private async requireRunDataLendable(context: GrantWriteContext, right: HeldRight) {
+    if (right.action !== READ_RUN_DATA_ACTION || right.resource?.name === undefined) return;
+    requireAuthorized(
+      await authorizeRunDataGrant(
+        {
+          ...this.rightsOptions(),
+          apiAccess: this.options.stores.apiAccess,
+          configAssets: this.options.configAssets.store
+        },
+        context.access,
+        right.resource.name
+      )
     );
   }
 
@@ -601,16 +617,13 @@ export class AccessWorkflow {
   ): Promise<void> {
     if (holder.id === actor.id) requireAuthorized(ownRowRefusal(REVOKE_OPERATION));
     const assets = await scopeAssets(this.rightsOptions(), [row]);
+    const right = rightAtScope(row, assets);
     requireAuthorized(
-      await authorizeHeldRightsWithin(
-        this.rightsOptions(),
-        context.access,
-        [rightAtScope(row, assets)],
-        {
-          gives: { label: holder.displayLabel }
-        }
-      )
+      await authorizeHeldRightsWithin(this.rightsOptions(), context.access, [right], {
+        gives: { label: holder.displayLabel }
+      })
     );
+    await this.requireRunDataLendable(context, right);
   }
 
   /** The active asset of the action's kind an asset grant names. */

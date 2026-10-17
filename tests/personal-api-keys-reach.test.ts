@@ -107,7 +107,7 @@ describe("what a personal key reaches", () => {
     await grantKaiNamespace(t);
     await t.createNamespace("lena-");
     for (const action of ["agent.read", "agent.write"]) {
-      await t.grant(t.kai.id, action, { namespace: "lena-" });
+      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "lena-" });
     }
     await t.putAgent(t.kai.id, "kai-helper");
     await t.putAgent(t.kai.id, "lena-helper");

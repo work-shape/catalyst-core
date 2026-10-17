@@ -31,7 +31,7 @@ describe("platform.context.get statements", () => {
     const t = await setupConnectionInstance();
     const a = await t.seed("alpha");
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.read", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.read", { namespace: "kai-" });
     await t.grant(t.kai.id, "connection.read", { assetId: a });
     await t.grant(t.kai.id, "connection.use", { assetId: a });
 

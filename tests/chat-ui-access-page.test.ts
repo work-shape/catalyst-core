@@ -608,8 +608,9 @@ describe("what the dialogs send", () => {
 
   it("offers a new right in a workspace or on one asset, and never in a Namespace or a workspace that owns no such asset", () => {
     expect(grantVerbs("connection")).toEqual(["read", "use"]);
-    // A Connection is the instance's own, so a workspace would cover nothing.
-    expect(grantScopeKinds("connection")).toEqual(["asset"]);
+    // A Connection is the instance's own, so a workspace would cover nothing. No legacy key
+    // carries its rights, so the whole instance is a place too (RIGHTS-1c, D3).
+    expect(grantScopeKinds("connection")).toEqual(["asset", "instance"]);
     // A workspace owns agents and skills (WS-OWN-1a), so "In workspace X" comes first.
     for (const kind of ["agent", "skill"] as const) {
       expect(grantVerbs(kind)).toEqual(["read", "write", "delete"]);
@@ -658,16 +659,24 @@ describe("what the dialogs send", () => {
       }
     ]);
     // No row is asked for where the server writes none: a verb the kind lacks, a workspace
-    // for a Connection, the whole instance.
+    // for a Connection, the whole instance for agents, whose rights a legacy key carries.
     expect(
       grantRequests({ ...onConnection, verbs: ["write"], assetId: "asset-crm" })
     ).toBeUndefined();
     const inPlace = (kind: "connection" | "agent", scopeKind: "workspace" | "instance") =>
       grantRequests({ ...onConnection, kind, scopeKind, workspaceId: "ws-1" });
     expect(inPlace("connection", "workspace")).toBeUndefined();
-    for (const kind of ["connection", "agent"] as const) {
-      expect(inPlace(kind, "instance"), kind).toBeUndefined();
-    }
+    expect(inPlace("agent", "instance")).toBeUndefined();
+    // A Connection right for the whole instance is one row there (RIGHTS-1c, D3).
+    expect(inPlace("connection", "instance")).toEqual([
+      {
+        holderKind: "user",
+        holderId: "user-1",
+        action: "connection.read",
+        effect: "allow",
+        scopeKind: "instance"
+      }
+    ]);
     // An agent right in a workspace is one row on that workspace.
     expect(inPlace("agent", "workspace")).toEqual([
       {

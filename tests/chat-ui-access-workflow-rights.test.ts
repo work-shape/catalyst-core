@@ -115,7 +115,9 @@ describe("what the Access page offers", () => {
 
   it("offers a further kind where the instance registers it", () => {
     expect(furtherGrantKinds(undefined)).toEqual([]);
-    expect(furtherGrantKinds(["agent", "skill", "app"])).toEqual([]);
+    // Apps are granted since RIGHTS-1c: a registered kind is offered.
+    expect(furtherGrantKinds(["agent", "skill", "app"])).toEqual(["app"]);
+    expect(furtherGrantKinds(["agent", "skill", "guardrails"])).toEqual([]);
     expect(furtherGrantKinds(["agent", "skill", "workflow"])).toEqual(["workflow"]);
     expect(furtherGrantKinds(["workflow", "connection", "agent"])).toEqual(
       GRANT_KINDS.filter((kind) => kind === "connection" || kind === "workflow")
@@ -124,8 +126,16 @@ describe("what the Access page offers", () => {
 });
 
 describe("rights on a Workflow", () => {
-  it("are reading, using, writing and publishing, on one Workflow", () => {
-    expect(grantVerbs("workflow")).toEqual(["read", "use", "write", "publish"]);
+  it("are reading, using, writing, publishing, deleting and reading run data, on one Workflow", () => {
+    expect(grantVerbs("workflow")).toEqual([
+      "read",
+      "use",
+      "write",
+      "publish",
+      "delete",
+      "read_run_data"
+    ]);
+    // Run data is given on one Workflow only (D4), so the dialog offers that one place.
     expect(grantScopeKinds("workflow")).toEqual(["asset"]);
   });
 

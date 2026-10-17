@@ -8,6 +8,9 @@ import {
   type GrantScopeAsset
 } from "./permissions";
 
+/** The resolver answers the lending rule reads. */
+type HeldRightsAccess = Pick<ActorAccess, "authorize" | "denials">;
+
 /**
  * One right as a holder holds it: an action on one resource, or without a resource on the whole
  * instance, as a legacy key is held.
@@ -59,7 +62,7 @@ export type RightsTransfer =
  * and that is not told to whoever may not see the asset.
  */
 export function authorizeHeldRights(
-  access: ActorAccess,
+  access: HeldRightsAccess,
   rights: readonly HeldRight[],
   transfer: RightsTransfer,
   deniedAssets: DeniedAssets = new Map()
@@ -70,7 +73,7 @@ export function authorizeHeldRights(
 
 /** `authorizeHeldRights` for a caller that refuses by throwing: `FORBIDDEN`. */
 export function requireHeldRights(
-  access: ActorAccess,
+  access: HeldRightsAccess,
   rights: readonly HeldRight[],
   transfer: RightsTransfer,
   deniedAssets: DeniedAssets = new Map()
@@ -84,7 +87,7 @@ export function requireHeldRights(
 type Refusal = Omit<Extract<OperationDenial, { kind: "forbidden" }>, "kind">;
 
 function firstUnheldRight(
-  access: ActorAccess,
+  access: HeldRightsAccess,
   rights: readonly HeldRight[],
   transfer: RightsTransfer,
   deniedAssets: DeniedAssets
@@ -125,7 +128,7 @@ export function isBroadRight(right: HeldRight): boolean {
 
 /** The first deny of the call that lies inside a broad right, or none. */
 function denyInside(
-  access: ActorAccess,
+  access: HeldRightsAccess,
   right: HeldRight,
   deniedAssets: DeniedAssets
 ): AccessEntry | undefined {
@@ -197,7 +200,7 @@ function transferClause(transfer: RightsTransfer): string {
  * Namespace by its prefix, which the caller named or the grant list shows them. Every kind's
  * read right is `<kind>.read`; a kind without one in the vocabulary is read by nobody here.
  */
-function resourcePhrase(access: ActorAccess, resource: AccessResource | undefined): string {
+function resourcePhrase(access: HeldRightsAccess, resource: AccessResource | undefined): string {
   if (resource === undefined) return " on the whole instance";
   if (resource.kind === undefined && resource.assetId === undefined) {
     if (resource.workspaceId !== undefined) return ` in the workspace '${resource.workspaceId}'`;

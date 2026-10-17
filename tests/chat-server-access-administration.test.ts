@@ -80,7 +80,7 @@ describe("Namespace administration", () => {
   it("refuses to delete a Namespace a grant row names, and deletes it after the revoke", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    const grantId = await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const grantId = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
     await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "kai-notes" },
@@ -121,7 +121,7 @@ describe("who may write a grant, and what a grant may say", () => {
   it("refuses a user without users.manage administration of other people and Namespaces", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    const grantId = await t.grant(t.lena.id, "agent.read", { namespace: "kai-" });
+    const grantId = await t.seedHistoricalGrant(t.lena.id, "agent.read", { namespace: "kai-" });
     const calls: Array<[TestOperationName, TestCallInput]> = [
       [
         "permissions.grant",
@@ -186,17 +186,18 @@ describe("who may write a grant, and what a grant may say", () => {
     expect(overview.statusCode).toBe(200);
   });
 
-  it("writes a row for a user, six actions, a Namespace or an asset, and nothing else", async () => {
+  it("writes a row for a user, six actions, a workspace or an asset, and nothing else", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
     expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
     const helper = await t.assetId("agent", "kai-helper");
+    const workspaceId = await t.sharedWorkspace("Grant scope");
     const base = {
       holderKind: "user",
       holderId: t.kai.id,
       action: "agent.write",
-      scopeKind: "namespace",
-      namespace: "kai-"
+      scopeKind: "workspace",
+      scopeId: workspaceId
     };
     const refusals: Array<[Record<string, unknown>, number, string, string]> = [
       [
@@ -218,8 +219,8 @@ describe("who may write a grant, and what a grant may say", () => {
         "VALIDATION_FAILED",
         "invalid_scope"
       ],
-      [{ ...base, namespace: undefined }, 422, "VALIDATION_FAILED", "invalid_scope"],
-      [{ ...base, scopeId: helper }, 422, "VALIDATION_FAILED", "invalid_scope"],
+      [{ ...base, scopeId: undefined }, 422, "VALIDATION_FAILED", "invalid_scope"],
+      [{ ...base, namespace: "kai-" }, 422, "VALIDATION_FAILED", "invalid_scope"],
       [
         { ...base, scopeKind: "asset", namespace: undefined },
         422,
@@ -245,8 +246,8 @@ describe("who may write a grant, and what a grant may say", () => {
         "VALIDATION_FAILED",
         "invalid_scope"
       ],
-      [{ ...base, namespace: "lena-" }, 422, "VALIDATION_FAILED", "unknown_namespace"],
-      [{ ...base, namespace: "kai" }, 422, "VALIDATION_FAILED", "unknown_namespace"],
+      [{ ...base, namespace: "lena-" }, 422, "VALIDATION_FAILED", "invalid_scope"],
+      [{ ...base, namespace: "kai" }, 422, "VALIDATION_FAILED", "invalid_scope"],
       [{ ...base, action: "users.manage" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
       [{ ...base, action: "assets.release" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
       [{ ...base, action: "skill.approve" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
@@ -274,7 +275,7 @@ describe("who may write a grant, and what a grant may say", () => {
       "skill.write",
       "skill.delete"
     ]) {
-      await t.grant(t.kai.id, action, { namespace: "kai-" });
+      await t.grant(t.kai.id, action, { workspaceId });
     }
     await t.grant(t.kai.id, "agent.write", { assetId: helper });
     await t.expectRefused(
@@ -302,8 +303,8 @@ describe("who may write a grant, and what a grant may say", () => {
           holderKind: "user",
           holderId: foreigner.id,
           action: "agent.write",
-          scopeKind: "namespace",
-          namespace: "kai-"
+          scopeKind: "asset",
+          scopeId: await t.assetId("agent", "assistant")
         }
       },
       { status: 404, code: "NOT_FOUND", details: { reason: "unknown_holder" } }
@@ -319,7 +320,7 @@ describe("who may write a grant, and what a grant may say", () => {
   it("hides the rows a superadmin holds from an administrator's list", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    const kaiGrant = await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const kaiGrant = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     const rootGrant = await t.stores.access.createGrant({
       clientInstanceId,
       holderKind: "user",
@@ -345,8 +346,8 @@ describe("who may write a grant, and what a grant may say", () => {
   it("lists rows by holder and shows the sources of a holder's rights", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    const allowId = await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.grant(t.lena.id, "skill.read", { namespace: "kai-" }, "deny");
+    const allowId = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.lena.id, "skill.read", { namespace: "kai-" }, "deny");
 
     const page = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
     const all = page.parse((await t.expectOk(t.admin.id, "permissions.list")).json());
@@ -434,7 +435,7 @@ describe("what a grant row says about the asset it names", () => {
       name: "kai-secret",
       active: true
     });
-    await t.grant(t.kai.id, "skill.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "skill.write", { namespace: "kai-" });
 
     await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "skill", name: "kai-secret" },
@@ -456,7 +457,7 @@ describe("tenant and holder boundaries of the access store", () => {
   it("loads no row and no Namespace of another client instance", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
 
     const own = await t.stores.access.loadPersistedAccess({
       clientInstanceId,
@@ -535,7 +536,7 @@ describe("tenant and holder boundaries of the access store", () => {
   it("loads only the holder's own rows, by kind and id", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
 
     const lena = await t.stores.access.loadPersistedAccess({
       clientInstanceId,
@@ -594,9 +595,9 @@ describe("deleting a holder", () => {
   it("deletes the user's grant rows with the user and leaves every other holder's", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.grant(t.kai.id, "skill.read", { namespace: "kai-" }, "deny");
-    const lenaGrant = await t.grant(t.lena.id, "agent.read", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "skill.read", { namespace: "kai-" }, "deny");
+    const lenaGrant = await t.seedHistoricalGrant(t.lena.id, "agent.read", { namespace: "kai-" });
 
     await t.expectOk(t.root.id, "users.delete", { params: { userId: t.kai.id } });
 
@@ -616,7 +617,7 @@ describe("deleting a holder", () => {
   it("keeps the rows when the deletion is refused", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     await t.expectRefused(
       t.lena.id,
       "users.delete",
@@ -632,7 +633,8 @@ describe("audit of grants and Namespaces", () => {
     const t = await setup();
     vi.useFakeTimers({ toFake: ["Date"], now: new Date() });
     await t.createNamespace("kai-", { allowedToolNames: ["known.tool"] });
-    const grantId = await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const workspaceId = await t.sharedWorkspace("Audit scope");
+    const grantId = await t.grant(t.kai.id, "agent.write", { workspaceId });
     await t.expectOk(t.admin.id, "namespaces.update", {
       params: { prefix: "kai-" },
       payload: { displayName: "Kai Private Name", allowedModelBindingIds: ["plain"] }
@@ -658,8 +660,8 @@ describe("audit of grants and Namespaces", () => {
       holderId: t.kai.id,
       action: "agent.write",
       effect: "allow",
-      scopeKind: "namespace",
-      namespace: "kai-"
+      scopeKind: "workspace",
+      scopeId: workspaceId
     };
     expect(
       events.map((event) => ({

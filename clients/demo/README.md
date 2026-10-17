@@ -46,11 +46,11 @@ The superadmin is the one of the demo's config, so the instance has nine people 
 
 - Four Namespaces: `tax-` (Steuern), `hr-` (Personal), `sales-` (Vertrieb) and `kai-` (Kai). `tax-` has a tool list (`read_skill`, `show_view`, `demo.workflow_summary`) and a model list (`primary`, `gpt56Luna`); the other three inherit everything.
 - Eight agents and seven skills from the working copy under `seed/`, pushed with the config CLI: two agents and two skills in each of `tax-`, `hr-` and `sales-`, and the agents `meeting-notes` and `travel-weather` and the skill `plain-language` outside every Namespace. The agent `tax-vat-checker` has two revisions: a draft Jonas Brandt saved in the interface's way, and the pushed definition over it.
-- Twenty-five grant rows: allows in a Namespace, allows on one agent and one skill, a deny on one agent inside an allowed Namespace, a deny in a Namespace against an admin, and the nine rows of Kai Berger in `kai-`.
-- Kai Berger, a member who builds. He holds no right beside his rows in his own Namespace `kai-`: reading, writing and deleting agents and skills, and reading, writing and publishing Workflows. In his own session he made the agent `kai-helper` and the Workflow `kai-client-years`, from `seed/workflows/kai-client-years/workflow.yaml`, so both carry his name. His Workflow stays a draft: a definition names the principal it runs as (`workflow-demo`), and publishing it asks what administering service principals asks, which he does not hold. He has no App: an App belongs to a workspace, and no grant gives a right on Apps yet, so only an admin writes one. The seed leaves his Workflow out on an instance whose module `workflows` is off.
+- Thirty-four grant rows on existing assets: allows for the current tax, HR and sales assets, denies on the tax checker and HR agents, and six rows on Kai Berger's two drafts. No new Namespace grant is written.
+- Kai Berger holds read, write and delete on `kai-helper`, and read, write and publish on `kai-client-years`. An admin prepares these drafts, then Kai saves their next revisions in his session. His Workflow stays unpublished: publishing lends the principal's rights, which he does not hold. He has no right on an App or to create other instance assets. The seed leaves his Workflow out when the Workflows module is off.
 - Three grant rows on the Connection `sample-business`, which the release config brings and not the seed: Sven Olsen may see and use it, Tobias Keller may use it. The two admins hold every right on it by their role and the other users hold none, so an agent of Elif Aydin is refused when it calls one of the Connection's tools. See [docs/try-connections.md](docs/try-connections.md).
 - One service principal, `Local config CLI`, with one key.
-- Two approvals waiting in the Inbox, both asked for by Elif Aydin and held by the demo, see below. One is the new skill `hr-parental-leave-faq` ("Elternzeit: häufige Fragen"), which the Inbox shows whole. The other replaces one paragraph of the pushed skill `hr-leave-policy` ("Urlaubsrichtlinie"), which the Inbox shows as before and after.
+- Two approvals waiting in the Inbox, held by the demo, see below. Mara Lindqvist asks for the new skill `hr-parental-leave-faq` ("Elternzeit: häufige Fragen"), which the Inbox shows whole. Elif Aydin asks to replace one paragraph of the pushed skill `hr-leave-policy` ("Urlaubsrichtlinie"), which the Inbox shows as before and after.
 - One Shared Workspace, `Nordlicht Beratung`: Mara Lindqvist owns it, and Jonas Brandt, Tobias Keller, Elif Aydin and Sven Olsen are its members.
 - One skill and one agent that workspace owns, saved by Mara Lindqvist in its Studio: the skill `nordlicht-house-style` and the agent `nordlicht-front-desk`, which names it. Studio lists both under the scope `Nordlicht Beratung` with the workspace's chip. The agent is offered in that workspace and nowhere else. Only an asset of that workspace may name the skill: an instance agent that names it is refused.
 - Three Apps in that workspace, written from the source files under `seed/apps/`: `client-onboarding` is published, `fee-estimate` is published with a draft one revision ahead, which adds a second route, and `customer-list` is published with a tile that reads customers of the Connection `sample-business` through the named action `list-customers` and has a Refresh button. The tile reads with the rights of whoever looks: Sven Olsen and the admins see rows, and a member without the right `connection.use` is told which right is missing. The seed leaves `customer-list` out on an instance without that Connection. A write of an App is built by the workspace command worker, so the seed needs that worker running. The Apps list shows them to Mara Lindqvist and Jonas Brandt, who hold the rights of the kind as admins.
@@ -60,12 +60,12 @@ The superadmin is the one of the demo's config, so the instance has nine people 
 
 The demo's server runs with one policy setting, in `src/policy.ts`, whether or not the seed has run. It holds a new or changed skill that is saved through `assets.put` into the Namespace `hr-`, for every caller, admins and the superadmin included. So editing an HR skill in the interface asks for an approval first. It holds nothing else: not a delete, not a revert, and not a push of the config CLI, which is a different operation. While no Namespace `hr-` is registered it matches nothing, so a demo that was never seeded behaves as before.
 
-A held call is decided by anyone who holds `operations.approve`. Admins and the superadmin hold it, so Mara Lindqvist, Jonas Brandt or the superadmin can decide the seeded requests. A requester who holds the right can decide their own request. Elif Aydin does not hold it, so hers wait for somebody else.
+A held call is decided by anyone who holds `operations.approve`. Admins and the superadmin hold it, so Mara Lindqvist, Jonas Brandt or the superadmin can decide the seeded requests. A requester who holds the right can decide their own request. Elif Aydin does not hold it, so her change waits for somebody else. Mara can decide her own request.
 
-| Request in the Inbox                  | Asked by   | What approving does                              | A rerun of the seed                                                                                          |
-| ------------------------------------- | ---------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| New skill: Elternzeit: häufige Fragen | Elif Aydin | Creates the skill `hr-parental-leave-faq`        | Asks again after a decline. Leaves it once the skill exists.                                                 |
-| Skill change: Urlaubsrichtlinie       | Elif Aydin | Replaces the last paragraph of `hr-leave-policy` | Asks again while the request for the new skill waits. An approved change is replaced by the file of `seed/`. |
+| Request in the Inbox                  | Asked by       | What approving does                              | A rerun of the seed                                                                                          |
+| ------------------------------------- | -------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| New skill: Elternzeit: häufige Fragen | Mara Lindqvist | Creates the skill `hr-parental-leave-faq`        | Asks again after a decline. Leaves it once the skill exists.                                                 |
+| Skill change: Urlaubsrichtlinie       | Elif Aydin     | Replaces the last paragraph of `hr-leave-policy` | Asks again while the request for the new skill waits. An approved change is replaced by the file of `seed/`. |
 
 The seed asks for the change only while the request for the new skill waits: that request tells it that the instance holds such a call. On an instance that holds none it would be written at once.
 
@@ -95,15 +95,15 @@ Open Settings > Instance > Access > Check, pick the person, the kind and the ass
 | -------------- | ---------------------------- | ---- | ----- | ------ | ---------------------------------------------------------------------------------------------------------- |
 | Mara Lindqvist | agent `sales-offer-writer`   | yes  | yes   | yes    | An admin may change every agent.                                                                           |
 | Mara Lindqvist | agent `hr-onboarding-guide`  | yes  | no    | no     | A deny on writing agents in `hr-` wins over her admin role, and whoever is denied writing does not delete. |
-| Tobias Keller  | agent `tax-deadline-planner` | yes  | yes   | yes    | His rows in the Namespace `tax-` allow all three.                                                          |
-| Tobias Keller  | agent `tax-vat-checker`      | yes  | no    | no     | A deny on this one agent wins over the allow of its Namespace.                                             |
+| Tobias Keller  | agent `tax-deadline-planner` | yes  | yes   | yes    | His rows on this agent allow all three.                                                                    |
+| Tobias Keller  | agent `tax-vat-checker`      | yes  | no    | no     | A deny on this agent wins over its allow.                                                                  |
 | Sven Olsen     | agent `sales-offer-writer`   | yes  | yes   | no     | He reads through the right set on the Users page and writes through a row on this one agent.               |
 | Sven Olsen     | agent `sales-pitch-coach`    | yes  | no    | no     | His write row names another agent, and nothing covers this one.                                            |
-| Elif Aydin     | agent `hr-exit-interview`    | yes  | yes   | yes    | The agent does not exist yet. Her rows in `hr-` would let her create it.                                   |
-| Elif Aydin     | skill `tax-vat-rules`        | no   | no    | no     | Her rows end at the Namespace `hr-`.                                                                       |
+| Elif Aydin     | agent `hr-exit-interview`    | no   | no    | no     | The agent does not exist. Her asset rows give no right to create another.                                  |
+| Elif Aydin     | skill `tax-vat-rules`        | no   | no    | no     | Her rows cover the existing HR assets.                                                                     |
 | Lena Hoffmann  | agent `sales-pitch-coach`    | no   | no    | no     | Her account is deactivated, so her rows in `sales-` allow nothing.                                         |
-| Kai Berger     | agent `kai-helper`           | yes  | yes   | yes    | He made this agent in his own Namespace `kai-`, where his rows allow all three.                            |
-| Kai Berger     | skill `plain-language`       | no   | no    | no     | His rows end at his Namespace `kai-`, and he holds no right beside them.                                   |
+| Kai Berger     | agent `kai-helper`           | yes  | yes   | yes    | His rows on this draft allow all three.                                                                    |
+| Kai Berger     | skill `plain-language`       | no   | no    | no     | His rows cover his two drafts, and he holds no right beside them.                                          |
 
 The table is `checkQuestions` in `src/seed/company.ts`, and `tests/demo-seed.test.ts` asks the instance every row of it.
 
@@ -120,9 +120,9 @@ This table is `connectionCheckQuestions` in `src/seed/company.ts`, and `tests/de
 
 A Workflow has a further action as well: using it, which is starting it. Choose the kind Workflows and the asset `kai-client-years`. Publishing is a row of its own under Rights and not a question of this tab.
 
-| Person     | Read | Use | Write | Delete | Because                                                                                                                  |
-| ---------- | ---- | --- | ----- | ------ | ------------------------------------------------------------------------------------------------------------------------ |
-| Kai Berger | yes  | no  | yes   | no     | His rows in `kai-` let him read and change his draft. He holds no row for starting it, and deleting stays with the role. |
+| Person     | Read | Use | Write | Delete | Because                                                                                        |
+| ---------- | ---- | --- | ----- | ------ | ---------------------------------------------------------------------------------------------- |
+| Kai Berger | yes  | no  | yes   | no     | His asset rows let him read and change his draft. He holds no row for starting or deleting it. |
 
 This table is `workflowCheckQuestions` in `src/seed/company.ts`, and `tests/demo-seed.test.ts` asks every row of it.
 

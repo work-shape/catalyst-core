@@ -49,7 +49,7 @@ export async function setupNamespaceHolder(
   await t.createNamespace("kai-");
   await t.createNamespace("lena-");
   for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read", "skill.write"]) {
-    await t.grant(t.kai.id, action, { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
   }
   const put = (userId: string, kind: "agent" | "skill", name: string) =>
     t.expectOk(userId, "assets.put", {

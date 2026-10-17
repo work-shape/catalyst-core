@@ -91,21 +91,24 @@ describe("the vocabulary of Connection rights", () => {
     ).toMatchFileSnapshot("./__snapshots__/rights.txt");
   });
 
-  it("lets a grant row name reading and using, in a Namespace or on one Connection", () => {
+  it("lets a new grant row name reading and using on one Connection or the instance", () => {
     expect(GRANTABLE_ACTIONS.filter((action) => action.startsWith("connection."))).toEqual([
       "connection.read",
       "connection.use"
     ]);
-    // A workspace owns agents and skills (WS-OWN-1a), so their rights are written there too.
-    // No workspace owns a Connection, so no right on Connections is written at workspace scope,
-    // nor on any other kind a workspace does not own yet. A guardrail's publish is granted for
-    // one workspace alone.
-    expect(GRANTABLE_ACTION_SCOPES["guardrail.publish"]).toEqual(["workspace"]);
-    for (const action of GRANTABLE_ACTIONS.filter((name) => name !== "guardrail.publish")) {
-      expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(
-        /^(?:agent|skill)\./u.test(action)
-          ? ["workspace", "namespace", "asset"]
-          : ["namespace", "asset"]
+    // A workspace owns agents, skills, Apps and Data Stores (WS-OWN-1a), so their rights are
+    // written there too. No workspace owns a Connection, so no right on Connections is written
+    // at workspace scope. A right no legacy key carries is also written for the whole instance
+    // (RIGHTS-1c, D3); agent and skill rights are carried by legacy keys, so they are not.
+    expect(GRANTABLE_ACTION_SCOPES["connection.use"]).toEqual(["asset", "instance"]);
+    expect(GRANTABLE_ACTION_SCOPES["guardrail.publish"]).toEqual(["workspace", "instance"]);
+    for (const action of GRANTABLE_ACTIONS) {
+      const scopes: readonly string[] = GRANTABLE_ACTION_SCOPES[action];
+      expect(scopes.includes("workspace"), action).toBe(
+        /^(?:agent|skill|app|data_store|guardrail)\./u.test(action)
+      );
+      expect(scopes.includes("instance"), action).toBe(
+        !/^(?:agent|skill)\./u.test(action) && action !== "workflow.read_run_data"
       );
     }
   });
@@ -190,8 +193,8 @@ describe("a right on a Connection", () => {
     await t.createNamespace("kai-");
     const inside = await t.seed("kai-crm");
     const outside = await t.seed("crm");
-    await t.grant(t.kai.id, "connection.read", { namespace: "kai-" });
-    await t.grant(t.lena.id, "connection.use", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "connection.read", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.lena.id, "connection.use", { namespace: "kai-" });
     const kai = await accessOf(t, t.kai);
     const lena = await accessOf(t, t.lena);
 
@@ -396,13 +399,13 @@ describe("a grant of a Connection right", () => {
     for (const action of ["connection.write", "connection.delete", "connection.approve"]) {
       await refusedFor(action, onAlpha, "action_not_grantable");
     }
-    // No instance row, and no row in a Namespace that does not exist. Writing stays with the
-    // role in a Namespace as on one Connection.
-    await refusedFor("connection.use", { scopeKind: "instance" }, "invalid_scope");
+    // No instance row with a place named, and no row in a Namespace that does not exist.
+    // Writing stays with the role in a Namespace as on one Connection.
+    await refusedFor("connection.use", { scopeKind: "instance", scopeId: a }, "invalid_scope");
     await refusedFor(
       "connection.use",
       { scopeKind: "namespace", namespace: "nobody-" },
-      "unknown_namespace"
+      "invalid_scope"
     );
     await refusedFor(
       "connection.write",

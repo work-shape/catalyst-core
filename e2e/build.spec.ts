@@ -1,3 +1,4 @@
+import { seedHistoricalGrant } from "./legacy-grant";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { type Locator, type Page } from "@playwright/test";
@@ -113,7 +114,7 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
   const holderId = textField(await createdUser.json(), "id");
 
   try {
-    // The Namespace kai- allows one tool. The holder reads, writes and deletes agents in it.
+    // A historical Namespace grant still lets this holder build under kai-. Its tool limit still applies.
     const namespace = await requestWithOrigin(admin, "post", namespacePath, {
       data: { prefix: "kai-", displayName: "Kai", allowedToolNames: ["show_view"] }
     });
@@ -124,16 +125,11 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
       (kind: unknown) => field(kind, "kind") === "agent"
     );
     for (const verb of ["read", "write", "delete"]) {
-      const granted = await requestWithOrigin(admin, "post", grantsPath, {
-        data: {
-          holderKind: "user",
-          holderId,
-          action: textField(field(agentKind, "actions"), verb),
-          scopeKind: "namespace",
-          namespace: "kai-"
-        }
+      await seedHistoricalGrant(admin, {
+        holderId,
+        action: textField(field(agentKind, "actions"), verb),
+        namespace: "kai-"
       });
-      expect(granted.ok()).toBe(true);
     }
     const first = await requestWithOrigin(admin, "put", agentPath("kai-first"), {
       data: {

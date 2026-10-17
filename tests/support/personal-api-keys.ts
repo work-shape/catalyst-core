@@ -99,7 +99,7 @@ function bearer(token: string) {
 export async function grantKaiNamespace(t: AccessInstance) {
   const grants: Record<string, string> = {};
   for (const action of ["agent.read", "agent.write", "skill.read"]) {
-    grants[action] = await t.grant(t.kai.id, action, { namespace: "kai-" });
+    grants[action] = await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
   }
   return grants;
 }

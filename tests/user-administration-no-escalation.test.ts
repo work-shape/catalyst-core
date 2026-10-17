@@ -20,17 +20,18 @@ async function setup() {
     permissions: ["users.manage"]
   });
   await t.createNamespace("kai-");
+  const workspaceId = await t.sharedWorkspace("No escalation");
   const rowFor = (holderId: string, action: string, effect: "allow" | "deny" = "allow") => ({
     payload: {
       holderKind: "user",
       holderId,
       action,
       effect,
-      scopeKind: "namespace",
-      namespace: "kai-"
+      scopeKind: "workspace",
+      scopeId: workspaceId
     }
   });
-  return { ...t, manager, rowFor };
+  return { ...t, manager, rowFor, workspaceId };
 }
 
 const holderNotAdministrable = (operation: string) => ({
@@ -49,7 +50,7 @@ describe("check 41: giving a person a row", () => {
       t.forbidden("agent.write", "no_grant")
     );
     expect(refused.message).toBe(
-      "This call does not hold 'agent.write' in the Namespace 'kai-', and 'Kai' would hold it. Only a holder of a right gives or lends it"
+      `This call does not hold 'agent.write' in the workspace '${t.workspaceId}', and 'Kai' would hold it. Only a holder of a right gives or lends it`
     );
     await t.expectRefused(
       t.manager.id,
@@ -60,7 +61,7 @@ describe("check 41: giving a person a row", () => {
     expect(await t.stores.access.listGrants({ clientInstanceId, holderId: t.kai.id })).toEqual([]);
 
     // Once the manager holds the right there, the manager gives it.
-    await t.grant(t.manager.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.manager.id, "agent.write", { workspaceId: t.workspaceId });
     await t.expectOk(t.manager.id, "permissions.grant", t.rowFor(t.kai.id, "agent.write"));
   });
 
@@ -93,7 +94,7 @@ describe("check 41: giving a person a row", () => {
         await t.expectOk(t.root.id, "permissions.grant", t.rowFor(t.kai.id, "agent.read", "deny"))
       ).json()
     ).id;
-    const allow = await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const allow = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     await t.expectRefused(
       t.manager.id,
       "permissions.revoke",
@@ -173,7 +174,7 @@ describe("check 41: changing a person's account", () => {
         "'Admin' holds it. Only a holder of every right of an account changes the account"
       );
     }
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     // A disabled admin holds the role's rights again once enabled, so the rule still asks them.
     await t.expectOk(t.root.id, "users.update", {
       params: { userId: t.admin.id },

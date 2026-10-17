@@ -1,6 +1,8 @@
-import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import {
   AppError,
+  LEGACY_PERMISSION_ACTIONS,
+  PERMISSIONS,
   asClientInstanceId,
   asUserId,
   createPlatformId,
@@ -23,6 +25,11 @@ import {
 } from "./schema";
 
 type GrantRow = typeof permissionGrants.$inferSelect;
+
+/** The actions a legacy key carries: their instance-wide rows are the legacy lists. */
+const LEGACY_KEY_ACTIONS: string[] = PERMISSIONS.flatMap((key) => [
+  ...LEGACY_PERMISSION_ACTIONS[key]
+]);
 type NamespaceRow = typeof namespaces.$inferSelect;
 
 /** `inTransaction` is true for the store of a transaction, the only one that holds a lock. */
@@ -294,7 +301,12 @@ export function createPostgresAccessStore(
             input.excludeServicePrincipalHolders
               ? ne(permissionGrants.holderKind, "service_principal")
               : undefined,
-            input.excludeInstanceScope ? ne(permissionGrants.scopeKind, "instance") : undefined,
+            input.excludeLegacyKeyRows
+              ? or(
+                  ne(permissionGrants.scopeKind, "instance"),
+                  notInArray(permissionGrants.action, LEGACY_KEY_ACTIONS)
+                )
+              : undefined,
             keysetFilter(input.page, order, false)
           )
         )

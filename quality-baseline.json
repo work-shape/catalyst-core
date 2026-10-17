@@ -425,14 +425,14 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "clients/demo",
-      "count": 63,
+      "count": 39,
       "owner": "NS-RETIRE"
     },
     {
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "e2e",
-      "count": 75,
+      "count": 74,
       "owner": "NS-RETIRE"
     },
     {
@@ -453,7 +453,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "packages/server",
-      "count": 275,
+      "count": 268,
       "owner": "NS-RETIRE"
     },
     {
@@ -481,7 +481,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "packages/core",
-      "count": 79,
+      "count": 64,
       "owner": "NS-RETIRE"
     },
     {
@@ -516,7 +516,7 @@
       "target": "lint",
       "rule": "catalyst/retired-terms",
       "scope": "tests",
-      "count": 865,
+      "count": 830,
       "owner": "NS-RETIRE"
     },
     {

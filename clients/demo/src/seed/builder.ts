@@ -4,31 +4,33 @@ import type { SeedStep } from "./step";
 import { readWorkflowFile } from "./workflows";
 
 /**
- * What the member who builds made in his own Namespace, written in his session so each
- * carries his name: his agent, shown in every workspace as the seed shows every agent, and
- * his Workflow as a draft where the instance has the module. Runs after the grants, which
- * are what lets him write there. An asset the instance holds is left as it is.
+ * An admin creates the initial drafts, then gives Kai rights on those exact assets. Kai
+ * saves their next revision in his session. No grant gives him a broader creation right.
+ * Existing drafts are left alone on later runs.
  */
 export async function seedBuilder(
   root: SeedApi,
   as: (key: PersonKey) => Promise<SeedApi>,
   modules: Awaited<ReturnType<SeedApi["listModules"]>>,
   assetsDir: string,
-  steps: SeedStep[]
+  steps: SeedStep[],
+  grantRights: () => Promise<void>
 ): Promise<void> {
   let created = 0;
   let existing = 0;
   const { agent } = builder;
+  const createdDrafts: { kind: string; config: Record<string, unknown> & { name: string } }[] = [];
   if (await root.getAsset("agent", agent.name)) {
     existing += 1;
   } else {
-    await (await as(builder.person)).saveAsset("agent", { ...agent, skillNames: [] });
+    const config = { ...agent, skillNames: [] };
+    await root.saveAsset("agent", config);
+    createdDrafts.push({ kind: "agent", config });
     created += 1;
   }
   const { assets } = await root.assetsOverview();
   const stored = assets.find((asset) => asset.kind === "agent" && asset.name === agent.name);
-  // Saved in his session, the agent starts in the workspace he made it in; the seed offers it
-  // everywhere, and one it holds only where nobody is offered it.
+  // The seed offers the agent everywhere, leaving an existing availability choice alone.
   if (stored && (created > 0 || offeredNowhere(stored.availability))) {
     await root.showAgentEverywhere(agent.name);
   }
@@ -40,11 +42,15 @@ export async function seedBuilder(
       existing += 1;
     } else {
       const manifest = await readWorkflowFile(assetsDir, builder.workflow);
-      await (
-        await as(builder.person)
-      ).saveAsset(WORKFLOW_KIND, { name: builder.workflow, manifest });
+      const config = { name: builder.workflow, manifest };
+      await root.saveAsset(WORKFLOW_KIND, config);
+      createdDrafts.push({ kind: WORKFLOW_KIND, config });
       created += 1;
     }
+  }
+  await grantRights();
+  for (const { kind, config } of createdDrafts) {
+    await (await as(builder.person)).saveAsset(kind, config, 1);
   }
   steps.push({
     name: "builder assets",

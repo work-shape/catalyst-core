@@ -294,6 +294,7 @@ describe("a subject in deletion stays closed and loses only what is its own", ()
     const superadmin = await t.createUser("superadmin", ["user", "admin", "superadmin"]);
     const leaving = await t.createUser("leaving", ["user", "admin"]);
     const member = await t.createUser("member");
+    const grantScope = await t.createSharedWorkspace(superadmin, "Grant scope");
     const grant = (actor: { id: string }, holderId: string, action: string, effect = "allow") =>
       t.api.call(
         "permissions.grant",
@@ -303,8 +304,8 @@ describe("a subject in deletion stays closed and loses only what is its own", ()
             holderId,
             action,
             effect,
-            scopeKind: "namespace",
-            namespace: "lea-"
+            scopeKind: "workspace",
+            scopeId: grantScope.id
           }
         },
         actor.id

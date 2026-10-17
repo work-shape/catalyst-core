@@ -43,7 +43,7 @@ describe("platform.context.get", () => {
     const t = await setup();
     await t.createNamespace("kai-");
     await t.createNamespace("lena-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
 
     const context = platformContextSchema.parse(
       (await t.expectOk(t.kai.id, "platform.context.get")).json()
@@ -84,7 +84,7 @@ describe("platform.context.get", () => {
   it("lists no Namespace for a user who holds nothing, and an administrator's actions less a deny", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.admin.id, "agent.delete", { namespace: "kai-" }, "deny");
+    await t.seedHistoricalGrant(t.admin.id, "agent.delete", { namespace: "kai-" }, "deny");
 
     const lena = platformContextSchema.parse(
       (await t.expectOk(t.lena.id, "platform.context.get")).json()
@@ -200,7 +200,7 @@ describe("platform.context.get", () => {
     await t.createNamespace("kai-");
     await t.createNamespace("lena-");
     for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read"]) {
-      await t.grant(t.kai.id, action, { namespace: "kai-" });
+      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
     }
     const namespacesWith = async (scopes: string) =>
       platformContextSchema.parse(
@@ -296,7 +296,7 @@ describe("platform.references.get", () => {
   it("answers the holder of one right in one Namespace, and the administrator, the same as the overview", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
 
     const read = async (userId: string) =>
       configAssetReferencesSchema.parse(
@@ -313,7 +313,7 @@ describe("platform.references.get", () => {
   it("refuses a user who holds no right on any kind anywhere", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
 
     const error = await t.expectRefused(t.lena.id, "platform.references.get", {}, refused);
     // The refusal tells nothing of the instance.
@@ -410,7 +410,7 @@ describe("platform.references.get", () => {
   it("refuses a credential whose scopes open no action its holder is granted", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.read", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.read", { namespace: "kai-" });
     const withScopes = (userId: string, scopes: string) =>
       t.call(userId, "platform.references.get", { headers: { [SCOPES_HEADER]: scopes } });
 

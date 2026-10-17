@@ -81,12 +81,14 @@ describe("a right on a Workflow given through grant administration", () => {
       row.scopeKind
     ]);
 
-  it("names the four rights of a Workflow a row is written for, each in a Namespace or on one Workflow", () => {
+  it("names the rights of a Workflow a row is written for, and where", () => {
     expect(GRANTABLE_ACTIONS.filter((action) => action.startsWith("workflow."))).toEqual([
       WORKFLOW_ACTIONS.read,
       WORKFLOW_ACTIONS.write,
       WORKFLOW_ACTIONS.publish,
-      WORKFLOW_ACTIONS.use
+      WORKFLOW_ACTIONS.delete,
+      WORKFLOW_ACTIONS.use,
+      WORKFLOW_ACTIONS.readRunData
     ]);
     for (const action of [
       WORKFLOW_ACTIONS.read,
@@ -94,8 +96,11 @@ describe("a right on a Workflow given through grant administration", () => {
       WORKFLOW_ACTIONS.write,
       WORKFLOW_ACTIONS.publish
     ] as const) {
-      expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(["namespace", "asset"]);
+      expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(["asset", "instance"]);
     }
+    // RIGHTS-1c: deleting is new and has no Namespace; the run data is one Workflow's (D4).
+    expect(GRANTABLE_ACTION_SCOPES[WORKFLOW_ACTIONS.delete]).toEqual(["asset", "instance"]);
+    expect(GRANTABLE_ACTION_SCOPES[WORKFLOW_ACTIONS.readRunData]).toEqual(["asset"]);
   });
 
   it("shows a member the one Workflow she was given to read, and starts it only with the use right", async () => {
@@ -224,7 +229,7 @@ describe("a right on a Workflow given through grant administration", () => {
     expect(await rowsOf(t, t.kai.id)).toHaveLength(2);
   });
 
-  it("writes a row in a Namespace or on one Workflow, and none for the instance, a workspace or a right that stays with the role", async () => {
+  it("writes a row in a Namespace, on one Workflow or for the instance, and none for a workspace or a place the action has none", async () => {
     const t = await ready();
     const notify = await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY);
     const workspaceId = await t.sharedWorkspace("Team");
@@ -240,8 +245,8 @@ describe("a right on a Workflow given through grant administration", () => {
     const onNotify = { scopeKind: "asset", scopeId: notify };
 
     for (const action of [WORKFLOW_ACTIONS.read, WORKFLOW_ACTIONS.use]) {
-      // The whole instance is a role's, and no workspace owns a Workflow.
-      await refusedFor(action, { scopeKind: "instance" }, "invalid_scope");
+      // No workspace owns a Workflow, and an instance row names no place.
+      await refusedFor(action, { scopeKind: "instance", scopeId: notify }, "invalid_scope");
       await refusedFor(action, { scopeKind: "workspace", scopeId: workspaceId }, "invalid_scope");
       await refusedFor(
         action,
@@ -249,14 +254,26 @@ describe("a right on a Workflow given through grant administration", () => {
         "invalid_scope"
       );
     }
+    // The rights 1c opens have no Namespace, and the run data is given on one Workflow only.
+    await t.createNamespace("notify-");
     for (const action of [WORKFLOW_ACTIONS.delete, WORKFLOW_ACTIONS.readRunData]) {
-      await refusedFor(action, onNotify, "action_not_grantable");
+      await refusedFor(action, { scopeKind: "namespace", namespace: "notify-" }, "invalid_scope");
     }
+    await refusedFor(WORKFLOW_ACTIONS.readRunData, { scopeKind: "instance" }, "invalid_scope");
     expect(await rowsOf(t, t.kai.id)).toEqual([]);
+    const deleting = await t.expectOk(t.admin.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: WORKFLOW_ACTIONS.delete,
+        ...onNotify
+      }
+    });
+    expect(await rowsOf(t, t.kai.id)).toEqual([[WORKFLOW_ACTIONS.delete, "asset"]]);
+    await revoke(t, grantSchema.parse(deleting.json()).id);
 
     // A Namespace covers the Workflows whose names start with its prefix, also later ones.
-    await t.createNamespace("notify-");
-    await t.grant(t.kai.id, WORKFLOW_ACTIONS.use, { namespace: "notify-" });
+    await t.seedHistoricalGrant(t.kai.id, WORKFLOW_ACTIONS.use, { namespace: "notify-" });
     expect(await listed(t, t.kai.id)).toEqual([[NOTIFY, ["workflow.use"]]]);
     await t.expectOk(t.kai.id, "workflows.start", startOf(NOTIFY));
     await t.expectRefused(
@@ -372,5 +389,68 @@ describe("a right on a Workflow given through grant administration", () => {
       scopeKind: "asset",
       scopeId: notify
     });
+  });
+
+  // RIGHTS-1c, D4: the rows of a run's datasets are what the Workflow's principal read, so
+  // `workflow.read_run_data` is given, and a deny of it lifted, only by a holder of every
+  // right of the principal. Fails without `requireRunDataLendable`: the manager gives it.
+  it("gives the run data of one Workflow only to a holder of every right of its principal", async () => {
+    const t = await ready();
+    const notify = await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY);
+    const manager = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Manager",
+      roles: ["user"],
+      permissions: ["users.manage"]
+    });
+    // The manager holds the right to give, on the Workflow, and not the principal's
+    // `connection.use`.
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: manager.id,
+      action: WORKFLOW_ACTIONS.readRunData,
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: notify,
+      grantedBy: t.root.id
+    });
+    const runData = (effect: "allow" | "deny") => ({
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: WORKFLOW_ACTIONS.readRunData,
+        effect,
+        scopeKind: "asset",
+        scopeId: notify
+      }
+    });
+    const refused = await t.expectRefused(
+      manager.id,
+      "permissions.grant",
+      runData("allow"),
+      t.forbidden("connection.use", "no_grant")
+    );
+    expect(refused.message).toBe(
+      "This call does not hold 'connection.use' on the whole instance, and 'workflow-runner' would act with it. Only a holder of a right gives or lends it"
+    );
+    expect(await rowsOf(t, t.kai.id)).toEqual([]);
+
+    // Lifting a deny of it gives it back, and asks the same.
+    const deny = grantSchema.parse(
+      (await t.expectOk(t.admin.id, "permissions.grant", runData("deny"))).json()
+    ).id;
+    await t.expectRefused(
+      manager.id,
+      "permissions.revoke",
+      { params: { grantId: deny } },
+      t.forbidden("connection.use", "no_grant")
+    );
+
+    // Once the manager holds what the principal holds, both pass.
+    await t.allow({ kind: "user", id: manager.id }, "connection.use");
+    await t.expectOk(manager.id, "permissions.revoke", { params: { grantId: deny } });
+    await t.expectOk(manager.id, "permissions.grant", runData("allow"));
+    expect(await rowsOf(t, t.kai.id)).toEqual([[WORKFLOW_ACTIONS.readRunData, "asset"]]);
   });
 });

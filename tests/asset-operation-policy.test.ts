@@ -31,7 +31,7 @@ async function setup(settings: CentralPolicySetting[]) {
     }
   });
   for (const action of ["agent.read", "agent.write", "skill.read", "skill.write"]) {
-    await t.grant(t.lena.id, action, { namespace: "lena-" });
+    await t.seedHistoricalGrant(t.lena.id, action, { namespace: "lena-" });
   }
   return { t, emitted, approvalRequests };
 }

@@ -6,7 +6,7 @@ import {
   type AccessHolder,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
-import { clientInstanceId, setupAccessInstance } from "./support/access-instance";
+import { agent, clientInstanceId, setupAccessInstance } from "./support/access-instance";
 
 // The second review of RIGHTS-1b: a right given over a Namespace, a workspace or the instance
 // (a role) asked the giver's right on that one place alone, so it reached past a deny of the
@@ -14,45 +14,65 @@ import { clientInstanceId, setupAccessInstance } from "./support/access-instance
 // fails without `denyInside` in `held-rights.ts`: the grant, the role and the account change
 // pass.
 
-async function setup() {
+async function setup(inWorkspace = false) {
   const t = await setupAccessInstance();
   await t.createNamespace("kai-");
+  const workspaceId = inWorkspace ? await t.sharedWorkspace("Wide") : undefined;
   for (const name of ["kai-secret", "kai-open"]) {
-    expect((await t.putAgent(t.admin.id, name)).statusCode).toBe(200);
+    expect(
+      (
+        await t.call(t.admin.id, "assets.put", {
+          params: { kind: "agent", name },
+          payload: { config: agent(name), ...(workspaceId ? { workspaceId } : {}) }
+        })
+      ).statusCode
+    ).toBe(200);
   }
-  const secret = await t.assetId("agent", "kai-secret");
-  return { ...t, secret };
+  const secret = await t.stores.configAssets.getConfigAsset({
+    clientInstanceId,
+    kind: "agent",
+    name: "kai-secret"
+  });
+  if (!secret) throw new Error("Missing secret agent");
+  const open = await t.stores.configAssets.getConfigAsset({
+    clientInstanceId,
+    kind: "agent",
+    name: "kai-open"
+  });
+  if (!open) throw new Error("Missing open agent");
+  return { ...t, secret: secret.id, open: open.id, workspaceId };
 }
 
-const inNamespace = (holderId: string, action: string, namespace = "kai-") => ({
+const inWorkspace = (holderId: string, action: string, scopeId: string | undefined) => ({
   payload: {
     holderKind: "user",
     holderId,
     action,
     effect: "allow",
-    scopeKind: "namespace",
-    namespace
+    scopeKind: "workspace",
+    scopeId
   }
 });
 
-describe("a right given over a Namespace", () => {
+describe("a right given over a workspace", () => {
   it("is refused to a giver denied it on an asset inside, named only where the giver reads it", async () => {
-    const t = await setup();
+    const t = await setup(true);
     await t.grant(t.admin.id, "agent.read", { assetId: t.secret }, "deny");
 
     const refused = await t.expectRefused(
       t.admin.id,
       "permissions.grant",
-      inNamespace(t.kai.id, "agent.read"),
+      inWorkspace(t.kai.id, "agent.read", t.workspaceId),
       t.forbidden("agent.read", "denied")
     );
     // The admin may not read `kai-secret`, so the refusal does not name it.
     expect(refused.message).toBe(
-      "'agent.read' on an asset this call may not read is denied to this call, and the right in the Namespace 'kai-' reaches it: 'Kai' would hold it. Only a holder of a right gives or lends it"
+      `'agent.read' on an asset this call may not read is denied to this call, and the right in the workspace '${t.workspaceId}' reaches it: 'Kai' would hold it. Only a holder of a right gives or lends it`
     );
     expect(await t.stores.access.listGrants({ clientInstanceId, holderId: t.kai.id })).toEqual([]);
     const kaiReads = await t.call(t.kai.id, "assets.get", {
-      params: { kind: "agent", name: "kai-secret" }
+      params: { kind: "agent", name: "kai-secret" },
+      query: { workspaceId: t.workspaceId }
     });
     expect(kaiReads.statusCode).toBe(403);
 
@@ -62,22 +82,26 @@ describe("a right given over a Namespace", () => {
     const named = await t.expectRefused(
       t.admin.id,
       "permissions.grant",
-      inNamespace(t.kai.id, "agent.write"),
+      inWorkspace(t.kai.id, "agent.write", t.workspaceId),
       t.forbidden("agent.write", "denied")
     );
     expect(named.message).toContain("'agent.write' on an asset this call may not read");
-    await t.grant(t.kai.id, "agent.read", { assetId: await t.assetId("agent", "kai-open") });
-    // The superadmin holds no deny and gives the Namespace.
-    await t.expectOk(t.root.id, "permissions.grant", inNamespace(t.kai.id, "agent.read"));
+    await t.grant(t.kai.id, "agent.read", { assetId: t.open });
+    // The superadmin holds no deny and gives the workspace.
+    await t.expectOk(
+      t.root.id,
+      "permissions.grant",
+      inWorkspace(t.kai.id, "agent.read", t.workspaceId)
+    );
   });
 
   it("names a deny on an asset the giver still reads", async () => {
-    const t = await setup();
+    const t = await setup(true);
     await t.grant(t.admin.id, "agent.write", { assetId: t.secret }, "deny");
     const refused = await t.expectRefused(
       t.admin.id,
       "permissions.grant",
-      inNamespace(t.kai.id, "agent.write"),
+      inWorkspace(t.kai.id, "agent.write", t.workspaceId),
       t.forbidden("agent.write", "denied")
     );
     expect(refused.message).toContain("'agent.write' on the agent 'kai-secret' is denied");
@@ -87,7 +111,7 @@ describe("a right given over a Namespace", () => {
 describe("a role or a key given by a giver denied in a Namespace", () => {
   it("refuses the admin role and a principal's key, and passes a workspace the deny lies outside", async () => {
     const t = await setup();
-    await t.grant(t.admin.id, "agent.read", { namespace: "kai-" }, "deny");
+    await t.seedHistoricalGrant(t.admin.id, "agent.read", { namespace: "kai-" }, "deny");
     const role = await t.call(t.admin.id, "users.update", {
       params: { userId: t.kai.id },
       payload: { roles: ["user", "admin"] }

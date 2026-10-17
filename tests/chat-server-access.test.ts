@@ -22,7 +22,7 @@ describe("Namespace grants on agents and skills", () => {
       { params: { kind: "agent", name: "kai-helper" }, payload: { config: agent("kai-helper") } },
       t.forbidden("agent.write", "no_grant")
     );
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
 
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
     expect(
@@ -50,7 +50,7 @@ describe("Namespace grants on agents and skills", () => {
   it("applies a grant to its action and kind only", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
 
     await t.expectRefused(
@@ -78,9 +78,9 @@ describe("Namespace grants on agents and skills", () => {
       t.forbidden("skill.write", "no_grant")
     );
 
-    await t.grant(t.kai.id, "agent.read", { namespace: "kai-" });
-    await t.grant(t.kai.id, "agent.delete", { namespace: "kai-" });
-    await t.grant(t.kai.id, "skill.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.read", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.delete", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "skill.write", { namespace: "kai-" });
     await t.expectOk(t.kai.id, "assets.get", {
       params: { kind: "agent", name: "kai-helper" }
     });
@@ -107,7 +107,7 @@ describe("Namespace grants on agents and skills", () => {
   it("lets a Namespace write grant revert inside the Namespace and not outside", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
     expect(
       (await t.putAgent(t.kai.id, "kai-helper", { instructions: "Changed." })).statusCode
@@ -123,7 +123,7 @@ describe("Namespace grants on agents and skills", () => {
       { params: { kind: "agent", name: "kai-helper" }, payload: { revision: 1 } },
       t.forbidden("agent.read", "no_grant")
     );
-    await t.grant(t.kai.id, "agent.read", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.read", { namespace: "kai-" });
     await t.expectOk(t.kai.id, "assets.revert", {
       params: { kind: "agent", name: "kai-helper" },
       payload: { revision: 1 }
@@ -164,7 +164,7 @@ describe("Namespace grants on agents and skills", () => {
     const t = await setup();
     await t.createNamespace("kai-");
     for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read"]) {
-      await t.grant(t.kai.id, action, { namespace: "kai-" });
+      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
     }
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
 
@@ -196,7 +196,7 @@ describe("Namespace grants on agents and skills", () => {
       "skill.write",
       "skill.delete"
     ]) {
-      await t.grant(t.kai.id, action, { namespace: "kai-" });
+      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
     }
     const me = z
       .object({ permissions: z.array(z.string()) })
@@ -218,8 +218,8 @@ describe("Namespace grants on agents and skills", () => {
   it("does not let a Namespace holder take or drop the default agent", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.grant(t.kai.id, "agent.delete", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.delete", { namespace: "kai-" });
     // With no agent left, the next one written would become the default.
     await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "agent", name: "assistant" },
@@ -255,7 +255,7 @@ describe("deny rows and asset grants", () => {
   it("lets a deny on one asset win over the Namespace allow", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
     expect((await t.putAgent(t.kai.id, "kai-second")).statusCode).toBe(200);
 
@@ -289,8 +289,8 @@ describe("deny rows and asset grants", () => {
   it("refuses the delete of an asset whose write is denied, so the deny cannot be shed", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.grant(t.kai.id, "agent.delete", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.delete", { namespace: "kai-" });
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
     expect((await t.putAgent(t.kai.id, "kai-second")).statusCode).toBe(200);
     const denyId = await t.grant(
@@ -336,7 +336,7 @@ describe("deny rows and asset grants", () => {
       200
     );
 
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" }, "deny");
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" }, "deny");
     await t.expectRefused(
       t.kai.id,
       "assets.put",
@@ -347,7 +347,7 @@ describe("deny rows and asset grants", () => {
       t.forbidden("agent.write", "denied")
     );
 
-    await t.grant(t.lena.id, "agent.write", { namespace: "kai-" }, "deny");
+    await t.seedHistoricalGrant(t.lena.id, "agent.write", { namespace: "kai-" }, "deny");
     await t.stores.users.updateUser({
       clientInstanceId,
       userId: t.lena.id,
@@ -419,7 +419,7 @@ describe("deny rows and asset grants", () => {
   it("stops answering a revoked grant on the next call", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    const grantId = await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const grantId = await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
 
     await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId } });
@@ -443,7 +443,7 @@ describe("deny rows and asset grants", () => {
   it("holds a deactivated user's rows inert and answers them again on reactivation", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
 
     await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
@@ -498,7 +498,7 @@ describe("Namespace allowlists", () => {
   it("refuses an agent with a tool in a Namespace whose tool list is empty", async () => {
     const t = await setup();
     await t.createNamespace("kai-", { allowedToolNames: [] });
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
 
     await t.expectRefused(
       t.kai.id,
@@ -621,7 +621,7 @@ describe("Namespace allowlists", () => {
   it("refuses a model binding outside the Namespace's list and never grants the model right", async () => {
     const t = await setup();
     await t.createNamespace("kai-", { allowedModelBindingIds: ["plain"] });
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     const bound = (modelBindingId: string) => {
       const { modelProviderId: _modelProviderId, ...rest } = agent("kai-helper");
       return { ...rest, modelBindingId };

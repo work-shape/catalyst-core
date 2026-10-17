@@ -86,7 +86,7 @@ describe("the Workflows row the platform context names", () => {
   it("names the empty row to whoever may write a Workflow, on the instance or in a Namespace", async () => {
     const t = await ready();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, WORKFLOW_ACTIONS.write, { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, WORKFLOW_ACTIONS.write, { namespace: "kai-" });
 
     // Nothing is stored yet, so nothing is listed, and the builders still have their row.
     expect(await listedTo(t, t.admin.id)).toEqual([]);

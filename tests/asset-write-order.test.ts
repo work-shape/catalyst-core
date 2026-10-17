@@ -181,8 +181,8 @@ describe("the order a write of an asset is refused in", () => {
 describe("what a write tells a caller who may not read the asset", () => {
   beforeAll(async () => {
     // Lena writes and deletes in the Namespace and reads nothing of it.
-    await t.grant(t.lena.id, "skill.write", { namespace: "kai-" });
-    await t.grant(t.lena.id, "skill.delete", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.lena.id, "skill.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.lena.id, "skill.delete", { namespace: "kai-" });
     const put = (name: string, config: Record<string, unknown>, workspace?: string) =>
       t.expectOk(t.admin.id, "assets.put", {
         params: { kind: "memo", name },

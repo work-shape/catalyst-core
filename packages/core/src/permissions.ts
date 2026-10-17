@@ -12,6 +12,7 @@ import {
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "./errors";
+import { GRANTABLE_ACTION_SCOPES } from "./grantable-action-scopes";
 import {
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
@@ -210,43 +211,7 @@ export const PERMISSION_REF_ACTION_PREFIX = "ref:";
 
 export { NAMESPACE_PREFIX_MAX_LENGTH, NAMESPACE_PREFIX_MIN_LENGTH, NAMESPACE_PREFIX_PATTERN };
 
-/**
- * The actions a grant row can be written for, with the scope kinds it can be written at. No
- * grant is written at instance scope: an instance-wide row is a key of a user's or a service
- * principal's legacy list (AP-4). `guardrail.publish` is one workspace's; no bundle carries it.
- */
-export const GRANTABLE_ACTION_SCOPES = {
-  "agent.read": ["workspace", "namespace", "asset"],
-  "agent.write": ["workspace", "namespace", "asset"],
-  "agent.delete": ["workspace", "namespace", "asset"],
-  "skill.read": ["workspace", "namespace", "asset"],
-  "skill.write": ["workspace", "namespace", "asset"],
-  "skill.delete": ["workspace", "namespace", "asset"],
-  // Reading and using a Connection are granted in a Namespace or on one Connection. No
-  // workspace owns a Connection, so a right at workspace scope would cover nothing. Writing,
-  // deleting and approving stay with the role until a slice opens them.
-  "connection.read": ["namespace", "asset"],
-  "connection.use": ["namespace", "asset"],
-  // A Knowledge Base's rights are granted in a Namespace or on one Knowledge Base: `use`
-  // queries the published revision, `read` shows it and its state, `write` changes the draft
-  // and `publish` makes it live. Deleting stays with the role.
-  "knowledge_base.read": ["namespace", "asset"],
-  "knowledge_base.use": ["namespace", "asset"],
-  "knowledge_base.write": ["namespace", "asset"],
-  "knowledge_base.publish": ["namespace", "asset"],
-  // A Workflow is the instance's own: its rights are granted in a Namespace or on one Workflow,
-  // and no workspace owns one yet. Reading shows it and its runs, using starts it, writing
-  // edits the draft and publishing moves the published pointer; making a revision live that
-  // names a service principal also asks every right of that principal (`requireHeldRights`).
-  // Deleting and the rows of a run's datasets stay with the role.
-  "workflow.read": ["namespace", "asset"],
-  "workflow.use": ["namespace", "asset"],
-  "workflow.write": ["namespace", "asset"],
-  "workflow.publish": ["namespace", "asset"],
-  "guardrail.publish": ["workspace"]
-} as const satisfies Partial<
-  Record<PlatformAction, readonly Exclude<PermissionGrant["scopeKind"], "instance">[]>
->;
+export { GRANTABLE_ACTION_SCOPES };
 
 export type GrantableAction = keyof typeof GRANTABLE_ACTION_SCOPES;
 
@@ -258,6 +223,13 @@ export function isPlatformAction(action: string): action is PlatformAction {
 
 export function isGrantableAction(action: string): action is GrantableAction {
   return Object.hasOwn(GRANTABLE_ACTION_SCOPES, action);
+}
+
+/** Whether a legacy key carries the action: its instance-wide row is that key's. */
+export function isLegacyKeyAction(action: string): boolean {
+  return PERMISSIONS.some((key) =>
+    LEGACY_PERMISSION_ACTIONS[key].some((carried) => carried === action)
+  );
 }
 
 /** Whether a grant row of the action can be written at the scope kind. */
@@ -698,8 +670,11 @@ export interface AccessAdministrationStore extends AccessStore, RightsLock {
     excludeSuperadminHolders?: boolean;
     /** Leaves out the rows whose holder is a service principal. */
     excludeServicePrincipalHolders?: boolean;
-    /** Leaves out the instance-wide rows, which the legacy permission lists show. */
-    excludeInstanceScope?: boolean;
+    /**
+     * Leaves out the instance-wide rows of the actions a legacy key carries, which the legacy
+     * permission lists show. An instance-wide row of any other action is listed.
+     */
+    excludeLegacyKeyRows?: boolean;
     page?: StorePage;
   }): Promise<PermissionGrant[]>;
   /** Throws CONFLICT `namespace_overlap` naming the registered prefix it meets. */

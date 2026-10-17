@@ -24,7 +24,7 @@ describe("the default and the availability of an asset", () => {
     const t = await setup();
     await t.createNamespace("kai-");
     for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read"]) {
-      await t.grant(t.kai.id, action, { namespace: "kai-" });
+      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
     }
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
     // The write right on the one asset is no more the instance's than the one in the Namespace.
@@ -331,7 +331,7 @@ describe("the default and the availability of an asset", () => {
     const t = await setup();
     await t.createNamespace("kai-");
     for (const action of ["agent.read", "agent.write"]) {
-      await t.grant(t.kai.id, action, { namespace: "kai-" });
+      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
     }
     const team = await t.sharedWorkspace("Team");
     const other = await t.sharedWorkspace("Other");

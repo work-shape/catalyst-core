@@ -94,7 +94,7 @@ describe("a reference to an asset the caller may not read", () => {
     // A skill beside the agent in its Namespace is no exception: Lena may write agents in
     // `kai-` and reads no skill at all, so none is a reference of hers.
     for (const action of ["agent.read", "agent.write"]) {
-      await t.grant(t.lena.id, action, { namespace: "kai-" });
+      await t.seedHistoricalGrant(t.lena.id, action, { namespace: "kai-" });
     }
     for (const hidden of ["kai-guide", "lena-guide"]) {
       expect(await check(t.lena.id, hidden), hidden).toEqual({
@@ -272,7 +272,7 @@ describe("an asset outside every Namespace", () => {
 describe("an issue of an asset the caller may not read", () => {
   it("is told without the asset's name, to a draft, a put, a delete and a batch", async () => {
     const { t } = await setup();
-    await t.grant(t.kai.id, "skill.delete", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "skill.delete", { namespace: "kai-" });
     // The instance default and an agent of another Namespace read Kai's skill. Kai reads neither.
     for (const name of ["assistant", "lena-helper"]) {
       const wired = await t.call(t.admin.id, "assets.put", {

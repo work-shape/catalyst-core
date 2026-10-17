@@ -6,6 +6,7 @@ import type {
   ConfigAssetSummary,
   CreatePermissionGrantRequest,
   LocaleCode,
+  EffectivePermissions,
   PermissionGrantRow
 } from "@work-shape/catalyst-api-client";
 import {
@@ -41,13 +42,10 @@ import {
   type TranslationKey
 } from "../../shared/i18n";
 import {
-  GRANT_KINDS,
   accessWriteFailure,
   grantAction,
   emptyGrantForm,
   grantRequests,
-  grantScopeKinds,
-  grantVerbs,
   grantableUsers,
   GrantWriteError,
   groupGrants,
@@ -71,6 +69,8 @@ import {
 } from "./grant-words";
 import { actionLabel, verbLabel } from "./right-words";
 
+import { grantOptions, type GrantChoices } from "./grant-options";
+
 /** From this many entries on, a picker of the grant dialog shows its search field. */
 const PICKER_SEARCH_FROM_COUNT = 8;
 
@@ -84,12 +84,7 @@ const GRANT_COLUMNS = "@xl:grid-cols-[minmax(0,4fr)_minmax(0,4fr)_minmax(0,6fr)_
 
 type Translate = TranslationContextValue["t"];
 
-/** What a picker of the grant dialog chooses from, such as the Workflows of the instance. */
-export interface GrantChoices {
-  /** Absent while the choices load and when they could not be loaded. */
-  items: readonly { id: string; name: string; description?: string }[] | undefined;
-  failed: boolean;
-}
+export type { GrantChoices } from "./grant-options";
 
 /** What one row says, with its effect in words: "Denied: Write agents". */
 function grantLabel(grant: PermissionGrantRow, t: Translate): string {
@@ -134,6 +129,8 @@ function scopeLabel(grant: PermissionGrantRow, t: Translate, names: ScopeNames):
 }
 
 export interface GrantsTabProps {
+  /** The giver's effective rights; absent while loading or after a failed read. */
+  giver?: EffectivePermissions;
   /** Absent while the grants load. */
   grants: readonly PermissionGrantRow[] | undefined;
   loadFailed: boolean;
@@ -163,6 +160,7 @@ export interface GrantsTabProps {
 
 /** The grants of the instance, one row per person and place, and the dialog that writes them. */
 export function GrantsTab({
+  giver,
   grants,
   loadFailed,
   onRetry,
@@ -194,8 +192,31 @@ export function GrantsTab({
         .find((asset) => asset.id === assetId)?.name
   };
 
+  const choiceAssets: Partial<Record<GrantKind, GrantChoices>> = {
+    ...Object.fromEntries(
+      (["agent", "skill"] as const).map((kind) => [
+        kind,
+        {
+          items: assets?.flatMap((asset) =>
+            asset.kind === kind && asset.id !== undefined
+              ? [
+                  {
+                    id: asset.id,
+                    name: asset.name,
+                    resource: { kind, name: asset.name, assetId: asset.id }
+                  }
+                ]
+              : []
+          ),
+          failed: assetsFailure !== undefined
+        }
+      ])
+    ),
+    ...kindAssets
+  };
+  const options = grantOptions(giver, choiceAssets, workspaces);
   const newGrant = (
-    <Button size="sm" onClick={() => setGranting(true)}>
+    <Button size="sm" disabled={options.kinds.length === 0} onClick={() => setGranting(true)}>
       {t("access.newGrant")}
     </Button>
   );
@@ -266,7 +287,8 @@ export function GrantsTab({
           usersFailed={usersFailed}
           assets={assets}
           assetsFailure={assetsFailure}
-          kindAssets={kindAssets}
+          kindAssets={choiceAssets}
+          options={options}
           workspaces={workspaces}
           onGrant={(requests) =>
             onGrant(requests).then((result) => {
@@ -476,13 +498,14 @@ function GrantDialog({
   assets,
   assetsFailure,
   kindAssets,
+  options,
   workspaces,
   onGrant,
   onClose
 }: Pick<
   GrantsTabProps,
   "users" | "usersFailed" | "assets" | "assetsFailure" | "kindAssets" | "workspaces" | "onGrant"
-> & { onClose(): void }) {
+> & { options: ReturnType<typeof grantOptions>; onClose(): void }) {
   const { t } = useTranslation();
   const docsLinkShown = useDocsLinkShown();
   const formId = useId();
@@ -494,43 +517,60 @@ function GrantDialog({
 
   const holders = grantableUsers(users ?? []);
   const holder = holders.find((user) => user.id === form.holderId);
-  const kinds = GRANT_KINDS.filter(
-    (kind) => isConfigAssetGrantKind(kind) || kindAssets?.[kind] !== undefined
-  );
-  const words = kindWords[form.kind];
+  const kinds = options.kinds;
+  const kind = kinds.includes(form.kind) ? form.kind : (kinds[0] ?? form.kind);
+  const requestedVerbs = form.verbs.filter((verb) => options.places(kind, [verb]).length > 0);
+  const scopeKinds = options.places(kind, requestedVerbs);
+  const scopeKind = scopeKinds.find((scope) => scope === form.scopeKind) ?? scopeKinds[0];
+  const allowedWorkspaces = options.choices(kind, "workspace", requestedVerbs);
+  const words = kindWords[kind];
   // What the asset picker chooses from: the agents or skills, or the assets of a further kind.
-  const choices: GrantChoices = isConfigAssetGrantKind(form.kind)
-    ? {
-        items: assets?.flatMap((candidate) =>
-          candidate.kind === form.kind && candidate.id !== undefined
-            ? [{ id: candidate.id, name: candidate.name }]
-            : []
-        ),
-        failed: assetsFailure !== undefined
-      }
-    : (kindAssets?.[form.kind] ?? { items: undefined, failed: false });
-  const kindItems = choices.items ?? [];
+  const choices: GrantChoices =
+    kindAssets?.[kind] ??
+    (isConfigAssetGrantKind(kind)
+      ? {
+          items: assets?.flatMap((candidate) =>
+            candidate.kind === kind && candidate.id !== undefined
+              ? [{ id: candidate.id, name: candidate.name }]
+              : []
+          ),
+          failed: assetsFailure !== undefined
+        }
+      : { items: undefined, failed: false });
+  const kindItems = options.choices(kind, "asset", requestedVerbs);
   const assetsError = !choices.failed
     ? undefined
     : t(
-        isConfigAssetGrantKind(form.kind) && assetsFailure === "forbidden"
+        isConfigAssetGrantKind(kind) && assetsFailure === "forbidden"
           ? "access.referencesForbidden"
           : words.assetsLoadFailed
       );
   const asset = kindItems.find((candidate) => candidate.id === form.assetId);
-  const kindIcon = <RegistryIcon name={form.kind} className="size-4 text-muted-foreground" />;
+  const kindIcon = <RegistryIcon name={kind} className="size-4 text-muted-foreground" />;
   /** The sentence under a right, with what else the right needs where an allow alone does nothing. */
   const rightDescription = (verb: GrantVerb): string | undefined => {
-    const action = grantAction(form.kind, verb);
+    const action = grantAction(kind, verb);
     const sentence = action && rightSentenceKeys[action];
     const note = action && form.effect === "allow" ? rightAllowNoteKeys[action] : undefined;
     const parts = [sentence, note].flatMap((key) => (key === undefined ? [] : [t(key)]));
     return parts.length === 0 ? undefined : parts.join(" ");
   };
-  const workspace = workspaces?.items?.find((candidate) => candidate.id === form.workspaceId);
+  const workspace = allowedWorkspaces.find((candidate) => candidate.id === form.workspaceId);
   // With one place to choose there is nothing to ask: the step is left out.
-  const scopeKinds = grantScopeKinds(form.kind);
-  const requests = grantRequests(form);
+  const verbs = options.verbs(
+    kind,
+    scopeKind,
+    scopeKind === "workspace" ? workspace?.id : asset?.id
+  );
+  const selectedVerbs = requestedVerbs.filter((verb) => verbs.includes(verb));
+  const requests = grantRequests({
+    ...form,
+    kind,
+    scopeKind,
+    verbs: selectedVerbs,
+    assetId: asset?.id,
+    workspaceId: workspace?.id
+  });
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -599,23 +639,27 @@ function GrantDialog({
             value: kind,
             label: t(kindLabelKeys[kind])
           }))}
-          value={form.kind}
+          value={kind}
           // An asset belongs to its kind, and a kind has its own actions and places.
           onValueChange={(kind) => setForm((current) => withGrantKind(current, kind))}
         />
         <fieldset className="grid gap-2.5">
           <legend className="mb-2.5 text-label">{t("access.grantActions")}</legend>
-          {grantVerbs(form.kind).map((verb) => (
+          {verbs.map((verb) => (
             <Checkbox
               key={verb}
-              label={verbLabel(verb, t)}
+              label={
+                verb === "read_run_data"
+                  ? actionLabel("workflow.read_run_data", t)
+                  : verbLabel(verb, t)
+              }
               description={rightDescription(verb)}
-              checked={form.verbs.includes(verb)}
+              checked={selectedVerbs.includes(verb)}
               onCheckedChange={(checked) =>
                 change({
                   verbs: checked
-                    ? [...form.verbs, verb]
-                    : form.verbs.filter((other) => other !== verb)
+                    ? [...selectedVerbs, verb]
+                    : selectedVerbs.filter((other) => other !== verb)
                 })
               }
             />
@@ -625,24 +669,24 @@ function GrantDialog({
           <RadioGroup
             label={t("access.grantScopeKind")}
             options={scopeKinds.map((scopeKind) => {
-              const keys = scopeChoice(scopeKind, form.kind);
+              const keys = scopeChoice(scopeKind, kind);
               return { value: scopeKind, label: t(keys.label), description: t(keys.description) };
             })}
-            value={form.scopeKind}
+            value={scopeKind}
             onValueChange={(scopeKind) => change({ scopeKind })}
             hint={docsLinkShown ? <DocsReference to="rightPlace" /> : undefined}
           />
         ) : null}
-        {form.scopeKind === "workspace" ? (
+        {scopeKind === "workspace" ? (
           <Field
             label={t("access.grantWorkspace")}
             required
             error={workspaces?.failed ? t("access.workspacesLoadFailed") : undefined}
-            hint={workspaces?.items?.length === 0 ? t("access.noWorkspaces") : undefined}
+            hint={allowedWorkspaces.length === 0 ? t("access.noWorkspaces") : undefined}
           >
             <Picker
-              search={(workspaces?.items?.length ?? 0) >= PICKER_SEARCH_FROM_COUNT}
-              options={(workspaces?.items ?? []).map((candidate) => ({
+              search={allowedWorkspaces.length >= PICKER_SEARCH_FROM_COUNT}
+              options={allowedWorkspaces.map((candidate) => ({
                 value: candidate.id,
                 label: candidate.name
               }))}
@@ -653,11 +697,11 @@ function GrantDialog({
                 label={t("access.grantWorkspace")}
                 placeholder={t("access.chooseWorkspace")}
                 value={workspace?.name}
-                disabled={!workspaces?.items || workspaces.items.length === 0}
+                disabled={allowedWorkspaces.length === 0}
               />
             </Picker>
           </Field>
-        ) : form.scopeKind === "asset" ? (
+        ) : scopeKind === "asset" ? (
           <Field
             label={t(words.assetField)}
             required

@@ -36,3 +36,5 @@ export {
   readerHolds,
   resourceHolders
 } from "./principal-grants-model";
+
+export { grantOptions } from "./grant-options";

@@ -28,12 +28,16 @@ async function setup(settings: CentralPolicySetting[] = []) {
   return { t, asked };
 }
 
-const grantPayload = (holderId: string, overrides: Record<string, unknown> = {}) => ({
+const grantPayload = async (
+  t: AccessInstance,
+  holderId: string,
+  overrides: Record<string, unknown> = {}
+) => ({
   holderKind: "user",
   holderId,
   action: "agent.write",
-  scopeKind: "namespace",
-  namespace: "kai-",
+  scopeKind: "asset",
+  scopeId: await t.assetId("agent", "assistant"),
   ...overrides
 });
 
@@ -76,7 +80,7 @@ describe("the Operation Run of a grant or Namespace write", () => {
       t,
       t.admin.id,
       "permissions.grant",
-      { payload: grantPayload(t.kai.id) },
+      { payload: await grantPayload(t, t.kai.id) },
       "corr_grant"
     );
     const grantId = grantSchema.parse(granted.response.json()).id;
@@ -176,7 +180,7 @@ describe("the Operation Run of a grant or Namespace write", () => {
     const { t } = await setup();
     await t.createNamespace("kai-");
     const input = {
-      payload: grantPayload(t.kai.id),
+      payload: await grantPayload(t, t.kai.id),
       headers: { "idempotency-key": "grant-kai-once" }
     };
     const first = await t.expectOk(t.admin.id, "permissions.grant", input);
@@ -197,7 +201,7 @@ describe("the Operation Run of a grant or Namespace write", () => {
     await t.expectRefused(
       t.admin.id,
       "permissions.grant",
-      { ...input, payload: grantPayload(t.lena.id) },
+      { ...input, payload: await grantPayload(t, t.lena.id) },
       { status: 409, code: "IDEMPOTENCY_KEY_REUSED" }
     );
     expect(await t.stores.access.listGrants({ clientInstanceId })).toHaveLength(1);
@@ -211,7 +215,7 @@ describe("a field the query string names", () => {
     const { t } = await setup();
     await t.createNamespace("kai-");
     const response = await t.expectOk(t.admin.id, "permissions.grant", {
-      payload: grantPayload(t.kai.id),
+      payload: await grantPayload(t, t.kai.id),
       undeclaredQuery: { holderId: t.lena.id, action: "agent.delete", stray: "1" }
     });
     expect(grantSchema.parse(response.json())).toMatchObject({
@@ -239,8 +243,8 @@ describe("a superadmin's rows", () => {
       holderKind: "user",
       holderId: root.id,
       action: "agent.write",
-      scopeKind: "namespace",
-      namespace: "kai-",
+      scopeKind: "asset",
+      scopeId: await t.assetId("agent", "assistant"),
       effect: "deny"
     };
     // The operation's own check refuses, so the refusal names the operation.
@@ -283,14 +287,21 @@ describe("a superadmin's rows", () => {
       roles: ["user", "admin", "superadmin"]
     });
     const held = grantSchema.parse(
-      (await t.expectOk(t.root.id, "permissions.grant", { payload: grantPayload(root.id) })).json()
+      (
+        await t.expectOk(t.root.id, "permissions.grant", {
+          payload: await grantPayload(t, root.id)
+        })
+      ).json()
     );
 
     const attempts: Array<[TestOperationName, TestCallInput]> = [
-      ["permissions.grant", { payload: grantPayload(root.id, { effect: "deny" }) }],
+      ["permissions.grant", { payload: await grantPayload(t, root.id, { effect: "deny" }) }],
       // The holder is decided before what the row says: an action that cannot be granted is
       // not looked at for a caller who may not write this holder's rows.
-      ["permissions.grant", { payload: grantPayload(root.id, { action: "users.manage" }) }],
+      [
+        "permissions.grant",
+        { payload: await grantPayload(t, root.id, { action: "users.manage" }) }
+      ],
       ["permissions.revoke", { params: { grantId: held.id } }]
     ];
     for (const [index, [operation, input]] of attempts.entries()) {
@@ -333,12 +344,12 @@ describe("a superadmin's rows", () => {
   it("and everyone's are refused to a caller without users.manage before any holder is read", async () => {
     const { t, asked } = await setup();
     await t.createNamespace("kai-");
-    const grantId = await t.grant(t.lena.id, "agent.read", { namespace: "kai-" });
+    const grantId = await t.seedHistoricalGrant(t.lena.id, "agent.read", { namespace: "kai-" });
     const policyAsked = asked.policy;
     for (const [operation, input] of [
       // A holder who is a superadmin answers as any other holder does.
-      ["permissions.grant", { payload: grantPayload(t.root.id) }],
-      ["permissions.grant", { payload: grantPayload("user_missing") }],
+      ["permissions.grant", { payload: await grantPayload(t, t.root.id) }],
+      ["permissions.grant", { payload: await grantPayload(t, "user_missing") }],
       ["permissions.revoke", { params: { grantId } }],
       ["permissions.revoke", { params: { grantId: "missing" } }]
     ] as const) {
@@ -360,7 +371,7 @@ describe("the policy of a grant or Namespace write", () => {
     await t.expectRefused(
       t.admin.id,
       "permissions.grant",
-      { payload: grantPayload(t.kai.id) },
+      { payload: await grantPayload(t, t.kai.id) },
       { status: 403, code: "POLICY_DENIED" }
     );
     await t.expectRefused(
@@ -378,7 +389,7 @@ describe("the policy of a grant or Namespace write", () => {
     const { t } = await setup([{ operation: "permissions.grant", value: "approval" }]);
     await t.createNamespace("kai-");
     const held = await t.call(t.admin.id, "permissions.grant", {
-      payload: grantPayload(t.kai.id)
+      payload: await grantPayload(t, t.kai.id)
     });
     expect(held.statusCode).toBe(202);
     const run = operationRunSchema.parse(held.json());

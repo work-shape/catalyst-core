@@ -1,3 +1,4 @@
+import { seedHistoricalGrant } from "./legacy-grant";
 import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
@@ -7,7 +8,6 @@ const normalUser = { email: "e2e-user@example.test", password: "e2e-user-passwor
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 const accessPath = "/settings/instance/access";
 const assetPath = `${apiBaseUrl}/api/v1/assets/agent/kai-helper`;
-const grantsPath = `${apiBaseUrl}/api/v1/instance/access/grants`;
 const NARROW = { width: 390, height: 844 };
 const WIDE = { width: 1280, height: 800 };
 
@@ -63,6 +63,11 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
   await signInViaApi(page, normalUser);
   const holder: { id: string } = await (await page.request.get(`${apiBaseUrl}/api/v1/me`)).json();
   await signInViaApi(page, adminUser);
+  const workspace = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+    data: { name: "Access rights scope" }
+  });
+  expect(workspace.ok()).toBe(true);
+  const rightsWorkspace: { id: string } = await workspace.json();
   await page.setViewportSize(WIDE);
   await page.goto("/settings/instance/users");
   await page
@@ -139,7 +144,7 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
-    const assetGrants = grantRows.filter({ hasText: "Agent kai-helper" });
+    const assetGrants = grantRows.filter({ hasText: "Agent Kai Helper" });
     await expect(grantRows).toHaveCount(1);
     await expect(assetGrants).toContainText("E2E User");
     await expect(assetGrants).toContainText("View agents");
@@ -159,19 +164,10 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await expect(grantRows).toHaveCount(1);
     await expect(assetGrants.locator('[data-effect="allow"]')).toHaveCount(2);
 
-    // Rows in a Namespace are written through the API until the Namespace is retired. The
-    // page lists them as one row and revokes them.
+    // Historical Namespace rows remain effective, listable and revocable; no new API call
+    // can write one. Seed the state an instance upgraded from an earlier release may hold.
     for (const action of ["agent.read", "agent.write", "agent.delete"]) {
-      const granted = await requestWithOrigin(page, "post", grantsPath, {
-        data: {
-          holderKind: "user",
-          holderId: holder.id,
-          action,
-          scopeKind: "namespace",
-          namespace: "kai-"
-        }
-      });
-      expect(granted.ok()).toBe(true);
+      await seedHistoricalGrant(page, { holderId: holder.id, action, namespace: "kai-" });
     }
     await page.reload();
     await tab(page, "Rights").click();
@@ -278,6 +274,11 @@ test("an administrator registers a Namespace, grants, checks, denies, revokes an
     await page.setViewportSize(WIDE);
     await page.getByRole("button", { name: "Expand sidebar" }).click();
   } finally {
+    await requestWithOrigin(
+      page,
+      "delete",
+      `${apiBaseUrl}/api/v1/workspaces/${rightsWorkspace.id}`
+    );
     const deleted = await requestWithOrigin(page, "post", `${assetPath}/delete`, {
       data: { expectedRevision: await assetRevision(page, assetPath) }
     });

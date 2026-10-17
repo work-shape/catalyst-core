@@ -121,7 +121,7 @@ describe("the preview of a held asset save", () => {
       params: { kind: "skill", name: "kai-leave" },
       payload: { config: skill("kai-leave", stored) }
     });
-    await t.grant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
+    await t.seedHistoricalGrant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
     await t.expectRefused(
       t.admin.id,
       "assets.get",
@@ -160,8 +160,8 @@ describe("the preview of a held asset save", () => {
       params: { kind: "skill", name: "kai-faq" },
       payload: { config: skill("kai-faq", stored) }
     });
-    await t.grant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
-    await t.grant(t.kai.id, "skill.delete", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
+    await t.seedHistoricalGrant(t.kai.id, "skill.delete", { namespace: "kai-" });
     holding("assets.put");
     // A call that creates under a name that is taken, and a change of a skill that is then
     // deleted while the request waits.

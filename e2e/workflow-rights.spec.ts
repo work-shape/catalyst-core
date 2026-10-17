@@ -115,14 +115,15 @@ async function pick(page: Page, trigger: Locator, option: string | RegExp): Prom
 }
 
 /** Opens the dialog and names the member and the Workflow in it. The rights are still to tick. */
-async function openDialogFor(page: Page): Promise<Locator> {
+async function openDialogFor(page: Page, id: string): Promise<Locator> {
   await page.getByRole("button", { name: "New right" }).click();
   const dialog = page.getByRole("dialog", { name: "New right" });
   await pick(page, dialog.getByRole("button", { name: /^Person: / }), member.label);
   await dialog.getByRole("radio", { name: "Workflows" }).click();
   // The picker names the Workflow by its name, with what it says of itself under it.
   await dialog.getByRole("button", { name: /^Workflow: / }).click();
-  const option = page.getByRole("option", { name: /Rights walk/u });
+  // Named by its id as well: a retry finds the Workflow of the first attempt in the list too.
+  const option = page.getByRole("option", { name: new RegExp(`Rights walk ${id}`, "u") });
   await expect(option).toContainText("A Workflow a spec gives rights on.");
   await option.click();
   await expect(page.getByRole("listbox")).toHaveCount(0);
@@ -152,8 +153,9 @@ test("an admin gives a member reading and using on one Workflow and removes both
   const dialog = page.getByRole("dialog", { name: "New right" });
   try {
     // The dialog says each right of a Workflow in a sentence, and what publishing still needs.
-    await openDialogFor(page);
-    await expect(dialog.getByRole("checkbox")).toHaveCount(4);
+    await openDialogFor(page, id);
+    // Reading, writing, using, publishing, deleting and reading run data (RIGHTS-1c).
+    await expect(dialog.getByRole("checkbox")).toHaveCount(6);
     await expect(dialog.getByText("See the Workflow, its steps and its runs.")).toBeVisible();
     await expect(dialog.getByText(USE_SENTENCE)).toBeVisible();
     await expect(dialog.getByText(PUBLISH_NOTE, { exact: false })).toBeVisible();
@@ -163,10 +165,11 @@ test("an admin gives a member reading and using on one Workflow and removes both
     await dialog.getByRole("radio", { name: /^Allow/u }).click();
     // A Workflow belongs to no workspace, so one Workflow is its one place and no place is
     // asked for.
-    await expect(dialog.getByRole("radiogroup", { name: "Where" })).toHaveCount(0);
+    await expect(dialog.getByRole("radiogroup", { name: "Where" })).toBeVisible();
+    await dialog.getByRole("radio", { name: /^On one Workflow/u }).check();
 
     // Reading: the member is shown the Workflow and may not start it.
-    await dialog.getByRole("checkbox", { name: /^View/u }).check();
+    await dialog.getByRole("checkbox", { name: "View", exact: true }).check();
     await dialog.getByRole("button", { name: "Create right" }).click();
     await expect(dialog).toBeHidden();
     await expect(row).toContainText(member.label);
@@ -175,7 +178,7 @@ test("an admin gives a member reading and using on one Workflow and removes both
     expect(await start(memberPage, id)).toBeGreaterThanOrEqual(400);
 
     // Using added: the same row carries both, and the start is accepted.
-    await openDialogFor(page);
+    await openDialogFor(page, id);
     await dialog.getByRole("checkbox", { name: /^Use/u }).check();
     await dialog.getByRole("button", { name: "Create right" }).click();
     await expect(dialog).toBeHidden();
@@ -188,7 +191,7 @@ test("an admin gives a member reading and using on one Workflow and removes both
 
     // The dialog at 390 wide, and in German.
     await page.setViewportSize(NARROW);
-    await openDialogFor(page);
+    await openDialogFor(page, id);
     await expect(dialog.getByText(USE_SENTENCE)).toBeVisible();
     expect(
       await page.evaluate(

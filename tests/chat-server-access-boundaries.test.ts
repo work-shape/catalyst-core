@@ -17,8 +17,8 @@ describe("a deny and the deletion of its asset", () => {
   it("refuses the delete to a holder whose read is denied for the asset", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "skill.read", { namespace: "kai-" });
-    await t.grant(t.kai.id, "skill.delete", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "skill.read", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "skill.delete", { namespace: "kai-" });
     for (const name of ["kai-secret", "kai-open"]) {
       await t.expectOk(t.admin.id, "assets.put", {
         params: { kind: "skill", name },
@@ -61,8 +61,8 @@ describe("a deny and the deletion of its asset", () => {
     const t = await setup();
     await t.createNamespace("kai-");
     for (const holder of [t.kai, t.lena]) {
-      await t.grant(holder.id, "skill.read", { namespace: "kai-" });
-      await t.grant(holder.id, "skill.write", { namespace: "kai-" });
+      await t.seedHistoricalGrant(holder.id, "skill.read", { namespace: "kai-" });
+      await t.seedHistoricalGrant(holder.id, "skill.write", { namespace: "kai-" });
     }
     await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "kai-secret" },
@@ -122,8 +122,8 @@ describe("a Namespace's model list and an agent without a binding", () => {
     const t = await setup();
     await t.createNamespace("kai-", { allowedModelBindingIds: ["plain"] });
     await t.createNamespace("free-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.grant(t.kai.id, "agent.write", { namespace: "free-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "free-" });
     const required = {
       status: 403,
       code: "FORBIDDEN",
@@ -177,8 +177,8 @@ describe("a Namespace's model list and its writer", () => {
     const t = await setup();
     await t.createNamespace("kai-", { allowedModelBindingIds: ["plain"] });
     await t.createNamespace("free-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
-    await t.grant(t.kai.id, "agent.write", { namespace: "free-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "free-" });
     const bound = (name: string, modelBindingId: string, overrides = {}) => {
       const { modelProviderId: _modelProviderId, ...rest } = agent(name, overrides);
       return { ...rest, modelBindingId };
@@ -284,11 +284,11 @@ describe("attribution to a hidden superadmin", () => {
         holderId: t.kai.id,
         action: "agent.read",
         effect: "allow",
-        scopeKind: "namespace",
-        namespace: "root-"
+        scopeKind: "asset",
+        scopeId: await t.assetId("agent", "assistant")
       }
     });
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
 
     const grants = z.object({
       items: z.array(z.object({ action: z.string(), grantedBy: z.string().optional() }))

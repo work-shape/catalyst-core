@@ -299,7 +299,7 @@ describe("assets.check_name", () => {
         t.forbidden("agent.write", "no_grant")
       );
     }
-    await t.grant(t.lena.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.lena.id, "agent.write", { namespace: "kai-" });
     const workspaceId = await createWorkspace(t, "Confidential workspace");
     for (const owner of [undefined, workspaceId]) {
       const name = owner === undefined ? "kai-private" : "kai-private-elsewhere";

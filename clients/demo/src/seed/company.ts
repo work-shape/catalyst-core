@@ -52,7 +52,7 @@ export const people: SeedPerson[] = [
   person("sven", "Sven Olsen", ["user"], { permissions: ["config_assets.read", "usage.view"] }),
   person("lena", "Lena Hoffmann", ["user"], { status: "disabled" }),
   person("noah", "Noah Fischer", ["user"], { invited: true }),
-  // A member who builds: his rows in his own Namespace are all he holds.
+  // A member who builds: his rows on his drafts are all he holds.
   person("kai", "Kai Berger", ["user"])
 ];
 
@@ -187,11 +187,11 @@ type Verb = "read" | "write" | "delete";
 interface SeedGrant {
   holder: PersonKey;
   kind: AssetKind | "workflow";
-  /** A Workflow has no row for deleting it: that stays with the role. */
+  /** The actions this seed demonstrates on each selected asset. */
   verbs: (Verb | "publish")[];
   effect: "allow" | "deny";
-  /** A registered prefix, or the name of one asset of `kind`. */
-  scope: { namespace: string } | { asset: string };
+  /** Select current assets by prefix, or one asset by name. Never a grant scope. */
+  scope: { prefix: string } | { asset: string };
   grantedBy: PersonKey;
 }
 
@@ -199,9 +199,17 @@ export const grants: SeedGrant[] = [
   {
     holder: "tobias",
     kind: "agent",
-    verbs: ["read", "write", "delete"],
+    verbs: ["read", "delete"],
     effect: "allow",
-    scope: { namespace: "tax-" },
+    scope: { prefix: "tax-" },
+    grantedBy: "mara"
+  },
+  {
+    holder: "tobias",
+    kind: "agent",
+    verbs: ["write"],
+    effect: "allow",
+    scope: { asset: "tax-deadline-planner" },
     grantedBy: "mara"
   },
   {
@@ -209,10 +217,10 @@ export const grants: SeedGrant[] = [
     kind: "skill",
     verbs: ["read", "write"],
     effect: "allow",
-    scope: { namespace: "tax-" },
+    scope: { prefix: "tax-" },
     grantedBy: "mara"
   },
-  // A deny on one asset wins over the allow of its Namespace.
+  // A deny on one asset wins over its allow.
   {
     holder: "tobias",
     kind: "agent",
@@ -226,7 +234,7 @@ export const grants: SeedGrant[] = [
     kind: "agent",
     verbs: ["read", "write", "delete"],
     effect: "allow",
-    scope: { namespace: "hr-" },
+    scope: { prefix: "hr-" },
     grantedBy: "mara"
   },
   {
@@ -234,7 +242,7 @@ export const grants: SeedGrant[] = [
     kind: "skill",
     verbs: ["read", "write"],
     effect: "allow",
-    scope: { namespace: "hr-" },
+    scope: { prefix: "hr-" },
     grantedBy: "mara"
   },
   {
@@ -259,34 +267,25 @@ export const grants: SeedGrant[] = [
     kind: "agent",
     verbs: ["read", "write"],
     effect: "allow",
-    scope: { namespace: "sales-" },
+    scope: { prefix: "sales-" },
     grantedBy: "jonas"
   },
-  // A deny in a Namespace wins over the admin role.
+  // Denies on the current HR agents win over the admin role.
   {
     holder: "mara",
     kind: "agent",
     verbs: ["write"],
     effect: "deny",
-    scope: { namespace: "hr-" },
+    scope: { prefix: "hr-" },
     grantedBy: "jonas"
   },
-  // Kai Berger builds in his own Namespace. No grant gives a right on Apps yet: an App
-  // belongs to a workspace, and a Namespace row never reaches one.
+  // Kai edits these concrete drafts, without a broader creation right or any App right.
   {
     holder: "kai",
     kind: "agent",
     verbs: ["read", "write", "delete"],
     effect: "allow",
-    scope: { namespace: "kai-" },
-    grantedBy: "mara"
-  },
-  {
-    holder: "kai",
-    kind: "skill",
-    verbs: ["read", "write", "delete"],
-    effect: "allow",
-    scope: { namespace: "kai-" },
+    scope: { prefix: "kai-" },
     grantedBy: "mara"
   },
   {
@@ -294,7 +293,7 @@ export const grants: SeedGrant[] = [
     kind: "workflow",
     verbs: ["read", "write", "publish"],
     effect: "allow",
-    scope: { namespace: "kai-" },
+    scope: { asset: "kai-client-years" },
     grantedBy: "mara"
   }
 ];
@@ -340,8 +339,8 @@ export const firstDraft: {
 
 /**
  * A call that waits for an approval. The demo holds every skill saved into the HR Namespace
- * (`demoOperations`), and the person who saves this one does not hold `operations.approve`,
- * so it lands in the Inbox of those who do.
+ * (`demoOperations`). An admin requests the new skill because asset grants do not allow
+ * creating another asset. Elif requests the change of the existing skill below.
  *
  * Why Elif Aydin wants it: the HR team answers the same three questions about parental leave
  * every month, and the absence desk agent has nothing to answer them from. A request carries
@@ -351,7 +350,7 @@ export const heldSkill: {
   requestedBy: PersonKey;
   config: { name: string; title: string; description: string; content: string };
 } = {
-  requestedBy: "elif",
+  requestedBy: "mara",
   config: {
     name: "hr-parental-leave-faq",
     title: "Elternzeit: häufige Fragen",
@@ -382,7 +381,7 @@ export const heldSkillChange: {
 };
 
 /**
- * What the member who builds made himself, in his own session, so each carries his name: one
+ * Drafts the member edits in his own session after an admin prepares them: one
  * agent, and one Workflow left as a draft, a folder under `seed/workflows`. A definition must
  * name a principal under `runAs`, and a draft lends nothing: making it live asks what
  * administering service principals asks, which he does not hold. So it stays a draft.
@@ -475,21 +474,21 @@ export const checkQuestions: CheckQuestion[] = [
     asset: "hr-onboarding-guide",
     expect: { read: yes("role"), write: no("deny"), delete: no("deny") },
     because:
-      "A deny on writing agents in `hr-` wins over her admin role, and whoever is denied writing does not delete."
+      "A deny on writing this agent wins over her admin role, and whoever is denied writing does not delete."
   },
   {
     person: "tobias",
     kind: "agent",
     asset: "tax-deadline-planner",
     expect: { read: yes("grant"), write: yes("grant"), delete: yes("grant") },
-    because: "His rows in the Namespace `tax-` allow all three."
+    because: "His rows on this agent allow all three."
   },
   {
     person: "tobias",
     kind: "agent",
     asset: "tax-vat-checker",
     expect: { read: yes("grant"), write: no("deny"), delete: no("deny") },
-    because: "A deny on this one agent wins over the allow of its Namespace."
+    because: "A deny on this agent wins over its allow."
   },
   {
     person: "sven",
@@ -510,36 +509,36 @@ export const checkQuestions: CheckQuestion[] = [
     person: "elif",
     kind: "agent",
     asset: "hr-exit-interview",
-    expect: { read: yes("grant"), write: yes("grant"), delete: yes("grant") },
-    because: "The agent does not exist yet. Her rows in `hr-` would let her create it."
+    expect: { read: no("no_grant"), write: no("no_grant"), delete: no("no_grant") },
+    because: "The agent does not exist. Her asset rows give no right to create another."
   },
   {
     person: "elif",
     kind: "skill",
     asset: "tax-vat-rules",
     expect: { read: no("no_grant"), write: no("no_grant"), delete: no("no_grant") },
-    because: "Her rows end at the Namespace `hr-`."
+    because: "Her rows cover the existing HR assets."
   },
   {
     person: "lena",
     kind: "agent",
     asset: "sales-pitch-coach",
     expect: { read: no("inactive"), write: no("inactive"), delete: no("inactive") },
-    because: "Her account is deactivated, so her rows in `sales-` allow nothing."
+    because: "Her account is deactivated, so her rows on the sales agents allow nothing."
   },
   {
     person: "kai",
     kind: "agent",
     asset: "kai-helper",
     expect: { read: yes("grant"), write: yes("grant"), delete: yes("grant") },
-    because: "He made this agent in his own Namespace `kai-`, where his rows allow all three."
+    because: "His rows on this draft allow all three."
   },
   {
     person: "kai",
     kind: "skill",
     asset: "plain-language",
     expect: { read: no("no_grant"), write: no("no_grant"), delete: no("no_grant") },
-    because: "His rows end at his Namespace `kai-`, and he holds no right beside them."
+    because: "His rows cover his two drafts, and he holds no right beside them."
   }
 ];
 
@@ -560,7 +559,7 @@ export const workflowCheckQuestions: CheckQuestion<"workflow", Verb | "use">[] =
       delete: no("no_grant")
     },
     because:
-      "His rows in `kai-` let him read and change his draft. He holds no row for starting it, and deleting a Workflow stays with the role."
+      "His rows on this Workflow let him read and change its draft. He holds no row for starting or deleting it."
   }
 ];
 

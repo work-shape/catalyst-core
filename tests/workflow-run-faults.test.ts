@@ -604,8 +604,8 @@ describe("the read of a run the caller is denied", () => {
     });
     await t.createNamespace("notify-");
     for (const action of ["workflow.read", "workflow.write"]) {
-      await t.grant(t.kai.id, action, { namespace: "notify-" }, "deny");
-      await t.grant(ops.id, action, { namespace: "notify-" }, "deny");
+      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "notify-" }, "deny");
+      await t.seedHistoricalGrant(ops.id, action, { namespace: "notify-" }, "deny");
     }
     for (const operation of RUN_CALLS) {
       // A member holds nothing on any Workflow: both are refused for the missing right.

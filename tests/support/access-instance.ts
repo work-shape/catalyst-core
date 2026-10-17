@@ -249,7 +249,14 @@ export interface AccessInstance {
   grant(
     holderId: string,
     action: string,
-    scope: { namespace: string } | { assetId: string } | { workspaceId: string },
+    scope: { assetId: string } | { workspaceId: string },
+    effect?: "allow" | "deny"
+  ): Promise<string>;
+  /** A row from before Namespace retirement, seeded to verify compatibility. */
+  seedHistoricalGrant(
+    holderId: string,
+    action: string,
+    scope: { namespace: string },
     effect?: "allow" | "deny"
   ): Promise<string>;
   /** A new agent starts hidden unless `availableIn` says where. */
@@ -409,7 +416,7 @@ export async function setupAccessInstance(
   const grant = async (
     holderId: string,
     action: string,
-    scope: { namespace: string } | { assetId: string } | { workspaceId: string },
+    scope: { assetId: string } | { workspaceId: string },
     effect: "allow" | "deny" = "allow"
   ) => {
     // Nobody writes a row of their own, so the superadmin writes the administrator's.
@@ -420,15 +427,31 @@ export async function setupAccessInstance(
         holderId,
         action,
         effect,
-        ...("namespace" in scope
-          ? { scopeKind: "namespace", namespace: scope.namespace }
-          : "workspaceId" in scope
-            ? { scopeKind: "workspace", scopeId: scope.workspaceId }
-            : { scopeKind: "asset", scopeId: scope.assetId })
+        ...("workspaceId" in scope
+          ? { scopeKind: "workspace", scopeId: scope.workspaceId }
+          : { scopeKind: "asset", scopeId: scope.assetId })
       }
     });
     return grantSchema.parse(response.json()).id;
   };
+  const seedHistoricalGrant: AccessInstance["seedHistoricalGrant"] = async (
+    holderId,
+    action,
+    scope,
+    effect = "allow"
+  ) =>
+    (
+      await stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId,
+        action,
+        effect,
+        scopeKind: "namespace",
+        namespace: scope.namespace,
+        grantedBy: holderId === admin.id ? root.id : admin.id
+      })
+    ).id;
   const putAgent = (
     userId: string,
     name: string,
@@ -457,6 +480,7 @@ export async function setupAccessInstance(
     forbidden,
     createNamespace,
     grant,
+    seedHistoricalGrant,
     putAgent,
     assetId,
     sharedWorkspace: async (name) =>

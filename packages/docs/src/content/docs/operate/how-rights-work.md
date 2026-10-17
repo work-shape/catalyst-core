@@ -135,7 +135,7 @@ The instance collects everything that speaks about you:
 
 1. Your **role** gives you a fixed set of rights on the whole instance.
 2. A **single right** on the Users page adds one right to that set or takes one away, also for the whole instance.
-3. A **grant** on the Access page allows or denies one action in one place: everything one Shared Workspace owns, or one asset. Connection grants written before on a Shared Workspace keep applying until they are revoked.
+3. A **grant** on the Access page allows or denies one action in one place. A new grant names one asset, a supported Shared Workspace scope, or the whole instance where that action allows it. Grants written before in a Namespace, and Connection grants written before on a Shared Workspace, keep applying until they are revoked.
 
 Then it decides:
 
@@ -211,17 +211,21 @@ The Users page has one more field, **Tool rights**. A tool written for one custo
 
 ## Grants
 
-A role and a single right always apply to the whole instance. A grant is for everything narrower. It says five things:
+A role and a single right always apply to the whole instance. A grant is for everything narrower, and for a right no switch carries it can be the whole instance too. It says five things:
 
 | Part | Choices |
 | --- | --- |
 | Who | One person. A Service Principal gets its grants on the API access page. |
-| Kind | Agents, or skills. Connections and Workflows too, where their modules are on. |
-| Action | Read, write, delete for agents and skills. Read and use for Connections. Read, use, write and publish for Workflows. |
-| Where | For agents and skills: what one Shared Workspace owns, or one existing asset. For Connections and Workflows: one existing item. |
+| Kind | Agents, or skills. Connections, Apps, Data Stores, Knowledge Bases and Workflows too, where their modules are on. |
+| Action | Read, write, delete for agents and skills. Read and use for Connections. Read, write, publish and delete for Apps and Data Stores. Read, use, write, publish and delete for Knowledge Bases and Workflows, and for a Workflow also reading the data of its runs. |
+| Where | For agents, skills, Apps and Data Stores: what one Shared Workspace owns, or one existing asset. For Connections, Knowledge Bases and Workflows: one existing item, or the whole instance where the action allows it. Reading run data stays on one Workflow. A right that no switch on the Users page carries, so not those of agents and skills, can also be given for the whole instance. Reading the data of a Workflow's runs is given on one Workflow only. Rows written before in a Namespace stay until they are revoked. |
 | Effect | Allow, or deny. |
 
+Reading the data of a Workflow's runs shows the rows its Service Principal read. Giving it, or lifting a deny of it, therefore needs every right that Service Principal holds, as publishing the Workflow does.
+
 So the answer to "can rights only be given to single people" is yes. A grant names one person or one Service Principal. There are no groups, and a role cannot hold a grant.
+
+The New right dialog offers only actions and places the giver holds. A right on one asset never offers the whole workspace or instance. New Namespace rows are refused by the server for every action; existing Namespace rows still apply and can be listed and revoked.
 
 **Deny wins.** A deny on an asset beats every allow, including the one from the Admin role. Use it for the one agent that even administrators should not change by accident. A deny has limits of its own, which [Rights for one person or asset](/operate/rights-for-one-person/#grants) lists.
 

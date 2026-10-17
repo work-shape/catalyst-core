@@ -24,7 +24,7 @@ describe("the availability of an agent in assets.get", () => {
   it("names only the workspaces its reader may see, and all of them to an administrator", async () => {
     const t = await setupNamespaceHolder();
     await t.put(t.admin.id, "agent", "kai-intake");
-    await t.grant(t.lena.id, "agent.read", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.lena.id, "agent.read", { namespace: "kai-" });
     const shared = (name: string, creatorUserId: typeof t.kai.id) =>
       t.stores.workspaces.createWorkspace({
         clientInstanceId,

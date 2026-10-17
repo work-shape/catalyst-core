@@ -68,6 +68,24 @@ export const kindWords: Record<GrantKind, KindWords> = {
     noAssets: "access.noConnections",
     assetsLoadFailed: "access.connectionsLoadFailed"
   },
+  app: {
+    scopeAsset: "access.scopeApp",
+    onAsset: "access.scopeOnApp",
+    onAssetDescription: "access.scopeOnAppDescription",
+    assetField: "access.grantApp",
+    chooseAsset: "access.chooseApp",
+    noAssets: "access.noApps",
+    assetsLoadFailed: "access.appsLoadFailed"
+  },
+  data_store: {
+    scopeAsset: "access.scopeDataStore",
+    onAsset: "access.scopeOnDataStore",
+    onAssetDescription: "access.scopeOnDataStoreDescription",
+    assetField: "access.grantDataStore",
+    chooseAsset: "access.chooseDataStore",
+    noAssets: "access.noDataStores",
+    assetsLoadFailed: "access.dataStoresLoadFailed"
+  },
   workflow: {
     scopeAsset: "access.scopeWorkflow",
     onAsset: "access.scopeOnWorkflow",
@@ -115,10 +133,13 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
   "workflow.use": "access.actionUseWorkflowDescription",
   "workflow.write": "access.actionWriteWorkflowDescription",
   "workflow.publish": "access.actionPublishWorkflowDescription",
+  "workflow.delete": "access.actionDeleteWorkflowDescription",
+  "workflow.read_run_data": "access.actionReadRunDataWorkflowDescription",
   "knowledge_base.read": "access.actionReadKnowledgeBaseDescription",
   "knowledge_base.use": "access.actionUseKnowledgeBaseDescription",
   "knowledge_base.write": "access.actionWriteKnowledgeBaseDescription",
   "knowledge_base.publish": "access.actionPublishKnowledgeBaseDescription",
+  "knowledge_base.delete": "access.actionDeleteKnowledgeBaseDescription",
   "guardrail.publish": "access.actionPublishGuardrailDescription"
 };
 
@@ -128,7 +149,8 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
  * holds as any deny does, so the note shows for an allow only.
  */
 export const rightAllowNoteKeys: Partial<Record<GrantableAction, TranslationKey>> = {
-  "workflow.publish": "access.actionPublishWorkflowNote"
+  "workflow.publish": "access.actionPublishWorkflowNote",
+  "workflow.read_run_data": "access.actionReadRunDataWorkflowNote"
 };
 
 /** Where a grant applies, as the dialog offers the places for one kind. */

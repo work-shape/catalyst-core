@@ -646,8 +646,8 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
         holderKind: "user",
         holderId: writerId,
         action: "skill.write",
-        scopeKind: "namespace",
-        namespace: HELD_NAMESPACE
+        scopeKind: "asset",
+        scopeId: idOf(await (await page.request.get(heldSkillUrl)).json())
       }
     });
     expect(granted.ok()).toBe(true);

@@ -73,7 +73,7 @@ describe("the demo seed on the fixture instance", () => {
       namespaces: 4,
       agents: 8,
       skills: 7,
-      "grant rows": 25,
+      "grant rows": 34,
       "builder assets": 2,
       "approval requests": 2,
       "connection grant rows": 0,
@@ -159,7 +159,7 @@ describe("the demo seed on the fixture instance", () => {
     ]);
   });
 
-  it("pushes the agents and skills, shows every agent, and gives one agent a second revision", async () => {
+  it("pushes the company assets and records the prepared builder draft", async () => {
     const { client, defaultAgentName } = seeded().before;
     // The instance's own two agents are there as well, and one of them stays the default, and
     // so are the skills the platform ships.
@@ -179,9 +179,12 @@ describe("the demo seed on the fixture instance", () => {
     expect(assets.filter((asset) => asset.kind === "agent")).toHaveLength(9);
     expect(assets.filter((asset) => asset.kind === "skill")).toHaveLength(7);
     expect(assets.filter((asset) => asset.kind === "agent" && asset.shown !== "all")).toEqual([]);
-    expect(assets.filter((asset) => asset.revision !== 1).map((asset) => asset.name)).toEqual([
-      "tax-vat-checker"
-    ]);
+    expect(
+      assets
+        .filter((asset) => asset.revision !== 1)
+        .map((asset) => asset.name)
+        .sort()
+    ).toEqual(["kai-helper", "tax-vat-checker"]);
     const revisions = await listAll((paging) =>
       client.assets.revisions.list({
         params: { kind: "agent", name: "tax-vat-checker" },
@@ -214,39 +217,36 @@ describe("the demo seed on the fixture instance", () => {
     expect(agent?.shown).not.toBe("all");
   });
 
-  it("writes allow and deny rows in Namespaces and on single assets", () => {
+  it("writes only asset-scoped allow and deny rows", () => {
     const { grants } = seeded().before;
     const count = (effect: string, scopeKind: string) =>
       grants.filter((row) => row.effect === effect && row.scopeKind === scopeKind).length;
-    expect(grants).toHaveLength(25);
-    expect(count("allow", "namespace")).toBe(21);
-    expect(count("allow", "asset")).toBe(2);
-    expect(count("deny", "namespace")).toBe(1);
-    expect(count("deny", "asset")).toBe(1);
+    expect(grants).toHaveLength(34);
+    expect(count("allow", "namespace")).toBe(0);
+    expect(count("allow", "asset")).toBe(31);
+    expect(count("deny", "namespace")).toBe(0);
+    expect(count("deny", "asset")).toBe(3);
   });
 
-  it("leaves an agent and a Workflow draft that Kai Berger made in his own Namespace", async () => {
+  it("lets Kai Berger edit two drafts with rights only on those assets", async () => {
     const { client, users, grants } = seeded().before;
     const kai = users.find((user) => user.displayLabel === "Kai Berger");
     expect(kai).toMatchObject({ roles: ["user"], permissions: [], status: "active" });
-    // Nothing but his rows in `kai-`: no right on an App, which no grant gives yet.
+    // Only asset rows, with no right on other assets or an App.
     expect(
       grants
         .filter((row) => row.holderId === kai?.id)
-        .map((row) => `${row.action} ${row.scopeKind} ${row.namespace ?? ""}`)
+        .map((row) => `${row.action} ${row.scopeKind}`)
         .sort()
     ).toEqual(
       [
         "agent.delete",
         "agent.read",
         "agent.write",
-        "skill.delete",
-        "skill.read",
-        "skill.write",
         "workflow.publish",
         "workflow.read",
         "workflow.write"
-      ].map((action) => `${action} namespace kai-`)
+      ].map((action) => `${action} asset`)
     );
     for (const [kind, name] of [
       ["agent", builder.agent.name],
@@ -255,13 +255,14 @@ describe("the demo seed on the fixture instance", () => {
       const revisions = await listAll((paging) =>
         client.assets.revisions.list({ params: { kind, name }, query: paging })
       );
-      expect(revisions.map((revision) => revision.actor?.displayLabel)).toEqual(["Kai Berger"]);
+      expect(revisions).toHaveLength(2);
+      expect(revisions[0]?.actor?.displayLabel).toBe("Kai Berger");
     }
     // His Workflow stays a draft: publishing it would lend the principal it names.
     const draft = await client.assets.get({
       params: { kind: "workflow", name: builder.workflow }
     });
-    expect(draft.revision).toBe(1);
+    expect(draft.revision).toBe(2);
     expect(draft.publishedRevision).toBeUndefined();
   });
 
@@ -282,7 +283,10 @@ describe("the demo seed on the fixture instance", () => {
       requestedBy: "Elif Aydin",
       status: "pending"
     };
-    expect(approvals).toEqual([held, held]);
+    expect(approvals).toEqual(
+      expect.arrayContaining([held, { ...held, requestedBy: "Mara Lindqvist" }])
+    );
+    expect(approvals).toHaveLength(2);
     // Nothing was written yet: the skill exists once somebody approves.
     expect(assets.some((asset) => asset.name === "hr-parental-leave-faq")).toBe(false);
 

@@ -114,7 +114,7 @@ export async function setup() {
     t.stores.access.listGrants({
       clientInstanceId,
       holderKind: "service_principal",
-      excludeInstanceScope: true
+      excludeLegacyKeyRows: true
     });
   return { t, principal, ops, manager, payload, grantTo, step, principalRows };
 }

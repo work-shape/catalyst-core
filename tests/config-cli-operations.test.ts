@@ -492,7 +492,7 @@ describe("CLI parity against persisted operations", () => {
   it("lets the server refuse a real personal key and shows the same error as the API", async () => {
     const t = await setupPersonalKeyInstance();
     instances.push(t.instance);
-    await t.grant(t.kai.id, "agent.read", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.read", { namespace: "kai-" });
     const issued = await t.issue(["agent.read:kai-"]);
     const headers = await t.tokenFor(issued.secret);
     const direct = await t.instance.call("me.update", {

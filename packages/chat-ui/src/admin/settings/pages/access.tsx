@@ -19,7 +19,6 @@ import {
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { listAll } from "@work-shape/catalyst-api-client";
 import {
-  useAdministeredCollaborationWorkspacesQuery,
   useConfigAssetsOverviewQuery,
   usePlatformContextQuery,
   useWorkspaceUsersQuery
@@ -35,7 +34,7 @@ import { useSettingsPage } from "../../../shared/settings-page-context";
  */
 export function AccessPage() {
   const { t } = useTranslation();
-  const { apiBaseUrl, authScope, client } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
   const api = { apiBaseUrl, authScope, client };
   const [checkedHolderId, setCheckedHolderId] = useState<string | undefined>();
   const [checkedKind, setCheckedKind] = useState("agent");
@@ -45,30 +44,84 @@ export function AccessPage() {
   // Tools, models and assets come with the agent configuration, which has its own right. A
   // reader without it still sees and revokes rows; the pickers say what could not be loaded.
   const overviewQuery = useConfigAssetsOverviewQuery({ ...api, enabled: true });
+  const giverQuery = useEffectivePermissionsQuery({ ...api, holderId: user.id });
   const effectiveQuery = useEffectivePermissionsQuery({ ...api, holderId: checkedHolderId });
   // A grant names a kind beyond agents and skills while the instance has the kind: its module
   // is on. Which kinds a grant can name at all, core says.
   const contextQuery = usePlatformContextQuery({ ...api, enabled: true });
   const furtherKinds = furtherGrantKinds(contextQuery.data?.kinds.map((kind) => kind.kind));
+  // An App or a Data Store is listed in the workspace that owns it, so the picker asks each
+  // Shared Workspace the reader can use something in, beside the instance's own assets.
+  const sharedWorkspaceIds = (contextQuery.data?.workspaces ?? [])
+    .filter((workspace) => workspace.kind === "shared")
+    .map((workspace) => workspace.id);
+  const ownersOf = (kind: GrantKind) =>
+    contextQuery.data?.kinds.find((candidate) => candidate.kind === kind)?.owners ?? ["instance"];
+  const grantKinds: GrantKind[] = ["agent", "skill", ...furtherKinds];
   const kindAssetQueries = useQueries({
-    queries: furtherKinds.map((kind) => ({
-      queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", kind],
-      queryFn: () => listAll((paging) => client.assets.list({ params: { kind }, query: paging })),
+    queries: grantKinds.map((kind) => ({
+      queryKey: [
+        ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
+        "choice",
+        kind,
+        ...sharedWorkspaceIds
+      ],
+      queryFn: async () => {
+        const owners = ownersOf(kind);
+        const lists = await Promise.all([
+          ...(owners.includes("instance")
+            ? [listAll((paging) => client.assets.list({ params: { kind }, query: paging }))]
+            : []),
+          ...(owners.includes("workspace")
+            ? sharedWorkspaceIds.map((workspaceId) =>
+                listAll((paging) =>
+                  client.assets.list({ params: { kind }, query: { ...paging, workspaceId } })
+                )
+              )
+            : [])
+        ]);
+        return lists.flat();
+      },
+      enabled: contextQuery.data !== undefined,
       retry: false
     }))
   });
   const kindAssets: Partial<Record<GrantKind, GrantChoices>> = Object.fromEntries(
-    furtherKinds.map((kind, index) => {
+    grantKinds.map((kind, index) => {
       const query = kindAssetQueries[index];
+      const loaded =
+        query?.data?.map((asset) => ({
+          id: asset.id,
+          resource: {
+            kind: asset.kind,
+            name: asset.name,
+            assetId: asset.id,
+            ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+          },
+          // The display name, with the id the rows list it by and what it says of itself.
+          name: asset.title,
+          description: asset.description ? `${asset.name} · ${asset.description}` : asset.name
+        })) ?? [];
+      // An asset-only holder need not be a workspace member. Their own grant rows can name
+      // such an asset even when platform.context offers no workspace-wide action there.
+      const heldAssets = (grantsQuery.data ?? []).flatMap((grant) =>
+        grant.holderKind === "user" &&
+        grant.holderId === user.id &&
+        grant.scopeKind === "asset" &&
+        grant.scopeId !== undefined &&
+        grant.scopeAsset?.kind === kind &&
+        grant.scopeAsset.active &&
+        !loaded.some((asset) => asset.id === grant.scopeId)
+          ? [{ id: grant.scopeId, name: grant.scopeAsset.name ?? grant.scopeId }]
+          : []
+      );
       return [
         kind,
         {
-          items: query?.data?.map((asset) => ({
-            id: asset.id,
-            // The display name, with the id the rows list it by and what it says of itself.
-            name: asset.title,
-            description: asset.description ? `${asset.name} · ${asset.description}` : asset.name
-          })),
+          items:
+            query?.data === undefined && grantsQuery.data === undefined
+              ? undefined
+              : [...loaded, ...new Map(heldAssets.map((asset) => [asset.id, asset])).values()],
           failed: Boolean(query?.error)
         }
       ];
@@ -87,10 +140,6 @@ export function AccessPage() {
       listAll((paging) => client.assets.list({ params: { kind: checkedKind }, query: paging })),
     enabled: checkedOtherKind,
     retry: false
-  });
-  const workspacesQuery = useAdministeredCollaborationWorkspacesQuery({
-    ...api,
-    enabled: namesWorkspaces
   });
   const mutations = useAccessMutations(api);
   const overview = overviewQuery.data;
@@ -139,6 +188,7 @@ export function AccessPage() {
         </TabsContent>
         <TabsContent value="grants" className="pt-5">
           <GrantsTab
+            giver={giverQuery.error === null ? giverQuery.data : undefined}
             grants={grantsQuery.data}
             loadFailed={Boolean(grantsQuery.error)}
             onRetry={retry(grantsQuery)}
@@ -150,11 +200,13 @@ export function AccessPage() {
             workspaces={
               namesWorkspaces
                 ? {
-                    items: workspacesQuery.data?.map((workspace) => ({
-                      id: workspace.id,
-                      name: workspace.name
-                    })),
-                    failed: Boolean(workspacesQuery.error)
+                    items: contextQuery.data?.workspaces
+                      .filter((workspace) => workspace.kind === "shared")
+                      .map((workspace) => ({
+                        id: workspace.id,
+                        name: workspace.name
+                      })),
+                    failed: Boolean(contextQuery.error)
                   }
                 : undefined
             }

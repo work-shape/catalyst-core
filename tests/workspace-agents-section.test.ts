@@ -93,7 +93,7 @@ describe("the Agents row the workspace's list of agents names", () => {
   it("names the row with one agent to whoever may write an agent, on the instance or in a Namespace", async () => {
     const t = await ready();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
 
     expect((await listOf(t, t.admin.id)).visibleSections).toEqual(["agents"]);
     expect((await listOf(t, t.kai.id)).visibleSections).toEqual(["agents"]);

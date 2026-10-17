@@ -161,8 +161,9 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   await seedInstanceAssets(root, instance, apiKey, steps);
   await seedNamespaces(root, as, steps);
   await seedAssets(root, as, instance, apiKey, steps);
-  await seedGrants(root, as, userIds, steps);
-  await seedBuilder(root, as, modules, instance.assetsDir, steps);
+  await seedBuilder(root, as, modules, instance.assetsDir, steps, () =>
+    seedGrants(root, as, userIds, steps)
+  );
   await seedHeldCalls(root, as, steps);
   await seedConnections(root, as, userIds, modules, steps);
   const workspaceId = await seedWorkspace(as, steps);
@@ -488,41 +489,40 @@ async function seedGrants(
   for (const grant of grants) {
     const holderId = userIds.get(grant.holder);
     if (!holderId) throw new Error(`The seed has no user for '${grant.holder}'`);
-    let scope:
-      { scopeKind: "namespace"; namespace: string } | { scopeKind: "asset"; scopeId: string };
-    if ("namespace" in grant.scope) {
-      scope = { scopeKind: "namespace", namespace: grant.scope.namespace };
-    } else {
-      const name = grant.scope.asset;
-      const asset = assets.find((entry) => entry.kind === grant.kind && entry.name === name);
-      if (!asset?.id) throw new Error(`The instance has no ${grant.kind} '${name}' to grant on`);
-      scope = { scopeKind: "asset", scopeId: asset.id };
-    }
-    for (const verb of grant.verbs) {
-      total += 1;
-      const action = `${grant.kind}.${verb}`;
-      const there = existing.some(
-        (row) =>
-          row.holderKind === "user" &&
-          row.holderId === holderId &&
-          row.action === action &&
-          row.effect === grant.effect &&
-          row.scopeKind === scope.scopeKind &&
-          (scope.scopeKind === "namespace"
-            ? row.namespace === scope.namespace
-            : row.scopeId === scope.scopeId)
-      );
-      if (there) continue;
-      await (
-        await as(grant.grantedBy)
-      ).grant({
-        holderKind: "user",
-        holderId,
-        action,
-        effect: grant.effect,
-        ...scope
-      });
-      created += 1;
+    // Prefixes select existing assets only; they never create a Namespace grant.
+    const selection = grant.scope;
+    const selected =
+      "prefix" in selection
+        ? assets.filter(
+            (entry) => entry.kind === grant.kind && entry.name.startsWith(selection.prefix)
+          )
+        : [await root.getAsset(grant.kind, selection.asset)].filter((entry) => entry !== undefined);
+    for (const asset of selected) {
+      const scope = { scopeKind: "asset" as const, scopeId: asset.id };
+      for (const verb of grant.verbs) {
+        total += 1;
+        const action = `${grant.kind}.${verb}`;
+        const there = existing.some(
+          (row) =>
+            row.holderKind === "user" &&
+            row.holderId === holderId &&
+            row.action === action &&
+            row.effect === grant.effect &&
+            row.scopeKind === scope.scopeKind &&
+            row.scopeId === scope.scopeId
+        );
+        if (there) continue;
+        await (
+          await as(grant.grantedBy)
+        ).grant({
+          holderKind: "user",
+          holderId,
+          action,
+          effect: grant.effect,
+          ...scope
+        });
+        created += 1;
+      }
     }
   }
   steps.push({ name: "grant rows", created, existing: total - created });

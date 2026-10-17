@@ -81,7 +81,7 @@ describe("the Check tab against real asset calls", () => {
     const t = await setup();
     await t.createNamespace("kai-");
     for (const action of ["agent.read", "agent.write", "agent.delete"]) {
-      await t.grant(t.kai.id, action, { namespace: "kai-" });
+      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
     }
     expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
     expect((await t.putAgent(t.admin.id, "other-helper")).statusCode).toBe(200);
@@ -114,7 +114,7 @@ describe("the Check tab against real asset calls", () => {
     const t = await setup();
     await t.createNamespace("kai-");
     for (const action of ["agent.read", "agent.write", "agent.delete"]) {
-      await t.grant(t.kai.id, action, { namespace: "kai-" });
+      await t.seedHistoricalGrant(t.kai.id, action, { namespace: "kai-" });
     }
     expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);
     await t.grant(
@@ -136,7 +136,7 @@ describe("the Check tab against real asset calls", () => {
   it("agrees for a deny that outlived its asset", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.seedHistoricalGrant(t.kai.id, "agent.write", { namespace: "kai-" });
     expect((await t.putAgent(t.admin.id, "kai-old")).statusCode).toBe(200);
     await t.grant(
       t.kai.id,
@@ -172,8 +172,8 @@ describe("the page's reading of a refused grant", () => {
         holderKind: "user",
         holderId: t.kai.id,
         action: "agent.write",
-        scopeKind: "namespace",
-        namespace: "kai-"
+        scopeKind: "asset",
+        scopeId: await t.assetId("agent", "assistant")
       }
     });
     expect(response.statusCode).toBe(409);
@@ -188,14 +188,14 @@ describe("the page's reading of a refused grant", () => {
   it("tells a row that exists already from every other conflict", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.write", { assetId: await t.assetId("agent", "assistant") });
     const response = await t.call(t.admin.id, "permissions.grant", {
       payload: {
         holderKind: "user",
         holderId: t.kai.id,
         action: "agent.write",
-        scopeKind: "namespace",
-        namespace: "kai-"
+        scopeKind: "asset",
+        scopeId: await t.assetId("agent", "assistant")
       }
     });
     expect(response.statusCode).toBe(409);

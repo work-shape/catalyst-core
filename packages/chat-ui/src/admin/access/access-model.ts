@@ -56,7 +56,8 @@ const GRANT_VERB_RANK: Record<GrantVerb, number> = {
   use: 1,
   write: 2,
   publish: 3,
-  delete: 4
+  delete: 4,
+  read_run_data: 5
 };
 
 function isGrantKind(kind: string): kind is GrantKind {
@@ -101,7 +102,7 @@ export function isConfigAssetGrantKind(
  * first, then one asset, then the whole instance. A Namespace is not among them: it is
  * retired, and its rows are only listed and revoked until it goes.
  */
-const GRANT_SCOPE_KINDS = [
+export const GRANT_SCOPE_KINDS = [
   "workspace",
   "asset",
   "instance"
@@ -126,14 +127,17 @@ export function grantVerbs(kind: GrantKind): GrantVerb[] {
 }
 
 /**
- * The places a grant of the kind can be written at: those every action of the kind has, so
- * the dialog offers no place one of the ticked actions would be refused at. The first is the
+ * The places shared by the selected verbs (every verb of the kind when omitted), so a
+ * request never names a place one of its ticked actions would be refused at. The first is the
  * one the dialog chooses for the kind.
  */
-export function grantScopeKinds(kind: GrantKind): GrantScopeKind[] {
-  const scopes = grantRights(kind).map(
-    (right): readonly string[] => GRANTABLE_ACTION_SCOPES[right.action]
-  );
+export function grantScopeKinds(
+  kind: GrantKind,
+  verbs: readonly GrantVerb[] = grantVerbs(kind)
+): GrantScopeKind[] {
+  const scopes = grantRights(kind)
+    .filter((right) => verbs.includes(right.verb))
+    .map((right): readonly string[] => GRANTABLE_ACTION_SCOPES[right.action]);
   return scopes.length === 0
     ? []
     : GRANT_SCOPE_KINDS.filter((scopeKind) => scopes.every((of) => of.includes(scopeKind)));
@@ -366,7 +370,10 @@ function grantScope(
 
 /** One request per chosen action, in the page's order; nothing while the form is incomplete. */
 export function grantRequests(form: GrantForm): CreatePermissionGrantRequest[] | undefined {
-  if (form.scopeKind === undefined || !grantScopeKinds(form.kind).includes(form.scopeKind)) {
+  if (
+    form.scopeKind === undefined ||
+    !grantScopeKinds(form.kind, form.verbs).includes(form.scopeKind)
+  ) {
     return undefined;
   }
   const scope = grantScope(form);
