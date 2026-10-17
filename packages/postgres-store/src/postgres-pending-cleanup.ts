@@ -126,6 +126,14 @@ export function conversationsPendingCleanup(input: {
       and acp.source_kind = 'conversation'
       and ${notActive}
     union
+    select c.id, c.deleted_at
+    from operation_runs opr
+    join conversations c
+      on c.id = opr.conversation_id
+     and c.client_instance_id = opr.client_instance_id
+    where opr.client_instance_id = ${input.clientInstanceId}
+      and ${notActive}
+    union
     -- A Try conversation's link outlives its deletion until its cleanup is through, and a
     -- Build conversation's cleanup deletes its Try conversations.
     select c.id, c.deleted_at

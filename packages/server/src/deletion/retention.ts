@@ -129,17 +129,12 @@ export class ConversationRetentionWorkflow {
   }
 
   /**
-   * Finishes the cleanup of Conversations that are deleted or expired and still hold files,
-   * artifacts, preview state or Pages, because an earlier cleanup failed or the process stopped.
+   * Finishes the cleanup of Conversations that are deleted or expired and still hold data,
+   * because an earlier cleanup failed or the process stopped. Database cleanup also runs on
+   * instances without object storage.
    * Safe to repeat.
    */
   async cleanUpPendingConversations(): Promise<ConversationCleanupRetrySummary> {
-    // Without an attachment service and without the store of Pages nothing here can remove
-    // stored objects. Either one is enough: the Pages of a Conversation are removed by the
-    // retry whether or not the instance keeps attachments.
-    if (!this.options.attachments && !this.options.pages) {
-      return { completedCount: 0, cleanupPendingCount: 0 };
-    }
     return retryPendingConversationCleanup(this.options, {
       limit: this.batchSize,
       deletedAt: this.now().toISOString()
