@@ -69,6 +69,8 @@ export const tools = defineTranslations({
     toolDecisionReason: "Reason",
     toolDecisionReasonHint: "The agent reads it.",
     toolDecisionWaiting: "Runs only when you allow it.",
+    toolDecisionInInbox: "Waits for you in your Inbox. Only you can answer it, and only there.",
+    toolDecisionOpenInInbox: "Open in Inbox",
     toolDetails: "Technical details",
     toolFailed: "Failed",
     toolInput: "Input",
@@ -155,6 +157,9 @@ export const tools = defineTranslations({
     toolDecisionReason: "Grund",
     toolDecisionReasonHint: "Der Agent liest ihn.",
     toolDecisionWaiting: "Läuft erst, wenn du es erlaubst.",
+    toolDecisionInInbox:
+      "Wartet in deinem Eingang auf dich. Nur du kannst antworten, und nur dort.",
+    toolDecisionOpenInInbox: "Im Eingang öffnen",
     toolDetails: "Technische Details",
     toolFailed: "Fehlgeschlagen",
     toolInput: "Eingabe",

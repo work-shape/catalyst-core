@@ -41,6 +41,20 @@ export function operationCallOutcome(request: {
   return request.status === "approved" ? { outcome: "done" } : undefined;
 }
 
+/**
+ * Whether a request is the confirmation of the person a call acts for, addressed to them alone
+ * (OP-4b): only they see it, and they answer it with Allow or Deny.
+ */
+export function isInboxConfirmation(request: {
+  addresseeUserId?: string;
+  preview?: unknown;
+}): boolean {
+  return (
+    request.addresseeUserId !== undefined ||
+    (isRecord(request.preview) && request.preview.mode === "confirmation")
+  );
+}
+
 /** The whole input of a held call as the request keeps it, as text. Nothing once it is removed. */
 export function operationCallFullInput(payload: unknown): string | undefined {
   if (!isRecord(payload) || payload.inputRemoved === true || !("input" in payload)) {
@@ -135,6 +149,11 @@ export interface OperationCallPreview {
    * Connection operation it stands for asks. No setting of the instance lowers it.
    */
   heldByFloor: boolean;
+  /**
+   * The call waits for the confirmation of the person it acts for, who was not present, in
+   * their Inbox (OP-4b). Without it, the call waits for another person's approval.
+   */
+  confirmation?: true;
 }
 
 /**
@@ -177,6 +196,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
     inputRemoved: preview.inputRemoved === true,
     heldByRule: standingRules.includes(readText(preview.heldBy) ?? ""),
     heldByFloor: preview.heldBy === "policy_floor",
+    ...(preview.mode === "confirmation" ? { confirmation: true as const } : {}),
     ...(asset ? { asset } : {}),
     ...(review ? { review } : {}),
     ...(workspaceId ? { workspaceId } : {}),

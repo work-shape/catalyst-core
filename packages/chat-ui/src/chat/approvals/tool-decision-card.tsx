@@ -1,3 +1,4 @@
+import { Inbox } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import {
   Banner,
@@ -13,6 +14,8 @@ import {
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import { workspaceRoutePath } from "../../shared/routes";
+import { useApprovalRevisionHost } from "./approval-revision-host";
 import { ApprovalRequestCard } from "./approval-request-card";
 import { formatApprovalDate } from "./approval-request-model";
 import { CallInputs } from "./operation-call-body";
@@ -73,8 +76,83 @@ function ToolConfirmation({
   toolName: string;
 }) {
   const answer = useToolDecisionDecide(decision.operationRunId);
+  const host = useApprovalRevisionHost();
+  // A confirmation that waits in the person's Inbox names its item there (OP-4b). Until the
+  // call's run says where it waits, the buttons are held.
+  const run = useWaitingOperationRunQuery(decision.operationRunId);
+  const inboxItemId = run.data?.approvalRequestId;
+  if (inboxItemId) {
+    return (
+      <ToolInboxWaitView
+        decision={decision}
+        title={title}
+        inboxItemId={inboxItemId}
+        onOpenInboxItem={host?.openInboxItem}
+      />
+    );
+  }
   return (
-    <ToolDecisionCardView decision={decision} title={title} toolName={toolName} answer={answer} />
+    <ToolDecisionCardView
+      decision={decision}
+      title={title}
+      toolName={toolName}
+      answer={run.isPending ? { ...answer, pending: true } : answer}
+    />
+  );
+}
+
+/**
+ * A confirmation of a run nobody watched, which waits in its person's Inbox: the conversation
+ * shows that it waits and leads to the item, the only place to answer it (OP-4b).
+ */
+export function ToolInboxWaitView({
+  decision,
+  title,
+  inboxItemId,
+  onOpenInboxItem
+}: {
+  decision: Pick<ToolDecision, "expiresAt">;
+  title: string;
+  inboxItemId: string;
+  /** Opens the item in this tab; without it the link loads its address. */
+  onOpenInboxItem?(itemId: string): void;
+}) {
+  const { locale, t } = useTranslation();
+  return (
+    <Card
+      className="grid min-w-0 gap-2 px-4 py-3 text-body"
+      role="group"
+      aria-label={t("toolDecisionLabel", { title })}
+      data-testid="tool-decision-card"
+      data-mode="inbox"
+    >
+      <div className="grid min-w-0 gap-0.5">
+        <p className="font-medium text-foreground wrap-anywhere">{title}</p>
+        <p className="text-caption text-muted-foreground">{t("toolDecisionInInbox")}</p>
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Button asChild size="sm" variant="outline">
+          <a
+            href={workspaceRoutePath({ kind: "inbox-item", itemId: inboxItemId })}
+            data-testid="tool-decision-inbox-link"
+            onClick={(event) => {
+              if (!onOpenInboxItem || event.metaKey || event.ctrlKey || event.shiftKey) return;
+              event.preventDefault();
+              onOpenInboxItem(inboxItemId);
+            }}
+          >
+            <Inbox aria-hidden="true" />
+            {t("toolDecisionOpenInInbox")}
+          </a>
+        </Button>
+        <span
+          className="ml-auto text-caption text-muted-foreground"
+          data-testid="tool-decision-expires"
+        >
+          {t("toolDecisionExpires", { date: formatApprovalDate(decision.expiresAt, locale) })}
+        </span>
+      </div>
+    </Card>
   );
 }
 

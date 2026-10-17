@@ -29,14 +29,16 @@ import {
 } from "../approvals/approval-request-model";
 import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
 import { ApprovalStatusBadge } from "../approvals/approval-status-badge";
+import { isInboxConfirmation } from "../approvals/operation-call-preview";
 import { useAttachmentContentContext } from "../files/attachment-content";
 import { useTranslation } from "../../shared/i18n";
 import { INBOX_REFETCH_MS } from "./inbox-api";
 import { useInboxItemActions, type InboxItemActions } from "./inbox-item-actions";
 import {
-  defaultInboxDecisions,
+  inboxDecisionsOf,
   useInboxItemKindLookup,
   type InboxDecision,
+  type InboxDecisionEntries,
   type InboxItemKind
 } from "./inbox-item-kinds";
 
@@ -104,7 +106,11 @@ export function InboxItemView({
   const kind = kindOf(item.kind);
   const KindIcon = kind?.itemIcon?.(item) ?? kind?.icon ?? CircleHelp;
   const agentName = item.origin?.agentName;
+  const agentLabel = agentName ? (host?.agentDisplayName(agentName) ?? agentName) : undefined;
   const checks = visibleApprovalChecks(item.checks);
+  const date = formatApprovalDate(item.createdAt, locale);
+  // A kind that says who asked on the reader's behalf says it in its own words.
+  const asked = kind?.asked?.(item, t, agentLabel);
 
   return (
     <article className="grid min-w-0 gap-4 text-body" data-testid="inbox-item">
@@ -114,16 +120,21 @@ export function InboxItemView({
           <h3 className="min-w-0 flex-1 text-heading break-words">
             {kind?.heading?.(item, t) ?? (item.summary.trim() || t("approvalFallbackTitle"))}
           </h3>
-          <ApprovalStatusBadge status={item.status} applyResult={item.applyResult} />
+          <ApprovalStatusBadge
+            status={item.status}
+            applyResult={item.applyResult}
+            confirmation={isInboxConfirmation(item)}
+          />
         </div>
-        <p className="text-caption text-muted-foreground">
-          {t("approvalRequestedBy", {
-            name: item.requestedBy.displayLabel,
-            date: formatApprovalDate(item.createdAt, locale)
-          })}
-          {agentName
-            ? ` · ${t("inbox.via", { agent: host?.agentDisplayName(agentName) ?? agentName })}`
-            : null}
+        <p className="text-caption text-muted-foreground" data-testid="inbox-item-asked">
+          {asked ? (
+            t("inbox.askedAt", { asked, date })
+          ) : (
+            <>
+              {t("approvalRequestedBy", { name: item.requestedBy.displayLabel, date })}
+              {agentLabel ? ` · ${t("inbox.via", { agent: agentLabel })}` : null}
+            </>
+          )}
         </p>
       </header>
 
@@ -248,7 +259,7 @@ function InboxItemFoot({
           <KindFoot item={item} actions={actions} />
         ) : (
           <InboxDecisionForm
-            decisions={kind?.decisions ?? defaultInboxDecisions}
+            decisions={inboxDecisionsOf(kind, item)}
             actions={actions}
             comment={comment}
             onCommentChange={onCommentChange}
@@ -323,7 +334,7 @@ function InboxDecisionForm({
   comment,
   onCommentChange
 }: {
-  decisions: NonNullable<InboxItemKind["decisions"]>;
+  decisions: InboxDecisionEntries;
   actions: InboxItemActions;
   comment: string;
   onCommentChange(comment: string): void;

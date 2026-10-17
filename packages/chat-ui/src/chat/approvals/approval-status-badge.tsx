@@ -17,16 +17,19 @@ const BADGE_LOOK = {
 export function ApprovalStatusBadge({
   status,
   applyResult,
-  size
+  size,
+  confirmation
 }: {
   status: string;
   /** What the request recorded. A change that ran after the decision says here how it went. */
   applyResult?: unknown;
   size?: BadgeProps["size"];
+  /** The request is a person's own confirmation in their Inbox: it is allowed or denied. */
+  confirmation?: boolean;
 }) {
   const { t } = useTranslation();
   const execution = readApprovalExecution(applyResult);
-  const presentation = approvalStatusPresentation(status, execution);
+  const presentation = approvalStatusPresentation(status, execution, confirmation);
   return (
     <Badge
       {...BADGE_LOOK[presentation.tone]}

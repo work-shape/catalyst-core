@@ -152,6 +152,8 @@ To decide and Decided need a right to decide, such as `agent_skills.approve` for
 
 Opening a row shows the request beside the list at `/inbox/<id>`. A decision is made there or on the card in the conversation; both read and change the same Approval Request. Who may decide is answered by the server for each request.
 
+A **confirmation** is a request addressed to one person: the call of an agent run nobody watched, or `catalyst app publish --yes` and `catalyst workflow publish --yes`, waits in the Inbox of the person it acts for. The item says who asks on their behalf, shows the frozen call or the publish review, says "The run waits until you decide" or "Nothing is published until you decide", and offers **Allow** and **Deny**. Deny needs no reason; a reason that was given reaches the agent. Only that person sees, counts and decides it: to anyone else, an instance admin and a holder of `operations.approve` included, it does not exist. It is answered only in the Inbox. The conversation of the run shows that it waits there, with a link to the item. After 7 days without an answer it expires and nothing runs; Stop on the run withdraws it.
+
 The lists and the open request ask for their state every 60 seconds. When two people decide the same request, the first decision stands. The second person is told who decided, and a comment they had written stays on the page.
 
 ## Deletion

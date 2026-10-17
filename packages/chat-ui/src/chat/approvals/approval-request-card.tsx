@@ -29,6 +29,7 @@ import {
   visibleApprovalChecks
 } from "./approval-request-model";
 import { ApprovalStatusBadge } from "./approval-status-badge";
+import { isInboxConfirmation } from "./operation-call-preview";
 
 /**
  * Card for the thread: fetches the request's live state by id and stays compact. The proposal
@@ -114,7 +115,11 @@ export function ApprovalRequestCardView({
           ) : null}
         </div>
         <ApprovalCheckIndicator checks={visibleApprovalChecks(request.checks)} />
-        <ApprovalStatusBadge status={request.status} applyResult={request.applyResult} />
+        <ApprovalStatusBadge
+          status={request.status}
+          applyResult={request.applyResult}
+          confirmation={isInboxConfirmation(request)}
+        />
         {hasActions ? null : detailsButton}
       </div>
       {hasActions ? (

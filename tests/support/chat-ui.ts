@@ -230,6 +230,7 @@ export {
   inboxItemKinds,
   InboxItemKindsProvider,
   inboxItemSurface,
+  InboxItemPanel,
   InboxItemView,
   InboxList,
   inboxListOutdatesItem,
@@ -240,6 +241,7 @@ export {
   inboxTabs,
   orderInboxItems
 } from "../../packages/chat-ui/src/chat/inbox";
+export { WorkspaceDraftsProvider } from "../../packages/chat-ui/src/chat/workspace/workspace-drafts";
 export {
   MarkdownArtifact,
   MarkdownLinkPolicyProvider

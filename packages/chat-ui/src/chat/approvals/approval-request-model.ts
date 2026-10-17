@@ -75,13 +75,39 @@ export function readApprovalExecution(applyResult: unknown): ApprovalExecution |
 
 export function approvalStatusPresentation(
   status: string,
-  execution?: ApprovalExecution
+  execution?: ApprovalExecution,
+  /** The request is a person's own confirmation in their Inbox (OP-4b): Allow and Deny. */
+  confirmation = false
 ): ApprovalStatusPresentation {
+  if (confirmation) {
+    const own = CONFIRMATION_STATUS_PRESENTATION[status];
+    if (own) return own;
+    if (execution && status !== "pending") return CONFIRMATION_EXECUTION_PRESENTATION[execution];
+    if (status === "approved") return CONFIRMATION_EXECUTION_PRESENTATION.done;
+  }
   if (execution && status !== "pending") {
     return EXECUTION_PRESENTATION[execution];
   }
   return STATUS_PRESENTATION[status] ?? { labelKey: "approvalStatusUnknown", tone: "neutral" };
 }
+
+/**
+ * A confirmation in the Inbox in its own words: it waits for the reader, who allows or denies
+ * it. Stop withdraws it; what the run recorded then says only that nothing ran.
+ */
+const CONFIRMATION_STATUS_PRESENTATION: Record<string, ApprovalStatusPresentation> = {
+  pending: { labelKey: "approvalStatusConfirmationPending", tone: "pending" },
+  rejected: { labelKey: "approvalStatusDenied", tone: "negative" },
+  withdrawn: { labelKey: "approvalStatusWithdrawn", tone: "neutral" }
+};
+
+const CONFIRMATION_EXECUTION_PRESENTATION: Record<ApprovalExecution, ApprovalStatusPresentation> = {
+  ...EXECUTION_PRESENTATION,
+  queued: { labelKey: "approvalStatusAllowedRunning", tone: "pending" },
+  done: { labelKey: "approvalStatusAllowed", tone: "positive" },
+  failed: { labelKey: "approvalStatusAllowedFailed", tone: "negative" },
+  interrupted: { labelKey: "approvalStatusAllowedInterrupted", tone: "negative" }
+};
 
 /** Passed checks stay silent; only warnings and blocks reach the card. */
 export function visibleApprovalChecks(

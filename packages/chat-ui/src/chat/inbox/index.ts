@@ -11,7 +11,7 @@ export {
   type InboxDecision,
   type InboxItemKind
 } from "./inbox-item-kinds";
-export { InboxItemView } from "./inbox-item-panel";
+export { InboxItemPanel, InboxItemView } from "./inbox-item-panel";
 export { inboxItemSurface } from "./inbox-item-surface";
 export { InboxList } from "./inbox-list";
 export {

@@ -23,6 +23,8 @@ export interface ApprovalRevisionHost {
   agentDisplayName(agentName: string): string | undefined;
   /** Opens a conversation of the person's own, such as the one a request of theirs came from. */
   openConversation(conversationId: string): void;
+  /** Opens an item of the person's Inbox, such as a confirmation that waits for them there. */
+  openInboxItem?(itemId: string): void;
 }
 
 export interface ApprovalRevisionStart {

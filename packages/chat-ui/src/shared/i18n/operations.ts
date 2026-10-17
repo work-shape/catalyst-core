@@ -182,7 +182,37 @@ export const operations = defineTranslations({
     "operations.callOutcomeReason": "Reason: {reason}",
     "operations.callExpires": "Expires",
     "operations.callExpiresHint": "After that the call expires and does not run.",
-    "operations.callUnreadable": "The details of this call cannot be shown."
+    "operations.callUnreadable": "The details of this call cannot be shown.",
+    "operations.confirmAllow": "Allow",
+    "operations.confirmDeny": "Deny",
+    "operations.confirmHeadlineAgentChanging": "{agent} wants to run a changing action for you.",
+    "operations.confirmHeadlineAgentReading": "{agent} wants to run a reading action for you.",
+    "operations.confirmHeadlineCliChanging":
+      "A call from your command line wants to run a changing action as you.",
+    "operations.confirmHeadlineCliReading":
+      "A call from your command line wants to run a reading action as you.",
+    "operations.confirmPublishHeadline":
+      "From your command line, you asked to publish a new version of {kind} “{title}”.",
+    "operations.confirmWaitsRun": "The run waits until you decide.",
+    "operations.confirmWaitsPublish": "Nothing is published until you decide.",
+    "operations.confirmWaitsCall": "Nothing runs until you decide.",
+    "operations.confirmEffectAgent":
+      "If you allow it, it runs once as you. If you deny it, nothing runs and the agent is told.",
+    "operations.confirmEffectCall":
+      "If you allow it, it runs once as you. If you deny it, nothing runs.",
+    "operations.confirmPublishEffect":
+      "Allow counts as your own click on Publish: where publishing needs an approval, Allow asks for it. Deny publishes nothing.",
+    "operations.confirmOnlyYou":
+      "Only you can decide this. It is in nobody else's Inbox, an admin's included.",
+    "operations.confirmOutcomeDone": "Allowed. The call ran once.",
+    "operations.confirmOutcomeQueued": "Allowed. The call is running.",
+    "operations.confirmOutcomeFailed": "Allowed, but the call failed. It is not run again.",
+    "operations.confirmOutcomeInterrupted":
+      "Allowed, but the call was interrupted while it ran. Whether it changed something is not known. It is not run again.",
+    "operations.confirmOutcomeDenied": "Denied. Nothing ran.",
+    "operations.confirmOutcomeExpired": "Expired after 7 days without your answer. Nothing ran.",
+    "operations.confirmOutcomeWithdrawn":
+      "Withdrawn: the run was stopped before you decided. Nothing ran."
   },
   de: {
     "operations.title": "Operationen",
@@ -367,6 +397,40 @@ export const operations = defineTranslations({
     "operations.callOutcomeReason": "Grund: {reason}",
     "operations.callExpires": "Läuft ab",
     "operations.callExpiresHint": "Danach verfällt der Aufruf und läuft nicht.",
-    "operations.callUnreadable": "Die Details dieses Aufrufs können nicht angezeigt werden."
+    "operations.callUnreadable": "Die Details dieses Aufrufs können nicht angezeigt werden.",
+    "operations.confirmAllow": "Erlauben",
+    "operations.confirmDeny": "Verweigern",
+    "operations.confirmHeadlineAgentChanging":
+      "{agent} möchte für dich eine ändernde Aktion ausführen.",
+    "operations.confirmHeadlineAgentReading":
+      "{agent} möchte für dich eine lesende Aktion ausführen.",
+    "operations.confirmHeadlineCliChanging":
+      "Ein Aufruf von deiner Kommandozeile möchte als du eine ändernde Aktion ausführen.",
+    "operations.confirmHeadlineCliReading":
+      "Ein Aufruf von deiner Kommandozeile möchte als du eine lesende Aktion ausführen.",
+    "operations.confirmPublishHeadline":
+      "Du hast über die Kommandozeile angefragt, eine neue Version {kind} „{title}“ zu veröffentlichen.",
+    "operations.confirmWaitsRun": "Der Lauf wartet, bis du entscheidest.",
+    "operations.confirmWaitsPublish": "Nichts wird veröffentlicht, bis du entscheidest.",
+    "operations.confirmWaitsCall": "Nichts läuft, bis du entscheidest.",
+    "operations.confirmEffectAgent":
+      "Wenn du es erlaubst, läuft es einmal als du. Wenn du es verweigerst, läuft nichts, und der Agent erfährt es.",
+    "operations.confirmEffectCall":
+      "Wenn du es erlaubst, läuft es einmal als du. Wenn du es verweigerst, läuft nichts.",
+    "operations.confirmPublishEffect":
+      "Erlauben zählt wie dein eigener Klick auf Veröffentlichen: Braucht die Veröffentlichung eine Freigabe, fragt Erlauben sie an. Verweigern veröffentlicht nichts.",
+    "operations.confirmOnlyYou":
+      "Nur du kannst das entscheiden. Es liegt in keinem anderen Eingang, auch nicht bei Admins.",
+    "operations.confirmOutcomeDone": "Erlaubt. Der Aufruf lief einmal.",
+    "operations.confirmOutcomeQueued": "Erlaubt. Der Aufruf läuft.",
+    "operations.confirmOutcomeFailed":
+      "Erlaubt, aber der Aufruf ist fehlgeschlagen. Er wird nicht erneut ausgeführt.",
+    "operations.confirmOutcomeInterrupted":
+      "Erlaubt, aber der Aufruf wurde während der Ausführung unterbrochen. Ob er etwas geändert hat, ist nicht bekannt. Er wird nicht erneut ausgeführt.",
+    "operations.confirmOutcomeDenied": "Verweigert. Nichts wurde ausgeführt.",
+    "operations.confirmOutcomeExpired":
+      "Nach 7 Tagen ohne deine Antwort abgelaufen. Nichts wurde ausgeführt.",
+    "operations.confirmOutcomeWithdrawn":
+      "Zurückgezogen: Der Lauf wurde gestoppt, bevor du entschieden hast. Nichts wurde ausgeführt."
   }
 });

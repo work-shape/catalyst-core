@@ -1,9 +1,18 @@
-import { BookOpen, FileText, LayoutGrid, Workflow, Zap, type LucideIcon } from "lucide-react";
+import {
+  BookOpen,
+  FileText,
+  LayoutGrid,
+  UserCheck,
+  Workflow,
+  Zap,
+  type LucideIcon
+} from "lucide-react";
 import { createContext, createElement, useContext, type ComponentType } from "react";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
 import { OperationCallBody } from "../approvals/operation-call-body";
 import {
   SKILL_ASSET_KIND,
+  isInboxConfirmation,
   operationCallOutcome,
   parseOperationCallPreview,
   type OperationCallAsset
@@ -17,6 +26,12 @@ export type Translate = TranslationContextValue["t"];
 
 /** One of the three answers the frame's foot can give. */
 export type InboxDecision = "approve" | "reject" | "request_changes";
+
+/** The answers the foot offers, with a kind's own words, in the order they stand. */
+export type InboxDecisionEntries = readonly {
+  decision: InboxDecision;
+  label: TranslationKey;
+}[];
 
 /**
  * What the client knows about one kind of Inbox item. The frame (the lists, the item panel, the
@@ -39,6 +54,15 @@ export interface InboxItemKind {
    * the request was filed with.
    */
   heading?(item: ApprovalRequestView, t: Translate): string | undefined;
+  /**
+   * Who asked, where it is not the person who filed the request: a confirmation is filed for
+   * its own reader, by an agent or a command line on their behalf.
+   */
+  asked?(
+    item: ApprovalRequestView,
+    t: Translate,
+    agentLabel: string | undefined
+  ): string | undefined;
   /** What the row says after who asked, such as the Namespace of what is asked. */
   rowDetail?(item: ApprovalRequestView, t: Translate): string | undefined;
   /**
@@ -46,21 +70,30 @@ export interface InboxItemKind {
    * server recorded on the request.
    */
   Body: ComponentType<{ item: ApprovalRequestView }>;
-  /** Which of the three decisions the foot offers, with the kind's own words. Default: all three. */
-  decisions?: readonly {
-    decision: InboxDecision;
-    label: TranslationKey;
-  }[];
+  /**
+   * Which of the three decisions the foot offers, with the kind's own words, for every item of
+   * the kind or by the item. Default: all three.
+   */
+  decisions?: InboxDecisionEntries | ((item: ApprovalRequestView) => InboxDecisionEntries);
   /** Replaces the foot for a kind whose answers are not these three. */
   Foot?: ComponentType<{ item: ApprovalRequestView; actions: InboxItemActions }>;
 }
 
 /** The three decisions in the frame's own words, for a kind that names none. */
-export const defaultInboxDecisions: NonNullable<InboxItemKind["decisions"]> = [
+const defaultInboxDecisions: InboxDecisionEntries = [
   { decision: "reject", label: "approvalReject" },
   { decision: "request_changes", label: "approvalRequestChanges" },
   { decision: "approve", label: "approvalAccept" }
 ];
+
+/** The decisions a kind offers on one item. */
+export function inboxDecisionsOf(
+  kind: InboxItemKind | undefined,
+  item: ApprovalRequestView
+): InboxDecisionEntries {
+  const decisions = kind?.decisions ?? defaultInboxDecisions;
+  return typeof decisions === "function" ? decisions(item) : decisions;
+}
 
 const skillChange: InboxItemKind = {
   kind: "skill_change",
@@ -96,21 +129,59 @@ function savedSkillTitle(skill: OperationCallAsset, t: Translate): string {
 }
 
 /**
+ * A confirmation in its person's Inbox: "Confirm publishing “X”" for a publish, otherwise
+ * "Confirm an action".
+ */
+function confirmationHeading(item: ApprovalRequestView, t: Translate): string {
+  const review = parseOperationCallPreview(item.preview)?.review;
+  return review
+    ? t("inbox.confirmationPublishHeading", { title: review.title })
+    : t("inbox.confirmationHeading");
+}
+
+/** A confirmation is answered with Allow or Deny; nobody edits the call in the Inbox (OP-4b). */
+const confirmationDecisions: InboxDecisionEntries = [
+  { decision: "reject", label: "operations.confirmDeny" },
+  { decision: "approve", label: "operations.confirmAllow" }
+];
+
+const approvalDecisions: InboxDecisionEntries = [
+  { decision: "reject", label: "operations.callDecline" },
+  { decision: "approve", label: "operations.callApprove" }
+];
+
+/**
  * An operation call that waits for another person's approval. A call that saves a skill is
  * named as that skill, new or changed; every other call is an action to approve. The approver
  * cannot edit the call, so there is no request for changes: it runs as it is, or it does not
  * run.
+ *
+ * A call in mode `confirmation` waits instead for the person it acts for, who was not present:
+ * an agent run nobody watches, or `catalyst <kind> publish --yes`. It is addressed to them
+ * alone, says who asks on their behalf, and is answered with Allow or Deny (OP-4b).
  */
 const operationCall: InboxItemKind = {
   kind: "operation_call",
   label: "inbox.kindOperationCall",
   icon: Zap,
-  itemIcon: (item) => (savedSkill(item) ? BookOpen : undefined),
+  itemIcon: (item) =>
+    isInboxConfirmation(item) ? UserCheck : savedSkill(item) ? BookOpen : undefined,
   title(item, t) {
+    if (isInboxConfirmation(item)) return confirmationHeading(item, t);
     const skill = savedSkill(item);
     return skill ? savedSkillTitle(skill, t) : undefined;
   },
+  asked(item, t, agentLabel) {
+    if (!isInboxConfirmation(item)) return undefined;
+    return agentLabel
+      ? t("inbox.confirmationAskedByAgent", { agent: agentLabel })
+      : t("inbox.confirmationAskedByCli");
+  },
   subject(item, t) {
+    if (isInboxConfirmation(item)) {
+      const call = parseOperationCallPreview(item.preview);
+      return call?.review?.title ?? call?.operation;
+    }
     const skill = savedSkill(item);
     if (skill) {
       return skill.title;
@@ -121,6 +192,7 @@ const operationCall: InboxItemKind = {
       : undefined;
   },
   heading(item, t) {
+    if (isInboxConfirmation(item)) return confirmationHeading(item, t);
     const skill = savedSkill(item);
     if (skill) {
       return `${savedSkillTitle(skill, t)}: ${skill.title}`;
@@ -129,13 +201,11 @@ const operationCall: InboxItemKind = {
   },
   rowDetail(item) {
     const call = parseOperationCallPreview(item.preview);
+    if (isInboxConfirmation(item)) return call?.review?.title ?? call?.operation;
     return call?.asset ? call.asset.namespace : call?.operation;
   },
   Body: ({ item }) => createElement(OperationCallBody, { request: item }),
-  decisions: [
-    { decision: "reject", label: "operations.callDecline" },
-    { decision: "approve", label: "operations.callApprove" }
-  ]
+  decisions: (item) => (isInboxConfirmation(item) ? confirmationDecisions : approvalDecisions)
 };
 
 /**
@@ -151,6 +221,7 @@ function publishKind(kind: string, label: TranslationKey, icon: LucideIcon): Inb
     icon,
     itemIcon: () => undefined,
     title: () => undefined,
+    asked: () => undefined,
     subject(item) {
       return parseOperationCallPreview(item.preview)?.review?.title;
     },

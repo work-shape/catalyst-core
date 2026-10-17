@@ -12,9 +12,11 @@ import {
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { operationOriginLabelKeys } from "../../shared/operations-model";
 import { formatApprovalDate } from "./approval-request-model";
+import { ConfirmationLead } from "./confirmation-lead";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import {
   SKILL_ASSET_KIND,
+  isInboxConfirmation,
   operationCallFullInput,
   operationCallOutcome,
   parseOperationCallPreview,
@@ -26,10 +28,9 @@ import { PublishReviewBody } from "./publish-review";
 import { SkillChangeBody } from "./skill-change-body";
 import { parseSkillChangePreview } from "./skill-change-preview";
 
-const OUTCOME: Record<
-  OperationCallOutcome,
-  { label: TranslationKey; tone: "info" | "success" | "danger" | "warning" }
-> = {
+type OutcomeTone = "info" | "success" | "danger" | "warning";
+
+const OUTCOME: Record<OperationCallOutcome, { label: TranslationKey; tone: OutcomeTone }> = {
   queued: { label: "operations.callOutcomeQueued", tone: "info" },
   done: { label: "operations.callOutcomeDone", tone: "success" },
   failed: { label: "operations.callOutcomeFailed", tone: "danger" },
@@ -38,6 +39,47 @@ const OUTCOME: Record<
   expired: { label: "operations.callOutcomeExpired", tone: "warning" },
   held: { label: "operations.callOutcomeHeld", tone: "info" }
 };
+
+/** What became of a call its person allowed in their Inbox, in the words of Allow. */
+const CONFIRMATION_OUTCOME: Record<
+  OperationCallOutcome,
+  { label: TranslationKey; tone: OutcomeTone }
+> = {
+  ...OUTCOME,
+  queued: { label: "operations.confirmOutcomeQueued", tone: "info" },
+  done: { label: "operations.confirmOutcomeDone", tone: "success" },
+  failed: { label: "operations.confirmOutcomeFailed", tone: "danger" },
+  interrupted: { label: "operations.confirmOutcomeInterrupted", tone: "danger" },
+  expired: { label: "operations.confirmOutcomeExpired", tone: "warning" }
+};
+
+interface ShownOutcome {
+  outcome: string;
+  label: TranslationKey;
+  tone: OutcomeTone;
+  reason?: string;
+}
+
+/**
+ * What the item says became of a call once its request ended. A confirmation also says that it
+ * was denied, and that Stop withdrew it before anyone decided; the reason a person gave for a
+ * denial stands under the decision.
+ */
+function shownOutcome(
+  request: Pick<ApprovalRequestView, "status" | "applyResult">,
+  confirmation: boolean
+): ShownOutcome | undefined {
+  if (confirmation && request.status === "rejected") {
+    return { outcome: "denied", label: "operations.confirmOutcomeDenied", tone: "info" };
+  }
+  if (confirmation && request.status === "withdrawn") {
+    return { outcome: "withdrawn", label: "operations.confirmOutcomeWithdrawn", tone: "info" };
+  }
+  const ended = operationCallOutcome(request);
+  if (!ended) return undefined;
+  const words = (confirmation ? CONFIRMATION_OUTCOME : OUTCOME)[ended.outcome];
+  return { outcome: ended.outcome, ...words, ...(ended.reason ? { reason: ended.reason } : {}) };
+}
 
 /** How a sentence names the kind of an asset. A kind without words of its own is "the asset". */
 const ASSET_KIND_PHRASE: Record<string, TranslationKey> = {
@@ -74,7 +116,10 @@ function effectKey(asset: OperationCallAsset | undefined): TranslationKey {
 export function OperationCallBody({
   request
 }: {
-  request: Pick<ApprovalRequestView, "preview" | "status" | "applyResult" | "payload">;
+  request: Pick<
+    ApprovalRequestView,
+    "preview" | "status" | "applyResult" | "payload" | "addresseeUserId"
+  >;
 }) {
   const { t } = useTranslation();
   const call = parseOperationCallPreview(request.preview);
@@ -87,7 +132,9 @@ export function OperationCallBody({
   }
 
   const pending = request.status === "pending";
-  const outcome = pending ? undefined : operationCallOutcome(request);
+  // A person's own confirmation, which only they see: it leads with who asks for them.
+  const confirmation = isInboxConfirmation(request);
+  const outcome = pending ? undefined : shownOutcome(request, confirmation);
   const { asset } = call;
   const actor = call.actor.label;
   // The skill's own view needs a text the server could read; without one the input shows.
@@ -99,9 +146,10 @@ export function OperationCallBody({
 
   return (
     <div className="grid min-w-0 gap-4" data-testid="operation-call" data-run-id={call.runId}>
+      {confirmation && pending ? <ConfirmationLead call={call} /> : null}
       {review ? (
-        <PublishReviewBody actor={actor} review={review} />
-      ) : pending ? (
+        <PublishReviewBody actor={actor} review={review} headline={!confirmation} />
+      ) : confirmation ? null : pending ? (
         <div className="grid min-w-0 gap-1.5">
           <p className="font-medium text-foreground" data-testid="operation-call-headline">
             {asset
@@ -134,11 +182,11 @@ export function OperationCallBody({
       ) : null}
       {outcome ? (
         <Banner
-          tone={OUTCOME[outcome.outcome].tone}
+          tone={outcome.tone}
           data-testid="operation-call-outcome"
           data-outcome={outcome.outcome}
         >
-          {t(OUTCOME[outcome.outcome].label)}
+          {t(outcome.label)}
           {outcome.reason ? (
             <span className="block text-caption">
               {t("operations.callOutcomeReason", { reason: outcome.reason })}
@@ -154,7 +202,7 @@ export function OperationCallBody({
             <KeyValue label={t("operations.operation")} data-field="operation">
               <span className="font-mono text-code wrap-anywhere">{call.operation}</span>
             </KeyValue>
-            {pending ? null : (
+            {pending || confirmation ? null : (
               <KeyValue label={t("operations.callCalledBy")} data-field="actor">
                 {actor}
               </KeyValue>

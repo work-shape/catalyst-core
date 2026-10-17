@@ -10,6 +10,7 @@ import {
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import { ApprovalStatusBadge } from "../approvals/approval-status-badge";
+import { isInboxConfirmation } from "../approvals/operation-call-preview";
 import { useTranslation } from "../../shared/i18n";
 import { useInboxItemKindLookup } from "./inbox-item-kinds";
 import { formatInboxAge, inboxTabEmptyKeys, type InboxTab } from "./inbox-model";
@@ -67,9 +68,10 @@ export function InboxList({
         const KindIcon = kind?.itemIcon?.(item) ?? kind?.icon ?? CircleHelp;
         const agentName = item.origin?.agentName;
         const requester = item.requestedBy.displayLabel;
-        const asked = agentName
-          ? `${requester} ${t("inbox.via", { agent: agentDisplayName?.(agentName) ?? agentName })}`
-          : requester;
+        const agentLabel = agentName ? (agentDisplayName?.(agentName) ?? agentName) : undefined;
+        const asked =
+          kind?.asked?.(item, t, agentLabel) ??
+          (agentLabel ? `${requester} ${t("inbox.via", { agent: agentLabel })}` : requester);
         const detail = kind?.rowDetail?.(item, t);
         return (
           <ListRow
@@ -88,6 +90,7 @@ export function InboxList({
                 <ApprovalStatusBadge
                   status={item.status}
                   applyResult={item.applyResult}
+                  confirmation={isInboxConfirmation(item)}
                   size="sm"
                 />
               )

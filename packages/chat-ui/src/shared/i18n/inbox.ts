@@ -25,7 +25,12 @@ export const inbox = defineTranslations({
     "inbox.tabs": "Lists of the Inbox",
     "inbox.toDecide": "To decide",
     "inbox.unknownKind": "This item cannot be shown here yet.",
-    "inbox.via": "via {agent}"
+    "inbox.via": "via {agent}",
+    "inbox.askedAt": "{asked}, {date}",
+    "inbox.confirmationAskedByAgent": "Asked by {agent} for you",
+    "inbox.confirmationAskedByCli": "Sent from your command line",
+    "inbox.confirmationHeading": "Confirm an action",
+    "inbox.confirmationPublishHeading": "Confirm publishing “{title}”"
   },
   de: {
     "inbox.comment": "Kommentar",
@@ -50,6 +55,11 @@ export const inbox = defineTranslations({
     "inbox.tabs": "Listen im Eingang",
     "inbox.toDecide": "Zu entscheiden",
     "inbox.unknownKind": "Dieser Eintrag kann hier noch nicht angezeigt werden.",
-    "inbox.via": "über {agent}"
+    "inbox.via": "über {agent}",
+    "inbox.askedAt": "{asked}, {date}",
+    "inbox.confirmationAskedByAgent": "Von {agent} für dich angefragt",
+    "inbox.confirmationAskedByCli": "Von deiner Kommandozeile gesendet",
+    "inbox.confirmationHeading": "Aktion bestätigen",
+    "inbox.confirmationPublishHeading": "Veröffentlichung von „{title}“ bestätigen"
   }
 });

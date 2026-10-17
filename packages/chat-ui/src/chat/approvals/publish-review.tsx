@@ -21,6 +21,11 @@ const KIND_PHRASE: Record<string, TranslationKey> = {
   workflow: "operations.publishKindWorkflow"
 };
 
+/** The words for the kind a publish makes live, as a sentence names it. */
+export function publishKindPhrase(kind: string): TranslationKey {
+  return KIND_PHRASE[kind] ?? "operations.publishKindOther";
+}
+
 /**
  * A publish that waits for an approver (GR-PUB-1): who wants to make which version live, what
  * approving does, and the review against the live version: the files that differ, the changing
@@ -28,7 +33,16 @@ const KIND_PHRASE: Record<string, TranslationKey> = {
  * Stores and account it uses. A request whose draft or live version moved says it cannot be
  * approved.
  */
-export function PublishReviewBody({ actor, review }: { actor: string; review: PublishReview }) {
+export function PublishReviewBody({
+  actor,
+  review,
+  headline = true
+}: {
+  actor: string;
+  review: PublishReview;
+  /** Without it the review starts with its lists: a confirmation says who asks in its own words. */
+  headline?: boolean;
+}) {
   const { t } = useTranslation();
   const none = <span className="text-muted-foreground">{t("operations.publishNone")}</span>;
   const names = (list: readonly string[]) => (list.length === 0 ? none : list.join(", "));
@@ -47,16 +61,18 @@ export function PublishReviewBody({ actor, review }: { actor: string; review: Pu
     );
   return (
     <section className="grid min-w-0 gap-4" data-testid="publish-review">
-      <div className="grid min-w-0 gap-1.5">
-        <p className="font-medium text-foreground" data-testid="operation-call-headline">
-          {t("operations.publishHeadline", {
-            actor,
-            kind: t(KIND_PHRASE[review.kind] ?? "operations.publishKindOther"),
-            title: review.title
-          })}
-        </p>
-        <p className="text-caption text-muted-foreground">{t("operations.publishEffect")}</p>
-      </div>
+      {headline ? (
+        <div className="grid min-w-0 gap-1.5">
+          <p className="font-medium text-foreground" data-testid="operation-call-headline">
+            {t("operations.publishHeadline", {
+              actor,
+              kind: t(publishKindPhrase(review.kind)),
+              title: review.title
+            })}
+          </p>
+          <p className="text-caption text-muted-foreground">{t("operations.publishEffect")}</p>
+        </div>
+      ) : null}
       {review.stale ? (
         <Banner tone="warning" role="note" data-testid="publish-review-stale">
           {t(STALE[review.stale])}
