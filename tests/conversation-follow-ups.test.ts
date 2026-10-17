@@ -294,9 +294,9 @@ describe("server follow-up queue on Postgres", () => {
     });
   });
 
-  it("FU-2 dispatches only the first of three pending messages per completed run, then starts three turns in order", async () => {
+  it("FU-2 dispatches different authors as three turns in order", async () => {
     const f = await fixture();
-    const items = [await f.queue("One"), await f.queue("Two"), await f.queue("Three")];
+    const items = [await f.queue("One"), await f.queue("Two", "other"), await f.queue("Three")];
     await f.complete();
     for (let index = 0; index < items.length; index++) {
       await f.dispatch();

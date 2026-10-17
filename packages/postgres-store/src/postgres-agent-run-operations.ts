@@ -50,6 +50,7 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   queueFollowUp,
+  getPendingFollowUpTurn,
   observeFollowUpChange,
   mapFollowUp,
   withFollowUpAuthorLabels
@@ -199,24 +200,27 @@ async function prepareConversationRunStart(
         .limit(1);
       if (latest?.id !== input.dispatchAfterRunId)
         throw new AppError("CONFLICT", "Dispatch belongs to an earlier turn");
-      const [oldest] = await tx
-        .select()
-        .from(conversationFollowUps)
-        .where(
-          and(
-            eq(conversationFollowUps.clientInstanceId, input.clientInstanceId),
-            eq(conversationFollowUps.conversationId, input.conversationId),
-            eq(conversationFollowUps.status, "pending")
-          )
-        )
-        .orderBy(asc(conversationFollowUps.position))
-        .limit(1);
+      const turn = await getPendingFollowUpTurn(tx, input);
+      const oldest = turn[0];
+      const dispatchMessages = input.dispatchMessages ?? [
+        { followUpId: input.dispatchFollowUpId, message: input.userMessage }
+      ];
       if (
         !oldest ||
         oldest.id !== input.dispatchFollowUpId ||
-        oldest.authorUserId !== input.ownerUserId
+        oldest.authorUserId !== input.ownerUserId ||
+        oldest.agentName !== input.run.agentName ||
+        (oldest.modelBindingId ?? undefined) !== input.run.modelBindingId ||
+        (oldest.reasoningEffort ?? undefined) !== input.run.reasoningEffort ||
+        dispatchMessages.length !== turn.length ||
+        turn.some(
+          (item, index) =>
+            item.id !== dispatchMessages[index]?.followUpId ||
+            item.text !== dispatchMessages[index]?.message.text
+        ) ||
+        dispatchMessages.at(-1)?.message.id !== input.userMessage.id
       )
-        throw new AppError("CONFLICT", "Follow-up is no longer the oldest pending message");
+        throw new AppError("CONFLICT", "Follow-up turn changed before dispatch");
     }
     const createdAt = input.run.startedAt ? new Date(input.run.startedAt) : new Date();
     const [earlierUserMessage] = await tx
@@ -230,37 +234,45 @@ async function prepareConversationRunStart(
         )
       )
       .limit(1);
-    const [messageRow] = await tx
-      .insert(messages)
-      .values({
-        id: input.userMessage.id,
-        clientInstanceId: input.clientInstanceId,
-        conversationId: input.conversationId,
-        role: "user",
-        text: input.userMessage.text,
-        createdAt,
-        metadata: input.userMessage.metadata ?? {}
-      })
-      .returning();
-    if (input.claimReadyDraftAttachments || input.dispatchFollowUpId) {
-      await tx
-        .update(conversationAttachments)
-        .set({
-          messageId: input.userMessage.id,
-          updatedAt: createdAt
+    const acceptedMessages = (input.dispatchFollowUpId && input.dispatchMessages) || [
+      { followUpId: input.dispatchFollowUpId, message: input.userMessage }
+    ];
+    const messageRows: Array<typeof messages.$inferSelect> = [];
+    // Equal timestamps retain queue order through messages.storageOrdinal.
+    for (const accepted of acceptedMessages) {
+      const [messageRow] = await tx
+        .insert(messages)
+        .values({
+          id: accepted.message.id,
+          clientInstanceId: input.clientInstanceId,
+          conversationId: input.conversationId,
+          role: "user",
+          text: accepted.message.text,
+          createdAt,
+          metadata: accepted.message.metadata ?? {}
         })
-        .where(
-          and(
-            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-            eq(conversationAttachments.conversationId, input.conversationId),
-            eq(conversationAttachments.status, "ready"),
-            isNull(conversationAttachments.messageId),
-            input.dispatchFollowUpId
-              ? eq(conversationAttachments.followUpId, input.dispatchFollowUpId)
-              : isNull(conversationAttachments.followUpId)
-          )
-        );
+        .returning();
+      if (!messageRow) throw new AppError("INTERNAL", "Message was not created");
+      messageRows.push(messageRow);
+      if (input.claimReadyDraftAttachments || accepted.followUpId) {
+        await tx
+          .update(conversationAttachments)
+          .set({ messageId: accepted.message.id, updatedAt: createdAt })
+          .where(
+            and(
+              eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+              eq(conversationAttachments.conversationId, input.conversationId),
+              eq(conversationAttachments.status, "ready"),
+              isNull(conversationAttachments.messageId),
+              accepted.followUpId
+                ? eq(conversationAttachments.followUpId, accepted.followUpId)
+                : isNull(conversationAttachments.followUpId)
+            )
+          );
+      }
     }
+    const messageRow = messageRows.at(-1);
+    if (!messageRow) throw new AppError("INTERNAL", "Run input message was not created");
 
     const [runRow] = await tx
       .insert(agentRuns)
@@ -285,13 +297,16 @@ async function prepareConversationRunStart(
       .returning();
 
     if (input.dispatchFollowUpId) {
-      const [item] = await tx
-        .update(conversationFollowUps)
-        .set({ status: "dispatched", dispatchedRunId: input.run.id, updatedAt: createdAt })
-        .where(eq(conversationFollowUps.id, input.dispatchFollowUpId))
-        .returning();
-      if (!item) throw new AppError("CONFLICT", "Follow-up is not available");
-      await observeFollowUpChange(tx, mapFollowUp(item));
+      for (const accepted of acceptedMessages) {
+        if (!accepted.followUpId) throw new AppError("INTERNAL", "Missing dispatched follow-up");
+        const [item] = await tx
+          .update(conversationFollowUps)
+          .set({ status: "dispatched", dispatchedRunId: input.run.id, updatedAt: createdAt })
+          .where(eq(conversationFollowUps.id, accepted.followUpId))
+          .returning();
+        if (!item) throw new AppError("CONFLICT", "Follow-up is not available");
+        await observeFollowUpChange(tx, mapFollowUp(item));
+      }
       // Release this wake-up's dedupe key before its new run can complete. Its concurrency
       // key stays held until the handler ends, so a fast next completion cannot lose a wake-up.
       if (input.dispatchJobId)

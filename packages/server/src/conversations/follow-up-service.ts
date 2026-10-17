@@ -78,7 +78,7 @@ export function createFollowUpDispatchHandler(options: ChatServerOptions) {
         clientInstanceId: options.clientInstanceId,
         conversationId: asConversationId(job.payload.conversationId)
       };
-      // A retry of an old wake-up must never consume a second message or restart a paused queue.
+      // A retry of an old wake-up must never consume a second turn or restart a paused queue.
       const latest = await options.stores.agentRuns.getLatestConversationAgentRun(scope);
       if (
         latest?.id !== job.payload.afterRunId ||

@@ -12,6 +12,8 @@ export interface ConversationFollowUpStore {
   listPending(input: FollowUpScope): Promise<ConversationFollowUp[]>;
   /** Coordinates with in-flight acceptance under the conversation lock before reading. */
   getOldestPending(input: FollowUpScope): Promise<ConversationFollowUp | undefined>;
+  /** Locks the conversation and reads its contiguous, equally authorized author/selection group. */
+  getPendingTurn(input: FollowUpScope): Promise<ConversationFollowUp[]>;
   get(input: FollowUpScope & { followUpId: string }): Promise<ConversationFollowUp | undefined>;
   findByIdempotencyKey(
     input: FollowUpScope & { authorUserId: string; idempotencyKey: string }

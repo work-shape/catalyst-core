@@ -383,8 +383,13 @@ export interface PrepareConversationRunStartInput {
   followUp?: "queue";
   /** Effective defaults captured only for a queued message; immediate runs keep caller selections. */
   followUpSelection?: Pick<CreateAgentRunInput, "modelBindingId" | "reasoningEffort">;
-  /** Internal dispatch: consumes exactly this oldest pending item under the start lock. */
+  /** Internal dispatch: starts with this oldest pending item under the conversation lock. */
   dispatchFollowUpId?: string;
+  /** One transcript row per queued item, in queue order; the last is the run input. */
+  dispatchMessages?: Array<{
+    followUpId: string;
+    message: PrepareConversationRunStartInput["userMessage"];
+  }>;
   dispatchAfterRunId?: AgentRunId;
   dispatchJobId?: JobId;
   claimReadyDraftAttachments?: boolean;

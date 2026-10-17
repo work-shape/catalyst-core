@@ -2,6 +2,7 @@ import { auditActorFromUser } from "@work-shape/catalyst-core";
 import {
   AppError,
   type ActorAccess,
+  type PrepareConversationRunStartInput,
   type ConversationFollowUp,
   type PlatformStores,
   type JobId,
@@ -223,13 +224,8 @@ export class RunStartWorkflow {
         Boolean(command.dispatchFollowUpId)
       );
       const attachments = this.options.attachments;
-      const pendingDraftAttachments = command.dispatchFollowUpId
-        ? await this.options.stores.followUps.listAttachments({
-            clientInstanceId: this.options.clientInstanceId,
-            conversationId,
-            followUpId: command.dispatchFollowUpId
-          })
-        : attachments
+      const pendingDraftAttachments =
+        !command.dispatchFollowUpId && attachments
           ? await attachments.listDraftAttachments(conversationId)
           : [];
       const draftAttachments = pendingDraftAttachments.filter(
@@ -250,6 +246,60 @@ export class RunStartWorkflow {
       // The title job is enqueued in the transaction that writes the first user message, so
       // the message never exists without it and the job never without the message.
       const prepared = await this.transact(async (stores) => {
+        const turn = command.dispatchFollowUpId
+          ? await stores.followUps.getPendingTurn({
+              clientInstanceId: this.options.clientInstanceId,
+              conversationId
+            })
+          : [];
+        if (command.dispatchFollowUpId && turn[0]?.id !== command.dispatchFollowUpId)
+          throw new AppError("CONFLICT", "Follow-up turn changed before dispatch");
+        const acceptedMessages = command.dispatchFollowUpId
+          ? await Promise.all(
+              turn.map(async (item, index) => {
+                const attachmentsForMessage = await stores.followUps.listAttachments({
+                  clientInstanceId: this.options.clientInstanceId,
+                  conversationId,
+                  followUpId: item.id
+                });
+                const manifest =
+                  attachments?.createAttachmentManifest(attachmentsForMessage) ??
+                  createEmptyAttachmentManifest();
+                return {
+                  followUpId: item.id,
+                  message: {
+                    id:
+                      index === turn.length - 1
+                        ? userMessageId
+                        : createPlatformId<"MessageId">("msg"),
+                    text: item.text,
+                    metadata: createUserMessageMetadata({ attachmentManifest: manifest })
+                  },
+                  attachmentManifest: manifest
+                };
+              })
+            )
+          : [
+              {
+                followUpId: undefined,
+                message: {
+                  id: userMessageId,
+                  text: command.text,
+                  metadata: createUserMessageMetadata({ attachmentManifest })
+                },
+                attachmentManifest
+              }
+            ];
+        const inputMessage = acceptedMessages.at(-1)?.message;
+        if (!inputMessage) throw new AppError("CONFLICT", "Follow-up turn is empty");
+        const dispatchMessages: PrepareConversationRunStartInput["dispatchMessages"] =
+          command.dispatchFollowUpId
+            ? acceptedMessages.map((item) => {
+                if (!item.followUpId)
+                  throw new AppError("INTERNAL", "Missing dispatched follow-up");
+                return { followUpId: item.followUpId, message: item.message };
+              })
+            : undefined;
         const prepared = await stores.agentRuns.prepareConversationRunStart({
           clientInstanceId: this.options.clientInstanceId,
           conversationId,
@@ -257,13 +307,10 @@ export class RunStartWorkflow {
           followUp: command.followUp,
           followUpSelection: command.followUp ? { modelBindingId, reasoningEffort } : undefined,
           dispatchFollowUpId: command.dispatchFollowUpId,
+          dispatchMessages,
           dispatchAfterRunId: command.dispatchAfterRunId,
           dispatchJobId: command.dispatchJobId,
-          userMessage: {
-            id: userMessageId,
-            text: command.text,
-            metadata: createUserMessageMetadata({ attachmentManifest })
-          },
+          userMessage: inputMessage,
           run: {
             id: runId,
             clientInstanceId: this.options.clientInstanceId,
@@ -315,11 +362,12 @@ export class RunStartWorkflow {
             }
           );
         }
-        return prepared;
+        return { ...prepared, acceptedMessages };
       });
 
       if ("followUp" in prepared) return prepared;
 
+      const inputManifest = prepared.acceptedMessages.at(-1)?.attachmentManifest;
       const run = await this.options.agentRuntime.start(
         {
           agentName: prepared.run.agentName,
@@ -333,9 +381,8 @@ export class RunStartWorkflow {
             startedAt: prepared.run.startedAt
           },
           message: {
-            text: command.text,
-            attachmentManifest:
-              attachmentManifest.attachments.length > 0 ? attachmentManifest : undefined
+            text: prepared.userMessage.text,
+            attachmentManifest: inputManifest?.attachments.length ? inputManifest : undefined
           }
         },
         context
@@ -344,18 +391,20 @@ export class RunStartWorkflow {
         throw new AppError("INTERNAL", "Prepared agent run id was not started");
       }
 
-      await this.options.auditRecorder.record({
-        type: "message.created",
-        status: "success",
-        actor: auditActorFromUser(user),
-        subject: prepared.userMessage.id,
-        correlationId: context.correlationId,
-        metadata: {
-          conversationId,
-          attachmentCount: attachmentManifest.attachments.length,
-          ...(command.dispatchFollowUpId ? { delivery: "queued" } : {})
-        }
-      });
+      for (const accepted of prepared.acceptedMessages) {
+        await this.options.auditRecorder.record({
+          type: "message.created",
+          status: "success",
+          actor: auditActorFromUser(user),
+          subject: accepted.message.id,
+          correlationId: context.correlationId,
+          metadata: {
+            conversationId,
+            attachmentCount: accepted.attachmentManifest.attachments.length,
+            ...(command.dispatchFollowUpId ? { delivery: "queued" } : {})
+          }
+        });
+      }
 
       monitorRunLifecycle(this.options, { conversationId, user, context, runId: prepared.run.id });
       return {

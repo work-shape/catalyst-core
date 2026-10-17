@@ -280,6 +280,46 @@ export async function queueFollowUp(
   return followUp;
 }
 
+/** Caller holds the conversation lock. Stop at the first incompatible pending item. */
+export async function getPendingFollowUpTurn(db: PostgresConnection, input: FollowUpScope) {
+  const pending = and(scopeWhere(input), eq(conversationFollowUps.status, "pending"));
+  const [first] = await db
+    .select()
+    .from(conversationFollowUps)
+    .where(pending)
+    .orderBy(asc(conversationFollowUps.position))
+    .limit(1);
+  if (!first) return [];
+  // JSONB equality includes principal, delegation and scopes: one credential cannot lend
+  // its rights to a message accepted under another, even for the same person.
+  const [boundary] = await db
+    .select({ position: conversationFollowUps.position })
+    .from(conversationFollowUps)
+    .where(
+      and(
+        pending,
+        sql`${conversationFollowUps.position} > ${first.position}`,
+        sql`(${conversationFollowUps.authorUserId}, ${conversationFollowUps.agentName},
+        ${conversationFollowUps.modelBindingId}, ${conversationFollowUps.reasoningEffort},
+        ${conversationFollowUps.authorizationContext}) is distinct from
+        (${first.authorUserId}::text, ${first.agentName}::text, ${first.modelBindingId}::text,
+        ${first.reasoningEffort}::text, ${first.authorizationContext === null ? null : JSON.stringify(first.authorizationContext)}::jsonb)`
+      )
+    )
+    .orderBy(asc(conversationFollowUps.position))
+    .limit(1);
+  return db
+    .select()
+    .from(conversationFollowUps)
+    .where(
+      and(
+        pending,
+        boundary ? sql`${conversationFollowUps.position} < ${boundary.position}` : undefined
+      )
+    )
+    .orderBy(asc(conversationFollowUps.position));
+}
+
 export function createPostgresFollowUpStore(
   db: PostgresConnection,
   deps: { lockActiveConversation: typeof lockActiveConversation }
@@ -300,6 +340,13 @@ export function createPostgresFollowUpStore(
           return undefined;
         const [row] = await pending(input, tx).limit(1);
         return row && mapFollowUp(row);
+      });
+    },
+    async getPendingTurn(input) {
+      return db.transaction(async (tx) => {
+        if (!(await deps.lockActiveConversation(tx, input.clientInstanceId, input.conversationId)))
+          return [];
+        return (await getPendingFollowUpTurn(tx, input)).map(mapFollowUp);
       });
     },
     async get(input) {

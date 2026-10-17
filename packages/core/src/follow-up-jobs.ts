@@ -9,7 +9,7 @@ const FOLLOW_UP_DISPATCH_LEASE_MS = 60_000;
 const FOLLOW_UP_DISPATCH_BACKOFF_BASE_MS = 1000;
 const FOLLOW_UP_DISPATCH_BACKOFF_MAX_MS = 10_000;
 
-/** Starts one pending message after one ended run; the conversation serializes dispatch. */
+/** Starts one compatible pending turn after one ended run; the conversation serializes dispatch. */
 export const dispatchConversationFollowUpJob = defineJobKind({
   kind: "conversation.follow_up.dispatch",
   payloadSchema: z.object({ conversationId: z.string().min(1), afterRunId: z.string().min(1) }),

@@ -15,6 +15,7 @@ import {
 import {
   DETERMINISTIC_CAPABILITIES,
   type ModelAdapterFactory,
+  type ModelAdapterRequest,
   type ModelCompletion
 } from "@work-shape/catalyst-model-provider";
 import { createTestInstance, getTestConfig, getTestJobs } from "./test-instance";
@@ -37,6 +38,7 @@ export async function followUpFixture(
   separate = false,
   selection: { defaultEffortOnly?: boolean; attachments?: boolean; streaming?: boolean } = {}
 ) {
+  const modelInputs: ModelAdapterRequest[] = [];
   const gates: Array<ReturnType<typeof deferred<void>>> = [];
   let cleaningUp = false;
   const deltaGates: Array<ReturnType<typeof deferred<void>>> = [];
@@ -65,7 +67,8 @@ export async function followUpFixture(
           reasoningEfforts: [...DETERMINISTIC_CAPABILITIES.reasoningEfforts, "high" as const]
         }),
         complete: async () => completion,
-        async *stream() {
+        async *stream(request) {
+          modelInputs.push(request);
           const gate = deferred<void>();
           gates.push(gate);
           yield { type: "text_delta", delta: "Working" };
@@ -162,6 +165,7 @@ export async function followUpFixture(
   if (!separate) await waitUntil(async () => gates.length === 1, "first model turn is held");
   return {
     app,
+    modelInputs,
     scope,
     author,
     other,
