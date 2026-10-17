@@ -4,7 +4,7 @@ import {
   useComposer,
   useComposerRuntime
 } from "@assistant-ui/react";
-import { AlertCircle, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
+import { AlertCircle, Paperclip, RotateCcw, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment } from "@work-shape/catalyst-api-client";
@@ -20,7 +20,7 @@ import { ModelPicker } from "./model-picker";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { FollowUpQueue, useFollowUpQueue } from "./follow-up-queue";
 import { shouldQueueSend, type SendBlock } from "./send-block";
-import { composerActions } from "./thread-activity";
+import { ComposerAction } from "./composer-action";
 
 export interface LocalUploadingAttachment {
   id: string;
@@ -87,11 +87,7 @@ export function AssistantComposer({
 }) {
   const { t } = useTranslation();
   const currentText = useComposer((state) => state.text);
-  const composerCanSend = useComposer((state) => state.canSend);
   const threadRunning = useAuiState((state) => state.thread.isRunning);
-  // An open conversation sends through the thread runtime, which takes up a lifted block one
-  // render after the composer does. An Enter in between would be ignored, so it waits.
-  const runtimeReady = Boolean(onSubmitMessage) || composerCanSend || threadRunning;
   const composerShellRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const attachmentActionRef = useRef<HTMLButtonElement | null>(null);
@@ -107,6 +103,7 @@ export function AssistantComposer({
   // While a run goes, a message waits in the conversation's queue and starts as the next turn.
   const queuesFollowUp = Boolean(conversationRunning && followUps);
   const queueFollowUp = useCallback(() => {
+    const currentText = composerRuntime.getState().text;
     const text = currentText.trim();
     if (!followUps || followUps.queueing || text.length === 0) {
       return;
@@ -117,12 +114,16 @@ export function AssistantComposer({
         composerRuntime.setText("");
       }
     });
-  }, [composerRuntime, currentText, followUps]);
+  }, [composerRuntime, followUps]);
+  // A keystroke updates the composer before React renders it. Submission reads that current
+  // state, so a fast Enter or click never sends the previous render's text (or starter).
   const queueSend = useCallback(() => {
-    if (shouldQueueSend({ sendBlock, sendQueued, text: currentText, runtimeReady })) {
-      onQueueSend(currentText);
+    const { text, canSend } = composerRuntime.getState();
+    const runtimeReady = Boolean(onSubmitMessage) || canSend || threadRunning;
+    if (shouldQueueSend({ sendBlock, sendQueued, text, runtimeReady })) {
+      onQueueSend(text);
     }
-  }, [currentText, onQueueSend, runtimeReady, sendBlock, sendQueued]);
+  }, [composerRuntime, onQueueSend, onSubmitMessage, sendBlock, sendQueued, threadRunning]);
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       if (submitBlocked || queuesFollowUp) {
@@ -133,12 +134,12 @@ export function AssistantComposer({
         }
         return;
       }
-      if (onSubmitMessage?.(currentText)) {
+      if (onSubmitMessage?.(composerRuntime.getState().text)) {
         event.preventDefault();
         event.stopPropagation();
       }
     },
-    [currentText, onSubmitMessage, queueFollowUp, queuesFollowUp, submitBlocked]
+    [composerRuntime, onSubmitMessage, queueFollowUp, queuesFollowUp, submitBlocked]
   );
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -158,6 +159,8 @@ export function AssistantComposer({
         queueFollowUp();
         return;
       }
+      const runtimeReady =
+        Boolean(onSubmitMessage) || composerRuntime.getState().canSend || threadRunning;
       if (submitBlocked || !runtimeReady) {
         event.preventDefault();
         queueSend();
@@ -168,16 +171,16 @@ export function AssistantComposer({
       }
 
       event.preventDefault();
-      onSubmitMessage(currentText);
+      onSubmitMessage(composerRuntime.getState().text);
     },
     [
-      currentText,
+      composerRuntime,
       onSubmitMessage,
       queueFollowUp,
       queueSend,
       queuesFollowUp,
-      runtimeReady,
-      submitBlocked
+      submitBlocked,
+      threadRunning
     ]
   );
 
@@ -634,142 +637,6 @@ function attachmentStatusLabel(
     default:
       return t("attachmentStatusReady");
   }
-}
-
-function ComposerAction({
-  sendBlock,
-  sendQueued,
-  conversationRunning,
-  optimisticPending,
-  currentText,
-  canQueueFollowUp,
-  queueingFollowUp,
-  onCancelRun,
-  onQueueFollowUp,
-  onQueueSend,
-  onSubmitMessage
-}: {
-  sendBlock: SendBlock | undefined;
-  sendQueued: boolean;
-  conversationRunning?: boolean;
-  optimisticPending?: boolean;
-  currentText: string;
-  /** A message sent while the run goes waits in the conversation's queue. */
-  canQueueFollowUp: boolean;
-  queueingFollowUp: boolean;
-  onCancelRun: () => void;
-  onQueueFollowUp: () => void;
-  onQueueSend: () => void;
-  onSubmitMessage?: (text: string) => boolean;
-}) {
-  const { t } = useTranslation();
-  const threadRunning = useAuiState((state) => state.thread.isRunning);
-  const emptyText = currentText.trim().length === 0;
-  const actions = composerActions({
-    conversationRunning,
-    optimisticPending,
-    threadRunning,
-    canQueue: canQueueFollowUp,
-    hasText: !emptyText
-  });
-  // During a loading block the control stays usable: a click is remembered like an Enter.
-  const queuesSend = Boolean(sendBlock?.loading);
-  const sendDisabled = queuesSend
-    ? emptyText
-    : Boolean(sendBlock) || Boolean(onSubmitMessage && emptyText);
-  const handleSendClick = useCallback(() => {
-    onSubmitMessage?.(currentText);
-  }, [currentText, onSubmitMessage]);
-  const stopButton = (placement: "alone" | "beside") => {
-    const button = (
-      <Button
-        type="button"
-        size="icon"
-        variant={placement === "alone" ? "solid" : "secondary"}
-        className={cn("size-9", placement === "alone" && "absolute inset-0")}
-        aria-label={t("stopGenerating")}
-        title={t("stopGenerating")}
-        onClick={onCancelRun}
-      >
-        <Square size={14} className="fill-current" aria-hidden="true" />
-      </Button>
-    );
-    return threadRunning ? (
-      <ComposerPrimitive.Cancel asChild>{button}</ComposerPrimitive.Cancel>
-    ) : (
-      button
-    );
-  };
-
-  if (actions === "stop-and-send") {
-    return (
-      <div className="ml-auto flex shrink-0 items-center gap-1">
-        {stopButton("beside")}
-        <Button
-          type="button"
-          size="icon"
-          variant="solid"
-          className="size-9"
-          aria-label={t("followUpSend")}
-          title={sendBlock?.reason ?? t("followUpSend")}
-          disabled={Boolean(sendBlock)}
-          loading={queueingFollowUp}
-          onClick={onQueueFollowUp}
-        >
-          <Send size={17} aria-hidden="true" />
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative ml-auto size-9">
-      {actions === "stop" ? (
-        stopButton("alone")
-      ) : queuesSend ? (
-        <Button
-          type="button"
-          size="icon"
-          variant="solid"
-          className="absolute inset-0 size-9"
-          aria-label={t("sendMessage")}
-          title={sendBlock?.reason}
-          disabled={sendDisabled}
-          loading={sendQueued}
-          onClick={onQueueSend}
-        >
-          <Send size={17} aria-hidden="true" />
-        </Button>
-      ) : onSubmitMessage ? (
-        <Button
-          type="button"
-          size="icon"
-          variant="solid"
-          className="absolute inset-0 size-9"
-          aria-label={t("sendMessage")}
-          title={sendBlock?.reason ?? t("sendMessage")}
-          disabled={sendDisabled}
-          onClick={handleSendClick}
-        >
-          <Send size={17} aria-hidden="true" />
-        </Button>
-      ) : (
-        <ComposerPrimitive.Send asChild>
-          <Button
-            type="button"
-            size="icon"
-            variant="solid"
-            className="absolute inset-0 size-9"
-            aria-label={t("sendMessage")}
-            title={sendBlock?.reason ?? t("sendMessage")}
-            disabled={sendDisabled}
-          >
-            <Send size={17} aria-hidden="true" />
-          </Button>
-        </ComposerPrimitive.Send>
-      )}
-    </div>
-  );
 }
 
 function formatFileSize(byteSize: number): string {

@@ -92,7 +92,10 @@ export {
 } from "../../packages/chat-ui/src/chat/approvals/approval-revision-message";
 export { parseSkillChangePreview } from "../../packages/chat-ui/src/chat/approvals/skill-change-preview";
 export { AssistantActivityStatus } from "../../packages/chat-ui/src/chat/assistant/assistant-activity-status";
-export { shouldExpandComposer } from "../../packages/chat-ui/src/chat/assistant/assistant-composer";
+export {
+  AssistantComposer,
+  shouldExpandComposer
+} from "../../packages/chat-ui/src/chat/assistant/assistant-composer";
 export {
   acknowledgeRecentlyActiveAssistantRunId,
   isRecentlyActiveAssistantRunId,
