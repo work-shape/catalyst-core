@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./support/agent-draft-publication";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
@@ -145,7 +146,9 @@ describe("the order a write of an asset is refused in", () => {
         payload: { config, expectedRevision }
       });
     await write(agent("kai-reverted", { reasoningEffort: "low" }), 1);
+    await publishAgentDraft({ ...t, admin: t.root }, "kai-reverted");
     await write(agent("kai-reverted"), 2);
+    await publishAgentDraft({ ...t, admin: t.root }, "kai-reverted");
     const revert = (userId: string, expectedRevision: number | undefined) =>
       t.call(userId, "assets.revert", {
         params: { kind: "agent", name: "kai-reverted" },

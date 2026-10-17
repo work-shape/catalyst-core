@@ -1,3 +1,6 @@
+import { removeAgentProposal } from "./postgres-agent-proposal-operations";
+import { chunksOf, type WrittenAsset } from "./config-asset-batch";
+import { writeAgentDraft, consumeAgentDraft, carryAgentSkillChange } from "./agent-draft-mutations";
 import { prefixPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
 import { and, asc, desc, eq, getTableColumns, inArray, like, max, or, sql } from "drizzle-orm";
@@ -194,31 +197,6 @@ async function listConfigAssetRevisions(
   return rows.map(mapConfigAssetRevision);
 }
 
-/**
- * How many rows one statement of a batch writes. A batch of 2,000 assets is written in a
- * handful of statements, so the time the lock is held grows with the bytes and not with a
- * round trip per asset.
- */
-const ASSET_WRITE_CHUNK = 500;
-
-/** One asset as a batch leaves it, followed through the mutations that name it. */
-interface WrittenAsset {
-  id: string;
-  kind: string;
-  /** Whether the row is there before the batch. */
-  stored: boolean;
-  status: ConfigAssetRecord["status"];
-  /** The highest revision number of the asset, the ones this batch adds included. */
-  newest: number;
-  activeRevisionId: string;
-  /** The batch gave it a revision. */
-  written: boolean;
-  /** The batch deleted it, whatever it did to it afterwards. */
-  deleted: boolean;
-  /** An agent that is there after a create: it starts with an availability of its own. */
-  created: boolean;
-}
-
 async function applyConfigAssetMutations(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
@@ -291,7 +269,11 @@ async function applyConfigAssetMutations(
     // stays: a draft is no part of the runtime snapshot.
     const draftsOnly =
       input.mutations.length > 0 &&
-      input.mutations.every((mutation) => mutation.type === "upsert" && mutation.draft === true);
+      input.mutations.every(
+        (mutation) =>
+          mutation.type === "upsert" &&
+          (mutation.draft === true || mutation.agentDraft !== undefined)
+      );
     const version = draftsOnly ? state.version : state.version + 1;
     let defaultAgentName = state.defaultAgentName ?? undefined;
 
@@ -317,6 +299,7 @@ async function applyConfigAssetMutations(
     const newAssets: (typeof configAssets.$inferInsert)[] = [];
     const newRevisions: (typeof configAssetRevisions.$inferInsert)[] = [];
     const revisions: Record<string, number> = {};
+    const draftRevisions: Record<string, number> = {};
     const assetIds: Record<string, string> = {};
     const appendRevision = (
       key: string,
@@ -372,6 +355,12 @@ async function applyConfigAssetMutations(
           continue;
         }
         appendRevision(key, asset, { operation: "delete", config: null, ...kept(key) }, "deleted");
+        if (asset.kind === "agent") {
+          await removeAgentProposal(tx, {
+            clientInstanceId: input.clientInstanceId,
+            agentId: asset.id
+          });
+        }
         asset.deleted = true;
         asset.created = false;
         continue;
@@ -382,6 +371,28 @@ async function applyConfigAssetMutations(
           `Config ${mutation.kind} '${mutation.name}' exists under another id`,
           { kind: mutation.kind, name: mutation.name }
         );
+      }
+      if (asset?.status === "active" && mutation.agentDraft) {
+        const draftRevision = await writeAgentDraft(tx, {
+          clientInstanceId: input.clientInstanceId,
+          agentId: asset.id,
+          liveRevision: current.get(key)?.revision.revision ?? 0,
+          mutation,
+          savedAt: now.toISOString()
+        });
+        if (draftRevision !== undefined) {
+          draftRevisions[key] = draftRevision;
+          assetIds[key] = asset.id;
+          continue;
+        }
+      }
+      if (asset && mutation.agentPublish !== undefined) {
+        await consumeAgentDraft(tx, {
+          clientInstanceId: input.clientInstanceId,
+          agentId: asset.id,
+          liveRevision: current.get(key)?.revision.revision ?? 0,
+          revision: mutation.agentPublish
+        });
       }
       const written = repo.writtenColumns(mutation);
       if (!asset) {
@@ -426,6 +437,15 @@ async function applyConfigAssetMutations(
         "active"
       );
       asset.created ||= recreated;
+      if (mutation.agentSkillChange) {
+        await carryAgentSkillChange(tx, {
+          clientInstanceId: input.clientInstanceId,
+          agentId: asset.id,
+          revision: asset.newest,
+          change: mutation.agentSkillChange,
+          savedAt: now.toISOString()
+        });
+      }
     }
 
     const all = [...assets.values()];
@@ -524,16 +544,8 @@ async function applyConfigAssetMutations(
         })
         .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
     }
-    return { version, revisions, assetIds };
+    return { version, revisions, assetIds, draftRevisions };
   });
-}
-
-function chunksOf<Row>(rows: readonly Row[]): Row[][] {
-  const chunks: Row[][] = [];
-  for (let start = 0; start < rows.length; start += ASSET_WRITE_CHUNK) {
-    chunks.push(rows.slice(start, start + ASSET_WRITE_CHUNK));
-  }
-  return chunks;
 }
 
 /** The rows of the named assets with their active revisions, deleted ones included. */

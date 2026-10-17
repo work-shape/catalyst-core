@@ -439,7 +439,7 @@ describe("a kind with a draft and a published revision on an instance", () => {
     const active = await t.expectRefused(
       t.admin.id,
       "assets.publish",
-      { params: { kind: "agent", name: "assistant" }, payload: { revision: 1 } },
+      { params: { kind: "skill", name: "missing" }, payload: { revision: 1 } },
       { status: 422, code: "VALIDATION_FAILED" }
     );
     expect(active.details).toMatchObject({ reason: "no_draft" });

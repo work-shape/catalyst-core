@@ -104,11 +104,6 @@ async function cleanUpOneConversation(
   });
   await deleteConversationPages(options, conversationId);
   await deleteOperationRunsOfConversation(options, conversationId);
-  // A Build conversation's proposals for agents go with it; the agents stay as they are.
-  await options.stores.agentProposals.removeOfConversations({
-    clientInstanceId: options.clientInstanceId,
-    conversationIds: [conversationId]
-  });
   // Last, because it hides a Try conversation and leads the retry of its cleanup to it.
   await options.stores.agentTryConversations.remove({
     clientInstanceId: options.clientInstanceId,
@@ -185,7 +180,7 @@ export async function attemptConversationDataCleanup(
 
 /** Why a Try conversation was deleted: its proposal was settled, or its Build conversation went. */
 type TryConversationDeletionReason =
-  "proposal_applied" | "proposal_discarded" | "build_conversation_deleted";
+  "draft_published" | "draft_discarded" | "build_conversation_deleted";
 
 /**
  * Deletes the Try conversations of a Build conversation, or the one of an agent: claims each
@@ -194,7 +189,7 @@ type TryConversationDeletionReason =
  */
 export async function deleteTryConversations(
   options: ChatServerOptions,
-  of: { buildConversationId: ConversationId; agentId?: string },
+  of: { buildConversationId?: ConversationId; agentId?: string },
   deletion: {
     deletedAt: string;
     requestedBy: TryConversationDeletionReason;

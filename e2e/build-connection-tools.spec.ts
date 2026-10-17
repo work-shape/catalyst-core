@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./request-with-origin";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -118,7 +119,8 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
     );
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     expect((await saved).status()).toBe(200);
-    // Both references must exist when the agent is saved.
+    await publishAgentDraft(page, agentPath(name));
+    // Both references must exist when the saved draft is published.
     expect(
       field(field(await (await page.request.get(agentPath(name))).json(), "config"), "toolNames")
     ).toEqual([gone, echo]);

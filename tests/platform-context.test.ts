@@ -26,7 +26,12 @@ const kinds = [
     lifecycle: "active",
     representation: "config",
     owners: ["instance", "workspace"],
-    actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
+    actions: {
+      read: "agent.read",
+      write: "agent.write",
+      publish: "agent.publish",
+      delete: "agent.delete"
+    }
   },
   {
     kind: "skill",
@@ -104,17 +109,25 @@ describe("platform.context.get", () => {
       {
         prefix: "kai-",
         displayName: "kai-",
-        actions: ["agent.read", "agent.write", "skill.read", "skill.write", "skill.delete"]
+        actions: [
+          "agent.read",
+          "agent.write",
+          "agent.publish",
+          "skill.read",
+          "skill.write",
+          "skill.delete"
+        ]
       }
     ]);
     // The role administers service principals (RIGHTS-1a).
     expect(admin.instanceActions).toEqual(["service_principals.manage"]);
     // Agents and skills are used through no right of their own: no use level is offered.
     expect(admin.useActions).toEqual([]);
-    // What the key `catalyst setup` asks for starts with: reading, writing, never deleting.
+    // What the key `catalyst setup` asks for: authoring and publishing, never deleting.
     expect(admin.authoringActions).toEqual([
       "agent.read",
       "agent.write",
+      "agent.publish",
       "skill.read",
       "skill.write"
     ]);
@@ -124,6 +137,7 @@ describe("platform.context.get", () => {
       "agent.read",
       "agent.write",
       "agent.delete",
+      "agent.publish",
       "skill.read",
       "skill.write",
       "skill.delete"
@@ -189,6 +203,7 @@ describe("platform.context.get", () => {
       "agent.read",
       "agent.write",
       "agent.delete",
+      "agent.publish",
       "skill.read",
       "skill.write",
       "skill.delete"

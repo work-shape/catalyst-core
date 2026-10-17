@@ -352,6 +352,7 @@ async function seedCliKey(
  * Without selectors the batch carries every asset and the default agent of the working copy.
  */
 async function push(
+  root: SeedApi,
   options: InstanceOptions,
   apiKey: string,
   workingDir: string,
@@ -372,7 +373,19 @@ async function push(
     const held =
       (await api.getAsset(kind, name)) ??
       (await api.getLatestRevision(kind, name).catch(() => undefined));
-    items.push({ type: "put" as const, kind, config, expectedRevision: held?.revision ?? null });
+    items.push({
+      type: "put" as const,
+      kind,
+      config,
+      expectedRevision: held?.revision ?? null,
+      ...(kind === "agent"
+        ? {
+            expectedDraftRevision: held
+              ? ((await root.getAgentDraft(name))?.revision ?? null)
+              : null
+          }
+        : {})
+    });
   }
   try {
     const outcome = await api.syncAssets({
@@ -386,6 +399,12 @@ async function push(
     });
     if (outcome.status === "pending_approval") {
       throw new Error("the instance holds the push for an approval");
+    }
+    // The service key writes drafts; the seed's signed-in administrator publishes them.
+    for (const asset of assets) {
+      if (asset.kind !== "agent") continue;
+      const draft = await root.getAgentDraft(asset.name);
+      if (draft) await root.publishAsset("agent", asset.name, draft.revision);
     }
   } catch (error) {
     throw new Error(
@@ -416,7 +435,7 @@ async function seedInstanceAssets(
     steps.push({ name, created: 0, existing: count });
     return;
   }
-  await push(options, apiKey, options.instanceAssetsDir);
+  await push(root, options, apiKey, options.instanceAssetsDir);
   steps.push({ name, created: count, existing: 0 });
 }
 
@@ -465,7 +484,7 @@ async function seedAssets(
     if (!same) differing.push(`skill:${skill.name}`);
     counts.skill[same ? "existing" : "created"] += 1;
   }
-  if (differing.length > 0) await push(options, apiKey, options.assetsDir, differing);
+  if (differing.length > 0) await push(root, options, apiKey, options.assetsDir, differing);
 
   // An agent saved or pushed in no workspace starts hidden: the seed offers it everywhere.
   const { assets } = await root.assetsOverview();

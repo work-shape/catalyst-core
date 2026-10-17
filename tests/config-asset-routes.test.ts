@@ -138,7 +138,13 @@ describe("config asset admin routes", () => {
       params: { kind: "agent", name: "assistant" },
       payload: { config: agentConfig("Changed instructions") }
     });
-    expect(updated.json()).toEqual({ version: 2, revision: 2, warnings: [] });
+    expect(updated.json()).toMatchObject({
+      version: 1,
+      revision: 1,
+      draftRevision: 1,
+      publishedRevision: 1
+    });
+    await publishFixtureDraft(fixture.server);
 
     const revisionsBeforeRevert = await request(fixture.server, token, "assets.revisions.list", {
       params: { kind: "agent", name: "assistant" }
@@ -161,7 +167,8 @@ describe("config asset admin routes", () => {
       params: { kind: "agent", name: "assistant" },
       payload: { revision: 1 }
     });
-    expect(reverted.json()).toEqual({ version: 3, revision: 3, warnings: [] });
+    expect(reverted.json()).toMatchObject({ version: 2, draftRevision: 2, publishedRevision: 2 });
+    await publishFixtureDraft(fixture.server);
     const fetchedAfterRevert = await request(fixture.server, token, "assets.get", {
       params: { kind: "agent", name: "assistant" }
     });
@@ -211,7 +218,6 @@ describe("config asset admin routes", () => {
     expect(events.map((event) => event.type)).toEqual(
       expect.arrayContaining([
         "config_asset.updated",
-        "config_asset.reverted",
         "config_asset.default_agent_set",
         "config_asset.deleted"
       ])
@@ -337,6 +343,7 @@ describe("config asset admin routes", () => {
       });
     expect((await put("Current")).statusCode).toBe(200);
     expect((await put("Changed", 1)).statusCode).toBe(200);
+    await publishFixtureDraft(fixture.server);
 
     // A put made against the revision before, and a create of a name that exists.
     for (const stale of [await put("Stale", 1), await put("Created again")]) {
@@ -564,11 +571,14 @@ describe("config asset admin routes", () => {
       fastMode: { fastMode: true },
       userSelectableModelBindingIds: { userSelectableModelBindingIds: ["other"] }
     };
-    const put = (token: string, config: Record<string, unknown>) =>
-      request(fixture.server, token, "assets.put", {
+    const put = async (token: string, config: Record<string, unknown>) => {
+      const response = await request(fixture.server, token, "assets.put", {
         params: { kind: "agent", name: "assistant" },
         payload: { config }
       });
+      if (response.statusCode === 200) await publishFixtureDraft(fixture.server);
+      return response;
+    };
 
     for (const [field, change] of Object.entries(changes)) {
       const denied = await put(adminToken, { ...initial, ...change });
@@ -623,11 +633,14 @@ describe("config asset admin routes", () => {
       roles: ["superadmin"],
       permissions: ["config_assets.release"]
     });
-    const put = (config: Record<string, unknown>) =>
-      request(fixture.server, token, "assets.put", {
+    const put = async (config: Record<string, unknown>) => {
+      const response = await request(fixture.server, token, "assets.put", {
         params: { kind: "agent", name: "assistant" },
         payload: { config }
       });
+      if (response.statusCode === 200) await publishFixtureDraft(fixture.server);
+      return response;
+    };
     const stored = async () =>
       (
         await request(fixture.server, token, "assets.get", {
@@ -705,11 +718,14 @@ describe("config asset admin routes", () => {
       roles: ["superadmin"],
       permissions: []
     });
-    const put = (config: Record<string, unknown>) =>
-      request(fixture.server, token, "assets.put", {
+    const put = async (config: Record<string, unknown>) => {
+      const response = await request(fixture.server, token, "assets.put", {
         params: { kind: "agent", name: "assistant" },
         payload: { config }
       });
+      if (response.statusCode === 200) await publishFixtureDraft(fixture.server);
+      return response;
+    };
 
     for (const change of [
       { userSelectableModelBindingIds: ["other"] },
@@ -732,11 +748,14 @@ describe("config asset admin routes", () => {
       roles: ["superadmin"],
       permissions: ["config_assets.release"]
     });
-    const put = (config: Record<string, unknown>) =>
-      request(fixture.server, token, "assets.put", {
+    const put = async (config: Record<string, unknown>) => {
+      const response = await request(fixture.server, token, "assets.put", {
         params: { kind: "agent", name: "assistant" },
         payload: { config }
       });
+      if (response.statusCode === 200) await publishFixtureDraft(fixture.server);
+      return response;
+    };
     const push = async (agent: Record<string, unknown>) =>
       release(fixture.server, token, { defaultAgentName: "assistant", agents: [agent] });
     const stored = async () =>
@@ -826,6 +845,7 @@ describe("config asset admin routes", () => {
     };
     expect((await put(renamed)).statusCode).toBe(200);
     expect((await push({ ...renamed, displayName: "Pushed" })).statusCode).toBe(200);
+    await publishFixtureDraft(fixture.server);
     expect(await stored()).toMatchObject({
       displayName: "Pushed",
       userSelectableModelBindingIds: ["retired"]
@@ -1578,6 +1598,28 @@ async function request(
     ...(await atCurrentRevision(server.stores, routesClientInstanceId, operation, input)),
     headers: { authorization: `Bearer ${token}` }
   });
+}
+
+async function publishFixtureDraft(server: TestInstance) {
+  const token = await mintToken(server, {
+    roles: ["superadmin"],
+    permissions: [],
+    scopes: [
+      "config_assets:read",
+      "config_assets:write",
+      "config_assets:publish",
+      "config_assets:release"
+    ]
+  });
+  const read = await request(server, token, "agents.draft.get", { params: { name: "assistant" } });
+  const draft = read.json<{ draft: { revision: number } | null }>().draft;
+  if (draft) {
+    const published = await request(server, token, "assets.publish", {
+      params: { kind: "agent", name: "assistant" },
+      payload: { revision: draft.revision }
+    });
+    expect(published.statusCode, published.body).toBe(200);
+  }
 }
 
 /** A config push of this content, every asset at the revision the instance holds now. */

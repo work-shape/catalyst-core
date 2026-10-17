@@ -1,3 +1,4 @@
+import { asUserId } from "@work-shape/catalyst-core";
 import { builtInModelCapabilities } from "./support/model-gateway";
 import { accessOf } from "./support/access";
 import { createTestInstance, getTestExecution } from "./support/test-instance";
@@ -19,6 +20,75 @@ import {
 } from "./support/skill-change-fixture";
 
 describe("skill change approval workflow", () => {
+  it("carries an approved skill creation and its undo into a pending draft, moving its base (AD-1 67)", async () => {
+    const f = await fixture();
+    const live = await f.store.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "agent",
+      name: f.agent.name
+    });
+    if (!live) throw new Error("Seeded agent missing");
+    const draft = await f.store.agentProposals.save({
+      clientInstanceId,
+      agentId: live.id,
+      baseRevision: live.revision,
+      expectedDraftRevision: null,
+      config: json({ ...f.agent, instructions: "Keep this draft." }),
+      author: { userId: asUserId(reviewer.id), release: false },
+      savedAt: new Date().toISOString()
+    });
+    const request = await f.propose(creation, "new_skill");
+    await f.approve(request.id);
+    const updated = await f.store.agentProposals.get({ clientInstanceId, agentId: live.id });
+    expect(updated).toMatchObject({
+      revision: (draft?.revision ?? 0) + 1,
+      baseRevision: live.revision + 1,
+      config: {
+        instructions: "Keep this draft.",
+        skillNames: expect.arrayContaining(["new_skill"])
+      }
+    });
+    // The draft can be consumed on the new base, without stale_base.
+    const after = await f.store.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "agent",
+      name: f.agent.name
+    });
+    expect(updated?.baseRevision).toBe(after?.revision);
+    await f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id);
+    const reverted = await f.store.agentProposals.get({ clientInstanceId, agentId: live.id });
+    expect(reverted?.config.skillNames).not.toContain("new_skill");
+    expect(reverted?.baseRevision).toBe(live.revision + 2);
+    expect(reverted?.revision).toBe((updated?.revision ?? 0) + 1);
+    if (!reverted) throw new Error("Pending draft missing after skill undo");
+    await f.store.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { [`agent:${f.agent.name}`]: reverted.baseRevision },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: f.agent.name,
+          config: reverted.config,
+          agentPublish: reverted.revision
+        }
+      ]
+    });
+    expect(
+      await f.store.agentProposals.get({ clientInstanceId, agentId: live.id })
+    ).toBeUndefined();
+    expect(
+      await f.store.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "agent",
+        name: f.agent.name
+      })
+    ).toMatchObject({
+      revision: reverted.baseRevision + 1,
+      config: { instructions: "Keep this draft." }
+    });
+  });
+
   it("applies as the approver with provenance despite disabled interactive administration, then reverts", async () => {
     const f = await fixture();
     expect(f.config.administration.agentConfiguration.allowSkillEditing).toBe(false);

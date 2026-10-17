@@ -9,6 +9,7 @@ import {
   type AuditRecorder,
   type AuthenticatedIdentity,
   type CollaborationWorkspaceId,
+  type ConversationId,
   type OperationAuthorization,
   type OperationRunId,
   type ServedFileSetAsset
@@ -20,6 +21,7 @@ import type { AssetSetIssue } from "./asset-set";
 /** What an asset operation knows about its caller: the call of the Operation Run. */
 export interface AssetCall {
   actor: AuthenticatedIdentity;
+  buildConversationId?: ConversationId;
   access: ActorAccess;
   /** Writes audit rows that carry the run's id. */
   audit: AuditRecorder;

@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./support/agent-draft-publication";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -134,6 +135,7 @@ describe("a definition in a release", () => {
     // The superadmin's save through the same operation is adjusted, as it always was.
     const saved = await syncAs(t, t.root.id, [putAgent("rel-old", fast, 1)]);
     expect(saved.statusCode, saved.body).toBe(200);
+    await publishAgentDraft({ ...t, admin: t.root }, "rel-old");
     const config = (await t.stored("agent", "rel-old"))?.config;
     expect(config).toMatchObject({ modelBindingId: "plain" });
     expect(config).not.toHaveProperty("fastMode");

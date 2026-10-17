@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./request-with-origin";
 import { seedHistoricalGrant } from "./legacy-grant";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -206,6 +207,8 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await expect(page.getByText("1 change", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    await publishAgentDraft(admin, agentPath("kai-helper"));
+    await page.reload();
     await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 1);
 
     // Somebody else saves while the holder types: the holder's save meets the newer revision,
@@ -215,7 +218,8 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await admin.goto("/build/agents/kai-helper");
     await instructions(admin).fill("The administrator was faster.");
     await admin.getByRole("button", { name: "Save changes", exact: true }).click();
-    // The button loses its name while it saves, so the revision says when the save is there.
+    await publishAgentDraft(admin, agentPath("kai-helper"));
+    // The administrator makes the saved draft live before the stale editor saves.
     await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 2);
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     const conflict = page.locator("[data-build-conflict]");
@@ -254,6 +258,8 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     // The restored content is the asset now: the drawer closes on the editor that shows it.
     await expect(history).toBeHidden();
     await expect(page.locator("[data-build-restored]")).toHaveText(`Revision ${created} restored.`);
+    await publishAgentDraft(admin, agentPath("kai-helper"));
+    await page.reload();
     await expect(instructions(page)).toHaveValue("You help Kai.");
     await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 3);
 

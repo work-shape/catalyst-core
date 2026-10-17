@@ -722,6 +722,20 @@
       "when": 1792247662864,
       "tag": "0102_approval_request_addressee_index",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1792257440256,
+      "tag": "0103_agent_draft",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1792257627011,
+      "tag": "0104_agent_draft_index",
+      "breakpoints": true
     }
   ]
 }

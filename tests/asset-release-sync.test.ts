@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./support/agent-draft-publication";
 import { describe, expect, it } from "vitest";
 import {
   SCOPES_HEADER,
@@ -29,6 +30,58 @@ import { applyAtCurrentRevisions } from "./support/asset-revisions";
 // What a release does as the release path did before it is in asset-release-parity.
 
 describe("a release through assets.sync", () => {
+  it("drafts a release update and publishes it under release field rules, while the service cannot publish (AD-1 64)", async () => {
+    const t = await setup({ editingLimits: RELEASE_ONLY });
+    const before = await t.stored("agent", "rel-old");
+    const version = await t.version();
+    const pushed = await syncAsService(
+      t,
+      [putAgent("rel-old", { instructions: "Released instructions." }, 1)],
+      "config_assets:read config_assets:release"
+    );
+    expect(pushed.statusCode, pushed.body).toBe(200);
+    expect(pushed.json()).toMatchObject({
+      version,
+      items: [{ draftRevision: 1, publishedRevision: 1 }]
+    });
+    expect(await t.stored("agent", "rel-old")).toEqual(before);
+    const refused = await asService(t, "assets.publish", {
+      params: { kind: "agent", name: "rel-old" },
+      payload: { revision: 1 }
+    });
+    expect(refused.statusCode).toBe(403);
+    const own = await t.call(t.admin.id, "assets.put", {
+      params: { kind: "agent", name: "rel-old" },
+      payload: {
+        config: agent("rel-old", { instructions: "Own instructions." }),
+        expectedRevision: 1,
+        expectedDraftRevision: 1
+      }
+    });
+    expect(own.statusCode).toBe(403);
+    const published = await t.call(t.admin.id, "assets.publish", {
+      params: { kind: "agent", name: "rel-old" },
+      payload: { revision: 1 }
+    });
+    expect(published.statusCode, published.body).toBe(200);
+    expect(await t.stored("agent", "rel-old")).toMatchObject({
+      revision: 2,
+      config: { instructions: "Released instructions." }
+    });
+  });
+
+  it("refuses a stale draft fence in sync and rolls back its sibling skill write (AD-1 62, 64)", async () => {
+    const t = await setup();
+    await syncAsService(t, [putAgent("rel-old", { instructions: "First." }, 1)]);
+    const before = await t.stored("skill", "rel-guide");
+    const refused = await syncAsService(t, [
+      { ...putAgent("rel-old", { instructions: "Stale." }, 1), expectedDraftRevision: null },
+      putSkill("rel-guide", "Must not land.", 1)
+    ]);
+    expect(refused.statusCode).toBe(412);
+    expect(await t.stored("skill", "rel-guide")).toEqual(before);
+  });
+
   it("lands in one version on an instance that is edited by release only, and binds everyone else", async () => {
     const t = await setup({ editingLimits: RELEASE_ONLY });
     // The agent the release replaces is one an operator placed in chosen workspaces.
@@ -119,6 +172,7 @@ describe("a release through assets.sync", () => {
       putAgent("rel-old", { instructions: "Changed by release." }, 1)
     ]);
     expect(changed.statusCode, changed.body).toBe(200);
+    await publishAgentDraft(t, "rel-old");
 
     // The same holder, on the operations of the interface.
     const limited = (message: string) => ({ status: 403, code: "FORBIDDEN", message });
@@ -213,6 +267,36 @@ describe("a release through assets.sync", () => {
       revision: 2,
       config: { content: "Pushed." }
     });
+    const agentDraft = await syncAsService(t, [
+      putAgent("rel-old", { instructions: "Published from a release." }, 1)
+    ]);
+    expect(agentDraft.statusCode, agentDraft.body).toBe(200);
+    await publishAgentDraft(t, "rel-old");
+    expect(await t.stored("agent", "rel-old")).toMatchObject({
+      revision: 2,
+      config: { instructions: "Published from a release." }
+    });
+    const live = await t.stored("agent", "rel-old");
+    if (!live) throw new Error("Released agent missing");
+    const interactive = await t.stores.agentProposals.save({
+      clientInstanceId,
+      agentId: live.id,
+      baseRevision: live.revision,
+      expectedDraftRevision: null,
+      author: { release: false },
+      config: agent("rel-old", { instructions: "Interactive draft." }),
+      savedAt: new Date().toISOString()
+    });
+    if (!interactive) throw new Error("Interactive fixture draft missing");
+    await t.expectRefused(
+      t.admin.id,
+      "assets.publish",
+      {
+        params: { kind: "agent", name: "rel-old" },
+        payload: { revision: interactive.revision }
+      },
+      moduleOff
+    );
   });
 
   it("carries model settings without the right that governs them, in a sync only", async () => {
@@ -235,6 +319,7 @@ describe("a release through assets.sync", () => {
 
     const pushed = await syncAsService(t, [bound]);
     expect(pushed.statusCode, pushed.body).toBe(200);
+    await publishAgentDraft(t, "rel-old");
     expect(await t.stored("agent", "rel-old")).toMatchObject({
       revision: 2,
       config: { modelBindingId: "plain" }
@@ -548,7 +633,11 @@ describe("assets.sync without a Namespace", () => {
     ]);
     expect(release.statusCode, release.body).toBe(200);
     expect(await t.stored("skill", "free-standing")).toMatchObject({ status: "active" });
-    expect(await t.stored("agent", "lena-notes")).toMatchObject({ revision: 2 });
+    expect(await t.stored("agent", "lena-notes")).toMatchObject({ revision: 1 });
+    const pending = (
+      await t.expectOk(t.admin.id, "agents.draft.get", { params: { name: "lena-notes" } })
+    ).json();
+    expect(pending).toMatchObject({ draft: { revision: 1, config: { displayName: "Renamed" } } });
   });
 
   it("is opened by the key's release scope only for a principal who holds the release right", async () => {

@@ -4,6 +4,8 @@ import {
   type PlatformAction,
   type Permission,
   ACTIONS,
+  GRANTABLE_ACTION_SCOPES,
+  operationScopesOfPersonalApiKey,
   LEGACY_PERMISSION_ACTIONS,
   PERMISSIONS,
   ROLE_DEFAULT_ACTIONS,
@@ -11,10 +13,16 @@ import {
 } from "@work-shape/catalyst-core";
 
 describe("permissions", () => {
+  it("grants agent publishing at workspace or asset scope and carries it in a personal key (Access 45)", () => {
+    expect(GRANTABLE_ACTION_SCOPES["agent.publish"]).toEqual(["workspace", "asset"]);
+    expect(operationScopesOfPersonalApiKey(["agent.publish"])).toContain("config_assets:publish");
+    expect(operationScopesOfPersonalApiKey(["agent.write"])).not.toContain("config_assets:publish");
+  });
   it("maps each action a legacy key names to exactly one of the nine legacy keys", () => {
     expect(ACTIONS).toEqual([
       "agent.read",
       "agent.write",
+      "agent.publish",
       "agent.delete",
       "skill.read",
       "skill.write",
@@ -67,7 +75,8 @@ describe("permissions", () => {
     // nobody holds one through the legacy column.
     const unkeyed = (action: string) =>
       /^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action) ||
-      action === "service_principals.manage";
+      action === "service_principals.manage" ||
+      action === "agent.publish";
     const keyed = ACTIONS.filter((action) => !unkeyed(action));
     expect(keyed).toHaveLength(14);
     for (const action of ACTIONS.filter(unkeyed)) {
@@ -120,6 +129,7 @@ describe("permissions", () => {
     expect(ROLE_DEFAULT_ACTIONS.admin).toEqual([
       "agent.read",
       "agent.write",
+      "agent.publish",
       "agent.delete",
       "skill.read",
       "skill.write",

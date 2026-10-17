@@ -1,3 +1,4 @@
+import { readAgentDraft } from "./request-with-origin";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { type Locator, type Page } from "@playwright/test";
@@ -232,8 +233,7 @@ test.describe("the Tools section of an agent, as rows", () => {
     );
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     expect((await saved).ok()).toBe(true);
-    const stored = await page.request.get(agentPath);
-    const { config } = storedAgentSchema.parse(await stored.json());
+    const { config } = storedAgentSchema.parse(await readAgentDraft(page, agentPath));
     expect(config.skillNames).toEqual([skillName]);
     expect(config.toolNames).toContain("read_skill");
     expect(config.toolNames).toContain("show_view");

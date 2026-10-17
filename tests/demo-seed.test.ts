@@ -184,18 +184,18 @@ describe("the demo seed on the fixture instance", () => {
         .filter((asset) => asset.revision !== 1)
         .map((asset) => asset.name)
         .sort()
-    ).toEqual(["kai-helper", "tax-vat-checker"]);
+    ).toEqual(["tax-vat-checker"]);
     const revisions = await listAll((paging) =>
       client.assets.revisions.list({
         params: { kind: "agent", name: "tax-vat-checker" },
         query: paging
       })
     );
-    // Newest first: the config CLI's push over the draft a person saved.
+    // Newest first: the administrator published the release-written draft.
     expect(
       revisions.map((revision) => [revision.revision, revision.actor?.principalKind ?? "user"])
     ).toEqual([
-      [2, "service"],
+      [2, "user"],
       [1, "user"]
     ]);
     expect(revisions[1]?.actor?.displayLabel).toBe("Jonas Brandt");
@@ -255,8 +255,14 @@ describe("the demo seed on the fixture instance", () => {
       const revisions = await listAll((paging) =>
         client.assets.revisions.list({ params: { kind, name }, query: paging })
       );
-      expect(revisions).toHaveLength(2);
-      expect(revisions[0]?.actor?.displayLabel).toBe("Kai Berger");
+      if (kind === "agent") {
+        expect(revisions).toHaveLength(1);
+        const { draft } = await client.agents.draft.get({ params: { name } });
+        expect(draft).toMatchObject({ revision: 1, baseRevision: 1, author: { userId: kai?.id } });
+      } else {
+        expect(revisions).toHaveLength(2);
+        expect(revisions[0]?.actor?.displayLabel).toBe("Kai Berger");
+      }
     }
     // His Workflow stays a draft: publishing it would lend the principal it names.
     const draft = await client.assets.get({

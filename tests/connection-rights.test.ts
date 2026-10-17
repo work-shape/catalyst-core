@@ -89,6 +89,7 @@ describe("the vocabulary of Connection rights", () => {
         JSON.stringify({
           adminActions: ROLE_DEFAULT_ACTIONS.admin.filter(
             (action) =>
+              action !== "agent.publish" &&
               !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action)
           )
         }) +

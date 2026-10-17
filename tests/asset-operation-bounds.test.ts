@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./support/agent-draft-publication";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { agent, clientInstanceId } from "./support/access-instance";
@@ -69,6 +70,7 @@ describe("the history of an asset", () => {
         payload: { config: agent("kai-intake", { instructions }) }
       });
       expect(response.statusCode, response.body).toBe(200);
+      await publishAgentDraft(t, "kai-intake");
     }
     const list = vi.spyOn(t.stores.configAssets, "listConfigAssetRevisions");
     const page = async (query: { limit: number; cursor?: string }) =>
@@ -96,6 +98,7 @@ describe("the history of an asset", () => {
     list.mockClear();
     await t.expectOk(t.kai.id, "assets.revert", { ...address, payload: { revision: 2 } });
     expect(list).not.toHaveBeenCalled();
+    await publishAgentDraft(t, "kai-intake");
     expect(await t.stored("agent", "kai-intake")).toMatchObject({
       revision: 6,
       config: { instructions: "Two." }

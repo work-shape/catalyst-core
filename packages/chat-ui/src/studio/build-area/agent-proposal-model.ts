@@ -108,7 +108,7 @@ export type AgentProposalRefusal = "changed" | "stale";
 export function readProposalRefusal(error: unknown): AgentProposalRefusal | undefined {
   const code = apiErrorCode(error);
   const { reason } = readRefusalDetails(error);
-  if (code === "REVISION_CONFLICT" && reason === "proposal_changed") return "changed";
+  if (code === "REVISION_CONFLICT" && reason === "draft_changed") return "changed";
   if (code === "CONFLICT" && reason === "stale_base") return "stale";
   return undefined;
 }

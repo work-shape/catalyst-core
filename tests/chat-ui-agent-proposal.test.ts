@@ -265,7 +265,7 @@ describe("Apply and Discard", () => {
 
   it("never applies a proposal newer than the one read: it reads the proposal again", async () => {
     const run = decide(async () => {
-      throw refused(412, "REVISION_CONFLICT", "proposal_changed");
+      throw refused(412, "REVISION_CONFLICT", "draft_changed");
     });
     await expect(run.answer).resolves.toEqual({ kind: "changed" });
     expect(run.reloaded).not.toHaveBeenCalled();

@@ -51,6 +51,7 @@ export type OperationScope = Exclude<FirstPartyAuthScope, "*">;
 export const ACTIONS = [
   "agent.read",
   "agent.write",
+  "agent.publish",
   "agent.delete",
   "skill.read",
   "skill.write",

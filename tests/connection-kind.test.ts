@@ -662,6 +662,7 @@ describe("a Connection through the asset operations", () => {
     expect(context.kinds.find((kind) => kind.kind === "agent")?.actions).toEqual({
       read: "agent.read",
       write: "agent.write",
+      publish: "agent.publish",
       delete: "agent.delete"
     });
     expect(context.actions).toEqual(

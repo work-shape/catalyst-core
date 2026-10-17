@@ -1,3 +1,4 @@
+import { publishAgentDraft, readAgentDraft } from "./request-with-origin";
 import { loadNewerVersion } from "./build-fixtures";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { randomUUID } from "node:crypto";
@@ -3306,7 +3307,14 @@ test("superadmin manages config assets with validation and conflict protection",
   // and the set of its skills are not this test's to predict.
   const revisionOf = async (assetUrl: string) => (await readAsset(page, assetUrl))?.revision;
   /** Waits for the asset to stand at another revision than `before`, and answers that one. */
-  const expectSaved = async (assetUrl: string, before: number | undefined) => {
+  const expectSaved = async (assetUrl: string, before: number | undefined, refresh = true) => {
+    if (new URL(assetUrl).pathname.includes("/assets/agent/")) {
+      await publishAgentDraft(page, assetUrl);
+      if (refresh) {
+        await page.reload();
+        await expect(page.locator("form")).toBeVisible();
+      }
+    }
     let revision: number | undefined;
     await expect
       .poll(async () => {
@@ -3505,11 +3513,13 @@ test("superadmin manages config assets with validation and conflict protection",
     const serverChange = await requestWithOrigin(page, "put", researchAgentUrl, {
       data: {
         expectedRevision: await assetRevision(page, researchAgentUrl),
+        expectedDraftRevision: (await readAgentDraft(page, researchAgentUrl))?.revision ?? null,
         config: { ...originalResearchAgent, instructions: serverInstructions }
       }
     });
     expect(serverChange.ok()).toBe(true);
-    agentRevision = await expectSaved(researchAgentUrl, agentRevision);
+    // Keep the page on its loaded revision to exercise the stale-editor refusal.
+    agentRevision = await expectSaved(researchAgentUrl, agentRevision, false);
     const unsaved = `${String(originalResearchAgent?.instructions)}\n\nUnsaved UI change.`;
     await instructions.fill(unsaved);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
@@ -3527,10 +3537,12 @@ test("superadmin manages config assets with validation and conflict protection",
     const restored = await requestWithOrigin(page, "put", researchAgentUrl, {
       data: {
         expectedRevision: await assetRevision(page, researchAgentUrl),
+        expectedDraftRevision: (await readAgentDraft(page, researchAgentUrl))?.revision ?? null,
         config: originalResearchAgent
       }
     });
     expect(restored.ok(), await restored.text()).toBe(true);
+    await publishAgentDraft(page, researchAgentUrl);
     const leftSkill = await revisionOf(skillUrl);
     if (leftSkill !== undefined) {
       const deleted = await requestWithOrigin(page, "post", `${skillUrl}/delete`, {

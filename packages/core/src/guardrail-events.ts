@@ -12,6 +12,7 @@ export const GUARDRAIL_EVENTS = [
   "asset.before_write",
   "operation.before_call",
   "app.before_publish",
+  "agent.before_publish",
   "workflow.before_publish",
   "data_store.before_publish",
   "approval_request.before_create"

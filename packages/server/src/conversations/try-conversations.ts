@@ -5,9 +5,12 @@ import {
   auditActorFromIdentity,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
+  type ActorAccess,
+  type AuthenticatedIdentity,
   type Conversation
 } from "@work-shape/catalyst-core";
-import { PROPOSED_KIND, type ProposalSettled } from "../assets/agent-proposals";
+import { AssetWorkflow } from "../assets/asset-service";
+const PROPOSED_KIND = "agent";
 import type { AssetCall } from "../assets/asset-access";
 import { deleteTryConversations } from "../deletion/conversation-cleanup";
 import type { ChatServerOptions } from "../types";
@@ -32,6 +35,35 @@ export class TryConversations {
 
   constructor(options: ChatServerOptions) {
     this.options = options;
+  }
+
+  async authorize(actor: AuthenticatedIdentity, access: ActorAccess, input: TryAddress) {
+    const conversation = await this.options.stores.conversations.getConversation(
+      this.options.clientInstanceId,
+      asConversationId(input.conversationId)
+    );
+    if (
+      isAuthenticatedServicePrincipal(actor) ||
+      conversation?.status !== "active" ||
+      conversation.createdByUserId !== getSubjectUserId(actor)
+    )
+      throw unavailable();
+    const agent = await this.options.configAssets.store.getConfigAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: "agent",
+      name: input.name
+    });
+    if (
+      !agent ||
+      (agent.scope.kind === "workspace" &&
+        agent.scope.workspaceId !== conversation.collaborationWorkspaceId)
+    )
+      throw unavailable();
+    return new AssetWorkflow(this.options).authorizeWrite(access, {
+      kind: "agent",
+      name: input.name,
+      ...(agent.scope.kind === "workspace" ? { workspaceId: agent.scope.workspaceId } : {})
+    });
   }
 
   /**
@@ -85,16 +117,27 @@ export class TryConversations {
     return conversation;
   }
 
-  /** The Try conversation of the agent goes once the person applied or discarded its proposal. */
-  readonly settled: ProposalSettled = (call, { agentId, conversationId, outcome }) =>
-    deleteTryConversations(
+  /** All Try conversations of the agent go after Publish or Discard. */
+  async settled(
+    call: AssetCall,
+    address: { name: string; workspaceId?: string },
+    outcome: "published" | "discarded"
+  ) {
+    const agent = await this.options.configAssets.store.getConfigAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: "agent",
+      ...address
+    });
+    if (!agent) return;
+    await deleteTryConversations(
       this.options,
-      { buildConversationId: conversationId, agentId },
+      { agentId: agent.id },
       {
         deletedAt: new Date().toISOString(),
-        requestedBy: outcome === "applied" ? "proposal_applied" : "proposal_discarded",
+        requestedBy: outcome === "published" ? "draft_published" : "draft_discarded",
         correlationId: call.correlationId,
         actor: auditActorFromIdentity(call.actor)
       }
     );
+  }
 }

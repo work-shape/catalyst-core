@@ -21,13 +21,11 @@ const sourceOf = (row: ProposalRow): AgentProposalSource =>
     ? { kind: "conversation", conversationId: asConversationId(row.sourceId) }
     : { kind: "person", userId: asUserId(row.sourceId) };
 
-/** The proposal of one agent and source. The unique index on the three finds it. */
-const ofSource = (input: Input<"get">) =>
+/** The shared draft of one agent, found by the unique agent index. */
+const ofAgent = (input: Input<"get">) =>
   and(
     eq(agentProposals.clientInstanceId, input.clientInstanceId),
-    eq(agentProposals.agentId, input.agentId),
-    eq(agentProposals.sourceKind, input.source.kind),
-    eq(agentProposals.sourceId, sourceIdOf(input.source))
+    eq(agentProposals.agentId, input.agentId)
   );
 
 function mapProposal(row: ProposalRow, config: AgentProposal["config"]): AgentProposal {
@@ -35,6 +33,13 @@ function mapProposal(row: ProposalRow, config: AgentProposal["config"]): AgentPr
     id: row.id,
     agentId: row.agentId,
     source: sourceOf(row),
+    author: {
+      ...(row.lastAuthorUserId ? { userId: asUserId(row.lastAuthorUserId) } : {}),
+      ...(row.lastBuildConversationId
+        ? { conversationId: asConversationId(row.lastBuildConversationId) }
+        : {}),
+      release: row.lastWriteRelease
+    },
     baseRevision: row.baseRevision,
     revision: row.revision,
     config,
@@ -43,7 +48,7 @@ function mapProposal(row: ProposalRow, config: AgentProposal["config"]): AgentPr
   };
 }
 
-async function getAgentProposal(
+export async function getAgentProposal(
   db: PostgresConnection,
   input: Input<"get">
 ): Promise<AgentProposal | undefined> {
@@ -57,22 +62,17 @@ async function getAgentProposal(
         eq(agentProposalRevisions.revision, agentProposals.revision)
       )
     )
-    .where(ofSource(input))
+    .where(ofAgent(input))
     .limit(1);
   return found ? mapProposal(found.proposal, found.config) : undefined;
 }
 
 /**
- * The row of one agent and source, locked for the write, and its pending revision: the row's
+ * The row of one agent, locked for the write, and its pending revision: the row's
  * revision where that revision is stored, and none once Apply or Discard removed its revisions.
  */
-async function lockSource(tx: PostgresTransaction, input: Input<"get">) {
-  const [row] = await tx
-    .select()
-    .from(agentProposals)
-    .where(ofSource(input))
-    .for("update")
-    .limit(1);
+async function lockDraft(tx: PostgresTransaction, input: Input<"get">) {
+  const [row] = await tx.select().from(agentProposals).where(ofAgent(input)).for("update").limit(1);
   if (!row) return { row: undefined, pending: null };
   const [head] = await tx
     .select({ revision: agentProposalRevisions.revision })
@@ -87,21 +87,39 @@ async function lockSource(tx: PostgresTransaction, input: Input<"get">) {
   return { row, pending: head ? row.revision : null };
 }
 
-async function saveAgentProposal(
+export async function saveAgentProposal(
   db: PostgresConnection,
   input: Input<"save">
 ): Promise<AgentProposal | undefined> {
   const savedAt = new Date(input.savedAt);
+  const author = input.author ?? {
+    ...(input.source?.kind === "person" ? { userId: input.source.userId } : {}),
+    ...(input.source?.kind === "conversation"
+      ? { conversationId: input.source.conversationId }
+      : {}),
+    release: false
+  };
+  const source =
+    input.source ??
+    (author.conversationId
+      ? { kind: "conversation" as const, conversationId: author.conversationId }
+      : { kind: "person" as const, userId: author.userId ?? asUserId("release") });
+  const attribution = {
+    lastAuthorUserId: author.userId ?? null,
+    lastBuildConversationId: author.conversationId ?? null,
+    lastWriteRelease: author.release
+  };
   return db.transaction(async (tx) => {
-    const { row: found, pending } = await lockSource(tx, input);
-    if (pending !== input.expectedRevision) return undefined;
-    // The row outlives an Apply or a Discard, so the next proposal of the source counts on from
+    const { row: found, pending } = await lockDraft(tx, input);
+    if (pending !== input.expectedDraftRevision) return undefined;
+    // The row outlives an Apply or a Discard, so the next proposal of the agent counts on from
     // the last one's revision: a revision a person read names one proposal's content only. Of
     // two first saves, the insert of one finds the other's row and writes nothing.
     const [row] = found
       ? await tx
           .update(agentProposals)
           .set({
+            ...attribution,
             baseRevision: input.baseRevision,
             revision: found.revision + 1,
             ...(pending === null ? { createdAt: savedAt } : {}),
@@ -115,8 +133,9 @@ async function saveAgentProposal(
             id: createPlatformId("acp"),
             clientInstanceId: input.clientInstanceId,
             agentId: input.agentId,
-            sourceKind: input.source.kind,
-            sourceId: sourceIdOf(input.source),
+            sourceKind: source.kind,
+            sourceId: sourceIdOf(source),
+            ...attribution,
             baseRevision: input.baseRevision,
             revision: 1,
             createdAt: savedAt,
@@ -135,41 +154,49 @@ async function saveAgentProposal(
   });
 }
 
-async function removeAgentProposal(
+export async function removeAgentProposal(
   db: PostgresConnection,
   input: Input<"remove">
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
-    const { row, pending } = await lockSource(tx, input);
+    const { row, pending } = await lockDraft(tx, input);
     if (!row || pending === null) return false;
     if (input.revision !== undefined && pending !== input.revision) return false;
-    // The revisions go; the row stays and keeps the count of the source's revisions.
+    // The revisions go; the row stays and keeps the count of the agent's revisions.
     await tx.delete(agentProposalRevisions).where(eq(agentProposalRevisions.proposalId, row.id));
     return true;
   });
 }
 
-async function removeAgentProposalsOfConversations(
-  db: PostgresConnection,
-  input: Input<"removeOfConversations">
-): Promise<void> {
-  if (input.conversationIds.length === 0) return;
-  await db
-    .delete(agentProposals)
-    .where(
-      and(
-        eq(agentProposals.clientInstanceId, input.clientInstanceId),
-        eq(agentProposals.sourceKind, "conversation"),
-        inArray(agentProposals.sourceId, [...input.conversationIds])
-      )
-    );
-}
-
 export function createPostgresAgentProposalStore(db: PostgresConnection): AgentProposalStore {
   return {
+    async summaries(input) {
+      if (!input.agentIds.length) return new Map();
+      const rows = await db
+        .select({ proposal: agentProposals })
+        .from(agentProposals)
+        .innerJoin(
+          agentProposalRevisions,
+          and(
+            eq(agentProposalRevisions.proposalId, agentProposals.id),
+            eq(agentProposalRevisions.revision, agentProposals.revision)
+          )
+        )
+        .where(
+          and(
+            eq(agentProposals.clientInstanceId, input.clientInstanceId),
+            inArray(agentProposals.agentId, [...input.agentIds])
+          )
+        );
+      return new Map(
+        rows.map(({ proposal }) => {
+          const { revision, baseRevision, author, updatedAt } = mapProposal(proposal, {});
+          return [proposal.agentId, { revision, baseRevision, author, updatedAt }];
+        })
+      );
+    },
     get: (input) => getAgentProposal(db, input),
     save: (input) => saveAgentProposal(db, input),
-    remove: (input) => removeAgentProposal(db, input),
-    removeOfConversations: (input) => removeAgentProposalsOfConversations(db, input)
+    remove: (input) => removeAgentProposal(db, input)
   };
 }

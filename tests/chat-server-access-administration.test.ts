@@ -253,7 +253,7 @@ describe("who may write a grant, and what a grant may say", () => {
       [{ ...base, action: "skill.approve" }, 422, "VALIDATION_FAILED", "action_not_grantable"],
       [{ ...base, action: "config_assets.write" }, 422, "VALIDATION_FAILED", "unknown_action"],
       [{ ...base, action: "ref:demo-tools" }, 422, "VALIDATION_FAILED", "unknown_action"],
-      [{ ...base, action: "agent.publish" }, 422, "VALIDATION_FAILED", "unknown_action"],
+      [{ ...base, action: "unregistered.action" }, 422, "VALIDATION_FAILED", "unknown_action"],
       [{ ...base, holderId: "usr_nobody" }, 404, "NOT_FOUND", "unknown_holder"]
     ];
     for (const [payload, status, code, reason] of refusals) {

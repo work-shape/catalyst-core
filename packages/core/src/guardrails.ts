@@ -52,6 +52,7 @@ export const GUARDRAIL_CHECKABLE_FIELDS = {
   "asset.before_write": ["name", "content"],
   "operation.before_call": ["input"],
   "app.before_publish": ["name", "content"],
+  "agent.before_publish": ["name", "content"],
   "workflow.before_publish": ["name", "content"],
   "data_store.before_publish": ["name", "content"],
   "approval_request.before_create": ["summary", "newContent"]
@@ -67,6 +68,7 @@ export const GUARDRAIL_FILTER_KEYS = {
   "asset.before_write": ["kind", "origin", "agent", "workspace"],
   "operation.before_call": ["operation", "origin", "agent", "workspace"],
   "app.before_publish": ["origin", "agent", "workspace"],
+  "agent.before_publish": ["origin", "agent", "workspace"],
   "workflow.before_publish": ["origin", "agent", "workspace"],
   "data_store.before_publish": ["origin", "agent", "workspace"],
   "approval_request.before_create": ["kind"]
@@ -93,6 +95,7 @@ export const GUARDRAIL_APPROVAL_EVENTS = [
   "asset.before_write",
   "operation.before_call",
   "app.before_publish",
+  "agent.before_publish",
   "workflow.before_publish",
   "data_store.before_publish"
 ] as const satisfies readonly GuardrailEvent[];

@@ -118,12 +118,12 @@ export function useAgentProposal(input: {
   ];
   const query = useQuery({
     queryKey,
-    enabled: address !== undefined,
+    enabled: address !== undefined && canDecide,
     queryFn: async ({ signal }): Promise<AgentProposal | null> => {
       if (address === undefined) return null;
       try {
-        const { proposal } = await client.agents.proposal.get({ params: address, signal });
-        return proposal;
+        const { draft } = await client.agents.draft.get({ params: { name: address.name }, signal });
+        return draft;
       } catch (error) {
         // The conversation is somebody else's, or gone: it has no proposal for this reader.
         if (apiErrorCode(error) === "NOT_FOUND") return null;
@@ -133,7 +133,7 @@ export function useAgentProposal(input: {
     retry: false
   });
   const proposal = query.data ?? undefined;
-  if (address === undefined || proposal === undefined) return undefined;
+  if (!canDecide || address === undefined || proposal === undefined) return undefined;
 
   const reread = () => queryClient.invalidateQueries({ queryKey });
   const decide = async (kind: ProposalDecision) => {
@@ -144,11 +144,14 @@ export function useAgentProposal(input: {
     const next = await decideProposal({
       call: () =>
         kind === "apply"
-          ? client.agents.proposal.apply({
-              params: address,
+          ? client.assets.publish({
+              params: { kind: "agent", name: address.name },
               body: { revision: sent }
             })
-          : client.agents.proposal.discard({ params: address }),
+          : client.agents.draft.discard({
+              params: { name: address.name },
+              body: { expectedRevision: sent }
+            }),
       done: async () => {
         queryClient.setQueryData(queryKey, null);
         if (kind === "apply") await reload();

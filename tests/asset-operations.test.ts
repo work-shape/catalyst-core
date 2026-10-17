@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./support/agent-draft-publication";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -305,7 +306,8 @@ describe("assets.put, assets.delete and assets.revert", () => {
       ]
     });
     const replaced = await put(t.kai.id, "Second.", 1);
-    expect(writeSchema.parse(replaced.json())).toEqual({ version: 3, revision: 2, warnings: [] });
+    expect(writeSchema.parse(replaced.json())).toEqual({ version: 2, revision: 1, warnings: [] });
+    await publishAgentDraft(t, "kai-intake");
 
     // Stale: made against revision 1 while the asset is at 2. And a create of a taken name.
     for (const stale of [await put(t.admin.id, "Stale.", 1), await put(t.kai.id, "Again.", null)]) {
@@ -319,7 +321,7 @@ describe("assets.put, assets.delete and assets.revert", () => {
               kind: "agent",
               name: "kai-intake",
               currentRevision: 2,
-              changedBy: "Kai",
+              changedBy: "Admin",
               changedAt: expect.any(String)
             }
           ]
@@ -365,6 +367,7 @@ describe("assets.put, assets.delete and assets.revert", () => {
       payload: { config: agent("kai-intake", { instructions: "Changed." }), expectedRevision: 1 }
     });
 
+    await publishAgentDraft(t, "kai-intake");
     const staleRevert = await t.call(t.kai.id, "assets.revert", {
       ...address,
       payload: { revision: 1, expectedRevision: 1 }
@@ -377,7 +380,8 @@ describe("assets.put, assets.delete and assets.revert", () => {
       ...address,
       payload: { revision: 1, expectedRevision: 2 }
     });
-    expect(writeSchema.parse(reverted.json())).toMatchObject({ revision: 3, warnings: [] });
+    expect(writeSchema.parse(reverted.json())).toMatchObject({ revision: 2, warnings: [] });
+    await publishAgentDraft(t, "kai-intake");
     expect(await t.stored("agent", "kai-intake")).toMatchObject({
       revision: 3,
       config: { instructions: "Help." }
@@ -427,7 +431,7 @@ describe("assets.put, assets.delete and assets.revert", () => {
       [6, "delete"],
       [5, "create"],
       [4, "delete"],
-      [3, "revert"],
+      [3, "update"],
       [2, "update"],
       [1, "create"]
     ]);
@@ -444,7 +448,7 @@ describe("assets.put, assets.delete and assets.revert", () => {
     expect(written.map((event) => [event.type, event.metadata?.revision])).toEqual([
       ["config_asset.updated", 1],
       ["config_asset.updated", 2],
-      ["config_asset.reverted", 3],
+      ["config_asset.updated", 3],
       ["config_asset.deleted", 4],
       ["config_asset.updated", 5],
       ["config_asset.deleted", 6]
@@ -701,7 +705,7 @@ describe("the Operation Run of an asset call", () => {
       })
     ).toEqual(done("assets.revert", t.kai.id, "changing"));
     expect(
-      await runOf(t.kai.id, "assets.delete", { ...address, payload: { expectedRevision: 2 } })
+      await runOf(t.kai.id, "assets.delete", { ...address, payload: { expectedRevision: 1 } })
     ).toEqual(done("assets.delete", t.kai.id, "changing"));
   });
 });

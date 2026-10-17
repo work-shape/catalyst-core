@@ -629,14 +629,14 @@ skills:
     );
     stdout.length = 0;
     expect(await runConfigCommand("push", commandOptions)).toBe(0);
-    expect(stdout.join("")).toContain("Pushed 1 agent, 0 skills, version 2.");
+    expect(stdout.join("")).toContain("Pushed 1 agent, 0 skills, version 1.");
     expect(
       await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
         kind: "agent",
         name: "assistant"
       })
-    ).toMatchObject({ config: { instructions: "Local instructions" } });
+    ).toMatchObject({ config: { instructions: "Remote instructions" } });
 
     await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
@@ -656,7 +656,7 @@ skills:
     );
     stderr.length = 0;
     expect(await runConfigCommand("push", commandOptions)).toBe(1);
-    expect(stderr.join("")).toContain("agent:assistant: revision 3, changed by");
+    expect(stderr.join("")).toContain("agent:assistant: revision 2, changed by");
     expect(stderr.join("")).toContain("catalyst config pull --only agent:assistant");
     expect(stderr.join("")).toContain("Commit or stash local edits in git first");
     expect(stderr.join("")).toContain("catalyst config diff");
@@ -673,7 +673,7 @@ skills:
         kind: "agent",
         name: "assistant"
       })
-    ).toMatchObject({ revision: 3, config: { instructions: "New remote instructions" } });
+    ).toMatchObject({ revision: 2, config: { instructions: "New remote instructions" } });
   });
 
   it("rejects noncanonical pull globs before writing or deleting assets", async () => {
@@ -984,7 +984,7 @@ skills:
       "utf8"
     );
     const placed = await push();
-    expect(placed).toContain("Pushed 1 agent, 0 skills, version 5.");
+    expect(placed).toContain("Pushed 1 agent, 0 skills, version 4.");
     expect(placed).not.toContain("Hidden in every workspace");
   });
 
@@ -1897,13 +1897,13 @@ describe("config CLI against an instance", () => {
         kind: "agent",
         name: "assistant"
       })
-    ).toMatchObject({ revision: 2, config: { instructions: "Local" } });
+    ).toMatchObject({ revision: 1, config: { instructions: "Remote" } });
     expect(await syncRuns(fixture)).toHaveLength(1);
     expect(
       (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.assets?.[
         "agent:assistant"
       ]
-    ).toMatchObject({ revision: 2 });
+    ).toMatchObject({ revision: 1 });
   });
 
   it("validates the working copy as one set, a new skill a new agent names included, and writes nothing", async () => {
@@ -3315,7 +3315,12 @@ describe("catalyst asset commands against an instance", () => {
       "1"
     );
     expect(renamed.code, renamed.err).toBe(0);
-    const stored = (await t.stored("agent", "bound"))?.config;
+    const stored = (
+      await t.stores.agentProposals.get({
+        clientInstanceId: accessInstanceId,
+        agentId: await t.assetId("agent", "bound")
+      })
+    )?.config;
     expect(stored).toMatchObject({ displayName: "Renamed", modelBindingId: "plain" });
     expect(stored).not.toHaveProperty("revision");
 

@@ -33,6 +33,12 @@ export const agentTryConversations = pgTable(
     uniqueIndex("agent_try_conversations_current_idx")
       .on(table.buildConversationId, table.agentId)
       .where(sql`${table.replacedAt} is null`),
+    // Publish and Discard find every Try conversation of one agent, replaced ones too.
+    index("agent_try_conversations_agent_idx").on(
+      table.clientInstanceId,
+      table.agentId,
+      table.conversationId
+    ),
     // What a Build conversation's deletion finds its Try conversations by, replaced ones too.
     index("agent_try_conversations_build_idx").on(table.buildConversationId, table.agentId)
   ]

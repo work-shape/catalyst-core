@@ -174,6 +174,7 @@ describe("asset kind registry", () => {
     expect(agentKind.actions).toEqual({
       read: "agent.read",
       write: "agent.write",
+      publish: "agent.publish",
       delete: "agent.delete"
     });
     expect(skillKind.actions).toEqual({

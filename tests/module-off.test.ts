@@ -138,15 +138,47 @@ async function push(instance: Instance, agents: JsonObject[], skills: JsonObject
     const listed = await instance.call("assets.list", { params: { kind } });
     const revisions = new Map(
       listed
-        .json<{ items: Array<{ name: string; revision: number }> }>()
+        .json<{
+          items: Array<{ name: string; revision: number; agentDraft?: { revision: number } }>;
+        }>()
         .items.map((asset) => [asset.name, asset.revision])
     );
     for (const config of configs) {
       const expectedRevision = revisions.get(String(config.name)) ?? null;
-      items.push({ type: "put", kind, config, expectedRevision });
+      const entry = listed
+        .json<{ items: Array<{ name: string; agentDraft?: { revision: number } }> }>()
+        .items.find((asset) => asset.name === String(config.name));
+      items.push({
+        type: "put",
+        kind,
+        config,
+        expectedRevision,
+        ...(kind === "agent" ? { expectedDraftRevision: entry?.agentDraft?.revision ?? null } : {})
+      });
     }
   }
-  return instance.call("assets.sync", { payload: { items, defaultAgentName: "test_agent" } });
+  const response = await instance.call("assets.sync", {
+    payload: { items, defaultAgentName: "test_agent" }
+  });
+  // These module tests arrange live agents: an administrator publishes accepted release drafts.
+  if (response.statusCode === 200) {
+    for (const config of agents) {
+      const read = await instance.call("agents.draft.get", {
+        params: { name: String(config.name) }
+      });
+      const { draft } = z
+        .object({ draft: z.object({ revision: z.number() }).nullable() })
+        .parse(read.json());
+      if (draft) {
+        const published = await instance.call("assets.publish", {
+          params: { kind: "agent", name: String(config.name) },
+          payload: { revision: draft.revision }
+        });
+        expect(published.statusCode, published.body).toBe(200);
+      }
+    }
+  }
+  return response;
 }
 
 const skill = (content: string): JsonObject => ({
@@ -305,7 +337,7 @@ describe("a module that is off", () => {
   });
 
   it("starts and serves after it is turned off under an agent that uses its tool", async () => {
-    const on = await startInstance({ resources: true, documents: true });
+    const on = await startInstance({ resources: true, documents: true, assetManagement: true });
     const stored = { ...agent([TOOL]), displayName: "Stored Agent" };
     expect((await push(on.instance, [stored])).statusCode).toBe(200);
     await on.instance.close();
@@ -457,7 +489,7 @@ describe("a module that is off", () => {
     expect(items[1]).toMatchObject({ shipped: true, operationCount: 1, toolCount: 0 });
     // The exact asset-management count was formerly asserted by the Modules browser journey.
     expect(items.find((item) => item.name === "assetManagement")).toMatchObject({
-      operationCount: 13
+      operationCount: 12
     });
   });
 

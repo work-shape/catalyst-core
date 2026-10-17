@@ -106,6 +106,21 @@ export class AssetReadWorkflow {
         readable: (asset) => listedTo(kind, call.access, asset)
       })
     ]);
+    const draftSummaries = await this.options.stores.agentProposals.summaries({
+      clientInstanceId: this.options.clientInstanceId,
+      agentIds:
+        kind.kind === "agent"
+          ? records
+              .filter(
+                (record) =>
+                  call.access.authorize(
+                    "agent.write",
+                    accessResource(record.kind, record.name, record.scope, record.id)
+                  ).allowed
+              )
+              .map((record) => record.id)
+          : []
+    });
     return records.map((record) => {
       const namespace = findNamespaceOfAssetName(namespaces, record.name);
       if (!reads(accessResource(record.kind, record.name, record.scope, record.id))) {
@@ -119,6 +134,7 @@ export class AssetReadWorkflow {
         ...(namespace ? { namespace: namespace.prefix } : {}),
         revision: record.revision,
         ...pointersOf(kind, record),
+        ...(draftSummaries.has(record.id) ? { agentDraft: draftSummaries.get(record.id) } : {}),
         ...(record.name === defaultName ? { isDefault: true as const } : {}),
         updatedAt: record.updatedAt
       };
@@ -151,10 +167,20 @@ export class AssetReadWorkflow {
     const namespace = findNamespaceOfAssetName(namespaces, asset.name);
     // Resolve only after authorization, from the revision the caller is allowed to read.
     const runsAs = await target.kind.readRunsAs?.(content.config);
+    const draftSummary =
+      target.kind.kind === "agent" && call.access.authorize("agent.write", target.resource).allowed
+        ? (
+            await this.options.stores.agentProposals.summaries({
+              clientInstanceId: this.options.clientInstanceId,
+              agentIds: [asset.id]
+            })
+          ).get(asset.id)
+        : undefined;
     const agentStatus =
       target.kind.kind === "agent" ? await this.agentStatus(content.config) : undefined;
     return {
       ...(agentStatus ?? {}),
+      ...(draftSummary ? { agentDraft: draftSummary } : {}),
       id: asset.id,
       kind: asset.kind,
       name: asset.name,

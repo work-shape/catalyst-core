@@ -95,10 +95,10 @@
     }
   ],
   "paths": {
-    "/api/v1/agents/{name}/proposals/{conversationId}": {
+    "/api/v1/agents/{name}/draft": {
       "get": {
-        "operationId": "agents.proposal.get",
-        "summary": "Read the pending change proposal a Build conversation made for an agent",
+        "operationId": "agents.draft.get",
+        "summary": "Read the shared agent draft and its last author; needs agent.write",
         "tags": [
           "Agents"
         ],
@@ -124,11 +124,12 @@
             }
           },
           {
-            "name": "conversationId",
-            "in": "path",
-            "required": true,
+            "name": "workspaceId",
+            "in": "query",
+            "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           }
         ],
@@ -138,7 +139,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AgentProposalResponse"
+                  "$ref": "#/components/schemas/AgentDraftResponse"
                 }
               }
             },
@@ -174,10 +175,10 @@
         "x-catalyst-rate-class": "read"
       }
     },
-    "/api/v1/agents/{name}/proposals/{conversationId}/apply": {
+    "/api/v1/agents/{name}/draft/discard": {
       "post": {
-        "operationId": "agents.proposal.apply",
-        "summary": "Make a pending change proposal the agent's live revision",
+        "operationId": "agents.draft.discard",
+        "summary": "Discard the named shared draft revision; the live agent stays as it is",
         "tags": [
           "Agents"
         ],
@@ -196,14 +197,6 @@
         "parameters": [
           {
             "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "conversationId",
             "in": "path",
             "required": true,
             "schema": {
@@ -238,7 +231,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ApplyAgentProposalRequest"
+                "$ref": "#/components/schemas/DiscardAgentDraftRequest"
               }
             }
           }
@@ -249,138 +242,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AssetWriteResponse"
-                }
-              }
-            },
-            "headers": {
-              "Operation-Run-Id": {
-                "$ref": "#/components/headers/OperationRunId"
-              },
-              "Idempotent-Replayed": {
-                "$ref": "#/components/headers/IdempotentReplayed"
-              }
-            }
-          },
-          "202": {
-            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationRun"
-                }
-              }
-            },
-            "headers": {
-              "Operation-Run-Id": {
-                "$ref": "#/components/headers/OperationRunId"
-              },
-              "Location": {
-                "$ref": "#/components/headers/Location"
-              },
-              "Idempotent-Replayed": {
-                "$ref": "#/components/headers/IdempotentReplayed"
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
-          },
-          "412": {
-            "$ref": "#/components/responses/RevisionConflict"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationFailed"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/Internal"
-          }
-        },
-        "x-catalyst-effect": "changing",
-        "x-catalyst-rate-class": "write"
-      }
-    },
-    "/api/v1/agents/{name}/proposals/{conversationId}/discard": {
-      "post": {
-        "operationId": "agents.proposal.discard",
-        "summary": "Drop a pending change proposal. The agent stays as it is",
-        "tags": [
-          "Agents"
-        ],
-        "security": [
-          {
-            "sessionCookie": [
-              "config_assets:write"
-            ]
-          },
-          {
-            "sessionToken": [
-              "config_assets:write"
-            ]
-          }
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "conversationId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 255
-            }
-          },
-          {
-            "name": "Catalyst-Unattended",
-            "in": "header",
-            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 255
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DiscardAgentProposalResponse"
+                  "$ref": "#/components/schemas/DiscardAgentDraftResponse"
                 }
               }
             },
@@ -428,6 +290,9 @@
           },
           "409": {
             "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "412": {
+            "$ref": "#/components/responses/RevisionConflict"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -22552,30 +22417,10 @@
           "collaborationWorkspaceIds"
         ]
       },
-      "AgentEditableField": {
-        "type": "string",
-        "enum": [
-          "displayName",
-          "description",
-          "welcomeMessage",
-          "welcomeSubtitle",
-          "instructions",
-          "modelBindingId",
-          "reasoningEffort",
-          "maxSteps",
-          "toolNames",
-          "skillNames",
-          "knowledgeBases",
-          "initialPrompts"
-        ]
-      },
-      "AgentProposal": {
+      "AgentDraft": {
         "type": "object",
         "properties": {
           "agent": {
-            "type": "string"
-          },
-          "conversationId": {
             "type": "string"
           },
           "revision": {
@@ -22599,28 +22444,45 @@
           "config": {
             "$ref": "#/components/schemas/ConfigAssetConfig"
           },
+          "author": {
+            "type": "object",
+            "properties": {
+              "userId": {
+                "type": "string"
+              },
+              "conversationId": {
+                "type": "string"
+              },
+              "release": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "release"
+            ]
+          },
           "updatedAt": {
             "$ref": "#/components/schemas/Timestamp"
           }
         },
         "required": [
           "agent",
-          "conversationId",
           "revision",
           "baseRevision",
           "liveRevision",
           "stale",
           "config",
+          "author",
           "updatedAt"
         ]
       },
-      "AgentProposalResponse": {
+      "AgentDraftResponse": {
         "type": "object",
         "properties": {
-          "proposal": {
+          "draft": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/AgentProposal"
+                "$ref": "#/components/schemas/AgentDraft"
               },
               {
                 "type": "null"
@@ -22629,7 +22491,65 @@
           }
         },
         "required": [
-          "proposal"
+          "draft"
+        ]
+      },
+      "AgentDraftSummary": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "baseRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "author": {
+            "type": "object",
+            "properties": {
+              "userId": {
+                "type": "string"
+              },
+              "conversationId": {
+                "type": "string"
+              },
+              "release": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "release"
+            ]
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "revision",
+          "baseRevision",
+          "author",
+          "updatedAt"
+        ]
+      },
+      "AgentEditableField": {
+        "type": "string",
+        "enum": [
+          "displayName",
+          "description",
+          "welcomeMessage",
+          "welcomeSubtitle",
+          "instructions",
+          "modelBindingId",
+          "reasoningEffort",
+          "maxSteps",
+          "toolNames",
+          "skillNames",
+          "knowledgeBases",
+          "initialPrompts"
         ]
       },
       "AgentRun": {
@@ -24417,19 +24337,6 @@
           "workflows_off"
         ]
       },
-      "ApplyAgentProposalRequest": {
-        "type": "object",
-        "properties": {
-          "revision": {
-            "type": "integer",
-            "exclusiveMinimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": [
-          "revision"
-        ]
-      },
       "ApprovalCheckResult": {
         "type": "object",
         "properties": {
@@ -25036,6 +24943,9 @@
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
           },
+          "agentDraft": {
+            "$ref": "#/components/schemas/AgentDraftSummary"
+          },
           "draftRevision": {
             "type": "integer",
             "exclusiveMinimum": 0,
@@ -25291,6 +25201,9 @@
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
           },
+          "agentDraft": {
+            "$ref": "#/components/schemas/AgentDraftSummary"
+          },
           "draftRevision": {
             "type": "integer",
             "exclusiveMinimum": 0,
@@ -25364,6 +25277,16 @@
                 "type": "integer",
                 "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
+              },
+              "draftRevision": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "publishedRevision": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": [
@@ -25419,6 +25342,18 @@
                 "$ref": "#/components/schemas/ConfigAssetConfig"
               },
               "expectedRevision": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "expectedDraftRevision": {
                 "anyOf": [
                   {
                     "type": "integer",
@@ -25518,6 +25453,16 @@
             "maximum": 9007199254740991
           },
           "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "draftRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "publishedRevision": {
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
@@ -28135,7 +28080,23 @@
           "ok"
         ]
       },
-      "DiscardAgentProposalResponse": {
+      "DiscardAgentDraftRequest": {
+        "type": "object",
+        "properties": {
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision"
+        ]
+      },
+      "DiscardAgentDraftResponse": {
         "type": "object",
         "properties": {
           "discarded": {
@@ -31163,6 +31124,18 @@
               }
             ]
           },
+          "expectedDraftRevision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "workspaceId": {
             "type": "string",
             "minLength": 1
@@ -31350,6 +31323,18 @@
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
+          },
+          "expectedDraftRevision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "workspaceId": {
             "type": "string",

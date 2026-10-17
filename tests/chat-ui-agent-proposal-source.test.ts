@@ -43,15 +43,15 @@ async function mountProposal() {
   const fetchImpl: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
     const path = new URL(request.url).pathname;
-    if (request.method === "POST" && path.endsWith("/apply")) {
+    if (request.method === "POST" && path.endsWith("/publish")) {
       return new Promise<Response>((resolve) => {
         answerApply = resolve;
       });
     }
     return Response.json({
-      proposal: {
+      draft: {
         agent: "assistant",
-        conversationId: CONVERSATION,
+        author: { userId: "author", release: false },
         revision: instance.revision,
         baseRevision: 3,
         liveRevision: 3,
@@ -193,7 +193,7 @@ describe("the answer to Apply", () => {
       const applied = page.apply();
       // The instance holds a newer proposal than the page sent; the refusal reads it.
       page.instanceHolds(2);
-      await page.answer(refusal(412, "REVISION_CONFLICT", "proposal_changed"), applied);
+      await page.answer(refusal(412, "REVISION_CONFLICT", "draft_changed"), applied);
       await page.shows(2);
       expect(page.seen.state?.answer).toEqual({ kind: "changed" });
     } finally {

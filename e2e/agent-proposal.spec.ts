@@ -26,7 +26,7 @@ const shotsDir = process.env.E2E_SHOTS_DIR;
 const WIDE = { width: 1280, height: 800 };
 
 const idSchema = z.object({ id: z.string() });
-const proposalSchema = z.object({ proposal: z.object({ revision: z.number() }).nullable() });
+const proposalSchema = z.object({ draft: z.object({ revision: z.number() }).nullable() });
 const agentPath = (name: string) => `${apiBaseUrl}/api/v1/assets/agent/${name}`;
 
 async function signIn(page: Page, user = superadmin): Promise<void> {
@@ -53,7 +53,14 @@ async function putAgent(page: Page, name: string, instructions: string): Promise
   const stored = await requestWithOrigin(page, "put", agentPath(name), {
     data: {
       expectedRevision: await assetBaseRevision(page, agentPath(name)),
-      ...(exists ? {} : { availableIn: "all" }),
+      ...(exists
+        ? {
+            expectedDraftRevision:
+              proposalSchema.parse(
+                await (await page.request.get(`${apiBaseUrl}/api/v1/agents/${name}/draft`)).json()
+              ).draft?.revision ?? null
+          }
+        : { availableIn: "all" }),
       config: agentConfig(name, instructions, "Checks contracts for missing signatures.")
     }
   });
@@ -69,7 +76,7 @@ async function deleteAgent(page: Page, name: string): Promise<void> {
   }
 }
 
-test("the agent page marks a proposal, applies it, discards one and refuses a stale one", async ({
+test("the agent page marks a draft, publishes it, discards one and refuses a changed one", async ({
   page,
   instanceAgentsChange: _instanceAgentsChange
 }) => {
@@ -101,9 +108,9 @@ test("the agent page marks a proposal, applies it, discards one and refuses a st
     );
     expect(conversation.ok(), await conversation.text()).toBe(true);
     const conversationId = idSchema.parse(await conversation.json()).id;
-    const proposalUrl = `${apiBaseUrl}/api/v1/agents/${name}/proposals/${conversationId}`;
+    const proposalUrl = `${apiBaseUrl}/api/v1/agents/${name}/draft`;
     const pending = async () =>
-      proposalSchema.parse(await (await page.request.get(proposalUrl)).json()).proposal;
+      proposalSchema.parse(await (await page.request.get(proposalUrl)).json()).draft;
 
     await page.goto(`/build/agents/${name}?chat=${conversationId}`);
     const instructions = page.locator("section#instructions");
@@ -173,8 +180,7 @@ test("the agent page marks a proposal, applies it, discards one and refuses a st
     expect(await pending()).toBeNull();
     expect(await revision()).toBe(live + 1);
 
-    // A proposal whose base was saved over is not applied: the page says to ask the agent in
-    // the chat again.
+    // Another writer advances the shared draft after the page read it.
     await sendToolCall(page, "platform.assets.put", {
       config: agentConfig(name, "Read the contract twice.", "Checks contracts for signatures."),
       expectedRevision: live + 1
@@ -187,17 +193,17 @@ test("the agent page marks a proposal, applies it, discards one and refuses a st
       .locator('[data-agent-proposal="pending"]')
       .getByRole("button", { name: "Apply", exact: true })
       .click();
-    await expect(page.locator('[data-agent-proposal="stale"]')).toContainText(
-      "This proposal can no longer be applied. Ask the agent in the chat to make the change again."
+    await expect(page.locator('[data-proposal-answer="changed"]')).toBeVisible();
+    await expect(page.locator('[data-proposed-field="instructions"]')).toContainText(
+      "Somebody else's instructions."
     );
-    await expect(page.locator("[data-proposal-apply]")).toHaveCount(0);
-    await expect(page.locator("[data-proposed-field]")).toHaveCount(0);
-    expect(await revision()).toBe(live + 2);
+    expect(await revision()).toBe(live + 1);
 
     // The agent's next save is a new proposal on the live agent: its marks and Apply are back.
     await sendToolCall(page, "platform.assets.put", {
       config: agentConfig(name, "Read the contract three times.", "Checks contracts."),
-      expectedRevision: live + 2
+      expectedRevision: live + 1,
+      expectedDraftRevision: (await pending())?.revision
     });
     await expect(page.locator('[data-agent-proposal="pending"]')).toBeVisible();
     await expect(page.locator('[data-proposed-field="instructions"]')).toContainText(
@@ -236,7 +242,8 @@ const VARIANTS = [
 async function shootStates(
   page: Page,
   name: string,
-  reach: (variant: (typeof VARIANTS)[number]) => Promise<void>
+  reach: (variant: (typeof VARIANTS)[number]) => Promise<void>,
+  hasDraft = true
 ): Promise<void> {
   if (shotsDir) await mkdir(shotsDir, { recursive: true });
   for (const variant of VARIANTS) {
@@ -249,7 +256,8 @@ async function shootStates(
       [variant.theme, variant.locale] as const
     );
     await page.reload();
-    await expect(page.locator("[data-agent-proposal]")).toHaveCount(1);
+    if (!hasDraft) await expect(page.locator("section#instructions")).toBeAttached();
+    await expect(page.locator("[data-agent-proposal]")).toHaveCount(hasDraft ? 1 : 0);
     if (variant.width < 760) {
       await page
         .getByTestId("dock-head")
@@ -274,9 +282,9 @@ async function shootStates(
 /** The agent as proposed with a change in each kind of field, as the instance would answer it. */
 function richProposal(name: string, conversationId: string, revision: number, stale = false) {
   return {
-    proposal: {
+    draft: {
       agent: name,
-      conversationId,
+      author: { userId: "e2e-author", conversationId, release: false },
       revision,
       baseRevision: 1,
       liveRevision: stale ? 2 : 1,
@@ -336,7 +344,7 @@ test("the proposal's states and each kind of proposed value, for a writer and a 
     expect(created.ok(), await created.text()).toBe(true);
     const workspaceId = idSchema.parse(await created.json()).id;
     const conversationId = await conversationIn(page, workspaceId, name);
-    const proposalUrl = `**/api/v1/agents/${name}/proposals/${conversationId}`;
+    const proposalUrl = `**/api/v1/agents/${name}/draft`;
     let answer = richProposal(name, conversationId, 1);
     await page.route(proposalUrl, (route) => route.fulfill({ json: answer }));
     await page.goto(`/build/agents/${name}?chat=${conversationId}`);
@@ -368,7 +376,7 @@ test("the proposal's states and each kind of proposed value, for a writer and a 
     });
 
     // The agent wrote a newer proposal than the one read: one banner says so.
-    const applyUrl = `${proposalUrl}/apply`;
+    const applyUrl = `**/api/v1/assets/agent/${name}/publish`;
     await page.route(applyUrl, async (route) => {
       answer = richProposal(name, conversationId, 2);
       await route.fulfill({
@@ -378,7 +386,7 @@ test("the proposal's states and each kind of proposed value, for a writer and a 
             code: "REVISION_CONFLICT",
             message: "The proposal changed.",
             correlationId: "corr_e2e_try_1a2",
-            details: { reason: "proposal_changed" }
+            details: { reason: "draft_changed" }
           }
         }
       });
@@ -451,20 +459,17 @@ test("the proposal's states and each kind of proposed value, for a writer and a 
     expect(granted.ok(), await granted.text()).toBe(true);
     grants.push(idSchema.parse(await granted.json()).id);
     const readerConversation = await conversationIn(readerPage, workspaceId);
-    const readerAnswer = richProposal(name, readerConversation, 1);
-    await readerPage.route(`**/api/v1/agents/${name}/proposals/${readerConversation}`, (route) =>
-      route.fulfill({ json: readerAnswer })
-    );
     await readerPage.goto(`/build/agents/${name}?chat=${readerConversation}`);
-    await shootStates(readerPage, "try-1a2-reader", async ({ locale }) => {
-      await expect(readerPage.locator('[data-agent-proposal="pending"]')).toContainText(
-        locale === "de"
-          ? "Übernehmen kann sie, wer diesen Agenten ändern darf."
-          : "Someone who may change this agent can apply them."
-      );
-      await expect(readerPage.locator("[data-proposal-apply]")).toHaveCount(0);
-      await expect(readerPage.locator("[data-proposed-field]").first()).toBeVisible();
-    });
+    await shootStates(
+      readerPage,
+      "try-1a2-reader",
+      async () => {
+        await expect(readerPage.locator("[data-agent-proposal]")).toHaveCount(0);
+        await expect(readerPage.locator("[data-proposal-apply]")).toHaveCount(0);
+        await expect(readerPage.locator("[data-proposed-field]")).toHaveCount(0);
+      },
+      false
+    );
     await readerContext.close();
   } finally {
     for (const grantId of grants) {

@@ -19,7 +19,7 @@ import {
 } from "../assets/asset-placement";
 import { publishPolicyFloor } from "../approvals/publish-approval";
 import { AssetWorkflow } from "../assets/asset-service";
-import { AgentProposals, PROPOSED_KIND } from "../assets/agent-proposals";
+
 import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
 import { TryConversations } from "../conversations/try-conversations";
 import type { Route } from "../http/route";
@@ -37,6 +37,7 @@ const ASSET_WRITE_MODULE = "assetManagement";
  */
 export function registerAssetRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new AssetWorkflow(options);
+  const tries = new TryConversations(options);
 
   route.operation(apiOperations["assets.list"], {
     // The list decides the right per asset. A caller without one receives an empty page.
@@ -116,12 +117,19 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
-    module: ASSET_WRITE_MODULE,
     beforeEvents: (input) => publishEvents(options, input),
     // A publish a guardrail holds waits for the holders of the kind's `approve` right.
     approval: (input) => workflow.publishApproval(input),
-    policyFloorOf: publishPolicyFloor,
-    execute: (input, context) => workflow.drafts.publish(context, input)
+    policyFloorOf: (origin, input) =>
+      typeof input === "object" && input !== null && "kind" in input && input.kind === "agent"
+        ? undefined
+        : publishPolicyFloor(origin),
+    execute: async (input, context) => {
+      if (input.kind !== "agent") return workflow.drafts.publish(context, input);
+      const result = await workflow.agentDrafts.publish(context, input);
+      await tries.settled(context, input, "published");
+      return result;
+    }
   });
 
   route.operation(apiOperations["assets.discard_draft"], {
@@ -197,45 +205,29 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.revert(context, input)
   });
 
-  // The pending change proposal of an agent: the person reads it, applies it as their own save
-  // of the agent, or drops it. Either ends the Try conversation beside it.
-  const tries = new TryConversations(options);
-  const proposals = new AgentProposals(options, tries.settled);
-  const proposalResource = ({ name }: { name: string }) =>
-    assetResource({ kind: PROPOSED_KIND, name });
-
-  route.operation(apiOperations["agents.proposal.get"], {
-    authorize: (input, { actor, access }) => proposals.authorizeRead(actor, access, input),
-    resource: proposalResource,
-    policyTargets: (input) => proposals.policyTargets(input),
-    execute: async (input, context) => ({ proposal: await proposals.get(context, input) })
+  const draftResource = ({ name }: { name: string }) => assetResource({ kind: "agent", name });
+  route.operation(apiOperations["agents.draft.get"], {
+    authorize: (input, { access }) => workflow.agentDrafts.authorize(access, input),
+    resource: draftResource,
+    policyTargets: (input) => workflow.policyTargets({ ...input, kind: "agent" }),
+    execute: async (input, context) => ({ draft: await workflow.agentDrafts.get(context, input) })
   });
-
-  route.operation(apiOperations["agents.proposal.apply"], {
-    authorize: (input, { actor, access }) =>
-      proposals.authorizeChange(actor, access, input, "apply"),
-    resource: proposalResource,
-    policyTargets: (input) => proposals.policyTargets(input),
+  route.operation(apiOperations["agents.draft.discard"], {
+    authorize: (input, { access }) => workflow.agentDrafts.authorize(access, input),
+    resource: draftResource,
+    policyTargets: (input) => workflow.policyTargets({ ...input, kind: "agent" }),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
-    beforeEvents: (input) => proposals.applyEvents(input),
-    execute: (input, context) => proposals.apply(context, input)
+    execute: async (input, context) => {
+      const result = await workflow.agentDrafts.discard(context, input);
+      await tries.settled(context, input, "discarded");
+      return result;
+    }
   });
-
-  route.operation(apiOperations["agents.proposal.discard"], {
-    authorize: (input, { actor, access }) =>
-      proposals.authorizeChange(actor, access, input, "discard"),
-    resource: proposalResource,
-    policyTargets: (input) => proposals.policyTargets(input),
-    changeClass: "reversible",
-    module: ASSET_WRITE_MODULE,
-    execute: (input, context) => proposals.discard(context, input)
-  });
-
   route.operation(apiOperations["agents.try.open"], {
-    authorize: (input, { actor, access }) => proposals.authorizeChange(actor, access, input, "try"),
-    resource: proposalResource,
-    policyTargets: (input) => proposals.policyTargets(input),
+    authorize: (input, { actor, access }) => tries.authorize(actor, access, input),
+    resource: draftResource,
+    policyTargets: (input) => workflow.policyTargets({ ...input, kind: "agent" }),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     execute: async (input, context) => ({

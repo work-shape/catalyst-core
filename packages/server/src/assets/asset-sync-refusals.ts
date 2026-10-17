@@ -84,6 +84,7 @@ type AssetSyncItem =
       kind: string;
       config: Record<string, unknown>;
       expectedRevision?: number | null;
+      expectedDraftRevision?: number | null;
       expectedAssetId?: string;
     }
   | {

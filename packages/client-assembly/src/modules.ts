@@ -35,7 +35,8 @@ const resourcesModule = defineModule({
 /**
  * Changing agents and skills in the interface. Running an agent and a config push are core:
  * `assets.sync` carries a push too, so its workflow asks the switch and lets the release holder
- * pass where the module is off. For every other caller it is an operation of the module.
+ * pass where the module is off. A person may also publish a release-written agent draft
+ * there; assets.publish checks that provenance itself. Other interactive writes stay bound.
  */
 const assetManagementModule = defineModule({
   name: "assetManagement",
@@ -43,17 +44,15 @@ const assetManagementModule = defineModule({
     "assets.put",
     "assets.delete",
     "assets.revert",
-    "assets.publish",
     "assets.discard_draft",
     "assets.run_live_once",
     "assets.set_default",
     "assets.set_availability",
-    "agents.proposal.apply",
-    "agents.proposal.discard",
+    "agents.draft.discard",
     "agents.try.open",
     "guardrails.unpublish"
   ],
-  selfCheckedOperations: ["assets.sync"],
+  selfCheckedOperations: ["assets.sync", "assets.publish"],
   // The agent's save of a draft is a change of an asset like `assets.put`, which it projects.
   tools: [PLATFORM_ASSET_TOOLS.put.name],
   ui: ["settings.build"]

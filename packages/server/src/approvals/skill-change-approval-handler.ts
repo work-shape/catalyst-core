@@ -237,6 +237,7 @@ export function createSkillChangeApprovalHandler(
           type: "upsert",
           kind: "agent",
           name: agent.name,
+          agentSkillChange: { name: skill.name, attached: true },
           scope: snapshot.scopeOf("agent"),
           config: toJsonObject({
             ...agent,
@@ -293,6 +294,7 @@ export function createSkillChangeApprovalHandler(
             type: "upsert",
             kind: "agent",
             name: agent.name,
+            agentSkillChange: { name: data.skillName, attached: false },
             scope: snapshot.scopeOf("agent"),
             operation: "revert",
             config: toJsonObject({

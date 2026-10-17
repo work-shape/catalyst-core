@@ -187,7 +187,9 @@ describe("the Try conversation of an agent", () => {
         }
       })
     );
-    await t.ok(t.app.call("agents.proposal.get", t.address(own), OTHER));
+    expect(
+      (await t.app.call("agents.draft.get", { params: { name: AGENT.name } }, OTHER)).statusCode
+    ).toBe(404);
     const refused = await t.open(own, OTHER);
     expect(refused.statusCode, refused.body).toBe(403);
     expect(
@@ -219,34 +221,57 @@ describe("the Try conversation of an agent", () => {
     const before = await t.live();
     const build = await t.converse();
     await t.propose(build, "Proposed once.", before.revision);
+    const otherBuild = await t.converse();
+    const otherTry = await t.opened(otherBuild);
     const first = await t.opened(build);
     await t.say(first, "Try it.");
     const usage = await t.usage(first);
     expect(usage.length).toBeGreaterThan(0);
 
-    await t.ok(
-      t.app.call("agents.proposal.apply", { ...t.address(build), payload: { revision: 1 } })
-    );
+    await t.ok(t.app.call("assets.publish", { params: AGENT, payload: { revision: 1 } }));
+    expect(await t.status(otherTry)).toBe("deleted");
+    expect(await t.linked(otherTry)).toBe(false);
     expect(await t.status(first)).toBe("deleted");
     expect(await t.linked(first)).toBe(false);
     expect(await t.deletions(first)).toEqual([
       expect.objectContaining({
         actor: expect.objectContaining({ externalUserId: "owner" }),
-        metadata: expect.objectContaining({ requestedBy: "proposal_applied", cleanup: "complete" })
+        metadata: expect.objectContaining({ requestedBy: "draft_published", cleanup: "complete" })
       })
     ]);
     expect(await t.usage(first)).toEqual(usage);
 
     // The next open makes another; a Discard removes that one.
+    const secondOtherTry = await t.opened(otherBuild);
     const second = await t.opened(build);
     expect(second).not.toBe(first);
     await t.propose(build, "Proposed twice.", (await t.live()).revision);
-    await t.ok(t.app.call("agents.proposal.discard", t.address(build)));
+    await t.ok(
+      t.app.call("agents.draft.discard", {
+        params: { name: AGENT.name },
+        payload: {
+          expectedRevision: (
+            await t.app.stores.agentProposals.get({
+              clientInstanceId: t.clientInstanceId,
+              agentId:
+                (
+                  await t.app.stores.configAssets.getConfigAsset({
+                    clientInstanceId: t.clientInstanceId,
+                    ...AGENT
+                  })
+                )?.id ?? ""
+            })
+          )?.revision
+        }
+      })
+    );
+    expect(await t.status(secondOtherTry)).toBe("deleted");
+    expect(await t.linked(secondOtherTry)).toBe(false);
     expect(await t.status(second)).toBe("deleted");
     expect(await t.linked(second)).toBe(false);
     expect(await t.deletions(second)).toEqual([
       expect.objectContaining({
-        metadata: expect.objectContaining({ requestedBy: "proposal_discarded" })
+        metadata: expect.objectContaining({ requestedBy: "draft_discarded" })
       })
     ]);
     // The Build conversation stays.
@@ -281,7 +306,25 @@ describe("the Try conversation of an agent", () => {
     const removeRuns = vi
       .spyOn(t.app.stores.operationRuns, "deleteOfConversations")
       .mockRejectedValueOnce(new Error("transient"));
-    await t.ok(t.app.call("agents.proposal.discard", t.address(build)));
+    await t.ok(
+      t.app.call("agents.draft.discard", {
+        params: { name: AGENT.name },
+        payload: {
+          expectedRevision: (
+            await t.app.stores.agentProposals.get({
+              clientInstanceId: t.clientInstanceId,
+              agentId:
+                (
+                  await t.app.stores.configAssets.getConfigAsset({
+                    clientInstanceId: t.clientInstanceId,
+                    ...AGENT
+                  })
+                )?.id ?? ""
+            })
+          )?.revision
+        }
+      })
+    );
     expect(removeRuns).toHaveBeenCalled();
     removeRuns.mockRestore();
     expect(await t.status(first)).toBe("deleted");

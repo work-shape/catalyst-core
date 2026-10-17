@@ -52,7 +52,12 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         description: "Agent name must not be empty",
         schema: agentConfigSchema.shape.name
       },
-      actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" },
+      actions: {
+        read: "agent.read",
+        write: "agent.write",
+        publish: "agent.publish",
+        delete: "agent.delete"
+      },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).
       owners: [...ASSET_OWNER_KINDS],
       validate(context, agents) {

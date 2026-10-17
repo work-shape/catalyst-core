@@ -283,7 +283,10 @@ describe("an asset write that waits for another person", () => {
       status: "approved",
       applyResult: { execution: "failed", error: { code: "REVISION_CONFLICT" } }
     });
-    expect(await t.stored("agent", "kai-intake")).toMatchObject({ revision: 2 });
-    expect(JSON.stringify(await t.stored("agent", "kai-intake"))).toContain("Newer.");
+    expect(await t.stored("agent", "kai-intake")).toMatchObject({ revision: 1 });
+    const pending = (
+      await t.expectOk(t.admin.id, "agents.draft.get", { params: { name: "kai-intake" } })
+    ).json();
+    expect(pending).toMatchObject({ draft: { revision: 1, config: { instructions: "Newer." } } });
   });
 });

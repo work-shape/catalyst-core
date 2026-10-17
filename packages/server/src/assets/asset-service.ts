@@ -1,3 +1,5 @@
+import { upsertAsset, type AssetUpsert } from "./asset-upsert";
+import { AgentDraftWorkflow } from "./agent-drafts";
 import {
   AppError,
   auditActorFromIdentity,
@@ -6,18 +8,14 @@ import {
   operationDenialError,
   type AuthenticatedIdentity,
   type ActorAccess,
-  type ConfigAssetMutation,
-  type ConfigAssetRevisionOrigin,
   type ConfigAssetStore,
-  type AssetRepoWrite,
-  type FileSet,
   type JsonObject,
   type OperationApproval,
   type OperationAuthorization,
   type OperationOrigin,
   type PolicyTarget
 } from "@work-shape/catalyst-core";
-import { afterRemove, afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
+import { afterRemove } from "./asset-after-write";
 import { AssetDraftWorkflow } from "./asset-draft-service";
 import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "../asset-kinds/shared";
@@ -40,9 +38,8 @@ import {
   type AssetSyncInput
 } from "./asset-sync";
 import {
-  assertChangedAgentsAllowed,
   assertDeleteWithinLimits,
-  assertUpsertWithinLimits,
+  requireAssetManagementOn,
   assetKey,
   authorizeInteractiveWrite,
   clearsLastDefault,
@@ -53,13 +50,10 @@ import {
   missingUpsertRightOf,
   type StoredAssets,
   requireInstanceDefaultChange,
-  requireInstanceFirstForDefault,
   requireAssetKindModuleOn,
   requireMatchingConfigName,
   setsInitialDefault,
   storedWritableIssues,
-  requireOwnerWorkspace,
-  toJsonObject,
   withPublishedConfigs,
   writeIssuesOf
 } from "./asset-write-rules";
@@ -78,7 +72,7 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
-import { initialAgentPlacement, type AvailableIn } from "./asset-placement";
+import { type AvailableIn } from "./asset-placement";
 import { AssetReadWorkflow } from "./asset-read-service";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
@@ -100,11 +94,30 @@ export class AssetWorkflow {
   private readonly options: AssetWorkflowOptions;
   /** The writes of a kind with a draft or with files. */
   readonly drafts: AssetDraftWorkflow;
+  readonly agentDrafts: AgentDraftWorkflow;
   /** The list, the asset, one revision of it and its history. */
   readonly reads: AssetReadWorkflow;
 
   constructor(options: AssetWorkflowOptions) {
     this.options = options;
+    this.agentDrafts = new AgentDraftWorkflow(options, {
+      target: (address) => this.target(address),
+      publish: async (call, target, draft) => {
+        await authorizeInteractiveWrite(
+          options,
+          call.actor,
+          call,
+          call.audit,
+          draft.author.release
+        );
+        return this.upsert(call, target, draft.config, {
+          expectedRevision: draft.baseRevision,
+          agentPublish: draft.revision,
+          releaseDraft: draft.author.release,
+          audit: "config_asset.updated"
+        });
+      }
+    });
     this.reads = new AssetReadWorkflow(options, {
       target: (address) => this.target(address),
       kind: (kind) => this.kind(kind)
@@ -139,6 +152,12 @@ export class AssetWorkflow {
     address: AssetAddress & { revision: number }
   ): Promise<OperationAuthorization> {
     const { access, origin } = caller;
+    if (address.kind === "agent")
+      return this.agentDrafts.authorizePublish(
+        { ...caller, audit: this.options.auditRecorder, correlationId: "" },
+        address
+      );
+    requireAssetManagementOn(this.options, access, "put");
     const target = await this.target(address);
     const { publish } = target.kind.actions;
     if (publish === undefined) return { allowed: true };
@@ -343,6 +362,7 @@ export class AssetWorkflow {
       config?: Record<string, unknown>;
       files?: readonly AssetFileInput[];
       expectedRevision?: number | null;
+      expectedDraftRevision?: number | null;
       availableIn?: AvailableIn;
     }
   ) {
@@ -383,6 +403,7 @@ export class AssetWorkflow {
     return this.upsert(call, target, input.config, {
       expectedRevision,
       audit: "config_asset.updated",
+      expectedDraftRevision: input.expectedDraftRevision ?? null,
       ...(input.availableIn === undefined ? {} : { availableIn: input.availableIn })
     });
   }
@@ -390,7 +411,11 @@ export class AssetWorkflow {
   /** Makes an earlier revision the content again, as a new revision. A deleted asset returns. */
   async revert(
     call: AssetCall,
-    input: AssetAddress & { revision: number; expectedRevision?: number }
+    input: AssetAddress & {
+      revision: number;
+      expectedRevision?: number;
+      expectedDraftRevision?: number | null;
+    }
   ) {
     const target = await this.target(input);
     call.access.require(target.kind.actions.write, target.resource);
@@ -427,6 +452,7 @@ export class AssetWorkflow {
     return this.upsert(call, target, restored.config, {
       expectedRevision,
       operation: "revert",
+      expectedDraftRevision: input.expectedDraftRevision ?? null,
       audit: "config_asset.reverted",
       // The files of the restored revision come back with it. They were never removed.
       ...(target.kind.revisionFiles && restored.fileSetId && target.asset
@@ -571,144 +597,17 @@ export class AssetWorkflow {
     return checkAssetSync(this.options, call, input);
   }
 
-  private async upsert(
+  private upsert(
     call: AssetCall,
     target: AssetTarget,
     config: Record<string, unknown>,
-    write: {
-      expectedRevision: number | null;
-      operation?: "revert";
-      audit: "config_asset.updated" | "config_asset.reverted";
-      /** The stored file set of the revision, with the id its asset has or gets. */
-      fileSet?: { assetId: string; fileSetId: FileSet["id"] };
-      /** The commit the revision names, for an asset whose files are a repository. */
-      repository?: AssetRepoWrite;
-      /** Where a new agent starts, as its caller asked. */
-      availableIn?: AvailableIn;
-      /** Where the revision came from, where it is not written as it stands. */
-      origin?: ConfigAssetRevisionOrigin;
-      /**
-       * Asked under the lock of the write: whether the write makes the asset the asset of the
-       * Page its origin names. It refuses the write by throwing.
-       */
-      pageLink?: () => Promise<boolean>;
-      /** The files of the write as its event names them: path, hash and size, no content. */
-      auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
-    }
+    write: AssetUpsert
   ) {
-    const { kind, name } = target;
-    const surface = write.operation === "revert" ? "revert" : "put";
-    const kinds = this.options.configAssets.kinds.kinds;
-    await requireOwnerWorkspace(this.options, target.address.workspaceId);
-    const stored = await loadStoredAssets(this.options);
-    const current = findDefinition(stored.set, kind.kind, name);
-    kind.assertStoredWritable?.({ current });
-    requireInstanceFirstForDefault(stored.set, kind, target.scope);
-    const setsDefault = setsInitialDefault(stored.set, kind, target.scope);
-    requireInstanceDefaultChange(call.access, kind, setsDefault);
-    // A revert restores what was stored: only what the kind's server decides is kept as it is.
-    const principalId = call.actor.id;
-    const definition =
-      write.operation === "revert"
-        ? (kind.prepareRevert?.({ current, restored: config, principalId }) ?? config)
-        : kind.prepareInteractiveUpsert({ current, next: config, principalId });
-    /** The set as the write would leave it. */
-    const written = (set: AssetSet) => {
-      const replaced = withDefinition(set, kind.kind, name, definition);
-      return setsDefault ? withDefaultAgentName(replaced, name) : replaced;
-    };
-    this.requireTellableChange(call, target, stored, written);
-    const validated = validateAssetSet(kinds, written(stored.set), stored.set);
-    const { namespaces, warnings: toolWarnings } = await assertChangedAgentsAllowed(
-      this.options,
-      call.access,
-      stored.set,
-      validated,
-      {
-        names: kind.kind === "agent" ? [name] : [],
-        scope: target.scope.kind === "workspace" ? { workspaceId: target.scope.workspaceId } : {}
-      }
-    );
-    const next = findDefinition(validated, kind.kind, name);
-    if (next === undefined) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `Validated config ${kind.kind} '${name}' was not found`
-      );
-    }
-    assertUpsertWithinLimits(call.access, surface, kind, { name, current, next, namespaces });
-    await kind.assertScopedWrite?.({
-      clientInstanceId: this.options.clientInstanceId,
-      scope: target.scope,
-      name,
-      definition: next,
-      stores: this.options.stores
+    return upsertAsset(this.options, call, target, config, write, {
+      requireTellableChange: (stored, written) =>
+        this.requireTellableChange(call, target, stored, written),
+      apply: (batch) => this.apply(call, target, batch)
     });
-    const mutations: ConfigAssetMutation[] = [
-      {
-        type: "upsert",
-        kind: kind.kind,
-        name,
-        config: toJsonObject(next),
-        scope: target.scope,
-        ...(write.operation ? { operation: write.operation } : {}),
-        // A kind with a published revision moves its draft with a write and nothing else.
-        ...(kind.lifecycle === "draft_published" ? { draft: true as const } : {}),
-        ...(write.fileSet ?? {}),
-        ...(write.repository ? { repository: write.repository } : {})
-      }
-    ];
-    if (setsDefault) {
-      mutations.push({ type: "setDefaultAgent", agentName: name });
-    }
-    const { warnings, ...placement } = await initialAgentPlacement(this.options, call, kind, {
-      name,
-      creates: target.asset?.status !== "active",
-      setsDefault,
-      ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn }),
-      ...(target.address.workspaceId === undefined ? {} : { madeIn: target.address.workspaceId })
-    });
-    let pageLinked = false;
-    const { pageLink } = write;
-    const result = await this.apply(call, target, {
-      ...(pageLink
-        ? {
-            underLock: async () => {
-              pageLinked = await pageLink();
-            }
-          }
-        : {}),
-      baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
-      // The default is set for the first asset only, so the instance has none before.
-      ...(setsDefault ? { baseDefaultAgentName: null } : {}),
-      ...placement,
-      ...(write.origin ? { origin: write.origin } : {}),
-      mutations
-    });
-    // The revision this write was given. The asset is not read again: by now another write
-    // may have given it a later one, which this caller did not make and must not be told as
-    // the revision of its own content.
-    const revision = allocatedRevision(result, kind.kind, name);
-    await recordCommitted(this.options, call, [
-      () =>
-        this.record(call, write.audit, {
-          kind: kind.kind,
-          name,
-          revision,
-          version: result.version,
-          // A revision that copies a Page names it: the trail says where the content came from.
-          ...(write.origin?.kind === "page" ? { pageId: write.origin.pageId } : {}),
-          ...(pageLinked ? { pageLinked: true } : {}),
-          ...(write.auditFiles ? { files: write.auditFiles.map((file) => ({ ...file })) } : {})
-        })
-    ]);
-    await afterWrite(this.options, call, target, { previous: current, config: toJsonObject(next) });
-    await clearLiveOnceSwitches(this.options, call, kind, name, target.asset?.id);
-    return {
-      version: result.version,
-      revision,
-      warnings: [...warnings, ...toolWarnings, ...(kind.writeWarnings?.(next) ?? [])]
-    };
   }
 
   /**
@@ -760,6 +659,22 @@ export class AssetWorkflow {
       });
     } catch (error) {
       if (!isAppError(error) || error.code !== "REVISION_CONFLICT") throw error;
+      if (
+        typeof error.details === "object" &&
+        error.details !== null &&
+        "reason" in error.details &&
+        error.details.reason === "draft_changed"
+      )
+        throw error;
+      if (
+        batch.mutations.some(
+          (mutation) => mutation.type === "upsert" && mutation.agentPublish !== undefined
+        )
+      ) {
+        throw new AppError("CONFLICT", "The live agent changed since the draft was written", {
+          reason: "stale_base"
+        });
+      }
       const now = await this.target(target.address);
       throw await revisionConflictOf(this.options, call.access, now);
     }

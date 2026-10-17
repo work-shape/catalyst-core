@@ -88,6 +88,12 @@ export async function applyValidatedConfigAssetMutations(
   const mutations = withRevisionFiles(options, input.mutations, assets);
   const validate = (stored: { state: ConfigAssetState; assets: ConfigAssetRecord[] }) => {
     validateMutations(kinds.kinds, mutations, stored);
+    // A draft cannot lend an unpublished reference removal to a live delete in the batch.
+    const live = mutations.filter(
+      (mutation) => mutation.type !== "upsert" || mutation.agentDraft === undefined
+    );
+    if (live.length !== mutations.length && live.some((mutation) => mutation.type === "delete"))
+      validateMutations(kinds.kinds, live, stored);
     assertReferencesWithinOwners(kinds.kinds, mutations, stored.assets);
     assertDefaultOwnedByInstance(kinds.kinds, mutations, stored.assets);
   };

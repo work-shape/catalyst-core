@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./support/agent-draft-publication";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { AssetScope } from "@work-shape/catalyst-core";
@@ -132,6 +133,7 @@ describe("a reference to an asset the caller may not read", () => {
     // Kai reads the skill, attaches it at revision 1 and takes it off again at revision 2.
     expect(await write(t.kai.id, "assets.put", { config: wired })).toEqual({ status: 200 });
     expect(await write(t.kai.id, "assets.put", { config: bare })).toEqual({ status: 200 });
+    await publishAgentDraft(t, "kai-intake");
     await t.grant(
       t.kai.id,
       "skill.read",
@@ -150,10 +152,13 @@ describe("a reference to an asset the caller may not read", () => {
     // The administrator attaches it at revision 3. Kai keeps what is stored: an edit and a
     // restore of that revision leave the reference as it is.
     expect(await write(t.admin.id, "assets.put", { config: wired })).toEqual({ status: 200 });
+    await publishAgentDraft(t, "kai-intake");
     expect(
       await write(t.kai.id, "assets.put", { config: { ...wired, instructions: "Help well." } })
     ).toEqual({ status: 200 });
+    await publishAgentDraft(t, "kai-intake");
     expect(await write(t.kai.id, "assets.revert", { revision: 3 })).toEqual({ status: 200 });
+    await publishAgentDraft(t, "kai-intake");
     expect(await t.stored("agent", "kai-intake")).toMatchObject({
       revision: 5,
       config: { instructions: "Help.", skillNames: ["kai-guide"] }
@@ -220,6 +225,7 @@ describe("a reference to an asset the caller may not read", () => {
     const edited = reader("kai-wired", ["lena-guide"], { instructions: "Help well." });
     expect(await validate(t, t.kai.id, edited)).toEqual({ valid: true, issues: [] });
     expect(await put(t.kai.id, edited)).toEqual({ status: 200 });
+    await publishAgentDraft(t, "kai-wired");
     expect(await t.stored("agent", "kai-wired")).toMatchObject({
       revision: 2,
       config: { instructions: "Help well.", skillNames: ["lena-guide"] }
@@ -280,6 +286,7 @@ describe("an issue of an asset the caller may not read", () => {
         payload: { config: reader(name, ["kai-guide"]) }
       });
       expect(wired.statusCode, wired.body).toBe(200);
+      await publishAgentDraft(t, name);
     }
     const unread = "The change would break an asset the caller may not read";
     const untitled = { ...skill("kai-guide"), title: "" };

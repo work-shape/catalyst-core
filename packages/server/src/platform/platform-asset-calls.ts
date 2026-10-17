@@ -41,7 +41,7 @@ import type { AssetCall } from "../assets/asset-access";
 import { assetWriteEvent } from "../guardrails/asset-guardrail-events";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { AssetWorkflow } from "../assets/asset-service";
-import { AgentProposals, PROPOSED_KIND } from "../assets/agent-proposals";
+const PROPOSED_KIND = "agent";
 import { callableByAudience, listingOrigin } from "./platform-operations-audience";
 import { readPlatformContext } from "./platform-context";
 import {
@@ -121,7 +121,7 @@ const namedBy = (input: { kind?: string; name?: string }): ConversationSubject |
 
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
-  const proposals = new AgentProposals(options);
+
   const pageApps = new PageApps(options);
 
   /** The conversation the call came from, where it came from one. */
@@ -396,16 +396,29 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     const call = await callOf(context);
     allowed(await workflow.reads.authorizeGet(call.access, address));
     const read = await workflow.reads.get(call, address);
-    // In the conversation of an agent's proposal, the agent reads what it proposed.
-    const proposed = await proposals.head(conversation, asset);
+    const proposed =
+      asset.kind === "agent" &&
+      call.access.authorize("agent.write", {
+        kind: "agent",
+        name: asset.name,
+        assetId: read.id,
+        ...(address.workspaceId ? { workspaceId: address.workspaceId } : {})
+      }).allowed
+        ? await workflow.agentDrafts.get(call, address)
+        : undefined;
     const published =
-      proposed?.liveRevision ?? ("publishedRevision" in read ? read.publishedRevision : undefined);
-    const revision = proposed?.revision ?? read.revision;
+      asset.kind === "agent"
+        ? read.revision
+        : "publishedRevision" in read
+          ? read.publishedRevision
+          : undefined;
+    const revision = read.revision;
     return {
       kind: read.kind,
       name: read.name,
       config: proposed?.config ?? read.config ?? {},
       revision,
+      ...(asset.kind === "agent" ? { draftRevision: proposed?.revision ?? null } : {}),
       ...(published === undefined ? {} : { publishedRevision: published }),
       shows: !proposed && published !== undefined && published === revision ? "published" : "draft",
       ...(address.workspaceId === undefined ? {} : { workspaceId: address.workspaceId })
@@ -630,13 +643,28 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       const write = {
         ...address,
         ...contentOf(input),
-        expectedRevision: input.expectedRevision
+        expectedRevision: input.expectedRevision,
+        expectedDraftRevision: input.expectedDraftRevision ?? null
       };
       try {
         allowed(await workflow.authorizeRevisionWrite(call.access, write, "write"));
-        if (proposes) return await proposals.save(call, conversation, address, input);
-        const written = await workflow.put(call, write);
-        return { saved: true, revision: written.revision };
+
+        const written = await workflow.put(
+          { ...call, buildConversationId: conversation.id },
+          write
+        );
+        return proposes
+          ? {
+              saved: true,
+              revision:
+                "publishedRevision" in written
+                  ? (written.publishedRevision ?? written.revision)
+                  : written.revision,
+              draftRevision: written.revision,
+              publishedRevision:
+                "publishedRevision" in written ? written.publishedRevision : undefined
+            }
+          : { saved: true, revision: written.revision };
       } catch (error) {
         const refused = platformAssetWriteRefusal(error);
         if (refused) return refused;

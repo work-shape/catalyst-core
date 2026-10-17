@@ -101,7 +101,9 @@ async function listTryConversations(
     .where(
       and(
         eq(agentTryConversations.clientInstanceId, input.clientInstanceId),
-        eq(agentTryConversations.buildConversationId, input.buildConversationId),
+        input.buildConversationId === undefined
+          ? undefined
+          : eq(agentTryConversations.buildConversationId, input.buildConversationId),
         input.agentId === undefined ? undefined : eq(agentTryConversations.agentId, input.agentId)
       )
     );

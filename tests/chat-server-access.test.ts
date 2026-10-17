@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./support/agent-draft-publication";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -116,6 +117,7 @@ describe("Namespace grants on agents and skills", () => {
       (await t.putAgent(t.admin.id, "assistant", { instructions: "Changed." })).statusCode
     ).toBe(200);
 
+    await publishAgentDraft(t, "kai-helper");
     // A revert restores content its guardrails answer about: it needs the read right too.
     await t.expectRefused(
       t.kai.id,

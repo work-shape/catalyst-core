@@ -1,3 +1,4 @@
+import { readAgentDraft } from "./request-with-origin";
 import { loadNewerVersion } from "./build-fixtures";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -203,9 +204,10 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
       await form.getByRole("button", { name: "Save changes", exact: true }).click();
       await expect
         .poll(
-          async () =>
-            storedAgentSchema.parse(await (await page.request.get(agentUrl)).json()).config
-              .toolNames,
+          async () => {
+            const draft = await readAgentDraft(page, agentUrl);
+            return draft ? storedAgentSchema.parse(draft).config.toolNames : undefined;
+          },
           { timeout: 3_000 }
         )
         .toEqual([]);

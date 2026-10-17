@@ -1,3 +1,4 @@
+import { publishAgentDraft } from "./request-with-origin";
 import type { Page } from "@playwright/test";
 import { shoot, shotsDir, signIn } from "./inbox-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
@@ -256,6 +257,7 @@ test("a builder reads what of an agent is unavailable, repairs it and is told it
     await form.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(notice).toHaveCount(0);
     await expect(line).toHaveCount(0);
+    await publishAgentDraft(page, agentUrl);
     const saved: { config: unknown } = await (await page.request.get(agentUrl)).json();
     expect(saved.config).toMatchObject({
       modelBindingId: "primary",
@@ -270,7 +272,7 @@ test("a builder reads what of an agent is unavailable, repairs it and is told it
   }
 });
 
-test("a builder who renames an agent in Studio finds the new name on its card", async ({
+test("a saved agent name stays in the draft until it is published", async ({
   page,
   // The probe agent is offered in every workspace while it exists, so the tests that count
   // the agents of the instance wait for this one.
@@ -312,9 +314,12 @@ test("a builder who renames an agent in Studio finds the new name on its card", 
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
 
-    // Back on the Agents page without a reload, the card carries the saved name.
+    // The list remains live until the administrator publishes the saved draft.
     await rail(page).getByRole("button", { name: "Agents", exact: true }).click();
     await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
+    await expect(card(page, "Rename Probe")).toBeVisible();
+    await publishAgentDraft(page, agentPath(name));
+    await page.reload();
     await expect(card(page, "Renamed Probe")).toBeVisible();
     await expect(card(page, "Rename Probe")).toHaveCount(0);
   } finally {

@@ -64,6 +64,7 @@ interface PlatformAssetRead {
   revision: number;
   /** The revision that runs. Missing while nothing is published. */
   publishedRevision?: number;
+  draftRevision?: number | null;
   /** Which of the two `config` is: the draft, or the published revision where no draft differs. */
   shows: (typeof APP_MODES)[number];
   /** The workspace that owns the asset, by its id. Missing for an asset of the instance. */
@@ -92,6 +93,7 @@ export interface PlatformAssetPut {
   files?: PlatformAssetFile[];
   /** The revision the save is based on. Missing for the save that creates the asset. */
   expectedRevision?: number;
+  expectedDraftRevision?: number | null;
   /**
    * The kind and the name of the asset the save creates; with `expectedRevision`, of a draft
    * this conversation created, where the save is not of the subject.
@@ -115,12 +117,37 @@ interface PlatformAssetCreated {
   besideSubject?: true;
 }
 
+interface DraftConflictDetails {
+  reason: "draft_changed";
+  currentDraftRevision: number | null;
+  author?: { userId?: string; conversationId?: string; release: boolean };
+  changedAt?: string;
+}
+
+const draftConflictDetailsSchema = z.object({
+  reason: z.literal("draft_changed"),
+  currentDraftRevision: z.number().int().positive().nullable(),
+  author: z
+    .object({
+      userId: z.string().optional(),
+      conversationId: z.string().optional(),
+      release: z.boolean()
+    })
+    .optional(),
+  changedAt: z.string().optional()
+});
+
 type PlatformAssetWrite =
-  | ({ saved: true; revision: number; publishedRevision?: number } & (
+  | ({ saved: true; revision: number; draftRevision?: number; publishedRevision?: number } & (
       PlatformAssetCreated | { created?: undefined }
     ))
   | { saved: false; issues: PlatformAssetIssue[] }
-  | { saved: false; conflict: "REVISION_CONFLICT"; message: string };
+  | {
+      saved: false;
+      conflict: "REVISION_CONFLICT";
+      message: string;
+      details?: DraftConflictDetails;
+    };
 
 /**
  * Who would call the listed operations: a step of a Workflow, or a `connection` action of an
@@ -257,6 +284,7 @@ const readOutputSchema = z.object({
   config: jsonObjectSchema,
   revision: z.number().int(),
   publishedRevision: z.number().int().optional(),
+  draftRevision: z.number().int().nullable().optional(),
   shows: z.enum(["draft", "published"]),
   workspaceId: z.string().optional()
 });
@@ -270,6 +298,7 @@ const putOutputSchema = z.union([
     saved: z.literal(true),
     revision: z.number().int(),
     publishedRevision: z.number().int().optional(),
+    draftRevision: z.number().int().nullable().optional(),
     created: z.literal(true).optional(),
     kind: z.string().optional(),
     name: z.string().optional(),
@@ -281,7 +310,8 @@ const putOutputSchema = z.union([
   z.object({
     saved: z.literal(false),
     conflict: z.literal("REVISION_CONFLICT"),
-    message: z.string()
+    message: z.string(),
+    details: draftConflictDetailsSchema.optional()
   })
 ]);
 const operationsOutputSchema = z.object({
@@ -404,8 +434,8 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
         "Read the definition of an asset of the platform, such as a Workflow, an App or an agent: its config and the revision it is at.",
         `Without 'kind' and 'name' it reads the asset the conversation is about. With them it reads that asset and changes nothing: the conversation stays about what it was, and the person sees nothing beside the chat. To work on that asset, open it with ${open.name}.`,
         "It reads with the rights of the person you act for: an asset they may not read is answered as one that does not exist. A conversation shared with a workspace reads no asset but the one it is about.",
-        "Answers the draft where one differs from the published revision, and says which of the two it shows. 'publishedRevision' is the revision that runs; it is missing while nothing is published, and on a kind without drafts, such as a skill, whose saves are live at once. For an agent with this conversation's pending change proposal it answers the proposal as the draft, and 'publishedRevision' is the agent's revision that runs.",
-        "Read before you change anything, and send the 'revision' you read as 'expectedRevision' when you save."
+        "Answers the draft where one differs from the published revision, and says which of the two it shows. 'publishedRevision' is the revision that runs; it is missing while nothing is published, and on a kind without drafts, such as a skill, whose saves are live at once. For an agent with a shared pending draft, a holder of agent.write reads its draft content: 'revision' and 'publishedRevision' name the live revision and 'draftRevision' names the draft, null when none is pending.",
+        "Read before you change anything, and send the 'revision' you read as 'expectedRevision' when you save. For an agent also send 'draftRevision' as 'expectedDraftRevision', null where no draft was pending."
       ].join(" "),
       inputSchema: readInputSchema,
       outputSchema: readOutputSchema,
@@ -470,7 +500,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
         "Choosing a View, an App or a Workflow: references/apps/app-or-workflow.md in 'platform-docs'.",
         "A draft save changes nothing that runs: it publishes nothing and starts nothing, and the published revision stays what it is until a person publishes the draft. That is why it runs on your call without a confirmation, unless an administrator set it stricter. You never publish: Publish is the person's click on the asset's page.",
         "Send the whole config and, as 'expectedRevision', the revision you read. A kind written as files, such as a Data Store, is sent as 'files' instead: every file of the asset, its manifest among them, as a read of it lists them. Answers the new draft revision; or the issues the definition is refused for, with nothing saved; or REVISION_CONFLICT where somebody saved since you read: read again, apply your change to what is there now and save with the new revision.",
-        "An agent that exists is never changed by your save: the save writes this conversation's change proposal for the agent, and the agent runs as it is until the person applies the proposal on the agent's page, or discards it. A read in this conversation answers your proposal while one is pending: save on its 'revision'. Where the agent was changed since your proposal was based on it, the person cannot apply the proposal: the read answers the agent as it runs now, and your next save on that revision makes the proposal anew from what you send.",
+        "For an existing agent, every Build conversation and author shares one pending draft. The live agent stays unchanged until a person publishes the draft. Send the live 'revision' as 'expectedRevision' and the 'draftRevision' as 'expectedDraftRevision', null when no draft is pending. A draft conflict identifies its current revision, last author and change time: read again and apply your change to the shared draft before saving.",
         "A skill that exists is refused: a save of it would be live at once. Say what you would change, and the person changes it on the skill's page.",
         `To make a new asset, leave 'expectedRevision' out and name its 'kind' and 'name'. That save creates a Workflow or a Data Store as a draft (a Data Store with its first migration among its files), or an agent or a skill. In a conversation that is about no asset yet it becomes the asset the conversation is about and the person is taken to its page. An agent made so is offered to nobody until a person makes it available on its page. Read ${PLATFORM_ASSET_TOOLS.get.name} of a similar asset first where you do not know the shape of the kind's config.`,
         "You may also create one while the conversation is about another asset, such as the Workflow or the Data Store an App needs: say first what you create and why, in a sentence such as \"Dafür legen wir zuerst den Workflow an.\" Such a draft stays beside the asset the conversation is about: the answer has 'besideSubject', the conversation stays about that asset and the person stays on the page they are on, offered a link to the new draft. Build what an App needs first and the App last.",
@@ -490,6 +520,15 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
           .optional()
           .describe(
             "For a kind written as files, such as a Data Store: every file of the asset, the manifest among them. A file left out is deleted. Send it instead of 'config'."
+          ),
+        expectedDraftRevision: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .optional()
+          .describe(
+            "For an existing agent, the draftRevision read, null where none is pending. Separate from its live expectedRevision."
           ),
         expectedRevision: z
           .number()
@@ -610,7 +649,13 @@ export function platformAssetWriteRefusal(
 ): Extract<PlatformAssetWrite, { saved: false }> | undefined {
   if (!isAppError(error)) return undefined;
   if (error.code === "REVISION_CONFLICT") {
-    return { saved: false, conflict: "REVISION_CONFLICT", message: error.message };
+    const draft = draftConflictDetailsSchema.safeParse(error.details);
+    return {
+      saved: false,
+      conflict: "REVISION_CONFLICT",
+      message: error.message,
+      ...(draft.success ? { details: draft.data } : {})
+    };
   }
   if (error.code !== "VALIDATION_FAILED") return undefined;
   const details = refusalDetailsSchema.safeParse(error.details);

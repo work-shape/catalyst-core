@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
-  index,
   integer,
   jsonb,
   pgTable,
@@ -13,14 +13,7 @@ import {
 import type { AgentProposalSource, ClientInstanceId, JsonObject } from "@work-shape/catalyst-core";
 import { configAssets } from "./configAssets";
 
-/**
- * The pending change proposal of an agent, one per agent and source (TRY-1a). The source is a
- * Build conversation or a person, by id: a conversation's proposals are removed with the
- * conversation's other data when it is deleted, so no key ties them to the conversation row,
- * which outlives its deletion. Removing the agent's asset removes its proposals. The row of a
- * source outlives an Apply or a Discard, which remove its revisions, and counts the revisions
- * on: a source's proposal is pending while its row's revision is stored.
- */
+/** One counter row per agent; a stored head is pending. Source columns remain for rollback. */
 export const agentProposals = pgTable(
   "agent_change_proposals",
   {
@@ -31,6 +24,9 @@ export const agentProposals = pgTable(
       .references(() => configAssets.id, { onDelete: "cascade" }),
     sourceKind: text("source_kind").$type<AgentProposalSource["kind"]>().notNull(),
     sourceId: text("source_id").notNull(),
+    lastAuthorUserId: text("last_author_user_id"),
+    lastBuildConversationId: text("last_build_conversation_id"),
+    lastWriteRelease: boolean("last_write_release").notNull().default(false),
     baseRevision: integer("base_revision").notNull(),
     /** The newest revision: the pending proposal's, which Apply writes, or the last one's. */
     revision: integer("revision").notNull(),
@@ -38,17 +34,7 @@ export const agentProposals = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },
   (table) => [
-    uniqueIndex("agent_change_proposals_source_idx").on(
-      table.agentId,
-      table.sourceKind,
-      table.sourceId
-    ),
-    // The proposals of a source, which a conversation's deletion removes.
-    index("agent_change_proposals_of_source_idx").on(
-      table.clientInstanceId,
-      table.sourceKind,
-      table.sourceId
-    ),
+    uniqueIndex("agent_change_proposals_agent_idx").on(table.agentId),
     check(
       "agent_change_proposals_source_kind_check",
       sql`${table.sourceKind} in ('conversation', 'person')`

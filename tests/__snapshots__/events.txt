@@ -1,3 +1,4 @@
+{"name":"agent.before_publish","legacy":false,"audited":false,"phases":["before"]}
 {"name":"agent_run.recovered","legacy":true,"audited":true,"phases":["after"]}
 {"name":"api_access.connect_code_confirmed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"api_access.credential_created","legacy":true,"audited":true,"phases":["after"]}

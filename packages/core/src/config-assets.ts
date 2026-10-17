@@ -350,6 +350,15 @@ export type ConfigAssetMutation =
        * batch of such writes alone leaves the version of the instance's asset set as it is.
        */
       draft?: true;
+      /** Existing agents save to their separate shared draft, atomically with the batch. */
+      agentDraft?: {
+        expectedDraftRevision: number | null;
+        author: import("./agent-proposals").AgentDraftAuthor;
+      };
+      /** Consume precisely this pending draft in the same transaction as its live revision. */
+      agentPublish?: number;
+      /** Approved skill attachment/detachment is carried into a pending draft. */
+      agentSkillChange?: { name: string; attached: boolean };
       /** The file set of the revision, stored before the write, for a `files` kind. */
       fileSetId?: FileSetId;
       /** The commit of the revision and its bundle, for an asset whose content is a repository. */
@@ -557,6 +566,7 @@ export interface ConfigAssetStore {
      * of an asset that was not there wrote nothing and has no entry.
      */
     revisions: Record<string, number>;
+    draftRevisions?: Record<string, number>;
     /** The id of each asset that has an entry in `revisions`, keyed the same way. */
     assetIds: Record<string, string>;
   }>;

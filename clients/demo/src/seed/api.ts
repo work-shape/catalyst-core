@@ -85,6 +85,7 @@ export interface SeedApi {
     workspaceId?: string
   ): Promise<"done" | "pending_approval">;
   /** Makes one revision of an asset with a draft the one its users are served. */
+  getAgentDraft(name: string): Promise<{ revision: number } | undefined>;
   publishAsset(kind: string, name: string, revision: number): Promise<void>;
   showAgentEverywhere(name: string): Promise<void>;
   listOwnApprovalRequests(): Promise<ApprovalRequestView[]>;
@@ -216,6 +217,14 @@ export function createSeedApi(client: ApiClient): SeedApi {
           }
         })
       ).status,
+    async getAgentDraft(name) {
+      try {
+        return (await client.agents.draft.get({ params: { name } })).draft ?? undefined;
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return undefined;
+        throw error;
+      }
+    },
     async publishAsset(kind, name, revision) {
       completedOutput(await client.assets.publish({ params: { kind, name }, body: { revision } }));
     },

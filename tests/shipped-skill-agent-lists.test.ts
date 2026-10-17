@@ -265,6 +265,11 @@ describe("the two config pushes around the release that ships the four", () => {
     // Push A, at commit 1 with --prune: the agent without the four, then the four deleted.
     const agentA = await put(upgraded, "agent", AGENT, agentListing([]), 1);
     expect(agentA.statusCode, agentA.body).toBe(200);
+    const publishedA = await upgraded.call("assets.publish", {
+      params: { kind: "agent", name: AGENT },
+      payload: { revision: 1 }
+    });
+    expect(publishedA.statusCode, publishedA.body).toBe(200);
     for (const name of FOUR) {
       const r = await del(upgraded, "skill", name, 1);
       expect(r.statusCode, r.body).toBe(200);
@@ -302,6 +307,11 @@ describe("the two config pushes around the release that ships the four", () => {
       (await get(next, "agent", AGENT)).revision
     );
     expect(agentB.statusCode, agentB.body).toBe(200);
+    const publishedB = await next.call("assets.publish", {
+      params: { kind: "agent", name: AGENT },
+      payload: { revision: 2 }
+    });
+    expect(publishedB.statusCode, publishedB.body).toBe(200);
     // A conversation that used the instance's `pdf` reads the release's now.
     const read = await readSkill(next, "pdf");
     expect(read).toMatchObject({ status: "success", output: { name: "pdf" } });

@@ -613,7 +613,9 @@ describe("what the dialogs send", () => {
     expect(grantScopeKinds("connection")).toEqual(["asset", "instance"]);
     // A workspace owns agents and skills (WS-OWN-1a), so "In workspace X" comes first.
     for (const kind of ["agent", "skill"] as const) {
-      expect(grantVerbs(kind)).toEqual(["read", "write", "delete"]);
+      expect(grantVerbs(kind)).toEqual(
+        kind === "agent" ? ["read", "write", "publish", "delete"] : ["read", "write", "delete"]
+      );
       expect(grantScopeKinds(kind)).toEqual(["workspace", "asset"]);
     }
     // A new right on agents starts at the agents' first place.

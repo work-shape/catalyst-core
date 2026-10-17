@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { ClientInstanceId, ConfigAssetStore } from "@work-shape/catalyst-core";
+import type {
+  AgentProposalStore,
+  ClientInstanceId,
+  ConfigAssetStore
+} from "@work-shape/catalyst-core";
 import type { TestCallInput, TestOperationName } from "./operations";
 
 const assetParamsSchema = z.object({ kind: z.string(), name: z.string() });
@@ -15,18 +19,28 @@ const syncItemSchema = z.object({
 
 /**
  * A write of one asset, or a batch, as a caller makes it who read the assets just before: it
- * carries the revision each asset is at, a deleted one's included, and `null` for a put of a
+ * carries the live and agent-draft revisions each asset is at, a deleted one's included, and `null` for a put of a
  * name that was never stored. A test that is about the revision check names `expectedRevision`
  * itself, `undefined` included, and is left as it is. A delete or revert of an asset that
  * does not exist names revision 1, so the call is complete and is answered by what the test
  * is about.
  */
 export async function atCurrentRevision(
-  stores: { configAssets: ConfigAssetStore },
+  stores: { configAssets: ConfigAssetStore; agentProposals?: AgentProposalStore },
   clientInstanceId: ClientInstanceId,
   operation: TestOperationName,
   input: TestCallInput
 ): Promise<TestCallInput> {
+  const draftOf = async (kind: string, name: string) => {
+    const asset =
+      kind === "agent"
+        ? await stores.configAssets.getConfigAsset({ clientInstanceId, kind, name })
+        : undefined;
+    return asset
+      ? ((await stores.agentProposals?.get({ clientInstanceId, agentId: asset.id }))?.revision ??
+          null)
+      : null;
+  };
   const revisionOf = async (type: "put" | "delete", kind: string, name: string) => {
     const asset = await stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
     return type === "put" ? (asset?.revision ?? null) : (asset?.revision ?? 1);
@@ -41,7 +55,15 @@ export async function atCurrentRevision(
       items.push(
         !read.success || name === undefined || "expectedRevision" in item
           ? item
-          : { ...item, expectedRevision: await revisionOf(read.data.type, read.data.kind, name) }
+          : {
+              ...item,
+              expectedRevision: await revisionOf(read.data.type, read.data.kind, name),
+              ...(read.data.kind === "agent" &&
+              read.data.type === "put" &&
+              !("expectedDraftRevision" in item)
+                ? { expectedDraftRevision: await draftOf(read.data.kind, name) }
+                : {})
+            }
       );
     }
     return { ...input, payload: { ...batch.data, items } };
@@ -64,7 +86,18 @@ export async function atCurrentRevision(
     kind,
     name
   );
-  return { ...input, payload: { ...payload.data, expectedRevision } };
+  return {
+    ...input,
+    payload: {
+      ...payload.data,
+      expectedRevision,
+      ...(kind === "agent" &&
+      operation !== "assets.delete" &&
+      !("expectedDraftRevision" in payload.data)
+        ? { expectedDraftRevision: await draftOf(kind, name) }
+        : {})
+    }
+  };
 }
 
 interface ReleaseContent {
@@ -79,7 +112,7 @@ interface ReleaseContent {
  * the instance just before: every asset at the revision it is at, a new one at `null`.
  */
 export async function releaseAtCurrentRevisions(
-  stores: { configAssets: ConfigAssetStore },
+  stores: { configAssets: ConfigAssetStore; agentProposals?: AgentProposalStore },
   clientInstanceId: ClientInstanceId,
   release: ReleaseContent
 ) {
@@ -94,7 +127,25 @@ export async function releaseAtCurrentRevisions(
   ] as const) {
     for (const config of configs) {
       const expectedRevision = await revisionOf(kind, String(config.name));
-      items.push({ type: "put", kind, config, expectedRevision });
+      const asset =
+        kind === "agent"
+          ? await stores.configAssets.getConfigAsset({
+              clientInstanceId,
+              kind,
+              name: String(config.name)
+            })
+          : undefined;
+      const expectedDraftRevision = asset
+        ? ((await stores.agentProposals?.get({ clientInstanceId, agentId: asset.id }))?.revision ??
+          null)
+        : null;
+      items.push({
+        type: "put",
+        kind,
+        config,
+        expectedRevision,
+        ...(kind === "agent" ? { expectedDraftRevision } : {})
+      });
     }
   }
   for (const { kind, name } of release.deleteAssets ?? []) {

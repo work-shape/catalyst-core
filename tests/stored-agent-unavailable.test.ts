@@ -295,6 +295,11 @@ describe("stored agents with unavailable references", () => {
       }
     });
     expect(repaired.statusCode, repaired.body).toBe(200);
+    const published = await instance.call("assets.publish", {
+      params: { kind: "agent", name: "test_agent" },
+      payload: { revision: 1 }
+    });
+    expect(published.statusCode, published.body).toBe(200);
     expect(await read(instance)).toMatchObject({
       chatAvailable: true,
       unavailableTools: [],

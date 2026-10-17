@@ -181,9 +181,9 @@ describe("access evaluator: whose rows apply", () => {
   });
 
   it("ignores a row whose action is not registered", () => {
-    const grants = [grant({ action: "agent.publish" }), grant({ action: "ref:demo-tools" })];
+    const grants = [grant({ action: "unregistered.action" }), grant({ action: "ref:demo-tools" })];
     expect(listAccessEntries(holder(), persisted(grants))).toEqual([]);
-    expect(decide({ grants, action: "agent.publish" })).toEqual({
+    expect(decide({ grants, action: "unregistered.action" })).toEqual({
       allowed: false,
       reason: "unknown_action"
     });
@@ -334,7 +334,7 @@ describe("access evaluator: the classes of action", () => {
 
   it("refuses an action nobody registered, also for a superadmin", () => {
     const superadmin = holder({ roles: ["user", "admin", "superadmin"] });
-    for (const action of ["agent.publish", "", "*", "agent.*", "AGENT.WRITE"]) {
+    for (const action of ["unregistered.action", "", "*", "agent.*", "AGENT.WRITE"]) {
       expect(decide({ holder: superadmin, action })).toEqual({
         allowed: false,
         reason: "unknown_action"
@@ -355,7 +355,7 @@ describe("access evaluator: an inactive holder", () => {
       permissionRefs: ["demo-tools"]
     });
     const grants = [grant(), ...legacyRows(["config_assets.release"])];
-    for (const action of [...ACTIONS, ...PERMISSIONS, "ref:demo-tools", "agent.publish"]) {
+    for (const action of [...ACTIONS, ...PERMISSIONS, "ref:demo-tools", "unregistered.action"]) {
       expect(decide({ holder: superadmin, grants, action, holderActive: false })).toEqual({
         allowed: false,
         reason: "holder_inactive"
@@ -400,7 +400,7 @@ describe("actor access", () => {
     for (const [action, reason] of [
       ["agent.write", "no_grant"],
       ["skill.write", "denied"],
-      ["agent.publish", "unknown_action"]
+      ["unregistered.action", "unknown_action"]
     ] as const) {
       let thrown: unknown;
       try {

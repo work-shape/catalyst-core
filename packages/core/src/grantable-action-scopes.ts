@@ -17,6 +17,7 @@ type GrantScopeKind = Exclude<StoredGrantScopeKind, "namespace">;
 export const GRANTABLE_ACTION_SCOPES = {
   "agent.read": ["workspace", "asset"],
   "agent.write": ["workspace", "asset"],
+  "agent.publish": ["workspace", "asset"],
   "agent.delete": ["workspace", "asset"],
   "skill.read": ["workspace", "asset"],
   "skill.write": ["workspace", "asset"],

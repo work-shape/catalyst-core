@@ -60,9 +60,8 @@ describe("the operation catalog", () => {
     expect(names.map((name) => `${name}  ${routeOf(name)}`).sort()).toMatchInlineSnapshot(`
       [
         "access_tokens.exchange  POST /api/v1/auth/access-token",
-        "agents.proposal.apply  POST /api/v1/agents/:name/proposals/:conversationId/apply",
-        "agents.proposal.discard  POST /api/v1/agents/:name/proposals/:conversationId/discard",
-        "agents.proposal.get  GET /api/v1/agents/:name/proposals/:conversationId",
+        "agents.draft.discard  POST /api/v1/agents/:name/draft/discard",
+        "agents.draft.get  GET /api/v1/agents/:name/draft",
         "agents.try.open  POST /api/v1/agents/:name/try/:conversationId",
         "api_credentials.create  POST /api/v1/instance/service-principals/:servicePrincipalId/credentials",
         "api_credentials.revoke  POST /api/v1/instance/api-credentials/:credentialId/revoke",
@@ -545,9 +544,8 @@ describe("a running instance", () => {
       "operations.decide",
       "conversations.follow_ups.withdraw",
       "conversations.follow_ups.dispatch",
-      "agents.proposal.get",
-      "agents.proposal.apply",
-      "agents.proposal.discard",
+      "agents.draft.get",
+      "agents.draft.discard",
       "agents.try.open",
       "conversations.subagents.list"
     ];

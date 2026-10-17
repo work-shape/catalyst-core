@@ -650,6 +650,13 @@ export const EVENTS = {
   "user.profile_updated": { ...LEGACY_AUDIT, name: "user.profile_updated", subject: "user" },
   "user.updated": { ...LEGACY_AUDIT, name: "user.updated", subject: "user" },
   // Guardrails answer here before a Workflow's revision goes live. The subject is the Workflow.
+  "agent.before_publish": {
+    name: "agent.before_publish",
+    subject: "config_asset",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
+  },
   "workflow.before_publish": {
     name: "workflow.before_publish",
     subject: "config_asset",

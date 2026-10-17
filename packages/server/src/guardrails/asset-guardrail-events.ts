@@ -139,6 +139,21 @@ export async function publishEvents(
   options: RevisionOptions,
   input: RevisionAddress
 ): Promise<OperationBeforeEvent[]> {
+  if (input.kind === "agent") {
+    const asset = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: "agent",
+      name: input.name
+    });
+    if (!asset || !assetScopesEqual(asset.scope, scopeOf(input.workspaceId))) return [];
+    const draft = await options.stores.agentProposals.get({
+      clientInstanceId: options.clientInstanceId,
+      agentId: asset.id
+    });
+    if (draft?.revision !== input.revision) return [];
+    const write = assetWriteEvent({ kind: "agent", name: input.name, config: draft.config });
+    return [write, { ...write, name: "agent.before_publish" }];
+  }
   const name = PUBLISH_EVENTS[input.kind];
   if (name === undefined) {
     return [];

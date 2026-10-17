@@ -1,3 +1,4 @@
+import { agentDraftAuthor } from "./agent-drafts";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -352,11 +353,19 @@ async function checkBatch(
           name: entry.name,
           config: toJsonObject(acceptedByName(entry.kind.kind).get(entry.name)),
           scope: entry.scope,
+          ...(entry.kind.kind === "agent" && entry.asset?.status === "active"
+            ? {
+                agentDraft: {
+                  expectedDraftRevision: entry.item.expectedDraftRevision ?? null,
+                  author: agentDraftAuthor(call, releaseSync)
+                }
+              }
+            : {}),
           // A kind with a published revision moves its draft with a write and nothing else.
           ...(entry.kind.lifecycle === "draft_published" ? { draft: true as const } : {})
         }
   );
-  if (defaultChange) {
+  if (defaultChange && (defaultChange.agentName ?? null) !== storedDefault) {
     mutations.push({ type: "setDefaultAgent", agentName: defaultChange.agentName });
   }
   // Asked here as well as by the writer, so that a check of the batch refuses it too.
@@ -445,6 +454,20 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
     // The revision the store gave the asset in this transaction. A delete of an asset that
     // was not there wrote nothing and has none.
     const key = assetKey(entry.kind.kind, entry.name);
+    const draftRevision = result.draftRevisions?.[key];
+    if (draftRevision !== undefined && entry.item.type === "put") {
+      items.push({
+        type: "put" as const,
+        kind: entry.kind.kind,
+        name: entry.name,
+        status: "applied" as const,
+        id: entry.asset?.id ?? "",
+        revision: draftRevision,
+        draftRevision,
+        publishedRevision: entry.asset?.revision
+      });
+      continue;
+    }
     const revision = result.revisions[key];
     const id = result.assetIds[key];
     if (entry.absent || revision === undefined || id === undefined) {
@@ -479,7 +502,11 @@ async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checke
   await recordCommitted(options, call, records);
   for (const entry of ready) {
     const id = result.assetIds[assetKey(entry.kind.kind, entry.name)];
-    if (!entry.absent && entry.item.type === "put") {
+    if (
+      !entry.absent &&
+      entry.item.type === "put" &&
+      result.draftRevisions?.[assetKey(entry.kind.kind, entry.name)] === undefined
+    ) {
       await clearLiveOnceSwitches(options, call, entry.kind, entry.name, id);
     }
   }

@@ -38,7 +38,11 @@ export interface AgentTryConversationStore {
    * The Try conversations of a Build conversation, replaced ones among them; with `agentId`,
    * those of that agent.
    */
-  list(input: TryConversationsOf & { agentId?: string }): Promise<ConversationId[]>;
+  list(input: {
+    clientInstanceId: ClientInstanceId;
+    buildConversationId?: ConversationId;
+    agentId?: string;
+  }): Promise<ConversationId[]>;
   /** Removes the link of a Try conversation once its data is cleaned up. */
   remove(input: {
     clientInstanceId: ClientInstanceId;

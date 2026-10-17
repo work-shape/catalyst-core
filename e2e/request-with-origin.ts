@@ -1,4 +1,5 @@
-import { test, type APIRequestContext, type Page } from "@playwright/test";
+import { type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test } from "./test";
 import { z } from "zod";
 
 export function requestWithOrigin(
@@ -68,4 +69,32 @@ export async function readAsset(
 ): Promise<z.infer<typeof assetSchema> | undefined> {
   const response = await page.request.get(assetUrl);
   return response.ok() ? assetSchema.parse(await response.json()) : undefined;
+}
+
+const agentDraftSchema = z.object({
+  draft: z.object({ revision: z.number(), config: z.record(z.string(), z.unknown()) }).nullable()
+});
+
+/** The shared draft, read explicitly by browser tests of the agent save contract. */
+export async function readAgentDraft(page: Page, assetUrl: string) {
+  const url = new URL(assetUrl);
+  url.pathname = url.pathname.replace("/assets/agent/", "/agents/") + "/draft";
+  const response = await page.request.get(url.href);
+  return agentDraftSchema.parse(await response.json()).draft;
+}
+
+/** An administrator's explicit publication, where a test needs a saved draft to be live. */
+export async function publishAgentDraft(page: Page, assetUrl: string): Promise<void> {
+  await expect
+    .poll(async () => (await readAgentDraft(page, assetUrl))?.revision ?? null, { timeout: 30_000 })
+    .not.toBeNull();
+  const draft = await readAgentDraft(page, assetUrl);
+  if (!draft) throw new Error("The agent save left no draft to publish");
+  const url = new URL(assetUrl);
+  url.pathname += "/publish";
+  const workspaceId = url.searchParams.get("workspaceId");
+  const published = await requestWithOrigin(page, "post", url.href, {
+    data: { revision: draft.revision, ...(workspaceId ? { workspaceId } : {}) }
+  });
+  expect(published.ok(), await published.text()).toBe(true);
 }
