@@ -15271,6 +15271,13 @@
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
                           },
+                          "originalStatus": {
+                            "type": "string",
+                            "enum": [
+                              "available",
+                              "released"
+                            ]
+                          },
                           "state": {
                             "type": "string",
                             "enum": [

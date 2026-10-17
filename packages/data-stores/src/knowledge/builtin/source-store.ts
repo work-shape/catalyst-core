@@ -2,6 +2,7 @@ import type { KnowledgeListingMode } from "../source-port";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
+  KNOWLEDGE_CONTENT_STATES,
   AppError,
   asManagedFileId,
   documentSourceItemSchema,
@@ -399,14 +400,26 @@ export function createSourceStore(
     async indexPayload(id: string) {
       return change(async (sql) => {
         const [row] = z
-          .array(z.object({ content_sha256: z.string(), managed_file_id: z.string() }))
+          .array(
+            z.object({
+              content_sha256: z.string(),
+              managed_file_id: z.string(),
+              state: z.enum(KNOWLEDGE_CONTENT_STATES)
+            })
+          )
           .parse(
             await sql.run(
-              "select content_sha256,managed_file_id from catalyst_kb.documents where source_item_id=$1::text and withdrawn_at is null",
+              "select d.content_sha256,d.managed_file_id,c.state from catalyst_kb.documents d join catalyst_kb.contents c on c.sha256=d.content_sha256 where source_item_id=$1::text and withdrawn_at is null",
               [id]
             )
           );
-        return row && { contentSha256: row.content_sha256, fileId: row.managed_file_id };
+        return (
+          row && {
+            contentSha256: row.content_sha256,
+            fileId: row.managed_file_id,
+            state: row.state
+          }
+        );
       });
     },
     async finish(payload: KnowledgeSyncJobPayload, failureCode?: string) {

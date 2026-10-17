@@ -582,6 +582,11 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
     if (!record) {
       throw new AppError("NOT_FOUND", `Managed file '${input.fileId}' was not found`);
     }
+    if (record.status === "released") {
+      throw new AppError("CONFLICT", "Original liegt in der Quelle", {
+        reason: "knowledge_original_released"
+      });
+    }
     return {
       record,
       bytes: await readObjectBytes(this.byteStore, record.objectKey),

@@ -1,4 +1,5 @@
 import { sourceAuthority, type SourceAuthority } from "../source-principal";
+import { enqueueOriginalRelease, hasStoredKnowledgeExtraction } from "../original-release";
 import { removeAbandonedSourceSpools, sourceSpool } from "./source-spool";
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
@@ -65,16 +66,31 @@ async function queueIndex(
   control: JobControl,
   store: KnowledgeSourceStore,
   payload: KnowledgeFetchJobPayload,
-  id: string
+  id: string,
+  retained: Set<string>
 ) {
   const content = await store.indexPayload(id);
-  if (content)
-    await control.transaction((stores) =>
-      enqueueKnowledgeIndex(stores.jobs, knowledgeIndexPayloadOfFetch(payload, content), {
-        clientInstanceId: runtime.data.clientInstanceId,
-        dedupe: true
+  if (!content) return;
+  if (content.state === "failed") return content;
+  if (content.state === "extracted") {
+    if (retained.has(content.contentSha256)) return content;
+    if (
+      await hasStoredKnowledgeExtraction(runtime.input.files, {
+        knowledgeBaseId: payload.knowledgeBaseId,
+        contentSha256: content.contentSha256
       })
-    );
+    ) {
+      retained.add(content.contentSha256);
+      return content;
+    }
+  }
+  await control.transaction((stores) =>
+    enqueueKnowledgeIndex(stores.jobs, knowledgeIndexPayloadOfFetch(payload, content), {
+      clientInstanceId: runtime.data.clientInstanceId,
+      dedupe: true
+    })
+  );
+  return content;
 }
 
 async function releaseCopy(
@@ -248,45 +264,29 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
       );
       const retry: string[] = [];
       let retryMs = 0;
-      for (let index = 0; index < payload.sourceItemIds.length; index++) {
-        const id = payload.sourceItemIds[index];
-        if (!id) continue;
-        control.signal.throwIfAborted();
-        if (signal.aborted) {
-          await queueAgain(
-            runtime,
-            control,
-            payload,
-            [...retry, ...payload.sourceItemIds.slice(index)],
-            0
-          );
-          return;
+      const releases = new Map<
+        string,
+        ReturnType<typeof knowledgeIndexPayloadOfFetch> & { fileIds: string[] }
+      >();
+      const retained = new Set<string>();
+      async function handoff(id: string) {
+        const content = await queueIndex(runtime, control, store, payload, id, retained);
+        if (content) {
+          const previous = releases.get(content.contentSha256);
+          if (previous) previous.fileIds.push(content.fileId);
+          else
+            releases.set(content.contentSha256, {
+              ...knowledgeIndexPayloadOfFetch(payload, content),
+              fileIds: [content.fileId]
+            });
         }
-        const previous = await store.item(id, payload.sourceId);
-        if (previous?.state === "fetched") {
-          await queueIndex(runtime, control, store, payload, id);
-          continue;
-        }
-        // The executor owns the job lease; the item owns its fetch. Even a duplicate job
-        // without a concurrency key cannot create another Managed File for this version.
-        const item = await sourceTransaction(runtime.data, payload, control, (store) =>
-          store.claim(id, payload.sourceId, job.id)
-        );
-        if (!item || item.state === "failed" || item.state === "withdrawn") continue;
-        let document;
-        try {
-          document = await fetchItem(
-            { ...runtime, authority },
-            control,
-            payload,
-            item,
-            found.source.connection,
-            signal
-          );
-        } catch (error) {
+      }
+      const fetchBatch = async () => {
+        for (let index = 0; index < payload.sourceItemIds.length; index++) {
+          const id = payload.sourceItemIds[index];
+          if (!id) continue;
           control.signal.throwIfAborted();
           if (signal.aborted) {
-            await store.release([id], job.id);
             await queueAgain(
               runtime,
               control,
@@ -296,76 +296,120 @@ export function createKnowledgeFetchHandler(runtime: SourceJobRuntime): Register
             );
             return;
           }
-          if (error instanceof SourceFormatRefusal) {
-            await sourceTransaction(runtime.data, payload, control, (store) =>
-              store.failure(payload, item, error.code)
-            );
+          const previous = await store.item(id, payload.sourceId);
+          if (previous?.state === "fetched") {
+            await handoff(id);
             continue;
           }
-          const code = documentSourceErrorCodeOf(error);
-          if (code === "rate_limited") {
-            await store.release([id], job.id);
-            const wait =
-              error instanceof DocumentSourceError
-                ? (error.retryAfterMs ?? SOURCE_RATE_LIMIT_WAIT_MS)
-                : SOURCE_RATE_LIMIT_WAIT_MS;
-            // Earlier ordinary failures keep their own backoff. They must not move this
-            // rate-limited remainder away from the time the source named.
-            await queueAgain(runtime, control, payload, retry, retryMs);
-            await queueAgain(runtime, control, payload, payload.sourceItemIds.slice(index), wait);
-            return;
-          }
-          if (code === "unauthorized") {
-            await store.release([id], job.id);
-            await sourceTransaction(runtime.data, payload, control, (store) =>
-              store.finish(payload, "knowledge_source_refused")
-            );
-            return;
-          }
-          const failure =
-            code === "over_limit"
-              ? "knowledge_file_over_limit"
-              : item.attempts + 1 >= KNOWLEDGE_FETCH_MAX_ATTEMPTS
-                ? "knowledge_fetch_failed"
-                : undefined;
-          await sourceTransaction(runtime.data, payload, control, (store) =>
-            store.failure(payload, item, failure)
+          // The executor owns the job lease; the item owns its fetch. Even a duplicate job
+          // without a concurrency key cannot create another Managed File for this version.
+          const item = await sourceTransaction(runtime.data, payload, control, (store) =>
+            store.claim(id, payload.sourceId, job.id)
           );
-          if (!failure) {
-            retry.push(id);
-            retryMs = Math.max(retryMs, FETCH_BACKOFF_BASE_MS * 2 ** item.attempts);
-          }
-          continue;
-        }
-        // The owned rows commit before the queue. A replay restores the index handoff.
-        // Clean an unadopted copy on refusal or failure; the durable cleanup job also
-        // covers a process killed before this check.
-        let adopted = false;
-        try {
-          const current = await sourceTarget(runtime, payload);
-          if (current && JSON.stringify(current.source) === JSON.stringify(found.source)) {
-            adopted = await sourceTransaction(runtime.data, payload, control, (store) =>
-              store.fetched(payload, item, document, document.byteSize)
+          if (!item || item.state === "failed" || item.state === "withdrawn") continue;
+          let document;
+          try {
+            document = await fetchItem(
+              { ...runtime, authority },
+              control,
+              payload,
+              item,
+              found.source.connection,
+              signal
             );
-          }
-        } catch (error) {
-          // Preserve the handoff failure if cleanup also fails.
-          await releaseCopy(runtime, payload, document.fileId).catch(() => {
-            runtime.data.logger.warn(
-              { knowledgeBaseId: payload.knowledgeBaseId },
-              "Source copy cleanup will be retried"
+          } catch (error) {
+            control.signal.throwIfAborted();
+            if (signal.aborted) {
+              await store.release([id], job.id);
+              await queueAgain(
+                runtime,
+                control,
+                payload,
+                [...retry, ...payload.sourceItemIds.slice(index)],
+                0
+              );
+              return;
+            }
+            if (error instanceof SourceFormatRefusal) {
+              await sourceTransaction(runtime.data, payload, control, (store) =>
+                store.failure(payload, item, error.code)
+              );
+              continue;
+            }
+            const code = documentSourceErrorCodeOf(error);
+            if (code === "rate_limited") {
+              await store.release([id], job.id);
+              const wait =
+                error instanceof DocumentSourceError
+                  ? (error.retryAfterMs ?? SOURCE_RATE_LIMIT_WAIT_MS)
+                  : SOURCE_RATE_LIMIT_WAIT_MS;
+              // Earlier ordinary failures keep their own backoff. They must not move this
+              // rate-limited remainder away from the time the source named.
+              await queueAgain(runtime, control, payload, retry, retryMs);
+              await queueAgain(runtime, control, payload, payload.sourceItemIds.slice(index), wait);
+              return;
+            }
+            if (code === "unauthorized") {
+              await store.release([id], job.id);
+              await sourceTransaction(runtime.data, payload, control, (store) =>
+                store.finish(payload, "knowledge_source_refused")
+              );
+              return;
+            }
+            const failure =
+              code === "over_limit"
+                ? "knowledge_file_over_limit"
+                : item.attempts + 1 >= KNOWLEDGE_FETCH_MAX_ATTEMPTS
+                  ? "knowledge_fetch_failed"
+                  : undefined;
+            await sourceTransaction(runtime.data, payload, control, (store) =>
+              store.failure(payload, item, failure)
             );
-          });
-          throw error;
+            if (!failure) {
+              retry.push(id);
+              retryMs = Math.max(retryMs, FETCH_BACKOFF_BASE_MS * 2 ** item.attempts);
+            }
+            continue;
+          }
+          // The owned rows commit before the queue. A replay restores the index handoff.
+          // Clean an unadopted copy on refusal or failure; the durable cleanup job also
+          // covers a process killed before this check.
+          let adopted = false;
+          try {
+            const current = await sourceTarget(runtime, payload);
+            if (current && JSON.stringify(current.source) === JSON.stringify(found.source)) {
+              adopted = await sourceTransaction(runtime.data, payload, control, (store) =>
+                store.fetched(payload, item, document, document.byteSize)
+              );
+            }
+          } catch (error) {
+            // Preserve the handoff failure if cleanup also fails.
+            await releaseCopy(runtime, payload, document.fileId).catch(() => {
+              runtime.data.logger.warn(
+                { knowledgeBaseId: payload.knowledgeBaseId },
+                "Source copy cleanup will be retried"
+              );
+            });
+            throw error;
+          }
+          if (!adopted) {
+            await releaseCopy(runtime, payload, document.fileId);
+            return;
+          }
+          await handoff(id);
         }
-        if (!adopted) {
-          await releaseCopy(runtime, payload, document.fileId);
-          return;
-        }
-        await queueIndex(runtime, control, store, payload, id);
+        await queueAgain(runtime, control, payload, retry, retryMs);
+        await sourceTransaction(runtime.data, payload, control, (store) => store.finish(payload));
+      };
+      await fetchBatch();
+      // A content index may have finished its final scan while this batch was still adopting
+      // copies. Hand off once per content after the whole batch, without deduping against a
+      // running index/release. If content is still pending, its index owns release instead.
+      for (const content of releases.values()) {
+        await control.transaction((stores) =>
+          enqueueOriginalRelease(stores, runtime.data.clientInstanceId, content)
+        );
       }
-      await queueAgain(runtime, control, payload, retry, retryMs);
-      await sourceTransaction(runtime.data, payload, control, (store) => store.finish(payload));
     },
     async onExhausted(job, stores) {
       // Settlement already holds the platform job row. This only updates source state;

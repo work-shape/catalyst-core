@@ -276,6 +276,26 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     return rows.length;
   }
 
+  async markOwnedManagedFilesReleased(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly ManagedFileId[];
+  }): Promise<void> {
+    if (input.fileIds.length === 0) return;
+    await this.db
+      .update(managedFiles)
+      .set({ status: "released" })
+      .where(
+        and(
+          eq(managedFiles.clientInstanceId, input.clientInstanceId),
+          eq(managedFiles.ownerKind, input.owner.kind),
+          eq(managedFiles.ownerId, input.owner.id),
+          eq(managedFiles.status, "available"),
+          inArray(managedFiles.id, [...input.fileIds])
+        )
+      );
+  }
+
   async deleteOwnedManagedFiles(input: {
     clientInstanceId: ClientInstanceId;
     owner: ManagedFileOwner;

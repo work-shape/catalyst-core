@@ -11,6 +11,7 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import {
   DATA_STORE_SCALAR_TYPES,
+  MANAGED_FILE_STATUSES,
   KNOWLEDGE_BASE_STATUSES,
   KNOWLEDGE_DOCUMENT_FAILURE_CODES,
   KNOWLEDGE_DOCUMENT_STATES,
@@ -110,6 +111,8 @@ const knowledgeListDocumentsResponseSchema = z.object({
       format: z.string(),
       /** The size of the file in bytes. */
       bytes: z.number().int(),
+      /** Released originals remain at the source; file metadata and extracted text stay here. */
+      originalStatus: z.enum(MANAGED_FILE_STATUSES).exclude(["deleted"]).optional(),
       /** `pending` until it is searchable, then `indexed`; `failed` with `failureCode`. */
       state: z.enum(KNOWLEDGE_DOCUMENT_STATES),
       failureCode: z.enum(KNOWLEDGE_DOCUMENT_FAILURE_CODES).optional(),

@@ -52,6 +52,17 @@ const KNOWLEDGE_SEARCH_TIMEOUT_MS = 15_000;
 /** How many chunks one insert statement writes. */
 const CHUNK_INSERT_BATCH = 500;
 
+// Bound cross-database file lookups while finding a live original among shared copies.
+const CONTENT_COPY_BATCH = 100;
+
+const contentCopyRow = z.object({
+  id: z.string(),
+  added_at: z.string(),
+  managed_file_id: z.string(),
+  title: z.string(),
+  file_name: z.string()
+});
+
 /** How long a write of one batch of vectors may take. */
 const KNOWLEDGE_EMBEDDINGS_WRITE_TIMEOUT_MS = 120_000;
 
@@ -191,6 +202,39 @@ export function createBuiltinDocumentStore(
 
   return {
     ...createDocumentRemoval(runtime, target),
+    releaseOriginalPage(input, release, signal) {
+      return inStore(
+        "Releasing synced originals",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          // Same lock order as fetch/removal: documents, content, then platform files. Never
+          // hold a platform connection while waiting for the owned-store documents lock.
+          await sql.script("lock table catalyst_kb.documents in share row exclusive mode");
+          const terminal = await sql.run(
+            "select sha256 from catalyst_kb.contents where sha256=$1::text and state <> 'pending' for update",
+            [input.contentSha256]
+          );
+          if (terminal.length === 0) return undefined;
+          const rows = z.array(z.object({ managed_file_id: z.string() })).parse(
+            await sql.run(
+              `select managed_file_id from catalyst_kb.documents where content_sha256=$1::text
+           and source_item_id is not null and managed_file_id > $2::text
+           and ($4::text[] is null or managed_file_id=any($4::text[]))
+           order by managed_file_id limit $3::int4`,
+              [
+                input.contentSha256,
+                input.afterFileId ?? "",
+                input.limit,
+                input.fileIds ? [...input.fileIds] : null
+              ]
+            )
+          );
+          await release(rows.map((row) => row.managed_file_id));
+          return rows.length === input.limit ? rows.at(-1)?.managed_file_id : undefined;
+        }
+      );
+    },
     readContent(contentSha256, signal) {
       return inStore("Reading the content", KNOWLEDGE_DOCUMENTS_TIMEOUT_MS, signal, async (sql) => {
         const [row] = z.array(contentRow).parse(
@@ -209,15 +253,51 @@ export function createBuiltinDocumentStore(
           )
         );
         if (!row) return undefined;
+        // Documents live in the owned store; availability lives on the platform. Keep a
+        // metadata fallback for retained-text re-indexing, but prefer a copy with bytes.
+        let document =
+          row.file_id !== null && row.title !== null && row.file_name !== null
+            ? { fileId: row.file_id, title: row.title, fileName: row.file_name }
+            : undefined;
+        let after: z.infer<typeof contentCopyRow> | undefined;
+        while (document) {
+          const candidates = z.array(contentCopyRow).parse(
+            await sql.run(
+              `select id, added_at::text, managed_file_id, title, file_name from catalyst_kb.documents
+             where content_sha256=$1::text and withdrawn_at is null
+               and ($2::timestamptz is null or (added_at, id) > ($2::timestamptz, $3::text))
+             order by added_at, id limit $4::int4`,
+              [contentSha256, after?.added_at ?? null, after?.id ?? null, CONTENT_COPY_BATCH]
+            )
+          );
+          const files = await runtime.stores.files.listOwnedManagedFilesById({
+            clientInstanceId: runtime.clientInstanceId,
+            owner: { kind: "knowledge_base", id: target.assetId },
+            fileIds: candidates.map((candidate) => candidate.managed_file_id)
+          });
+          const available = new Set<string>(
+            files.filter((file) => file.status === "available").map((file) => file.id)
+          );
+          const copy = candidates.find((candidate) => available.has(candidate.managed_file_id));
+          if (copy) {
+            document = {
+              fileId: copy.managed_file_id,
+              title: copy.title,
+              fileName: copy.file_name
+            };
+            break;
+          }
+          const last = candidates.at(-1);
+          if (!last || candidates.length < CONTENT_COPY_BATCH) break;
+          after = last;
+        }
         return {
           contentSha256,
           synced: row.synced,
           format: row.format,
           state: row.state,
           ...(row.chunking_revision === null ? {} : { chunkingRevision: row.chunking_revision }),
-          ...(row.file_id !== null && row.title !== null && row.file_name !== null
-            ? { document: { fileId: row.file_id, title: row.title, fileName: row.file_name } }
-            : {})
+          ...(document ? { document } : {})
         };
       });
     },

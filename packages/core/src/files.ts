@@ -3,6 +3,7 @@ import {
   ARTIFACT_PREVIEW_IMAGE_MIME_TYPES,
   ARTIFACT_PREVIEW_STATUSES,
   CONVERSATION_ATTACHMENT_STATUSES,
+  MANAGED_FILE_STATUSES,
   SUPPORTED_IMAGE_MIME_TYPES,
   TOOL_DISPLAY_MODES
 } from "@work-shape/catalyst-asset-schemas";
@@ -221,7 +222,9 @@ export interface AuditSafeSummary {
   metadata?: JsonObject;
 }
 
-export type ManagedFileStatus = "available" | "deleted";
+/** Released files keep their identity and metadata; their original bytes live at the source. */
+export type ManagedFileStatus = (typeof MANAGED_FILE_STATUSES)[number];
+export { MANAGED_FILE_STATUSES };
 export type ManagedArtifactStatus = "available" | "deleted";
 
 export type ImageFileFormat = "png" | "jpeg" | "webp" | "gif";
@@ -576,6 +579,13 @@ export interface ManagedFileStore {
     fileIds: readonly ManagedFileId[];
     deletedAt: ISODateString;
   }): Promise<number>;
+  /** Marks an owner's originals released without deleting their document file identities.
+   * Call only after extraction/index state commits; repeat safely after interrupted deletion. */
+  markOwnedManagedFilesReleased(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+    fileIds: readonly ManagedFileId[];
+  }): Promise<void>;
   /**
    * Deletes the rows of files `owner` owns, marked deleted or not, and returns how many. For an
    * owner whose objects are gone: no file name or checksum of a removed copy stays behind. A

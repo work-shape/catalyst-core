@@ -191,6 +191,39 @@ describe("the Documents section", () => {
     expect(button("Dokumente hinzufügen")).toBeDefined();
   });
 
+  it("says plainly when a document's original is stored at its source", () => {
+    const synced = [
+      document_("richtlinie", "indexed", {
+        format: "pdf",
+        fileName: "richtlinie.pdf",
+        originalStatus: "released"
+      }),
+      document_("kopie", "indexed", { originalStatus: "available" }),
+      document_("leer", "failed", {
+        originalStatus: "released",
+        failureCode: "knowledge_text_empty"
+      })
+    ];
+    const source = plantedSource({ useDocuments: () => ready({ documents: synced }) });
+    const shown = { source, knowledgeBase: "objektunterlagen", canWrite: true };
+
+    show(createElement(KnowledgeDocuments, shown));
+    expect(row("richtlinie").textContent).toContain(
+      "PDF · 2 KiB · Original is stored at the source"
+    );
+    expect(row("richtlinie").textContent).toContain("Searchable");
+    expect(row("kopie").textContent).not.toContain("Original is stored at the source");
+    expect(row("leer").textContent).toContain(
+      "The file has no text to search, such as a scanned PDF without a text layer. · Original is stored at the source"
+    );
+    // No way to open the original: the notice is text, not an action.
+    expect(button("Open", row("richtlinie"))).toBeUndefined();
+
+    show(createElement(KnowledgeDocuments, shown), "de");
+    expect(row("richtlinie").textContent).toContain("Original liegt in der Quelle");
+    expect(row("kopie").textContent).not.toContain("Original liegt in der Quelle");
+  });
+
   it("has a sentence for every failure code the instance sends", () => {
     expect(Object.keys(KNOWLEDGE_DOCUMENT_FAILURES).sort()).toEqual(
       [...KNOWLEDGE_DOCUMENT_FAILURE_CODES].sort()

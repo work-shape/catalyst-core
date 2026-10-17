@@ -1,3 +1,4 @@
+import { createOriginalReleaseJobs } from "./original-release";
 import { z } from "zod";
 import {
   defineJobHandler,
@@ -194,14 +195,16 @@ export function createKnowledgeFileCleanupJobs(
   files: KnowledgeFiles | undefined
 ): { handlers: RegisteredJobHandler[]; retries: JobRetry[] } {
   if (!files) return { handlers: [], retries: [] };
+  const originals = createOriginalReleaseJobs(runtime, files);
   return {
     handlers: [
+      ...originals.handlers,
       defineJobHandler({
         kind: cleanupJob,
         slots: 1,
         run: (job, control) => cleanUp(runtime, files, job.payload, control.signal)
       })
     ],
-    retries: [{ kind: cleanupJob }]
+    retries: [{ kind: cleanupJob }, ...originals.retries]
   };
 }

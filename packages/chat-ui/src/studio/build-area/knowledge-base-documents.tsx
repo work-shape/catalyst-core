@@ -212,7 +212,10 @@ export function KnowledgeDocuments({
   );
 }
 
-/** One document: its name, format and size, when it was added, and its state. */
+/**
+ * One document: its name, format and size, when it was added, its state, and whether its
+ * original is stored at the source.
+ */
 function DocumentRow({
   document,
   retrying,
@@ -230,13 +233,19 @@ function DocumentRow({
   const view = KNOWLEDGE_DOCUMENT_STATE_VIEWS[document.state];
   const title = document.title || document.fileName;
   const facts = `${FORMAT_NAMES[document.format] ?? document.format} · ${formatFileBytes(document.bytes, locale)}`;
+  const summary = document.state === "failed" ? t(documentFailureText(document)) : facts;
+  // A synced document whose original stays at its source keeps no copy of the file here.
+  const description =
+    document.originalStatus === "released"
+      ? `${summary} · ${t("knowledge.originalReleased")}`
+      : summary;
   return (
     <ListRow
       data-knowledge-document={document.id}
       data-knowledge-document-state={document.state}
       leading={<FileText aria-hidden="true" />}
       title={title}
-      description={document.state === "failed" ? t(documentFailureText(document)) : facts}
+      description={description}
       descriptionWraps={document.state === "failed"}
       chips={
         <Badge

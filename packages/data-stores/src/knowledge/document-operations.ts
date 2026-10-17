@@ -3,6 +3,7 @@ import type { KnowledgeBaseDefinition } from "./definition";
 import { z } from "zod";
 import {
   AppError,
+  MANAGED_FILE_STATUSES,
   enqueueKnowledgeIndex,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_DOCUMENT_FAILURE_CODES,
@@ -57,6 +58,7 @@ const documentSchema = z.object({
   format: z.enum(KNOWLEDGE_DOCUMENT_FORMATS),
   /** The size of the copy in bytes. */
   bytes: z.number().int(),
+  originalStatus: z.enum(MANAGED_FILE_STATUSES).exclude(["deleted"]).optional(),
   state: z.enum(KNOWLEDGE_DOCUMENT_STATES),
   failureCode: z.enum(KNOWLEDGE_DOCUMENT_FAILURE_CODES).optional(),
   /** Why a `pending` document waits, such as a usage limit that refuses its embedding. */
@@ -108,11 +110,13 @@ export function listDocumentsOperation(
         owner: { kind: "knowledge_base", id: knowledgeBase.assetId },
         fileIds: page.documents.map((document) => document.fileId)
       });
-      const sizes = new Map<string, number>(copies.map((copy) => [copy.id, copy.byteSize]));
+      const filesById = new Map(copies.map((copy) => [String(copy.id), copy]));
       return {
         documents: page.documents.map((document) => ({
           ...document,
-          bytes: sizes.get(document.fileId) ?? 0
+          bytes: filesById.get(document.fileId)?.byteSize ?? 0,
+          originalStatus:
+            filesById.get(document.fileId)?.status === "released" ? "released" : "available"
         })),
         ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor })
       };

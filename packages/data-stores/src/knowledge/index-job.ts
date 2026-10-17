@@ -48,6 +48,7 @@ import {
   type KnowledgeEmbedding
 } from "./definition";
 import type { KnowledgeRuntime } from "./runtime";
+import { releaseSyncedOriginals, enqueueOriginalRelease } from "./original-release";
 
 // `knowledge_base.index`: one content of a Knowledge Base on the built-in backend, from its
 // bytes to its passages in the store the Knowledge Base owns. Spec: Embeddings and documents on
@@ -66,10 +67,9 @@ import type { KnowledgeRuntime } from "./runtime";
 //   `knowledge_file_format_unavailable`, as adding them is refused there.
 // - The skip rule: a content whose chunks were written at the current chunking revision is not
 //   read again, and a PDF whose stored extraction holds text is not extracted again, also when
-//   a new chunking revision indexes it once more. A stored failure, a result that does not
-//   parse and one without text are never used twice: the job deletes the result before it
-//   marks the content failed, and Retry deletes what an interrupted job left, so a retried
-//   PDF or DOCX is always extracted afresh.
+//   a new chunking revision indexes it once more. Failed/invalid/empty extraction is never
+//   indexed: uploads discard it immediately; synced content retains its result until Retry
+//   discards it and fetches a fresh original.
 // - Idempotent: a rerun replaces the content's chunks, whose ids are content, revision and
 //   position. A failure that another attempt cannot help marks the content failed and ends
 //   the job; any other error is retried with the kind's backoff, and the last attempt marks
@@ -265,19 +265,29 @@ type Pages =
   | { kind: "failed"; code: KnowledgeDocumentFailureCode }
   | { kind: "requested" };
 
+async function availableCopy(runtime: KnowledgeRuntime, knowledgeBaseId: string, fileId: string) {
+  const copy = await runtime.stores.files.getManagedFile({
+    clientInstanceId: runtime.clientInstanceId,
+    fileId: asManagedFileId(fileId)
+  });
+  if (
+    copy?.owner?.kind !== "knowledge_base" ||
+    copy.owner.id !== knowledgeBaseId ||
+    copy.status !== "available"
+  ) {
+    return undefined;
+  }
+  return copy;
+}
+
 async function readCopy(
   runtime: KnowledgeRuntime,
   files: KnowledgeFiles,
   knowledgeBaseId: string,
   fileId: string
 ): Promise<Uint8Array | undefined> {
-  const copy = await runtime.stores.files.getManagedFile({
-    clientInstanceId: runtime.clientInstanceId,
-    fileId: asManagedFileId(fileId)
-  });
-  if (copy?.owner?.kind !== "knowledge_base" || copy.owner.id !== knowledgeBaseId) {
-    return undefined;
-  }
+  const copy = await availableCopy(runtime, knowledgeBaseId, fileId);
+  if (!copy) return undefined;
   try {
     return await readObjectBytes(files.objects, copy.objectKey);
   } catch (error) {
@@ -385,9 +395,10 @@ async function pagesOf(
     // Deleted before the content is marked failed: a job that ends between the two finds no
     // result and asks for the extraction again, and a failed content keeps no result for its
     // Retry to read.
-    await files.objects.delete(
-      knowledgeExtractionKey(payload.knowledgeBaseId, payload.contentSha256)
-    );
+    if (!content.synced)
+      await files.objects.delete(
+        knowledgeExtractionKey(payload.knowledgeBaseId, payload.contentSha256)
+      );
     return { kind: "failed", code: unusable };
   }
   if (result !== undefined && result !== "invalid" && result.status === "extracted") {
@@ -399,6 +410,11 @@ async function pagesOf(
       })),
       extractionRevision: result.extractionRevision
     };
+  }
+  // Retained extraction needs no original. Without it, never hand a released or
+  // missing copy to the extractor and leave the content waiting for work it cannot do.
+  if (!(await availableCopy(runtime, payload.knowledgeBaseId, content.fileId))) {
+    return { kind: "failed", code: "knowledge_file_missing" };
   }
   const { format } = content;
   await control.transaction((stores) =>
@@ -598,85 +614,101 @@ export function createKnowledgeIndexJobHandler(
       const content = await store.readContent(payload.contentSha256, signal);
       // A content no document holds any more is removed with its documents (KB-5e).
       if (!content?.document) return;
-      // A failure waits for Retry.
-      if (content.state === "failed") return;
-      const semantic = target.methods.includes("semantic");
-      const chunked = content.chunkingRevision === KNOWLEDGE_CHUNKING_REVISION;
-      // The skip rule. A Knowledge Base that searches by meaning looks for passages without a
-      // vector, which costs no call where there are none.
-      if (content.state === "extracted" && chunked && !semantic) return;
       const { document } = content;
-      let written: { chunks: number; pages: number } | undefined;
-      if (!chunked) {
+      // A synced copy can join content first indexed from an upload. TXT/Markdown uploads
+      // have no extraction object yet: persist their text before releasing the synced copy.
+      if (content.synced && content.state === "extracted" && !isExtracted(content.format)) {
         const pages = await pagesOf(runtime, files, control, payload, {
           format: content.format,
-          synced: content.synced,
+          synced: true,
           fileId: document.fileId
         });
-        if (pages.kind === "requested") return;
-        if (pages.kind === "failed") {
-          await store.failContent(
-            { contentSha256: payload.contentSha256, code: pages.code },
+        if (pages.kind !== "pages") return;
+      }
+      const indexContent = async () => {
+        // A failure waits for Retry.
+        if (content.state === "failed") return;
+        const semantic = target.methods.includes("semantic");
+        const chunked = content.chunkingRevision === KNOWLEDGE_CHUNKING_REVISION;
+        // The skip rule. A Knowledge Base that searches by meaning looks for passages without a
+        // vector, which costs no call where there are none.
+        if (content.state === "extracted" && chunked && !semantic) return;
+        let written: { chunks: number; pages: number } | undefined;
+        if (!chunked) {
+          const pages = await pagesOf(runtime, files, control, payload, {
+            format: content.format,
+            synced: content.synced,
+            fileId: document.fileId
+          });
+          if (pages.kind === "requested") return;
+          if (pages.kind === "failed") {
+            await store.failContent(
+              { contentSha256: payload.contentSha256, code: pages.code },
+              signal
+            );
+            await audit(payload, target, job.correlationId, { code: pages.code });
+            return;
+          }
+          const chunks = chunkKnowledgeText({
+            format: content.format,
+            pages: pages.pages,
+            title: document.title,
+            fileName: document.fileName
+          });
+          if (chunks.length === 0) {
+            await store.failContent(
+              { contentSha256: payload.contentSha256, code: "knowledge_text_empty" },
+              signal
+            );
+            await audit(payload, target, job.correlationId, { code: "knowledge_text_empty" });
+            return;
+          }
+          await store.writeChunks(
+            {
+              contentSha256: payload.contentSha256,
+              chunkingRevision: KNOWLEDGE_CHUNKING_REVISION,
+              extractionRevision: pages.extractionRevision,
+              pageCount: pages.pages.length,
+              chunks,
+              complete: !semantic
+            },
             signal
           );
-          await audit(payload, target, job.correlationId, { code: pages.code });
-          return;
+          written = { chunks: chunks.length, pages: pages.pages.length };
+          if (!semantic) {
+            await audit(payload, target, job.correlationId, written);
+            return;
+          }
         }
-        const chunks = chunkKnowledgeText({
-          format: content.format,
-          pages: pages.pages,
-          title: document.title,
-          fileName: document.fileName
-        });
-        if (chunks.length === 0) {
+        // Chunks written while the Knowledge Base searched by meaning, and it no longer does:
+        // nothing is embedded.
+        const embedded = semantic ? await embedContent(job, control, found, document) : undefined;
+        if (embedded === "waits") return;
+        if (embedded === "too_large") {
           await store.failContent(
-            { contentSha256: payload.contentSha256, code: "knowledge_text_empty" },
+            { contentSha256: payload.contentSha256, code: "knowledge_index_failed" },
             signal
           );
-          await audit(payload, target, job.correlationId, { code: "knowledge_text_empty" });
+          await audit(payload, target, job.correlationId, { code: "knowledge_index_failed" });
           return;
         }
-        await store.writeChunks(
-          {
-            contentSha256: payload.contentSha256,
-            chunkingRevision: KNOWLEDGE_CHUNKING_REVISION,
-            extractionRevision: pages.extractionRevision,
-            pageCount: pages.pages.length,
-            chunks,
-            complete: !semantic
-          },
+        await store.completeContent(
+          { contentSha256: payload.contentSha256, chunkingRevision: KNOWLEDGE_CHUNKING_REVISION },
           signal
         );
-        written = { chunks: chunks.length, pages: pages.pages.length };
-        if (!semantic) {
-          await audit(payload, target, job.correlationId, written);
-          return;
+        if (written || (embedded?.vectors ?? 0) > 0 || content.state !== "extracted") {
+          await audit(payload, target, job.correlationId, {
+            ...written,
+            ...(embedded ? { embedded: embedded.vectors } : {})
+          });
         }
-      }
-      // Chunks written while the Knowledge Base searched by meaning, and it no longer does:
-      // nothing is embedded.
-      const embedded = semantic ? await embedContent(job, control, found, document) : undefined;
-      if (embedded === "waits") return;
-      if (embedded === "too_large") {
-        await store.failContent(
-          { contentSha256: payload.contentSha256, code: "knowledge_index_failed" },
-          signal
-        );
-        await audit(payload, target, job.correlationId, { code: "knowledge_index_failed" });
-        return;
-      }
-      await store.completeContent(
-        { contentSha256: payload.contentSha256, chunkingRevision: KNOWLEDGE_CHUNKING_REVISION },
-        signal
-      );
-      if (written || (embedded?.vectors ?? 0) > 0 || content.state !== "extracted") {
-        await audit(payload, target, job.correlationId, {
-          ...written,
-          ...(embedded ? { embedded: embedded.vectors } : {})
-        });
-      }
+      };
+      await indexContent();
+      // A successful extraction result and terminal state are already committed.
+      // Release and its deletion job commit together before this index attempt settles.
+      await releaseSyncedOriginals(runtime, payload, store, signal);
     },
-    async onExhausted(job) {
+    async onExhausted(job, stores) {
       const { payload } = job;
       try {
         const found = await indexTargetOf(runtime, payload.knowledgeBaseId);
@@ -685,6 +717,7 @@ export function createKnowledgeIndexJobHandler(
           contentSha256: payload.contentSha256,
           code: "knowledge_index_failed"
         });
+        await enqueueOriginalRelease(stores, runtime.clientInstanceId, payload);
         await audit(payload, found.target, job.correlationId, { code: "knowledge_index_failed" });
       } catch (error) {
         // The content stays `pending`; Retry queues it again.

@@ -648,7 +648,11 @@ export interface KnowledgeContentToIndex {
   state: KnowledgeContentState;
   /** The chunking revision its chunks were written with, once they were. */
   chunkingRevision?: number;
-  /** A document that holds the content and is not withdrawn. None when every one is. */
+  /**
+   * An active document, preferring one whose owned copy is available. A metadata fallback
+   * permits retained-text re-indexing when all originals are released; byte readers must
+   * still check availability. None when every document is withdrawn.
+   */
   document?: { fileId: string; title: string; fileName: string };
 }
 
@@ -776,6 +780,19 @@ export interface KnowledgeDocumentStore {
     },
     signal?: AbortSignal
   ): Promise<KnowledgePurgePage>;
+  /** Releases one bounded page of synced originals only after content leaves pending.
+   * Holds the documents lock, then the content row through `release`, so Retry, fetch and
+   * removal cannot change the decision mid-delete. Returns the last file id of a full page. */
+  releaseOriginalPage(
+    input: {
+      contentSha256: string;
+      fileIds?: readonly string[];
+      afterFileId?: string;
+      limit: number;
+    },
+    release: (fileIds: string[]) => Promise<void>,
+    signal?: AbortSignal
+  ): Promise<string | undefined>;
   readContent(
     contentSha256: string,
     signal?: AbortSignal

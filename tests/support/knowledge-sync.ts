@@ -1,3 +1,4 @@
+import { createManagedObjectTestAttachmentCapability } from "./chat-server-attachment-harness";
 import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 import { afterEach, expect, vi } from "vitest";
@@ -61,7 +62,8 @@ export function useKnowledgeSync() {
 
   async function setup(
     wrap: (source: DocumentSourceCapability) => DocumentSourceCapability = (source) => source,
-    extractor?: KnowledgeExtractor
+    extractor?: KnowledgeExtractor,
+    withFileRoute = false
   ) {
     const logs: unknown[] = [];
     const logger: Logger = {
@@ -82,7 +84,10 @@ export function useKnowledgeSync() {
     const instance = await start(true, undefined, undefined, undefined, {
       embedding: true,
       apiAccess: true,
-      ...(extractor ? { documents: true as const } : {})
+      ...(extractor ? { documents: true as const } : {}),
+      ...(withFileRoute
+        ? { attachments: createManagedObjectTestAttachmentCapability().capability }
+        : {})
     });
     const definition = {
       name: KB,
@@ -276,6 +281,10 @@ export function useKnowledgeSync() {
           const [unindexed] =
             await sql`select count(*)::int as n from catalyst_kb.contents where state = 'pending'`;
           expect(unindexed?.n).toBe(0);
+          // KB-13a: a synced original's release and deletion finish before the run counts as drained.
+          const [releasing] =
+            await platform`select count(*)::int as n from platform_jobs where kind in ('knowledge_base.delete_originals','knowledge_base.release_originals') and status in ('queued','running')`;
+          expect(releasing?.n).toBe(0);
         },
         { timeout: 180_000 }
       );
@@ -295,6 +304,7 @@ export function useKnowledgeSync() {
       sync,
       drain,
       objects,
+      files,
       record
     };
   }

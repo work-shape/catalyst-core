@@ -558,7 +558,7 @@
       "target": "lint",
       "rule": "catalyst/duplicate-literal-list",
       "scope": "packages/core",
-      "count": 20,
+      "count": 18,
       "owner": "D5-after-freeze"
     },
     {

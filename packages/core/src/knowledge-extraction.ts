@@ -31,8 +31,8 @@ import type { PlatformStores } from "./platform-store";
 //   3. It stores the result as one JSON object in the instance's store of files under
 //      `knowledgeExtractionKey`: the pages and the extractor's revision, or a failure code.
 //   4. It queues `knowledge_base.index` for the content again. That job reads the result,
-//      writes the chunks, or marks the content failed with the code and removes a failed
-//      result, so that Retry extracts again.
+//      writes the chunks, or marks the content failed. Synced content keeps its result when
+//      the original is released; Retry discards unusable results and fetches again.
 //
 // Both steps of 3 and 4 repeat safely: a job that ends between them runs again and writes the
 // same object. The object outlives both jobs, so a worker restart loses nothing, and a later
@@ -187,7 +187,11 @@ async function readOwnedCopy(
     clientInstanceId,
     fileId: asManagedFileId(payload.fileId)
   });
-  if (file?.owner?.kind !== "knowledge_base" || file.owner.id !== payload.knowledgeBaseId) {
+  if (
+    file?.owner?.kind !== "knowledge_base" ||
+    file.owner.id !== payload.knowledgeBaseId ||
+    file.status !== "available"
+  ) {
     return undefined;
   }
   try {
@@ -215,6 +219,19 @@ export function defineKnowledgeExtractHandler(input: {
     slots: input.slots,
     async run(job, control) {
       const { payload } = job;
+      const copy = await control.transaction((stores) =>
+        stores.files.getManagedFile({
+          clientInstanceId,
+          fileId: asManagedFileId(payload.fileId)
+        })
+      );
+      // Re-select an available copy (or fail missing) without replacing retained text.
+      if (copy?.status === "released") {
+        await control.transaction((stores) =>
+          enqueueKnowledgeIndex(stores.jobs, indexPayloadOf(payload), { clientInstanceId })
+        );
+        return;
+      }
       const result = await runKnowledgeExtraction({
         format: payload.format,
         extractor,
@@ -228,7 +245,11 @@ export function defineKnowledgeExtractHandler(input: {
           fileId: asManagedFileId(payload.fileId),
           lock: true
         });
-        if (file?.owner?.kind !== "knowledge_base" || file.owner.id !== payload.knowledgeBaseId) {
+        if (
+          file?.status === "released" ||
+          file?.owner?.kind !== "knowledge_base" ||
+          file.owner.id !== payload.knowledgeBaseId
+        ) {
           // Indexing selects a live document again. A surviving document with the same hash
           // must not stay pending because the removed copy happened to be the extractor's.
           await enqueueKnowledgeIndex(stores.jobs, indexPayloadOf(payload), { clientInstanceId });
@@ -247,7 +268,11 @@ export function defineKnowledgeExtractHandler(input: {
         fileId: asManagedFileId(job.payload.fileId),
         lock: true
       });
-      if (file?.owner?.kind !== "knowledge_base" || file.owner.id !== job.payload.knowledgeBaseId) {
+      if (
+        file?.status === "released" ||
+        file?.owner?.kind !== "knowledge_base" ||
+        file.owner.id !== job.payload.knowledgeBaseId
+      ) {
         await enqueueKnowledgeIndex(stores.jobs, indexPayloadOf(job.payload), { clientInstanceId });
         return;
       }
