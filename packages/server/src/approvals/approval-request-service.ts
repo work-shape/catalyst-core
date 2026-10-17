@@ -2,10 +2,12 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { StorePage } from "@work-shape/catalyst-core";
 import {
   AppError,
+  GRANT_SCOPE_KINDS,
   auditActorFromUser,
   getSubjectUserId,
   hasAuthScope,
   operationDenialError,
+  type AccessResource,
   type ActorAccess,
   type ApprovalPreviewViewer,
   type ApprovalRequest,
@@ -17,6 +19,7 @@ import {
   type ApprovalRequestPendingLimits,
   type ApprovalRequestStatus,
   type ApprovalRequestStore,
+  type ApprovalSubjectKind,
   type AuditRecorder,
   type AuthenticatedUser,
   type ClientInstanceId,
@@ -132,16 +135,21 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     context: CallContext,
     filter: { status?: ApprovalRequestStatus; scope?: "decided"; page?: StorePage } = {}
   ): Promise<ApprovalRequestView[]> {
-    const kinds = this.reviewableKinds(user, access);
+    const { kinds, subjectKinds } = await this.reviewable(user, access);
     // A person without any kind's right reads the confirmations addressed to them, and
     // nothing else; one who has none is refused the queue as before (OP-4b).
-    if (kinds.length === 0 && !(await this.hasAddressedRequests(user))) {
+    if (
+      kinds.length === 0 &&
+      subjectKinds.length === 0 &&
+      !(await this.hasAddressedRequests(user))
+    ) {
       throw new AppError("FORBIDDEN", "Approval review requires a registered kind's permission");
     }
     const { scope, ...storeFilter } = filter;
     const requests = await this.options.store.listApprovalRequests({
       clientInstanceId: this.options.clientInstanceId,
       kinds,
+      subjectKinds,
       reader: this.reader(user),
       ...storeFilter,
       ...(scope === "decided" ? decidedListFilter() : {})
@@ -182,18 +190,20 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     decided: number;
     mine: { pending: number; total: number };
   }> {
-    const kinds = this.reviewableKinds(user, access);
+    const { kinds, subjectKinds } = await this.reviewable(user, access);
     const reader = this.reader(user);
     const [count, decided, mine] = await Promise.all([
       this.options.store.countPendingApprovalRequests({
         clientInstanceId: this.options.clientInstanceId,
         kinds,
+        subjectKinds,
         reader
       }),
       // What the decided list holds for this person: the same kinds and the same filter.
       this.options.store.countApprovalRequests({
         clientInstanceId: this.options.clientInstanceId,
         kinds,
+        subjectKinds,
         reader,
         ...decidedListFilter()
       }),
@@ -204,7 +214,12 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       })
     ]);
     // A confirmation addressed to the person is theirs to review whatever rights they hold.
-    return { count, canReview: kinds.length > 0 || count + decided > 0, decided, mine };
+    return {
+      count,
+      canReview: kinds.length > 0 || subjectKinds.length > 0 || count + decided > 0,
+      decided,
+      mine
+    };
   }
 
   async decideRequest(
@@ -221,8 +236,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const handler = this.handler(request.kind);
     // A request addressed to a person is theirs to decide, whatever rights they hold; only
     // they reach it here.
-    if (request.addresseeUserId === undefined) access.require(handler.requiredPermission);
-    else if (command.decision === "request_changes") {
+    if (request.addresseeUserId === undefined) {
+      access.require(handler.requiredPermission, resourceOfRequest(handler, request));
+    } else if (command.decision === "request_changes") {
       throw new AppError("VALIDATION_FAILED", "A confirmation is allowed or denied");
     }
     const comment = command.comment?.trim();
@@ -332,7 +348,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   ): Promise<ApprovalRequest> {
     const request = await this.visibleRequest(user, access, requestId);
     const handler = this.handler(request.kind);
-    access.require(handler.requiredPermission);
+    access.require(handler.requiredPermission, resourceOfRequest(handler, request));
     const revert = handler.revert?.bind(handler);
     if (!revert)
       throw new AppError("CONFLICT", "This approval request kind does not support revert");
@@ -476,7 +492,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       (request.addresseeUserId !== undefined
         ? request.addresseeUserId !== user.id
         : request.requestedBy.id !== user.id &&
-          (!handler || !access.authorize(handler.requiredPermission).allowed))
+          (!handler ||
+            !access.authorize(handler.requiredPermission, resourceOfRequest(handler, request))
+              .allowed))
     ) {
       throw new AppError("NOT_FOUND", "Approval request was not found");
     }
@@ -511,7 +529,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const decides =
       request.addresseeUserId !== undefined
         ? request.addresseeUserId === user.id
-        : access.authorize(handler.requiredPermission).allowed;
+        : access.authorize(handler.requiredPermission, resourceOfRequest(handler, request)).allowed;
     return {
       ...request,
       preview: await handler.preview(handler.validate(request.payload), {
@@ -532,12 +550,35 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     };
   }
 
-  private reviewableKinds(user: AuthenticatedUser, access: ActorAccess): string[] {
+  /**
+   * What the caller reviews: the kinds whose right they hold on the instance, and of a kind
+   * whose right is held on assets, the requests about the assets they hold it on.
+   */
+  private async reviewable(
+    user: AuthenticatedUser,
+    access: ActorAccess
+  ): Promise<{ kinds: string[]; subjectKinds: ApprovalSubjectKind[] }> {
     this.assertClientInstance(user);
-    const kinds = [...this.options.handlers.values()]
-      .filter((handler) => access.authorize(handler.requiredPermission).allowed)
-      .map((handler) => handler.kind);
-    return kinds;
+    const kinds: string[] = [];
+    const subjectKinds: ApprovalSubjectKind[] = [];
+    for (const handler of this.options.handlers.values()) {
+      const permission = handler.requiredPermission;
+      const onInstance = access.authorize(permission).allowed;
+      if (!handler.resourceOf || !handler.reviewableSubjects) {
+        if (onInstance) kinds.push(handler.kind);
+        continue;
+      }
+      // The right on the instance covers every asset only where no deny lies on one: a list
+      // and its counts read what a read of each request would, denies included.
+      if (onInstance && access.denials(permission).length === 0) {
+        kinds.push(handler.kind);
+        continue;
+      }
+      if (!onInstance && !access.holdsGrantAt(permission, NARROWER_SCOPES)) continue;
+      const subjects = await handler.reviewableSubjects(access);
+      if (subjects.length > 0) subjectKinds.push({ kind: handler.kind, subjects });
+    }
+    return { kinds, subjectKinds };
   }
 
   /** Every kind with a handler. A request of a kind without one cannot be shown or counted. */
@@ -594,5 +635,24 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
           : {})
       }
     });
+  }
+}
+
+/** The scopes of a grant narrower than the instance. */
+const NARROWER_SCOPES = GRANT_SCOPE_KINDS.filter((scope) => scope !== "instance");
+
+/**
+ * The asset a request's right is asked on, where its kind names one. A payload the kind cannot
+ * read names none, and the right is asked of the instance.
+ */
+function resourceOfRequest(
+  handler: ApprovalRequestHandler,
+  request: ApprovalRequest
+): AccessResource | undefined {
+  if (!handler.resourceOf) return undefined;
+  try {
+    return handler.resourceOf(handler.validate(request.payload));
+  } catch {
+    return undefined;
   }
 }

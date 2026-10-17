@@ -83,8 +83,19 @@ export function connectionOAuthReasonOf(error: unknown): ConnectionOAuthReason |
   return isConnectionOAuthReason(details.reason) ? details.reason : undefined;
 }
 
-/** Where the provider sends the browser back to, under `instance.publicUrl`. */
-export const CONNECTION_OAUTH_CALLBACK_PATH = "/api/v1/connections/oauth/callback";
+/**
+ * Where the provider sends the browser back to for one Connection, under `instance.publicUrl`.
+ * Each Connection has its own: a code one authorization server sent can only land at the
+ * Connection whose client asked for it, also where the server sends no `iss` (RFC 9207).
+ */
+export function connectionOAuthCallbackPath(connectionName: string): string {
+  return `/api/v1/connections/${encodeURIComponent(connectionName)}/oauth/callback`;
+}
+
+/** Whether a path is the callback of some Connection's sign-in, which holds a code and a state. */
+export function isConnectionOAuthCallbackPath(path: string): boolean {
+  return /^\/api\/v1\/connections\/[^/]+\/oauth\/callback\/?$/u.test(path);
+}
 
 /**
  * The one in-app page a callback redirects to, under `instance.publicUrl`. Its query holds

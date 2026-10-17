@@ -19,6 +19,9 @@ import {
   type ClientInstanceId,
   type ConfigAssetMutation,
   type ConfigAssetRecord,
+  type ConnectionBindingEndReason,
+  type ConnectionSignInEnded,
+  type ConnectionSignInEnding,
   type ConnectionConfig,
   type ConnectionHealth,
   type ConnectionOperationConfig,
@@ -52,6 +55,11 @@ export interface SeedReleaseConnectionsInput {
   keyring?: SecretKeyring;
   /** Where the secret an entry names is read from, once, at start. */
   secrets: SecretResolver;
+  /**
+   * What ends a sign-in the seed makes useless, with the provider told once the seed
+   * committed. Left out, the sign-in ends on the instance only.
+   */
+  ending?: ConnectionSignInEnding;
 }
 
 /** What one start changed, by Connection name. It holds names and versions, never a value. */
@@ -221,155 +229,199 @@ export async function seedReleaseConnections(
     }
   }
 
-  return input.stores.transaction(async (stores) => {
-    await stores.connections.lockReleaseSeed({ clientInstanceId });
-    const result: ReleaseSeedResult = {
-      created: [],
-      updated: [],
-      removed: [],
-      needsConfiguration: [],
-      secretUnreadable: [],
-      secretVersions: {}
-    };
-    const list = () =>
-      stores.configAssets.listActiveConfigAssets({
-        clientInstanceId,
-        kind: CONNECTION_ASSET_KIND
-      });
-    const before = new Map((await list()).map((asset) => [asset.name, asset]));
+  /** The sign-ins this seed ended, whose provider is told once it committed. */
+  const ended: ConnectionSignInEnded[] = [];
+  /** Ends the shared sign-in of a Connection inside the seed's transaction. */
+  async function endSignIn(
+    stores: PlatformStores,
+    asset: ConfigAssetRecord,
+    reason: ConnectionBindingEndReason
+  ): Promise<void> {
+    if (input.ending === undefined) {
+      await endConnectionSignIn(
+        stores.connections,
+        { clientInstanceId, connectionAssetId: asset.id },
+        { reason }
+      );
+      return;
+    }
+    const signIn = await input.ending.end(stores, {
+      connectionAssetId: asset.id,
+      connectionName: asset.name,
+      connectionRevision: asset.revision,
+      config: asset.config,
+      reason,
+      actor: SYSTEM_ACTOR
+    });
+    if (signIn !== undefined) ended.push(signIn);
+  }
 
-    const mutations: ConfigAssetMutation[] = [];
-    /** The revision each written Connection was read at, under the lock of the seed. */
-    const baseRevisions: Record<string, number | null> = {};
-    const handles = new Map<string, string>();
-    for (const name of names) {
-      const entry = input.connections[name];
-      if (!entry) continue;
-      const asset = before.get(name);
-      if (asset && storedOrigin(asset) !== "release") {
-        // A runtime row is never touched. The name is its own until it is removed.
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `Release config defines the Connection '${name}', and a Connection of that name was created on the instance. Rename one of the two`
-        );
-      }
-      const stored = asset && storedConnection(asset);
-      // The handle is a name for the secret's place and stays with the Connection, whether
-      // or not a secret is stored yet: a secret that arrives later makes no new revision.
-      const handle =
-        entry.secret === undefined
-          ? undefined
-          : (stored?.secretHandle ?? createConnectionSecretHandle());
-      if (handle !== undefined) handles.set(name, handle);
-      const config = toJsonObject(definitionOf(name, entry, connectorTypes, handle));
-      if (asset && sameJson(asset.config, config)) continue;
-      mutations.push({ type: "upsert", kind: CONNECTION_ASSET_KIND, name, config });
-      // A name release config had once and dropped left a deleted row: the seed that brings
-      // the entry back continues its revisions.
-      const row =
-        asset ??
-        (await stores.configAssets.getConfigAsset({
+  let outcome: ReleaseSeedResult;
+  try {
+    outcome = await seedInTransaction();
+  } catch (error) {
+    for (const signIn of ended.splice(0)) signIn.discard();
+    throw error;
+  }
+  // Never throws: a provider that does not answer leaves a sign-in that ended on the instance.
+  await Promise.all(ended.splice(0).map((signIn) => signIn.revokeAtProvider()));
+  return outcome;
+
+  function seedInTransaction(): Promise<ReleaseSeedResult> {
+    return input.stores.transaction(async (stores) => {
+      await stores.connections.lockReleaseSeed({ clientInstanceId });
+      const result: ReleaseSeedResult = {
+        created: [],
+        updated: [],
+        removed: [],
+        needsConfiguration: [],
+        secretUnreadable: [],
+        secretVersions: {}
+      };
+      const list = () =>
+        stores.configAssets.listActiveConfigAssets({
           clientInstanceId,
-          kind: CONNECTION_ASSET_KIND,
-          name
-        }));
-      baseRevisions[`${CONNECTION_ASSET_KIND}:${name}`] = row?.revision ?? null;
-      (asset ? result.updated : result.created).push(name);
-    }
-    for (const asset of before.values()) {
-      if (storedOrigin(asset) !== "release" || names.includes(asset.name)) continue;
-      // The entry is gone from release config: the Connection goes, with its secret and state.
-      await stores.connections.deleteSecrets({ clientInstanceId, connectionAssetId: asset.id });
-      await stores.connections.deleteConnectionState({
-        clientInstanceId,
-        connectionAssetId: asset.id
-      });
-      mutations.push({ type: "delete", kind: CONNECTION_ASSET_KIND, name: asset.name });
-      baseRevisions[`${CONNECTION_ASSET_KIND}:${asset.name}`] = asset.revision;
-      result.removed.push(asset.name);
-    }
-    if (mutations.length > 0) {
-      await stores.configAssets.applyConfigAssetMutations({
-        clientInstanceId,
-        actor: SYSTEM_ACTOR,
-        baseRevisions,
-        mutations
-      });
-    }
+          kind: CONNECTION_ASSET_KIND
+        });
+      const before = new Map((await list()).map((asset) => [asset.name, asset]));
 
-    const after = new Map((await list()).map((asset) => [asset.name, asset]));
-    const states = new Map(
-      (await stores.connections.listConnectionStates({ clientInstanceId })).map((state) => [
-        state.connectionAssetId,
-        state
-      ])
-    );
-    const secretStore = input.keyring
-      ? createSecretStore({ clientInstanceId, keyring: input.keyring, store: stores.connections })
-      : undefined;
-    for (const name of names) {
-      const asset = after.get(name);
-      if (!asset) {
-        throw new AppError("INTERNAL", `The seeded Connection '${name}' was not stored`);
+      const mutations: ConfigAssetMutation[] = [];
+      /** The revision each written Connection was read at, under the lock of the seed. */
+      const baseRevisions: Record<string, number | null> = {};
+      const handles = new Map<string, string>();
+      for (const name of names) {
+        const entry = input.connections[name];
+        if (!entry) continue;
+        const asset = before.get(name);
+        if (asset && storedOrigin(asset) !== "release") {
+          // A runtime row is never touched. The name is its own until it is removed.
+          throw new AppError(
+            "VALIDATION_FAILED",
+            `Release config defines the Connection '${name}', and a Connection of that name was created on the instance. Rename one of the two`
+          );
+        }
+        const stored = asset && storedConnection(asset);
+        // The handle is a name for the secret's place and stays with the Connection, whether
+        // or not a secret is stored yet: a secret that arrives later makes no new revision.
+        const handle =
+          entry.secret === undefined
+            ? undefined
+            : (stored?.secretHandle ?? createConnectionSecretHandle());
+        if (handle !== undefined) handles.set(name, handle);
+        const config = toJsonObject(definitionOf(name, entry, connectorTypes, handle));
+        if (asset && sameJson(asset.config, config)) continue;
+        mutations.push({ type: "upsert", kind: CONNECTION_ASSET_KIND, name, config });
+        // A name release config had once and dropped left a deleted row: the seed that brings
+        // the entry back continues its revisions.
+        const row =
+          asset ??
+          (await stores.configAssets.getConfigAsset({
+            clientInstanceId,
+            kind: CONNECTION_ASSET_KIND,
+            name
+          }));
+        baseRevisions[`${CONNECTION_ASSET_KIND}:${name}`] = row?.revision ?? null;
+        (asset ? result.updated : result.created).push(name);
       }
-      const binding = { connectionAssetId: asset.id, subject: SHARED_CREDENTIAL_SUBJECT };
-      const seeded = storedConnection(asset);
-      const type = seeded && connectorTypes.get(seeded.connectorType);
-      const origin = seeded && type ? connectionOriginOf(type, seeded) : undefined;
-      // A sign-in made for another address, or kept by a Connection that no longer signs in,
-      // ends: release config that moves the Connection away and back restores none.
-      const signIn = await stores.connections.getConnectionBinding({
-        clientInstanceId,
-        ...binding
-      });
-      if (
-        signIn !== undefined &&
-        signIn.state !== "revoked" &&
-        (seeded?.authScheme !== AUTH_SCHEME_OAUTH || signIn.origin !== origin)
-      ) {
-        await endConnectionSignIn(stores.connections, {
+      for (const asset of before.values()) {
+        if (storedOrigin(asset) !== "release" || names.includes(asset.name)) continue;
+        // The entry is gone from release config: the Connection goes, with its sign-in, secret
+        // and state.
+        await endSignIn(stores, asset, "deleted");
+        await stores.connections.deleteSecrets({ clientInstanceId, connectionAssetId: asset.id });
+        await stores.connections.deleteConnectionState({
           clientInstanceId,
           connectionAssetId: asset.id
         });
+        mutations.push({ type: "delete", kind: CONNECTION_ASSET_KIND, name: asset.name });
+        baseRevisions[`${CONNECTION_ASSET_KIND}:${asset.name}`] = asset.revision;
+        result.removed.push(asset.name);
       }
-      const health = await bootstrapSecret({
-        name,
-        // The environment's secret is for the address release config names now.
-        origin,
-        named: input.connections[name]?.secret !== undefined,
-        value: values.get(name),
-        handle: handles.get(name),
-        binding,
-        secretStore,
-        deleteSecret: (source) =>
-          stores.connections.deleteSecrets({
-            clientInstanceId,
-            connectionAssetId: asset.id,
-            subject: SHARED_CREDENTIAL_SUBJECT,
-            ...(source === undefined ? {} : { source })
-          }),
-        result
-      });
-      const current = states.get(asset.id)?.health;
-      // What a test found stays, unless the secret's own state says otherwise. A Connection
-      // whose secret arrived or became readable again is unknown until it is tested.
-      const settled =
-        health ??
-        (current === undefined ||
-        current === "needs_configuration" ||
-        current === "secret_unreadable"
-          ? "unknown"
-          : current);
-      if (settled !== current) {
-        await stores.connections.putConnectionState({
+      if (mutations.length > 0) {
+        await stores.configAssets.applyConfigAssetMutations({
           clientInstanceId,
-          connectionAssetId: asset.id,
-          health: settled
+          actor: SYSTEM_ACTOR,
+          baseRevisions,
+          mutations
         });
       }
-    }
-    return result;
-  });
+
+      const after = new Map((await list()).map((asset) => [asset.name, asset]));
+      const states = new Map(
+        (await stores.connections.listConnectionStates({ clientInstanceId })).map((state) => [
+          state.connectionAssetId,
+          state
+        ])
+      );
+      const secretStore = input.keyring
+        ? createSecretStore({ clientInstanceId, keyring: input.keyring, store: stores.connections })
+        : undefined;
+      for (const name of names) {
+        const asset = after.get(name);
+        if (!asset) {
+          throw new AppError("INTERNAL", `The seeded Connection '${name}' was not stored`);
+        }
+        const binding = { connectionAssetId: asset.id, subject: SHARED_CREDENTIAL_SUBJECT };
+        const seeded = storedConnection(asset);
+        const type = seeded && connectorTypes.get(seeded.connectorType);
+        const origin = seeded && type ? connectionOriginOf(type, seeded) : undefined;
+        // A sign-in made for another address, or kept by a Connection that no longer signs in,
+        // ends: release config that moves the Connection away and back restores none.
+        const signIn = await stores.connections.getConnectionBinding({
+          clientInstanceId,
+          ...binding
+        });
+        if (
+          signIn !== undefined &&
+          signIn.state !== "revoked" &&
+          (seeded?.authScheme !== AUTH_SCHEME_OAUTH || signIn.origin !== origin)
+        ) {
+          // The sign-in was made under the config before this seed, where its provider is.
+          await endSignIn(
+            stores,
+            before.get(name) ?? asset,
+            seeded?.authScheme !== AUTH_SCHEME_OAUTH ? "scheme_changed" : "origin_changed"
+          );
+        }
+        const health = await bootstrapSecret({
+          name,
+          // The environment's secret is for the address release config names now.
+          origin,
+          named: input.connections[name]?.secret !== undefined,
+          value: values.get(name),
+          handle: handles.get(name),
+          binding,
+          secretStore,
+          deleteSecret: (source) =>
+            stores.connections.deleteSecrets({
+              clientInstanceId,
+              connectionAssetId: asset.id,
+              subject: SHARED_CREDENTIAL_SUBJECT,
+              ...(source === undefined ? {} : { source })
+            }),
+          result
+        });
+        const current = states.get(asset.id)?.health;
+        // What a test found stays, unless the secret's own state says otherwise. A Connection
+        // whose secret arrived or became readable again is unknown until it is tested.
+        const settled =
+          health ??
+          (current === undefined ||
+          current === "needs_configuration" ||
+          current === "secret_unreadable"
+            ? "unknown"
+            : current);
+        if (settled !== current) {
+          await stores.connections.putConnectionState({
+            clientInstanceId,
+            connectionAssetId: asset.id,
+            health: settled
+          });
+        }
+      }
+      return result;
+    });
+  }
 }
 
 /**

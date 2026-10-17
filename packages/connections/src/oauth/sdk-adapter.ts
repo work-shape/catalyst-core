@@ -6,6 +6,10 @@ import {
   registerClient,
   startAuthorization
 } from "@modelcontextprotocol/sdk/client/auth.js";
+import {
+  InvalidClientError,
+  InvalidGrantError
+} from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type {
   AuthorizationServerMetadata,
   OAuthClientInformationMixed,
@@ -221,15 +225,22 @@ export function createSdkOAuthPort(): OAuthPort {
       return tokenSetOf(tokens);
     },
     async refresh({ server, client, refreshToken, resource, fetch }) {
-      const tokens = await step("token_refused", () =>
-        refreshAuthorization(server.issuer, {
+      let tokens: OAuthTokens;
+      try {
+        tokens = await refreshAuthorization(server.issuer, {
           metadata: sdkMetadata(server),
           clientInformation: sdkClient(client),
           refreshToken,
           resource,
           fetchFn: fetchLike(fetch)
-        })
-      );
+        });
+      } catch (error) {
+        if (connectionCallReasonOf(error) !== undefined) throw error;
+        // Only the two refusals that say the grant or the client is gone end the sign-in.
+        if (error instanceof InvalidGrantError) throw new OAuthPortError("invalid_grant");
+        if (error instanceof InvalidClientError) throw new OAuthPortError("invalid_client");
+        throw new OAuthPortError("token_refused");
+      }
       return tokenSetOf(tokens);
     },
     revoke: (input) => revokeToken(input)

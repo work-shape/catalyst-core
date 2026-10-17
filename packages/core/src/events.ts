@@ -285,6 +285,52 @@ export const EVENTS = {
       }
     }
   },
+  // The outside system refused a Connection's sign-in: a refresh was refused (`invalid_grant`,
+  // `invalid_client`), or a call lacked a scope (`insufficient_scope`). The reason is the
+  // event's reason. A refused refresh leaves the binding `needs_reconnect` with its token set
+  // deleted; a missing scope leaves it connected for what it has.
+  "connection.binding_needs_reconnect": {
+    name: "connection.binding_needs_reconnect",
+    subject: "connection",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["connectionName", "connectionRevision", "subjectKind"],
+      properties: {
+        connectionName: { type: "string" },
+        connectionRevision: { type: "integer" },
+        subjectKind: { type: "string", enum: ["shared"] },
+        /** The scopes a call lacked, with `insufficient_scope`. Names, never a token. */
+        missingScopes: { type: "array", items: { type: "string" } },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
+  // A Connection's sign-in ended: Disconnect, or the Connection was deleted, moved to another
+  // origin or set to another auth scheme. The reason is the event's reason; the metadata says
+  // what the provider answered to the revocation.
+  "connection.binding_revoked": {
+    name: "connection.binding_revoked",
+    subject: "connection",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["connectionName", "connectionRevision", "subjectKind", "providerRevocation"],
+      properties: {
+        connectionName: { type: "string" },
+        connectionRevision: { type: "integer" },
+        subjectKind: { type: "string", enum: ["shared"] },
+        providerRevocation: { type: "string", enum: ["confirmed", "failed", "not_offered"] },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
   "connection.discovered": {
     ...LEGACY_AUDIT,
     name: "connection.discovered",

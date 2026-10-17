@@ -9,13 +9,14 @@ import type {
   AccessResource,
   AuditActor,
   AuditRecorder,
+  ConnectionProviderRevocation,
   OperationResource,
   PlatformStores
 } from "@work-shape/catalyst-core";
 
 /** What a step of a sign-in records its audit events with. */
 interface ConnectionSignInAudit {
-  recorder: AuditRecorder;
+  auditRecorder: AuditRecorder;
   actor: AuditActor;
   correlationId: string;
 }
@@ -108,6 +109,8 @@ export interface ConnectionManagementPort {
    * in `details.connection`. Only a person in a first-party session completes one.
    */
   oauthComplete(input: {
+    /** The Connection whose callback path the provider sent the browser to. */
+    connectionName: string;
     query: { state?: string; code?: string; error?: string; iss?: string };
     completer: { userId: string; firstPartySessionId: string | undefined } | undefined;
     mayWrite(resource: OperationResource): boolean;
@@ -116,4 +119,18 @@ export interface ConnectionManagementPort {
   }): Promise<{ location: string; connectionName: string }>;
   /** The in-app address of an outcome, or nothing where `instance.publicUrl` is not set. */
   oauthLandingUrl(outcome: string, connectionName?: string): string | undefined;
+  /**
+   * Refreshes the shared OAuth sign-ins no call used for 7 days, never a personal one, and
+   * answers how many were refreshed and failed. Missing where the assembly brings no refresh:
+   * the job kind `connection_bindings.keep_alive` is then not served.
+   */
+  keepAlive?(input: { signal: AbortSignal }): Promise<{ refreshed: number; failed: number }>;
+  /**
+   * Disconnect: ends the shared sign-in of a Connection. Its token set is deleted before the
+   * provider is asked to revoke the grant, and the answer says what the provider said.
+   */
+  disconnect(
+    name: string,
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<{ state: "revoked"; providerRevocation: ConnectionProviderRevocation }>;
 }

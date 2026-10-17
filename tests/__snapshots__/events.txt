@@ -43,6 +43,8 @@
 {"name":"config_asset.shipped_skill_unlisted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"config_asset.updated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"connection.binding_connected","legacy":false,"audited":true,"phases":["after"]}
+{"name":"connection.binding_needs_reconnect","legacy":false,"audited":true,"phases":["after"]}
+{"name":"connection.binding_revoked","legacy":false,"audited":true,"phases":["after"]}
 {"name":"connection.discovered","legacy":true,"audited":true,"phases":["after"]}
 {"name":"connection.discovery_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"connection.oauth_client_registered","legacy":false,"audited":true,"phases":["after"]}

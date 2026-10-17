@@ -106,10 +106,11 @@ describe("the operation catalog", () => {
         "config_assets.get_overview  GET /api/v1/instance/config/assets",
         "connect_codes.redeem  POST /api/v1/auth/connect-codes/redeem",
         "connect_codes.start  POST /api/v1/auth/connect-codes",
+        "connections.disconnect  POST /api/v1/connections/:name/disconnect",
         "connections.discover  POST /api/v1/connections/:name/discover",
         "connections.get  GET /api/v1/connections/:name",
         "connections.list_tools  GET /api/v1/connection-tools",
-        "connections.oauth_complete  GET /api/v1/connections/oauth/callback",
+        "connections.oauth_complete  GET /api/v1/connections/:name/oauth/callback",
         "connections.oauth_start  POST /api/v1/connections/:name/oauth/start",
         "connections.set_secret  PUT /api/v1/connections/:name/secret",
         "connections.test  POST /api/v1/connections/:name/test",
@@ -547,7 +548,8 @@ describe("a running instance", () => {
       "agents.draft.get",
       "agents.draft.discard",
       "agents.try.open",
-      "conversations.subagents.list"
+      "conversations.subagents.list",
+      "connections.disconnect"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

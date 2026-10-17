@@ -2,6 +2,7 @@ import type { StoredAgentReferences } from "@work-shape/catalyst-config-schema";
 import type {
   ActorAccess,
   AssetScope,
+  AuditActor,
   AuthenticatedIdentity,
   ClientInstanceId,
   ConfigAssetKind,
@@ -14,6 +15,14 @@ import type {
   RegisteredAssetKind,
   ToolPresentation
 } from "@work-shape/catalyst-core";
+
+/** What a kind's `withinWrite` leaves to do once the transaction ended. */
+export interface AssetWriteFollowUp {
+  /** Called once after the commit. Never throws. */
+  committed(): Promise<void>;
+  /** Called where the transaction rolled back: nothing of it happened. */
+  rolledBack(): void;
+}
 
 /** What an agent or skill definition may refer to on this instance. */
 export interface ConfigAssetValidationRefs extends StoredAgentReferences {
@@ -192,6 +201,27 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     name: string;
     assets(kind: string): Promise<readonly ConfigAssetRecord[]>;
   }): Promise<void>;
+  /**
+   * What a write or delete of a config revision must do in the same transaction: asked after
+   * the revision was written and before the commit, with the transaction's stores. What it
+   * throws refuses the write. It answers what to do once the transaction committed, or
+   * nothing. Asked of `assets.put`, revert and delete; a kind that brings it has those writes
+   * made in one transaction with it.
+   */
+  withinWrite?(input: {
+    clientInstanceId: ClientInstanceId;
+    name: string;
+    /** The asset written, where it existed before the write. */
+    assetId: string | undefined;
+    /** The config before the write and its revision, where the asset was active. */
+    previous: unknown;
+    previousRevision: number | undefined;
+    /** The config written, or nothing for a delete. */
+    config: JsonObject | undefined;
+    actor: AuditActor;
+    correlationId: string;
+    stores: PlatformStores;
+  }): Promise<AssetWriteFollowUp | undefined>;
   /**
    * What a write of a config revision does beside storing it, called once the write is
    * committed, with the stores of the instance. A failure is logged and the write stands, so

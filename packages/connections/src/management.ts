@@ -10,6 +10,8 @@ import {
   connectionOperationName,
   parseConnectionOperationName,
   type AccessResource,
+  type AuditActor,
+  type ConnectionProviderRevocation,
   type ConnectionBindingState,
   type ConnectionOAuthRegistration,
   type ConnectionCallReason,
@@ -36,6 +38,7 @@ import {
   openConnectorContext
 } from "./connector-context";
 import { registeredClientOf } from "./oauth/client-registration";
+import { createSignInEnding } from "./oauth/sign-in-ending";
 import {
   createConnectionSignIn,
   signInLandingUrl,
@@ -165,6 +168,22 @@ export interface ConnectionManagement {
   oauthComplete: ConnectionSignIn["complete"];
   /** The in-app address a callback sends the browser to, or nothing without a public URL. */
   oauthLandingUrl(outcome: string, connectionName?: string): string | undefined;
+  /**
+   * Disconnect: ends the shared sign-in of a Connection. The binding becomes `revoked` and its
+   * token set is deleted, and only once that committed is the provider asked to revoke the
+   * grant (RFC 7009), best effort. Answers what the provider said. A Connection without a
+   * sign-in to end answers CONFLICT `connection_not_connected`.
+   */
+  disconnect(
+    name: string,
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<ConnectionDisconnected>;
+}
+
+/** What Disconnect answers. */
+export interface ConnectionDisconnected {
+  state: "revoked";
+  providerRevocation: ConnectionProviderRevocation;
 }
 
 function resourceOf(connection: StoredConnection): OperationResource {
@@ -261,6 +280,19 @@ export function createConnectionManagement(
 ): ConnectionManagement {
   const now = deps.now ?? (() => new Date());
   const signIn = createConnectionSignIn(deps);
+  // Without a key of the Secret Store there is no token set, and so no sign-in to end.
+  const ending =
+    deps.keyring === undefined
+      ? undefined
+      : createSignInEnding({
+          clientInstanceId: deps.clientInstanceId,
+          connectorTypes: deps.connectorTypes,
+          egress: deps.egress,
+          keyring: deps.keyring,
+          audit: deps.stores.audit,
+          logger: deps.logger,
+          ...(deps.oauth === undefined ? {} : { oauth: deps.oauth })
+        });
 
   /** The binding of the Connection's address, as its page shows it. */
   async function bindingOf(
@@ -294,7 +326,7 @@ export function createConnectionManagement(
     const settings = type.settingsSchema.safeParse(config.settings);
     const chosen = settings.success ? type.signIn.oauthSettings(settings.data) : {};
     const registered = registeredClientOf(connection.state?.oauthClient);
-    const redirectUri = signIn.redirectUri();
+    const redirectUri = signIn.redirectUri(config.name);
     let providerHost: string | undefined;
     try {
       providerHost =
@@ -480,6 +512,32 @@ export function createConnectionManagement(
         });
       }
       return { state: "set", version: written.version };
+    },
+
+    async disconnect(name, audit) {
+      const ended = await deps.stores.transaction(async (stores) => {
+        // Held until the end: a write of the Connection waits, and ends nothing twice.
+        const connection = await readConnection({ ...deps, stores }, name, { held: true });
+        if (!connection) throw notFound(name);
+        if (ending === undefined) return undefined;
+        return ending.end(stores, {
+          connectionAssetId: connection.assetId,
+          connectionName: connection.config.name,
+          connectionRevision: connection.revision,
+          config: connection.config,
+          reason: "disconnect",
+          actor: audit.actor,
+          correlationId: audit.correlationId
+        });
+      });
+      if (ended === undefined) {
+        throw new AppError(
+          "CONFLICT",
+          `${CREDENTIAL_REFUSALS.notConnected}: the Connection has no sign-in to end`,
+          { reason: CREDENTIAL_REFUSALS.notConnected }
+        );
+      }
+      return { state: "revoked", providerRevocation: await ended.revokeAtProvider() };
     },
 
     oauthStart: (name, input) => signIn.start(name, input),

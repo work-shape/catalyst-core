@@ -132,18 +132,49 @@ async function countApprovalRequests(
 type ListFilter = Parameters<ApprovalRequestStore["countApprovalRequests"]>[0];
 
 /** Whether no kind could be listed at all, so nothing needs to be asked. */
-function listsNothing(input: Pick<ListFilter, "kinds" | "reader">): boolean {
-  return input.kinds.length === 0 && (input.reader?.addressedKinds.length ?? 0) === 0;
+function listsNothing(input: Pick<ListFilter, "kinds" | "reader" | "subjectKinds">): boolean {
+  return (
+    input.kinds.length === 0 &&
+    (input.reader?.addressedKinds.length ?? 0) === 0 &&
+    !(input.subjectKinds ?? []).some((entry) => entry.subjects.length > 0)
+  );
+}
+
+/** The requests of the kinds a reader may review on some subjects only, addressed to nobody. */
+function subjectKindsFilter(input: Pick<ListFilter, "subjectKinds">) {
+  const kinds = (input.subjectKinds ?? []).filter((entry) => entry.subjects.length > 0);
+  if (kinds.length === 0) return undefined;
+  return and(
+    isNull(approvalRequests.addresseeUserId),
+    or(
+      ...kinds.map((entry) =>
+        and(
+          eq(approvalRequests.kind, entry.kind),
+          or(
+            ...entry.subjects.map(
+              (subject) => sql`${approvalRequests.payload} @> ${JSON.stringify({ subject })}::jsonb`
+            )
+          )
+        )
+      )
+    )
+  );
 }
 
 /**
  * Which kinds a list holds, and to whom: for a reader, a request addressed to somebody only
  * where it is addressed to them (OP-4b); for the instance itself, every request of the kinds.
  */
-function audienceFilter(input: Pick<ListFilter, "kinds" | "reader">) {
+function audienceFilter(input: Pick<ListFilter, "kinds" | "reader" | "subjectKinds">) {
   const { reader } = input;
-  if (!reader) return inArray(approvalRequests.kind, [...input.kinds]);
+  if (!reader) {
+    return or(
+      input.kinds.length === 0 ? undefined : inArray(approvalRequests.kind, [...input.kinds]),
+      subjectKindsFilter(input)
+    );
+  }
   return or(
+    subjectKindsFilter(input),
     input.kinds.length === 0
       ? undefined
       : and(

@@ -155,8 +155,8 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
   });
 
   route.operation(apiOperations["connections.oauth_complete"], {
-    // The callback names no Connection: the state does. Whose sign-in it is and the right on
-    // the Connection it names are checked there, once the state is read.
+    // Whose sign-in it is and the right on the Connection are checked once the state is read;
+    // the state must name the Connection of the path.
     authorize: () => ({ allowed: true }),
     module: CONNECTIONS_MODULE,
     execute: async (input, context) => {
@@ -165,8 +165,10 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
         !isAuthenticatedServicePrincipal(actor) &&
         actor.authenticationMethod === "session-cookie" &&
         actor.delegatedActor === undefined;
+      const { name, ...query } = input;
       const completed = await required().oauthComplete({
-        query: input,
+        connectionName: name,
+        query,
         completer: isAuthenticatedServicePrincipal(actor)
           ? undefined
           : {
@@ -183,6 +185,19 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
       return { location: completed.location };
     },
     redirectOnError: (error) => connections?.oauthLandingUrl(...signInOutcomeOf(error))
+  });
+
+  route.operation(apiOperations["connections.disconnect"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    // The tokens are deleted and the grant revoked at the provider: a new sign-in is the way
+    // back, never a revert.
+    module: CONNECTIONS_MODULE,
+    execute: (input, context) =>
+      required().disconnect(input.name, {
+        actor: auditActorFromIdentity(context.actor),
+        correlationId: context.correlationId
+      })
   });
 
   route.operation(apiOperations["connections.list_tools"], {
@@ -226,7 +241,7 @@ function signInStarter(actor: AuthenticatedIdentity): { userId: string; authSess
 
 function signInAudit(context: OperationExecutionContext) {
   return {
-    recorder: context.audit,
+    auditRecorder: context.audit,
     actor: auditActorFromIdentity(context.actor),
     correlationId: context.correlationId
   };

@@ -4,10 +4,12 @@ import {
   CONNECTION_CALL_REASONS,
   CONNECTION_TRANSIENT_CALL_REASONS,
   EGRESS_UNRESOLVED,
+  SHARED_CREDENTIAL_SUBJECT,
   connectionCallError,
   connectionCallFailure,
   connectionCallReasonOf,
   isAppError,
+  operationDenialError,
   type ConnectionCallReason,
   type ConnectionHealth,
   type ConnectionOperationEffect,
@@ -246,6 +248,18 @@ function safeCallError(
       `${reason}: the host ${target.host}:${target.port} did not resolve to an address`,
       { reason, cause: EGRESS_UNRESOLVED, host: target.host, port: target.port },
       { exposeMessage: true }
+    );
+  }
+  if (reason === "connection_needs_reconnect" && lacksScope(error)) {
+    const scopes = isAppError(error) ? missingScopesOf(error.details, secret) : undefined;
+    return new AppError(
+      CONNECTION_CALL_REASONS[reason],
+      `${reason}: the sign-in lacks a scope the call needs`,
+      {
+        reason,
+        cause: "insufficient_scope",
+        ...(scopes === undefined ? {} : { missingScopes: scopes })
+      }
     );
   }
   return connectionCallError(reason, undefined, retryAfterSecondsOf(error));
@@ -583,6 +597,7 @@ function inSentence(error: unknown, named: Named): unknown {
     "cause" in details &&
     details.cause === EGRESS_UNRESOLVED;
   const retryAfterSeconds = retryAfterSecondsOf(error);
+  const scopes = lacksScope(error) ? missingScopesOf(details, undefined) : undefined;
   return connectionCallFailure(
     reason,
     named.displayName,
@@ -591,6 +606,8 @@ function inSentence(error: unknown, named: Named): unknown {
         ? { host: refused.host, port: refused.port }
         : {}),
       ...(unresolved ? { cause: EGRESS_UNRESOLVED } : {}),
+      ...(lacksScope(error) ? { cause: "insufficient_scope" } : {}),
+      ...(scopes === undefined ? {} : { missingScopes: scopes }),
       ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds })
     },
     named.effect
@@ -623,6 +640,71 @@ function idempotencyKeyOf(
 }
 
 /**
+ * What a call is handed of its run. A call made outside a run, as a test makes one, has no
+ * run to read and no recorder.
+ */
+export type ConnectionCallContext = Pick<OperationExecutionContext, "runtime" | "idempotencyKey"> &
+  Partial<Pick<OperationExecutionContext, "runId" | "audit">>;
+
+/** The auth scheme of a Connection that signs in at its outside system. */
+const AUTH_SCHEME_OAUTH = "oauth";
+
+/**
+ * Refuses a call that waited for a decision while the Connection's sign-in changed: a call
+ * confirmed or approved before a new sign-in would act through an account nobody looked at
+ * when it was decided. It fails as stale and the caller asks again (CS-4b3).
+ */
+async function refuseStaleHeldCall(
+  deps: ConnectionOperationSourceDeps,
+  connection: StoredConnection,
+  context: ConnectionCallContext
+): Promise<void> {
+  if (connection.config.authScheme !== AUTH_SCHEME_OAUTH || context.runId === undefined) return;
+  const run = await deps.stores.operationRuns.get({
+    clientInstanceId: deps.clientInstanceId,
+    id: context.runId
+  });
+  if (run?.decision === undefined || run.decision.mode === "direct") return;
+  const binding = await deps.stores.connections.getConnectionBinding({
+    clientInstanceId: deps.clientInstanceId,
+    connectionAssetId: connection.assetId,
+    subject: SHARED_CREDENTIAL_SUBJECT
+  });
+  if (binding !== undefined && Date.parse(binding.connectedAt) > Date.parse(run.createdAt)) {
+    throw operationDenialError({
+      kind: "policy",
+      operation: run.operation,
+      reason: "approval_stale"
+    });
+  }
+}
+
+/** The scopes a refusal for `insufficient_scope` names, where they may be repeated. */
+const SCOPES_PATTERN =
+  /^[\x21\x23-\x5B\x5D-\x7E]{1,256}(?: [\x21\x23-\x5B\x5D-\x7E]{1,256}){0,63}$/u;
+
+function missingScopesOf(details: unknown, secret: string | undefined): string | undefined {
+  if (typeof details !== "object" || details === null || !("missingScopes" in details)) {
+    return undefined;
+  }
+  const scopes = details.missingScopes;
+  return typeof scopes === "string" && SCOPES_PATTERN.test(scopes) && !namesSecret(scopes, secret)
+    ? scopes
+    : undefined;
+}
+
+/** Whether a refusal says the sign-in lacks a scope, which leaves it connected. */
+function lacksScope(error: unknown): boolean {
+  return (
+    isAppError(error) &&
+    typeof error.details === "object" &&
+    error.details !== null &&
+    "cause" in error.details &&
+    error.details.cause === "insufficient_scope"
+  );
+}
+
+/**
  * Executes one call. The caller is `runOperation`, which has authorized the actor on the
  * Connection, resolved the policy and written the run. Answers the result of the Connector
  * type once it passed the size bound, the search for the credential and the output schema.
@@ -633,7 +715,7 @@ export async function callConnectionOperation(
   slots: ConnectionCallSlots,
   target: ConnectionCallTarget,
   input: unknown,
-  context: Pick<OperationExecutionContext, "runtime" | "idempotencyKey">
+  context: ConnectionCallContext
 ): Promise<JsonValue> {
   const named: Named = {};
   try {
@@ -664,7 +746,7 @@ async function call(
   slots: ConnectionCallSlots,
   target: ConnectionCallTarget,
   input: unknown,
-  context: Pick<OperationExecutionContext, "runtime" | "idempotencyKey">,
+  context: ConnectionCallContext,
   /** Receives what a sentence says of the Connection the call was authorized on, once read. */
   named: Named
 ): Promise<JsonValue> {
@@ -684,6 +766,7 @@ async function call(
     return found;
   };
   const first = await read();
+  await refuseStaleHeldCall(deps, first.connection, context);
   const jsonInput = toJsonInput(input);
   const limits = connectionCallLimits(first.type);
 
@@ -700,7 +783,8 @@ async function call(
     named.keyed = key.idempotencyKey !== undefined;
     let result: JsonValue;
     let secret: string | undefined;
-    try {
+    /** Opens the context of the call; `refused` names a token a 401 refused. */
+    const open = async (refused?: string): Promise<ConnectorContext> => {
       // Egress first, then the credential: `openConnectorContext` keeps that order.
       const opening = openConnectorContext({
         type,
@@ -712,17 +796,53 @@ async function call(
         egress: deps.egress,
         credentials: deps.credentials ?? NO_CREDENTIALS,
         signal: deadline.signal,
-        ...key
+        ...key,
+        ...(refused === undefined ? {} : { refused })
       });
       opening.catch(() => undefined);
-      const connectorContext: ConnectorContext = await Promise.race([opening, aborted.promise]);
+      return Promise.race([opening, aborted.promise]);
+    };
+    const attempt = async (refused?: string): Promise<JsonValue> => {
+      const connectorContext = await open(refused);
       secret = connectorContext.credentialFor(connectorContext.target)?.secret;
       const executing = type.execute(target.operationName, jsonInput, connectorContext);
       executing.catch(() => undefined);
-      result = await Promise.race([executing, aborted.promise]);
-    } catch (error) {
-      const reason = deadline.signal.aborted ? "upstream_timeout" : connectionCallReasonOf(error);
-      await recordFailedHealth(deps, connection, reason);
+      return Promise.race([executing, aborted.promise]);
+    };
+    try {
+      try {
+        result = await attempt();
+      } catch (error) {
+        // A sign-in's token the outside system refused although it was believed valid gets one
+        // refresh. A reading call is made once more with the new token; a changing call is
+        // never made again, since the system may have carried it out.
+        const refusedToken = secret;
+        if (
+          connection.config.authScheme !== AUTH_SCHEME_OAUTH ||
+          refusedToken === undefined ||
+          deadline.signal.aborted ||
+          connectionCallReasonOf(error) !== "upstream_unauthorized"
+        ) {
+          throw error;
+        }
+        const effect = connection.config.operations.find(
+          (candidate) => candidate.name === target.operationName
+        )?.effect;
+        if (effect !== "reading") {
+          await open(refusedToken).catch(() => undefined);
+          throw error;
+        }
+        result = await attempt(refusedToken);
+      }
+    } catch (caught) {
+      const reason = deadline.signal.aborted ? "upstream_timeout" : connectionCallReasonOf(caught);
+      let error = caught;
+      if (reason === "connection_needs_reconnect" && lacksScope(caught)) {
+        error = await withoutGrantedScopes(deps, connection, caught);
+        await recordMissingScope(connection, context, missingScopesOf(errorDetails(error), secret));
+      } else {
+        await recordFailedHealth(deps, connection, reason);
+      }
       if (reason === undefined) {
         // Nothing of the error is logged: its text may be the outside system's.
         deps.logger.error(
@@ -747,6 +867,70 @@ async function call(
     deadline.stop();
     release();
   }
+}
+
+function errorDetails(error: unknown): unknown {
+  return isAppError(error) ? error.details : undefined;
+}
+
+/**
+ * The refusal with only the scopes the sign-in lacks: a challenge names every scope the
+ * resource needs (RFC 6750 3), the ones the binding was granted among them. A binding that
+ * cannot be read leaves the refusal as it is.
+ */
+async function withoutGrantedScopes(
+  deps: ConnectionOperationSourceDeps,
+  connection: StoredConnection,
+  error: unknown
+): Promise<unknown> {
+  if (!isAppError(error) || typeof error.details !== "object" || error.details === null) {
+    return error;
+  }
+  const details: Record<string, unknown> = { ...error.details };
+  const named = details.missingScopes;
+  if (typeof named !== "string") return error;
+  const binding = await deps.stores.connections
+    .getConnectionBinding({
+      clientInstanceId: deps.clientInstanceId,
+      connectionAssetId: connection.assetId,
+      subject: SHARED_CREDENTIAL_SUBJECT
+    })
+    .catch(() => undefined);
+  if (binding === undefined) return error;
+  const granted = new Set(binding.grantedScopes);
+  const missing = named.split(" ").filter((scope) => !granted.has(scope));
+  if (missing.length === 0) delete details.missingScopes;
+  else details.missingScopes = missing.join(" ");
+  return new AppError(error.code, error.message, details, {
+    exposeMessage: error.exposeMessage
+  });
+}
+
+/**
+ * Records that the sign-in lacked a scope a call needed. The binding stays connected and the
+ * health as it is: the Connection works for what it was granted. A failure is not the call's.
+ */
+async function recordMissingScope(
+  connection: StoredConnection,
+  context: ConnectionCallContext,
+  scopes: string | undefined
+): Promise<void> {
+  await context.audit
+    ?.record({
+      type: "connection.binding_needs_reconnect",
+      status: "failed",
+      subject: connection.config.name,
+      reason: "insufficient_scope",
+      correlationId: context.runId ?? "connection_call",
+      metadata: {
+        connectionName: connection.config.name,
+        connectionRevision: connection.revision,
+        subjectKind: SHARED_CREDENTIAL_SUBJECT,
+        ...(scopes === undefined ? {} : { missingScopes: scopes.split(" ") }),
+        ...(context.runId === undefined ? {} : { operationRunId: context.runId })
+      }
+    })
+    .catch(() => undefined);
 }
 
 /**

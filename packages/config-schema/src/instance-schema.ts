@@ -24,7 +24,7 @@ function isPublicOrigin(value: string): boolean {
 /**
  * Facts about where the instance is reached. `publicUrl` is the origin a person's browser opens
  * the instance on; an OAuth sign-in for a Connection sends the provider back to
- * `<publicUrl>/api/v1/connections/oauth/callback`. Without it, Connect is refused.
+ * `<publicUrl>/api/v1/connections/<name>/oauth/callback`. Without it, Connect is refused.
  */
 export const instanceConfigSchema = z
   .object({

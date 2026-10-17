@@ -64,6 +64,10 @@ export type OAuthPortFailure =
   | "no_server_metadata"
   | "registration_refused"
   | "token_refused"
+  /** The token endpoint refused a refresh with `invalid_grant`: the grant is gone. */
+  | "invalid_grant"
+  /** The token endpoint refused the client itself with `invalid_client`. */
+  | "invalid_client"
   | "invalid_answer";
 
 /** The failure of a step of the port. It carries its kind, never a server's text. */
@@ -114,6 +118,11 @@ export interface OAuthPort {
     resource: string;
     fetch: OAuthFetch;
   }): Promise<OAuthTokenSet>;
+  /**
+   * Refreshes the access token. A refusal of the grant fails with `invalid_grant` or
+   * `invalid_client`; every other failure, such as a server error or no answer, with
+   * `token_refused`, which a later refresh may get past.
+   */
   refresh(input: {
     server: OAuthServerMetadata;
     client: OAuthClient;

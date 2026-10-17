@@ -403,6 +403,16 @@ export async function createClientInstanceExecutionAssembly(
     platformInstructions: PLATFORM_INSTRUCTIONS
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
+  const reconnectNotice = connections?.reconnectNotice;
+  if (reconnectNotice) {
+    if (approvalRequestHandlers.has(reconnectNotice.kind)) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `The ${reconnectNotice.kind} approval kind is platform-owned`
+      );
+    }
+    approvalRequestHandlers.set(reconnectNotice.kind, reconnectNotice);
+  }
   const skillPolicy = config.administration.agentConfiguration.agentSkillChanges;
   if (skillPolicy.enabled) {
     if (approvalRequestHandlers.has("skill_change")) {

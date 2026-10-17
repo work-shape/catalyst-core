@@ -18,7 +18,11 @@ import {
 import { afterRemove } from "./asset-after-write";
 import { AssetDraftWorkflow } from "./asset-draft-service";
 import type { AssetFileInput } from "./asset-files";
-import { readDefinitionName, type WorkflowAssetKind } from "../asset-kinds/shared";
+import {
+  readDefinitionName,
+  type AssetWriteFollowUp,
+  type WorkflowAssetKind
+} from "../asset-kinds/shared";
 import {
   INVALID_ASSET_SET_MESSAGE,
   findAssetSetIssues,
@@ -493,14 +497,19 @@ export class AssetWorkflow {
     };
     this.requireTellableChange(call, target, stored, deleted);
     validateAssetSet(this.options.configAssets.kinds.kinds, deleted(stored.set), stored.set);
-    const result = await this.apply(call, target, {
-      baseRevisions: { [assetKey(kind.kind, name)]: expectedRevision },
-      ...(clearsDefault ? { baseDefaultAgentName: name } : {}),
-      mutations: [
-        { type: "delete", kind: kind.kind, name, scope: target.scope },
-        ...(clearsDefault ? [{ type: "setDefaultAgent" as const, agentName: undefined }] : [])
-      ]
-    });
+    const result = await this.apply(
+      call,
+      target,
+      {
+        baseRevisions: { [assetKey(kind.kind, name)]: expectedRevision },
+        ...(clearsDefault ? { baseDefaultAgentName: name } : {}),
+        mutations: [
+          { type: "delete", kind: kind.kind, name, scope: target.scope },
+          ...(clearsDefault ? [{ type: "setDefaultAgent" as const, agentName: undefined }] : [])
+        ]
+      },
+      { previous: target.asset?.config, config: undefined }
+    );
     const revision = allocatedRevision(result, kind.kind, name);
     await recordCommitted(this.options, call, [
       () =>
@@ -606,7 +615,7 @@ export class AssetWorkflow {
     return upsertAsset(this.options, call, target, config, write, {
       requireTellableChange: (stored, written) =>
         this.requireTellableChange(call, target, stored, written),
-      apply: (batch) => this.apply(call, target, batch)
+      apply: (batch, write) => this.apply(call, target, batch, write)
     });
   }
 
@@ -649,14 +658,50 @@ export class AssetWorkflow {
   private async apply(
     call: AssetCall,
     target: AssetTarget,
-    batch: MutationBatch
+    batch: MutationBatch,
+    write?: { previous: unknown; config: JsonObject | undefined }
   ): ReturnType<ConfigAssetStore["applyConfigAssetMutations"]> {
+    const actor = auditActorFromIdentity(call.actor);
+    const within = target.kind.withinWrite?.bind(target.kind);
     try {
-      return await applyValidatedConfigAssetMutations(this.options, {
-        clientInstanceId: this.options.clientInstanceId,
-        actor: auditActorFromIdentity(call.actor),
-        ...batch
-      });
+      if (within === undefined || write === undefined) {
+        return await applyValidatedConfigAssetMutations(this.options, {
+          clientInstanceId: this.options.clientInstanceId,
+          actor,
+          ...batch
+        });
+      }
+      // The kind's part of the write commits with the revision or not at all.
+      const followUps: AssetWriteFollowUp[] = [];
+      let result: Awaited<ReturnType<ConfigAssetStore["applyConfigAssetMutations"]>>;
+      try {
+        result = await this.options.stores.transaction(async (stores) => {
+          const applied = await applyValidatedConfigAssetMutations(
+            {
+              ...this.options,
+              configAssets: { ...this.options.configAssets, store: stores.configAssets }
+            },
+            { clientInstanceId: this.options.clientInstanceId, actor, ...batch }
+          );
+          const followUp = await within({
+            clientInstanceId: this.options.clientInstanceId,
+            name: target.name,
+            assetId: target.asset?.status === "active" ? target.asset.id : undefined,
+            previousRevision: target.asset?.status === "active" ? target.asset.revision : undefined,
+            ...write,
+            actor,
+            correlationId: call.correlationId,
+            stores
+          });
+          if (followUp !== undefined) followUps.push(followUp);
+          return applied;
+        });
+      } catch (error) {
+        for (const followUp of followUps) followUp.rolledBack();
+        throw error;
+      }
+      for (const followUp of followUps) await followUp.committed();
+      return result;
     } catch (error) {
       if (!isAppError(error) || error.code !== "REVISION_CONFLICT") throw error;
       if (

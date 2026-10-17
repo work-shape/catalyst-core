@@ -3,6 +3,11 @@ import {
   createDocumentSourceOpener,
   ConnectionCallSlots,
   createConnectionManagement,
+  createConnectionReconnectNoticeHandler,
+  createSignInEnding,
+  createSignInTokens,
+  fileConnectionReconnectNotice,
+  withSignInRefresh,
   createConnectionOperationSource,
   createConnectionToolSource,
   createEgressChecker,
@@ -18,8 +23,10 @@ import {
 } from "@work-shape/catalyst-connections";
 import {
   createConnectorTypeRegistry,
+  type ApprovalRequestHandler,
   type ClientInstanceId,
   type ConnectionCredentialResolver,
+  type ConnectionSignInEnding,
   type ConnectorTypeDefinition,
   type ConnectorTypeRegistry,
   type DataToolSource,
@@ -49,6 +56,13 @@ export interface InstanceConnections {
   readonly egress: EgressChecker;
   /** Missing while release config names no Connection: nothing can be opened then. */
   readonly credentials?: ConnectionCredentialResolver;
+  /**
+   * Ends a sign-in a write of a Connection makes useless, and tells the provider once the
+   * write committed. Missing without a Secret Store: no sign-in is stored then.
+   */
+  readonly signInEnding?: ConnectionSignInEnding;
+  /** The Inbox notice of a Connection whose sign-in the outside system refused. */
+  readonly reconnectNotice?: ApprovalRequestHandler;
   /**
    * Makes the stored release Connections equal to release config, then queues one discovery
    * for every Connection that reads its operations from its outside system. The API process
@@ -202,8 +216,36 @@ async function buildInstanceConnections(
     platformStore: platformStore ?? [],
     platformStoreUnknown: platformStore === undefined
   });
-  const credentials = keyring
+  const ownSecrets = keyring
     ? createConnectionCredentialResolver({ clientInstanceId, keyring, store: stores.connections })
+    : undefined;
+  const notices = { clientInstanceId, stores };
+  // A sign-in's access token is refreshed where it is about to expire, under the binding's
+  // lease, and a refused one files the Inbox notice.
+  const signInTokens =
+    keyring && ownSecrets
+      ? createSignInTokens({
+          clientInstanceId,
+          stores,
+          connectorTypes,
+          egress,
+          keyring,
+          credentials: ownSecrets,
+          logger,
+          onRefused: (refusal) => fileConnectionReconnectNotice(notices, refusal)
+        })
+      : undefined;
+  const credentials =
+    ownSecrets && signInTokens ? withSignInRefresh(ownSecrets, signInTokens) : ownSecrets;
+  const signInEnding = keyring
+    ? createSignInEnding({
+        clientInstanceId,
+        connectorTypes,
+        egress,
+        keyring,
+        audit: stores.audit,
+        logger
+      })
     : undefined;
   const operations = { clientInstanceId, stores, connectorTypes, egress, credentials, logger };
   const slots = new ConnectionCallSlots();
@@ -212,6 +254,8 @@ async function buildInstanceConnections(
     openDocumentSource: createDocumentSourceOpener(operations, slots),
     egress,
     ...(credentials ? { credentials } : {}),
+    ...(signInEnding ? { signInEnding } : {}),
+    reconnectNotice: createConnectionReconnectNoticeHandler(notices),
     operationSource: createConnectionOperationSource(operations, slots),
     toolSource: createConnectionToolSource(operations),
     management: {
@@ -222,7 +266,8 @@ async function buildInstanceConnections(
         ...(config.instance.publicUrl === undefined ? {} : { publicUrl: config.instance.publicUrl })
       }),
       discover: (connectionName, attempt) =>
-        discoverConnection({ ...operations, connectionName, ...attempt })
+        discoverConnection({ ...operations, connectionName, ...attempt }),
+      ...(signInTokens ? { keepAlive: (input) => signInTokens.keepAlive(input) } : {})
     },
     async seed() {
       const result = await seedReleaseConnections({
@@ -231,7 +276,8 @@ async function buildInstanceConnections(
         connectorTypes,
         stores,
         secrets,
-        ...(keyring ? { keyring } : {})
+        ...(keyring ? { keyring } : {}),
+        ...(signInEnding ? { ending: signInEnding } : {})
       });
       const changed =
         result.created.length +

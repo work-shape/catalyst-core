@@ -27,7 +27,13 @@ const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" 
 const shotsDir = process.env.E2E_SHOTS_DIR;
 /** How long the instance may take to read the tools: the discovery is a job. */
 const DISCOVERY_TIMEOUT_MS = 45_000;
-const CALLBACK_PATH = "/api/v1/connections/oauth/callback";
+/** Each Connection's sign-in comes back at a path of its own. */
+const callbackPathOf = (connection: string) => `/api/v1/connections/${connection}/oauth/callback`;
+/**
+ * The Connection of the provider that issued a client: the client's redirect URI names it, so
+ * the sample server is started knowing it.
+ */
+const REGISTERED_CONNECTION = `e2e-oauth-en-${randomUUID().slice(0, 8)}`;
 const REGISTERED_CLIENT_ID = "e2e-registered-client";
 
 type Locale = "en" | "de";
@@ -52,7 +58,7 @@ test.beforeEach(async ({ releaseConnections: _releaseConnections, baseURL }) => 
       PORT: String(samplePort),
       SAMPLE_OAUTH_ISSUER_BASE: sampleBase,
       SAMPLE_OAUTH_CLIENT_ID: REGISTERED_CLIENT_ID,
-      SAMPLE_OAUTH_REDIRECT_URI: `${baseURL}${CALLBACK_PATH}`
+      SAMPLE_OAUTH_REDIRECT_URI: `${baseURL}${callbackPathOf(REGISTERED_CONNECTION)}`
     },
     stdio: "ignore"
   });
@@ -98,7 +104,7 @@ async function routeProvider(context: BrowserContext, input: { deny?: boolean } 
       const answer = await route.fetch({ maxRedirects: 0 });
       back = new URL(answer.headers().location ?? "");
     }
-    expect(back.pathname).toBe(CALLBACK_PATH);
+    expect(back.pathname).toMatch(/^\/api\/v1\/connections\/[^/]+\/oauth\/callback$/u);
     const landed = await context.request.get(`${apiBaseUrl}${back.pathname}${back.search}`, {
       maxRedirects: 0
     });
@@ -250,7 +256,7 @@ test("en: a provider that registers no client asks for the one it issued, and an
   baseURL
 }) => {
   test.setTimeout(150_000);
-  const id = `e2e-oauth-en-${randomUUID().slice(0, 8)}`;
+  const id = REGISTERED_CONNECTION;
   await routeProvider(page.context());
   const authorizations: URL[] = [];
   page.context().on("request", (request) => {
@@ -266,7 +272,7 @@ test("en: a provider that registers no client asks for the one it issued, and an
       page.getByRole("dialog", { name: "Register the instance at the provider" })
     ).toBeVisible();
     await expect(client.locator("[data-sign-in-redirect-uri]")).toHaveText(
-      `${baseURL}${CALLBACK_PATH}`
+      `${baseURL}${callbackPathOf(id)}`
     );
     await expect(dialog.locator("[data-sign-in-save-client]")).toBeDisabled();
     await client.locator('[data-sign-in-field="clientId"]').fill(REGISTERED_CLIENT_ID);
@@ -291,7 +297,7 @@ test("en: a provider that registers no client asks for the one it issued, and an
     const section = main.locator("[data-connection-sign-in]");
     await expect(section.locator('[data-sign-in-state="connected"]')).toBeVisible();
     await expect(section).toContainText(REGISTERED_CLIENT_ID);
-    await expect(section).toContainText(`${baseURL}${CALLBACK_PATH}`);
+    await expect(section).toContainText(`${baseURL}${callbackPathOf(id)}`);
     await section.scrollIntoViewIfNeeded();
     await shoot(page, "en", "page-registered");
   } finally {

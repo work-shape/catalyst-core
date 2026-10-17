@@ -2,8 +2,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import {
-  REDIRECT_URI,
+  callbackPathOf,
   createOAuthWorld,
+  redirectUriOf,
   landingOf,
   type OAuthWorld
 } from "./support/oauth-sign-in-world";
@@ -190,17 +191,34 @@ describe("a callback", () => {
     });
   });
 
-  it("sends no code to a token endpoint off the egress list", async () => {
+  it("sends no code to a token endpoint on another host than the issuer's or the Connection's", async () => {
     const alice = await world.signIn("alice");
+    const back = await startedBy("dcr", alice);
+    // The metadata changes between the start and the callback.
     world.provider.adjustMetadata = (_mode, kind, metadata) =>
       kind === "server" ? { ...metadata, token_endpoint: `${world.trap.base}/token` } : metadata;
-    const back = await startedBy("dcr", alice);
     const before = await stored();
     expect(landingOf((await world.callback(back, { cookie: alice })).location)).toEqual({
-      signIn: "egress_denied",
+      signIn: "oauth_discovery_failed",
       connection: "dcr"
     });
     expect(world.trap.hits()).toBe(0);
+    expect(await stored()).toEqual(before);
+  });
+
+  it("takes a callback only at the path of the Connection that started it", async () => {
+    const alice = await world.signIn("alice");
+    const back = await startedBy("dcr", alice);
+    const before = await stored();
+    const elsewhere = new URL(back);
+    elsewhere.pathname = callbackPathOf("registered");
+    expect(landingOf((await world.callback(elsewhere, { cookie: alice })).location)).toMatchObject({
+      signIn: "oauth_state_invalid"
+    });
+    // The state was taken: the right path refuses it too, and nothing was connected.
+    expect(landingOf((await world.callback(back, { cookie: alice })).location)).toMatchObject({
+      signIn: "oauth_state_invalid"
+    });
     expect(await stored()).toEqual(before);
   });
   it("refuses an answer that names another issuer, or none where the server sends one", async () => {
@@ -255,7 +273,7 @@ describe("a start", () => {
     expect((await world.start("dcr", alice)).status).toBe(200);
   });
 
-  it("sends nothing to a metadata or registration endpoint off the egress list", async () => {
+  it("sends nothing to a metadata endpoint off the egress list, or a registration endpoint on another host", async () => {
     const alice = await world.signIn("alice");
     world.provider.adjustMetadata = (_mode, kind, metadata) =>
       kind === "resource"
@@ -270,15 +288,40 @@ describe("a start", () => {
         ? { ...metadata, registration_endpoint: `${world.trap.base}/register` }
         : metadata;
     const registration = await world.start("dcr", alice);
-    expect(reasonOf(registration)).toBe("egress_denied");
+    expect(reasonOf(registration)).toBe("oauth_discovery_failed");
     expect(world.trap.hits()).toBe(0);
+  });
+
+  it("refuses a token, registration or revocation endpoint on another host than the issuer's or the Connection's", async () => {
+    const alice = await world.signIn("alice");
+    for (const field of ["token_endpoint", "registration_endpoint", "revocation_endpoint"]) {
+      world.provider.adjustMetadata = (_mode, kind, metadata) =>
+        kind === "server" ? { ...metadata, [field]: `${world.trap.base}/${field}` } : metadata;
+      const answer = await world.start("dcr", alice);
+      expect(answer.status, field).toBe(409);
+      expect(reasonOf(answer), field).toBe("oauth_discovery_failed");
+    }
+    expect(world.trap.hits()).toBe(0);
+  });
+
+  it("refuses a challenge that names resource metadata on another host than the Connection's", async () => {
+    const alice = await world.signIn("alice");
+    world.oauth.controls.challengeMetadataBase = world.trap.base;
+    try {
+      const answer = await world.start("dcr", alice);
+      expect(answer.status).toBe(409);
+      expect(reasonOf(answer)).toBe("oauth_discovery_failed");
+      expect(world.trap.hits()).toBe(0);
+    } finally {
+      world.oauth.controls.challengeMetadataBase = undefined;
+    }
   });
 
   it("refuses a registration that names other redirect URIs than the instance's", async () => {
     await forgetRegisteredClient();
     world.provider.adjustRegistration = (answer) => ({
       ...answer,
-      redirect_uris: [REDIRECT_URI, "https://elsewhere.example.test/callback"]
+      redirect_uris: [redirectUriOf("dcr"), "https://elsewhere.example.test/callback"]
     });
     const answer = await world.start("dcr", await world.signIn("alice"));
     expect(answer.status).toBe(409);
@@ -286,7 +329,7 @@ describe("a start", () => {
     expect(
       await withTestSql(
         (sql) => sql`select oauth_client from connection_state where oauth_client is not null
-          and oauth_client->>'redirectUri' <> ${REDIRECT_URI}`
+          and oauth_client->>'redirectUri' <> ${redirectUriOf("dcr")}`
       )
     ).toEqual([]);
   });

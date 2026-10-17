@@ -17,7 +17,10 @@ import {
   parseConnectionOperationName,
   endConnectionSignIn,
   type AssetValidationIssue,
+  type ConnectionBindingEndReason,
   type ConnectionConfig,
+  type ConnectionSignInEnding,
+  type JsonObject,
   type ConnectorTypeRegistry,
   type EgressChecker,
   type EgressTarget
@@ -35,6 +38,24 @@ export interface ConnectionAssetKindOptions {
   connectorTypes: ConnectorTypeRegistry;
   /** Asked on a save whether the operator's egress list names the Connection's target. */
   egress: Pick<EgressChecker, "admits">;
+  /**
+   * Ends a sign-in a write makes useless and tells the provider once the write committed.
+   * Left out, where the instance has no Secret Store, the sign-in ends on the instance only.
+   */
+  signInEnding?: ConnectionSignInEnding;
+}
+
+/** Why a write ends the Connection's sign-in, or nothing where the sign-in stays. */
+function signInEndOf(
+  options: ConnectionAssetKindOptions,
+  previous: unknown,
+  config: JsonObject | undefined
+): ConnectionBindingEndReason | undefined {
+  if (config === undefined) return "deleted";
+  const parsed = connectionConfigSchema.safeParse(config);
+  if (!parsed.success) return undefined;
+  if (parsed.data.authScheme !== AUTH_SCHEME_OAUTH) return "scheme_changed";
+  return originMoved(options, previous, parsed.data) ? "origin_changed" : undefined;
 }
 
 /** The auth scheme that sends no credential, so the Connection holds no secret. */
@@ -305,6 +326,41 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
         { reason: CONNECTION_REFUSALS.inUse, agentCount: carrying, appCount: naming }
       );
     },
+    // A sign-in made for another server, or kept by a Connection that no longer signs in,
+    // ends in the write's transaction: the binding is revoked and its tokens are deleted with
+    // the revision, so no call after the commit uses them, and a revert restores none. The
+    // provider is asked to revoke the grant once the write committed.
+    async withinWrite(input) {
+      const { clientInstanceId, assetId, previous, config, stores } = input;
+      if (assetId === undefined || previous === undefined) return undefined;
+      const reason = signInEndOf(options, previous, config);
+      if (reason === undefined) return undefined;
+      const ending = options.signInEnding;
+      if (ending === undefined) {
+        await endConnectionSignIn(
+          stores.connections,
+          { clientInstanceId, connectionAssetId: assetId },
+          { reason, ...(input.actor.userId === undefined ? {} : { changedBy: input.actor.userId }) }
+        );
+        return undefined;
+      }
+      const ended = await ending.end(stores, {
+        connectionAssetId: assetId,
+        connectionName: input.name,
+        connectionRevision: input.previousRevision ?? 0,
+        config: previous,
+        reason,
+        actor: input.actor,
+        correlationId: input.correlationId
+      });
+      if (ended === undefined) return undefined;
+      return {
+        committed: async () => {
+          await ended.revokeAtProvider();
+        },
+        rolledBack: () => ended.discard()
+      };
+    },
     // A change of where or how the Connection reaches its system makes what a test found
     // stale, and every write asks for a discovery, which stores nothing a write did not accept.
     // The key of an origin the Connection left is removed here, after the commit. Should that
@@ -337,9 +393,6 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           connectionAssetId,
           oauthClient: null
         });
-      }
-      if (moved || connection.authScheme !== AUTH_SCHEME_OAUTH) {
-        await endConnectionSignIn(stores.connections, { clientInstanceId, connectionAssetId });
       }
       const target = targetOf(options, connection);
       const origin = target === undefined ? undefined : egressOriginOf(target);

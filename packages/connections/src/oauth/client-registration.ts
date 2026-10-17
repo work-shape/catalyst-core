@@ -122,7 +122,7 @@ export async function clientForSignIn(
     preregisteredId: string | undefined;
     scope: string | undefined;
     fetch: OAuthFetch;
-    audit: { recorder: AuditRecorder; actor: AuditActor; correlationId: string };
+    audit: { auditRecorder: AuditRecorder; actor: AuditActor; correlationId: string };
   }
 ): Promise<OAuthClient> {
   const { connection, server, origin, redirectUri } = input;
@@ -206,7 +206,7 @@ export async function clientForSignIn(
     connectionAssetId: connection.assetId,
     oauthClient: state
   });
-  await input.audit.recorder.record({
+  await input.audit.auditRecorder.record({
     type: "connection.oauth_client_registered",
     status: "success",
     actor: input.audit.actor,

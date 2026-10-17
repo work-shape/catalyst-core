@@ -2,7 +2,6 @@ import { randomBytes, randomUUID } from "node:crypto";
 import {
   AppError,
   CONNECTION_ASSET_KIND,
-  CONNECTION_OAUTH_CALLBACK_PATH,
   CONNECTION_OAUTH_CONNECTED,
   CONNECTION_OAUTH_LANDING_PATH,
   CONNECTION_OAUTH_SESSION_TTL_MS,
@@ -12,6 +11,7 @@ import {
   connectionCallError,
   connectionCallReasonOf,
   connectionOAuthError,
+  connectionOAuthCallbackPath,
   connectionOAuthReasonOf,
   egressOriginOf,
   signInSecretSubject,
@@ -31,15 +31,17 @@ import {
 } from "../connection-reads";
 import { NO_CREDENTIALS } from "../connector-context";
 import { createSecretStore, type SecretKeyring } from "../secret-store";
-import { issuersMatch, resourceAllowed, scopesOf, stateHashOf } from "./checks";
+import { onOrigins, resourceAllowed, scopesOf, stateHashOf } from "./checks";
 import {
   clientForSignIn,
   clientOfSession,
   type ClientRegistrationDeps
 } from "./client-registration";
 import { createOAuthFetch, type OAuthFetch } from "./fetch";
-import { OAuthPortError, type OAuthPort, type OAuthServerMetadata } from "./port";
+import type { OAuthPort, OAuthServerMetadata } from "./port";
 import { createSdkOAuthPort } from "./sdk-adapter";
+import { checkedServer, portFailure } from "./server";
+import { writeTokenSet } from "./token-set";
 
 // The shared OAuth sign-in of a Connection (CS-4b2): its start and its callback. The start
 // discovers the server, settles the client, and stores a setup session that holds the state as
@@ -69,7 +71,7 @@ function verifierAssociatedData(session: {
 
 /** The audit of a step: the run's recorder, the person and the call's correlation. */
 export interface SignInAudit {
-  recorder: AuditRecorder;
+  auditRecorder: AuditRecorder;
   actor: AuditActor;
   correlationId: string;
 }
@@ -122,6 +124,8 @@ export interface ConnectionSignIn {
    * with its reason and, where known, the Connection's name in `details.connection`.
    */
   complete(input: {
+    /** The Connection the callback's path names. A session of another one is refused. */
+    connectionName: string;
     query: OAuthCallbackQuery;
     completer: SignInCompleter | undefined;
     /** Whether the person holds `connection.write` on the Connection now. */
@@ -129,34 +133,11 @@ export interface ConnectionSignIn {
     audit: SignInAudit;
     signal?: AbortSignal;
   }): Promise<{ location: string; connectionName: string }>;
-  /** The redirect URI of the instance, or nothing without `instance.publicUrl`. */
-  redirectUri(): string | undefined;
+  /** The redirect URI of a Connection, or nothing without `instance.publicUrl`. */
+  redirectUri(connectionName: string): string | undefined;
 }
 
 /** The in-app address after a callback. It holds the outcome and the name, nothing else. */
-/**
- * Whether the browser may be sent to an authorization endpoint: an `https` address, or plain
- * `http` on the person's own machine, as a local server under test is. The browser carries
- * the state and, back, the code, so neither travels in the clear to another host.
- */
-function browserSafe(endpoint: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(endpoint);
-  } catch {
-    return false;
-  }
-  if (url.protocol === "https:") return true;
-  const host = url.hostname;
-  return (
-    url.protocol === "http:" &&
-    (host === "localhost" ||
-      host.endsWith(".localhost") ||
-      host === "[::1]" ||
-      /^127(?:\.\d{1,3}){3}$/u.test(host))
-  );
-}
-
 export function signInLandingUrl(
   publicUrl: string,
   outcome: string,
@@ -201,22 +182,13 @@ function signInOf(connection: StoredConnection): {
   return { type, signIn: type.signIn, settings: settings.data };
 }
 
-/** A failure of the port as the reason the flow tells. */
-function portFailure(error: unknown, reason: "oauth_discovery_failed" | "oauth_denied"): unknown {
-  if (error instanceof OAuthPortError) {
-    if (error.failure === "invalid_answer") return connectionCallError("upstream_error");
-    return connectionOAuthError(reason);
-  }
-  return error;
-}
-
 export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSignIn {
   const port = deps.oauth ?? createSdkOAuthPort();
   const now = deps.now ?? (() => new Date());
-  const redirectUri = () =>
+  const redirectUri = (connectionName: string) =>
     deps.publicUrl === undefined
       ? undefined
-      : new URL(CONNECTION_OAUTH_CALLBACK_PATH, deps.publicUrl).href;
+      : new URL(connectionOAuthCallbackPath(connectionName), deps.publicUrl).href;
 
   function registration(keyring: SecretKeyring): ClientRegistrationDeps {
     return {
@@ -228,8 +200,12 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     };
   }
 
-  function required(): { keyring: SecretKeyring; publicUrl: string; redirect: string } {
-    const redirect = redirectUri();
+  function required(connectionName: string): {
+    keyring: SecretKeyring;
+    publicUrl: string;
+    redirect: string;
+  } {
+    const redirect = redirectUri(connectionName);
     if (deps.publicUrl === undefined || redirect === undefined) {
       throw connectionOAuthError("oauth_redirect_unconfigured");
     }
@@ -243,31 +219,13 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     return { keyring: deps.keyring, publicUrl: deps.publicUrl, redirect };
   }
 
-  /** The authorization server's metadata, refused unless it is the issuer asked and has S256. */
-  async function serverOf(asked: string, fetch: OAuthFetch): Promise<OAuthServerMetadata> {
-    let server: OAuthServerMetadata;
-    try {
-      server = await port.discoverServer({ issuer: asked, fetch });
-    } catch (error) {
-      throw portFailure(error, "oauth_discovery_failed");
-    }
-    if (!issuersMatch(server.issuer, asked)) throw connectionOAuthError("oauth_issuer_mismatch");
-    if (!server.codeChallengeMethodsSupported.includes("S256")) {
-      throw connectionOAuthError("oauth_pkce_unsupported");
-    }
-    if (!browserSafe(server.authorizationEndpoint)) {
-      throw connectionOAuthError(
-        "oauth_discovery_failed",
-        "the authorization endpoint is no https address"
-      );
-    }
-    if (!server.responseTypesSupported.includes("code")) {
-      throw connectionOAuthError(
-        "oauth_discovery_failed",
-        "the authorization server offers no authorization code"
-      );
-    }
-    return server;
+  /** The authorization server's metadata, as every step checks it. */
+  function serverOf(
+    asked: string,
+    connectionOrigin: string,
+    fetch: OAuthFetch
+  ): Promise<OAuthServerMetadata> {
+    return checkedServer({ port, issuer: asked, connectionOrigin, fetch });
   }
 
   async function refused(
@@ -281,7 +239,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       connectionCallReasonOf(error) ??
       (error instanceof AppError && error.code === "FORBIDDEN" ? "forbidden" : undefined);
     if (reason === undefined) return;
-    await audit.recorder.record({
+    await audit.auditRecorder.record({
       type: "connection.oauth_refused",
       status: "denied",
       actor: audit.actor,
@@ -304,7 +262,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     audit: SignInAudit,
     signal: AbortSignal
   ): Promise<OAuthStartAnswer> {
-    const { keyring, publicUrl, redirect } = required();
+    const { keyring, publicUrl, redirect } = required(connection.config.name);
     const { type, signIn, settings } = signInOf(connection);
     const target = await deps.egress.check(type.target(settings));
     const origin = egressOriginOf(target);
@@ -313,6 +271,17 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     const fetch = createOAuthFetch({ egress: deps.egress, signal });
 
     const challenge = await signIn.challenge({ target, settings, signal });
+    const connectionOrigin = new URL(resourceUrl).origin;
+    // The challenge is the server's answer, so the metadata it names is on the server's origin.
+    if (
+      challenge?.resourceMetadataUrl !== undefined &&
+      !onOrigins(challenge.resourceMetadataUrl, [connectionOrigin])
+    ) {
+      throw connectionOAuthError(
+        "oauth_discovery_failed",
+        "the server's challenge names resource metadata on another host than its own"
+      );
+    }
     let resource;
     try {
       resource = await port.discoverResource({
@@ -338,7 +307,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         "the resource metadata names no authorization server"
       );
     }
-    const server = await serverOf(asked, fetch);
+    const server = await serverOf(asked, connectionOrigin, fetch);
     // The admin's choice, else the challenge's scopes, else all the server lists, else none.
     const scopes = [...(chosen.scopes ?? challenge?.scopes ?? resource.scopesSupported ?? [])];
     const scope = scopes.length > 0 ? scopes.join(" ") : undefined;
@@ -433,7 +402,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     audit: SignInAudit,
     signal: AbortSignal
   ): Promise<void> {
-    const { keyring } = required();
+    const { keyring } = required(connection.config.name);
     // The config of the session's revision: what the start discovered and signed in for.
     const { type, signIn, settings } = signInOf(connection);
     const target = await deps.egress.check(type.target(settings));
@@ -443,7 +412,11 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       throw connectionOAuthError("oauth_state_invalid", "the provider sent no code");
     }
     const fetch = createOAuthFetch({ egress: deps.egress, signal });
-    const server = await serverOf(session.issuer, fetch);
+    const server = await serverOf(
+      session.issuer,
+      new URL(signIn.resourceUrl(settings)).origin,
+      fetch
+    );
     // RFC 9207: a server that names itself in its answer must name the issuer asked.
     if (server.authorizationResponseIssParameterSupported || query.iss !== undefined) {
       if (query.iss !== server.issuer) throw connectionOAuthError("oauth_issuer_mismatch");
@@ -476,17 +449,10 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       throw portFailure(error, "oauth_denied");
     }
     const granted = tokens.scope === undefined ? session.scopes : scopesOf(tokens.scope);
-    const issuedAt = now().getTime();
-    const accessExpiresAt =
-      tokens.expiresIn !== undefined && Number.isFinite(tokens.expiresIn) && tokens.expiresIn > 0
-        ? new Date(issuedAt + tokens.expiresIn * 1000).toISOString()
-        : undefined;
-    const tokenSet = JSON.stringify({
-      accessToken: tokens.accessToken,
-      tokenType: tokens.tokenType,
-      ...(accessExpiresAt === undefined ? {} : { expiresAt: accessExpiresAt }),
-      ...(tokens.refreshToken === undefined ? {} : { refreshToken: tokens.refreshToken }),
-      ...(tokens.scope === undefined ? {} : { scope: tokens.scope })
+    const { text: tokenSet, accessExpiresAt } = writeTokenSet({
+      tokens,
+      issuedAt: now().getTime(),
+      origin: { issuer: server.issuer, resource: session.resource, clientId: client.clientId }
     });
 
     // One transaction: the Connection is held at the session's revision, the token set is
@@ -552,7 +518,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       health: "unknown",
       lastErrorCode: null
     });
-    await audit.recorder.record({
+    await audit.auditRecorder.record({
       type: "connection.binding_connected",
       status: "success",
       actor: audit.actor,
@@ -586,7 +552,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       }
     },
 
-    async complete({ query, completer, mayWrite, audit, signal }) {
+    async complete({ connectionName, query, completer, mayWrite, audit, signal }) {
       let connection: StoredConnection | undefined;
       try {
         // Only a person in their own signed-in browser completes a sign-in: an embedding
@@ -613,6 +579,15 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
           throw connectionOAuthError("oauth_state_invalid");
         }
         connection = await connectionOfSession(session);
+        // The browser came back to the address of the Connection whose client asked: a code
+        // of one authorization server cannot complete the sign-in of another Connection, also
+        // where the server sends no `iss`.
+        if (
+          connection.config.name !== connectionName ||
+          session.redirectUri !== redirectUri(connectionName)
+        ) {
+          throw connectionOAuthError("oauth_state_invalid");
+        }
         if (!mayWrite(resourceOf(connection))) {
           throw new AppError(
             "FORBIDDEN",
@@ -622,7 +597,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         }
         await complete(session, connection, query, audit, deadline(signal));
         const location = signInLandingUrl(
-          required().publicUrl,
+          required(connection.config.name).publicUrl,
           CONNECTION_OAUTH_CONNECTED,
           connection.config.name
         );

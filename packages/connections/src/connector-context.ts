@@ -171,6 +171,11 @@ export interface OpenConnectorContextInput {
   signal: AbortSignal;
   /** The key of a changing call and the header that carries it, where the call has both. */
   idempotencyKey?: { header: string; value: string };
+  /**
+   * The access token of a sign-in the outside system just refused with a 401: the sign-in is
+   * refreshed before a token is handed out again. Only for auth scheme `oauth`.
+   */
+  refused?: string;
 }
 
 /**
@@ -203,7 +208,9 @@ export async function openConnectorContext(
       config.authScheme === AUTH_SCHEME_OAUTH
         ? await credentials.resolveSignIn({
             connectionAssetId: connection.id,
-            origin: egressOriginOf(target)
+            origin: egressOriginOf(target),
+            ...(input.refused === undefined ? {} : { refused: input.refused }),
+            signal
           })
         : await credentials.resolve({
             handle: storedSecretHandle(config),

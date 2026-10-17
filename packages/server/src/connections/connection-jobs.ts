@@ -3,9 +3,12 @@ import {
   NonRetryableJobError,
   defineJobHandler,
   defineJobKind,
+  defineSchedule,
+  scheduledJobPayloadSchema,
   subjectDedupeKey,
   type ClientInstanceId,
   type Job,
+  type JobSchedule,
   type JobsStore,
   type RegisteredJobHandler
 } from "@work-shape/catalyst-core";
@@ -124,18 +127,69 @@ const FAILURES_NOT_RETRIED: ReadonlySet<string> = new Set([
 type ConnectionDiscoveryJobOptions = Pick<ChatServerOptions, "connections" | "auditRecorder">;
 
 /**
- * The handler of `connection.discover`, for the API process. An instance whose assembly
- * brings no discovery serves no such job.
+ * Refreshes the shared OAuth sign-ins no call used for 7 days, so a Connection a monthly
+ * Workflow calls still has a live refresh token: providers end one after 30 idle days. One
+ * tick at a time across the instance; a failed tick waits for the next.
+ */
+const connectionBindingsKeepAliveJob = defineJobKind({
+  kind: "connection_bindings.keep_alive",
+  payloadSchema: scheduledJobPayloadSchema,
+  maxAttempts: 1,
+  backoff: { baseMs: 0, maxMs: 0 },
+  leaseMs: 10 * MINUTE_MS,
+  concurrency: { global: 1 },
+  manualRetry: false
+});
+
+/** Four ticks a day: an idle sign-in is refreshed within a quarter day of its seventh. */
+const connectionBindingsKeepAliveSchedule = defineSchedule({
+  kind: connectionBindingsKeepAliveJob,
+  every: 6 * 60 * MINUTE_MS
+});
+
+/** The keep-alive of shared sign-ins, where the assembly brings one. */
+function keepAliveJobs(options: ConnectionDiscoveryJobOptions): {
+  handlers: RegisteredJobHandler[];
+  schedules: JobSchedule[];
+} {
+  const connections = options.connections;
+  if (!connections?.keepAlive) return { handlers: [], schedules: [] };
+  const keepAlive = connections.keepAlive.bind(connections);
+  return {
+    handlers: [
+      defineJobHandler({
+        kind: connectionBindingsKeepAliveJob,
+        slots: 1,
+        async run(_job, control) {
+          const kept = await keepAlive({ signal: control.signal });
+          if (kept.refreshed + kept.failed > 0) {
+            control.logger.info(kept, "Refreshed idle sign-ins of Connections");
+          }
+        }
+      })
+    ],
+    schedules: [connectionBindingsKeepAliveSchedule]
+  };
+}
+
+/**
+ * The handlers of `connection.discover` and of the sign-in keep-alive, for the API process.
+ * An instance whose assembly brings no discovery serves no such job, and one without a
+ * keep-alive no keep-alive.
  */
 export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOptions): {
   handlers: RegisteredJobHandler[];
+  schedules: JobSchedule[];
 } {
+  const kept = keepAliveJobs(options);
   const connections = options.connections;
-  if (!connections?.discover) return { handlers: [] };
+  if (!connections?.discover) return kept;
   const discover = connections.discover.bind(connections);
 
   return {
+    schedules: kept.schedules,
     handlers: [
+      ...kept.handlers,
       defineJobHandler({
         kind: connectionDiscoverJob,
         slots: CONNECTION_DISCOVERY_SLOTS,

@@ -1,4 +1,6 @@
 import {
+  AppError,
+  CONNECTION_CALL_REASONS,
   connectionCallError,
   connectionCallReasonOf,
   isJsonObject,
@@ -188,6 +190,37 @@ async function reasoned<Result>(work: () => Promise<Result>): Promise<Result> {
   }
 }
 
+/**
+ * A refusal for a scope the sign-in lacks (RFC 6750 3.1, `insufficient_scope`) as the call
+ * tells it: `connection_needs_reconnect` with the scopes the server names, so a person signs in
+ * again with the wider set. Only for a Connection that signs in, and only scopes that are no
+ * part of the credential. Nothing for any other refusal.
+ */
+function insufficientScopeOf(
+  error: unknown,
+  challenge: BearerChallenge | undefined,
+  context: ConnectorContext
+): AppError | undefined {
+  if (
+    context.connection.authScheme !== "oauth" ||
+    challenge?.error !== "insufficient_scope" ||
+    connectionCallReasonOf(error) !== "upstream_unauthorized"
+  ) {
+    return undefined;
+  }
+  const credential = context.credentialFor(context.target);
+  const scopes = (challenge.scopes ?? []).filter((scope) => !holdsCredential(scope, credential));
+  return new AppError(
+    CONNECTION_CALL_REASONS.connection_needs_reconnect,
+    "connection_needs_reconnect: the sign-in lacks a scope the call needs",
+    {
+      reason: "connection_needs_reconnect",
+      cause: "insufficient_scope",
+      ...(scopes.length === 0 ? {} : { missingScopes: scopes.join(" ") })
+    }
+  );
+}
+
 export interface McpConnectorOptions {
   /** Told how many tools a discovery left out, by reason. Never a name, a schema or a value. */
   logger?: Logger;
@@ -289,17 +322,26 @@ export function createMcpConnectorType(options: McpConnectorOptions = {}): Conne
         if (!isJsonObject(input)) {
           throw connectionCallError("input_invalid", "the input of an MCP tool is an object");
         }
-        const raw = await withMcpSession(
-          {
-            ...session(context),
-            bounds: {
-              timeoutMs: MCP_CALL_TIMEOUT_MS,
-              maxResponseBytes: MCP_RESULT_MAX_BYTES + MCP_RESPONSE_ENVELOPE_BYTES,
-              tooLarge: "the result is larger than MCP_RESULT_MAX_BYTES"
-            }
-          },
-          (opened) => opened.callTool(operation, input)
-        );
+        let challenged: BearerChallenge | undefined;
+        let raw;
+        try {
+          raw = await withMcpSession(
+            {
+              ...session(context),
+              bounds: {
+                timeoutMs: MCP_CALL_TIMEOUT_MS,
+                maxResponseBytes: MCP_RESULT_MAX_BYTES + MCP_RESPONSE_ENVELOPE_BYTES,
+                tooLarge: "the result is larger than MCP_RESULT_MAX_BYTES"
+              },
+              onChallenge: (challenge) => {
+                challenged = challenge;
+              }
+            },
+            (opened) => opened.callTool(operation, input)
+          );
+        } catch (error) {
+          throw insufficientScopeOf(error, challenged, context) ?? error;
+        }
         const result = mcpToolResult(raw, MCP_RESULT_MAX_BYTES);
         if (holdsCredential(result, context.credentialFor(context.target))) {
           throw connectionCallError("output_rejected");

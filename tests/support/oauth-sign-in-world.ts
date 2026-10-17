@@ -1,12 +1,24 @@
 import { createServer, type Server } from "node:http";
 import { z } from "zod";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
-import { asClientInstanceId } from "@work-shape/catalyst-core";
+import {
+  asClientInstanceId,
+  asUserId,
+  connectionOAuthCallbackPath,
+  type AuthenticatedIdentity
+} from "@work-shape/catalyst-core";
+import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
 import type { SampleOAuthOptions } from "@work-shape/catalyst-demo/sample-mcp";
 import { createSampleMcpServer } from "@work-shape/catalyst-demo/sample-mcp";
 import { createTestConfig } from "./fixtures";
 import { generateSecretStoreKey, generateTestSecret } from "./test-connector";
-import { createTestInstance, listenTestInstance, type TestInstance } from "./test-instance";
+import {
+  createTestInstance,
+  getTestExecution,
+  getTestJobs,
+  listenTestInstance,
+  type TestInstance
+} from "./test-instance";
 import { withTestSql } from "./test-sql";
 
 // The world of the shared OAuth sign-in tests (CS-4b2): an assembled instance with real
@@ -16,8 +28,12 @@ import { withTestSql } from "./test-sql";
 
 /** The browser origin of the instance, `instance.publicUrl`. Nothing listens there. */
 const PUBLIC_URL = "http://localhost:5173";
-export const CALLBACK_PATH = "/api/v1/connections/oauth/callback";
-export const REDIRECT_URI = `${PUBLIC_URL}${CALLBACK_PATH}`;
+/** The callback path of one Connection's sign-in. */
+export const callbackPathOf = (connectionName: string) =>
+  connectionOAuthCallbackPath(connectionName);
+/** The redirect URI the instance names for one Connection. */
+export const redirectUriOf = (connectionName: string) =>
+  `${PUBLIC_URL}${callbackPathOf(connectionName)}`;
 const LANDING = `${PUBLIC_URL}/build/connections`;
 /** The client the provider issued for the Connection `registered`. */
 export const REGISTERED_CLIENT_ID = "catalyst-registered";
@@ -41,6 +57,8 @@ interface TrapServer {
 
 export interface OAuthWorld {
   readonly instance: TestInstance;
+  /** A worker process of the instance on the same rows, where the calls run. */
+  readonly worker: TestInstance;
   /** The address the test reaches the instance at. */
   readonly api: string;
   /** The sample MCP server's base, as the instance reaches it. */
@@ -54,7 +72,24 @@ export interface OAuthWorld {
   readonly provider: {
     adjustMetadata?: SampleOAuthOptions["adjustMetadata"];
     adjustRegistration?: SampleOAuthOptions["adjustRegistration"];
+    beforeRevoke?: SampleOAuthOptions["beforeRevoke"];
   };
+  /** The authorization server's switches and counts. */
+  readonly oauth: SampleOAuthHandle;
+  /** The identity of the person whose session `cookie` is, as the call path is handed it. */
+  identityOf(cookie: string): Promise<AuthenticatedIdentity>;
+  /** The call path of a worker process of the instance, on the same rows. */
+  calls(): Promise<ReturnType<typeof getTestExecution>["operationCalls"]>;
+  /** A Connection operation called by the person as the CLI calls it. */
+  call(connectionName: string, operation: string, cookie: string): Promise<OperationOutcome>;
+  /** `connections.discover` in the person's browser session, and the discovery run. */
+  discover(name: string, cookie: string): Promise<void>;
+  /** `connections.disconnect` in the person's browser session. */
+  disconnect(name: string, cookie: string): Promise<{ status: number; body: unknown }>;
+  /** `assets.delete` of a runtime Connection in the person's browser session. */
+  deleteConnection(name: string, cookie: string): Promise<number>;
+  /** `assets.revert` of a runtime Connection to `revision`, in the person's browser session. */
+  revertConnection(name: string, revision: number, cookie: string): Promise<number>;
   /** A session token an embedding host had the instance issue for a user it names. */
   embeddedToken(): Promise<string>;
   /** An access token of a Service Principal's API key that may write config assets. */
@@ -85,6 +120,8 @@ export interface OAuthWorld {
   ): Promise<{ status: number; location: string | null; body: string }>;
   close(): Promise<void>;
 }
+
+type SampleOAuthHandle = NonNullable<ReturnType<typeof createSampleMcpServer>["oauth"]>;
 
 async function listen(server: Server): Promise<string> {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -129,14 +166,21 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
     key: sampleKey,
     oauth: {
       issuerBase: sampleBase,
-      registeredClient: { clientId: REGISTERED_CLIENT_ID, clientSecret, redirectUri: REDIRECT_URI },
+      registeredClient: {
+        clientId: REGISTERED_CLIENT_ID,
+        clientSecret,
+        redirectUri: redirectUriOf("registered")
+      },
       adjustMetadata: (mode, kind, metadata) =>
         provider.adjustMetadata?.(mode, kind, metadata) ?? metadata,
       adjustRegistration: (answer) => provider.adjustRegistration?.(answer) ?? answer,
+      beforeRevoke: async () => provider.beforeRevoke?.(),
       onSecret: (value) => secrets.push(value)
     }
   });
   await sample.listen(samplePort, "127.0.0.1");
+  const sampleOAuth = sample.oauth;
+  if (!sampleOAuth) throw new Error("The sample serves no sign-in");
 
   const base = createTestConfig({ developmentAuth: { enabled: false } });
   const config = parseClientInstanceConfig({
@@ -190,7 +234,7 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
         displayName: "Sample by registration",
         settings: { url: `${sampleBase}/dcr/mcp` },
         authScheme: "oauth",
-        operations: [{ name: "list_customers", effect: "reading", exposure: ["agent"] }]
+        operations: [{ name: "list_customers", effect: "reading", exposure: ["agent", "outside"] }]
       },
       // A key where the server wants a sign-in: the server answers with its challenge.
       keyed: {
@@ -199,7 +243,7 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
         settings: { url: `${sampleBase}/dcr/mcp` },
         authScheme: "bearer",
         secret: "SAMPLE_MCP_KEY",
-        operations: [{ name: "list_customers", effect: "reading", exposure: ["agent"] }]
+        operations: [{ name: "list_customers", effect: "reading", exposure: ["agent", "outside"] }]
       },
       registered: {
         connectorType: "mcp",
@@ -210,11 +254,11 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
         },
         authScheme: "oauth",
         secret: "REGISTERED_CLIENT_SECRET",
-        operations: [{ name: "list_customers", effect: "reading", exposure: ["agent"] }]
+        operations: [{ name: "list_customers", effect: "reading", exposure: ["agent", "outside"] }]
       }
     }
   });
-  const instance = await createTestInstance({
+  const assembly = {
     config,
     env: {
       CATALYST_SECRET_STORE_KEY: generateSecretStoreKey(),
@@ -227,19 +271,112 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
       CHAT_SERVER_CREDENTIAL: serverCredential,
       SERVICE_ACCESS_TOKEN_SECRET: generateTestSecret()
     },
-    tools: [],
-    seedAssets: false
-  });
+    tools: []
+  };
+  const instance = await createTestInstance({ ...assembly, seedAssets: false });
   const api = await listenTestInstance(instance);
+  /** A worker process on the same rows: the calls of operations run there, as a Workflow's do. */
+  const worker = await createTestInstance({ execution: assembly });
+  async function callPath() {
+    return getTestExecution(worker).operationCalls;
+  }
+  const clientInstanceId = asClientInstanceId(config.clientInstance.id);
+  async function identityOf(cookie: string): Promise<AuthenticatedIdentity> {
+    const response = await fetch(`${api}/api/v1/me`, { headers: { cookie } });
+    const userId = asUserId(meSchema.parse(await response.json()).id);
+    const user = await instance.stores.users.getUser({ clientInstanceId, userId });
+    if (!user) throw new Error("No such user");
+    return {
+      id: user.id,
+      externalUserId: user.id,
+      displayLabel: user.displayLabel,
+      roles: user.roles,
+      permissions: user.permissions,
+      permissionRefs: user.permissionRefs,
+      clientInstanceId,
+      authSource: "test",
+      scopes: ["*"]
+    };
+  }
+  async function assetCall(
+    operation: "assets.delete" | "assets.revert",
+    name: string,
+    payload: Record<string, unknown>,
+    cookie: string
+  ): Promise<number> {
+    const stored = await instance.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "connection",
+      name
+    });
+    const answer = await instance.call(
+      operation,
+      {
+        params: { kind: "connection", name },
+        payload: { ...payload, expectedRevision: stored?.revision ?? null }
+      },
+      { headers: { cookie, origin: PUBLIC_URL } }
+    );
+    return answer.statusCode;
+  }
 
   return {
     instance,
+    worker,
     api,
     sample: sampleBase,
     trap: trap.trap,
     secrets,
     clientSecret,
     provider,
+    oauth: sampleOAuth,
+    identityOf,
+    calls: callPath,
+    async call(connectionName, operation, cookie) {
+      const calls = await callPath();
+      return runOperation(
+        {
+          operation: `connection.${connectionName}.${operation}`,
+          effect: "reading",
+          input: {},
+          actor: await identityOf(cookie),
+          origin: { kind: "cli" },
+          correlationId: `corr_${generateTestSecret().slice(0, 12)}`
+        },
+        calls.deps
+      );
+    },
+    async disconnect(name, cookie) {
+      const response = await fetch(`${api}/api/v1/connections/${name}/disconnect`, {
+        method: "POST",
+        headers: { cookie, origin: PUBLIC_URL, "content-type": "application/json" },
+        body: "{}"
+      });
+      return { status: response.status, body: await response.json() };
+    },
+    async discover(name, cookie) {
+      const response = await fetch(`${api}/api/v1/connections/${name}/discover`, {
+        method: "POST",
+        headers: { cookie, origin: PUBLIC_URL, "content-type": "application/json" },
+        body: "{}"
+      });
+      if (!response.ok) throw new Error(`The discovery was not queued: ${response.status}`);
+      // A pass runs as many jobs as the concurrency allows, the other Connections' first.
+      for (let pass = 0; pass < 10; pass += 1) {
+        await getTestJobs(instance).runDue();
+        const [waiting] = await withTestSql(
+          (sql) => sql<{ count: number }[]>`
+            select count(*)::int as count from platform_jobs
+            where kind = 'connection.discover' and subject = ${name}
+              and status in ('queued', 'running')`
+        );
+        if (waiting?.count === 0) return;
+      }
+      throw new Error("The discovery did not run");
+    },
+    deleteConnection: (name, cookie) => assetCall("assets.delete", name, {}, cookie),
+    revertConnection: (name, revision, cookie) =>
+      assetCall("assets.revert", name, { revision }, cookie),
     async embeddedToken() {
       const response = await fetch(`${api}/api/v1/instance/session-tokens`, {
         method: "POST",
@@ -256,7 +393,6 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
       return tokenAnswerSchema.parse(answer).chatSessionToken;
     },
     async servicePrincipalToken() {
-      const clientInstanceId = asClientInstanceId(config.clientInstance.id);
       const principal = await instance.stores.apiAccess.createServicePrincipal({
         clientInstanceId,
         displayLabel: "Automation",
@@ -359,6 +495,7 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
       };
     },
     async close() {
+      await worker.close();
       await instance.close();
       await sample.close();
       await trap.close();

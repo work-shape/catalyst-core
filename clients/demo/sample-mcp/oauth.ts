@@ -22,7 +22,7 @@ export type SampleOAuthMode = (typeof SAMPLE_OAUTH_MODES)[number];
 export const SAMPLE_OAUTH_SCOPE = "sample.read";
 
 const CODE_TTL_MS = 60_000;
-const ACCESS_TTL_SECONDS = 3600;
+const DEFAULT_ACCESS_TTL_SECONDS = 3600;
 const MAXIMUM_FORM_BYTES = 64 * 1024;
 const MAXIMUM_CLIENTS = 1000;
 
@@ -52,6 +52,18 @@ export interface SampleOAuthOptions {
    * token. For tests that look for them where they must not be.
    */
   onSecret?: (value: string) => void;
+  /**
+   * Asked before a revocation request is answered, for tests of what the platform did before
+   * it asked.
+   */
+  beforeRevoke?: () => Promise<void>;
+}
+
+/** How many requests of each kind the server answered, for tests that count them. */
+export interface SampleOAuthCounts {
+  authorizationCode: number;
+  refreshToken: number;
+  revocation: number;
 }
 
 interface Client {
@@ -159,6 +171,26 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
   const codes = new Map<string, PendingCode>();
   const accessTokens = new Map<string, Grant & { expiresAt: number }>();
   const refreshTokens = new Map<string, Grant>();
+  /** What a test may switch on the running server. Each starts off. */
+  const controls: {
+    /** How long an access token issued from now lives, in seconds. An hour to start with. */
+    accessTtlSeconds: number;
+    /** Every refresh is refused with `invalid_grant`, as a provider does whose grant ended. */
+    refuseRefresh: boolean;
+    /**
+     * A scope the MCP endpoints insist on beside the granted one: a token without it is
+     * answered 403 `insufficient_scope` (RFC 6750 3.1).
+     */
+    requiredScope: string | undefined;
+    /** Where the 401's challenge says the resource metadata is, in place of this server. */
+    challengeMetadataBase: string | undefined;
+  } = {
+    accessTtlSeconds: DEFAULT_ACCESS_TTL_SECONDS,
+    refuseRefresh: false,
+    requiredScope: undefined,
+    challengeMetadataBase: undefined
+  };
+  const counts: SampleOAuthCounts = { authorizationCode: 0, refreshToken: 0, revocation: 0 };
   if (options.registeredClient) {
     clients.set(options.registeredClient.clientId, {
       clientId: options.registeredClient.clientId,
@@ -263,12 +295,13 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     const refreshToken = opaque();
     options.onSecret?.(accessToken);
     options.onSecret?.(refreshToken);
-    accessTokens.set(accessToken, { ...grant, expiresAt: Date.now() + ACCESS_TTL_SECONDS * 1000 });
+    const expiresIn = controls.accessTtlSeconds;
+    accessTokens.set(accessToken, { ...grant, expiresAt: Date.now() + expiresIn * 1000 });
     refreshTokens.set(refreshToken, grant);
     return {
       access_token: accessToken,
       token_type: "Bearer",
-      expires_in: ACCESS_TTL_SECONDS,
+      expires_in: expiresIn,
       refresh_token: refreshToken,
       scope: grant.scope
     };
@@ -280,6 +313,7 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     if (form.get("resource") !== resourceOf(mode)) throw new OAuthError(400, "invalid_target");
     const grantType = form.get("grant_type");
     if (grantType === "authorization_code") {
+      counts.authorizationCode += 1;
       const code = form.get("code") ?? "";
       const pending = codes.get(code);
       // A code is used once, whatever comes of it.
@@ -299,10 +333,16 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
       return issue(pending);
     }
     if (grantType === "refresh_token") {
+      counts.refreshToken += 1;
       const refreshToken = form.get("refresh_token") ?? "";
       const grant = refreshTokens.get(refreshToken);
       refreshTokens.delete(refreshToken);
-      if (!grant || grant.mode !== mode || grant.clientId !== client.clientId) {
+      if (
+        controls.refuseRefresh ||
+        !grant ||
+        grant.mode !== mode ||
+        grant.clientId !== client.clientId
+      ) {
         throw new OAuthError(400, "invalid_grant");
       }
       return issue(grant);
@@ -337,6 +377,8 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
   async function revoke(request: IncomingMessage): Promise<void> {
     const form = await readForm(request);
     const client = authenticateClient(request, form);
+    counts.revocation += 1;
+    await options.beforeRevoke?.();
     const value = form.get("token") ?? "";
     for (const tokens of [accessTokens, refreshTokens]) {
       if (tokens.get(value)?.clientId === client.clientId) tokens.delete(value);
@@ -347,16 +389,37 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     /** The resource address of a mode, the address a Connection names. */
     resourceOf,
     /** The value of `WWW-Authenticate` that a request of a mode without a valid token gets. */
-    challengeOf: (mode: SampleOAuthMode) =>
-      `Bearer resource_metadata="${resourceMetadataUrlOf(mode)}", scope="${SAMPLE_OAUTH_SCOPE}"`,
+    challengeOf: (mode: SampleOAuthMode) => {
+      const metadata =
+        controls.challengeMetadataBase === undefined
+          ? resourceMetadataUrlOf(mode)
+          : `${controls.challengeMetadataBase}/.well-known/oauth-protected-resource/${mode}/mcp`;
+      return `Bearer resource_metadata="${metadata}", scope="${SAMPLE_OAUTH_SCOPE}"`;
+    },
     /** Whether a bearer token is one this server issued for the mode's resource. */
     accepts(mode: SampleOAuthMode, bearer: string | undefined): boolean {
       if (bearer === undefined) return false;
       const grant = accessTokens.get(bearer);
       return grant !== undefined && grant.mode === mode && grant.expiresAt > Date.now();
     },
+    /**
+     * The value of `WWW-Authenticate` of a 403 for a token that lacks the required scope, or
+     * nothing where it has every scope the endpoints insist on.
+     */
+    scopeRefusalOf(mode: SampleOAuthMode, bearer: string): string | undefined {
+      const required = controls.requiredScope;
+      const granted = accessTokens.get(bearer)?.scope.split(" ") ?? [];
+      if (required === undefined || granted.includes(required)) return undefined;
+      return `Bearer error="insufficient_scope", scope="${SAMPLE_OAUTH_SCOPE} ${required}", resource_metadata="${resourceMetadataUrlOf(mode)}"`;
+    },
     /** How many tokens are live, for tests of a revocation. */
     liveTokenCount: () => accessTokens.size + refreshTokens.size,
+    /** What a test may switch while the server runs. */
+    controls,
+    /** Ends every access token at once, as a provider does that rotated its keys. */
+    expireAccessTokens: () => accessTokens.clear(),
+    /** How many token and revocation requests were answered, whatever their outcome. */
+    counts: (): SampleOAuthCounts => ({ ...counts }),
     /**
      * Answers a request this server serves and says so; leaves every other one.
      * The MCP endpoints of the modes stay with the caller.

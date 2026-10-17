@@ -72,6 +72,8 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "connection.discovered": "Read the operations of a Connection",
   "connection.discovery_failed": "Connection discovery failed",
   "connection.binding_connected": "Signed in to the outside system of a Connection",
+  "connection.binding_needs_reconnect": "The outside system of a Connection refused its sign-in",
+  "connection.binding_revoked": "Ended the sign-in of a Connection",
   "connection.oauth_client_registered": "Registered a sign-in client for a Connection",
   "connection.oauth_refused": "Refused a sign-in for a Connection",
   "conversation.created": "Started a conversation",

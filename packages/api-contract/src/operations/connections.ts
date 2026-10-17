@@ -6,6 +6,7 @@ import {
   CONNECTION_NAME_PATTERN,
   CONNECTION_OAUTH_REGISTRATIONS,
   CONNECTION_OPERATION_STATUSES,
+  CONNECTION_PROVIDER_REVOCATIONS,
   CONNECTION_SECRET_STATES,
   CONNECTOR_TEST_STATUSES,
   OPERATION_EFFECTS
@@ -135,6 +136,15 @@ export const connectionOAuthStartSchema = z.object({
   providerHost: z.string(),
   scopes: z.array(z.string()),
   expiresAt: timestampSchema
+});
+
+/**
+ * What Disconnect answers: the sign-in ended on the instance, and what the provider said to
+ * the revocation of its grant.
+ */
+export const connectionDisconnectSchema = z.object({
+  state: z.literal("revoked"),
+  providerRevocation: z.enum(CONNECTION_PROVIDER_REVOCATIONS)
 });
 
 /**
@@ -282,11 +292,12 @@ export const connectionOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  // Two segments after `/connections/`, so no Connection's name stands in for it.
+  // One callback per Connection: a code sent back for one Connection is never taken for
+  // another's sign-in.
   "connections.oauth_complete": defineRegisteredOperation({
     id: "connections.oauth_complete",
     method: "GET",
-    path: "/api/v1/connections/oauth/callback",
+    path: "/api/v1/connections/:name/oauth/callback",
     summary:
       "Where the provider sends the browser back after a sign-in. Answers a redirect to the instance's page, never the code or a token",
     tag: "Connections",
@@ -301,6 +312,21 @@ export const connectionOperations = {
     query: connectionOAuthCallbackQuerySchema,
     response: redirect(),
     errors: ["CONFLICT"],
+    rateClass: "write"
+  }),
+  "connections.disconnect": defineRegisteredOperation({
+    id: "connections.disconnect",
+    method: "POST",
+    path: "/api/v1/connections/:name/disconnect",
+    summary:
+      "End the shared OAuth sign-in of one Connection. Its tokens are deleted, then the provider is asked to revoke the grant",
+    tag: "Connections",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    response: json(connectionDisconnectSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
   // A path of its own: `agent-tools` would be a valid Connection name under `/connections/`.

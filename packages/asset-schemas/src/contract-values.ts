@@ -639,6 +639,13 @@ export type ConnectionBindingState = (typeof CONNECTION_BINDING_STATES)[number];
 export const CONNECTION_OAUTH_REGISTRATIONS = ["dcr", "preregistered"] as const;
 export type ConnectionOAuthRegistration = (typeof CONNECTION_OAUTH_REGISTRATIONS)[number];
 
+/**
+ * What the provider answered to the revocation of a sign-in (RFC 7009): it confirmed, it
+ * failed or was not reached, or it lists no revocation endpoint and was sent nothing.
+ */
+export const CONNECTION_PROVIDER_REVOCATIONS = ["confirmed", "failed", "not_offered"] as const;
+export type ConnectionProviderRevocation = (typeof CONNECTION_PROVIDER_REVOCATIONS)[number];
+
 export const CONNECTION_ORIGINS = ["release", "runtime"] as const;
 export type ConnectionOrigin = (typeof CONNECTION_ORIGINS)[number];
 

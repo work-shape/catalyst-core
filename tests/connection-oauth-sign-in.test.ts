@@ -2,12 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { captureProcessOutput, dumpDatabaseText, findLeak } from "./support/test-connector";
 import {
-  CALLBACK_PATH,
-  REDIRECT_URI,
   REGISTERED_CLIENT_ID,
+  callbackPathOf,
   countRows,
   createOAuthWorld,
   landingOf,
+  redirectUriOf,
   type OAuthWorld
 } from "./support/oauth-sign-in-world";
 import { withTestSql } from "./support/test-sql";
@@ -93,7 +93,7 @@ describe("a shared OAuth sign-in", () => {
     expect(asked.get("code_challenge_method")).toBe("S256");
     expect(asked.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/u);
     expect(asked.get("resource")).toBe(`${world.sample}/dcr/mcp`);
-    expect(asked.get("redirect_uri")).toBe(REDIRECT_URI);
+    expect(asked.get("redirect_uri")).toBe(redirectUriOf("dcr"));
     expect(landed.status).toBe(303);
     expect(landingOf(landed.location)).toEqual({ signIn: "connected", connection: "dcr" });
 
@@ -102,7 +102,7 @@ describe("a shared OAuth sign-in", () => {
     expect(read.binding).toMatchObject({ state: "connected", scopes: ["sample.read"] });
     expect(read.oauth).toEqual({
       registration: "dcr",
-      redirectUri: REDIRECT_URI,
+      redirectUri: redirectUriOf("dcr"),
       providerHost: new URL(world.sample).host
     });
     expect(
@@ -122,7 +122,7 @@ describe("a shared OAuth sign-in", () => {
     expect(await test("registered", alice)).toBe("ready");
     expect((await detail("registered", alice)).oauth).toEqual({
       registration: "preregistered",
-      redirectUri: REDIRECT_URI
+      redirectUri: redirectUriOf("registered")
     });
     expect(await countRows("connection_bindings")).toBe(2);
   });
@@ -156,7 +156,8 @@ describe("a shared OAuth sign-in", () => {
     output = undefined;
     // Requests are logged, the callback's never: its address holds the code and the state.
     expect(logged).toContain("/oauth/start");
-    expect(logged).not.toContain(CALLBACK_PATH);
+    expect(logged).not.toContain(callbackPathOf("dcr"));
+    expect(logged).not.toContain(callbackPathOf("registered"));
     const database = await dumpDatabaseText();
     const everything = [...world.secrets, world.clientSecret];
     expect(everything.length).toBeGreaterThan(6);

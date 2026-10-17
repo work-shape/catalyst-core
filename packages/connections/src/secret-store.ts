@@ -15,6 +15,7 @@ import {
   createConnectionSecretHandle,
   signInSecretSubject,
   type ClientInstanceId,
+  type ConnectionBindingRecord,
   type ConnectionCredentialResolver,
   type ConnectionsStore,
   type SecretBinding,
@@ -22,7 +23,7 @@ import {
   type SecretStore,
   type StoredSecretRecord
 } from "@work-shape/catalyst-core";
-import { z } from "zod";
+import { readTokenSet, type StoredTokenSet } from "./oauth/token-set";
 
 // The Secret Store: AES-256-GCM over one secret per Connection and subject. A fresh random
 // nonce for every encryption, and associated data that binds a row to its instance, its
@@ -204,7 +205,7 @@ export function secretAssociatedData(input: {
   return parts.join("|");
 }
 
-interface SecretStoreOptions {
+export interface SecretStoreOptions {
   clientInstanceId: ClientInstanceId;
   keyring: SecretKeyring;
   /** The rows. Inside a transaction, the store bound to it. */
@@ -329,8 +330,40 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
   };
 }
 
-/** The member of a token set the resolver hands out. The rest is the refresh's to read. */
-const tokenSetSchema = z.object({ accessToken: z.string().min(1) });
+/**
+ * The token set a binding names, opened for the origin it was made for. Throws
+ * `connection_not_connected` where its row is gone or was set for another origin, and
+ * `secret_unreadable` where it does not open or is no token set.
+ */
+export async function openSignInTokenSet(
+  options: SecretStoreOptions,
+  binding: Pick<ConnectionBindingRecord, "connectionAssetId" | "subject" | "secretHandle"> & {
+    origin: string;
+  }
+): Promise<StoredTokenSet> {
+  const { clientInstanceId, store } = options;
+  const subject = signInSecretSubject(binding.subject);
+  const record = await store.getSecret({ clientInstanceId, handle: binding.secretHandle });
+  if (!record || record.origin !== binding.origin) {
+    throw new AppError(
+      "CONFLICT",
+      `${CREDENTIAL_REFUSALS.notConnected}: the Connection has no sign-in for its address`,
+      { reason: CREDENTIAL_REFUSALS.notConnected }
+    );
+  }
+  const opened =
+    record.connectionAssetId === binding.connectionAssetId && record.subject === subject
+      ? openRecord(options, record, { connectionAssetId: binding.connectionAssetId, subject })
+      : undefined;
+  if (!opened) throw unreadable();
+  try {
+    const tokenSet = readTokenSet(opened.toString("utf8"));
+    if (!tokenSet) throw unreadable();
+    return tokenSet;
+  } finally {
+    opened.fill(0);
+  }
+}
 
 /**
  * The connector auth component's way to a value. It reads one row by its handle and opens it
@@ -408,21 +441,8 @@ export function createConnectionCredentialResolver(
           { reason: CREDENTIAL_REFUSALS.notConnected }
         );
       }
-      const opened = await open(
-        {
-          handle: binding.secretHandle,
-          binding: { connectionAssetId, subject: signInSecretSubject(binding.subject) },
-          origin
-        },
-        CREDENTIAL_REFUSALS.notConnected
-      );
-      try {
-        const tokenSet = tokenSetSchema.safeParse(parseJson(opened.toString("utf8")));
-        if (!tokenSet.success) throw unreadable();
-        return tokenSet.data.accessToken;
-      } finally {
-        opened.fill(0);
-      }
+      const tokenSet = await openSignInTokenSet(options, { ...binding, origin });
+      return tokenSet.accessToken;
     }
   };
 }
@@ -433,13 +453,4 @@ function unreadable(): AppError {
     `${CREDENTIAL_REFUSALS.unreadable}: the stored secret cannot be opened with the configured keys`,
     { reason: CREDENTIAL_REFUSALS.unreadable }
   );
-}
-
-/** JSON of a token set, or nothing where the text is none. Its text is never repeated. */
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
 }

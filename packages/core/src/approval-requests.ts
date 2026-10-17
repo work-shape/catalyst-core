@@ -9,7 +9,7 @@ import type { StorePage } from "./paging";
 import type { ClientInstanceId, ConversationId } from "./ids";
 import type { AgentRunWriteFence, AuthenticatedUser } from "./identity";
 import type { JsonObject } from "./json";
-import type { ActorAccess, Permission, PlatformAction } from "./permissions";
+import type { AccessResource, ActorAccess, Permission, PlatformAction } from "./permissions";
 import type { JobsStore } from "./jobs";
 import type { OperationRunStore } from "./operation-runs";
 import type { ConfigAssetStore } from "./config-assets";
@@ -80,6 +80,19 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
   kind: string;
   /** The right of who decides a request of this kind and sees it among the requests to decide. */
   requiredPermission: Permission | PlatformAction;
+  /**
+   * The asset a request is about, for a kind whose right is held on that asset: the right is
+   * then asked on it, as the evaluator resolves it there (a grant on the asset or on a scope that covers it). Left
+   * out, it is asked of the instance.
+   */
+  resourceOf?(payload: TPayload): AccessResource;
+  /**
+   * The subjects of the requests one holder may review, where the right on the instance does
+   * not cover every asset for them (they hold it on some assets only, or are denied it on
+   * some): what `payload.subject` holds of each request `resourceOf` admits them to. Lists and
+   * counts read it, so they show what a read of each request shows. Only with `resourceOf`.
+   */
+  reviewableSubjects?(access: ActorAccess): Promise<readonly JsonObject[]>;
   validate(payload: JsonObject): TPayload;
   /** Proposed new content only; the workflow adds the request summary. */
   checkContent?(payload: TPayload): string;
@@ -178,6 +191,18 @@ export interface ApprovalRequestListFilter {
    * for the paths of the instance itself.
    */
   reader?: { userId: string; addressedKinds: readonly string[] };
+  /**
+   * Beside `kinds`: requests of these kinds, addressed to nobody, whose `payload.subject`
+   * holds one of the subjects with its values. The kinds a reader may review on some assets
+   * only.
+   */
+  subjectKinds?: readonly ApprovalSubjectKind[];
+}
+
+/** The requests of one kind a reader may review: those about one of the subjects. */
+export interface ApprovalSubjectKind {
+  kind: string;
+  subjects: readonly JsonObject[];
 }
 
 export interface ApprovalRequestStore {
@@ -214,7 +239,7 @@ export interface ApprovalRequestStore {
   /** How many requests `listApprovalRequests` answers for the same filter, read to its end. */
   countApprovalRequests(input: ApprovalRequestListFilter): Promise<number>;
   countPendingApprovalRequests(
-    input: Pick<ApprovalRequestListFilter, "clientInstanceId" | "kinds" | "reader">
+    input: Pick<ApprovalRequestListFilter, "clientInstanceId" | "kinds" | "reader" | "subjectKinds">
   ): Promise<number>;
   /** How many requests of these kinds one person made: those still pending, and all of them. */
   countOwnApprovalRequests(input: {

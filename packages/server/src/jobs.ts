@@ -299,7 +299,9 @@ export function createChatServerJobs(
   handlers.push(...operationRuns.handlers);
   schedules.push(...operationRuns.schedules);
 
-  handlers.push(...createConnectionDiscoveryJobs(options).handlers);
+  const connectionJobs = createConnectionDiscoveryJobs(options);
+  handlers.push(...connectionJobs.handlers);
+  schedules.push(...connectionJobs.schedules);
 
   const cleanup = options.executionWorkspaceCleanup;
   if (cleanup) {

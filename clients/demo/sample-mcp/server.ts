@@ -194,6 +194,14 @@ export function createSampleMcpServer(options: {
       json(response, 401, { error: "Unauthorized." });
       return;
     }
+    const scopeRefusal =
+      endpoint.signIn === undefined ? undefined : oauth?.scopeRefusalOf(endpoint.signIn, token);
+    if (scopeRefusal !== undefined) {
+      response.setHeader("WWW-Authenticate", scopeRefusal);
+      options.log?.(requestLine(path, 403));
+      json(response, 403, { error: "Forbidden." });
+      return;
+    }
     const body = await readBody(request);
     response.once("finish", () => options.log?.(requestLine(path, response.statusCode, body)));
     if (response.destroyed) return;

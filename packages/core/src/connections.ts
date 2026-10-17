@@ -414,7 +414,18 @@ export interface ConnectionCredentialResolver {
    * refused the sign-in, and `secret_unreadable` where the token set cannot be opened. It
    * never falls back to the Connection's own secret.
    */
-  resolveSignIn(input: { connectionAssetId: string; origin: string }): Promise<string>;
+  resolveSignIn(input: {
+    connectionAssetId: string;
+    origin: string;
+    /**
+     * The access token the outside system just refused with a 401. Where it is still the
+     * stored one, the sign-in is refreshed before a token is answered; where another call
+     * refreshed meanwhile, the newer one is answered.
+     */
+    refused?: string;
+    /** Ends a wait for another process's refresh, as the call that waits ends. */
+    signal?: AbortSignal;
+  }): Promise<string>;
 }
 
 export { CONNECTION_HEALTH_STATES, type ConnectionHealth };

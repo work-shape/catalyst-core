@@ -4,7 +4,8 @@ import {
   type ConfigAssetRevisionOrigin,
   type FileSet,
   type AssetRepoWrite,
-  type ConfigAssetStore
+  type ConfigAssetStore,
+  type JsonObject
 } from "@work-shape/catalyst-core";
 import { configValuesEqual } from "../asset-kinds/shared";
 import { afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
@@ -39,7 +40,11 @@ type Batch = Omit<
 >;
 interface UpsertHost {
   requireTellableChange(stored: StoredAssets, written: (set: AssetSet) => AssetSet): void;
-  apply(batch: Batch): ReturnType<ConfigAssetStore["applyConfigAssetMutations"]>;
+  /** `write` is what the asset held and holds after, for the kind's part of the write. */
+  apply(
+    batch: Batch,
+    write: { previous: unknown; config: JsonObject | undefined }
+  ): ReturnType<ConfigAssetStore["applyConfigAssetMutations"]>;
 }
 
 export type AssetUpsert = {
@@ -165,21 +170,24 @@ export async function upsertAsset(
   });
   let pageLinked = false;
   const { pageLink } = write;
-  const result = await host.apply({
-    ...(pageLink
-      ? {
-          underLock: async () => {
-            pageLinked = await pageLink();
+  const result = await host.apply(
+    {
+      ...(pageLink
+        ? {
+            underLock: async () => {
+              pageLinked = await pageLink();
+            }
           }
-        }
-      : {}),
-    baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
-    // The default is set for the first asset only, so the instance has none before.
-    ...(setsDefault ? { baseDefaultAgentName: null } : {}),
-    ...placement,
-    ...(write.origin ? { origin: write.origin } : {}),
-    mutations
-  });
+        : {}),
+      baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
+      // The default is set for the first asset only, so the instance has none before.
+      ...(setsDefault ? { baseDefaultAgentName: null } : {}),
+      ...placement,
+      ...(write.origin ? { origin: write.origin } : {}),
+      mutations
+    },
+    { previous: current, config: toJsonObject(next) }
+  );
   // The revision this write was given. The asset is not read again: by now another write
   // may have given it a later one, which this caller did not make and must not be told as
   // the revision of its own content.

@@ -1,13 +1,42 @@
-import type { ConnectionBindingState } from "@work-shape/catalyst-asset-schemas";
+import {
+  CONNECTION_PROVIDER_REVOCATIONS,
+  type ConnectionBindingState,
+  type ConnectionProviderRevocation
+} from "@work-shape/catalyst-asset-schemas";
 import type { ClientInstanceId } from "./ids";
 
-export type { ConnectionBindingState };
+export { CONNECTION_PROVIDER_REVOCATIONS };
+export type { ConnectionBindingState, ConnectionProviderRevocation };
 
 // A Connection's sign-in at its outside system: the binding that says whose account the
 // Connection acts through and in which state that sign-in is, and the short-lived setup
 // session of a sign-in that is under way. Both are runtime state, never an asset revision,
 // and neither holds a token: the token set is a secret of the Secret Store that the binding
 // names by handle and version.
+
+/**
+ * Why a binding was ended by the platform or a person: Disconnect, the Connection deleted,
+ * moved to another origin, or set to another auth scheme. Each is the `reason` of
+ * `connection.binding_revoked` and the binding's `stateReason`.
+ */
+export const CONNECTION_BINDING_END_REASONS = [
+  "disconnect",
+  "deleted",
+  "origin_changed",
+  "scheme_changed"
+] as const;
+export type ConnectionBindingEndReason = (typeof CONNECTION_BINDING_END_REASONS)[number];
+
+/**
+ * Why a refresh or a call refused the sign-in itself, each the `reason` of
+ * `connection.binding_needs_reconnect`.
+ */
+export const CONNECTION_BINDING_REFUSALS = [
+  "invalid_grant",
+  "invalid_client",
+  "insufficient_scope"
+] as const;
+export type ConnectionBindingRefusal = (typeof CONNECTION_BINDING_REFUSALS)[number];
 
 /** How the binding was obtained. `static` is reserved for DT-3 and CS-9a. */
 export type ConnectionBindingScheme = "oauth";
@@ -147,6 +176,37 @@ export interface ConnectionBindingsStore {
   ): Promise<ConnectionBindingRecord | undefined>;
   /** Gives the lease back. `false` where `owner` does not hold it, because it ran out. */
   releaseConnectionBindingLease(input: ConnectionBindingKey & { owner: string }): Promise<boolean>;
+  /**
+   * Writes a refresh: the token set's new secret version, its access expiry and the granted
+   * scopes, and `lastRefreshedAt` now. Only while the binding is connected, at the row version
+   * the refresher read, and while `owner` holds the lease. Answers the changed binding, or
+   * `undefined` and changes nothing.
+   */
+  refreshConnectionBinding(
+    input: ConnectionBindingKey & {
+      owner: string;
+      expectedRowVersion: number;
+      secretVersion: number;
+      grantedScopes: readonly string[];
+      /** `null` where the new access token has no expiry. */
+      accessExpiresAt: string | null;
+    }
+  ): Promise<ConnectionBindingRecord | undefined>;
+  /**
+   * Notes that a call used the binding today, by the database's date. It changes no row
+   * version, so a refresh under way is not made to fail; a binding noted today is left alone.
+   */
+  noteConnectionBindingUse(key: ConnectionBindingKey): Promise<void>;
+  /**
+   * The connected `oauth` bindings of one subject whose last use, last refresh and sign-in
+   * are all older than `idleMs`, the oldest first. The keep-alive asks for `shared` only.
+   */
+  listIdleConnectionBindings(input: {
+    clientInstanceId: ClientInstanceId;
+    subject: string;
+    idleMs: number;
+    limit: number;
+  }): Promise<ConnectionBindingRecord[]>;
   /** Stores a new session that expires `ttlMs` from now. */
   createConnectionSetupSession(
     input: Omit<ConnectionSetupSessionRecord, "createdAt" | "expiresAt"> & { ttlMs: number }

@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type {
   ConnectionBindingKey,
   ConnectionBindingRecord,
@@ -172,6 +172,76 @@ export function createPostgresConnectionBindingOperations(
         .where(and(bindingOf(key), eq(connectionBindings.leaseOwner, owner)))
         .returning({ subject: connectionBindings.subject });
       return released.length > 0;
+    },
+    async refreshConnectionBinding({
+      owner,
+      expectedRowVersion,
+      secretVersion,
+      grantedScopes,
+      accessExpiresAt,
+      ...key
+    }) {
+      const [row] = await db
+        .update(connectionBindings)
+        .set({
+          secretVersion,
+          grantedScopes: [...grantedScopes],
+          accessExpiresAt: accessExpiresAt === null ? null : new Date(accessExpiresAt),
+          lastRefreshedAt: statementTime,
+          rowVersion: sql`${connectionBindings.rowVersion} + 1`
+        })
+        .where(
+          and(
+            bindingOf(key),
+            eq(connectionBindings.state, "connected"),
+            eq(connectionBindings.rowVersion, expectedRowVersion),
+            eq(connectionBindings.leaseOwner, owner)
+          )
+        )
+        .returning();
+      return row ? mapBinding(row) : undefined;
+    },
+    async noteConnectionBindingUse(key) {
+      // A day is the database's, as every other time of the row.
+      await db
+        .update(connectionBindings)
+        .set({ lastUsedOn: sql`current_date` })
+        .where(
+          and(
+            bindingOf(key),
+            or(
+              isNull(connectionBindings.lastUsedOn),
+              lt(connectionBindings.lastUsedOn, sql`current_date`)
+            )
+          )
+        );
+    },
+    async listIdleConnectionBindings({ clientInstanceId, subject, idleMs, limit }) {
+      // The latest of the three moments a binding was last kept alive. A day of use counts
+      // from its start, so a binding used today is idle for no keep-alive.
+      const lastAlive = sql`greatest(
+        ${connectionBindings.connectedAt},
+        coalesce(${connectionBindings.lastRefreshedAt}, ${connectionBindings.connectedAt}),
+        coalesce(${connectionBindings.lastUsedOn}::timestamptz, ${connectionBindings.connectedAt})
+      )`;
+      const rows = await db
+        .select()
+        .from(connectionBindings)
+        .where(
+          and(
+            eq(connectionBindings.clientInstanceId, clientInstanceId),
+            eq(connectionBindings.subject, subject),
+            eq(connectionBindings.state, "connected"),
+            eq(connectionBindings.scheme, "oauth"),
+            lte(
+              lastAlive,
+              sql`clock_timestamp() - make_interval(secs => ${idleMs}::double precision / 1000)`
+            )
+          )
+        )
+        .orderBy(asc(lastAlive))
+        .limit(limit);
+      return rows.map(mapBinding);
     },
     async createConnectionSetupSession({ ttlMs, verifier, ...session }) {
       const [row] = await db
