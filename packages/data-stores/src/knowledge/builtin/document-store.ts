@@ -15,6 +15,7 @@ import {
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import { databaseFailureError } from "../../failures";
 import type { DataStoreRuntime } from "../../runtime";
+import { createDocumentRemoval } from "./remove-documents";
 
 // The documents and contents of a Knowledge Base on the built-in backend, as its index job and
 // its page reach them, in the store it owns, as the platform's role. A write locks the one
@@ -117,6 +118,7 @@ export function createBuiltinDocumentStore(
   }
 
   return {
+    ...createDocumentRemoval(runtime, target),
     readContent(contentSha256, signal) {
       return inStore("Reading the content", KNOWLEDGE_DOCUMENTS_TIMEOUT_MS, signal, async (sql) => {
         const [row] = z.array(contentRow).parse(

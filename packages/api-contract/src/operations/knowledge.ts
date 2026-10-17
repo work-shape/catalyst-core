@@ -196,6 +196,20 @@ export const knowledgeOperations = {
     errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
     rateClass: "read"
   }),
+  "knowledge_bases.remove_documents": defineRegisteredOperation({
+    ...BASE,
+    id: "knowledge_bases.remove_documents",
+    method: "POST",
+    path: "/api/v1/knowledge-bases/:knowledgeBase/documents/remove",
+    summary:
+      "Remove documents from search immediately and queue deletion of their unshared content and files",
+    scope: "data_store_rows:write",
+    effect: "changing",
+    body: z.strictObject({ documentIds: z.array(z.string().min(1).max(200)).min(1).max(100) }),
+    response: json(z.object({ removed: z.number().int() })),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED", "TIMEOUT"],
+    rateClass: "write"
+  }),
   "knowledge_bases.retry_documents": defineRegisteredOperation({
     ...BASE,
     id: "knowledge_bases.retry_documents",

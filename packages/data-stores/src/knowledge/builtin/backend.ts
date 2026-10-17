@@ -5,7 +5,7 @@ import {
   type KnowledgeBackend,
   type KnowledgeBackendStores
 } from "@work-shape/catalyst-core";
-import { enqueueStoreDrop, enqueueStoreJob } from "../../jobs";
+import { enqueueStoreJob } from "../../jobs";
 import type { DataStoreRuntime } from "../../runtime";
 import { semanticSearchIssue, type KnowledgeEmbedding } from "../definition";
 import { createBuiltinDocumentStore } from "./document-store";
@@ -130,7 +130,7 @@ export function createBuiltinKnowledgeBackend(
           updatedAt: now
         });
       }
-      await enqueueStoreDrop(stores, record);
+      // The document removal job deletes files and extraction results before queuing the drop.
     },
 
     addDocuments(target, input, signal) {

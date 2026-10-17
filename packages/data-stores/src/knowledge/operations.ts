@@ -28,6 +28,7 @@ import {
   type DataStoreKnowledgeDefinition,
   type KnowledgeBaseDefinition
 } from "./definition";
+import { removeDocumentsOperation } from "./removal";
 import { addFilesOperation } from "./add-files";
 import { listDocumentsOperation, retryDocumentsOperation } from "./document-operations";
 import { checkKnowledgeBase, type KnowledgeRuntime } from "./runtime";
@@ -339,6 +340,10 @@ const OPERATIONS = {
     const { files } = runtime;
     const target = documentsTargetOf(runtime, knowledgeBase);
     return files && target && retryDocumentsOperation(runtime, files, target);
+  },
+  remove_documents: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) => {
+    const target = documentsTargetOf(runtime, knowledgeBase);
+    return runtime.files && target && removeDocumentsOperation(runtime, target);
   },
   state: stateOperation,
   check: checkOperation

@@ -27,6 +27,7 @@ import {
   semanticSearchIssue,
   type KnowledgeEmbedding
 } from "./definition";
+import { createKnowledgeRemovalJobs, enqueueKnowledgeRemoval } from "./removal";
 import { createKnowledgeFileCleanupJobs } from "./file-cleanup";
 import { createKnowledgeIndexJobHandler } from "./index-job";
 import { createKnowledgeOperationSource, createKnowledgeToolSource } from "./operations";
@@ -162,19 +163,23 @@ export function createKnowledgeBases(input: {
       const definition = knowledgeBaseDefinitionSchema.safeParse(published);
       // A Knowledge Base never published was never let to read anything.
       if (definition.success) {
-        await runtime.backend.retire(stores, knowledgeTargetOf(definition.data, assetId));
+        const target = knowledgeTargetOf(definition.data, assetId);
+        await runtime.backend.retire(stores, target);
+        if (target.backend === "builtin") await enqueueKnowledgeRemoval(stores, runtime, target);
       }
     },
     operationSource: (files) =>
       createKnowledgeOperationSource(files ? { ...runtime, files } : runtime),
     fileJobs: (files, auditRecorder) => {
       const cleanup = createKnowledgeFileCleanupJobs(runtime, files);
+      const removal = createKnowledgeRemovalJobs(runtime, files, auditRecorder);
       return {
         handlers: [
           ...cleanup.handlers,
+          ...removal.handlers,
           ...(files ? [createKnowledgeIndexJobHandler(runtime, { files, auditRecorder })] : [])
         ],
-        retries: cleanup.retries
+        retries: [...cleanup.retries, ...removal.retries]
       };
     },
     toolSource: createKnowledgeToolSource(runtime)

@@ -607,6 +607,7 @@ describe("the modules workflows and dataStores", () => {
     expect(knowledgeModule).toEqual({
       ...nothing,
       name: "knowledge",
+      jobKinds: ["knowledge_base.remove_documents"],
       requires: ["dataStores"],
       kinds: [KNOWLEDGE_BASE_ASSET_KIND],
       operations: [
@@ -615,7 +616,8 @@ describe("the modules workflows and dataStores", () => {
         "knowledge_bases.query",
         "knowledge_bases.add_files",
         "knowledge_bases.list_documents",
-        "knowledge_bases.retry_documents"
+        "knowledge_bases.retry_documents",
+        "knowledge_bases.remove_documents"
       ]
     });
     // The kind of a Workflow, its runs and the job that executes their steps.

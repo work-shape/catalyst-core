@@ -40,7 +40,7 @@ import type { KnowledgeRuntime } from "./runtime";
 // An object is never shared: every copy has its own key, so removing one copy cannot take bytes
 // another copy, or a Conversation's file, still holds. Two documents of the same bytes keep two
 // objects; extraction still runs once per content (`catalyst_kb.contents`). Removing the
-// objects of a deleted Knowledge Base is its retirement's (KB-5e).
+// objects of a deleted Knowledge Base is its retirement's (`removal.ts`).
 
 /** The kind of the job that removes the copies a call of `add_files` left without documents. */
 const KNOWLEDGE_FILE_CLEANUP_JOB_KIND = "knowledge_base.clean_files";

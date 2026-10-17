@@ -222,15 +222,35 @@ export function defineKnowledgeExtractHandler(input: {
         readFile: () =>
           control.transaction((stores) => readOwnedCopy(stores, objects, clientInstanceId, payload))
       });
-      await storeKnowledgeExtraction(objects, payload, result);
-      await control.transaction((stores) =>
-        enqueueKnowledgeIndex(stores.jobs, indexPayloadOf(payload), { clientInstanceId })
-      );
+      await control.transaction(async (stores) => {
+        const file = await stores.files.getManagedFile({
+          clientInstanceId,
+          fileId: asManagedFileId(payload.fileId),
+          lock: true
+        });
+        if (file?.owner?.kind !== "knowledge_base" || file.owner.id !== payload.knowledgeBaseId) {
+          // Indexing selects a live document again. A surviving document with the same hash
+          // must not stay pending because the removed copy happened to be the extractor's.
+          await enqueueKnowledgeIndex(stores.jobs, indexPayloadOf(payload), { clientInstanceId });
+          return;
+        }
+        await storeKnowledgeExtraction(objects, payload, result);
+        await enqueueKnowledgeIndex(stores.jobs, indexPayloadOf(payload), { clientInstanceId });
+      });
     },
     async onExhausted(job, stores) {
       // Without the stored failure the index job would ask for the extraction again, so the
       // index job is queued only once the failure is stored. Where storing fails, the content
       // stays `pending` and Retry asks again.
+      const file = await stores.files.getManagedFile({
+        clientInstanceId,
+        fileId: asManagedFileId(job.payload.fileId),
+        lock: true
+      });
+      if (file?.owner?.kind !== "knowledge_base" || file.owner.id !== job.payload.knowledgeBaseId) {
+        await enqueueKnowledgeIndex(stores.jobs, indexPayloadOf(job.payload), { clientInstanceId });
+        return;
+      }
       try {
         await storeKnowledgeExtraction(objects, job.payload, {
           status: "failed",

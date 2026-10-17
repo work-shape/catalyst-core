@@ -1,3 +1,4 @@
+import { KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND } from "./knowledge/removal";
 import type { SecretKeyring } from "@work-shape/catalyst-connections";
 import {
   ASSET_OWNER_KINDS,
@@ -104,8 +105,10 @@ export const knowledgeModule = defineModule({
     "knowledge_bases.query",
     "knowledge_bases.add_files",
     "knowledge_bases.list_documents",
-    "knowledge_bases.retry_documents"
-  ]
+    "knowledge_bases.retry_documents",
+    "knowledge_bases.remove_documents"
+  ],
+  jobKinds: [KNOWLEDGE_REMOVE_DOCUMENTS_JOB_KIND]
 });
 
 /** What the Data Stores of one process are made of, for the assembly to put in place. */

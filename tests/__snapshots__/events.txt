@@ -75,6 +75,9 @@
 {"name":"guardrail.unpublished","legacy":false,"audited":true,"phases":["after"]}
 {"name":"job.retried","legacy":true,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.content_indexed","legacy":false,"audited":true,"phases":["after"]}
+{"name":"knowledge_base.deleted","legacy":false,"audited":true,"phases":["after"]}
+{"name":"knowledge_base.documents_purged","legacy":false,"audited":true,"phases":["after"]}
+{"name":"knowledge_base.documents_removed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.files_added","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.cleared","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.switched_on","legacy":false,"audited":true,"phases":["after"]}

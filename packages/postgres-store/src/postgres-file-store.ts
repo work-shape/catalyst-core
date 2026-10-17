@@ -138,8 +138,9 @@ class PostgresPlatformFileStore implements PlatformFileStore {
   async getManagedFile(input: {
     clientInstanceId: ClientInstanceId;
     fileId: ManagedFileId;
+    lock?: boolean;
   }): Promise<ManagedFileRecord | undefined> {
-    const [row] = await this.db
+    const query = this.db
       .select()
       .from(managedFiles)
       .where(
@@ -150,6 +151,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
         )
       )
       .limit(1);
+    const [row] = await (input.lock ? query.for("update") : query);
     return row ? mapManagedFile(row) : undefined;
   }
 

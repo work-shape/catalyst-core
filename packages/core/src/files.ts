@@ -535,6 +535,8 @@ export interface ManagedFileStore {
   getManagedFile(input: {
     clientInstanceId: ClientInstanceId;
     fileId: ManagedFileId;
+    /** Holds the row until the surrounding transaction ends, for extraction versus deletion. */
+    lock?: boolean;
   }): Promise<ManagedFileRecord | undefined>;
   /**
    * The files an owner holds among `fileIds`, deleted ones left out, in one read. For a list

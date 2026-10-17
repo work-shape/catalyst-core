@@ -57,7 +57,8 @@ const KNOWLEDGE_BASE_NOT_AVAILABLE = "Knowledge Base is not available";
  */
 const knowledgeRoutes: RouteRegistration = (routes) => {
   const bind = (
-    part: "query" | "state" | "check" | "add_files" | "list_documents" | "retry",
+    part:
+      "query" | "state" | "check" | "add_files" | "list_documents" | "retry" | "remove_documents",
     right: string
   ) => ({
     target: ({ knowledgeBase, ...input }: { knowledgeBase: string }) => ({
@@ -86,6 +87,10 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
   routes.resourceOperation(
     apiOperations["knowledge_bases.list_documents"],
     bind("list_documents", KNOWLEDGE_BASE_ACTIONS.use)
+  );
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.remove_documents"],
+    bind("remove_documents", KNOWLEDGE_BASE_ACTIONS.write)
   );
   routes.resourceOperation(
     apiOperations["knowledge_bases.retry_documents"],

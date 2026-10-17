@@ -422,7 +422,8 @@ export function enqueueKnowledgeIndex(
   });
 }
 
-/** Queues the extraction of one content, once while one is queued or running. */
+/** Queues extraction once per content and source copy. A withdrawn source copy cannot
+ * suppress extraction from its replacement while the old attempt is still ending. */
 export function enqueueKnowledgeExtract(
   jobs: Pick<JobsStore, "enqueue">,
   payload: KnowledgeExtractJobPayload,
@@ -434,7 +435,7 @@ export function enqueueKnowledgeExtract(
     concurrencyKey: payload.knowledgeBaseId,
     dedupeKey: subjectDedupeKey(
       KNOWLEDGE_BASE_EXTRACT_JOB_KIND,
-      `${payload.knowledgeBaseId}:${payload.contentSha256}`
+      `${payload.knowledgeBaseId}:${payload.contentSha256}:${payload.fileId}`
     )
   });
 }
@@ -512,10 +513,30 @@ export interface KnowledgeRetriedDocument {
 
 /**
  * The documents and contents of a Knowledge Base that keeps documents, as its index job and
- * its operations reach them. No call locks the whole Knowledge Base: each locks at most the
- * content it writes.
+ * its operations reach them. Index writes lock one content. Removal shares the documents
+ * writer lock with adding files so shared content cannot be adopted while it is purged.
  */
 export interface KnowledgeDocumentStore {
+  /** Withdraws the named documents in one statement. Queues cleanup before commit while
+   * holding the documents lock; a rolled-back withdrawal leaves a harmless cleanup job. */
+  withdrawDocuments(
+    documentIds: readonly string[],
+    queue: () => Promise<void>,
+    signal?: AbortSignal
+  ): Promise<number>;
+  /** Deletes withdrawn documents (all documents on retirement). The callback removes their
+   * files and unshared extraction results before the rows go, under the documents lock.
+   * A failed callback rolls back the rows, so interrupted deletion can repeat safely. */
+  purgeDocuments(
+    input: { documentIds?: readonly string[] },
+    remove: (plan: {
+      fileIds: string[];
+      contentSha256s: string[];
+      documents: number;
+      chunks: number;
+    }) => Promise<void>,
+    signal?: AbortSignal
+  ): Promise<void>;
   readContent(
     contentSha256: string,
     signal?: AbortSignal

@@ -31,6 +31,27 @@ const LIVE_ONCE_AUDIT = {
   phases: ["after"]
 } as const;
 
+// Counts of the physical cleanup, shared by document removal and Knowledge Base deletion.
+const KNOWLEDGE_PURGE_AUDIT: Omit<PlatformEventDefinition, "name"> = {
+  subject: "config_asset",
+  legacy: false,
+  audited: true,
+  phases: ["after"],
+  payload: {
+    type: "object",
+    additionalProperties: false,
+    required: ["documents", "chunks", "contents", "files", "objects", "extractionResults"],
+    properties: {
+      documents: { type: "integer", minimum: 0 },
+      chunks: { type: "integer", minimum: 0 },
+      contents: { type: "integer", minimum: 0 },
+      files: { type: "integer", minimum: 0 },
+      objects: { type: "integer", minimum: 0 },
+      extractionResults: { type: "integer", minimum: 0 }
+    }
+  }
+};
+
 // Run observations remain a separate stream from platform events and audit.
 export const EVENTS = {
   "agent_run.recovered": { ...LEGACY_AUDIT, name: "agent_run.recovered", subject: "agent_run" },
@@ -470,9 +491,29 @@ export const EVENTS = {
       }
     }
   },
-  // One content of a Knowledge Base indexed, or failed with the code in `reason`. The subject
-  // is the Knowledge Base's asset; the file is one copy that holds the content. No file name,
-  // no text.
+  // Removal records ids and counts; content, titles and file names stay in the store.
+  "knowledge_base.documents_removed": {
+    name: "knowledge_base.documents_removed",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["documentIds", "documents"],
+      properties: {
+        documentIds: { type: "array", items: { type: "string" } },
+        documents: { type: "integer", minimum: 0 }
+      }
+    }
+  },
+  "knowledge_base.documents_purged": {
+    ...KNOWLEDGE_PURGE_AUDIT,
+    name: "knowledge_base.documents_purged"
+  },
+  "knowledge_base.deleted": { ...KNOWLEDGE_PURGE_AUDIT, name: "knowledge_base.deleted" },
+  // One content indexed or failed: ids, counts and a failure code, never its text or file name.
   "knowledge_base.content_indexed": {
     name: "knowledge_base.content_indexed",
     subject: "config_asset",
