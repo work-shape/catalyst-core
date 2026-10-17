@@ -1,4 +1,4 @@
-import { Check, Link } from "lucide-react";
+import { Check, Database, Link } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset } from "@work-shape/catalyst-api-client";
 import {
@@ -8,11 +8,15 @@ import {
   ConfirmDialog,
   Dialog,
   DropdownMenuCopyItem,
+  IconButton,
   InlineError,
   KeyValue,
   KeyValueList,
   PageHeader,
   PageHeaderBack,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
@@ -245,10 +249,38 @@ export function AppFrame({
  * call of it for the reader, once the instance said so; until then, and where it could not,
  * the actions are the names of the manifest.
  */
+/**
+ * Where the App's data comes from, for whoever uses it: one sentence for each Workflow or App
+ * that fills a store it reads. Plain text, no links: the reader may not open what it names.
+ */
+export function AppDataSourcesButton({ lines }: { lines: readonly string[] }) {
+  const { t } = useTranslation();
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <IconButton label={t("apps.dataSources")} variant="outline">
+          <Database aria-hidden="true" />
+        </IconButton>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="grid gap-2">
+        <p className="text-label">{t("apps.dataSources")}</p>
+        <ul className="grid min-w-0 gap-2 text-body" data-app-data-sources-popover="">
+          {lines.map((line) => (
+            <li key={line} className="min-w-0 break-words">
+              {line}
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function AppDetailsDialog({
   name,
   app,
   actions,
+  dataSources,
   failed,
   onClose
 }: {
@@ -256,6 +288,8 @@ export function AppDetailsDialog({
   /** The record, once it arrived. */
   app: Asset | undefined;
   actions: AppActionsRead;
+  /** Where the data its statements read comes from, one line per store, once it is known. */
+  dataSources?: readonly string[];
   failed: boolean;
   onClose(): void;
 }) {
@@ -279,6 +313,19 @@ export function AppDetailsDialog({
     >
       {app && summary ? (
         <KeyValueList>
+          {/* Where the data comes from stands first: the App's own Connections below are
+              another matter, and "None" there does not contradict it. */}
+          {dataSources && dataSources.length > 0 ? (
+            <KeyValue label={t("apps.detailsData")}>
+              <ul className="grid min-w-0 gap-2" data-app-data-sources="">
+                {dataSources.map((line) => (
+                  <li key={line} className="min-w-0 break-words">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </KeyValue>
+          ) : null}
           {description ? (
             <KeyValue label={t("apps.detailsDescription")} foldable>
               {description}

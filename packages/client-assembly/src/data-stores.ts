@@ -58,6 +58,12 @@ const dataStoreRoutes =
       module: dataStoresModule.name,
       execute: (_input, { access }) => dataStores.list(access)
     });
+    // Whoever uses an App reads where its data comes from: the right is asked of the App.
+    routes.operation(apiOperations["data_stores.app_sources"], {
+      authorize: () => ({ allowed: true }),
+      module: dataStoresModule.name,
+      execute: (input, { access }) => dataStores.appSources(access, input.app)
+    });
   };
 
 const registerStoreRoutes: RouteRegistration = (routes) => {

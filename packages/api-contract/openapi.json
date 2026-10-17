@@ -930,6 +930,140 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/app-data-sources": {
+      "get": {
+        "operationId": "data_stores.app_sources",
+        "summary": "Read where the data of one published App comes from: the Data Stores its statements read, and the Workflows and Apps that fill them from which Connections. Whoever uses the App reads it",
+        "tags": [
+          "Data Stores"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "stores": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "fillers": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "workflow",
+                                    "app"
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "connections": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "name",
+                                "title",
+                                "connections"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "title",
+                          "fillers"
+                        ]
+                      }
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "stores",
+                    "truncated"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/approval-requests": {
       "get": {
         "operationId": "approval_requests.list",
@@ -8879,7 +9013,7 @@
     "/api/v1/data-stores/{store}/used-by": {
       "get": {
         "operationId": "data_stores.used_by",
-        "summary": "Read which published Apps and Workflows use one Data Store",
+        "summary": "Read which published Apps, Workflows and Knowledge Bases use one Data Store, where its rows come from and who reads them",
         "tags": [
           "Data Stores"
         ],
@@ -8931,12 +9065,99 @@
                           },
                           "title": {
                             "type": "string"
+                          },
+                          "reads": {
+                            "type": "boolean"
+                          },
+                          "writes": {
+                            "type": "boolean"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "connection": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "connection",
+                                "title"
+                              ]
+                            }
+                          },
+                          "audience": {
+                            "type": "object",
+                            "properties": {
+                              "workspace": {
+                                "type": "object",
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "members": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "title",
+                                  "members"
+                                ]
+                              },
+                              "holders": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "user",
+                                        "service_principal",
+                                        "role",
+                                        "group"
+                                      ]
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "name",
+                                    "title"
+                                  ]
+                                }
+                              },
+                              "hiddenHolders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "holders",
+                              "hiddenHolders"
+                            ]
                           }
                         },
                         "required": [
                           "id",
                           "name",
-                          "title"
+                          "title",
+                          "reads",
+                          "writes",
+                          "sources",
+                          "audience"
                         ]
                       }
                     },
@@ -8953,14 +9174,193 @@
                           },
                           "title": {
                             "type": "string"
+                          },
+                          "reads": {
+                            "type": "boolean"
+                          },
+                          "writes": {
+                            "type": "boolean"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "connection": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "connection",
+                                "title"
+                              ]
+                            }
+                          },
+                          "account": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            }
                           }
                         },
                         "required": [
                           "id",
                           "name",
-                          "title"
+                          "title",
+                          "reads",
+                          "writes",
+                          "sources"
                         ]
                       }
+                    },
+                    "knowledgeBases": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "audience": {
+                            "type": "object",
+                            "properties": {
+                              "workspace": {
+                                "type": "object",
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "members": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "title",
+                                  "members"
+                                ]
+                              },
+                              "holders": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "user",
+                                        "service_principal",
+                                        "role",
+                                        "group"
+                                      ]
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "name",
+                                    "title"
+                                  ]
+                                }
+                              },
+                              "hiddenHolders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "holders",
+                              "hiddenHolders"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "title",
+                          "audience"
+                        ]
+                      }
+                    },
+                    "readers": {
+                      "type": "object",
+                      "properties": {
+                        "workspace": {
+                          "type": "object",
+                          "properties": {
+                            "title": {
+                              "type": "string"
+                            },
+                            "members": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "title",
+                            "members"
+                          ]
+                        },
+                        "holders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "service_principal",
+                                  "role",
+                                  "group"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "name",
+                              "title"
+                            ]
+                          }
+                        },
+                        "hiddenHolders": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "holders",
+                        "hiddenHolders"
+                      ]
                     },
                     "hidden": {
                       "type": "object",
@@ -8974,11 +9374,29 @@
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
+                        },
+                        "knowledgeBases": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "fills": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "reads": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
                         }
                       },
                       "required": [
                         "apps",
-                        "workflows"
+                        "workflows",
+                        "knowledgeBases",
+                        "fills",
+                        "reads"
                       ]
                     },
                     "truncated": {
@@ -8988,6 +9406,8 @@
                   "required": [
                     "apps",
                     "workflows",
+                    "knowledgeBases",
+                    "readers",
                     "hidden",
                     "truncated"
                   ]

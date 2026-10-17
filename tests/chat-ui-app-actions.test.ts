@@ -621,6 +621,27 @@ describe("the Details of an App", () => {
     expect(waiting).toContain(">load<");
     expect(waiting).toContain(">save<");
   });
+
+  it("says where the data of each store comes from, once it is known", () => {
+    const line =
+      "Shows data from “Kunden”, which the Workflow “Nachtimport” copies from Exampledata.";
+    const shown = render(
+      createElement(AppDetailsDialog, {
+        name: "Orders",
+        app,
+        actions: ready([action()]),
+        dataSources: [line],
+        failed: false,
+        onClose: noop
+      })
+    );
+    expect(shown).toContain(">Data<");
+    expect(shown).toContain(`>${line}<`);
+    // It stands first, above the App's own Connections, so "None" there reads as no contradiction.
+    expect(shown.indexOf(">Data<")).toBeLessThan(shown.indexOf(">Connections<"));
+    // While it is read, and for an App that reads no store, nothing stands there.
+    expect(details(ready([action()]))).not.toContain("data-app-data-sources");
+  });
 });
 
 describe("a run of an App in Instance > Operations", () => {

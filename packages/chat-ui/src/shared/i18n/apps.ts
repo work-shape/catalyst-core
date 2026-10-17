@@ -55,6 +55,15 @@ export const apps = defineTranslations({
     "apps.actionTestTitle": "Test “{name}”",
     "apps.actionTestableInDraft": "Can be tested",
     "apps.actions": "Actions",
+    "apps.dataSources": "Where the data comes from",
+    "apps.detailsData": "Data",
+    "apps.sourceByApp":
+      "Shows data from “{store}”, which the App “{name}” copies from {connections}.",
+    "apps.sourceByAppAlone": "Shows data from “{store}”, which the App “{name}” adds.",
+    "apps.sourceByWorkflow":
+      "Shows data from “{store}”, which the Workflow “{name}” copies from {connections}.",
+    "apps.sourceByWorkflowAlone": "Shows data from “{store}”, which the Workflow “{name}” adds.",
+    "apps.sourceStoreOnly": "Shows data from “{store}”.",
     "apps.technicalDetails": "Technical details",
     "apps.actionsEmpty":
       "This app has no actions yet. An action lets the app read from a connection or write to it.",
@@ -253,6 +262,15 @@ export const apps = defineTranslations({
     "apps.actionTestTitle": "„{name}“ testen",
     "apps.actionTestableInDraft": "Kann getestet werden",
     "apps.actions": "Aktionen",
+    "apps.dataSources": "Woher die Daten kommen",
+    "apps.detailsData": "Daten",
+    "apps.sourceByApp":
+      "Zeigt Daten aus „{store}“, die die App „{name}“ aus {connections} kopiert.",
+    "apps.sourceByAppAlone": "Zeigt Daten aus „{store}“, die die App „{name}“ hinzufügt.",
+    "apps.sourceByWorkflow":
+      "Zeigt Daten aus „{store}“, die der Workflow „{name}“ aus {connections} kopiert.",
+    "apps.sourceByWorkflowAlone": "Zeigt Daten aus „{store}“, die der Workflow „{name}“ hinzufügt.",
+    "apps.sourceStoreOnly": "Zeigt Daten aus „{store}“.",
     "apps.technicalDetails": "Technische Details",
     "apps.actionsEmpty":
       "Diese App hat noch keine Aktionen. Mit einer Aktion liest die App über eine Verbindung oder schreibt über sie.",

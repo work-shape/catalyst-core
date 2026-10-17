@@ -241,10 +241,12 @@ describe("an open App (layout 2)", () => {
   const frame = (
     rights: AppRights,
     served: { revision?: number } = { revision: 2 },
-    draftShown = true
+    draftShown = true,
+    dataSources?: readonly string[]
   ) =>
     render(
       createElement(AppViewFrame, {
+        dataSources,
         draftShown,
         name: "Angebotsrechner",
         workspace,
@@ -286,6 +288,20 @@ describe("an open App (layout 2)", () => {
     expect(markup).not.toContain("Details");
     // A publisher is a builder and reads the number, also without the right to write.
     expect(frame({ ...NO_APP_RIGHTS, publish: true })).toContain("Published · revision 2");
+  });
+
+  it("tells whoever uses the App where its data comes from, with no right to read the App", () => {
+    const line = "Shows data from “Clients”, which the Workflow “Nightly import” copies from CRM.";
+    const user = frame(NO_APP_RIGHTS, { revision: 2 }, true, [line]);
+    expect(user).toContain('aria-label="Where the data comes from"');
+    expect(frame(WRITER, { revision: 2 }, true, [line])).toContain(
+      'aria-label="Where the data comes from"'
+    );
+    // Nothing is offered while it is read, or for an App that reads no store.
+    expect(frame(NO_APP_RIGHTS)).not.toContain("Where the data comes from");
+    expect(frame(NO_APP_RIGHTS, { revision: 2 }, true, [])).not.toContain(
+      "Where the data comes from"
+    );
   });
 
   it("offers Edit to a writer and to nobody else", () => {

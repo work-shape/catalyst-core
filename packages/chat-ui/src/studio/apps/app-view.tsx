@@ -12,12 +12,13 @@ import {
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import { workspaceRouteFromPath, workspaceRoutePath } from "../../shared/routes";
-import { useApp, useAppActions } from "./app-data";
+import { useApp, useAppActions, useAppDataSources } from "./app-data";
 import {
   AppDetailsDialog,
   AppFrame,
   AppHeader,
   AppStateBadge,
+  AppDataSourcesButton,
   CopyAppLinkButton,
   CopyAppLinkItem
 } from "./app-header";
@@ -50,6 +51,8 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   // The list is read by whoever reads the App's record. Everybody else is shown the names of
   // the record, and no request is made that the instance would refuse.
   const actions = useAppActions(app, detailsOpen && rights?.read === true);
+  // Whoever uses the App reads where its data comes from, not only who builds it.
+  const dataSources = useAppDataSources(app);
   const showRoute = host?.showRoute;
   const workspaceId = workspace?.id;
 
@@ -105,6 +108,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
         onBack={() => host.showRoute({ kind: "apps", collaborationWorkspaceId: workspace.id })}
         onEdit={() => host.showRoute({ kind: "app-edit", ...address })}
         onDetails={() => setDetailsOpen(true)}
+        dataSources={dataSources}
         app={app}
         draftShown={draftShown}
       >
@@ -129,6 +133,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
           name={name}
           app={record.app}
           actions={actions}
+          dataSources={dataSources}
           failed={record.failed || record.missing}
           onClose={() => setDetailsOpen(false)}
         />
@@ -149,7 +154,8 @@ export function AppViewFrame({
   children,
   onBack,
   onEdit,
-  onDetails
+  onDetails,
+  dataSources
 }: {
   name: string;
   /** What the App does, in one line after its name. */
@@ -167,6 +173,8 @@ export function AppViewFrame({
   onBack(): void;
   onEdit(): void;
   onDetails(): void;
+  /** Where the App's data comes from, one sentence per filler, once it is known. */
+  dataSources?: readonly string[] | undefined;
 }) {
   const { t } = useTranslation();
   return (
@@ -199,23 +207,28 @@ export function AppViewFrame({
             ) : undefined
           }
           overflow={
-            rights.read ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <IconButton label={t("apps.moreActions")} variant="outline">
-                    <MoreHorizontal aria-hidden="true" />
-                  </IconButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
-                  <CopyAppLinkItem workspaceId={workspace.id} app={app} />
-                  {/* The id is a builder's, as the number of a revision is. */}
-                  {appBuilder(rights) ? <CopyIdItem id={app} /> : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <CopyAppLinkButton workspaceId={workspace.id} app={app} />
-            )
+            <>
+              {dataSources && dataSources.length > 0 ? (
+                <AppDataSourcesButton lines={dataSources} />
+              ) : null}
+              {rights.read ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <IconButton label={t("apps.moreActions")} variant="outline">
+                      <MoreHorizontal aria-hidden="true" />
+                    </IconButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
+                    <CopyAppLinkItem workspaceId={workspace.id} app={app} />
+                    {/* The id is a builder's, as the number of a revision is. */}
+                    {appBuilder(rights) ? <CopyIdItem id={app} /> : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <CopyAppLinkButton workspaceId={workspace.id} app={app} />
+              )}
+            </>
           }
         />
       }

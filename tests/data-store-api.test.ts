@@ -636,7 +636,9 @@ describe("a Data Store on an assembled instance", () => {
     expect(used.json()).toEqual({
       apps: [],
       workflows: [],
-      hidden: { apps: 0, workflows: 0 },
+      knowledgeBases: [],
+      readers: { holders: [], hiddenHolders: 0 },
+      hidden: { apps: 0, workflows: 0, knowledgeBases: 0, fills: 0, reads: 0 },
       truncated: false
     });
     expect((await get("data_stores.rows", { table: "findings" }, "nowhere")).statusCode).toBe(404);

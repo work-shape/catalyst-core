@@ -30,7 +30,14 @@ import { useTranslation } from "../../shared/i18n";
 import { BuildWithAgentEmptyState, type BuildWithAgentCopy } from "../build-with-agent-empty";
 import { RouteLink } from "../route-link";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
-import { useApp, useAppActions, useAppList, useAppWrites, type AppList } from "./app-data";
+import {
+  useApp,
+  useAppActions,
+  useAppDataSources,
+  useAppList,
+  useAppWrites,
+  type AppList
+} from "./app-data";
 import { AppDeleteDialog, AppDetailsDialog, AppStateBadge, CopyAppLinkItem } from "./app-header";
 import {
   appBuilder,
@@ -106,6 +113,7 @@ export function AppsPage() {
   const [deleteError, setDeleteError] = useState<string>();
   const details = useApp(workspace?.id ?? "", detailsOf?.name ?? "", detailsOf !== undefined);
   const detailActions = useAppActions(detailsOf?.name ?? "", detailsOf !== undefined);
+  const detailSources = useAppDataSources(detailsOf?.name ?? "", detailsOf !== undefined);
   // The ages are counted from when the list last arrived.
   const rows = list.rows;
   const now = useMemo(() => new Date(), [rows]);
@@ -160,6 +168,7 @@ export function AppsPage() {
           name={appDisplayName(detailsOf)}
           app={details.app}
           actions={detailActions}
+          dataSources={detailSources}
           failed={details.failed || details.missing}
           onClose={() => setDetailsOf(undefined)}
         />

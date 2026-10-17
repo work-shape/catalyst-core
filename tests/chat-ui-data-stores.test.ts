@@ -1,7 +1,11 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
+import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
 import {
+  appDataLines,
+  audienceLine,
+  fillerLine,
   buildAssetKinds,
   BuildAssetKindsProvider,
   BuildFrame,
@@ -21,10 +25,12 @@ import {
   type DataStoreSchema,
   type DataStoreSource,
   type DataStoreState,
+  type AppDataSources,
   type DataStoreUsedBy,
   type DataStoreValue,
   usingPageRoute
 } from "@work-shape/catalyst-chat-ui/build-area";
+import { required } from "./support/assertions";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -138,17 +144,67 @@ const visitRows: DataStoreRowsPage = {
   valueMaxChars: 1000
 };
 
+const admins = { holders: [], hiddenHolders: 0 };
+
 const usedBy: DataStoreUsedBy = {
-  apps: [{ id: "asset_visits_board", name: "visits-board", title: "Visits board" }],
-  workflows: [{ id: "asset_nightly", name: "nightly-rollup", title: "Nightly rollup" }],
-  hidden: { apps: 1, workflows: 2 },
+  apps: [
+    {
+      id: "asset_visits_board",
+      name: "visits-board",
+      title: "Visits board",
+      reads: true,
+      writes: false,
+      sources: [],
+      audience: { workspace: { title: "Kai Spezis", members: 14 }, holders: [], hiddenHolders: 0 }
+    }
+  ],
+  workflows: [
+    {
+      id: "asset_nightly",
+      name: "nightly-rollup",
+      title: "Nightly rollup",
+      reads: false,
+      writes: true,
+      sources: [
+        { connection: "exampledata", title: "Exampledata" },
+        { connection: "crm", title: "CRM" }
+      ],
+      account: { name: "nightly-runner", title: "Nightly runner" }
+    },
+    {
+      id: "asset_weekly",
+      name: "weekly-report",
+      title: "Weekly report",
+      reads: true,
+      writes: false,
+      sources: []
+    }
+  ],
+  knowledgeBases: [
+    {
+      id: "asset_visits_knowledge",
+      name: "visits-knowledge",
+      title: "Visits knowledge",
+      audience: {
+        holders: [{ kind: "user", name: "usr_kai", title: "Kai" }],
+        hiddenHolders: 0
+      }
+    }
+  ],
+  readers: {
+    holders: [{ kind: "service_principal", name: "sp_report", title: "Reporting" }],
+    hiddenHolders: 2
+  },
+  hidden: { apps: 1, workflows: 2, knowledgeBases: 0, fills: 1, reads: 2 },
   truncated: false
 };
 
 const nothingUses: DataStoreUsedBy = {
   apps: [],
   workflows: [],
-  hidden: { apps: 0, workflows: 0 },
+  knowledgeBases: [],
+  readers: admins,
+  hidden: { apps: 0, workflows: 0, knowledgeBases: 0, fills: 0, reads: 0 },
   truncated: false
 };
 
@@ -692,27 +748,85 @@ describe("What uses a Data Store", () => {
     ).toBeUndefined();
   });
 
-  it("lists the Apps and Workflows that use a store, links the ones that have a page and counts the ones the reader cannot see", () => {
+  it("says what fills a store, from which Connections and as which account, and who reads it", () => {
     const page = render(address);
-    expect(page).toContain(">Used by</h2>");
-    expect(page).toContain('data-data-store-used-by="app"');
-    expect(page).toContain(">Visits board<");
-    expect(page).toContain('href="/w/ws_1/apps/visits-board"');
-    expect(page).toContain('data-data-store-used-by="workflow"');
-    expect(page).toContain(">Nightly rollup<");
-    expect(page).not.toContain('nightly-rollup"');
-    expect(page).toContain("and 3 more you cannot see");
+    const section = (id: string) =>
+      page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "";
+    const filled = section("filled-by");
+    // Both stand right after the status: a phone shows no table of contents to jump by.
+    expect(page.indexOf('id="status"')).toBeLessThan(page.indexOf('id="filled-by"'));
+    expect(page.indexOf('id="read-by"')).toBeLessThan(page.indexOf('id="tables"'));
+    expect(filled).toContain(">Filled by</h2>");
+    expect(filled).toContain('data-data-store-used-by="workflow"');
+    expect(filled).toContain(">Nightly rollup<");
+    expect(filled).toContain("Copies from Exampledata and CRM · Runs as Nightly runner");
+    // An App that only reads and a Workflow that only reads fill nothing.
+    expect(filled).not.toContain("Visits board");
+    expect(filled).not.toContain("Weekly report");
 
-    expect(render(address, { locale: "de" })).toContain("und 3 weitere, die du nicht sehen kannst");
+    const read = section("read-by");
+    expect(read).toContain(">Read by</h2>");
+    expect(read).toContain(">Visits board<");
+    expect(read).toContain('href="/w/ws_1/apps/visits-board"');
+    expect(read).toContain(">Everyone in Kai Spezis (14 people)<");
+    expect(read).toContain('data-data-store-used-by="knowledge_base"');
+    expect(read).toContain(">Kai<");
+    expect(read).toContain(">Weekly report<");
+    expect(read).not.toContain("Nightly rollup");
+    expect(read).toContain(">Direct access<");
+    expect(read).toContain(">Reporting (technical account) · 2 more with access<");
+    // The admins are said once, under the section, and on no line.
+    expect(read).toContain(">Instance admins always see everything.<");
+    expect(page.split("Instance admins").length - 1).toBe(1);
+    // What the reader may not see is counted where it would stand: the hidden Workflow that
+    // fills the store under Filled by, the two that read it under Read by.
+    expect(filled).toContain("and 1 more you can&#x27;t see");
+    expect(read).toContain("and 2 more you can&#x27;t see");
+    // The lines are read whole on a phone, not cut after the first words.
+    const wraps = (line: string) => new RegExp(`class="[^"]*\\bsm:truncate\\b[^"]*">${line}`, "u");
+    expect(filled).toMatch(wraps("Copies from Exampledata"));
+    expect(read).toMatch(wraps("Everyone in Kai Spezis"));
+    expect(read).toMatch(wraps("Reporting \\(technical account\\)"));
+
+    const german = render(address, { locale: "de" });
+    expect(german).toContain(">Gefüllt von</h2>");
+    expect(german).toContain("Kopiert aus Exampledata und CRM · Läuft als Nightly runner");
+    expect(german).toContain(">Gelesen von</h2>");
+    expect(german).toContain(">Alle in Kai Spezis (14 Personen)<");
+    expect(german).toContain(">Direkter Zugriff<");
+    expect(german).toContain(">Reporting (technisches Konto) · 2 weitere mit Zugriff<");
+    expect(german).toContain(">Instanz-Admins sehen immer alles.<");
+    expect(german).toContain("und 1 weitere, die du nicht sehen kannst");
+    expect(german).toContain("und 2 weitere, die du nicht sehen kannst");
   });
 
   it("says in one sentence that nothing uses a store, that only hidden ones do, and that the reader may not see it", () => {
-    expect(render(address, { usedBy: ready(nothingUses) })).toContain(
-      "No published app or workflow uses this store."
+    const nothing = render(address, { usedBy: ready(nothingUses) });
+    expect(nothing).toContain("No published workflow or app adds rows to this store.");
+    // Whoever may read the store is always said, admins at the least.
+    expect(nothing).toContain(">Direct access<");
+    expect(nothing).toContain(">Only instance admins<");
+    const hidden = (fills: number, reads: number) =>
+      render(address, {
+        usedBy: ready({
+          ...nothingUses,
+          hidden: { apps: fills, workflows: reads, knowledgeBases: 0, fills, reads }
+        })
+      });
+    // A store that only a hidden Workflow fills is not said to be filled by nothing.
+    const filledUnseen = hidden(1, 0);
+    expect(filledUnseen).not.toContain("No published workflow or app adds rows to this store.");
+    expect(filledUnseen).toContain(
+      "One workflow or app you can&#x27;t see adds rows to this store."
     );
-    expect(
-      render(address, { usedBy: ready({ ...nothingUses, hidden: { apps: 1, workflows: 0 } }) })
-    ).toContain("1 app or workflow you cannot see uses this store.");
+    expect(filledUnseen).not.toContain("more you can&#x27;t see");
+    expect(hidden(3, 0)).toContain(
+      "3 workflows or apps you can&#x27;t see add rows to this store."
+    );
+    // One that only hidden ones read says so under Read by, and nothing fills it.
+    const readUnseen = hidden(0, 1);
+    expect(readUnseen).toContain("No published workflow or app adds rows to this store.");
+    expect(readUnseen).toContain("and 1 more you can&#x27;t see");
     expect(render(address, { usedBy: { status: "refused" } })).toContain(
       "You may not see what uses this store."
     );
@@ -738,5 +852,76 @@ describe("Data Store state", () => {
     expect(formatDataStoreSize(512, "en")).toBe("512 byte");
     expect(formatDataStoreSize(1536, "en")).toBe("1.5 kB");
     expect(formatDataStoreSize(2 * 1024 ** 3, "de")).toMatch(/^2\sGB$/u);
+  });
+});
+
+describe("where an App's data comes from", () => {
+  const translate = (locale: LocaleCode) => createTranslationContext(locale);
+
+  it("names the store, each Workflow or App that fills it and the Connections it copies from", () => {
+    const sources: AppDataSources = {
+      stores: [
+        {
+          name: "kunden",
+          title: "Kunden",
+          fillers: [
+            {
+              kind: "workflow",
+              name: "nightly-rollup",
+              title: "Nightly rollup",
+              connections: ["Exampledata", "CRM"]
+            },
+            { kind: "app", name: "entry", title: "Entry form", connections: [] }
+          ]
+        },
+        { name: "termine", title: "Termine", fillers: [] }
+      ],
+      truncated: false
+    };
+    expect(appDataLines(sources, translate("en").t, "en")).toEqual([
+      "Shows data from “Kunden”, which the Workflow “Nightly rollup” copies from Exampledata and CRM.",
+      "Shows data from “Kunden”, which the App “Entry form” adds.",
+      // A store nothing fills is named alone.
+      "Shows data from “Termine”."
+    ]);
+    expect(appDataLines(sources, translate("de").t, "de")).toEqual([
+      "Zeigt Daten aus „Kunden“, die der Workflow „Nightly rollup“ aus Exampledata und CRM kopiert.",
+      "Zeigt Daten aus „Kunden“, die die App „Entry form“ hinzufügt.",
+      "Zeigt Daten aus „Termine“."
+    ]);
+  });
+
+  it("words an audience by its workspace, its holders and how many more, and the admins only where nobody else reads", () => {
+    const { t } = translate("en");
+    expect(
+      audienceLine(
+        {
+          workspace: { title: "Kai Spezis", members: 1 },
+          holders: [
+            { kind: "role", name: "user", title: "user" },
+            { kind: "group", name: "grp_sales", title: "grp_sales" }
+          ],
+          hiddenHolders: 1
+        },
+        t,
+        "en"
+      )
+    ).toBe(
+      "Everyone in Kai Spezis (1 person) · Everyone with the role user · Group grp_sales · 1 more with access"
+    );
+    expect(audienceLine({ holders: [], hiddenHolders: 0 }, t, "en")).toBe("Only instance admins");
+    // A count with nobody named before it is not "more".
+    expect(audienceLine({ holders: [], hiddenHolders: 4 }, t, "en")).toBe("4 with access");
+    expect(audienceLine({ holders: [], hiddenHolders: 3 }, translate("de").t, "de")).toBe(
+      "3 mit Zugriff"
+    );
+    // As whom a Workflow runs is named to who administers users; anyone else reads the kind.
+    const nightly = required(usedBy.workflows[0]);
+    expect(fillerLine(nightly, t, "en")).toBe(
+      "Copies from Exampledata and CRM · Runs as Nightly runner"
+    );
+    expect(fillerLine({ ...nightly, account: {} }, translate("de").t, "de")).toBe(
+      "Kopiert aus Exampledata und CRM · Läuft als technisches Konto"
+    );
   });
 });

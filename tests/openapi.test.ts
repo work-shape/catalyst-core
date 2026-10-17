@@ -490,6 +490,7 @@ describe("the reference an instance serves", () => {
     // Nor does this server hold the routes of a module, which only its assembly adds.
     const moduleRoutes = [
       `${API_VERSION_PREFIX}/data-stores`,
+      `${API_VERSION_PREFIX}/app-data-sources`,
       `${API_VERSION_PREFIX}/knowledge-bases`
     ];
     expect(paths).toEqual(

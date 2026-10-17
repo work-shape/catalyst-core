@@ -13,7 +13,9 @@ import {
 } from "@work-shape/catalyst-api-client";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
+import { useTranslation } from "../../shared/i18n";
 import { PendingApprovalError } from "../build-area/build-refusals";
+import { appDataLines } from "../build-area/data-store-provenance-model";
 import { keepPageAddress, retryUnlessGone, type PageAddressState } from "../pages/page-address";
 import { appPreviewProblem, type AppPreviewProblem } from "./app-model";
 
@@ -149,6 +151,24 @@ export function useAppActions(app: string, enabled: boolean): AppActionsRead {
   return query.isError || query.data
     ? { status: "failed", retry: () => void query.refetch().catch(() => undefined) }
     : { status: "loading" };
+}
+
+/**
+ * Where the data of an App comes from: one sentence for each Workflow or App that fills a store
+ * its statements read, as the published App declares it. Whoever uses the App reads it. Nothing
+ * until the answer arrived, and nothing for an App with no published revision.
+ */
+export function useAppDataSources(app: string, enabled = true): readonly string[] | undefined {
+  const { client } = useWorkspaceApiClient();
+  const keys = useAppKeys();
+  const { locale, t } = useTranslation();
+  const read = useQuery({
+    queryKey: [...keys, "data-sources", app],
+    queryFn: ({ signal }) => client.data_stores.app_sources({ query: { app }, signal }),
+    enabled: enabled && app !== "",
+    retry: false
+  });
+  return read.data ? appDataLines(read.data, t, locale) : undefined;
 }
 
 /**

@@ -67,6 +67,8 @@ export type {
   DataStoreValue
 } from "./data-store-source";
 export { usingPageRoute } from "./data-store-source";
+export { appDataLines, audienceLine, fillerLine } from "./data-store-provenance-model";
+export type { AppDataSources } from "./data-store-provenance-model";
 export { knowledgeBaseKindOn } from "./knowledge-base-kind";
 export type {
   KnowledgeBaseSource,

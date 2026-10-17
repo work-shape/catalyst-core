@@ -172,6 +172,14 @@ export interface CollaborationWorkspaceStore {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;
   }): Promise<WorkspaceMembership[]>;
+  /**
+   * The name and the number of members of each workspace named, in one read. A workspace that
+   * is not there or is being deleted is left out.
+   */
+  countMembersOfWorkspaces(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceIds: readonly CollaborationWorkspaceId[];
+  }): Promise<{ id: CollaborationWorkspaceId; name: string; members: number }[]>;
   searchMemberCandidates(input: {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;

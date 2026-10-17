@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   NoopAuditRecorder,
   asClientInstanceId,
   asUserId,
   createPlatformId,
+  type AssetScope,
   type AuthenticatedUser,
   type JsonObject,
   type PermissionGrant
@@ -73,6 +74,42 @@ describe("the reads of a Data Store's page", () => {
       access,
       audit: new NoopAuditRecorder()
     });
+  }
+
+  /** Writes an asset and publishes it, as its kind's own workflow would. */
+  async function publishAssetOf(
+    world: World,
+    kind: string,
+    name: string,
+    config: JsonObject,
+    scope?: AssetScope
+  ) {
+    const { clientInstanceId } = world;
+    const key = `${kind}:${name}`;
+    const written = await db.store.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { [key]: null },
+      mutations: [{ type: "upsert", kind, name, config, draft: true, ...(scope ? { scope } : {}) }]
+    });
+    const revision = required(written.revisions[key]);
+    const stored = required(
+      await db.store.configAssets.getConfigAssetRevision({
+        clientInstanceId,
+        kind,
+        name,
+        revision
+      })
+    );
+    const assetId = required(written.assetIds[key]);
+    await db.store.configAssets.publishConfigAssetRevision({
+      clientInstanceId,
+      kind,
+      name,
+      assetId,
+      revision,
+      revisionId: stored.id
+    });
+    return assetId;
   }
 
   const page = async (world: World, input: JsonObject) =>
@@ -416,34 +453,8 @@ describe("the reads of a Data Store's page", () => {
   it("answers the published Apps and Workflows that use a store, and of those the caller may not be shown a count alone", async () => {
     const world = await published("used");
     const { clientInstanceId } = world;
-    /** Writes an asset and publishes it, as its kind's own workflow would. */
-    const publishAsset = async (kind: string, name: string, config: JsonObject) => {
-      const key = `${kind}:${name}`;
-      const written = await db.store.configAssets.applyConfigAssetMutations({
-        clientInstanceId,
-        baseRevisions: { [key]: null },
-        mutations: [{ type: "upsert", kind, name, config, draft: true }]
-      });
-      const revision = required(written.revisions[key]);
-      const stored = required(
-        await db.store.configAssets.getConfigAssetRevision({
-          clientInstanceId,
-          kind,
-          name,
-          revision
-        })
-      );
-      const assetId = required(written.assetIds[key]);
-      await db.store.configAssets.publishConfigAssetRevision({
-        clientInstanceId,
-        kind,
-        name,
-        assetId,
-        revision,
-        revisionId: stored.id
-      });
-      return assetId;
-    };
+    const publishAsset = (kind: string, name: string, config: JsonObject) =>
+      publishAssetOf(world, kind, name, config);
     const app = (store: string): JsonObject => ({
       title: `App on ${store}`,
       manifest: {
@@ -471,7 +482,11 @@ describe("the reads of a Data Store's page", () => {
       "monthly",
       workflow("monthly", "data_store.findings.insert", true)
     );
-    await publishAsset("workflow", "yearly", workflow("yearly", "data_store.findings.query"));
+    const yearly = await publishAsset(
+      "workflow",
+      "yearly",
+      workflow("yearly", "data_store.findings.query")
+    );
     // A store whose name begins the same, a Connection, and a draft that was never published.
     await publishAsset("workflow", "near", workflow("near", "data_store.findings2.query"));
     await publishAsset("workflow", "crm", workflow("crm", "connection.crm.echo"));
@@ -483,20 +498,32 @@ describe("the reads of a Data Store's page", () => {
       ]
     });
 
+    const nobody = { holders: [], hiddenHolders: 0 };
+    const reading = { reads: true, writes: false, sources: [] };
     expect(await read(world, "used_by", {})).toEqual({
       apps: [
-        { id: board, name: "board", title: "App on findings" },
-        { id: report, name: "report", title: "App on findings" }
+        { id: board, name: "board", title: "App on findings", ...reading, audience: nobody },
+        { id: report, name: "report", title: "App on findings", ...reading, audience: nobody }
       ],
       workflows: [
-        { id: monthly, name: "monthly", title: "Workflow monthly" },
-        { id: expect.any(String), name: "yearly", title: "Workflow yearly" }
+        {
+          id: monthly,
+          name: "monthly",
+          title: "Workflow monthly",
+          reads: false,
+          writes: true,
+          sources: []
+        },
+        { id: yearly, name: "yearly", title: "Workflow yearly", ...reading }
       ],
-      hidden: { apps: 0, workflows: 0 },
+      knowledgeBases: [],
+      readers: nobody,
+      hidden: { apps: 0, workflows: 0, knowledgeBases: 0, fills: 0, reads: 0 },
       truncated: false
     });
 
-    // A member who is shown one App and one Workflow: the others are counted and not named.
+    // A member who is shown one App and the Workflow that reads: the others are counted and not
+    // named, each where it stands, so the Workflow that fills the store counts as one that fills.
     const member = person("usr_page_member", ["user"]);
     const grant = (action: string, scopeId: string): PermissionGrant => ({
       id: `grant_${action}_${scopeId}`,
@@ -514,16 +541,18 @@ describe("the reads of a Data Store's page", () => {
       world,
       "used_by",
       {},
-      accessOf(member, { grants: [grant("app.read", board), grant("workflow.use", monthly)] })
+      accessOf(member, { grants: [grant("app.read", board), grant("workflow.use", yearly)] })
     );
     expect(answer).toEqual({
-      apps: [{ id: board, name: "board", title: "App on findings" }],
-      workflows: [{ id: monthly, name: "monthly", title: "Workflow monthly" }],
-      hidden: { apps: 1, workflows: 1 },
+      apps: [{ id: board, name: "board", title: "App on findings", ...reading, audience: nobody }],
+      workflows: [{ id: yearly, name: "yearly", title: "Workflow yearly", ...reading }],
+      knowledgeBases: [],
+      readers: nobody,
+      hidden: { apps: 1, workflows: 1, knowledgeBases: 0, fills: 1, reads: 1 },
       truncated: false
     });
     expect(JSON.stringify(answer)).not.toContain("report");
-    expect(JSON.stringify(answer)).not.toContain("yearly");
+    expect(JSON.stringify(answer)).not.toContain("monthly");
     // The blocks a later engine runs, and an agent step that may call the store as a tool.
     const inBlock = (name: string, block: JsonObject, tools?: string[]): JsonObject => ({
       manifest: {
@@ -604,5 +633,303 @@ describe("the reads of a Data Store's page", () => {
     expect(
       await world.dataStores.operationSource.resolve("data_store.findings.used_by")
     ).toMatchObject({ effect: "reading", action: "data_store.read", scope: "config_assets:read" });
+  });
+
+  it("names where a store's rows come from and who reads them: check 68, the screens half", async () => {
+    const world = await published("sources");
+    const { clientInstanceId } = world;
+    const stores = db.store;
+    const storeId = required(
+      await stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "data_store",
+        name: "findings"
+      })
+    ).id;
+    // Kai Spezis: a workspace of three, whose App on the store its members open.
+    const people = await Promise.all(
+      ["Kai", "Lena", "Tobias"].map((displayLabel) =>
+        stores.users.createUser({ clientInstanceId, displayLabel, roles: ["user"] })
+      )
+    );
+    const [kai, ...others] = people.map(({ id }) => id);
+    const workspace = await stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Kai Spezis",
+      creatorUserId: required(kai)
+    });
+    for (const userId of others) {
+      await stores.workspaces.addMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: workspace.id,
+        userId,
+        role: "member"
+      });
+    }
+    await stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      name: "nachtimport-konto",
+      displayLabel: "Nachtimport account"
+    });
+    const reader = await stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      name: "auswertung",
+      displayLabel: "Reporting account"
+    });
+    const barred = await stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      name: "gesperrt",
+      displayLabel: "Barred account"
+    });
+    const grant = (
+      holder: Pick<PermissionGrant, "holderKind" | "holderId">,
+      action: string,
+      scope: Pick<PermissionGrant, "scopeKind" | "scopeId">,
+      effect: PermissionGrant["effect"] = "allow"
+    ) =>
+      stores.access.createGrant({
+        clientInstanceId,
+        ...holder,
+        action,
+        effect,
+        ...scope,
+        grantedBy: asUserId(admin.id)
+      });
+    const onStore = { scopeKind: "asset", scopeId: storeId } as const;
+    await grant(
+      { holderKind: "service_principal", holderId: reader.id },
+      "data_store.read",
+      onStore
+    );
+    // A holder whose allow on the instance a deny on the store overrides reads nothing of it.
+    await grant({ holderKind: "service_principal", holderId: barred.id }, "data_store.read", {
+      scopeKind: "instance"
+    });
+    await grant(
+      { holderKind: "service_principal", holderId: barred.id },
+      "data_store.read",
+      onStore,
+      "deny"
+    );
+
+    // A Connection has no draft and is never published: its current revision is what it is.
+    await db.store.configAssets.applyConfigAssetMutations({
+      clientInstanceId: world.clientInstanceId,
+      baseRevisions: { "connection:exampledata": null },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "connection",
+          name: "exampledata",
+          config: { displayName: "Exampledata" }
+        }
+      ]
+    });
+    const nachtimport = await publishAssetOf(world, "workflow", "nachtimport", {
+      manifest: {
+        id: "nachtimport",
+        name: "Nachtimport",
+        runAs: "nachtimport-konto",
+        steps: [
+          {
+            id: "read",
+            name: "Read",
+            type: "operation",
+            operation: "connection.exampledata.clients"
+          },
+          { id: "store", name: "Store", type: "operation", operation: "data_store.findings.insert" }
+        ]
+      }
+    });
+    const app = await publishAssetOf(
+      world,
+      "app",
+      "kunden",
+      {
+        title: "Kunden",
+        manifest: {
+          actions: [
+            { name: "open", kind: "connection", connection: "crm", operation: "echo" },
+            { name: "list", kind: "sql", dataStore: "findings", effect: "reading" }
+          ]
+        }
+      },
+      { kind: "workspace", workspaceId: workspace.id }
+    );
+    // A second workspace, of one, with an App of its own on the store.
+    const lenaTeam = await stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Lena Team",
+      creatorUserId: required(others[0])
+    });
+    const termine = await publishAssetOf(
+      world,
+      "app",
+      "termine",
+      {
+        title: "Termine",
+        manifest: {
+          actions: [{ name: "list", kind: "sql", dataStore: "findings", effect: "reading" }]
+        }
+      },
+      { kind: "workspace", workspaceId: lenaTeam.id }
+    );
+    // The workspace owns the Knowledge Base too, and its members do not ask it by being members:
+    // only the one who holds its use does.
+    const knowledgeBase = await publishAssetOf(
+      world,
+      "knowledge_base",
+      "kunden-wissen",
+      { title: "Kunden knowledge", backend: { dataStore: "findings" } },
+      { kind: "workspace", workspaceId: workspace.id }
+    );
+    await grant({ holderKind: "user", holderId: required(kai) }, "knowledge_base.use", {
+      scopeKind: "asset",
+      scopeId: knowledgeBase
+    });
+
+    const kunden = {
+      id: app,
+      name: "kunden",
+      title: "Kunden",
+      reads: true,
+      writes: false,
+      // The App calls a Connection and adds no row: that Connection is no source of the store.
+      sources: []
+    };
+    const filler = {
+      id: nachtimport,
+      name: "nachtimport",
+      title: "Nachtimport",
+      reads: false,
+      writes: true,
+      account: { name: "nachtimport-konto", title: "Nachtimport account" }
+    };
+    const counted = vi.spyOn(stores.workspaces, "countMembersOfWorkspaces");
+    const listed = vi.spyOn(stores.workspaces, "listMemberships");
+    expect(await read(world, "used_by", {})).toEqual({
+      apps: [
+        {
+          ...kunden,
+          audience: {
+            workspace: { title: "Kai Spezis", members: 3 },
+            holders: [],
+            hiddenHolders: 0
+          }
+        },
+        {
+          id: termine,
+          name: "termine",
+          title: "Termine",
+          reads: true,
+          writes: false,
+          sources: [],
+          audience: { workspace: { title: "Lena Team", members: 1 }, holders: [], hiddenHolders: 0 }
+        }
+      ],
+      workflows: [{ ...filler, sources: [{ connection: "exampledata", title: "Exampledata" }] }],
+      knowledgeBases: [
+        {
+          id: knowledgeBase,
+          name: "kunden-wissen",
+          title: "Kunden knowledge",
+          audience: {
+            holders: [{ kind: "user", name: kai, title: "Kai" }],
+            hiddenHolders: 0
+          }
+        }
+      ],
+      readers: {
+        holders: [{ kind: "service_principal", name: reader.id, title: "Reporting account" }],
+        hiddenHolders: 0
+      },
+      hidden: { apps: 0, workflows: 0, knowledgeBases: 0, fills: 0, reads: 0 },
+      truncated: false
+    });
+    // The two workspaces are read at once, not one read of members for each App.
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(listed).not.toHaveBeenCalled();
+    counted.mockRestore();
+    listed.mockRestore();
+
+    // A member who reads the App and the Workflow and administers nobody: the Connection by its
+    // id, the holders as a number, and of the Knowledge Base nothing but that it exists.
+    const member = person("usr_sources_member", ["user"]);
+    const shown = (action: string, scopeId: string): PermissionGrant => ({
+      id: `grant_${action}_${scopeId}`,
+      clientInstanceId: member.clientInstanceId,
+      holderKind: "user",
+      holderId: member.id,
+      action,
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId,
+      grantedBy: asUserId(admin.id),
+      createdAt: new Date().toISOString()
+    });
+    const answer = await read(
+      world,
+      "used_by",
+      {},
+      accessOf(member, { grants: [shown("app.read", app), shown("workflow.read", nachtimport)] })
+    );
+    expect(answer).toEqual({
+      apps: [
+        {
+          ...kunden,
+          audience: {
+            workspace: { title: "Kai Spezis", members: 3 },
+            holders: [],
+            hiddenHolders: 0
+          }
+        }
+      ],
+      // As whom the Workflow runs is named only to who administers users: a member learns it
+      // runs as an account and not which.
+      workflows: [
+        { ...filler, account: {}, sources: [{ connection: "exampledata", title: "exampledata" }] }
+      ],
+      knowledgeBases: [],
+      readers: { holders: [], hiddenHolders: 1 },
+      hidden: { apps: 1, workflows: 0, knowledgeBases: 1, fills: 0, reads: 2 },
+      truncated: false
+    });
+    expect(JSON.stringify(answer)).not.toContain("Reporting");
+    expect(JSON.stringify(answer)).not.toContain("kunden-wissen");
+    expect(JSON.stringify(answer)).not.toContain("Nachtimport account");
+    expect(JSON.stringify(answer)).not.toContain("nachtimport-konto");
+    // Who only uses the App reads where its data comes from, as the App declares it: the
+    // store, the Workflow and the Connection by their names, and never the account.
+    const user = person("usr_sources_user", ["user"]);
+    const sources = await world.dataStores.appSources(
+      accessOf(user, { grants: [{ ...shown("app.use", app), holderId: user.id }] }),
+      "kunden"
+    );
+    expect(sources).toEqual({
+      stores: [
+        {
+          name: "findings",
+          title: "Findings",
+          fillers: [
+            {
+              kind: "workflow",
+              name: "nachtimport",
+              title: "Nachtimport",
+              connections: ["Exampledata"]
+            }
+          ]
+        }
+      ],
+      truncated: false
+    });
+    expect(JSON.stringify(sources)).not.toMatch(/konto|account/iu);
+    // Who may neither use nor read the App learns nothing of it.
+    await expect(
+      world.dataStores.appSources(accessOf(person("usr_sources_none", ["user"])), "kunden")
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // The suite removes the workspace after the test, and an asset it owns cannot outlive it.
+    await db.sql`delete from config_assets where scope_id in (${workspace.id}, ${lenaTeam.id})`;
   });
 });

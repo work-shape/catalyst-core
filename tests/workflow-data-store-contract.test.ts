@@ -649,7 +649,8 @@ describe("the modules workflows and dataStores", () => {
         "data_stores.list",
         "data_stores.rows",
         "data_stores.value",
-        "data_stores.used_by"
+        "data_stores.used_by",
+        "data_stores.app_sources"
       ],
       jobKinds: Object.values(DATA_STORE_JOB_KINDS)
     });

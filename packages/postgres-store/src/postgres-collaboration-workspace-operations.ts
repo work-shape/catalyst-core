@@ -1,6 +1,7 @@
 import { and, asc, eq, ilike, inArray, isNull, or, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   AppError,
+  asCollaborationWorkspaceId,
   asUserId,
   type ClientInstanceId,
   type CollaborationWorkspace,
@@ -329,6 +330,43 @@ async function listMemberships(
     )
     .orderBy(asc(collaborationWorkspaceMemberships.createdAt));
   return rows.map(mapWorkspaceMembership);
+}
+
+async function countMembersOfWorkspaces(
+  db: PostgresConnection,
+  input: Parameters<CollaborationWorkspaceStore["countMembersOfWorkspaces"]>[0]
+): Promise<{ id: CollaborationWorkspaceId; name: string; members: number }[]> {
+  if (input.collaborationWorkspaceIds.length === 0) return [];
+  const rows = await db
+    .select({
+      id: collaborationWorkspaces.id,
+      name: collaborationWorkspaces.name,
+      members: drizzleSql<number>`count(${collaborationWorkspaceMemberships.userId})::int`
+    })
+    .from(collaborationWorkspaces)
+    .leftJoin(
+      collaborationWorkspaceMemberships,
+      and(
+        eq(
+          collaborationWorkspaceMemberships.clientInstanceId,
+          collaborationWorkspaces.clientInstanceId
+        ),
+        eq(collaborationWorkspaceMemberships.collaborationWorkspaceId, collaborationWorkspaces.id)
+      )
+    )
+    .where(
+      and(
+        eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+        inArray(collaborationWorkspaces.id, [...input.collaborationWorkspaceIds]),
+        notInDeletion
+      )
+    )
+    .groupBy(collaborationWorkspaces.id, collaborationWorkspaces.name);
+  return rows.map((row) => ({
+    id: asCollaborationWorkspaceId(row.id),
+    name: row.name,
+    members: row.members
+  }));
 }
 
 async function searchMemberCandidates(
@@ -832,6 +870,11 @@ export function createPostgresWorkspacesStore(
       input: Parameters<CollaborationWorkspaceStore["listMemberships"]>[0]
     ): Promise<WorkspaceMembership[]> {
       return listMemberships(db, input);
+    },
+    async countMembersOfWorkspaces(
+      input: Parameters<CollaborationWorkspaceStore["countMembersOfWorkspaces"]>[0]
+    ) {
+      return countMembersOfWorkspaces(db, input);
     },
     async searchMemberCandidates(
       input: Parameters<CollaborationWorkspaceStore["searchMemberCandidates"]>[0]

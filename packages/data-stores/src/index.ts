@@ -36,6 +36,7 @@ import { createDataStoreJobs, publishDataStore, retireDataStore } from "./jobs";
 import type { KnowledgeEmbedding } from "./knowledge/definition";
 import { createKnowledgeBackend } from "./knowledge/backends";
 import { listDataStores } from "./list";
+import { appDataSources } from "./used-by";
 import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
 import { ensureVectorExtension } from "./provisioning";
 import type { DataStoreDatasetReader, DataStoreLimits, DataStoreRuntime } from "./runtime";
@@ -74,7 +75,8 @@ export const dataStoresModule = defineModule({
     "data_stores.list",
     "data_stores.rows",
     "data_stores.value",
-    "data_stores.used_by"
+    "data_stores.used_by",
+    "data_stores.app_sources"
   ],
   jobKinds: Object.values(DATA_STORE_JOB_KINDS)
 });
@@ -117,6 +119,11 @@ export interface DataStores {
    * asks no database of a store.
    */
   list(access: ActorAccess): ReturnType<typeof listDataStores>;
+  /**
+   * Where the data of one published App comes from, for whoever uses or reads it. `NOT_FOUND`
+   * for an App the caller may neither use nor read.
+   */
+  appSources(access: ActorAccess, app: string): ReturnType<typeof appDataSources>;
   /** Describes the operations to an agent that lists them as tools. */
   readonly toolSource: DataToolSource;
   readonly jobHandlers: readonly RegisteredJobHandler[];
@@ -214,6 +221,7 @@ export function createDataStores(input: {
     retire: (bound, assetId) => retireDataStore(runtime, bound, assetId),
     operationSource: createDataStoreOperationSource(runtime),
     list: (access) => listDataStores(runtime, access),
+    appSources: (access, app) => appDataSources(runtime, access, app),
     toolSource: createDataStoreToolSource(runtime),
     jobHandlers: jobs.handlers,
     schedules: jobs.schedules,

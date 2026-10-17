@@ -172,9 +172,31 @@ const cases: CommandCase[] = [
     operation: "data_stores.used_by",
     params: { store: "reporting" },
     response: {
-      apps: [{ id: "app-1", name: "offers", title: "Offers" }],
-      workflows: [],
-      hidden: { apps: 2, workflows: 0 },
+      apps: [
+        {
+          id: "app-1",
+          name: "offers",
+          title: "Offers",
+          reads: true,
+          writes: false,
+          sources: [],
+          audience: { workspace: { title: "Sales", members: 4 }, holders: [], hiddenHolders: 0 }
+        }
+      ],
+      workflows: [
+        {
+          id: "wf-1",
+          name: "nightly",
+          title: "Nightly",
+          reads: false,
+          writes: true,
+          sources: [{ connection: "crm", title: "CRM" }],
+          account: { name: "nightly-runner", title: "Nightly runner" }
+        }
+      ],
+      knowledgeBases: [],
+      readers: { holders: [], hiddenHolders: 1 },
+      hidden: { apps: 2, workflows: 0, knowledgeBases: 0, fills: 0, reads: 2 },
       truncated: false
     }
   },

@@ -2,6 +2,11 @@ import { defineTranslations } from "./translation-area";
 
 export const dataStores = defineTranslations({
   en: {
+    "dataStores.audienceAdminsOnly": "Only instance admins",
+    "dataStores.audienceHidden": "{count} more with access",
+    "dataStores.audienceHiddenOnly": "{count} with access",
+    "dataStores.audienceWorkspace": "Everyone in {workspace} ({count} people)",
+    "dataStores.audienceWorkspaceOne": "Everyone in {workspace} ({count} person)",
     "dataStores.column": "Column",
     "dataStores.columnCount": "1 column",
     "dataStores.columnCounts": "{count} columns",
@@ -28,6 +33,18 @@ export const dataStores = defineTranslations({
       "No data stores yet. A data store is a database in which apps and workflows keep their records. Describe one to the agent, and its first save creates it.",
     "dataStores.emptyReadOnly":
       "No data stores yet. A data store keeps records such as a client list or the hours per project, for apps and workflows to use.",
+    "dataStores.filledByDescription": "Where the rows come from.",
+    "dataStores.filledByEmpty": "No published workflow or app adds rows to this store.",
+    "dataStores.filledByHiddenOnly":
+      "{count} workflows or apps you can't see add rows to this store.",
+    "dataStores.filledByHiddenOnlyOne":
+      "One workflow or app you can't see adds rows to this store.",
+    "dataStores.filledByTitle": "Filled by",
+    "dataStores.filledFrom": "Copies from {connections}",
+    "dataStores.filledWithoutSource": "Adds rows without calling a connection",
+    "dataStores.holderAccount": "{name} (technical account)",
+    "dataStores.holderGroup": "Group {name}",
+    "dataStores.holderRole": "Everyone with the role {name}",
     "dataStores.kind": "Data stores",
     "dataStores.kindSingular": "Data store",
     "dataStores.draftUnpublished": "Draft · not published",
@@ -53,6 +70,10 @@ export const dataStores = defineTranslations({
     "dataStores.newPrompt": "Build a new data store that holds ",
     "dataStores.nextMigration": "Next migration",
     "dataStores.notReachable": "The tables show once the store is ready.",
+    "dataStores.readByAdmins": "Instance admins always see everything.",
+    "dataStores.readByDescription": "Who can see the rows.",
+    "dataStores.readByTitle": "Read by",
+    "dataStores.readersStore": "Direct access",
     "dataStores.refused": "You may not read this store.",
     "dataStores.rowEstimate": "about 1 row",
     "dataStores.rowEstimateHint": "The database's estimate, not a count.",
@@ -76,6 +97,8 @@ export const dataStores = defineTranslations({
     "dataStores.rowsTable": "Table",
     "dataStores.rowsTitle": "Rows",
     "dataStores.rowsToStart": "Back to start",
+    "dataStores.runsAs": "Runs as {account}",
+    "dataStores.runsAsUnnamed": "Runs as a technical account",
     "dataStores.schemaFailed": "The tables could not be loaded.",
     "dataStores.schemaLevel": "Schema level",
     "dataStores.schemaLevelOf": "{level} of {published}",
@@ -110,17 +133,12 @@ export const dataStores = defineTranslations({
     "dataStores.tablesTitle": "Tables",
     "dataStores.updated": "Last change",
     "dataStores.usedByApp": "App",
-    "dataStores.usedByDescription":
-      "The published apps and workflows that read or add rows of this store.",
-    "dataStores.usedByEmpty": "No published app or workflow uses this store.",
     "dataStores.usedByFailed": "What uses this store could not be loaded.",
-    "dataStores.usedByHidden": "and {count} more you cannot see",
-    "dataStores.usedByHiddenOnly": "{count} apps or workflows you cannot see use this store.",
-    "dataStores.usedByHiddenOnlyOne": "1 app or workflow you cannot see uses this store.",
+    "dataStores.usedByHidden": "and {count} more you can't see",
+    "dataStores.usedByKnowledgeBase": "Knowledge base",
     "dataStores.usedByRefused": "You may not see what uses this store.",
-    "dataStores.usedByTitle": "Used by",
     "dataStores.usedByTruncated":
-      "The instance has more published apps or workflows than one read looks through, so this list may be incomplete.",
+      "The instance has more published apps, workflows, knowledge bases or rights than one read looks through, so these lists may be incomplete.",
     "dataStores.usedByWorkflow": "Workflow",
     "dataStores.valueFailed": "The value could not be loaded.",
     "dataStores.valueGone":
@@ -134,6 +152,11 @@ export const dataStores = defineTranslations({
     "dataStores.valueUnread": "Not read"
   },
   de: {
+    "dataStores.audienceAdminsOnly": "Nur Instanz-Admins",
+    "dataStores.audienceHidden": "{count} weitere mit Zugriff",
+    "dataStores.audienceHiddenOnly": "{count} mit Zugriff",
+    "dataStores.audienceWorkspace": "Alle in {workspace} ({count} Personen)",
+    "dataStores.audienceWorkspaceOne": "Alle in {workspace} ({count} Person)",
     "dataStores.column": "Spalte",
     "dataStores.columnCount": "1 Spalte",
     "dataStores.columnCounts": "{count} Spalten",
@@ -160,6 +183,19 @@ export const dataStores = defineTranslations({
       "Noch keine Datenspeicher. Ein Datenspeicher ist eine Datenbank, in der Apps und Workflows ihre Einträge ablegen. Beschreib dem Agenten einen, und sein erstes Speichern legt ihn an.",
     "dataStores.emptyReadOnly":
       "Noch keine Datenspeicher. Ein Datenspeicher hält Einträge wie eine Kundenliste oder die Stunden je Projekt, mit denen Apps und Workflows arbeiten.",
+    "dataStores.filledByDescription": "Woher die Zeilen kommen.",
+    "dataStores.filledByEmpty":
+      "Kein veröffentlichter Workflow und keine veröffentlichte App schreibt Zeilen in diesen Speicher.",
+    "dataStores.filledByHiddenOnly":
+      "{count} Workflows oder Apps, die du nicht sehen kannst, schreiben Zeilen in diesen Speicher.",
+    "dataStores.filledByHiddenOnlyOne":
+      "Ein Workflow oder eine App, die du nicht sehen kannst, schreibt Zeilen in diesen Speicher.",
+    "dataStores.filledByTitle": "Gefüllt von",
+    "dataStores.filledFrom": "Kopiert aus {connections}",
+    "dataStores.filledWithoutSource": "Schreibt Zeilen, ohne eine Verbindung aufzurufen",
+    "dataStores.holderAccount": "{name} (technisches Konto)",
+    "dataStores.holderGroup": "Gruppe {name}",
+    "dataStores.holderRole": "Alle mit der Rolle {name}",
     "dataStores.kind": "Datenspeicher",
     "dataStores.kindSingular": "Datenspeicher",
     "dataStores.draftUnpublished": "Entwurf · nicht veröffentlicht",
@@ -186,6 +222,10 @@ export const dataStores = defineTranslations({
     "dataStores.newPrompt": "Bau einen neuen Datenspeicher, der ",
     "dataStores.nextMigration": "Nächste Migration",
     "dataStores.notReachable": "Die Tabellen erscheinen, sobald der Speicher bereit ist.",
+    "dataStores.readByAdmins": "Instanz-Admins sehen immer alles.",
+    "dataStores.readByDescription": "Wer die Zeilen sehen kann.",
+    "dataStores.readByTitle": "Gelesen von",
+    "dataStores.readersStore": "Direkter Zugriff",
     "dataStores.refused": "Du darfst diesen Speicher nicht lesen.",
     "dataStores.rowEstimate": "etwa 1 Zeile",
     "dataStores.rowEstimateHint": "Die Schätzung der Datenbank, keine Zählung.",
@@ -209,6 +249,8 @@ export const dataStores = defineTranslations({
     "dataStores.rowsTable": "Tabelle",
     "dataStores.rowsTitle": "Zeilen",
     "dataStores.rowsToStart": "Zum Anfang",
+    "dataStores.runsAs": "Läuft als {account}",
+    "dataStores.runsAsUnnamed": "Läuft als technisches Konto",
     "dataStores.schemaFailed": "Die Tabellen konnten nicht geladen werden.",
     "dataStores.schemaLevel": "Schemastand",
     "dataStores.schemaLevelOf": "{level} von {published}",
@@ -244,20 +286,12 @@ export const dataStores = defineTranslations({
     "dataStores.tablesTitle": "Tabellen",
     "dataStores.updated": "Letzte Änderung",
     "dataStores.usedByApp": "App",
-    "dataStores.usedByDescription":
-      "Die veröffentlichten Apps und Workflows, die Zeilen dieses Speichers lesen oder hinzufügen.",
-    "dataStores.usedByEmpty":
-      "Keine veröffentlichte App und kein veröffentlichter Workflow verwendet diesen Speicher.",
     "dataStores.usedByFailed": "Was diesen Speicher verwendet, konnte nicht geladen werden.",
     "dataStores.usedByHidden": "und {count} weitere, die du nicht sehen kannst",
-    "dataStores.usedByHiddenOnly":
-      "{count} Apps oder Workflows, die du nicht sehen kannst, verwenden diesen Speicher.",
-    "dataStores.usedByHiddenOnlyOne":
-      "1 App oder Workflow, den du nicht sehen kannst, verwendet diesen Speicher.",
+    "dataStores.usedByKnowledgeBase": "Wissensbasis",
     "dataStores.usedByRefused": "Du darfst nicht sehen, was diesen Speicher verwendet.",
-    "dataStores.usedByTitle": "Verwendet von",
     "dataStores.usedByTruncated":
-      "Die Instanz hat mehr veröffentlichte Apps oder Workflows, als ein Lesezugriff durchsieht. Diese Liste kann unvollständig sein.",
+      "Die Instanz hat mehr veröffentlichte Apps, Workflows, Wissensbasen oder Rechte, als ein Lesezugriff durchsieht. Diese Listen können unvollständig sein.",
     "dataStores.usedByWorkflow": "Workflow",
     "dataStores.valueFailed": "Der Wert konnte nicht geladen werden.",
     "dataStores.valueGone":
