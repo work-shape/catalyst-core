@@ -22,7 +22,9 @@ import type { WorkflowRunsPort } from "../workflows/workflow-runs-port";
 
 type WorkflowSubjects = {
   clientInstanceId: ClientInstanceId;
-  stores: { conversations: Pick<PlatformStores["conversations"], "getConversation"> };
+  stores: {
+    conversations: Pick<PlatformStores["conversations"], "getConversation" | "createdAsset">;
+  };
 };
 
 /** The module these operations belong to. */
@@ -147,21 +149,32 @@ function registerWorkflowRoutes(
       )
   });
 
-  /** Refuses before a policy can prompt, and re-reads at dispatch after any wait. */
+  /**
+   * An agent tests the conversation's subject Workflow, or a Workflow draft the conversation
+   * created (BUILD-ALL-1). Refuses before a policy can prompt, and re-reads at dispatch after
+   * any wait.
+   */
   async function requireTestSubject(workflow: string, origin: OperationOrigin): Promise<void> {
     if (origin.kind !== "agent") return;
     const conversation = await subjects.stores.conversations.getConversation(
       subjects.clientInstanceId,
       origin.conversationId
     );
-    if (
-      conversation?.status !== "active" ||
-      conversation.subject?.kind !== WORKFLOW_ASSET_KIND ||
-      conversation.subject.name !== workflow
-    ) {
+    const isSubject =
+      conversation?.subject?.kind === WORKFLOW_ASSET_KIND && conversation.subject.name === workflow;
+    const testable =
+      conversation?.status === "active" &&
+      (isSubject ||
+        (await subjects.stores.conversations.createdAsset({
+          clientInstanceId: subjects.clientInstanceId,
+          conversationId: conversation.id,
+          kind: WORKFLOW_ASSET_KIND,
+          name: workflow
+        })));
+    if (!testable) {
       throw new AppError(
         "FORBIDDEN",
-        "An agent may test only the conversation's subject Workflow",
+        "An agent may test only the conversation's subject Workflow or a Workflow draft the conversation created",
         { reason: "workflow_not_subject" },
         { exposeMessage: true }
       );

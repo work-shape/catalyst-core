@@ -117,11 +117,74 @@ const AgentOpensContext = createContext<AgentOpens | undefined>(undefined);
 /** Gives the lines of the thread the way to the pages of the assets the agent opened. */
 export const AgentOpensProvider = AgentOpensContext.Provider;
 
+/** What the created line says, by the kind of the asset the agent created. */
+function createdKeyOf(kind: string) {
+  switch (kind) {
+    case WORKFLOW_ASSET_KIND:
+      return "conversationCreatedWorkflow";
+    case DATA_STORE_ASSET_KIND:
+      return "conversationCreatedDataStore";
+    case AGENT_ASSET_KIND:
+      return "conversationCreatedAgent";
+    case "skill":
+      return "conversationCreatedSkill";
+    default:
+      return "conversationCreatedOther";
+  }
+}
+
+/**
+ * The line a draft the agent created beside the subject leaves in the conversation (BUILD-ALL-1):
+ * "Workflow draft “<name>” created · Open". Nobody was moved; "Open" leads to its page with the
+ * conversation in the dock, which stays about its subject.
+ */
+function AssetCreatedLine({ open }: { open: AssetOpen }) {
+  const { t } = useTranslation();
+  const opens = useContext(AgentOpensContext);
+  const route = opens?.pageOf(open);
+  return (
+    <p
+      className="chat-tool-part my-1 flex max-w-3xl items-center gap-2 text-xs text-muted-foreground"
+      data-testid="asset-created-line"
+      data-subject-kind={open.subject.kind}
+    >
+      <span className="flex h-4 shrink-0 items-center [&>svg]:size-3.5">
+        <SubjectIcon kind={open.subject.kind} />
+      </span>
+      <span className="min-w-0 truncate">
+        {t(createdKeyOf(open.subject.kind), { name: open.title })}
+        {route === undefined || opens === undefined ? null : (
+          <>
+            {" · "}
+            <TextLink
+              href={workspaceRoutePath(route)}
+              onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                if (opensHere(event)) {
+                  event.preventDefault();
+                  opens.goTo(open).catch(() => undefined);
+                }
+              }}
+            >
+              {t("conversationCreatedOpen")}
+            </TextLink>
+          </>
+        )}
+      </span>
+    </p>
+  );
+}
+
 /**
  * The line every open leaves in the conversation: "Opened <name>", the name leading to the
- * asset's page. Where the thread has no workspace to lead to, the name stands alone.
+ * asset's page. Where the thread has no workspace to lead to, the name stands alone. A draft
+ * created beside the subject leaves its created line instead.
  */
 export function AssetOpenedLine({ open }: { open: AssetOpen }) {
+  if (open.besideSubject) return <AssetCreatedLine open={open} />;
+  return <OpenedLine open={open} />;
+}
+
+function OpenedLine({ open }: { open: AssetOpen }) {
   const { t } = useTranslation();
   const opens = useContext(AgentOpensContext);
   const route = opens?.pageOf(open);

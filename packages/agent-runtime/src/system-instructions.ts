@@ -119,7 +119,8 @@ function createSubjectContext({ subject, toolNames, skillNames }: SubjectOffer):
   }
   if (offered("put")) {
     lines.push(
-      `${SUBJECT_TOOL_PREFIX}put saves your change as a draft. A draft runs nowhere until a person publishes it; say so after a save.`
+      `${SUBJECT_TOOL_PREFIX}put saves your change as a draft. A draft runs nowhere until a person publishes it; say so after a save.`,
+      `Where '${subject.name}' needs a Workflow or a Data Store that does not exist yet, create its draft in this conversation with ${SUBJECT_TOOL_PREFIX}put and say first what you create. The conversation stays about '${subject.name}'.`
     );
   }
   if (skillNames.length > 0 && toolNames.includes("read_skill")) {

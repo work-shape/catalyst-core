@@ -9,6 +9,7 @@ import {
   type ClientInstanceId,
   type CollaborationWorkspaceId,
   type Conversation,
+  type ConversationCreatedAssetInput,
   type ConversationId,
   type ConversationListItem,
   type ConversationsStore,
@@ -22,11 +23,14 @@ import {
   type SetConversationSubjectInput,
   type UserId
 } from "@work-shape/catalyst-core";
-import { and, asc, desc, eq, inArray, isNull, lt, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notExists, or } from "drizzle-orm";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
   collaborationWorkspaces,
+  configAssetRevisions,
+  configAssets,
+  conversationCreatedAssets,
   conversationFollowUps,
   conversationAttachments,
   conversations,
@@ -368,6 +372,62 @@ async function setConversationSubject(
   return row ? mapConversation(row) : undefined;
 }
 
+async function recordCreatedAsset(
+  db: PostgresConnection,
+  input: ConversationCreatedAssetInput
+): Promise<void> {
+  await db
+    .insert(conversationCreatedAssets)
+    .values({
+      conversationId: input.conversationId,
+      assetId: input.assetId,
+      clientInstanceId: input.clientInstanceId,
+      revision: input.revision,
+      createdAt: new Date(input.createdAt)
+    })
+    .onConflictDoNothing();
+}
+
+async function createdAsset(
+  db: PostgresConnection,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    kind: string;
+    name: string;
+  }
+): Promise<boolean> {
+  const [row] = await db
+    .select({ assetId: conversationCreatedAssets.assetId })
+    .from(conversationCreatedAssets)
+    .innerJoin(configAssets, eq(configAssets.id, conversationCreatedAssets.assetId))
+    .where(
+      and(
+        eq(conversationCreatedAssets.clientInstanceId, input.clientInstanceId),
+        eq(conversationCreatedAssets.conversationId, input.conversationId),
+        eq(configAssets.clientInstanceId, input.clientInstanceId),
+        eq(configAssets.kind, input.kind),
+        eq(configAssets.name, input.name),
+        eq(configAssets.status, "active"),
+        // A delete or a create since the one noted: the asset of the name is another one now.
+        notExists(
+          db
+            .select({ revision: configAssetRevisions.revision })
+            .from(configAssetRevisions)
+            .where(
+              and(
+                eq(configAssetRevisions.assetId, conversationCreatedAssets.assetId),
+                gt(configAssetRevisions.revision, conversationCreatedAssets.revision),
+                inArray(configAssetRevisions.operation, ["create", "delete"])
+              )
+            )
+        )
+      )
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
 /** Called inside the approval transaction; the public hook reuses this idempotently. */
 export async function appendApprovalDecision(
   db: PostgresConnection,
@@ -654,6 +714,14 @@ async function markLockedConversationDeleted(
         eq(structuredDataResources.conversationId, input.conversationId)
       )
     );
+  await tx
+    .delete(conversationCreatedAssets)
+    .where(
+      and(
+        eq(conversationCreatedAssets.clientInstanceId, input.clientInstanceId),
+        eq(conversationCreatedAssets.conversationId, input.conversationId)
+      )
+    );
   const [row] = await tx
     .update(conversations)
     .set({
@@ -757,6 +825,12 @@ export function createPostgresConversationsStore(
     },
     async setConversationSubject(input): Promise<Conversation | undefined> {
       return setConversationSubject(db, input);
+    },
+    async recordCreatedAsset(input): Promise<void> {
+      return recordCreatedAsset(db, input);
+    },
+    async createdAsset(input): Promise<boolean> {
+      return createdAsset(db, input);
     },
     async appendMessage(input: CreateMessageInput): Promise<ChatMessage> {
       return appendMessage(db, input);

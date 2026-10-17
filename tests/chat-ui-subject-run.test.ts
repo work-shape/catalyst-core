@@ -75,6 +75,56 @@ describe("the subject a run opens", () => {
     ).toEqual(["1", "4"]);
   });
 
+  // BUILD-ALL-1: a draft created while the conversation is about another asset opens nothing.
+  it("stays the subject where a save created a draft beside it, whose line says it was created", () => {
+    const createdBeside: SubjectRunPart = {
+      type: "tool_call",
+      toolCallId: "2",
+      toolName: "platform.assets.put",
+      state: "output_available",
+      output: {
+        saved: true,
+        revision: 1,
+        created: true,
+        kind: "workflow",
+        name: "invoice-check",
+        title: "Invoice check",
+        besideSubject: true
+      }
+    };
+    const parts = [opened("1", "app", "invoice-desk"), createdBeside];
+
+    expect(subjectOpenedInRun(parts)).toEqual({
+      subject: { kind: "app", name: "invoice-desk" },
+      callId: "1"
+    });
+    expect(opensInRun([createdBeside])).toEqual([]);
+    expect(savedDraftCalls(parts)).toEqual(["2"]);
+    expect(
+      standingAssetOpen({
+        toolName: "platform.assets.put",
+        toolCallId: "2",
+        result: createdBeside.output
+      })
+    ).toEqual({
+      subject: { kind: "workflow", name: "invoice-check" },
+      title: "Invoice check",
+      callId: "2",
+      awaitsPerson: false,
+      besideSubject: true
+    });
+    expect(t("conversationCreatedWorkflow", { name: "Invoice check" })).toBe(
+      "Workflow draft “Invoice check” created"
+    );
+    expect(de("conversationCreatedWorkflow", { name: "Rechnungsprüfung" })).toBe(
+      "Workflow-Entwurf „Rechnungsprüfung“ erstellt"
+    );
+    expect(de("conversationCreatedDataStore", { name: "Belege" })).toBe(
+      "Datenspeicher-Entwurf „Belege“ erstellt"
+    );
+    expect(de("conversationCreatedOpen")).toBe("Öffnen");
+  });
+
   it("is the App the first app.save made, and a later app.save is a saved draft of it", () => {
     const appSave = (id: string, output: unknown): SubjectRunPart => ({
       type: "tool_call",

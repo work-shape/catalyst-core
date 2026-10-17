@@ -192,25 +192,28 @@ describe("the agent's first save of a conversation", () => {
     );
     expect(next).toEqual({ saved: true, revision: created.revision + 1 });
 
-    // A second first save in a conversation about an asset makes nothing.
-    const second = await t.say(
-      id,
-      `/tool platform.assets.put ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: "other-close", config: { ...config, name: "other-close" } })}`
-    );
-    expect(second.answer).toContain("A new asset is made in a conversation about none");
-    // Nor does a save that names no kind it may create.
+    // A later create in a conversation about an asset stands beside it (BUILD-ALL-1): the
+    // conversation stays about the first one. Its own tests are in
+    // `platform-asset-build-all.test.ts`.
+    const second = await t.call(id, "platform.assets.put", {
+      kind: WORKFLOW_ASSET_KIND,
+      name: "other-close",
+      config: { name: "other-close", manifest: { ...config.manifest, id: "other-close" } }
+    });
+    expect(second).toMatchObject({ saved: true, created: true, besideSubject: true });
+    expect(
+      z
+        .object({ conversation: z.object({ subject: subjectSchema.optional() }) })
+        .parse(
+          (
+            await t.ok(t.app.call("conversations.thread.get", { params: { conversationId: id } }))
+          ).json()
+        ).conversation.subject
+    ).toEqual({ kind: WORKFLOW_ASSET_KIND, name: NEW });
+    // A save that names no kind it may create makes nothing.
     const { id: fresh } = z.object({ id: z.string() }).parse((await t.ok(t.converse())).json());
     const unnamed = await t.say(fresh, `/tool platform.assets.put ${JSON.stringify({ config })}`);
-    expect(unnamed.answer).toContain("A first save creates an asset");
-    for (const name of ["other-close"]) {
-      expect(
-        await t.app.stores.configAssets.getConfigAsset({
-          clientInstanceId: t.clientInstanceId,
-          kind: WORKFLOW_ASSET_KIND,
-          name
-        })
-      ).toBeUndefined();
-    }
+    expect(unnamed.answer).toContain("A save without 'expectedRevision' creates an asset");
 
     // The person who may not write a Workflow creates none.
     const { id: theirs } = z

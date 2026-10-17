@@ -223,6 +223,18 @@ export interface SetConversationSubjectInput {
   subject: ConversationSubject;
 }
 
+/**
+ * An asset the agent of a conversation created (BUILD-ALL-1): the conversation may keep saving
+ * its draft beside its subject. `revision` is the revision the create wrote.
+ */
+export interface ConversationCreatedAssetInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  assetId: string;
+  revision: number;
+  createdAt: ISODateString;
+}
+
 export interface ReplaceConversationTitleInput extends UpdateConversationTitleInput {
   /** The title the caller read. Another title by now means someone else wrote one. */
   expectedTitle: string;
@@ -275,6 +287,18 @@ export interface ConversationStore extends ConversationHistoryStore {
    * is not active.
    */
   setConversationSubject(input: SetConversationSubjectInput): Promise<Conversation | undefined>;
+  /** Notes that the conversation created the asset. A second note of it changes nothing. */
+  recordCreatedAsset(input: ConversationCreatedAssetInput): Promise<void>;
+  /**
+   * Whether the conversation created the active asset of `kind` and `name`, and nobody deleted
+   * it or created it anew since: an asset made again under the name is another one.
+   */
+  createdAsset(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    kind: string;
+    name: string;
+  }): Promise<boolean>;
   /**
    * Deletes an active Conversation. With `inCollaborationWorkspaceId` only while it is in
    * that workspace: one that was moved away meanwhile is answered as not available.

@@ -26,7 +26,7 @@ export function createWorkflowTestTools(): AnyToolDefinition[] {
       effect: "changing",
       permission: { mode: "allow" },
       description: [
-        "Start a test run of the saved draft of the Workflow this conversation is about, and no other Workflow.",
+        "Start a test run of the saved draft of the Workflow this conversation is about, or of a Workflow draft this conversation created, and no other Workflow.",
         "Give its name as 'workflow' and the input its definition asks for as 'input'. Read its definition with platform.assets.get first.",
         "The run acts as the person you work for, bounded by the Workflow's service principal, with you as its origin. It needs the person's workflow.write right.",
         "Reading steps read live; changing steps are Simulated unless the called asset has a test target. A person's Run live once switch cannot be set by an agent; a switched step that needs confirmation is refused: ask the person to start that test from the canvas.",
@@ -34,7 +34,12 @@ export function createWorkflowTestTools(): AnyToolDefinition[] {
         "Use workflows.get_run for progress and workflows.list_step_runs for every step's target and result. Report what would have been written, and any refusal, to the person."
       ].join(" "),
       inputSchema: z.object({
-        workflow: z.string().min(1).describe("The name of the conversation's subject Workflow."),
+        workflow: z
+          .string()
+          .min(1)
+          .describe(
+            "The name of the conversation's subject Workflow, or of a Workflow draft this conversation created."
+          ),
         input: z.record(z.string(), z.unknown())
       }),
       execute

@@ -687,6 +687,13 @@
       "when": 1792238102804,
       "tag": "0097_subagent_run_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1792243510975,
+      "tag": "0098_conversation_created_assets",
+      "breakpoints": true
     }
   ]
 }

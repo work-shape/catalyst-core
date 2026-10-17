@@ -127,7 +127,7 @@ A reading statement answers `{ columns, rows, truncated }`: `rows` is a list of 
 
 ### The Data Store
 
-The App lists its Data Store under `dataStores` in `app.yaml`, by name, with `minSchema` where it needs at least that migration of the store. The `dataStores` module has to be on. The agent cannot create a Data Store or its tables: a person creates it with its migrations (`store.yaml` and `migrations/0001_<name>.sql`, written with `catalyst data-store put` and published), and the statements read and write the tables those migrations made. Ask the person which Data Store to use, or to create one.
+The App lists its Data Store under `dataStores` in `app.yaml`, by name, with `minSchema` where it needs at least that migration of the store. The `dataStores` module has to be on. Where the App needs a Data Store that does not exist yet, the agent creates its draft in the same conversation with `platform.assets.put` (kind `data_store`, its files `store.yaml` and `migrations/0001_<name>.sql`), after it says what it creates. The draft stays beside the App: the conversation stays about the App, and the person stays on the page they are on. The agent keeps saving the draft from that conversation, and a person publishes it, which applies its migrations. A person can also write a store with `catalyst data-store put`. The statements read and write the tables those migrations made.
 
 An `sql` action runs only in an App: in a preview that is not yet saved a reading `sql` action is refused with `data_store_needs_app`, and a changing one with `draft_safe_mode`. In the App's draft it runs with the viewer's own right on the store: to read it, and for an insert, which the draft simulates, to insert.
 

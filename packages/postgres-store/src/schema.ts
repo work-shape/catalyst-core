@@ -3,6 +3,7 @@ export * from "./schema/users";
 export * from "./schema/workspaces";
 export * from "./schema/apiAccess";
 export * from "./schema/conversations";
+export * from "./schema/conversationCreatedAssets";
 export * from "./schema/agentRuns";
 export * from "./schema/executionWorkspaces";
 export * from "./schema/files";
@@ -46,6 +47,7 @@ import { auditEvents } from "./schema/audit";
 import { modelUsageEvents } from "./schema/usage";
 import { configAssetState, configAssets, configAssetRevisions } from "./schema/configAssets";
 import { agentProposals, agentProposalRevisions } from "./schema/agentProposals";
+import { conversationCreatedAssets } from "./schema/conversationCreatedAssets";
 import { agentTryConversations } from "./schema/agentTryConversations";
 import { assetCheckouts, assetRepoBundles } from "./schema/assetRepos";
 import { approvalRequests } from "./schema/approvals";
@@ -98,6 +100,7 @@ export const schema = {
   configAssetRevisions,
   agentProposals,
   agentProposalRevisions,
+  conversationCreatedAssets,
   agentTryConversations,
   assetRepoBundles,
   assetCheckouts,

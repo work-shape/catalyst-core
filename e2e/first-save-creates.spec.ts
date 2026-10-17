@@ -131,6 +131,90 @@ test("New workflow opens the dock, and the agent's first save creates the draft 
   await expect(page.getByText(title).first()).toBeVisible();
 });
 
+/** A Workflow definition of the e2e instance: one manual start and one result. */
+const workflowConfig = (id: string, title: string, runAs: string) => ({
+  name: id,
+  manifest: {
+    id,
+    name: title,
+    runAs,
+    inputs: { type: "object", additionalProperties: false },
+    outputs: { type: "object" },
+    steps: [
+      { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
+      { id: "result", name: "Result", type: "output", input: {} }
+    ]
+  }
+});
+
+// BUILD-ALL-1 (Platform Access check 60, navigation-and-layout 4.7b): a draft the agent creates
+// while the conversation is about an asset stays beside it. Fails without the change: the
+// second create was refused, and a created line moved the person.
+test("a Workflow draft the agent creates beside the subject moves nobody and offers its page", async ({
+  page
+}) => {
+  test.setTimeout(180_000);
+  const first = `beside-${randomUUID().slice(0, 8)}`;
+  const second = `${first}-needed`;
+  const runAs = `${first}-runner`;
+  const firstTitle = `Subject ${first.slice(-8)}`;
+  const secondTitle = `Needed ${first.slice(-8)}`;
+  await page.setViewportSize(WIDE);
+  await signIn(page);
+  page.setDefaultTimeout(30_000);
+  const principal = await requestWithOrigin(
+    page,
+    "post",
+    `${apiBaseUrl}/api/v1/instance/service-principals`,
+    { data: { name: runAs, displayLabel: runAs, description: "Runs the Workflows of a spec." } }
+  );
+  expect(principal.ok(), await principal.text()).toBe(true);
+  const personalId = await personalWorkspaceId(page);
+  await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
+
+  // The first save makes the subject and takes the person to it.
+  await page.goto(`/w/${personalId}/workflows`);
+  await page.getByRole("button", { name: NEW_WORKFLOW }).first().click();
+  await sendToolCall(page, "platform.assets.put", {
+    kind: "workflow",
+    name: first,
+    config: workflowConfig(first, firstTitle, runAs)
+  });
+  const firstPath = `/w/${personalId}/workflows/${first}`;
+  await expect(page).toHaveURL((url) => url.pathname === firstPath && url.searchParams.has("chat"));
+  const here = page.url();
+
+  // The next create stands beside it: nobody moves, the line says what was created.
+  await sendToolCall(page, "platform.assets.put", {
+    kind: "workflow",
+    name: second,
+    config: workflowConfig(second, secondTitle, runAs)
+  });
+  const created = page.getByTestId("asset-created-line").last();
+  await expect(created).toHaveText(`Workflow draft “${secondTitle}” created · Open`);
+  expect(page.url()).toBe(here);
+  // The dock's head says what the conversation is about: still the first Workflow.
+  const head = page.getByTestId("dock-head");
+  await expect(head).toHaveAttribute("data-subject-kind", "workflow");
+  await expect(head).toContainText(`Working on: ${firstTitle}`);
+  expect((await page.request.get(`${apiBaseUrl}/api/v1/assets/workflow/${second}`)).status()).toBe(
+    200
+  );
+  await shootLocales(page, "build-all-1-created-line", async () => {
+    await expect(page.getByTestId("asset-created-line").last()).toBeVisible();
+  });
+  await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
+  await page.goto(here);
+
+  // "Open" is the person's way to the draft, with the conversation in the dock; it stays
+  // about its subject.
+  await page.getByTestId("asset-created-line").last().getByRole("link", { name: "Open" }).click();
+  await expect(page).toHaveURL(
+    (url) => url.pathname === `/w/${personalId}/workflows/${second}` && url.searchParams.has("chat")
+  );
+  await expect(page.getByTestId("dock-head")).toContainText(`Working on: ${firstTitle}`);
+});
+
 test("New agent in a workspace's Studio opens the dock, and the first save creates an agent offered nowhere", async ({
   page
 }) => {

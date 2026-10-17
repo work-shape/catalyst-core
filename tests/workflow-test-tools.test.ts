@@ -57,9 +57,13 @@ async function fixture() {
   const getConversation = vi
     .fn<PlatformStores["conversations"]["getConversation"]>()
     .mockResolvedValue(conversation);
+  // The Workflow drafts the conversation created (BUILD-ALL-1): none unless a test says so.
+  const createdAsset = vi
+    .fn<PlatformStores["conversations"]["createdAsset"]>()
+    .mockResolvedValue(false);
   // Only these methods may be reached: any other store access fails the unit probe.
   const stores = {
-    conversations: { getConversation }
+    conversations: { getConversation, createdAsset }
   };
   const test = vi.fn<WorkflowRunsPort["test"]>().mockRejectedValue(new Error("engine reached"));
   const workflows: WorkflowRunsPort = {
@@ -99,7 +103,7 @@ async function fixture() {
     },
     audit: new NoopAuditRecorder()
   };
-  return { binding, context, test, stores, getConversation, workflows };
+  return { binding, context, test, stores, getConversation, createdAsset, workflows };
 }
 
 describe("the agent projections of Workflow testing", () => {
@@ -214,6 +218,29 @@ describe("the agent projections of Workflow testing", () => {
       expect(test).not.toHaveBeenCalled();
     }
   );
+
+  it("dispatches a Workflow draft the conversation created beside its subject, and no other", async () => {
+    const { binding, context, test, getConversation, createdAsset } = await fixture();
+    // The conversation is about an App; it created the Workflow the App needs (BUILD-ALL-1).
+    getConversation.mockResolvedValue({ ...conversation, subject: { kind: "app", name: "desk" } });
+    createdAsset.mockImplementation(({ kind, name }) =>
+      Promise.resolve(kind === "workflow" && name === "created-workflow")
+    );
+    await expect(
+      binding.execute({ workflow: "created-workflow", input: {} }, context)
+    ).rejects.toThrow("engine reached");
+    expect(createdAsset).toHaveBeenCalledWith({
+      clientInstanceId,
+      conversationId: conversation.id,
+      kind: "workflow",
+      name: "created-workflow"
+    });
+    test.mockClear();
+    await expect(
+      binding.execute({ workflow: "existing-workflow", input: {} }, context)
+    ).rejects.toMatchObject({ code: "FORBIDDEN", details: { reason: "workflow_not_subject" } });
+    expect(test).not.toHaveBeenCalled();
+  });
 
   it("uses the person's Workflow write right, even if an agent lists the tool", async () => {
     const { binding, context } = await fixture();

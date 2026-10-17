@@ -80,6 +80,12 @@ export interface AssetOpen {
   awaitsPerson: boolean;
   /** The workspace that owns the asset, by its id. Absent for an asset of the instance. */
   owner?: string;
+  /**
+   * The agent created the asset while the conversation was about another one (BUILD-ALL-1):
+   * it is no open. The conversation stays about its subject and nobody is moved; the line says
+   * "created" and offers the way to the new draft.
+   */
+  besideSubject?: true;
 }
 
 /** The open an answer of `platform.assets.open` or of a save that created an asset says. */
@@ -95,7 +101,8 @@ function assetOpenOfAnswer(
     title: typeof answer.title === "string" && answer.title !== "" ? answer.title : answer.name,
     callId,
     awaitsPerson: answer.awaitsPerson === true,
-    ...(typeof answer.workspaceId === "string" ? { owner: answer.workspaceId } : {})
+    ...(typeof answer.workspaceId === "string" ? { owner: answer.workspaceId } : {}),
+    ...(answer.besideSubject === true ? { besideSubject: true as const } : {})
   };
 }
 
@@ -104,9 +111,15 @@ function createdBy(answer: Record<string, unknown> | undefined) {
   return answer?.created === true ? answer : undefined;
 }
 
+/** The answer of a save that created the asset and opened it: not one beside the subject. */
+function openedBy(answer: Record<string, unknown> | undefined) {
+  return answer?.besideSubject === true ? undefined : createdBy(answer);
+}
+
 /**
- * The open a call of `platform.assets.open` made, or the first save that created an asset, once
- * it stood. The thread shows it as a line of its own that leads to the asset's page.
+ * The open a call of `platform.assets.open` made, or the save that created an asset, once it
+ * stood. The thread shows it as a line of its own that leads to the asset's page; a draft created
+ * beside the subject says so (`besideSubject`).
  */
 export function standingAssetOpen(call: {
   toolName: string;
@@ -124,7 +137,7 @@ export function standingAssetOpen(call: {
 
 /**
  * Every open of the run that stood, in order. The first save of an App or of any asset opens
- * the asset it created.
+ * the asset it created; a draft created beside the subject opens nothing.
  */
 export function opensInRun(parts: readonly SubjectRunPart[]): AssetOpen[] {
   return parts.flatMap((part) => {
@@ -132,7 +145,7 @@ export function opensInRun(parts: readonly SubjectRunPart[]): AssetOpen[] {
       answered(part, ASSET_OPEN_TOOL_NAME) ??
         answered(part, FORMER_APP_SAVE_TOOL_NAME) ??
         createdBy(answered(part, APP_SAVE_TOOL_NAME)) ??
-        createdBy(answered(part, ASSET_PUT_TOOL_NAME)),
+        openedBy(answered(part, ASSET_PUT_TOOL_NAME)),
       part.toolCallId
     );
     return open === undefined ? [] : [open];

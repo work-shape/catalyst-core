@@ -108,8 +108,8 @@ export async function ofInstance(
 }
 
 /**
- * The kinds the agent's first save of a conversation creates (NAV-2): each has a page the
- * person is taken to. An App is made from what the preview shows (`app.save`), a Connection by a
+ * The kinds the agent's save creates (NAV-2, BUILD-ALL-1): each has a page. The first create of
+ * a conversation about no asset takes the person there; a later one leaves them where they are. An App is made from what the preview shows (`app.save`), a Connection by a
  * person in its dialog.
  */
 export const CREATED_FROM_CHAT: readonly string[] = [
@@ -129,20 +129,26 @@ export const ownerOf = (
 ): { workspaceId?: string } =>
   kind.owners.includes("workspace") ? { workspaceId: conversation.collaborationWorkspaceId } : {};
 
-/** The refusal of a first save in a conversation that is about an asset already. */
-export const subjectTaken = (subject: ConversationSubject) =>
+/**
+ * The refusal of a change of an asset that is neither the conversation's subject nor a draft
+ * the conversation created (BUILD-ALL-1). It says nothing of whether the asset exists.
+ */
+export const notOfConversation = (
+  subject: ConversationSubject | undefined,
+  named: ConversationSubject
+) =>
   new AppError(
-    "VALIDATION_FAILED",
-    `This conversation is about the ${subject.kind} '${subject.name}': a save of it sends the revision you read as 'expectedRevision'. A new asset is made in a conversation about none: ask the person to start a new one`,
-    { reason: "conversation_has_subject" },
+    "CONFLICT",
+    `${subject ? `This conversation is about the ${subject.kind} '${subject.name}'` : "This conversation is about no asset yet"}, and it did not create the ${named.kind} '${named.name}'. A save reaches the asset the conversation is about and the drafts this conversation created. To change an asset that existed before, open it with platform.assets.open first`,
+    { reason: "asset_not_of_conversation" },
     { exposeMessage: true }
   );
 
-/** The refusal of a first save that names no kind it creates, or no name. */
+/** The refusal of a save without a revision that names no kind it creates, or no name. */
 export const createUnnamed = (kinds: readonly string[]) =>
   new AppError(
     "VALIDATION_FAILED",
-    `A first save creates an asset: name its 'kind', one of ${kinds.join(", ")}, and its 'name'`,
+    `A save without 'expectedRevision' creates an asset: name its 'kind', one of ${kinds.join(", ")}, and its 'name'`,
     { reason: "create_unnamed" },
     { exposeMessage: true }
   );

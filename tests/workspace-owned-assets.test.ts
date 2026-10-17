@@ -482,17 +482,34 @@ describe("the agent's first save of a conversation (NAV-2)", () => {
     );
     expect(made?.actor?.userId).toBe(t.kai.id);
 
-    // A conversation that is about an asset makes no second one.
-    const again = calls.put(kaiContext(t, forAgent), {
+    // A conversation that is about an asset creates the next one beside it (BUILD-ALL-1): the
+    // workspace owns it too, and the conversation stays about the agent.
+    expect(
+      await calls.put(kaiContext(t, forAgent), {
+        kind: "skill",
+        name: "second-notes",
+        config: skill("second-notes")
+      })
+    ).toMatchObject({ saved: true, created: true, kind: "skill", besideSubject: true });
+    expect(await ownerOf(t, "skill", "second-notes")).toEqual({
+      kind: "workspace",
+      workspaceId: team
+    });
+    expect(await subjectOf(t, forAgent)).toEqual({ kind: "agent", name: "built-helper" });
+    // A save naming the created skill asks the guardrails about the skill, and a save naming
+    // nothing about the subject.
+    const [skillEvent] = await calls.putBeforeEvents(asConversationId(forAgent), {
       kind: "skill",
       name: "second-notes",
-      config: skill("second-notes")
+      config: skill("second-notes"),
+      expectedRevision: 1
     });
-    await expect(again).rejects.toMatchObject({
-      code: "VALIDATION_FAILED",
-      details: { reason: "conversation_has_subject" }
+    expect(skillEvent).toMatchObject({ subject: { kind: "skill", name: "second-notes" } });
+    const [subjectEvent] = await calls.putBeforeEvents(asConversationId(forAgent), {
+      config: agent("built-helper"),
+      expectedRevision: 1
     });
-    expect(await ownerOf(t, "skill", "second-notes")).toBeUndefined();
+    expect(subjectEvent).toMatchObject({ subject: { kind: "agent", name: "built-helper" } });
 
     const forSkill = await ownConversation(t, team);
     expect(
