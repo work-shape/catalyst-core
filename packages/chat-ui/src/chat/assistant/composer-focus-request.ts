@@ -22,13 +22,7 @@ export function useComposerFocusRequest(
       if (cancelled) {
         return;
       }
-      const input = inputRef.current;
-      // Recovery must preserve the caret or selection once this input has focus.
-      if (!input || input.disabled || document.activeElement === input) {
-        return;
-      }
-      input.focus({ preventScroll: true });
-      input.setSelectionRange(input.value.length, input.value.length);
+      focusComposerAtEnd(inputRef.current);
     }
 
     // A person who presses a pointer or a key in the meantime has gone on, and a try after
@@ -56,4 +50,17 @@ export function useComposerFocusRequest(
       }
     };
   }, [inputRef, requestId]);
+}
+
+/**
+ * Puts the focus at the end of the composer's text. An input that has the focus already keeps
+ * its caret or selection: whoever focused it in the meantime put them there, and a select-all
+ * collapsed to the end would turn replacing the text into appending to it.
+ */
+export function focusComposerAtEnd(input: HTMLTextAreaElement | null | undefined): void {
+  if (!input || input.disabled || document.activeElement === input) {
+    return;
+  }
+  input.focus({ preventScroll: true });
+  input.setSelectionRange(input.value.length, input.value.length);
 }

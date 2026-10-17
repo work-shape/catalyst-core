@@ -36,13 +36,8 @@ import {
   ProductConversationRunTransport,
   startProductConversationRun
 } from "./product-run-transport";
-import {
-  createQueuedSendSettler,
-  draftAttachmentsKey,
-  resolveSendBlock,
-  type QueuedSend,
-  type SendBlock
-} from "./send-block";
+import { draftAttachmentsKey, resolveSendBlock, type QueuedSend } from "./send-block";
+import { QueuedSendBridge } from "./queued-send-bridge";
 
 export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
   const { activeRun, completedRunProjections, messages, selectedConversationId } = chat;
@@ -584,72 +579,6 @@ function DraftBridge({
       onDraftChange(currentText);
     }
   }, [currentText, draft, onDraftChange]);
-
-  return null;
-}
-
-/**
- * Sends a queued message once its loading block lifts, or forgets it when the user edits the
- * text or the attachments, the block turns into a refusal or the workspace changes. A pane lives for one
- * conversation, so a change of conversation drops the queued send with the pane.
- */
-function QueuedSendBridge({
-  queuedSend,
-  sendBlock,
-  attachmentsKey,
-  collaborationWorkspaceId,
-  onSettled,
-  onSubmitMessage
-}: {
-  queuedSend: QueuedSend | undefined;
-  sendBlock: SendBlock | undefined;
-  attachmentsKey: string;
-  collaborationWorkspaceId: string | undefined;
-  onSettled: () => void;
-  /** The first-message path; an open conversation sends through the thread runtime instead. */
-  onSubmitMessage: ((text: string) => boolean) | undefined;
-}) {
-  const composer = useComposerRuntime();
-  const composerText = useComposer((state) => state.text);
-  const composerCanSend = useComposer((state) => state.canSend);
-  const [settle] = useState(createQueuedSendSettler);
-
-  useEffect(() => {
-    if (!queuedSend) {
-      return;
-    }
-    const step = settle({
-      queued: queuedSend,
-      block: sendBlock,
-      composerText,
-      attachmentsKey,
-      collaborationWorkspaceId,
-      runtimeReady: Boolean(onSubmitMessage) || composerCanSend
-    });
-    if (step === "wait") {
-      return;
-    }
-    onSettled();
-    if (step === "drop") {
-      return;
-    }
-    if (onSubmitMessage) {
-      onSubmitMessage(queuedSend.text);
-    } else {
-      composer.send();
-    }
-  }, [
-    attachmentsKey,
-    collaborationWorkspaceId,
-    composer,
-    composerCanSend,
-    composerText,
-    onSettled,
-    onSubmitMessage,
-    queuedSend,
-    sendBlock,
-    settle
-  ]);
 
   return null;
 }

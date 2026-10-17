@@ -19,6 +19,7 @@ import { AssistantActivityStatus } from "./assistant-activity-status";
 import { RetentionNotice } from "../conversation/retention-notice";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
+import { focusComposerAtEnd } from "./composer-focus-request";
 import { DayMarkersProvider, MessageDayMarker } from "./message-day-marker";
 import { useTranslation } from "../../shared/i18n";
 import { useKeepReadingPlace } from "./reading-place";
@@ -333,9 +334,7 @@ export function AssistantThread({
                 onStarterChosen={() => {
                   // The request stands in the composer now: the person goes on writing there.
                   window.requestAnimationFrame(() => {
-                    const input = composerRef.current?.querySelector("textarea");
-                    input?.focus({ preventScroll: true });
-                    input?.setSelectionRange(input.value.length, input.value.length);
+                    focusComposerAtEnd(composerRef.current?.querySelector("textarea"));
                   });
                 }}
               />

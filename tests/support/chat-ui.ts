@@ -125,6 +125,7 @@ export {
 } from "../../packages/chat-ui/src/chat/assistant/assistant-work-grouping";
 export { useComposerFocusRequest } from "../../packages/chat-ui/src/chat/assistant/composer-focus-request";
 export { ContextIndicator } from "../../packages/chat-ui/src/chat/assistant/context-indicator";
+export { QueuedSendBridge } from "../../packages/chat-ui/src/chat/assistant/queued-send-bridge";
 export { resolveContextUsage } from "../../packages/chat-ui/src/chat/assistant/context-usage";
 export { ModelCard, ModelPicker } from "../../packages/chat-ui/src/chat/assistant/model-picker";
 export { DockedChat } from "../../packages/chat-ui/src/chat/dock/docked-chat";

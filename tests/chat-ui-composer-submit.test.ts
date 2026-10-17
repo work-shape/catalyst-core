@@ -1,6 +1,14 @@
 // @vitest-environment happy-dom
 
-import { AssistantRuntimeProvider, useComposerRuntime, useLocalRuntime } from "@assistant-ui/react";
+import {
+  AssistantRuntimeProvider,
+  useComposerRuntime,
+  useExternalStoreRuntime,
+  useLocalRuntime,
+  useThreadRuntime,
+  type AssistantRuntime,
+  type ThreadMessage
+} from "@assistant-ui/react";
 import { act, createElement, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,13 +47,16 @@ afterEach(() => {
 
 function mountComposer(
   options: Partial<ComponentProps<typeof AssistantComposer>> = {},
-  followUps?: FollowUpQueueModel
+  followUps?: FollowUpQueueModel,
+  useRuntime: () => AssistantRuntime = useIdleRuntime
 ) {
   let composer: ReturnType<typeof useComposerRuntime> | undefined;
+  let thread: ReturnType<typeof useThreadRuntime> | undefined;
   const submitted: string[] = [];
   const queued: string[] = [];
   function Composer() {
     composer = useComposerRuntime();
+    thread = useThreadRuntime();
     return createElement(AssistantComposer, {
       attachments: [],
       localUploadingAttachments: [],
@@ -73,11 +84,7 @@ function mountComposer(
     });
   }
   function Harness() {
-    const runtime = useLocalRuntime({
-      async run() {
-        return { content: [] };
-      }
-    });
+    const runtime = useRuntime();
     return createElement(
       AssistantRuntimeProvider,
       { runtime },
@@ -97,7 +104,24 @@ function mountComposer(
       )
     )
   );
-  return { composer: required(composer), submitted, queued };
+  return { composer: required(composer), thread: required(thread), submitted, queued };
+}
+
+function useIdleRuntime(): AssistantRuntime {
+  return useLocalRuntime({
+    async run() {
+      return { content: [] };
+    }
+  });
+}
+
+/** A thread whose run goes on, as the thread runtime reports one. */
+function useRunningRuntime(): AssistantRuntime {
+  return useExternalStoreRuntime<ThreadMessage>({
+    messages: [],
+    isRunning: true,
+    async onNew() {}
+  });
 }
 
 describe("composer submission before its next render", () => {
@@ -145,6 +169,29 @@ describe("composer submission before its next render", () => {
       ...readState(),
       canSend: false
     }));
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(queued).toEqual(["Keep this send"]);
+  });
+
+  it("queues Enter when the run ended after the last render and the runtime still ignores sends", () => {
+    const { composer, thread, queued } = mountComposer(
+      { onSubmitMessage: undefined },
+      undefined,
+      useRunningRuntime
+    );
+    act(() => composer.setText("Keep this send"));
+    const input = required(container.querySelector("textarea"));
+    const readComposer = composer.getState.bind(composer);
+    const readThread = thread.getState.bind(thread);
+    // The last render saw the run going, which would let the runtime take the Enter. The run
+    // has ended since, and the runtime has not taken up the lifted block: it would ignore it.
+    vi.spyOn(composer, "getState").mockImplementation(() => ({
+      ...readComposer(),
+      canSend: false
+    }));
+    vi.spyOn(thread, "getState").mockImplementation(() => ({ ...readThread(), isRunning: false }));
     act(() => {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });

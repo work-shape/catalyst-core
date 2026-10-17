@@ -1,9 +1,13 @@
 // @vitest-environment happy-dom
 
+import { AssistantRuntimeProvider, useLocalRuntime } from "@assistant-ui/react";
 import { act, createElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useComposerFocusRequest } from "./support/chat-ui";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
+import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
+import { AssistantThread, useComposerFocusRequest } from "./support/chat-ui";
+import { TranslationProvider } from "./chat-ui-render-harness";
 import { required } from "./support/assertions";
 
 const STARTER = "Build a new agent that ";
@@ -12,8 +16,15 @@ let root: Root;
 let container: HTMLDivElement;
 let frames: FrameRequestCallback[];
 
+class StillResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("ResizeObserver", StillResizeObserver);
   vi.useFakeTimers();
   frames = [];
   vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
@@ -114,5 +125,88 @@ describe("composer focus recovery", () => {
     required(container.querySelector("button")).focus();
     render(2);
     expect(document.activeElement).toBe(input);
+  });
+});
+
+async function settleRuntime(): Promise<void> {
+  await act(async () => {
+    await vi.runAllTimersAsync();
+  });
+}
+
+function EmptyThread() {
+  const runtime = useLocalRuntime({
+    async run() {
+      return { content: [] };
+    }
+  });
+  const noop = () => undefined;
+  return createElement(
+    AssistantRuntimeProvider,
+    { runtime },
+    createElement(AssistantThread, {
+      config: undefined,
+      agents: [],
+      selectedAgentName: undefined,
+      selectableModels: [],
+      selectedModelBindingId: undefined,
+      selectedReasoningEffort: undefined,
+      showContextIndicator: false,
+      contextSnapshot: undefined,
+      notice: undefined,
+      subjectKind: APP_ASSET_KIND,
+      draftAttachments: [],
+      localUploadingAttachments: [],
+      sendQueued: false,
+      attachmentsEnabled: false,
+      attachmentAccept: "",
+      messagesEnabled: true,
+      messagesLoaded: true,
+      loadedMessageCount: 0,
+      messageTimes: {},
+      composerFocusRequestId: 0,
+      onCancelRun: noop,
+      onSelectAgent: noop,
+      onSelectModelBinding: noop,
+      onSelectReasoningEffort: noop,
+      onFilesSelected: noop,
+      onRemoveDraftAttachment: noop,
+      onRetryDraftAttachment: noop,
+      onQueueSend: noop
+    })
+  );
+}
+
+describe("composer focus after a starter", () => {
+  it("keeps a selection made before the next frame, so replacing the starter replaces it", async () => {
+    act(() =>
+      root.render(
+        createElement(
+          UiRoot,
+          { mode: "light", labels: uiLabelsEn },
+          createElement(
+            TranslationProvider,
+            { children: null, locale: "en" },
+            createElement(EmptyThread)
+          )
+        )
+      )
+    );
+    // The runtime reports its state to the page after a timer: the thread as loaded, and so
+    // empty, then the starter's text in the composer.
+    await settleRuntime();
+    const starter = required(container.querySelector<HTMLButtonElement>('[role="group"] button'));
+    act(() => starter.click());
+    await settleRuntime();
+    const input = required(container.querySelector("textarea"));
+    expect(input.value).not.toBe("");
+
+    // A fill selects the starter in the composer before the starter's focus frame comes.
+    input.focus();
+    input.setSelectionRange(0, input.value.length);
+    nextFrame();
+    input.setRangeText(COMMAND, input.selectionStart, input.selectionEnd, "end");
+
+    expect(input.value).toBe(COMMAND);
   });
 });

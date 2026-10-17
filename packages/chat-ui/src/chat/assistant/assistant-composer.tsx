@@ -1,8 +1,8 @@
 import {
   ComposerPrimitive,
-  useAuiState,
   useComposer,
-  useComposerRuntime
+  useComposerRuntime,
+  useThreadRuntime
 } from "@assistant-ui/react";
 import { AlertCircle, Paperclip, RotateCcw, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
@@ -87,7 +87,6 @@ export function AssistantComposer({
 }) {
   const { t } = useTranslation();
   const currentText = useComposer((state) => state.text);
-  const threadRunning = useAuiState((state) => state.thread.isRunning);
   const composerShellRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const attachmentActionRef = useRef<HTMLButtonElement | null>(null);
@@ -99,6 +98,7 @@ export function AssistantComposer({
   const submitBlocked = Boolean(sendBlock);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const composerRuntime = useComposerRuntime();
+  const threadRuntime = useThreadRuntime();
   const followUps = useFollowUpQueue();
   // While a run goes, a message waits in the conversation's queue and starts as the next turn.
   const queuesFollowUp = Boolean(conversationRunning && followUps);
@@ -117,13 +117,22 @@ export function AssistantComposer({
   }, [composerRuntime, followUps]);
   // A keystroke updates the composer before React renders it. Submission reads that current
   // state, so a fast Enter or click never sends the previous render's text (or starter).
+  // Readiness is read the same way: an open conversation sends through the thread runtime,
+  // which takes up a lifted block one render after the composer does, and a run can start or
+  // end between renders. An Enter the runtime would still ignore waits.
+  const runtimeReady = useCallback(
+    () =>
+      Boolean(onSubmitMessage) ||
+      composerRuntime.getState().canSend ||
+      threadRuntime.getState().isRunning,
+    [composerRuntime, onSubmitMessage, threadRuntime]
+  );
   const queueSend = useCallback(() => {
-    const { text, canSend } = composerRuntime.getState();
-    const runtimeReady = Boolean(onSubmitMessage) || canSend || threadRunning;
-    if (shouldQueueSend({ sendBlock, sendQueued, text, runtimeReady })) {
+    const { text } = composerRuntime.getState();
+    if (shouldQueueSend({ sendBlock, sendQueued, text, runtimeReady: runtimeReady() })) {
       onQueueSend(text);
     }
-  }, [composerRuntime, onQueueSend, onSubmitMessage, sendBlock, sendQueued, threadRunning]);
+  }, [composerRuntime, onQueueSend, runtimeReady, sendBlock, sendQueued]);
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       if (submitBlocked || queuesFollowUp) {
@@ -159,9 +168,7 @@ export function AssistantComposer({
         queueFollowUp();
         return;
       }
-      const runtimeReady =
-        Boolean(onSubmitMessage) || composerRuntime.getState().canSend || threadRunning;
-      if (submitBlocked || !runtimeReady) {
+      if (submitBlocked || !runtimeReady()) {
         event.preventDefault();
         queueSend();
         return;
@@ -179,8 +186,8 @@ export function AssistantComposer({
       queueFollowUp,
       queueSend,
       queuesFollowUp,
-      submitBlocked,
-      threadRunning
+      runtimeReady,
+      submitBlocked
     ]
   );
 
